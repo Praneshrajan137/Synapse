@@ -1,0 +1,22 @@
+{
+  "version": "1.0.0",
+  "description": "SYNAPSE Kafka Topic Registry — FROZEN after Sprint 1",
+  "topics": [
+    {"name": "synapse.demand.forecast",       "partitions": 8,  "retention_hours": 72,   "producer": "demand_prophet",      "key_consumers": ["inventory_sentinel", "pricing_oracle", "orchestrator"]},
+    {"name": "synapse.demand.drift_alert",     "partitions": 1,  "retention_hours": 24,   "producer": "demand_prophet",      "key_consumers": ["ml_pipeline"]},
+    {"name": "synapse.routing.plan",           "partitions": 8,  "retention_hours": 24,   "producer": "routing_navigator",   "key_consumers": ["orchestrator", "sustainability_agent"]},
+    {"name": "synapse.inventory.state",        "partitions": 8,  "retention_hours": 72,   "producer": "inventory_sentinel",  "key_consumers": ["demand_prophet", "freshness_guardian"]},
+    {"name": "synapse.inventory.reorder",      "partitions": 4,  "retention_hours": 48,   "producer": "inventory_sentinel",  "key_consumers": ["supplier_trust", "orchestrator"]},
+    {"name": "synapse.pricing.update",         "partitions": 4,  "retention_hours": 24,   "producer": "pricing_oracle",      "key_consumers": ["demand_prophet", "orchestrator"]},
+    {"name": "synapse.disruption.alert",       "partitions": 2,  "retention_hours": 168,  "producer": "disruption_shield",   "key_consumers": ["all_agents", "orchestrator"]},
+    {"name": "synapse.disruption.playbook",    "partitions": 2,  "retention_hours": 168,  "producer": "disruption_shield",   "key_consumers": ["routing_navigator", "inventory_sentinel"]},
+    {"name": "synapse.supplier.score",         "partitions": 2,  "retention_hours": 168,  "producer": "supplier_trust",      "key_consumers": ["inventory_sentinel", "orchestrator"]},
+    {"name": "synapse.sustainability.carbon",  "partitions": 2,  "retention_hours": 168,  "producer": "sustainability_agent","key_consumers": ["orchestrator", "routing_navigator"]},
+    {"name": "synapse.freshness.alert",        "partitions": 4,  "retention_hours": 24,   "producer": "freshness_guardian",  "key_consumers": ["inventory_sentinel", "pricing_oracle"]},
+    {"name": "synapse.orchestrator.decision",  "partitions": 4,  "retention_hours": 720,  "producer": "orchestrator",        "key_consumers": ["all_agents", "audit_logger"]},
+    {"name": "synapse.orchestrator.escalation","partitions": 1,  "retention_hours": 720,  "producer": "orchestrator",        "key_consumers": ["hitl_console"]},
+    {"name": "synapse.twin.divergence",        "partitions": 1,  "retention_hours": 168,  "producer": "digital_twin",        "key_consumers": ["disruption_shield", "orchestrator"]},
+    {"name": "synapse.audit.log",              "partitions": 4,  "retention_hours": -1,   "producer": "all_agents",          "key_consumers": ["postgres_sink", "compliance"]},
+    {"name": "synapse.metrics.agent",          "partitions": 8,  "retention_hours": 24,   "producer": "all_agents",          "key_consumers": ["prometheus_exporter"]}
+  ]
+}

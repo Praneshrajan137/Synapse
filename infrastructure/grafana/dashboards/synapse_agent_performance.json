@@ -1,0 +1,65 @@
+{
+  "dashboard": {
+    "id": null,
+    "uid": "synapse-agents",
+    "title": "SYNAPSE Agent Performance",
+    "tags": ["synapse", "agents"],
+    "timezone": "browser",
+    "schemaVersion": 39,
+    "version": 1,
+    "refresh": "10s",
+    "panels": [
+      {
+        "id": 1,
+        "title": "Per-Agent Inference Latency Heatmap",
+        "type": "heatmap",
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 0},
+        "targets": [
+          {
+            "expr": "rate(synapse_inference_latency_seconds_bucket[5m])",
+            "legendFormat": "{{ agent_name }}"
+          }
+        ]
+      },
+      {
+        "id": 2,
+        "title": "Confidence Distribution",
+        "type": "histogram",
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 0},
+        "targets": [
+          {
+            "expr": "rate(synapse_confidence_bucket[5m])",
+            "legendFormat": "{{ agent_name }}"
+          }
+        ]
+      },
+      {
+        "id": 3,
+        "title": "Decisions per Second by Tier",
+        "type": "timeseries",
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 8},
+        "targets": [
+          {
+            "expr": "sum(rate(synapse_decisions_total[5m])) by (tier)",
+            "legendFormat": "{{ tier }}"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {"unit": "ops"}
+        }
+      },
+      {
+        "id": 4,
+        "title": "Agent State Distribution",
+        "type": "piechart",
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 8},
+        "targets": [
+          {
+            "expr": "sum(synapse_decisions_total) by (agent_name, outcome)",
+            "legendFormat": "{{ agent_name }} / {{ outcome }}"
+          }
+        ]
+      }
+    ]
+  }
+}

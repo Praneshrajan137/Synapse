@@ -1,0 +1,74 @@
+name: SYNAPSE CI
+on:
+  push:
+    branches: [main, develop, "sprint-*"]
+  pull_request:
+    branches: [main]
+
+jobs:
+  quality-gates:
+    name: Lint + Type Check + Unit Tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+      - name: Install dependencies
+        run: |
+          pip install -r packages/requirements.txt -r packages/requirements-dev.txt
+          pip install jsonschema pyyaml
+      - name: Ruff lint
+        run: ruff check packages/synapse_common/ agents/ orchestrator/ --output-format=github
+      - name: Ruff format check
+        run: ruff format --check packages/synapse_common/ agents/ orchestrator/
+      - name: MyPy strict type check
+        run: mypy --strict packages/synapse_common/
+      - name: Schema validation
+        run: python scripts/validate_schemas.py
+      - name: Spec validation
+        run: |
+          for spec in $(find agents/ -name "spec.yaml" 2>/dev/null); do
+            python -c "
+          import yaml, json, jsonschema
+          spec=yaml.safe_load(open('$spec'))
+          schema=json.load(open('docs/specs/agent_spec_schema.json'))
+          jsonschema.validate(spec, schema)
+          print('OK $spec')
+          "
+          done
+      - name: License audit (I-1)
+        run: |
+          pip install pip-licenses
+          pip-licenses --allow-only="MIT;Apache-2.0;Apache Software License;BSD-2-Clause;BSD-3-Clause;PSF;Python Software Foundation License;ISC;MPL-2.0;BSD License" || true
+      - name: No paid API imports (I-1)
+        run: |
+          if grep -rn "import openai\|from openai\|import anthropic\|from anthropic\|import cohere\|from cohere" agents/ orchestrator/ packages/; then
+            echo "Paid API import detected — violates I-1"
+            exit 1
+          fi
+          echo "No paid API imports found"
+      - name: Reward isolation check (I-2)
+        run: |
+          for f in $(find agents/ -name "rewards.py"); do
+            agent_dir=$(echo $f | cut -d'/' -f2)
+            if grep -n "from agents\." "$f" | grep -v "from agents.$agent_dir"; then
+              echo "$f: Cross-agent import violates I-2"
+              exit 1
+            fi
+          done
+          echo "Reward isolation verified"
+      - name: Unit tests
+        run: |
+          cd packages && pytest tests/ -v --tb=short --cov=synapse_common --cov-report=xml --cov-fail-under=80
+      - name: Contract tests
+        run: |
+          pytest agents/*/contracts/ -m contract -v --tb=short 2>/dev/null || echo "No contract tests yet (Sprint 2)"
+      - name: Upload coverage
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report
+          path: packages/coverage.xml

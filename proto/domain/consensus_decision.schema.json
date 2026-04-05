@@ -1,0 +1,20 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "synapse.domain.consensus_decision",
+  "title": "Orchestrator Consensus Decision",
+  "type": "object",
+  "required": ["decision_id", "timestamp", "tier", "proposals", "selected_action", "pareto_weights", "confidence", "audit_trace"],
+  "properties": {
+    "decision_id": {"type": "string", "format": "uuid"},
+    "timestamp": {"type": "string", "format": "date-time"},
+    "tier": {"type": "string", "enum": ["tier_1", "tier_2", "tier_3", "tier_4"]},
+    "proposals": {"type": "array", "items": {"type": "object"}},
+    "selected_action": {"type": "object"},
+    "pareto_weights": {"type": "object"},
+    "confidence": {"type": "number", "minimum": 0.0, "maximum": 1.0},
+    "escalated_to_human": {"type": "boolean"},
+    "human_override": {"type": ["object", "null"]},
+    "audit_trace": {"type": "array", "items": {"type": "string"}}
+  },
+  "additionalProperties": false
+}

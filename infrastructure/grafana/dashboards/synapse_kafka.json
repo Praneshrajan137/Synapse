@@ -1,0 +1,68 @@
+{
+  "dashboard": {
+    "id": null,
+    "uid": "synapse-kafka",
+    "title": "SYNAPSE Kafka",
+    "tags": ["synapse", "kafka"],
+    "timezone": "browser",
+    "schemaVersion": 39,
+    "version": 1,
+    "refresh": "10s",
+    "panels": [
+      {
+        "id": 1,
+        "title": "Topic Throughput (messages/sec)",
+        "type": "timeseries",
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 0},
+        "targets": [
+          {
+            "expr": "rate(synapse_kafka_produce_total{topic=~\"synapse\\\\..*\"}[5m])",
+            "legendFormat": "{{ topic }}"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {"unit": "ops"}
+        }
+      },
+      {
+        "id": 2,
+        "title": "Consumer Lag per Group",
+        "type": "timeseries",
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 0},
+        "targets": [
+          {
+            "expr": "synapse_kafka_consume_lag{topic=~\"synapse\\\\..*\"}",
+            "legendFormat": "{{ consumer_group }} / {{ topic }}"
+          }
+        ]
+      },
+      {
+        "id": 3,
+        "title": "Partition Health",
+        "type": "stat",
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 8},
+        "targets": [
+          {
+            "expr": "count(kafka_topic_partition_current_offset{topic=~\"synapse\\\\..*\"}) by (topic)",
+            "legendFormat": "{{ topic }}"
+          }
+        ]
+      },
+      {
+        "id": 4,
+        "title": "Producer Errors",
+        "type": "timeseries",
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 8},
+        "targets": [
+          {
+            "expr": "rate(synapse_kafka_produce_total{status=\"error\"}[5m])",
+            "legendFormat": "{{ topic }}"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {"unit": "ops"}
+        }
+      }
+    ]
+  }
+}

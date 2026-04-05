@@ -1,0 +1,14 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "synapse.a2a.jsonrpc",
+  "title": "A2A JSON-RPC 2.0 Envelope",
+  "type": "object",
+  "required": ["jsonrpc", "method", "id"],
+  "properties": {
+    "jsonrpc": {"type": "string", "const": "2.0"},
+    "method": {"type": "string", "enum": ["proposal", "debate_respond", "execute"]},
+    "params": {"type": "object"},
+    "id": {"type": "string", "minLength": 1}
+  },
+  "additionalProperties": false
+}

@@ -1,0 +1,46 @@
+# SYNAPSE Cursor AI Rules — Lightweight Header
+# Full reference docs loaded on-demand from docs/cursor/*.md
+
+## Identity
+Project: SYNAPSE — Multi-Agent RL Supply Chain Orchestration System
+Stack: Python 3.11 | PyTorch | RLlib | FastAPI | Kafka | Neo4j | Redis | Ollama | React
+License: Apache 2.0 | Zero monetary cost (I-1)
+
+## Non-Negotiable Invariants (14 total — see docs/cursor/architecture.md)
+- I-1: Zero cost. No paid APIs. No paid dependencies. Ever.
+- I-2: Independent reward functions per agent. No shared rewards.
+- I-3: Ontology-bound outputs validated against JSON Schema + NeMo Guardrails.
+- I-4: Append-only audit. REVOKE DELETE/UPDATE on audit tables.
+- I-5: Confidence-gated execution. Below threshold → HITL escalation.
+- I-6: Hard guardrails (1.3x cap, shift limits) override learned policies.
+- I-7: Graceful degradation. Every failure mode has a fallback.
+- I-8: Reproducible ML pipeline. MLflow lineage on every checkpoint.
+- I-9: A2A for inter-agent. MCP for agent-to-tool. Never conflate.
+- I-10: Tiered latency routing. 80% Tier 1 (<100ms). LLM only Tier 3-4.
+- I-11: Federated privacy via Flower. No raw data leaves store boundaries.
+- I-12: Twin fidelity. KL divergence >0.1 triggers re-sync.
+- I-13: KV-cache preservation. No cache-invalidating mutations.
+- I-14: Append-only runtime context. Never remove error traces.
+
+## Code Conventions
+- Type hints on ALL functions (mypy --strict must pass)
+- Pydantic BaseModel/BaseSettings for all configs and data models
+- All retries use Full Jitter from synapse_common.retry (ADR-016)
+- All JSON serialization: json.dumps(obj, sort_keys=True, separators=(',',':'))
+- All agent outputs validate against proto/domain/*.schema.json
+- Tests: pytest + hypothesis. Coverage >80%. Seven testing layers.
+- Imports: no openai, no anthropic, no cohere, no paid SDK. CI blocks.
+- Logging: structlog only. Never print(). Never bare except.
+
+## Agent Pattern (every agent follows agents/<name>/ canonical structure)
+- spec.yaml → test_spec.py (auto-generated) → implement → pytest green → commit
+- Reward functions in training/rewards.py are AGENT-SCOPED. Cross-agent = rejection.
+- A2A handler: proposal(), debate_respond(), execute() via JSON-RPC.
+- State machine in state_machine.py with recite_objective() every 10 tool calls.
+
+## Reference Docs (load on-demand when entering these directories)
+- docs/cursor/architecture.md — 4 layers, 8 agents, protocols, DAG
+- docs/cursor/agent_conventions.md — Canonical structure, spec format, reward isolation
+- docs/cursor/testing.md — Seven-layer topology, metamorphic, contracts, mutation
+- docs/cursor/domain_models.md — Pydantic models, Kafka topics, Feast features, Neo4j
+- docs/cursor/ollama_patterns.md — KV-cache, tier routing, context building, prefill

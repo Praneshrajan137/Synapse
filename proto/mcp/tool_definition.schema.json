@@ -1,0 +1,17 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "synapse.mcp.tool_definition",
+  "title": "SYNAPSE MCP Tool Definition (Agent-to-Tool — I-9)",
+  "type": "object",
+  "required": ["name", "description", "input_schema"],
+  "properties": {
+    "name": {"type": "string", "pattern": "^(rl_|feast_|graph_|llm_|twin_|playbook_)[a-z_]+$"},
+    "description": {"type": "string", "minLength": 10},
+    "input_schema": {"type": "object"},
+    "tier_availability": {
+      "type": "array",
+      "items": {"type": "string", "enum": ["tier_1", "tier_2", "tier_3", "tier_4"]}
+    }
+  },
+  "additionalProperties": false
+}

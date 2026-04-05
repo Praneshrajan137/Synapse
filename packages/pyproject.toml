@@ -1,0 +1,35 @@
+[build-system]
+requires = ["setuptools>=69.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "synapse-common"
+version = "0.1.0"
+description = "SYNAPSE shared libraries for all agents and orchestrator"
+requires-python = ">=3.11"
+license = {text = "Apache-2.0"}
+dependencies = [
+    "pydantic>=2.7.0,<3.0",
+    "confluent-kafka>=2.4.0,<3.0",
+    "httpx>=0.27.0,<1.0",
+    "prometheus-client>=0.20.0,<1.0",
+    "structlog>=24.1.0,<25.0",
+    "deal>=4.24.0,<5.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.2.0,<9.0",
+    "pytest-asyncio>=0.23.0,<1.0",
+    "pytest-cov>=5.0.0,<6.0",
+    "hypothesis>=6.100.0,<7.0",
+    "mypy>=1.10.0,<2.0",
+    "ruff>=0.4.0,<1.0",
+    "mutmut>=2.4.0,<3.0",
+    "schemathesis>=3.30.0,<4.0",
+    "pyyaml>=6.0.0,<7.0",
+    "jsonschema>=4.22.0,<5.0",
+]
+
+[tool.setuptools.packages.find]
+include = ["synapse_common*"]

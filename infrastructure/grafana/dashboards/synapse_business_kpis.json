@@ -1,0 +1,127 @@
+{
+  "dashboard": {
+    "id": null,
+    "uid": "synapse-business",
+    "title": "SYNAPSE Business KPIs",
+    "tags": ["synapse", "business"],
+    "timezone": "browser",
+    "schemaVersion": 39,
+    "version": 1,
+    "refresh": "30s",
+    "panels": [
+      {
+        "id": 1,
+        "title": "Fill Rate per Store",
+        "type": "gauge",
+        "gridPos": {"h": 8, "w": 8, "x": 0, "y": 0},
+        "targets": [
+          {
+            "expr": "synapse_fill_rate",
+            "legendFormat": "{{ store_id }}"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "percentunit",
+            "min": 0,
+            "max": 1,
+            "thresholds": {
+              "steps": [
+                {"color": "red", "value": null},
+                {"color": "yellow", "value": 0.85},
+                {"color": "green", "value": 0.95}
+              ]
+            }
+          }
+        }
+      },
+      {
+        "id": 2,
+        "title": "Waste Rate Trend",
+        "type": "timeseries",
+        "gridPos": {"h": 8, "w": 8, "x": 8, "y": 0},
+        "targets": [
+          {
+            "expr": "synapse_waste_rate",
+            "legendFormat": "{{ store_id }}"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "percentunit",
+            "thresholds": {
+              "steps": [
+                {"color": "green", "value": null},
+                {"color": "yellow", "value": 0.03},
+                {"color": "red", "value": 0.05}
+              ]
+            }
+          }
+        }
+      },
+      {
+        "id": 3,
+        "title": "Delivery Time Distribution",
+        "type": "histogram",
+        "gridPos": {"h": 8, "w": 8, "x": 16, "y": 0},
+        "targets": [
+          {
+            "expr": "histogram_quantile(0.50, synapse_inference_latency_seconds_bucket{agent_name=\"routing_navigator\"})",
+            "legendFormat": "p50"
+          },
+          {
+            "expr": "histogram_quantile(0.95, synapse_inference_latency_seconds_bucket{agent_name=\"routing_navigator\"})",
+            "legendFormat": "p95"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {"unit": "s"}
+        }
+      },
+      {
+        "id": 4,
+        "title": "HITL Escalation Rate",
+        "type": "gauge",
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 8},
+        "targets": [
+          {
+            "expr": "synapse_escalation_rate"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "percentunit",
+            "min": 0,
+            "max": 1,
+            "thresholds": {
+              "steps": [
+                {"color": "green", "value": null},
+                {"color": "yellow", "value": 0.10},
+                {"color": "red", "value": 0.15}
+              ]
+            }
+          }
+        }
+      },
+      {
+        "id": 5,
+        "title": "Pricing Cap Violations (I-6)",
+        "type": "timeseries",
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 8},
+        "targets": [
+          {
+            "expr": "rate(synapse_decisions_total{agent_name=\"pricing_oracle\",outcome=\"guardrail_blocked\"}[5m])",
+            "legendFormat": "blocked"
+          },
+          {
+            "expr": "rate(synapse_decisions_total{agent_name=\"pricing_oracle\",outcome=\"guardrail_capped\"}[5m])",
+            "legendFormat": "capped"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {"unit": "ops"}
+        }
+      }
+    ]
+  }
+}

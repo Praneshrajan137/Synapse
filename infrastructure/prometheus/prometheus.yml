@@ -1,0 +1,55 @@
+# ============================================================================
+# SYNAPSE Prometheus Configuration
+# ============================================================================
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+  scrape_timeout: 10s
+
+rule_files:
+  - "alert_rules.yml"
+
+scrape_configs:
+  # ── Prometheus self-monitoring ──
+  - job_name: "prometheus"
+    static_configs:
+      - targets: ["localhost:9090"]
+
+  # ── Infrastructure (Sprint 2: add redis_exporter, jmx_exporter, neo4j metrics) ──
+  # Redis, Kafka, and Neo4j do not expose /metrics natively.
+  # Uncomment after adding exporter sidecars.
+  # - job_name: "redis"
+  #   static_configs:
+  #     - targets: ["redis-exporter:9121"]
+  # - job_name: "kafka"
+  #   static_configs:
+  #     - targets: ["kafka-jmx-exporter:9404"]
+  # - job_name: "neo4j"
+  #   static_configs:
+  #     - targets: ["neo4j:2004"]
+
+  # ── Agent Services (populated in Sprint 2+) ──
+  - job_name: "synapse-agents"
+    static_configs:
+      - targets: []
+    # Will be populated dynamically as agents come online:
+    # demand_prophet:8001, routing_navigator:8002, inventory_sentinel:8003
+    # freshness_guardian:8004, pricing_oracle:8005, disruption_shield:8006
+    # supplier_trust:8007, sustainability_agent:8008
+
+  # ── Orchestrator ──
+  - job_name: "synapse-orchestrator"
+    static_configs:
+      - targets: []
+    # orchestrator:8010
+
+  # ── MLflow ──
+  - job_name: "mlflow"
+    static_configs:
+      - targets: ["mlflow:5000"]
+
+  # ── API Gateway ──
+  - job_name: "api-gateway"
+    static_configs:
+      - targets: []
+    # api:8000

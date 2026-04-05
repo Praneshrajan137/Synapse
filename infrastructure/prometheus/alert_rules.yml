@@ -1,0 +1,89 @@
+# ============================================================================
+# SYNAPSE Prometheus Alert Rules
+# Maps to architectural invariants and SLA requirements
+# ============================================================================
+groups:
+  - name: synapse_infrastructure
+    interval: 30s
+    rules:
+      - alert: KafkaConsumerLagHigh
+        expr: kafka_consumer_group_lag > 1000
+        for: 5m
+        labels:
+          severity: warning
+          invariant: "I-7"
+        annotations:
+          summary: "Kafka consumer lag exceeds 1000 for {{ $labels.consumer_group }}"
+          description: "Consumer group {{ $labels.consumer_group }} on topic {{ $labels.topic }} has lag {{ $value }}. Graceful degradation to Redis fallback may be needed."
+
+      - alert: RedisMemoryHigh
+        expr: redis_memory_used_bytes / redis_memory_max_bytes > 0.85
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Redis memory usage above 85%"
+
+      - alert: Neo4jQueryLatencyHigh
+        expr: histogram_quantile(0.95, neo4j_query_duration_seconds_bucket) > 0.1
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Neo4j p95 query latency exceeds 100ms"
+
+      - alert: ContainerCPUHigh
+        expr: rate(container_cpu_usage_seconds_total[5m]) > 0.8
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Container {{ $labels.name }} CPU above 80%"
+
+      - alert: ContainerMemoryHigh
+        expr: container_memory_usage_bytes / container_spec_memory_limit_bytes > 0.85
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Container {{ $labels.name }} memory above 85%"
+
+  - name: synapse_kv_cache
+    interval: 15s
+    rules:
+      - alert: OllamaCacheHitRateLow
+        expr: synapse_ollama_cache_hit_rate{tier="2"} < 0.70
+        for: 5m
+        labels:
+          severity: critical
+          invariant: "I-13"
+        annotations:
+          summary: "Tier 2 Ollama KV-cache hit rate below 70% — latency regression (ADR-021)"
+
+  - name: synapse_business
+    interval: 60s
+    rules:
+      - alert: FillRateLow
+        expr: synapse_fill_rate < 0.90
+        for: 15m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Fill rate below 90% — inventory action required"
+
+      - alert: WasteRateHigh
+        expr: synapse_waste_rate > 0.05
+        for: 30m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Waste rate above 5%"
+
+      - alert: EscalationRateHigh
+        expr: synapse_escalation_rate > 0.15
+        for: 15m
+        labels:
+          severity: warning
+          invariant: "I-5"
+        annotations:
+          summary: "HITL escalation rate above 15% — model confidence degradation"

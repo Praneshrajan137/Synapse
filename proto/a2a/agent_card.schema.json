@@ -1,0 +1,25 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "synapse.a2a.agent_card",
+  "title": "SYNAPSE A2A Agent Card",
+  "description": "Agent capability declaration per A2A Protocol (Google/Linux Foundation)",
+  "type": "object",
+  "required": ["name", "description", "version", "url", "capabilities", "supported_methods"],
+  "properties": {
+    "name": {"type": "string", "pattern": "^[a-z_]+$"},
+    "description": {"type": "string", "minLength": 10},
+    "version": {"type": "string", "pattern": "^\\d+\\.\\d+\\.\\d+$"},
+    "url": {"type": "string", "format": "uri"},
+    "capabilities": {
+      "type": "array",
+      "items": {"type": "string"},
+      "minItems": 1
+    },
+    "supported_methods": {
+      "type": "array",
+      "items": {"type": "string", "enum": ["proposal", "debate_respond", "execute", "health", "metrics"]},
+      "minItems": 3
+    }
+  },
+  "additionalProperties": false
+}

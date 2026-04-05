@@ -1,0 +1,86 @@
+# ============================================================================
+# SYNAPSE Pre-Commit Hooks — 11 hooks enforcing architectural invariants
+# ============================================================================
+repos:
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.4.8
+    hooks:
+      - id: ruff
+        name: ruff-check
+        args: [--fix, --exit-non-zero-on-fix]
+      - id: ruff-format
+        name: ruff-format
+
+  - repo: https://github.com/pre-commit/mirrors-mypy
+    rev: v1.10.0
+    hooks:
+      - id: mypy
+        name: mypy-strict
+        args: [--strict]
+        additional_dependencies:
+          - pydantic>=2.7.0
+          - types-PyYAML
+
+  - repo: local
+    hooks:
+      - id: schema-validate
+        name: schema-validate
+        entry: python scripts/validate_schemas.py
+        language: python
+        files: '(agent_card\.json|mcp_tools\.json|\.schema\.json)$'
+        pass_filenames: false
+
+      - id: spec-validate
+        name: spec-validate
+        entry: python -c "import yaml, json, jsonschema, sys; spec=yaml.safe_load(open(sys.argv[1])); schema=json.load(open('docs/specs/agent_spec_schema.json')); jsonschema.validate(spec, schema); print(f'OK {sys.argv[1]}')"
+        language: python
+        files: 'spec\.yaml$'
+        additional_dependencies: [pyyaml, jsonschema]
+
+      - id: reward-isolation
+        name: reward-isolation
+        entry: python -c "
+import sys, ast
+for f in sys.argv[1:]:
+    tree = ast.parse(open(f).read())
+    for node in ast.walk(tree):
+        if isinstance(node, ast.ImportFrom) and node.module and 'agents.' in node.module:
+            parts = node.module.split('.')
+            if len(parts) >= 2 and parts[1] != f.split('/')[1]:
+                print(f'FAIL {f}: Cross-agent import from {node.module} violates I-2')
+                sys.exit(1)
+print('OK Reward isolation verified')
+"
+        language: python
+        files: 'rewards\.py$'
+
+      - id: no-paid-apis
+        name: no-paid-apis
+        entry: python -c "
+import sys
+PAID = ['import openai', 'from openai', 'import anthropic', 'from anthropic',
+        'import cohere', 'from cohere', 'import replicate', 'from replicate']
+for f in sys.argv[1:]:
+    content = open(f).read()
+    for pattern in PAID:
+        if pattern in content:
+            print(f'FAIL {f}: Paid API import detected: {pattern} — violates I-1')
+            sys.exit(1)
+print('OK No paid API imports')
+"
+        language: python
+        files: '\.py$'
+
+      - id: jitter-enforcement
+        name: jitter-enforcement
+        entry: python -c "
+import sys
+for f in sys.argv[1:]:
+    content = open(f).read()
+    if 'time.sleep' in content and 'retry_with_jitter' not in content and 'test_' not in f:
+        print(f'FAIL {f}: time.sleep without retry_with_jitter — violates ADR-016')
+        sys.exit(1)
+print('OK Jitter enforcement verified')
+"
+        language: python
+        files: '\.py$'

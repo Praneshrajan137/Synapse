@@ -1,0 +1,22 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "synapse.domain.demand_forecast",
+  "title": "Demand Prophet Forecast Output",
+  "type": "object",
+  "required": ["sku_id", "store_id", "forecast_timestamp", "horizons", "lower_90", "upper_90", "confidence", "drift_detected"],
+  "properties": {
+    "sku_id": {"type": "string"},
+    "store_id": {"type": "string"},
+    "forecast_timestamp": {"type": "string", "format": "date-time"},
+    "horizons": {
+      "type": "object",
+      "patternProperties": {"^(15min|1h|6h|24h|7d)$": {"type": "number", "minimum": 0}},
+      "additionalProperties": false
+    },
+    "lower_90": {"type": "object"},
+    "upper_90": {"type": "object"},
+    "confidence": {"type": "number", "minimum": 0.0, "maximum": 1.0},
+    "drift_detected": {"type": "boolean"}
+  },
+  "additionalProperties": false
+}
