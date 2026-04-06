@@ -1,0 +1,45 @@
+{
+  "agent_name": "pricing_oracle",
+  "version": "1.0.0",
+  "description": "Multi-agent RL pricing with per-category MADDPG agents and causal elasticity estimation via Double ML. Essential price cap 1.3x enforced as hard guardrail.",
+  "protocol": "a2a",
+  "protocol_version": "1.0",
+  "endpoint": "http://pricing-oracle:8005",
+  "capabilities": [
+    {
+      "name": "price_optimization",
+      "description": "Generate optimal price multipliers with causal elasticity estimates and hard essential cap enforcement",
+      "input_schema": "proto/domain/pricing_request.schema.json",
+      "output_schema": "proto/domain/pricing_update.schema.json"
+    }
+  ],
+  "methods": [
+    {
+      "name": "proposal",
+      "description": "Generate pricing proposal for Orchestrator consensus",
+      "params": ["decision_context"],
+      "returns": "AgentProposal"
+    },
+    {
+      "name": "debate_respond",
+      "description": "Revise pricing based on other agents' proposals",
+      "params": ["proposals", "round_number"],
+      "returns": "AgentProposal"
+    },
+    {
+      "name": "execute",
+      "description": "Execute approved pricing and publish to Kafka",
+      "params": ["consensus_action"],
+      "returns": "ExecutionResult"
+    }
+  ],
+  "health_endpoint": "/health",
+  "metrics_endpoint": "/metrics",
+  "decision_tiers": ["tier_2", "tier_3"],
+  "kafka_topics": {
+    "produces": ["synapse.pricing.update"],
+    "consumes": ["synapse.demand.forecast", "synapse.freshness.alert"]
+  },
+  "feast_features": ["sku_price_history", "competitor_prices", "demand_elasticity"],
+  "dependencies": ["feast", "kafka", "neo4j", "mlflow"]
+}

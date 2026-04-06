@@ -1,0 +1,45 @@
+{
+  "agent_name": "disruption_shield",
+  "version": "1.0.0",
+  "description": "Detects supply chain disruptions via anomaly ensemble, retrieves recovery playbooks from Pinecone, and generates reasoning chains via DeepSeek-R1 on Ollama",
+  "protocol": "a2a",
+  "protocol_version": "1.0",
+  "endpoint": "http://disruption-shield:8006",
+  "capabilities": [
+    {
+      "name": "detect_disruption",
+      "description": "Run anomaly ensemble on supply chain signals and produce disruption alert with playbook",
+      "input_schema": "proto/domain/disruption_request.schema.json",
+      "output_schema": "proto/domain/disruption_alert.schema.json"
+    }
+  ],
+  "methods": [
+    {
+      "name": "proposal",
+      "description": "Generate disruption assessment proposal for Orchestrator consensus",
+      "params": ["decision_context"],
+      "returns": "AgentProposal"
+    },
+    {
+      "name": "debate_respond",
+      "description": "Revise disruption assessment based on other agents' proposals",
+      "params": ["proposals", "round_number"],
+      "returns": "AgentProposal"
+    },
+    {
+      "name": "execute",
+      "description": "Execute approved disruption response and publish alert + playbook to Kafka",
+      "params": ["consensus_action"],
+      "returns": "ExecutionResult"
+    }
+  ],
+  "health_endpoint": "/health",
+  "metrics_endpoint": "/metrics",
+  "decision_tiers": ["tier_2", "tier_3"],
+  "kafka_topics": {
+    "produces": ["synapse.disruption.alert", "synapse.disruption.playbook"],
+    "consumes": ["synapse.twin.divergence"]
+  },
+  "feast_features": ["supply_chain_signals", "node_operational_state"],
+  "dependencies": ["feast", "kafka", "pinecone", "ollama"]
+}

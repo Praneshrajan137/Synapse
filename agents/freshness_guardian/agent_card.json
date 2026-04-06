@@ -1,0 +1,45 @@
+{
+  "agent_name": "freshness_guardian",
+  "version": "1.0.0",
+  "description": "Monitors perishable inventory shelf life, applies dynamic markdown, triggers cross-store rebalancing, and enforces FSSAI cold chain compliance",
+  "protocol": "a2a",
+  "protocol_version": "1.0",
+  "endpoint": "http://freshness-guardian:8004",
+  "capabilities": [
+    {
+      "name": "assess_freshness",
+      "description": "Evaluates shelf life and quality of perishable SKUs at a given store",
+      "input_schema": "proto/domain/freshness_request.schema.json",
+      "output_schema": "proto/domain/freshness_alert.schema.json"
+    }
+  ],
+  "methods": [
+    {
+      "name": "proposal",
+      "description": "Generate freshness assessment proposal for Orchestrator consensus",
+      "params": ["decision_context"],
+      "returns": "AgentProposal"
+    },
+    {
+      "name": "debate_respond",
+      "description": "Revise freshness assessment based on other agents' proposals",
+      "params": ["proposals", "round_number"],
+      "returns": "AgentProposal"
+    },
+    {
+      "name": "execute",
+      "description": "Execute approved freshness action and publish to Kafka",
+      "params": ["consensus_action"],
+      "returns": "ExecutionResult"
+    }
+  ],
+  "health_endpoint": "/health",
+  "metrics_endpoint": "/metrics",
+  "decision_tiers": ["tier_1", "tier_2"],
+  "kafka_topics": {
+    "produces": ["synapse.freshness.alert"],
+    "consumes": ["synapse.inventory.state"]
+  },
+  "feast_features": ["perishable_state", "store_operational_state"],
+  "dependencies": ["feast", "kafka"]
+}

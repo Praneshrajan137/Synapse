@@ -1,0 +1,23 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "FreshnessAlert",
+  "type": "object",
+  "required": ["alert_id", "store_id", "sku_id", "days_to_expiry", "quality_score",
+                "markdown_applied", "markdown_pct", "fssai_compliant", "timestamp", "confidence"],
+  "properties": {
+    "alert_id": {"type": "string", "format": "uuid"},
+    "store_id": {"type": "string"},
+    "sku_id": {"type": "string"},
+    "days_to_expiry": {"type": "number", "minimum": 0},
+    "quality_score": {"type": "number", "minimum": 0, "maximum": 1},
+    "markdown_applied": {"type": "boolean"},
+    "markdown_pct": {"type": "number", "minimum": 0, "maximum": 100},
+    "temperature_deviation_hours": {"type": "number", "minimum": 0},
+    "rebalance_recommended": {"type": "boolean"},
+    "target_store_id": {"type": ["string", "null"]},
+    "fssai_compliant": {"type": "boolean"},
+    "timestamp": {"type": "string", "format": "date-time"},
+    "confidence": {"type": "number", "minimum": 0, "maximum": 1}
+  },
+  "additionalProperties": false
+}

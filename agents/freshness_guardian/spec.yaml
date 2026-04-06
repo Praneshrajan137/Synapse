@@ -1,0 +1,152 @@
+# ============================================================================
+# SYNAPSE Freshness Guardian -- Formal Behavioral Specification (SDD)
+# Auto-generates test_spec.py via: python scripts/generate_tests_from_spec.py
+# ============================================================================
+agent_name: freshness_guardian
+version: "1.0.0"
+description: >
+  Monitors perishable inventory shelf life via simulated IoT data, applies
+  dynamic markdown pricing as items approach expiry, triggers cross-store
+  rebalancing, and enforces FSSAI cold chain compliance logging. Uses
+  survival analysis (lifelines) for shelf life modeling and Weibull
+  distributions for expiry prediction.
+
+architecture:
+  shelf_life_model: "Weibull AFT (lifelines)"
+  markdown_engine: "Rule-based + RL-learned tiers"
+  compliance: "FSSAI cold chain logging"
+  rebalancing: "Cross-store quality-gated transfer"
+
+invariants:
+  - id: "INV-FG-001"
+    description: "Every freshness assessment includes quality_score in [0, 1]"
+    assertion: "0.0 <= output.quality_score <= 1.0"
+    severity: critical
+
+  - id: "INV-FG-002"
+    description: "Items with days_to_expiry = 0 MUST have markdown_applied = True"
+    assertion: "if output.days_to_expiry == 0 then output.markdown_applied == True"
+    severity: critical
+
+  - id: "INV-FG-003"
+    description: "FSSAI cold chain violation triggers immediate alert with fssai_compliant = False"
+    assertion: "if temperature_deviation_hours > 4 then output.fssai_compliant == False"
+    severity: critical
+
+  - id: "INV-FG-004"
+    description: "Markdown percentage increases monotonically as days_to_expiry decreases"
+    assertion: "d2 < d1 implies markdown_pct(d2) >= markdown_pct(d1)"
+    severity: high
+
+  - id: "INV-FG-005"
+    description: "Cross-store rebalancing only triggered when quality_score > 0.5"
+    assertion: "if output.rebalance_recommended then output.quality_score > 0.5"
+    severity: medium
+
+  - id: "INV-FG-006"
+    description: "Reward function is entirely self-contained — no cross-agent imports"
+    assertion: "ast_check: no import from agents.* except agents.freshness_guardian"
+    severity: critical
+
+  - id: "INV-FG-007"
+    description: "Output validates against freshness_alert.schema.json"
+    assertion: "jsonschema.validate(output, freshness_alert_schema) passes"
+    severity: critical
+
+  - id: "INV-FG-008"
+    description: "Graceful degradation: if Feast unavailable, use last-known values from Redis cache"
+    assertion: "feast_down implies fallback_to_redis and output.confidence < 0.7"
+    severity: high
+
+preconditions:
+  - id: "PRE-FG-001"
+    description: "Store ID is a non-empty string"
+    check: "len(store_id) > 0"
+
+  - id: "PRE-FG-002"
+    description: "SKU ID is a non-empty string"
+    check: "len(sku_id) > 0"
+
+  - id: "PRE-FG-003"
+    description: "Initial shelf life is positive"
+    check: "initial_shelf_life_days > 0"
+
+postconditions:
+  - id: "POST-FG-001"
+    description: "All output fields are non-null"
+    check: "all(v is not None for v in output.__dict__.values())"
+
+  - id: "POST-FG-002"
+    description: "Timestamp is valid ISO-8601"
+    check: "datetime.fromisoformat(output.timestamp) is not None"
+
+  - id: "POST-FG-003"
+    description: "Confidence in [0, 1]"
+    check: "0.0 <= output.confidence <= 1.0"
+
+  - id: "POST-FG-004"
+    description: "Kafka message published to synapse.freshness.alert"
+    check: "kafka_publish_success == True"
+
+state_machine:
+  initial_state: "IDLE"
+  states: ["IDLE", "PROPOSING", "DEBATING", "EXECUTING", "LEARNING", "ERROR"]
+  transitions:
+    - from: "IDLE"
+      to: "PROPOSING"
+      trigger: "freshness_request_received"
+      guard: "kafka_healthy"
+      timeout_seconds: 2
+    - from: "PROPOSING"
+      to: "DEBATING"
+      trigger: "proposal_submitted"
+      guard: "confidence >= 0.0"
+      timeout_seconds: 5
+    - from: "DEBATING"
+      to: "EXECUTING"
+      trigger: "consensus_reached"
+      guard: "orchestrator_approved"
+      timeout_seconds: 30
+    - from: "EXECUTING"
+      to: "LEARNING"
+      trigger: "execution_confirmed"
+      timeout_seconds: 10
+    - from: "LEARNING"
+      to: "IDLE"
+      trigger: "policy_updated"
+      timeout_seconds: 5
+    - from: "PROPOSING"
+      to: "ERROR"
+      trigger: "exception_raised"
+    - from: "EXECUTING"
+      to: "ERROR"
+      trigger: "exception_raised"
+    - from: "ERROR"
+      to: "IDLE"
+      trigger: "error_handled"
+      timeout_seconds: 30
+
+metamorphic_relations:
+  - id: "MR-FG-001"
+    description: "days_to_expiry = 0 implies markdown_applied = True"
+    transform: "set days_since_receipt = initial_shelf_life_days"
+    expected: "output.markdown_applied == True"
+
+  - id: "MR-FG-002"
+    description: "Higher temperature deviation implies lower quality_score"
+    transform: "increase temperature_deviation_hours from 0 to 12"
+    expected: "quality_score decreases"
+
+  - id: "MR-FG-003"
+    description: "Increasing shelf_life_days for same conditions implies higher quality_score"
+    transform: "increase initial_shelf_life_days from 5 to 30"
+    expected: "quality_score increases at same days_since_receipt"
+
+contracts:
+  - producer: "freshness_guardian"
+    expectations:
+      - "output includes days_to_expiry, quality_score, markdown_applied, fssai_compliant"
+      - "quality_score in [0, 1]"
+      - "markdown_pct in [0, 100]"
+      - "fssai_compliant is boolean"
+      - "timestamp is valid ISO-8601"

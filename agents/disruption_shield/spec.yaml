@@ -1,0 +1,149 @@
+# ============================================================================
+# SYNAPSE Disruption Shield -- Formal Behavioral Specification (SDD)
+# Auto-generates test_spec.py via: python scripts/generate_tests_from_spec.py
+# ============================================================================
+agent_name: disruption_shield
+version: "1.0.0"
+description: >
+  Detects supply chain disruptions via a three-model anomaly ensemble
+  (Isolation Forest, LSTM Autoencoder, GNN Structural Anomaly), retrieves
+  historical playbooks from Pinecone vector store, and generates reasoning
+  chains via DeepSeek-R1 (Ollama). Produces disruption alerts with
+  confidence-gated escalation (I-5) and recovery playbooks.
+
+architecture:
+  anomaly_ensemble: "IsolationForest + LSTMAutoencoder + GNNStructuralAnomaly"
+  weights: "0.3*IF + 0.3*LSTM + 0.4*GNN"
+  reasoning: "DeepSeek-R1:14b via Ollama (zero-cost, I-1)"
+  playbook_retrieval: "Pinecone + sentence-transformers all-mpnet-base-v2"
+  sla: "Pinecone retrieval < 200ms (INV-DS-002)"
+
+invariants:
+  - id: "INV-DS-001"
+    description: "Anomaly score above threshold implies alert_level > 0"
+    assertion: "if ensemble_score > threshold then output.alert_level > 0"
+    severity: critical
+
+  - id: "INV-DS-002"
+    description: "Pinecone playbook retrieval latency < 200ms"
+    assertion: "playbook_retrieval_latency_ms < 200"
+    severity: critical
+
+  - id: "INV-DS-003"
+    description: "Every disruption alert includes a non-empty reasoning chain"
+    assertion: "len(output.reasoning_chain) > 0"
+    severity: critical
+
+  - id: "INV-DS-004"
+    description: "Reward function is entirely self-contained — no cross-agent imports"
+    assertion: "ast_check: no import from agents.* except agents.disruption_shield"
+    severity: critical
+
+  - id: "INV-DS-005"
+    description: "Output validates against disruption_alert.schema.json"
+    assertion: "jsonschema.validate(output, disruption_alert_schema) passes"
+    severity: critical
+
+  - id: "INV-DS-006"
+    description: "Graceful degradation: if Pinecone unavailable, return cached playbooks"
+    assertion: "pinecone_down implies fallback_to_cache and output.confidence < 0.7"
+    severity: high
+
+  - id: "INV-DS-007"
+    description: "Ensemble score is a weighted combination in [0, 1]"
+    assertion: "0.0 <= output.ensemble_score <= 1.0"
+    severity: critical
+
+preconditions:
+  - id: "PRE-DS-001"
+    description: "Supply chain graph node IDs are non-empty"
+    check: "len(node_ids) > 0"
+
+  - id: "PRE-DS-002"
+    description: "Time-series feature matrix has at least one row"
+    check: "feature_matrix.shape[0] > 0"
+
+  - id: "PRE-DS-003"
+    description: "Anomaly threshold is in (0, 1)"
+    check: "0.0 < anomaly_threshold < 1.0"
+
+postconditions:
+  - id: "POST-DS-001"
+    description: "All output fields are non-null"
+    check: "all(v is not None for v in output.__dict__.values())"
+
+  - id: "POST-DS-002"
+    description: "Timestamp is valid ISO-8601"
+    check: "datetime.fromisoformat(output.timestamp) is not None"
+
+  - id: "POST-DS-003"
+    description: "Confidence in [0, 1]"
+    check: "0.0 <= output.confidence <= 1.0"
+
+  - id: "POST-DS-004"
+    description: "Kafka message published to synapse.disruption.alert"
+    check: "kafka_publish_success == True"
+
+state_machine:
+  initial_state: "IDLE"
+  states: ["IDLE", "PROPOSING", "DEBATING", "EXECUTING", "LEARNING", "ERROR"]
+  transitions:
+    - from: "IDLE"
+      to: "PROPOSING"
+      trigger: "disruption_signal_received"
+      guard: "kafka_healthy"
+      timeout_seconds: 2
+    - from: "PROPOSING"
+      to: "DEBATING"
+      trigger: "proposal_submitted"
+      guard: "confidence >= 0.0"
+      timeout_seconds: 5
+    - from: "DEBATING"
+      to: "EXECUTING"
+      trigger: "consensus_reached"
+      guard: "orchestrator_approved"
+      timeout_seconds: 30
+    - from: "EXECUTING"
+      to: "LEARNING"
+      trigger: "execution_confirmed"
+      timeout_seconds: 10
+    - from: "LEARNING"
+      to: "IDLE"
+      trigger: "policy_updated"
+      timeout_seconds: 5
+    - from: "PROPOSING"
+      to: "ERROR"
+      trigger: "exception_raised"
+    - from: "EXECUTING"
+      to: "ERROR"
+      trigger: "exception_raised"
+    - from: "ERROR"
+      to: "IDLE"
+      trigger: "error_handled"
+      timeout_seconds: 30
+
+metamorphic_relations:
+  - id: "MR-DS-001"
+    description: "Increasing anomaly magnitude implies higher or equal alert_level"
+    transform: "scale anomaly features by factor 2x"
+    expected: "output.alert_level(2x) >= output.alert_level(1x)"
+
+  - id: "MR-DS-002"
+    description: "Adding affected nodes increases ensemble score"
+    transform: "add 3 anomalous nodes to supply chain graph"
+    expected: "ensemble_score increases or stays equal"
+
+  - id: "MR-DS-003"
+    description: "Removing all anomalies results in alert_level = 0"
+    transform: "set all feature values to nominal range"
+    expected: "output.alert_level == 0"
+
+contracts:
+  - producer: "disruption_shield"
+    expectations:
+      - "output includes alert_level, ensemble_score, reasoning_chain, playbooks"
+      - "ensemble_score in [0, 1]"
+      - "alert_level in {0, 1, 2, 3}"
+      - "reasoning_chain is a non-empty list of strings"
+      - "playbooks is a list of dicts with keys: id, title, relevance_score"
+      - "timestamp is valid ISO-8601"

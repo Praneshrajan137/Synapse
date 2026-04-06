@@ -1,0 +1,169 @@
+# ============================================================================
+# SYNAPSE Sustainability Agent -- Formal Behavioral Specification (SDD)
+# Auto-generates test_spec.py via: python scripts/generate_tests_from_spec.py
+# ============================================================================
+agent_name: sustainability_agent
+version: "1.0.0"
+description: >
+  Carbon footprint tracking, food waste prediction via survival analysis,
+  and ESG report generation with full provenance. Integrates CodeCarbon for
+  compute emissions and Routing Navigator fuel estimates for delivery CO2.
+
+architecture:
+  carbon_tracker: "CodeCarbon EmissionsTracker"
+  waste_model: "lifelines KaplanMeierFitter + CoxPHFitter"
+  esg_report: "Provenance-backed ESG summary (I-3)"
+  pareto_objective: "Carbon cost as first-class Pareto dimension"
+
+invariants:
+  - id: "INV-SA-001"
+    description: "Carbon cost is a first-class Pareto objective with weight > 0"
+    assertion: "pareto_weights.get('carbon', 0.0) > 0.0"
+    severity: critical
+
+  - id: "INV-SA-002"
+    description: "CO2 estimate within 10% of Digital Twin reference"
+    assertion: "abs(co2_estimate - twin_reference) / (twin_reference + 1e-9) <= 0.10"
+    severity: critical
+
+  - id: "INV-SA-003"
+    description: "ESG report includes full provenance chain"
+    assertion: "len(report.provenance_chain) > 0 and all(p.source != '' for p in report.provenance_chain)"
+    severity: critical
+
+  - id: "INV-SA-004"
+    description: "All CO2 values are non-negative"
+    assertion: "co2_kg >= 0.0"
+    severity: critical
+
+  - id: "INV-SA-005"
+    description: "Waste prediction probability in [0, 1]"
+    assertion: "0.0 <= waste_probability <= 1.0"
+    severity: critical
+
+  - id: "INV-SA-006"
+    description: "Confidence score is bounded [0, 1]"
+    assertion: "0.0 <= output.confidence <= 1.0"
+    severity: critical
+
+  - id: "INV-SA-007"
+    description: "Output validates against sustainability_report.schema.json"
+    assertion: "jsonschema.validate(output.dict(), sustainability_report_schema) passes"
+    severity: critical
+
+  - id: "INV-SA-008"
+    description: "Inference latency within Tier 2 SLA"
+    assertion: "inference_latency_ms < 500"
+    severity: high
+
+  - id: "INV-SA-009"
+    description: "Output serialization is deterministic (I-13)"
+    assertion: "output.to_deterministic_json() == output.to_deterministic_json()"
+    severity: critical
+
+preconditions:
+  - id: "PRE-SA-001"
+    description: "Route plan includes fuel_estimate_liters"
+    check: "route_plan.fuel_estimate_liters >= 0.0"
+
+  - id: "PRE-SA-002"
+    description: "Route plan includes distance_km"
+    check: "route_plan.total_distance_km >= 0.0"
+
+  - id: "PRE-SA-003"
+    description: "Product quality scores are non-negative"
+    check: "all(score >= 0.0 for score in quality_scores)"
+
+  - id: "PRE-SA-004"
+    description: "SKU shelf life data available"
+    check: "shelf_life_days > 0"
+
+postconditions:
+  - id: "POST-SA-001"
+    description: "Carbon report produced with all required fields"
+    check: "report.delivery_co2_kg is not None and report.compute_co2_kg is not None"
+
+  - id: "POST-SA-002"
+    description: "ESG provenance chain non-empty"
+    check: "len(report.provenance_chain) > 0"
+
+  - id: "POST-SA-003"
+    description: "Kafka message published to synapse.sustainability.carbon"
+    check: "kafka_publish_success == True"
+
+  - id: "POST-SA-004"
+    description: "MLflow metrics logged"
+    check: "mlflow_log_success == True"
+
+  - id: "POST-SA-005"
+    description: "Waste prediction includes survival curve"
+    check: "waste_result.survival_curve is not None"
+
+state_machine:
+  initial_state: "IDLE"
+  states: ["IDLE", "PROPOSING", "DEBATING", "EXECUTING", "LEARNING", "ERROR"]
+  transitions:
+    - from: "IDLE"
+      to: "PROPOSING"
+      trigger: "carbon_report_requested"
+      guard: "kafka_healthy and codecarbon_available"
+      timeout_seconds: 2
+    - from: "PROPOSING"
+      to: "DEBATING"
+      trigger: "proposal_submitted"
+      guard: "confidence >= 0.0"
+      timeout_seconds: 5
+    - from: "DEBATING"
+      to: "EXECUTING"
+      trigger: "consensus_reached"
+      guard: "orchestrator_approved"
+      timeout_seconds: 30
+    - from: "EXECUTING"
+      to: "LEARNING"
+      trigger: "execution_confirmed"
+      timeout_seconds: 10
+    - from: "LEARNING"
+      to: "IDLE"
+      trigger: "policy_updated"
+      timeout_seconds: 5
+    - from: "PROPOSING"
+      to: "ERROR"
+      trigger: "exception_raised"
+    - from: "EXECUTING"
+      to: "ERROR"
+      trigger: "exception_raised"
+    - from: "ERROR"
+      to: "IDLE"
+      trigger: "error_handled"
+      timeout_seconds: 30
+
+metamorphic_relations:
+  - id: "MR-SA-001"
+    description: "Doubling fuel consumption doubles delivery CO2"
+    transform: "multiply fuel_estimate_liters by 2"
+    expected: "delivery_co2_kg doubles (within 1% tolerance)"
+
+  - id: "MR-SA-002"
+    description: "Zero distance yields zero delivery CO2"
+    transform: "set total_distance_km to 0 and fuel_estimate_liters to 0"
+    expected: "delivery_co2_kg == 0.0"
+
+  - id: "MR-SA-003"
+    description: "Higher quality score reduces predicted waste rate"
+    transform: "increase quality_score by 20%"
+    expected: "predicted waste probability decreases or stays equal"
+
+  - id: "MR-SA-004"
+    description: "Longer shelf life reduces predicted waste rate"
+    transform: "increase shelf_life_days by 50%"
+    expected: "predicted waste probability decreases"
+
+contracts:
+  - producer: "sustainability_agent"
+    expectations:
+      - "output includes delivery_co2_kg, compute_co2_kg, waste_rate fields"
+      - "all CO2 values are non-negative"
+      - "ESG report includes provenance_chain with at least one entry"
+      - "carbon Pareto weight is > 0"
+      - "proposal includes utility_score, confidence, justification_trace per A2A spec"
+      - "waste prediction includes survival_curve and hazard_rate"

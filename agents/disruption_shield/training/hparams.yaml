@@ -1,0 +1,67 @@
+# ============================================================================
+# SYNAPSE Disruption Shield -- Training Hyperparameters
+# Platform: Google Colab Free (T4 GPU) or local CPU
+# Estimated training time: ~2h on CPU (ensemble + RL fine-tuning)
+# ============================================================================
+model:
+  isolation_forest:
+    n_estimators: 100
+    contamination: 0.1
+    random_state: 42
+
+  lstm_autoencoder:
+    input_dim: 12
+    hidden_dim: 64
+    latent_dim: 16
+    seq_len: 24
+
+  gnn_structural:
+    in_channels: 12
+    hidden_channels: 32
+
+  ensemble_weights:
+    isolation_forest: 0.3
+    lstm_autoencoder: 0.3
+    gnn_structural: 0.4
+
+training:
+  seed: 42
+  learning_rate: 0.001
+  batch_size: 64
+  max_epochs: 50
+  patience: 7
+  lstm_epochs: 30
+  gnn_epochs: 20
+
+anomaly:
+  threshold: 0.65
+  alert_level_thresholds: [0.65, 0.80, 0.95]
+
+reward:
+  early_detection_weight: 1.0
+  false_positive_weight: 10.0
+  missed_disruption_weight: 50.0
+  recovery_speed_weight: 1.0
+
+data:
+  train_ratio: 0.7
+  val_ratio: 0.15
+  test_ratio: 0.15
+  synthetic_samples: 10000
+
+checkpointing:
+  save_every_n_epochs: 5
+  keep_best: true
+  best_metric: "val_f1_disruption"
+  best_mode: "max"
+
+reasoning:
+  ollama_model: "deepseek-r1:14b"
+  temperature: 0.3
+  max_tokens: 512
+
+playbook_retrieval:
+  embedding_model: "all-mpnet-base-v2"
+  pinecone_index: "synapse-playbooks"
+  top_k: 3
+  sla_ms: 200

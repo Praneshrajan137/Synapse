@@ -1,0 +1,63 @@
+# ============================================================================
+# SYNAPSE Pricing Oracle -- Training Hyperparameters
+# Platform: Google Colab Free (T4 GPU) or Kaggle (dual T4)
+# Estimated training time: ~6h / 5000 episodes on T4
+# ============================================================================
+model:
+  num_agents: 5
+  obs_dim: 24
+  action_dim: 1
+  actor_hidden_dim: 128
+  actor_num_layers: 3
+  critic_hidden_dim: 256
+  critic_num_layers: 3
+  gamma: 0.99
+  tau: 0.01
+
+training:
+  max_episodes: 5000
+  actor_lr: 0.0001
+  critic_lr: 0.001
+  weight_decay: 0.00001
+  gradient_clip_norm: 1.0
+  batch_size: 64
+  buffer_size: 100000
+  warmup_episodes: 100
+  noise_start: 0.3
+  noise_end: 0.01
+  noise_decay_episodes: 3000
+  optimizer: "AdamW"
+  seed: 42
+
+reward:
+  revenue_weight: 1.0
+  elasticity_weight: 0.5
+  essential_penalty_weight: -5.0
+  competitor_gap_weight: -2.0
+
+causal:
+  dml_cv_folds: 5
+  dml_max_iter: 1000
+  elasticity_update_interval: 50
+
+categories:
+  - essential
+  - snack
+  - beverage
+  - dairy
+  - produce
+
+essential_cap: 1.3
+
+data:
+  num_skus: 200
+  num_stores: 25
+  train_ratio: 0.7
+  val_ratio: 0.15
+  test_ratio: 0.15
+
+checkpointing:
+  save_every_n_episodes: 100
+  keep_best: true
+  best_metric: "val_total_reward"
+  best_mode: "max"

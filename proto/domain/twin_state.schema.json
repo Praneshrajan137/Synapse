@@ -1,0 +1,32 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "TwinState",
+  "type": "object",
+  "required": ["snapshot_id", "timestamp", "kl_divergence", "sync_status"],
+  "properties": {
+    "snapshot_id": {"type": "string", "format": "uuid"},
+    "timestamp": {"type": "string", "format": "date-time"},
+    "kl_divergence": {"type": "number", "minimum": 0},
+    "sync_status": {"type": "string", "enum": ["synced", "divergent", "resync_in_progress"]},
+    "node_counts": {
+      "type": "object",
+      "properties": {
+        "dark_stores": {"type": "integer"},
+        "warehouses": {"type": "integer"},
+        "suppliers": {"type": "integer"},
+        "skus": {"type": "integer"},
+        "riders": {"type": "integer"}
+      }
+    },
+    "simulation_metrics": {
+      "type": "object",
+      "properties": {
+        "avg_delivery_time_min": {"type": "number"},
+        "fill_rate": {"type": "number"},
+        "waste_rate": {"type": "number"},
+        "orders_per_hour": {"type": "number"}
+      }
+    }
+  },
+  "additionalProperties": false
+}

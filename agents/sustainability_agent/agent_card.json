@@ -1,0 +1,51 @@
+{
+  "agent_name": "sustainability_agent",
+  "version": "1.0.0",
+  "description": "Carbon footprint tracking, food waste survival analysis, and ESG report generation with provenance",
+  "protocol": "a2a",
+  "protocol_version": "1.0",
+  "endpoint": "http://sustainability-agent:8008",
+  "capabilities": [
+    {
+      "name": "carbon_report",
+      "description": "Generate carbon footprint report for deliveries and compute workloads",
+      "input_schema": "proto/domain/carbon_report_request.schema.json",
+      "output_schema": "proto/domain/carbon_report.schema.json"
+    },
+    {
+      "name": "waste_prediction",
+      "description": "Predict food waste probability using survival analysis",
+      "input_schema": "proto/domain/waste_prediction_request.schema.json",
+      "output_schema": "proto/domain/waste_prediction.schema.json"
+    }
+  ],
+  "methods": [
+    {
+      "name": "proposal",
+      "description": "Generate sustainability proposal for Orchestrator consensus",
+      "params": ["decision_context"],
+      "returns": "AgentProposal"
+    },
+    {
+      "name": "debate_respond",
+      "description": "Revise sustainability assessment based on other agents' proposals",
+      "params": ["proposals", "round_number"],
+      "returns": "AgentProposal"
+    },
+    {
+      "name": "execute",
+      "description": "Execute approved sustainability action and publish to Kafka",
+      "params": ["consensus_action"],
+      "returns": "ExecutionResult"
+    }
+  ],
+  "health_endpoint": "/health",
+  "metrics_endpoint": "/metrics",
+  "decision_tiers": ["tier_2", "tier_3"],
+  "kafka_topics": {
+    "produces": ["synapse.sustainability.carbon"],
+    "consumes": ["synapse.routing.plan"]
+  },
+  "feast_features": ["route_carbon_signals", "product_shelf_life", "quality_scores"],
+  "dependencies": ["feast", "kafka", "mlflow", "codecarbon"]
+}

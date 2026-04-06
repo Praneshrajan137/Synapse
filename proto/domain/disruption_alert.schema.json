@@ -1,0 +1,37 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "DisruptionAlert",
+  "type": "object",
+  "required": ["alert_id", "alert_level", "anomaly_scores", "affected_nodes",
+                "playbook_id", "reasoning_chain", "timestamp", "confidence"],
+  "properties": {
+    "alert_id": {"type": "string", "format": "uuid"},
+    "alert_level": {"type": "integer", "minimum": 1, "maximum": 10},
+    "anomaly_scores": {
+      "type": "object",
+      "properties": {
+        "isolation_forest": {"type": "number"},
+        "lstm_autoencoder": {"type": "number"},
+        "gnn_structural": {"type": "number"},
+        "ensemble_weighted": {"type": "number"}
+      },
+      "required": ["isolation_forest", "lstm_autoencoder", "gnn_structural", "ensemble_weighted"]
+    },
+    "affected_nodes": {"type": "array", "items": {"type": "string"}, "minItems": 1},
+    "disruption_type": {"type": "string"},
+    "playbook_id": {"type": "string"},
+    "playbook_actions": {"type": "string"},
+    "reasoning_chain": {"type": "string"},
+    "monte_carlo_impact": {
+      "type": "object",
+      "properties": {
+        "scenarios_run": {"type": "integer"},
+        "expected_kpi_degradation_pct": {"type": "number"},
+        "p95_degradation_pct": {"type": "number"}
+      }
+    },
+    "timestamp": {"type": "string", "format": "date-time"},
+    "confidence": {"type": "number", "minimum": 0, "maximum": 1}
+  },
+  "additionalProperties": false
+}

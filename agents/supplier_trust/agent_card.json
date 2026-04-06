@@ -1,0 +1,26 @@
+{
+  "agent_name": "supplier_trust",
+  "version": "1.0.0",
+  "description": "Bayesian trust scoring with GNN embeddings on temporal knowledge graph for supplier reliability",
+  "protocol": "a2a",
+  "protocol_version": "1.0",
+  "endpoint": "http://supplier-trust:8007",
+  "capabilities": [
+    {"name": "supplier_trust_scoring", "description": "Compute trust scores for suppliers using GNN + Bayesian lead-time"},
+    {"name": "lead_time_estimation", "description": "Bayesian posterior estimation of supplier lead times"}
+  ],
+  "methods": [
+    {"name": "proposal", "params": ["decision_context"], "returns": "AgentProposal"},
+    {"name": "debate_respond", "params": ["proposals", "round_number"], "returns": "AgentProposal"},
+    {"name": "execute", "params": ["consensus_action"], "returns": "ExecutionResult"}
+  ],
+  "health_endpoint": "/health",
+  "metrics_endpoint": "/metrics",
+  "decision_tiers": ["tier_2", "tier_3"],
+  "kafka_topics": {
+    "produces": ["synapse.supplier.score"],
+    "consumes": ["synapse.inventory.reorder"]
+  },
+  "feast_features": ["supplier_performance", "delivery_history", "lead_time_signals"],
+  "dependencies": ["feast", "kafka", "neo4j", "inventory_sentinel"]
+}

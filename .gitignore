@@ -48,6 +48,8 @@ Thumbs.db
 
 # Secrets (NEVER commit)
 .env
+.env.cloud
+.env.local
 *.key
 *.pem
 vault-token

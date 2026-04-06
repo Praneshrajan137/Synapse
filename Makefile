@@ -125,3 +125,76 @@ clean: ## Remove all generated files, caches, volumes
 	find . -type d -name .pytest_cache -exec rm -rf {} + 2>/dev/null || true
 	find . -type d -name .ruff_cache -exec rm -rf {} + 2>/dev/null || true
 	find . -name "*.pyc" -delete 2>/dev/null || true
+
+# ============================================================================
+# Sprint 3+ Cloud Targets (Oracle Cloud Always-Free)
+# ============================================================================
+.PHONY: up-cloud down-cloud cloud-status migrate-neo4j-aura init-pinecone
+.PHONY: ralph-sprint3 verify-sprint3
+
+COMPOSE_CLOUD := docker compose -f docker/docker-compose.cloud.yml --env-file .env.cloud
+
+up-cloud: ## Start all services on Oracle Cloud VM
+	$(COMPOSE_CLOUD) up -d
+	@echo "Waiting 60s for services to stabilize..."
+	@sleep 60
+	@$(MAKE) cloud-status
+
+down-cloud: ## Stop all cloud services
+	$(COMPOSE_CLOUD) down
+
+cloud-status: ## Check health of all cloud services
+	@echo "=== Infrastructure ==="
+	$(COMPOSE_CLOUD) ps
+	@echo ""
+	@echo "=== Kafka ==="
+	$(COMPOSE_CLOUD) exec kafka kafka-broker-api-versions.sh --bootstrap-server localhost:9092 2>&1 | head -3
+	@echo ""
+	@echo "=== Neo4j Aura ==="
+	@python -c "from neo4j import GraphDatabase; import os; d=GraphDatabase.driver(os.environ['NEO4J_AURA_URI'], auth=(os.environ['NEO4J_AURA_USER'], os.environ['NEO4J_AURA_PASSWORD'])); d.verify_connectivity(); print('OK Neo4j Aura connected'); d.close()"
+	@echo ""
+	@echo "=== Pinecone ==="
+	@python -c "from pinecone import Pinecone; import os; pc=Pinecone(api_key=os.environ['PINECONE_API_KEY']); indexes=[i.name for i in pc.list_indexes()]; print(f'OK Pinecone connected: {len(indexes)} indexes: {indexes}')"
+	@echo ""
+	@echo "=== LangSmith ==="
+	@python -c "from langsmith import Client; c=Client(); print('OK LangSmith connected')"
+
+migrate-neo4j-aura: ## Migrate schema + data to Neo4j Aura Free
+	python infrastructure/neo4j/migrate_to_aura.py
+
+init-pinecone: ## Initialize Pinecone Starter index with playbooks
+	python infrastructure/pinecone/init_pinecone.py
+
+ralph-freshness_guardian: ## Ralph loop for Freshness Guardian (15 iterations)
+	./scripts/ralph/ralph.sh freshness_guardian 15
+
+ralph-pricing_oracle: ## Ralph loop for Pricing Oracle (15 iterations)
+	./scripts/ralph/ralph.sh pricing_oracle 15
+
+ralph-disruption_shield: ## Ralph loop for Disruption Shield (15 iterations)
+	./scripts/ralph/ralph.sh disruption_shield 15
+
+ralph-supplier_trust: ## Ralph loop for Supplier Trust (15 iterations)
+	./scripts/ralph/ralph.sh supplier_trust 15
+
+ralph-sustainability_agent: ## Ralph loop for Sustainability Agent (15 iterations)
+	./scripts/ralph/ralph.sh sustainability_agent 15
+
+ralph-sprint3: ## Run Ralph loop for all Sprint 3 agents sequentially
+	$(MAKE) ralph-freshness_guardian
+	$(MAKE) ralph-pricing_oracle
+	$(MAKE) ralph-disruption_shield
+	$(MAKE) ralph-supplier_trust
+	$(MAKE) ralph-sustainability_agent
+
+verify-sprint3: ## Verify all Sprint 3 deliverables
+	@echo "=== Sprint 3 Verification ==="
+	PYTHONPATH=. pytest agents/freshness_guardian/tests/ -v --tb=short
+	PYTHONPATH=. pytest agents/pricing_oracle/tests/ -v --tb=short
+	PYTHONPATH=. pytest agents/disruption_shield/tests/ -v --tb=short
+	PYTHONPATH=. pytest agents/supplier_trust/tests/ -v --tb=short
+	PYTHONPATH=. pytest agents/sustainability_agent/tests/ -v --tb=short
+	PYTHONPATH=. pytest digital_twin/tests/ -v --tb=short
+	PYTHONPATH=. pytest tests/integration/test_sprint3_agents.py -v --tb=short
+	python scripts/check_spec_coverage.py
+	@echo "Sprint 3 verification complete."

@@ -1,0 +1,324 @@
+# ============================================================================
+# SYNAPSE — Docker Compose for Oracle Cloud Always-Free (ARM64)
+# 4 ARM OCPUs, 24GB RAM, 200GB storage
+# All images MUST be ARM64 compatible (linux/arm64)
+# No `version` field — Docker Compose V2 ignores it
+# ============================================================================
+
+x-common-env: &common-env
+  KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+  REDIS_URL: redis://redis:6379/0
+  NEO4J_URI: ${NEO4J_AURA_URI:-bolt://neo4j:7687}
+  NEO4J_USER: ${NEO4J_AURA_USER:-neo4j}
+  NEO4J_PASSWORD: ${NEO4J_AURA_PASSWORD:-synapse_graph_2026}
+  FEAST_REPO_PATH: /app/data_fabric/feast
+  MLFLOW_TRACKING_URI: http://mlflow:5000
+  PINECONE_API_KEY: ${PINECONE_API_KEY:-}
+  PINECONE_INDEX_NAME: synapse-playbooks
+  LANGSMITH_API_KEY: ${LANGSMITH_API_KEY:-}
+  LANGSMITH_PROJECT: synapse-production
+  OLLAMA_BASE_URL: http://host.docker.internal:11434
+  PYTHONPATH: /app
+
+x-extra-hosts: &extra-hosts
+  extra_hosts:
+    - "host.docker.internal:host-gateway"
+
+services:
+  # ── Infrastructure Services ──
+  kafka:
+    image: bitnami/kafka:3.7
+    platform: linux/arm64
+    environment:
+      KAFKA_CFG_NODE_ID: 0
+      KAFKA_CFG_PROCESS_ROLES: controller,broker
+      KAFKA_CFG_LISTENERS: PLAINTEXT://:9092,CONTROLLER://:9093
+      KAFKA_CFG_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT
+      KAFKA_CFG_CONTROLLER_QUORUM_VOTERS: 0@kafka:9093
+      KAFKA_CFG_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_CFG_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092
+      KAFKA_CFG_AUTO_CREATE_TOPICS_ENABLE: "true"
+      KAFKA_CFG_NUM_PARTITIONS: 4
+      KAFKA_CFG_LOG_RETENTION_HOURS: 72
+    ports: ["9092:9092"]
+    volumes: ["kafka_data:/bitnami/kafka"]
+    healthcheck:
+      test: ["CMD-SHELL", "kafka-broker-api-versions.sh --bootstrap-server localhost:9092"]
+      interval: 15s
+      timeout: 10s
+      retries: 5
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 3G
+
+  redis:
+    image: redis:7-alpine
+    platform: linux/arm64
+    ports: ["6379:6379"]
+    volumes: ["redis_data:/data"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+    deploy:
+      resources:
+        limits:
+          cpus: "0.25"
+          memory: 512M
+
+  postgres:
+    image: postgres:16-alpine
+    platform: linux/arm64
+    environment:
+      POSTGRES_DB: synapse_audit
+      POSTGRES_USER: synapse
+      POSTGRES_PASSWORD: synapse_audit_2026
+    ports: ["5432:5432"]
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ../infrastructure/postgres/init_audit.sql:/docker-entrypoint-initdb.d/01_init_audit.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U synapse -d synapse_audit"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+    deploy:
+      resources:
+        limits:
+          cpus: "0.25"
+          memory: 512M
+
+  mlflow:
+    image: python:3.11-slim
+    platform: linux/arm64
+    ports: ["5000:5000"]
+    volumes: ["mlflow_data:/mlflow"]
+    command: >
+      bash -c "pip install --quiet mlflow==2.16.0 &&
+      mlflow server --host 0.0.0.0 --port 5000
+      --backend-store-uri sqlite:///mlflow/mlflow.db
+      --default-artifact-root /mlflow/artifacts"
+    deploy:
+      resources:
+        limits:
+          cpus: "0.25"
+          memory: 512M
+
+  prometheus:
+    image: prom/prometheus:v2.53.0
+    platform: linux/arm64
+    ports: ["9090:9090"]
+    volumes:
+      - ../infrastructure/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ../infrastructure/prometheus/alert_rules.yml:/etc/prometheus/alert_rules.yml:ro
+      - prometheus_data:/prometheus
+    deploy:
+      resources:
+        limits:
+          cpus: "0.25"
+          memory: 512M
+
+  grafana:
+    image: grafana/grafana:11.1.0
+    platform: linux/arm64
+    ports: ["3000:3000"]
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: synapse_grafana_2026
+      GF_AUTH_ANONYMOUS_ENABLED: "true"
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ../infrastructure/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ../infrastructure/grafana/dashboards:/var/lib/grafana/dashboards:ro
+    deploy:
+      resources:
+        limits:
+          cpus: "0.25"
+          memory: 256M
+
+  # ── NOTE: Neo4j runs on Aura Free (cloud-managed) ──
+  # No local Neo4j container. All agents connect via NEO4J_AURA_URI env var.
+  # Set in .env.cloud: NEO4J_AURA_URI=neo4j+s://<id>.databases.neo4j.io
+
+  # ── Sprint 2 Agents ──
+  demand-prophet:
+    build:
+      context: ..
+      dockerfile: agents/demand_prophet/Dockerfile
+      target: serve
+    platform: linux/arm64
+    environment: *common-env
+    <<: *extra-hosts
+    ports: ["8081:8001"]
+    depends_on:
+      kafka: { condition: service_healthy }
+      redis: { condition: service_healthy }
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 1G
+
+  routing-navigator:
+    build:
+      context: ..
+      dockerfile: agents/routing_navigator/Dockerfile
+      target: serve
+    platform: linux/arm64
+    environment: *common-env
+    <<: *extra-hosts
+    ports: ["8082:8002"]
+    depends_on:
+      kafka: { condition: service_healthy }
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 1G
+
+  inventory-sentinel:
+    build:
+      context: ..
+      dockerfile: agents/inventory_sentinel/Dockerfile
+      target: serve
+    platform: linux/arm64
+    environment: *common-env
+    <<: *extra-hosts
+    ports: ["8083:8003"]
+    depends_on:
+      kafka: { condition: service_healthy }
+      demand-prophet: { condition: service_started }
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 1G
+
+  # ── Sprint 3 Agents ──
+  freshness-guardian:
+    build:
+      context: ..
+      dockerfile: agents/freshness_guardian/Dockerfile
+      target: serve
+    platform: linux/arm64
+    environment: *common-env
+    <<: *extra-hosts
+    ports: ["8084:8004"]
+    depends_on:
+      kafka: { condition: service_healthy }
+    deploy:
+      resources:
+        limits:
+          cpus: "0.25"
+          memory: 768M
+
+  pricing-oracle:
+    build:
+      context: ..
+      dockerfile: agents/pricing_oracle/Dockerfile
+      target: serve
+    platform: linux/arm64
+    environment: *common-env
+    <<: *extra-hosts
+    ports: ["8085:8005"]
+    depends_on:
+      kafka: { condition: service_healthy }
+      demand-prophet: { condition: service_started }
+      freshness-guardian: { condition: service_started }
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 1G
+
+  disruption-shield:
+    build:
+      context: ..
+      dockerfile: agents/disruption_shield/Dockerfile
+      target: serve
+    platform: linux/arm64
+    environment: *common-env
+    <<: *extra-hosts
+    ports: ["8086:8006"]
+    depends_on:
+      kafka: { condition: service_healthy }
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 1G
+
+  supplier-trust:
+    build:
+      context: ..
+      dockerfile: agents/supplier_trust/Dockerfile
+      target: serve
+    platform: linux/arm64
+    environment: *common-env
+    <<: *extra-hosts
+    ports: ["8087:8007"]
+    depends_on:
+      kafka: { condition: service_healthy }
+    deploy:
+      resources:
+        limits:
+          cpus: "0.25"
+          memory: 768M
+
+  sustainability-agent:
+    build:
+      context: ..
+      dockerfile: agents/sustainability_agent/Dockerfile
+      target: serve
+    platform: linux/arm64
+    environment: *common-env
+    <<: *extra-hosts
+    ports: ["8088:8008"]
+    depends_on:
+      kafka: { condition: service_healthy }
+    deploy:
+      resources:
+        limits:
+          cpus: "0.25"
+          memory: 512M
+
+  # ── Digital Twin ──
+  digital-twin:
+    build:
+      context: ..
+      dockerfile: digital_twin/Dockerfile
+      target: serve
+    platform: linux/arm64
+    environment: *common-env
+    <<: *extra-hosts
+    ports: ["8089:8009"]
+    depends_on:
+      kafka: { condition: service_healthy }
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 2G
+
+volumes:
+  kafka_data:
+  redis_data:
+  postgres_data:
+  mlflow_data:
+  prometheus_data:
+  grafana_data:
+
+# ============================================================================
+# RESOURCE BUDGET (Oracle Cloud Always-Free: 4 OCPUs, 24GB RAM)
+# ============================================================================
+# Infrastructure: Kafka(3G) + Redis(512M) + Postgres(512M) + MLflow(512M)
+#                 + Prometheus(512M) + Grafana(256M) = ~5.3GB
+# Sprint 2 Agents: DP(1G) + RN(1G) + IS(1G) = 3GB
+# Sprint 3 Agents: FG(768M) + PO(1G) + DS(1G) + ST(768M) + SA(512M) = 4GB
+# Digital Twin: 2GB
+# Ollama (host): ~4-6GB (one model at a time via swapping)
+# OS + overhead: ~2GB
+# TOTAL: ~20-22GB — fits in 24GB with model swapping
+# ============================================================================

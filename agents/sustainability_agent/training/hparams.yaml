@@ -1,0 +1,47 @@
+# ============================================================================
+# SYNAPSE Sustainability Agent -- Training Hyperparameters
+# Platform: Google Colab Free (T4 GPU) or Kaggle (dual T4)
+# Estimated training time: ~2h on T4
+# ============================================================================
+model:
+  carbon_tracker: "codecarbon"
+  waste_model: "lifelines"
+  km_fitter_confidence: 0.95
+  cox_penalizer: 0.1
+
+training:
+  batch_size: 32
+  learning_rate: 0.001
+  weight_decay: 0.00001
+  max_epochs: 30
+  patience: 8
+  optimizer: "AdamW"
+  seed: 42
+
+reward:
+  carbon_weight: 1.0
+  waste_weight: 0.5
+  accuracy_weight: 0.3
+  baseline_co2_kg: 1.0
+
+carbon:
+  co2_per_liter_diesel_kg: 2.68
+  twin_tolerance: 0.10
+
+waste_survival:
+  default_shelf_life_days: 7
+  hazard_threshold: 0.5
+  km_alpha: 0.05
+
+data:
+  train_ratio: 0.7
+  val_ratio: 0.15
+  test_ratio: 0.15
+  num_routes: 1000
+  num_products: 200
+
+checkpointing:
+  save_every_n_epochs: 5
+  keep_best: true
+  best_metric: "val_total_reward"
+  best_mode: "max"

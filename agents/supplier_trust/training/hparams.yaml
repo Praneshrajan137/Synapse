@@ -1,0 +1,57 @@
+# ============================================================================
+# SYNAPSE Supplier Trust -- Training Hyperparameters
+# Platform: Google Colab Free (T4 GPU) or Kaggle (dual T4)
+# Estimated training time: ~2h on T4
+# ============================================================================
+model:
+  gnn_hidden_dim: 128
+  gnn_out_dim: 64
+  gnn_num_layers: 3
+  gnn_dropout: 0.1
+  supplier_in_dim: 16
+  sku_in_dim: 12
+  store_in_dim: 10
+
+bayesian:
+  prior_mu: 2.0
+  prior_sigma: 0.5
+  svi_num_steps: 1000
+  svi_learning_rate: 0.01
+  num_posterior_samples: 500
+
+training:
+  batch_size: 32
+  learning_rate: 0.001
+  weight_decay: 0.00001
+  max_epochs: 30
+  patience: 8
+  gradient_clip_norm: 1.0
+  optimizer: "AdamW"
+  scheduler: "CosineAnnealingLR"
+  scheduler_T_max: 30
+  scheduler_eta_min: 0.00001
+  seed: 42
+
+reward:
+  prediction_accuracy_weight: 1.0
+  trust_bias_weight: 2.0
+  calibration_weight: 0.5
+
+trust:
+  new_vendor_floor: 0.3
+  late_delivery_decay: 0.05
+  ema_alpha: 0.3
+
+data:
+  num_suppliers: 200
+  num_skus: 500
+  num_stores: 25
+  train_ratio: 0.7
+  val_ratio: 0.15
+  test_ratio: 0.15
+
+checkpointing:
+  save_every_n_epochs: 5
+  keep_best: true
+  best_metric: "val_trust_mae"
+  best_mode: "min"

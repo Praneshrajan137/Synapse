@@ -1,0 +1,24 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "CarbonReport",
+  "type": "object",
+  "required": ["report_id", "scope", "co2_kg", "energy_kwh", "timestamp"],
+  "properties": {
+    "report_id": {"type": "string", "format": "uuid"},
+    "scope": {"type": "string", "enum": ["route", "store", "agent_compute", "aggregate"]},
+    "entity_id": {"type": "string"},
+    "co2_kg": {"type": "number", "minimum": 0},
+    "energy_kwh": {"type": "number", "minimum": 0},
+    "waste_prediction": {
+      "type": "object",
+      "properties": {
+        "predicted_waste_kg": {"type": "number"},
+        "survival_probability": {"type": "number", "minimum": 0, "maximum": 1},
+        "recommended_action": {"type": "string"}
+      }
+    },
+    "pareto_weight": {"type": "number", "minimum": 0, "maximum": 1},
+    "timestamp": {"type": "string", "format": "date-time"}
+  },
+  "additionalProperties": false
+}

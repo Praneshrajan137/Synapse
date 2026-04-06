@@ -1,0 +1,174 @@
+# ============================================================================
+# SYNAPSE Pricing Oracle -- Formal Behavioral Specification (SDD)
+# Auto-generates test_spec.py via: python scripts/generate_tests_from_spec.py
+# ============================================================================
+agent_name: pricing_oracle
+version: "1.0.0"
+description: >
+  MADDPG multi-agent RL pricing with per-category agents (essentials, snacks,
+  beverages, dairy, produce) and causal price elasticity estimation via
+  Double ML. Essential price cap (1.3x) is a hard guardrail, not learned.
+
+architecture:
+  rl_algorithm: "MADDPG (Multi-Agent Deep Deterministic Policy Gradient)"
+  category_agents: ["essentials", "snacks", "beverages", "dairy", "produce"]
+  causal_estimator: "Double ML via EconML (LassoCV)"
+  environment: "PettingZoo AEC"
+  guardrail: "Hard essential cap 1.3x (I-6)"
+
+invariants:
+  - id: "INV-PO-001"
+    description: "Essential category pricing never exceeds 1.3x base price (I-6)"
+    assertion: "if category == 'essential' then multiplier <= 1.3"
+    severity: critical
+
+  - id: "INV-PO-002"
+    description: "All price multipliers are strictly positive"
+    assertion: "multiplier > 0.0"
+    severity: critical
+
+  - id: "INV-PO-003"
+    description: "Confidence score is bounded [0, 1]"
+    assertion: "0.0 <= output.confidence <= 1.0"
+    severity: critical
+
+  - id: "INV-PO-004"
+    description: "Output validates against pricing_update.schema.json"
+    assertion: "jsonschema.validate(output.dict(), pricing_update_schema) passes"
+    severity: critical
+
+  - id: "INV-PO-005"
+    description: "Elasticity estimates are finite real numbers"
+    assertion: "math.isfinite(elasticity) for all elasticity values"
+    severity: high
+
+  - id: "INV-PO-006"
+    description: "Price update includes justification trace for audit (I-4)"
+    assertion: "len(output.justification_trace) > 0"
+    severity: high
+
+  - id: "INV-PO-007"
+    description: "Inference latency within Tier 2 SLA"
+    assertion: "inference_latency_ms < 500"
+    severity: high
+
+  - id: "INV-PO-008"
+    description: "Output serialization is deterministic (I-13)"
+    assertion: "output.to_deterministic_json() == output.to_deterministic_json()"
+    severity: critical
+
+  - id: "INV-PO-009"
+    description: "Competitor gap penalty is non-negative"
+    assertion: "competitor_gap >= 0.0"
+    severity: high
+
+preconditions:
+  - id: "PRE-PO-001"
+    description: "Category is a recognized product category"
+    check: "category in {'essential', 'snack', 'beverage', 'dairy', 'produce'}"
+
+  - id: "PRE-PO-002"
+    description: "Store ID exists in knowledge graph"
+    check: "store_id in valid_store_ids"
+
+  - id: "PRE-PO-003"
+    description: "Base price is strictly positive"
+    check: "base_price > 0.0"
+
+  - id: "PRE-PO-004"
+    description: "SKU count within batch limit"
+    check: "1 <= len(sku_ids) <= 200"
+
+  - id: "PRE-PO-005"
+    description: "Demand forecast is available for the requested SKUs"
+    check: "demand_forecast is not None"
+
+postconditions:
+  - id: "POST-PO-001"
+    description: "Output count matches input count"
+    check: "len(pricing_updates) == len(sku_ids)"
+
+  - id: "POST-PO-002"
+    description: "Inference latency within SLA"
+    check: "inference_latency_ms < 500"
+
+  - id: "POST-PO-003"
+    description: "Essential cap enforced on all essential items"
+    check: "all(u.multiplier <= 1.3 for u in pricing_updates if u.category == 'essential')"
+
+  - id: "POST-PO-004"
+    description: "Kafka message published to synapse.pricing.update"
+    check: "kafka_publish_success == True"
+
+  - id: "POST-PO-005"
+    description: "MLflow metrics logged"
+    check: "mlflow_log_success == True"
+
+state_machine:
+  initial_state: "IDLE"
+  states: ["IDLE", "PROPOSING", "DEBATING", "EXECUTING", "LEARNING", "ERROR"]
+  transitions:
+    - from: "IDLE"
+      to: "PROPOSING"
+      trigger: "pricing_request_received"
+      guard: "kafka_healthy and feast_available"
+      timeout_seconds: 2
+    - from: "PROPOSING"
+      to: "DEBATING"
+      trigger: "proposal_submitted"
+      guard: "confidence >= 0.0"
+      timeout_seconds: 5
+    - from: "DEBATING"
+      to: "EXECUTING"
+      trigger: "consensus_reached"
+      guard: "orchestrator_approved"
+      timeout_seconds: 30
+    - from: "EXECUTING"
+      to: "LEARNING"
+      trigger: "execution_confirmed"
+      timeout_seconds: 10
+    - from: "LEARNING"
+      to: "IDLE"
+      trigger: "policy_updated"
+      timeout_seconds: 5
+    - from: "PROPOSING"
+      to: "ERROR"
+      trigger: "exception_raised"
+    - from: "EXECUTING"
+      to: "ERROR"
+      trigger: "exception_raised"
+    - from: "ERROR"
+      to: "IDLE"
+      trigger: "error_handled"
+      timeout_seconds: 30
+
+metamorphic_relations:
+  - id: "MR-PO-001"
+    description: "Essential category items always have multiplier <= 1.3x"
+    transform: "set category to 'essential' for any input"
+    expected: "output multiplier <= 1.3 regardless of demand signal strength"
+
+  - id: "MR-PO-002"
+    description: "Higher demand forecast increases price multiplier for non-essentials"
+    transform: "multiply demand forecast by 2 for non-essential category"
+    expected: "price multiplier increases (all else equal)"
+
+  - id: "MR-PO-003"
+    description: "Price multiplier is insensitive to SKU ID permutation"
+    transform: "shuffle sku_ids list order"
+    expected: "per-SKU pricing unchanged (order invariance)"
+
+  - id: "MR-PO-004"
+    description: "Identical inputs produce identical outputs (determinism)"
+    transform: "submit identical request twice"
+    expected: "outputs are byte-identical"
+
+contracts:
+  - producer: "pricing_oracle"
+    expectations:
+      - "output includes multiplier, category, confidence, justification_trace"
+      - "all multipliers are positive real numbers"
+      - "essential items capped at 1.3x (I-6)"
+      - "elasticity_estimate is finite"
+      - "sku_id and store_id are non-empty strings"
+      - "proposal includes utility_score, confidence, justification_trace per A2A spec"

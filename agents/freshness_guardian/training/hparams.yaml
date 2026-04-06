@@ -1,0 +1,41 @@
+# ============================================================================
+# SYNAPSE Freshness Guardian -- Training Hyperparameters
+# Platform: Google Colab Free (T4 GPU) or local CPU
+# Estimated training time: ~1h on CPU (survival model + RL fine-tuning)
+# ============================================================================
+model:
+  weibull_shape_init: 2.5
+  shelf_life_covariates:
+    - temperature_deviation_hours
+    - humidity_deviation_pct
+    - initial_shelf_life_days
+    - is_cold_chain
+
+training:
+  synthetic_samples: 5000
+  seed: 42
+  learning_rate: 0.001
+  batch_size: 64
+  max_epochs: 30
+  patience: 5
+
+markdown_engine:
+  tier_boundaries: [0.75, 0.50, 0.25, 0.10, 0.03, 0.00]
+  tier_markdowns: [0.0, 10.0, 20.0, 30.0, 50.0, 70.0]
+
+reward:
+  accuracy_weight: 1.0
+  timing_weight: 0.4
+  fssai_weight: 2.0
+  unnecessary_weight: 0.3
+
+data:
+  train_ratio: 0.7
+  val_ratio: 0.15
+  test_ratio: 0.15
+
+checkpointing:
+  save_every_n_epochs: 5
+  keep_best: true
+  best_metric: "val_concordance_index"
+  best_mode: "max"

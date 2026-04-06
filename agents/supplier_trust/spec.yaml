@@ -1,0 +1,128 @@
+# ============================================================================
+# SYNAPSE Supplier Trust -- Formal Behavioral Specification (SDD)
+# ============================================================================
+agent_name: supplier_trust
+version: "1.0.0"
+description: >
+  Bayesian trust scoring for suppliers using GNN embeddings on a temporal
+  knowledge graph (Supplier → SKU → DarkStore).  Lead-time estimation via
+  Pyro LogNormal posterior.  Publishes trust scores consumed by
+  Inventory Sentinel and Disruption Shield.
+
+architecture:
+  trust_gnn: "PyG HeteroConv -- typed message-passing on Supplier/SKU/DarkStore graph"
+  bayesian_lead_time: "Pyro SVI with AutoNormal guide -- LogNormal posterior"
+  scoring: "trust_score = gnn_embedding_sim * bayesian_reliability * delivery_history_decay"
+
+invariants:
+  - id: "INV-ST-001"
+    description: "New vendor trust floor is 0.3 -- no vendor starts below this"
+    assertion: "output.trust_score >= 0.3 when supplier.history_days == 0"
+    severity: critical
+
+  - id: "INV-ST-002"
+    description: "Consecutive late deliveries must decrease trust"
+    assertion: "trust(t) < trust(t-1) when consecutive_late_deliveries(t) > consecutive_late_deliveries(t-1)"
+    severity: critical
+
+  - id: "INV-ST-003"
+    description: "Lead-time posterior includes positive std_days"
+    assertion: "output.lead_time_posterior.std_days > 0"
+    severity: critical
+
+  - id: "INV-ST-004"
+    description: "Trust score bounded [0, 1]"
+    assertion: "0.0 <= output.trust_score <= 1.0"
+    severity: critical
+
+  - id: "INV-ST-005"
+    description: "Output validates against supplier_trust_score.schema.json"
+    assertion: "jsonschema.validate(output.dict(), supplier_trust_schema) passes"
+    severity: critical
+
+  - id: "INV-ST-006"
+    description: "Output serialization is deterministic (I-13)"
+    assertion: "output.to_deterministic_json() == output.to_deterministic_json()"
+    severity: critical
+
+preconditions:
+  - id: "PRE-ST-001"
+    description: "Supplier ID is non-empty string"
+    check: "len(supplier_id) > 0"
+
+  - id: "PRE-ST-002"
+    description: "At least one delivery record exists or supplier is flagged new"
+    check: "len(delivery_history) >= 1 or is_new_vendor"
+
+  - id: "PRE-ST-003"
+    description: "Neo4j knowledge graph is reachable"
+    check: "neo4j_driver.verify_connectivity() succeeds"
+
+postconditions:
+  - id: "POST-ST-001"
+    description: "Trust score published to synapse.supplier.score"
+    check: "kafka_publish_success == True"
+
+  - id: "POST-ST-002"
+    description: "Lead-time posterior contains mean, std, p10, p90"
+    check: "all(k in posterior for k in ('mean_days', 'std_days', 'p10_days', 'p90_days'))"
+
+  - id: "POST-ST-003"
+    description: "Audit trail appended with scoring rationale"
+    check: "audit_log.last_entry.agent == 'supplier_trust'"
+
+state_machine:
+  initial_state: "IDLE"
+  states: ["IDLE", "PROPOSING", "DEBATING", "EXECUTING", "LEARNING", "ERROR"]
+  transitions:
+    - from: "IDLE"
+      to: "PROPOSING"
+      trigger: "trust_evaluation_triggered"
+      guard: "neo4j_healthy and kafka_healthy"
+      timeout_seconds: 2
+    - from: "PROPOSING"
+      to: "DEBATING"
+      trigger: "proposal_submitted"
+      timeout_seconds: 5
+    - from: "DEBATING"
+      to: "EXECUTING"
+      trigger: "consensus_reached"
+      timeout_seconds: 30
+    - from: "EXECUTING"
+      to: "LEARNING"
+      trigger: "execution_confirmed"
+      timeout_seconds: 10
+    - from: "LEARNING"
+      to: "IDLE"
+      trigger: "policy_updated"
+      timeout_seconds: 5
+    - from: "PROPOSING"
+      to: "ERROR"
+      trigger: "exception_raised"
+    - from: "EXECUTING"
+      to: "ERROR"
+      trigger: "exception_raised"
+    - from: "ERROR"
+      to: "IDLE"
+      trigger: "error_handled"
+      timeout_seconds: 30
+
+metamorphic_relations:
+  - id: "MR-ST-001"
+    description: "More late deliveries must decrease trust score"
+    transform: "increase consecutive_late_deliveries by 3"
+    expected: "trust_score decreases"
+
+  - id: "MR-ST-002"
+    description: "Perfect delivery history yields trust >= 0.8"
+    transform: "set on_time_rate = 1.0, defect_rate = 0.0"
+    expected: "trust_score >= 0.8"
+
+contracts:
+  - producer: "supplier_trust"
+    consumers: ["inventory_sentinel", "disruption_shield"]
+    expectations:
+      - "proposal includes utility_score, confidence, justification_trace"
+      - "trust_score in [0.0, 1.0]"
+      - "lead_time_posterior contains mean_days, std_days, p10_days, p90_days"
+      - "new vendors have trust_score >= 0.3"

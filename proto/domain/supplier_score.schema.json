@@ -1,0 +1,30 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "SupplierScore",
+  "type": "object",
+  "required": ["score_id", "supplier_id", "trust_score", "lead_time_posterior",
+                "delivery_reliability", "timestamp", "confidence"],
+  "properties": {
+    "score_id": {"type": "string", "format": "uuid"},
+    "supplier_id": {"type": "string"},
+    "trust_score": {"type": "number", "minimum": 0, "maximum": 1},
+    "trust_floor_applied": {"type": "boolean"},
+    "lead_time_posterior": {
+      "type": "object",
+      "properties": {
+        "mean_days": {"type": "number", "minimum": 0},
+        "std_days": {"type": "number", "minimum": 0},
+        "p10_days": {"type": "number"},
+        "p90_days": {"type": "number"}
+      },
+      "required": ["mean_days", "std_days"]
+    },
+    "delivery_reliability": {"type": "number", "minimum": 0, "maximum": 1},
+    "quality_score": {"type": "number", "minimum": 0, "maximum": 1},
+    "geopolitical_risk": {"type": "number", "minimum": 0, "maximum": 1},
+    "last_delivery_ts": {"type": ["string", "null"], "format": "date-time"},
+    "timestamp": {"type": "string", "format": "date-time"},
+    "confidence": {"type": "number", "minimum": 0, "maximum": 1}
+  },
+  "additionalProperties": false
+}
