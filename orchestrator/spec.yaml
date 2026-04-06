@@ -1,0 +1,173 @@
+# ============================================================================
+# SYNAPSE Orchestrator -- Formal Behavioral Specification (SDD)
+# Auto-generates test_spec.py via: python scripts/generate_tests_from_spec.py
+# ============================================================================
+agent_name: orchestrator
+version: "0.4.0"
+description: >
+  Meta-agent implementing five-phase consensus protocol across 8 specialized agents.
+  Manages decision lifecycle from proposal collection through Pareto arbitration to execution.
+
+architecture:
+  consensus_phases: ["COLLECTING", "DEBATING", "ARBITRATING", "EXECUTING", "LEARNING"]
+  pareto_engine: "NSGA-II via pymoo"
+  llm_backend: "Ollama (local, free)"
+  audit_backend: "PostgreSQL append-only"
+
+invariants:
+  - id: "INV-ORC-001"
+    description: "Every decision has a complete audit trail in PostgreSQL"
+    assertion: "decision.audit_id is not None after execution"
+    severity: critical
+
+  - id: "INV-ORC-002"
+    description: "No decision below confidence threshold executes without HITL approval"
+    assertion: "decision.confidence >= 0.7 or decision.escalated_to_human == True"
+    severity: critical
+
+  - id: "INV-ORC-003"
+    description: "Essential price caps enforced regardless of agent proposals"
+    assertion: "all(a.get('multiplier', 1.0) <= 1.3 for a in pricing_actions if a.get('category') in ESSENTIALS)"
+    severity: critical
+
+  - id: "INV-ORC-004"
+    description: "Context messages are append-only during active lifecycle"
+    assertion: "len(context_messages) >= len(previous_context_messages)"
+    severity: critical
+
+  - id: "INV-ORC-005"
+    description: "KV-cache system prompt is byte-identical across invocations"
+    assertion: "sha256(system_prompt) == FROZEN_HASH"
+    severity: high
+
+  - id: "INV-ORC-006"
+    description: "Tier 1-2 decisions bypass debate and arbitration phases"
+    assertion: "tier <= 2 implies phase_reached <= 1 or phase_reached == 4"
+    severity: high
+
+  - id: "INV-ORC-007"
+    description: "All inter-agent communication uses A2A JSON-RPC"
+    assertion: "all agent calls use a2a_sdk.send_a2a_request()"
+    severity: critical
+
+  - id: "INV-ORC-008"
+    description: "Objective recitation occurs every 10 tool calls"
+    assertion: "tool_call_count % 10 == 0 implies recitation_appended"
+    severity: medium
+
+preconditions:
+  - id: "PRE-ORC-001"
+    description: "Kafka is healthy"
+    check: "kafka_healthy == True"
+
+  - id: "PRE-ORC-002"
+    description: "Ollama available for Tier 3+ or not needed for Tier 1-2"
+    check: "ollama_healthy == True or tier <= 2"
+
+  - id: "PRE-ORC-003"
+    description: "PostgreSQL audit store is reachable"
+    check: "postgresql_healthy == True"
+
+  - id: "PRE-ORC-004"
+    description: "At least 6 of 8 agents reachable"
+    check: "all_agents_reachable >= 6"
+
+postconditions:
+  - id: "POST-ORC-001"
+    description: "Decision logged to audit_consensus table"
+    check: "audit_id is not None"
+
+  - id: "POST-ORC-002"
+    description: "All agent execute() confirmations received or timeout handled"
+    check: "len(execution_confirmations) > 0"
+
+  - id: "POST-ORC-003"
+    description: "Meta-RL weights updated"
+    check: "meta_rl_update_applied == True"
+
+  - id: "POST-ORC-004"
+    description: "Semantic cache updated for Tier 3-4 decisions"
+    check: "tier >= 3 implies semantic_cache_updated"
+
+state_machine:
+  initial_state: "IDLE"
+  states: ["IDLE", "COLLECTING", "DEBATING", "ARBITRATING", "EXECUTING", "LEARNING", "ESCALATED", "ERROR"]
+  transitions:
+    - from: "IDLE"
+      to: "COLLECTING"
+      trigger: "decision_request_received"
+      guard: "kafka_healthy"
+    - from: "COLLECTING"
+      to: "DEBATING"
+      trigger: "all_proposals_received"
+      guard: "tier >= 3 and conflict_detected"
+      timeout_seconds: 2
+    - from: "COLLECTING"
+      to: "EXECUTING"
+      trigger: "all_proposals_received"
+      guard: "tier <= 2 or not conflict_detected"
+      timeout_seconds: 2
+    - from: "DEBATING"
+      to: "ARBITRATING"
+      trigger: "convergence_or_max_rounds"
+      timeout_seconds: 30
+    - from: "ARBITRATING"
+      to: "EXECUTING"
+      trigger: "pareto_solution_selected"
+      guard: "guardrails_passed and confidence >= threshold"
+      timeout_seconds: 5
+    - from: "ARBITRATING"
+      to: "ESCALATED"
+      trigger: "guardrails_failed_or_low_confidence"
+    - from: "ESCALATED"
+      to: "EXECUTING"
+      trigger: "human_approved"
+      timeout_seconds: 300
+    - from: "ESCALATED"
+      to: "EXECUTING"
+      trigger: "timeout_expired"
+    - from: "EXECUTING"
+      to: "LEARNING"
+      trigger: "execution_complete"
+      timeout_seconds: 10
+    - from: "LEARNING"
+      to: "IDLE"
+      trigger: "updates_applied"
+    - from: "COLLECTING"
+      to: "ERROR"
+      trigger: "exception_raised"
+    - from: "DEBATING"
+      to: "ERROR"
+      trigger: "exception_raised"
+    - from: "EXECUTING"
+      to: "ERROR"
+      trigger: "exception_raised"
+    - from: "ERROR"
+      to: "IDLE"
+      trigger: "error_handled"
+      timeout_seconds: 30
+
+metamorphic_relations:
+  - id: "MR-ORC-001"
+    description: "Adding an agent proposal cannot reduce consensus confidence by more than 0.1"
+    transform: "add new agent proposal to proposals list"
+    expected: "confidence(proposals + new) >= confidence(proposals) - 0.1"
+
+  - id: "MR-ORC-002"
+    description: "Higher disruption severity increases disruption_readiness weight"
+    transform: "set active_disruptions > 0 in system_state"
+    expected: "weight['disruption_readiness'] > default_weight"
+
+  - id: "MR-ORC-003"
+    description: "Tier 1 decision latency is always under 100ms"
+    transform: "submit Tier 1 decision request"
+    expected: "total_latency_ms < 100"
+
+contracts:
+  - producer: "orchestrator"
+    expectations:
+      - "proposal() returns utility_score in [0.0, 1.0]"
+      - "proposal() returns confidence in [0.0, 1.0]"
+      - "proposal() returns justification_trace as non-empty list"
+      - "proposal() returns payload as non-empty dict"
+      - "execute() returns confirmation dict with status field"

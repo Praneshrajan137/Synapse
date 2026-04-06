@@ -56,3 +56,41 @@ KAFKA_CONSUME_LAG = Gauge(
 FILL_RATE = Gauge("synapse_fill_rate", "Current fill rate", ["store_id"])
 WASTE_RATE = Gauge("synapse_waste_rate", "Current waste rate", ["store_id"])
 ESCALATION_RATE = Gauge("synapse_escalation_rate", "HITL escalation rate")
+
+CONSENSUS_DECISIONS_TOTAL = Counter(
+    "synapse_consensus_decisions_total",
+    "Total consensus decisions completed",
+    ["tier", "outcome"],
+)
+
+CONSENSUS_DURATION = Histogram(
+    "synapse_consensus_duration_seconds",
+    "Consensus protocol duration",
+    ["tier"],
+    buckets=[0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0, 15.0, 30.0, 60.0, 120.0],
+)
+
+CONSENSUS_DEBATE_ROUNDS = Histogram(
+    "synapse_consensus_debate_rounds",
+    "Debate rounds per consensus",
+    ["tier"],
+    buckets=[0, 1, 2, 3],
+)
+
+HITL_ESCALATIONS_TOTAL = Counter(
+    "synapse_hitl_escalations_total",
+    "Total HITL escalation events",
+    ["reason"],
+)
+
+HITL_OVERRIDES_TOTAL = Counter(
+    "synapse_hitl_overrides_total",
+    "Total human override decisions",
+    ["action"],
+)
+
+CONSENSUS_PROPOSALS_RECEIVED = Counter(
+    "synapse_consensus_proposals_received",
+    "Agent proposals received per consensus round",
+    ["agent_name"],
+)

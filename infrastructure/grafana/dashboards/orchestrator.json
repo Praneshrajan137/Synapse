@@ -1,0 +1,155 @@
+{
+  "dashboard": {
+    "id": null,
+    "uid": "synapse-orchestrator",
+    "title": "SYNAPSE Orchestrator",
+    "tags": ["synapse", "orchestrator", "sprint4"],
+    "timezone": "browser",
+    "schemaVersion": 39,
+    "version": 1,
+    "refresh": "10s",
+    "panels": [
+      {
+        "id": 1,
+        "title": "Decisions/min by Tier",
+        "type": "timeseries",
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 0},
+        "targets": [
+          {
+            "expr": "rate(synapse_consensus_decisions_total[5m])",
+            "legendFormat": "{{ tier }} - {{ outcome }}"
+          }
+        ]
+      },
+      {
+        "id": 2,
+        "title": "Consensus Latency (p50/p95/p99)",
+        "type": "timeseries",
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 0},
+        "targets": [
+          {
+            "expr": "histogram_quantile(0.50, synapse_consensus_duration_seconds_bucket)",
+            "legendFormat": "p50"
+          },
+          {
+            "expr": "histogram_quantile(0.95, synapse_consensus_duration_seconds_bucket)",
+            "legendFormat": "p95"
+          },
+          {
+            "expr": "histogram_quantile(0.99, synapse_consensus_duration_seconds_bucket)",
+            "legendFormat": "p99"
+          }
+        ]
+      },
+      {
+        "id": 3,
+        "title": "KV-Cache Hit Rate",
+        "type": "gauge",
+        "gridPos": {"h": 8, "w": 6, "x": 0, "y": 8},
+        "targets": [
+          {
+            "expr": "synapse_ollama_cache_hit_rate",
+            "legendFormat": "{{ model }} ({{ tier }})"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "min": 0,
+            "max": 1,
+            "thresholds": {
+              "steps": [
+                {"value": 0, "color": "red"},
+                {"value": 0.5, "color": "yellow"},
+                {"value": 0.7, "color": "green"}
+              ]
+            }
+          }
+        }
+      },
+      {
+        "id": 4,
+        "title": "Prefill Tokens",
+        "type": "histogram",
+        "gridPos": {"h": 8, "w": 6, "x": 6, "y": 8},
+        "targets": [
+          {
+            "expr": "rate(synapse_ollama_prefill_tokens_bucket[5m])",
+            "legendFormat": "{{ model }}"
+          }
+        ]
+      },
+      {
+        "id": 5,
+        "title": "Escalation Rate",
+        "type": "stat",
+        "gridPos": {"h": 4, "w": 6, "x": 12, "y": 8},
+        "targets": [
+          {
+            "expr": "rate(synapse_hitl_escalations_total[5m])",
+            "legendFormat": "escalations/s"
+          }
+        ]
+      },
+      {
+        "id": 6,
+        "title": "Override Rate",
+        "type": "stat",
+        "gridPos": {"h": 4, "w": 6, "x": 18, "y": 8},
+        "targets": [
+          {
+            "expr": "rate(synapse_hitl_overrides_total[5m])",
+            "legendFormat": "{{ action }}"
+          }
+        ]
+      },
+      {
+        "id": 7,
+        "title": "Debate Rounds Distribution",
+        "type": "barchart",
+        "gridPos": {"h": 8, "w": 6, "x": 12, "y": 12},
+        "targets": [
+          {
+            "expr": "synapse_consensus_debate_rounds_bucket",
+            "legendFormat": "{{ le }} rounds"
+          }
+        ]
+      },
+      {
+        "id": 8,
+        "title": "Agent Response Times",
+        "type": "timeseries",
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 16},
+        "targets": [
+          {
+            "expr": "histogram_quantile(0.95, synapse_inference_latency_seconds_bucket)",
+            "legendFormat": "{{ agent_name }} p95"
+          }
+        ]
+      },
+      {
+        "id": 9,
+        "title": "Proposals Received per Agent",
+        "type": "timeseries",
+        "gridPos": {"h": 8, "w": 6, "x": 18, "y": 12},
+        "targets": [
+          {
+            "expr": "rate(synapse_consensus_proposals_received[5m])",
+            "legendFormat": "{{ agent_name }}"
+          }
+        ]
+      },
+      {
+        "id": 10,
+        "title": "Error Count (Append-Only Context)",
+        "type": "stat",
+        "gridPos": {"h": 4, "w": 6, "x": 12, "y": 16},
+        "targets": [
+          {
+            "expr": "synapse_consensus_decisions_total{outcome=\"error\"}",
+            "legendFormat": "errors"
+          }
+        ]
+      }
+    ]
+  }
+}

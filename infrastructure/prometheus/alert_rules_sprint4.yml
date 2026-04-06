@@ -1,0 +1,48 @@
+# ============================================================================
+# SYNAPSE Sprint 4 — Orchestrator Prometheus Alert Rules
+# ============================================================================
+groups:
+  - name: synapse_orchestrator
+    interval: 15s
+    rules:
+      - alert: OllamaCacheHitRateLow
+        expr: synapse_ollama_cache_hit_rate{tier="tier_2"} < 0.7
+        for: 5m
+        labels:
+          severity: warning
+          invariant: "I-13"
+        annotations:
+          summary: "Tier 2 KV-cache hit rate below 70% for 5 minutes"
+
+      - alert: ConsensusLatencyHigh
+        expr: histogram_quantile(0.95, synapse_consensus_duration_seconds_bucket) > 15
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "P95 consensus latency exceeds 15 seconds"
+
+      - alert: EscalationRateHigh
+        expr: rate(synapse_hitl_escalations_total[5m]) > 0.15
+        for: 5m
+        labels:
+          severity: warning
+          invariant: "I-5"
+        annotations:
+          summary: "HITL escalation rate exceeds 15%"
+
+      - alert: ConsensusErrorRate
+        expr: rate(synapse_consensus_decisions_total{outcome="error"}[5m]) > 0.05
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Consensus error rate exceeds 5%"
+
+      - alert: DebateRoundsHigh
+        expr: histogram_quantile(0.95, synapse_consensus_debate_rounds_bucket) >= 3
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "95th percentile debate rounds at maximum (3) — check proposal divergence"

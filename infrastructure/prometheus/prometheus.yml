@@ -8,6 +8,7 @@ global:
 
 rule_files:
   - "alert_rules.yml"
+  - "alert_rules_sprint4.yml"
 
 scrape_configs:
   # ── Prometheus self-monitoring ──
@@ -37,11 +38,10 @@ scrape_configs:
     # freshness_guardian:8004, pricing_oracle:8005, disruption_shield:8006
     # supplier_trust:8007, sustainability_agent:8008
 
-  # ── Orchestrator ──
+  # ── Orchestrator (Sprint 4) ──
   - job_name: "synapse-orchestrator"
     static_configs:
-      - targets: []
-    # orchestrator:8010
+      - targets: ["orchestrator:8085"]
 
   # ── MLflow ──
   - job_name: "mlflow"

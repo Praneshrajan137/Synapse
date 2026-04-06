@@ -6,7 +6,7 @@ All serialization uses sort_keys=True, separators=(',',':') for KV-cache preserv
 from __future__ import annotations
 
 import json
-from datetime import datetime
+from datetime import UTC, datetime
 from enum import StrEnum
 from typing import Any
 from uuid import UUID, uuid4
@@ -57,13 +57,20 @@ class MessageStatus(StrEnum):
     ERROR = "error"
 
 
+class HitlTimeoutAction(StrEnum):
+    """Configurable action on HITL escalation timeout."""
+    DEFER = "defer"
+    EXECUTE_TIER1 = "execute_tier1"
+    EXECUTE_LAST_KNOWN_GOOD = "execute_last_known_good"
+
+
 class ContextMessage(SynapseBaseModel):
     """
     Immutable context message for Orchestrator runtime context.
     Once created, NEVER modified or deleted (I-14, ADR-023).
     """
     message_id: UUID = Field(default_factory=uuid4)
-    timestamp: datetime = Field(default_factory=datetime.utcnow)
+    timestamp: datetime = Field(default_factory=lambda: datetime.now(UTC))
     source: str
     content: dict[str, Any]
     status: MessageStatus = MessageStatus.ACTIVE
@@ -85,7 +92,7 @@ class AgentProposal(SynapseBaseModel):
 class ConsensusDecision(SynapseBaseModel):
     """Final Orchestrator decision with full provenance (I-4)."""
     decision_id: UUID = Field(default_factory=uuid4)
-    timestamp: datetime = Field(default_factory=datetime.utcnow)
+    timestamp: datetime = Field(default_factory=lambda: datetime.now(UTC))
     tier: DecisionTier
     proposals: list[AgentProposal]
     selected_action: dict[str, Any]
@@ -94,6 +101,12 @@ class ConsensusDecision(SynapseBaseModel):
     escalated_to_human: bool = False
     human_override: dict[str, Any] | None = None
     audit_trace: list[str]
+    phase_reached: int = Field(default=1, ge=1, le=5)
+    debate_rounds: int = Field(default=0, ge=0)
+    pareto_front: list[dict[str, float]] | None = None
+    context_messages: list[ContextMessage] = Field(default_factory=list)
+    execution_confirmations: list[str] = Field(default_factory=list)
+    audit_id: UUID | None = None
 
 
 class DemandForecast(SynapseBaseModel):

@@ -1,0 +1,44 @@
+{
+  "agent_name": "orchestrator",
+  "version": "0.4.0",
+  "description": "Multi-agent consensus engine implementing five-phase consensus across 8 specialized supply-chain agents",
+  "protocol": "a2a",
+  "protocol_version": "1.0",
+  "endpoint": "http://orchestrator:8085",
+  "capabilities": [
+    {
+      "name": "consensus_decision",
+      "description": "Run multi-agent consensus protocol to produce an optimal decision",
+      "input_schema": "proto/domain/consensus_decision_request.schema.json",
+      "output_schema": "proto/domain/consensus_decision.schema.json"
+    }
+  ],
+  "methods": [
+    {
+      "name": "proposal",
+      "description": "Initiate consensus for an incoming decision request",
+      "params": ["decision_context"],
+      "returns": "ConsensusDecision"
+    },
+    {
+      "name": "debate_respond",
+      "description": "Provide debate round context for LLM-mediated conflict resolution",
+      "params": ["proposals", "round_number"],
+      "returns": "DebateRoundResult"
+    },
+    {
+      "name": "execute",
+      "description": "Execute an approved consensus action and log to audit trail",
+      "params": ["consensus_action"],
+      "returns": "ExecutionResult"
+    }
+  ],
+  "health_endpoint": "/health",
+  "metrics_endpoint": "/metrics",
+  "decision_tiers": ["tier_1", "tier_2", "tier_3", "tier_4"],
+  "kafka_topics": {
+    "produces": ["synapse.orchestrator.decision", "synapse.orchestrator.escalation"],
+    "consumes": ["synapse.orchestrator.request"]
+  },
+  "dependencies": ["kafka", "redis", "neo4j", "postgresql", "ollama", "pinecone"]
+}

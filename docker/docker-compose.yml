@@ -130,6 +130,7 @@ services:
     volumes:
       - postgres-data:/var/lib/postgresql/data
       - ../infrastructure/postgres/init_audit.sql:/docker-entrypoint-initdb.d/01_init_audit.sql:ro
+      - ../infrastructure/postgres/02_sprint4_consensus.sql:/docker-entrypoint-initdb.d/02_sprint4_consensus.sql:ro
     networks:
       - infra-net
       - agents-net
@@ -187,6 +188,7 @@ services:
     volumes:
       - ../infrastructure/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
       - ../infrastructure/prometheus/alert_rules.yml:/etc/prometheus/alert_rules.yml:ro
+      - ../infrastructure/prometheus/alert_rules_sprint4.yml:/etc/prometheus/alert_rules_sprint4.yml:ro
       - prometheus-data:/prometheus
     networks:
       - infra-net
@@ -227,6 +229,47 @@ services:
   # ════════════════════════════════════════════════════════════════════════════
   # LAYER 4: Utility Services
   # ════════════════════════════════════════════════════════════════════════════
+
+  # ════════════════════════════════════════════════════════════════════════════
+  # LAYER 5: Orchestrator (Sprint 4)
+  # ════════════════════════════════════════════════════════════════════════════
+
+  orchestrator:
+    build:
+      context: ..
+      dockerfile: orchestrator/Dockerfile
+    container_name: synapse-orchestrator
+    <<: *common-labels
+    environment:
+      - SYNAPSE_ORCHESTRATOR_KAFKA_BOOTSTRAP_SERVERS=kafka:9092
+      - SYNAPSE_ORCHESTRATOR_REDIS_URL=redis://redis:6379
+      - SYNAPSE_ORCHESTRATOR_NEO4J_URI=bolt://neo4j:7687
+      - SYNAPSE_ORCHESTRATOR_OLLAMA_BASE_URL=http://host.docker.internal:11434
+      - SYNAPSE_ORCHESTRATOR_POSTGRESQL_URL=postgresql+asyncpg://synapse_app:synapse_app_2026@postgres:5432/synapse_audit
+      - SYNAPSE_ORCHESTRATOR_PINECONE_API_KEY=${PINECONE_API_KEY:-}
+      - SYNAPSE_ORCHESTRATOR_CONFIDENCE_THRESHOLD=0.7
+    ports:
+      - "8085:8085"
+    depends_on:
+      kafka:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      neo4j:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8085/health')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    networks:
+      - agents-net
+      - infra-net
+    restart: unless-stopped
 
   kafka-ui:
     image: provectuslabs/kafka-ui:latest

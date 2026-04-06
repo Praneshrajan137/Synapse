@@ -53,14 +53,14 @@ format: ## Format code with ruff
 	ruff format packages/synapse_common/ agents/ orchestrator/
 
 generate-spec-tests: ## Auto-generate test stubs from all spec.yaml files
-	@for spec in $$(find agents/ -name "spec.yaml"); do \
+	@for spec in $$(find agents/ orchestrator/ -name "spec.yaml"); do \
 		echo "Generating tests for $$spec..."; \
 		python scripts/generate_tests_from_spec.py $$spec; \
 	done
 	@echo "All spec tests generated."
 
 validate-specs: ## Validate all spec.yaml against schema
-	@for spec in $$(find agents/ -name "spec.yaml"); do \
+	@for spec in $$(find agents/ orchestrator/ -name "spec.yaml"); do \
 		python -c "import yaml, json, jsonschema; spec=yaml.safe_load(open('$$spec')); schema=json.load(open('docs/specs/agent_spec_schema.json')); jsonschema.validate(spec, schema); print('OK $$spec')"; \
 	done
 
@@ -186,6 +186,18 @@ ralph-sprint3: ## Run Ralph loop for all Sprint 3 agents sequentially
 	$(MAKE) ralph-disruption_shield
 	$(MAKE) ralph-supplier_trust
 	$(MAKE) ralph-sustainability_agent
+
+verify-sprint4: ## Verify all Sprint 4 deliverables
+	@echo "=== Sprint 4 Verification ==="
+	PYTHONPATH=. pytest orchestrator/tests/ -v --tb=short
+	PYTHONPATH=. pytest orchestrator/contracts/ -v --tb=short -m contract
+	PYTHONPATH=. pytest tests/oracle/ -v --tb=short -m oracle
+	python scripts/verify/test_context_immutability.py
+	python scripts/check_spec_coverage.py
+	@echo "Sprint 4 verification complete."
+
+ralph-orchestrator: ## Ralph loop for Orchestrator (20 iterations)
+	./scripts/ralph/ralph.sh orchestrator 20
 
 verify-sprint3: ## Verify all Sprint 3 deliverables
 	@echo "=== Sprint 3 Verification ==="
