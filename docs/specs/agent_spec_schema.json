@@ -8,6 +8,8 @@
   "properties": {
     "agent_name": {"type": "string"},
     "version": {"type": "string"},
+    "description": {"type": "string"},
+    "architecture": {"type": "object"},
     "invariants": {
       "type": "array",
       "items": {

@@ -1,0 +1,53 @@
+# ============================================================================
+# SYNAPSE Demand Prophet -- Training Hyperparameters
+# Platform: Google Colab Free (T4 GPU) or Kaggle (dual T4)
+# Estimated training time: ~4h / 50 epochs on T4
+# ============================================================================
+model:
+  hgt_hidden_dim: 128
+  hgt_num_heads: 4
+  hgt_num_layers: 3
+  hgt_dropout: 0.1
+  tft_hidden_size: 160
+  tft_num_heads: 4
+  tft_dropout: 0.1
+  gating_hidden: 64
+
+training:
+  batch_size: 64
+  learning_rate: 0.001
+  weight_decay: 0.00001
+  max_epochs: 50
+  patience: 10
+  gradient_clip_norm: 1.0
+  optimizer: "AdamW"
+  scheduler: "CosineAnnealingLR"
+  scheduler_T_max: 50
+  scheduler_eta_min: 0.00001
+  seed: 42
+
+quantile_levels: [0.1, 0.5, 0.9]
+
+reward:
+  crps_weight: 1.0
+  calibration_weight: 0.5
+  event_weight: 0.1
+
+conformal:
+  alpha: 0.1
+  coverage_target: 0.85
+  calibration_set_ratio: 0.2
+
+data:
+  lookback_days: 30
+  train_ratio: 0.7
+  val_ratio: 0.15
+  test_ratio: 0.15
+  num_skus: 100
+  num_stores: 25
+
+checkpointing:
+  save_every_n_epochs: 5
+  keep_best: true
+  best_metric: "val_crps"
+  best_mode: "min"

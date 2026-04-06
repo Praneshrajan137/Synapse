@@ -1,0 +1,25 @@
+{
+  "agent_name": "inventory_sentinel",
+  "version": "1.0.0",
+  "description": "Three-level hierarchical MARL for inventory optimization with Flower federated learning",
+  "protocol": "a2a",
+  "protocol_version": "1.0",
+  "endpoint": "http://inventory-sentinel:8003",
+  "capabilities": [
+    {"name": "inventory_optimization", "description": "Multi-level inventory decisions: reorder, transfer, markdown"}
+  ],
+  "methods": [
+    {"name": "proposal", "params": ["decision_context"], "returns": "AgentProposal"},
+    {"name": "debate_respond", "params": ["proposals", "round_number"], "returns": "AgentProposal"},
+    {"name": "execute", "params": ["consensus_action"], "returns": "ExecutionResult"}
+  ],
+  "health_endpoint": "/health",
+  "metrics_endpoint": "/metrics",
+  "decision_tiers": ["tier_1", "tier_2"],
+  "kafka_topics": {
+    "produces": ["synapse.inventory.state", "synapse.inventory.reorder"],
+    "consumes": ["synapse.demand.forecast", "synapse.freshness.alert", "synapse.supplier.score", "synapse.orchestrator.decision"]
+  },
+  "feast_features": ["sku_demand_signals", "store_operational_state", "supplier_performance", "perishable_state"],
+  "dependencies": ["feast", "kafka", "demand_prophet", "flower"]
+}

@@ -1,0 +1,44 @@
+# ============================================================================
+# SYNAPSE Sprint 2 -- Consolidated Agent Dependencies
+# All open-source, zero cost (I-1). No paid APIs.
+# ============================================================================
+
+# -- Core ML --
+torch>=2.2.0,<3.0
+torch-geometric>=2.5.0,<3.0
+
+# -- RL --
+ray[rllib]>=2.9.0,<3.0
+
+# -- Federated Learning --
+flwr>=1.7.0,<2.0
+
+# -- Uncertainty Quantification --
+mapie>=0.9.0,<1.0
+
+# -- Web Framework --
+fastapi>=0.111.0,<1.0
+uvicorn>=0.29.0,<1.0
+
+# -- Data --
+pandas>=2.2.0,<3.0
+numpy>=1.26.0,<2.0
+scikit-learn>=1.4.0,<2.0
+
+# -- Experiment Tracking --
+mlflow>=2.12.0,<3.0
+
+# -- Config + Validation --
+pydantic-settings>=2.2.0,<3.0
+
+# -- Observability --
+structlog>=24.1.0,<25.0
+prometheus-client>=0.20.0,<1.0
+
+# -- Config Files --
+pyyaml>=6.0.0,<7.0
+
+# -- Testing (dev) --
+schemathesis>=3.28.0,<4.0
+pytest>=7.0.0,<9.0
+hypothesis>=6.100.0,<7.0

@@ -1,0 +1,149 @@
+# ============================================================================
+# SYNAPSE Routing Navigator -- Formal Behavioral Specification (SDD)
+# ============================================================================
+agent_name: routing_navigator
+version: "1.0.0"
+description: >
+  Attention-based Deep RL for vehicle routing with policy distillation.
+  Transformer encoder + pointer-network decoder for expert policy.
+  Distilled to 2-layer MLP for Tier 1 sub-100ms inference.
+
+architecture:
+  encoder: "6-layer Transformer (8 heads, 128-dim)"
+  decoder: "Autoregressive pointer network with masking"
+  training: "REINFORCE with self-critical baseline, 500K episodes"
+  student: "2-layer MLP distilled from expert for Tier 1"
+  routing_engine: "OSRM self-hosted (OpenStreetMap Bengaluru + Mumbai)"
+
+invariants:
+  - id: "INV-RN-001"
+    description: "All route stops have valid GPS coordinates"
+    assertion: "all(stop has -90 <= lat <= 90 and -180 <= lon <= 180 for stop in output.stops)"
+    severity: critical
+
+  - id: "INV-RN-002"
+    description: "Route total distance is non-negative"
+    assertion: "output.total_distance_km >= 0"
+    severity: critical
+
+  - id: "INV-RN-003"
+    description: "Route time within shift limits (max 8 hours)"
+    assertion: "0 <= output.total_time_min <= 480"
+    severity: critical
+
+  - id: "INV-RN-004"
+    description: "Rider fairness Gini coefficient tracked and logged"
+    assertion: "gini_coefficient is computed and in [0, 1]"
+    severity: high
+
+  - id: "INV-RN-005"
+    description: "Output validates against route_plan.schema.json"
+    assertion: "jsonschema.validate(output.dict(), route_plan_schema) passes"
+    severity: critical
+
+  - id: "INV-RN-006"
+    description: "Tier 1 inference under 100ms via distilled MLP student"
+    assertion: "student_inference_latency_ms < 100"
+    severity: high
+
+  - id: "INV-RN-007"
+    description: "Fuel estimate is non-negative"
+    assertion: "output.fuel_estimate_liters >= 0"
+    severity: critical
+
+  - id: "INV-RN-008"
+    description: "Freshness violations count is non-negative"
+    assertion: "output.freshness_violations >= 0"
+    severity: critical
+
+  - id: "INV-RN-009"
+    description: "Output serialization is deterministic (I-13)"
+    assertion: "output.to_deterministic_json() == output.to_deterministic_json()"
+    severity: critical
+
+preconditions:
+  - id: "PRE-RN-001"
+    description: "Order batch non-empty"
+    check: "1 <= len(orders) <= 200"
+
+  - id: "PRE-RN-002"
+    description: "All orders have valid pickup store"
+    check: "all(order.store_id in valid_store_ids for order in orders)"
+
+  - id: "PRE-RN-003"
+    description: "At least one rider available"
+    check: "len(available_riders) >= 1"
+
+  - id: "PRE-RN-004"
+    description: "All orders have valid delivery coordinates"
+    check: "all(-90 <= o.lat <= 90 and -180 <= o.lon <= 180 for o in orders)"
+
+postconditions:
+  - id: "POST-RN-001"
+    description: "Every order assigned to exactly one route"
+    check: "all orders appear in exactly one route"
+
+  - id: "POST-RN-002"
+    description: "Inference latency within SLA"
+    check: "inference_latency_ms < tier_sla_ms"
+
+  - id: "POST-RN-003"
+    description: "Kafka message published to synapse.routing.plan"
+    check: "kafka_publish_success == True"
+
+state_machine:
+  initial_state: "IDLE"
+  states: ["IDLE", "PROPOSING", "DEBATING", "EXECUTING", "LEARNING", "ERROR"]
+  transitions:
+    - from: "IDLE"
+      to: "PROPOSING"
+      trigger: "route_request_received"
+      guard: "kafka_healthy and osrm_available"
+      timeout_seconds: 2
+    - from: "PROPOSING"
+      to: "DEBATING"
+      trigger: "proposal_submitted"
+      guard: "confidence >= 0.0"
+      timeout_seconds: 5
+    - from: "DEBATING"
+      to: "EXECUTING"
+      trigger: "consensus_reached"
+      guard: "orchestrator_approved"
+      timeout_seconds: 30
+    - from: "EXECUTING"
+      to: "LEARNING"
+      trigger: "execution_confirmed"
+      timeout_seconds: 10
+    - from: "LEARNING"
+      to: "IDLE"
+      trigger: "policy_updated"
+      timeout_seconds: 5
+    - from: "PROPOSING"
+      to: "ERROR"
+      trigger: "exception_raised"
+    - from: "EXECUTING"
+      to: "ERROR"
+      trigger: "exception_raised"
+    - from: "ERROR"
+      to: "IDLE"
+      trigger: "error_handled"
+      timeout_seconds: 30
+
+metamorphic_relations:
+  - id: "MR-RN-001"
+    description: "Adding order to batch cannot decrease total time by >5%"
+    transform: "add one order to existing batch"
+    expected: "total_time does not decrease by more than 5%"
+
+  - id: "MR-RN-002"
+    description: "Doubling traffic index increases route time or avoids congested zones"
+    transform: "multiply traffic_index by 2 for all zones"
+    expected: "route_time increases OR route avoids congested zones"
+
+contracts:
+  - producer: "routing_navigator"
+    expectations:
+      - "output includes fuel_estimate_liters (non-negative float)"
+      - "output includes total_distance_km (non-negative float)"
+      - "route legs include per-leg distance_km"
+      - "proposal includes utility_score, confidence, justification_trace per A2A spec"

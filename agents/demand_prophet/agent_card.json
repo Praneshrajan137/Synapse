@@ -1,0 +1,45 @@
+{
+  "agent_name": "demand_prophet",
+  "version": "1.0.0",
+  "description": "Multi-horizon demand forecasting with conformal prediction intervals using HGT-TFT hybrid architecture",
+  "protocol": "a2a",
+  "protocol_version": "1.0",
+  "endpoint": "http://demand-prophet:8001",
+  "capabilities": [
+    {
+      "name": "demand_forecast",
+      "description": "Generate multi-horizon demand forecasts with uncertainty quantification",
+      "input_schema": "proto/domain/demand_forecast_request.schema.json",
+      "output_schema": "proto/domain/demand_forecast.schema.json"
+    }
+  ],
+  "methods": [
+    {
+      "name": "proposal",
+      "description": "Generate forecast proposal for Orchestrator consensus",
+      "params": ["decision_context"],
+      "returns": "AgentProposal"
+    },
+    {
+      "name": "debate_respond",
+      "description": "Revise forecast based on other agents' proposals",
+      "params": ["proposals", "round_number"],
+      "returns": "AgentProposal"
+    },
+    {
+      "name": "execute",
+      "description": "Execute approved forecast and publish to Kafka",
+      "params": ["consensus_action"],
+      "returns": "ExecutionResult"
+    }
+  ],
+  "health_endpoint": "/health",
+  "metrics_endpoint": "/metrics",
+  "decision_tiers": ["tier_1", "tier_2"],
+  "kafka_topics": {
+    "produces": ["synapse.demand.forecast", "synapse.demand.drift_alert"],
+    "consumes": ["synapse.orchestrator.decision"]
+  },
+  "feast_features": ["sku_demand_signals", "weather_context", "event_calendar"],
+  "dependencies": ["feast", "kafka", "neo4j", "mlflow"]
+}

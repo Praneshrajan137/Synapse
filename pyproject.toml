@@ -30,17 +30,20 @@ warn_redundant_casts = true
 warn_unused_ignores = true
 
 [tool.pytest.ini_options]
+minversion = "7.0"
 testpaths = ["packages/tests", "agents", "orchestrator", "tests"]
+pythonpath = ["."]
 markers = [
     "slow: marks tests as slow (deselect with '-m \"not slow\"')",
-    "contract: consumer-driven contract tests",
-    "metamorphic: metamorphic ML behavioral tests",
-    "fuzz: API fuzz tests",
+    "contract: consumer-driven contract tests (Layer 3)",
+    "metamorphic: metamorphic ML behavioral invariant tests (Layer 4)",
+    "integration: cross-agent integration tests",
+    "fuzz: Schemathesis API fuzz tests (Layer 2)",
     "chaos: chaos engineering tests",
     "oracle: digital twin oracle tests",
     "mutation: mutation testing targets",
 ]
-addopts = "-v --tb=short"
+addopts = "--strict-markers -v --tb=short"
 
 [tool.coverage.run]
 source = ["packages/synapse_common", "agents", "orchestrator"]

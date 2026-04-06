@@ -1,0 +1,125 @@
+# ============================================================================
+# SYNAPSE Sprint 2 -- Docker Compose for agent development and testing
+# No `version` field -- Docker Compose V2 ignores it (D5 fix)
+# Total cost: $0 (all open-source images)
+# ============================================================================
+
+services:
+  # -- Sprint 2 Agents --
+  demand-prophet:
+    build:
+      context: .
+      dockerfile: agents/demand_prophet/Dockerfile
+      target: serve
+    ports:
+      - "8001:8001"
+    environment:
+      - DP_KAFKA_BOOTSTRAP=kafka:9092
+      - DP_FEAST_REPO_PATH=/app/data_fabric/feast
+      - DP_NEO4J_URI=bolt://neo4j:7687
+      - DP_MLFLOW_TRACKING_URI=http://mlflow:5000
+    depends_on:
+      kafka:
+        condition: service_healthy
+    networks:
+      - synapse-net
+    restart: unless-stopped
+
+  routing-navigator:
+    build:
+      context: .
+      dockerfile: agents/routing_navigator/Dockerfile
+      target: serve
+    ports:
+      - "8002:8002"
+    environment:
+      - RN_KAFKA_BOOTSTRAP=kafka:9092
+      - RN_OSRM_ENDPOINT=http://osrm:5000
+      - RN_MLFLOW_TRACKING_URI=http://mlflow:5000
+    depends_on:
+      kafka:
+        condition: service_healthy
+    networks:
+      - synapse-net
+    restart: unless-stopped
+
+  inventory-sentinel:
+    build:
+      context: .
+      dockerfile: agents/inventory_sentinel/Dockerfile
+      target: serve
+    ports:
+      - "8003:8003"
+    environment:
+      - IS_KAFKA_BOOTSTRAP=kafka:9092
+      - IS_FEAST_REPO_PATH=/app/data_fabric/feast
+      - IS_MLFLOW_TRACKING_URI=http://mlflow:5000
+      - IS_FLOWER_SERVER_ADDRESS=flower-server:8080
+    depends_on:
+      kafka:
+        condition: service_healthy
+    networks:
+      - synapse-net
+    restart: unless-stopped
+
+  # -- Infrastructure --
+  kafka:
+    image: bitnami/kafka:3.7
+    ports:
+      - "9092:9092"
+    environment:
+      - KAFKA_CFG_NODE_ID=0
+      - KAFKA_CFG_PROCESS_ROLES=controller,broker
+      - KAFKA_CFG_CONTROLLER_QUORUM_VOTERS=0@kafka:9093
+      - KAFKA_CFG_LISTENERS=PLAINTEXT://:9092,CONTROLLER://:9093
+      - KAFKA_CFG_LISTENER_SECURITY_PROTOCOL_MAP=CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT
+      - KAFKA_CFG_CONTROLLER_LISTENER_NAMES=CONTROLLER
+      - KAFKA_CFG_ADVERTISED_LISTENERS=PLAINTEXT://kafka:9092
+    healthcheck:
+      test: ["CMD-SHELL", "kafka-broker-api-versions.sh --bootstrap-server localhost:9092"]
+      interval: 10s
+      timeout: 10s
+      retries: 10
+    networks:
+      - synapse-net
+
+  neo4j:
+    image: neo4j:5.18-community
+    ports:
+      - "7474:7474"
+      - "7687:7687"
+    environment:
+      - NEO4J_AUTH=neo4j/synapse_graph_2026
+    volumes:
+      - neo4j_data:/data
+    networks:
+      - synapse-net
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    networks:
+      - synapse-net
+
+  mlflow:
+    image: ghcr.io/mlflow/mlflow:v2.12.2
+    ports:
+      - "5000:5000"
+    command: mlflow server --host 0.0.0.0 --port 5000
+    networks:
+      - synapse-net
+
+  osrm:
+    image: osrm/osrm-backend:latest
+    ports:
+      - "5001:5000"
+    networks:
+      - synapse-net
+
+volumes:
+  neo4j_data:
+
+networks:
+  synapse-net:
+    driver: bridge

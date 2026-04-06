@@ -1,0 +1,30 @@
+{
+  "agent_name": "routing_navigator",
+  "version": "1.0.0",
+  "description": "Attention-based Deep RL vehicle routing with policy distillation for sub-100ms inference",
+  "protocol": "a2a",
+  "protocol_version": "1.0",
+  "endpoint": "http://routing-navigator:8002",
+  "capabilities": [
+    {
+      "name": "route_optimization",
+      "description": "Optimize delivery routes for rider-order assignment with fairness tracking",
+      "input_schema": "proto/domain/route_request.schema.json",
+      "output_schema": "proto/domain/route_plan.schema.json"
+    }
+  ],
+  "methods": [
+    {"name": "proposal", "description": "Generate route proposal for Orchestrator", "params": ["decision_context"], "returns": "AgentProposal"},
+    {"name": "debate_respond", "description": "Revise route based on other agents' proposals", "params": ["proposals", "round_number"], "returns": "AgentProposal"},
+    {"name": "execute", "description": "Execute approved route plan", "params": ["consensus_action"], "returns": "ExecutionResult"}
+  ],
+  "health_endpoint": "/health",
+  "metrics_endpoint": "/metrics",
+  "decision_tiers": ["tier_1", "tier_2"],
+  "kafka_topics": {
+    "produces": ["synapse.routing.plan"],
+    "consumes": ["synapse.demand.forecast", "synapse.orchestrator.decision"]
+  },
+  "feast_features": ["routing_context", "store_operational_state"],
+  "dependencies": ["feast", "kafka", "osrm"]
+}
