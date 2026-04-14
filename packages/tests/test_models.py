@@ -8,11 +8,16 @@ import pytest
 from synapse_common.models import (
     AgentName,
     AgentProposal,
+    ConsensusDecision,
     ContextMessage,
     DecisionTier,
     DemandForecast,
+    HitlTimeoutAction,
+    InventoryAction,
     MessageStatus,
     PricingDecision,
+    RoutePlan,
+    SynapseBaseModel,
 )
 
 
@@ -107,3 +112,125 @@ class TestAgentProposalValidation:
             tier=DecisionTier.TIER_2,
         )
         assert proposal.confidence == 0.9
+
+
+class TestHitlTimeoutAction:
+
+    def test_enum_values(self) -> None:
+        assert HitlTimeoutAction.DEFER == "defer"
+        assert HitlTimeoutAction.EXECUTE_TIER1 == "execute_tier1"
+        assert HitlTimeoutAction.EXECUTE_LAST_KNOWN_GOOD == "execute_last_known_good"
+
+
+class TestConsensusDecision:
+
+    def test_valid_construction(self) -> None:
+        proposal = AgentProposal(
+            agent_name=AgentName.PRICING_ORACLE,
+            decision_id=uuid4(),
+            utility_score=0.7,
+            confidence=0.85,
+            justification_trace=["demand up"],
+            payload={"price": 120},
+            tier=DecisionTier.TIER_2,
+        )
+        decision = ConsensusDecision(
+            tier=DecisionTier.TIER_2,
+            proposals=[proposal],
+            selected_action={"apply_price": 120},
+            pareto_weights={"pricing_oracle": 0.6},
+            confidence=0.85,
+            audit_trace=["round-1"],
+        )
+        assert decision.confidence == 0.85
+        assert decision.phase_reached == 1
+        assert decision.debate_rounds == 0
+
+    def test_frozen(self) -> None:
+        decision = ConsensusDecision(
+            tier=DecisionTier.TIER_1,
+            proposals=[],
+            selected_action={},
+            pareto_weights={},
+            confidence=0.5,
+            audit_trace=[],
+        )
+        with pytest.raises(Exception):
+            decision.confidence = 0.99  # type: ignore[misc]
+
+
+class TestRoutePlan:
+
+    def test_valid_construction(self) -> None:
+        plan = RoutePlan(
+            rider_id="rider-1",
+            store_id="store-1",
+            stops=[{"lat": 37.0, "lon": 127.0}],
+            total_distance_km=15.5,
+            total_time_min=30.0,
+            fuel_estimate_liters=2.0,
+            freshness_violations=0,
+        )
+        assert plan.total_distance_km == 15.5
+
+    def test_negative_distance_rejected(self) -> None:
+        with pytest.raises(Exception):
+            RoutePlan(
+                rider_id="r",
+                store_id="s",
+                stops=[],
+                total_distance_km=-1.0,
+                total_time_min=0.0,
+                fuel_estimate_liters=0.0,
+                freshness_violations=0,
+            )
+
+
+class TestInventoryAction:
+
+    def test_valid_construction(self) -> None:
+        action = InventoryAction(
+            store_id="s1",
+            sku_id="sku_001",
+            action_type="reorder",
+            quantity=50.0,
+            safety_stock_multiplier=1.5,
+            reorder_point=20.0,
+            confidence=0.9,
+        )
+        assert action.action_type == "reorder"
+
+    def test_safety_stock_out_of_range(self) -> None:
+        with pytest.raises(Exception):
+            InventoryAction(
+                store_id="s1",
+                sku_id="sku_001",
+                action_type="reorder",
+                quantity=10.0,
+                safety_stock_multiplier=5.0,
+                reorder_point=5.0,
+                confidence=0.8,
+            )
+
+    def test_safety_stock_below_minimum(self) -> None:
+        with pytest.raises(Exception):
+            InventoryAction(
+                store_id="s1",
+                sku_id="sku_001",
+                action_type="reorder",
+                quantity=10.0,
+                safety_stock_multiplier=0.5,
+                reorder_point=5.0,
+                confidence=0.8,
+            )
+
+
+class TestSynapseBaseModelExtra:
+
+    def test_extra_fields_forbidden(self) -> None:
+        with pytest.raises(Exception):
+            ContextMessage(
+                source="test",
+                content={},
+                unknown_field="boom",  # type: ignore[call-arg]
+            )

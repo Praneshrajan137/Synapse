@@ -8,6 +8,8 @@ from synapse_common.contracts import (
     ensure_append_only,
     essential_price_cap,
     jitter_bounds,
+    safe_positive_result,
+    validate_audit_insertion,
 )
 
 
@@ -57,3 +59,29 @@ class TestJitterBounds:
 
     def test_exceeds_bounds(self) -> None:
         assert jitter_bounds(delay=100.0, cap=60.0, base=0.5, attempt=0) is False
+
+
+class TestValidateAuditInsertion:
+
+    def test_valid_result_with_id(self) -> None:
+        class _Row:
+            id: int = 42
+
+        result = validate_audit_insertion(_Row())
+        assert result.id == 42
+
+    def test_none_result_violates(self) -> None:
+        with pytest.raises(Exception):
+            validate_audit_insertion(None)
+
+
+class TestSafePositiveResult:
+
+    def test_positive_unchanged(self) -> None:
+        assert safe_positive_result(5.0) == 5.0
+
+    def test_negative_clamped(self) -> None:
+        assert safe_positive_result(-3.0) == 0.0
+
+    def test_zero_stays_zero(self) -> None:
+        assert safe_positive_result(0.0) == 0.0
