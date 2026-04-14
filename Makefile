@@ -266,3 +266,79 @@ sprint5-verify: ## Full Sprint 5 quality gate verification
 	@echo "============================================="
 	@echo "Sprint 5 Verification Complete"
 	@echo "============================================="
+
+# ============================================================================
+# Sprint 6: Multi-City Deployment (Mumbai)
+# ============================================================================
+.PHONY: generate-bengaluru generate-mumbai convert-parquet-mumbai seed-mumbai
+.PHONY: transfer-train cold-start-baseline ab-test
+.PHONY: demo demo-fast demo-mumbai verify-multi-city sprint6-verify
+.PHONY: mumbai-up mumbai-down sprint6-full sprint5-exit-gate
+
+COMPOSE_MUMBAI := docker compose -f docker/docker-compose.yml -f docker/docker-compose.mumbai.yml --env-file docker/.env
+
+sprint5-exit-gate: ## Verify all Sprint 5 prerequisites before Sprint 6
+	@echo "Running Sprint 5 Exit Gate..."
+	@python -c "import json; assert len(json.load(open('data/bengaluru/stores.json'))) == 25; print('Bengaluru stores OK')"
+	@python scripts/verify_ollama.py
+	@echo "Sprint 5 Exit Gate: PASSED"
+
+generate-bengaluru: ## Generate Bengaluru city data (25 stores, 90 days, 500 SKUs)
+	python scripts/generate_city.py --city bengaluru --stores 25 --days 90 --seed 42
+
+generate-mumbai: ## Generate Mumbai city data (25 stores, 90 days, 500 SKUs)
+	python scripts/generate_city.py --city mumbai --stores 25 --days 90 --seed 42
+
+convert-parquet-mumbai: ## Convert Mumbai CSV to Parquet for Feast
+	python scripts/convert_to_parquet.py --city mumbai
+
+seed-mumbai: ## Seed Mumbai data into Neo4j
+	python scripts/seed_mumbai_graph.py
+
+transfer-train: ## Run transfer learning for all agents (Bengaluru -> Mumbai)
+	@echo "Starting transfer learning pipeline..."
+	@for agent in demand_prophet routing_navigator inventory_sentinel_l1 inventory_sentinel_l2 pricing_oracle disruption_shield supplier_trust; do \
+		echo "Transfer training: $$agent"; \
+		python ml_pipelines/transfer/transfer.py --agent $$agent --source-city bengaluru --target-city mumbai; \
+	done
+	@echo "Transfer learning complete for all agents"
+
+cold-start-baseline: ## Train cold-start baselines for A/B testing
+	@echo "Training cold-start baselines..."
+	@for agent in demand_prophet routing_navigator inventory_sentinel_l1 pricing_oracle disruption_shield supplier_trust; do \
+		echo "Cold-start baseline: $$agent"; \
+		python ml_pipelines/transfer/cold_start_baseline.py --agent $$agent; \
+	done
+	@echo "Cold-start baselines complete"
+
+ab-test: ## Run A/B tests comparing transfer vs cold-start models
+	python ml_pipelines/ab_test/run_ab_tests.py --city mumbai
+	@echo "A/B test results logged to MLflow"
+
+demo: ## Run the full 5-minute demo
+	bash scripts/demo/run_demo.sh bengaluru 1.0
+
+demo-fast: ## Run demo at 3x speed (for verification)
+	bash scripts/demo/run_demo.sh bengaluru 3.0
+
+demo-mumbai: ## Run demo with Mumbai city
+	bash scripts/demo/run_demo.sh mumbai 1.0
+
+verify-multi-city: ## Verify multi-city deployment quality gate
+	PYTHONPATH=. pytest scripts/verify/test_multi_city.py -v --tb=short
+
+sprint6-verify: verify-multi-city ## Full Sprint 6 verification
+	@echo "============================================="
+	@echo "  SPRINT 6 VERIFICATION COMPLETE"
+	@echo "============================================="
+
+mumbai-up: ## Start Mumbai agent containers
+	$(COMPOSE_MUMBAI) up -d
+
+mumbai-down: ## Stop Mumbai agent containers
+	$(COMPOSE_MUMBAI) down
+
+sprint6-full: sprint5-exit-gate generate-bengaluru generate-mumbai convert-parquet-mumbai seed-mumbai transfer-train cold-start-baseline ab-test mumbai-up verify-multi-city ## Complete Sprint 6 end-to-end
+	@echo "============================================="
+	@echo "  SPRINT 6 COMPLETE — Total Cost: $$0"
+	@echo "============================================="

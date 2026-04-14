@@ -72,9 +72,31 @@
 - E-S5-12: All RNG-dependent chaos tests must use `np.random.default_rng(seed)` for determinism in CI
 - E-S5-13: `import logging` in shared packages replaced with structlog in Sprint 5 (retry.py, kafka_client.py, a2a_sdk.py)
 
+### Sprint 6 Error Patterns
+- E-S6-01: Mumbai SKU IDs must be identical to Bengaluru — transfer learning fails on embedding dimension mismatch otherwise
+- E-S6-02: Each city's OSRM runs on a unique port (Bengaluru: 5000, Mumbai: 5001). Port collision causes routing failures
+- E-S6-03: Each city has its own Feast project, registry file, and Redis DB index (Mumbai: db=1, Bengaluru: db=0)
+- E-S6-04: ALWAYS recalibrate conformal intervals on Mumbai holdout after transfer learning. Bengaluru intervals are INVALID for Mumbai distribution
+- E-S6-05: ALL Neo4j queries in multi-city mode MUST include `{city: $city}` filter. Add city property to every node
+- E-S6-06: Each demo segment waits for Kafka consumer group lag to reach 0 before proceeding, not just wall-clock time
+- E-S6-07: Mumbai models use `mumbai_` prefix in MLflow: `mumbai_demand_prophet_hgt_tft`, not `demand_prophet_hgt_tft`
+- E-S6-08: A/B tests require minimum 1000 predictions per variant. Report Cohen's d alongside p-value
+- E-S6-09: Mumbai Feast feature views MUST include `monsoon_intensity` (0-1 scale) not present in Bengaluru schema
+- E-S6-10: Always use: `docker compose -f docker-compose.yml -f docker-compose.mumbai.yml up -d`. Never run Mumbai overlay alone
+- E-S6-11: Run `scripts/convert_to_parquet.py --city mumbai` AFTER data generation, BEFORE Feast apply
+- E-S6-12: Always use MERGE (not CREATE) for SKU nodes since they are shared across cities. SKU nodes have NO city property
+- E-S6-13: All agent_card.json files must include `cities` array and `city_specific_config` object
+- E-S6-14: Transfer-learned models are loaded from `mumbai_{model_name}` in Staging stage. Cold-start baselines from `mumbai_coldstart_{model_name}`
+- E-S6-15: Neo4j property keys must match init.cypher constraints: store_id, warehouse_id, supplier_id, zone_id, rider_id, sku_id — NOT generic 'id'
+- E-S6-16: Neo4j auth in scripts must match docker-compose.yml (`synapse_graph_2026`), not hardcoded values
+- E-S6-17: Convergence speedup measures epoch at which transfer model achieves within 5% of Bengaluru's final metric, not early-stop epoch
+- E-S6-18: A/B test control must be cold-start Mumbai model (not Bengaluru Production) for meaningful comparison
+- E-S6-19: OSRM data prep (download/extract/process) is separate from container lifecycle (Docker Compose). Do not duplicate
+
 ## Sprint Status
 - **Sprint 1**: Infrastructure foundation (Docker, Neo4j, Kafka, Redis, PostgreSQL, shared packages, proto schemas, SDD framework, CI pipeline)
 - **Sprint 2**: Agent implementation (Demand Prophet, Inventory Sentinel, Routing Navigator)
 - **Sprint 3**: Orchestrator + Digital Twin
 - **Sprint 4**: Remaining agents + API Gateway + Frontend
 - **Sprint 5**: Hardening — Chaos engineering (9 failure modes), load testing, security (JWT, audit immutability, nginx), mutation testing, Schemathesis API fuzz, DragonflyDB evaluation (ADR-019)
+- **Sprint 6**: Multi-city deployment — Mumbai via transfer learning, A/B testing framework, cold-start baselines, Feast multi-city, OSRM Mumbai, Docker Compose overlay, Grafana multi-city dashboard, demo choreography
