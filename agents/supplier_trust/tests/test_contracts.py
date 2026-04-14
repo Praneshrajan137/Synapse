@@ -6,13 +6,13 @@ Consumers:
   - Inventory Sentinel: expects trust_score in [0, 1], lead_time_posterior
   - Disruption Shield: expects trust_score, supplier_id, is_new_vendor
 """
+
 from __future__ import annotations
 
 import pytest
 
 from agents.supplier_trust.inference.pipeline import (
     SupplierTrustPipeline,
-    TrustScoreResult,
 )
 
 
@@ -27,7 +27,7 @@ def _make_delivery_history(n: int, on_time: bool = True) -> list[dict[str, objec
 
 @pytest.mark.contract
 class TestInventorySentinelContract:
-    """Inventory Sentinel expects: trust_score in [0, 1], lead_time_posterior with mean/std/p10/p90."""
+    """Inventory Sentinel expects: trust_score [0,1], lead_time_posterior."""
 
     def test_trust_score_bounded(self, pipeline: SupplierTrustPipeline) -> None:
         result = pipeline.score(

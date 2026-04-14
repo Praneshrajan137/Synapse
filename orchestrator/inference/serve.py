@@ -8,10 +8,11 @@ Endpoints:
   WS   /ws/escalation     — HITL escalation WebSocket
   POST /a2a               — A2A JSON-RPC handler
 """
+
 from __future__ import annotations
 
 from contextlib import asynccontextmanager
-from typing import Any, AsyncIterator
+from typing import TYPE_CHECKING, Any
 from uuid import UUID
 
 import structlog
@@ -19,9 +20,7 @@ from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.responses import Response
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
-
 from synapse_common.kafka_client import KafkaConfig, SynapseProducer
-from synapse_common.models import ConsensusDecision
 
 from orchestrator.a2a.handler import OrchestratorA2AHandler
 from orchestrator.audit.logger import AuditLogger
@@ -35,6 +34,9 @@ from orchestrator.llm.context_builder import ContextBuilder
 from orchestrator.llm.ollama_client import OllamaClient
 from orchestrator.llm.semantic_cache import SemanticDecisionCache
 from orchestrator.meta_rl.meta_agent import MetaRLAgent
+
+if TYPE_CHECKING:
+    from collections.abc import AsyncIterator
 
 logger = structlog.get_logger(__name__)
 

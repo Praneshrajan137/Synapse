@@ -9,6 +9,7 @@ The -5.0 weight on essential_cap_violation makes any violation catastrophically
 negative, ensuring the RL policy learns to NEVER approach the hard cap boundary.
 The hard clamp in the model is the true safety net; the reward penalty is defense-in-depth.
 """
+
 from __future__ import annotations
 
 import structlog

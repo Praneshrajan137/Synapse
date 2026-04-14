@@ -1,4 +1,5 @@
 """SYNAPSE Routing Navigator -- Model unit tests."""
+
 from __future__ import annotations
 
 import torch

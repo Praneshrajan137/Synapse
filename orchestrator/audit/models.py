@@ -1,13 +1,14 @@
 """
 SYNAPSE Orchestrator — SQLAlchemy ORM models for the append-only audit trail (I-4).
 """
+
 from __future__ import annotations
 
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
-from sqlalchemy import Boolean, Column, DateTime, Float, Integer, String, Text
+from sqlalchemy import Boolean, Column, DateTime, Float, Integer, String
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import DeclarativeBase
 
@@ -29,7 +30,7 @@ class AuditConsensusRow(Base):
     timestamp: Any = Column(
         DateTime(timezone=True),
         nullable=False,
-        default=lambda: datetime.now(timezone.utc),
+        default=lambda: datetime.now(UTC),
     )
     tier: Any = Column(String(10), nullable=False)
     phase_reached: Any = Column(Integer, nullable=False, default=1)
@@ -48,5 +49,5 @@ class AuditConsensusRow(Base):
     created_at: Any = Column(
         DateTime(timezone=True),
         nullable=False,
-        default=lambda: datetime.now(timezone.utc),
+        default=lambda: datetime.now(UTC),
     )

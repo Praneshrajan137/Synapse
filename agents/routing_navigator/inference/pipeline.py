@@ -3,6 +3,7 @@ SYNAPSE Routing Navigator -- Inference Pipeline.
 Tier 1 (<100ms): Uses distilled MLP student.
 Tier 2 (<500ms): Uses expert Transformer+Pointer.
 """
+
 from __future__ import annotations
 
 import time
@@ -10,7 +11,6 @@ from typing import Any
 
 import numpy as np
 import structlog
-
 from synapse_common.models import RoutePlan
 
 logger = structlog.get_logger(__name__)

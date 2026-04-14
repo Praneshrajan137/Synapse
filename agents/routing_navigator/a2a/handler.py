@@ -1,4 +1,5 @@
 """SYNAPSE Routing Navigator -- A2A JSON-RPC Handler (I-9)."""
+
 from __future__ import annotations
 
 import json
@@ -6,10 +7,10 @@ from typing import Any
 from uuid import UUID, uuid4
 
 import structlog
+from synapse_common.models import AgentName, AgentProposal, DecisionTier
 
 from agents.routing_navigator.inference.pipeline import RoutingNavigatorPipeline
 from agents.routing_navigator.state_machine import RoutingNavigatorStateMachine
-from synapse_common.models import AgentName, AgentProposal, DecisionTier
 
 logger = structlog.get_logger(__name__)
 

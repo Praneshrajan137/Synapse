@@ -5,14 +5,16 @@ These rules CANNOT be overridden by any agent or RL policy.
 Implementation is a deterministic rule engine (no NeMo Guardrails LLM overhead)
 to meet Tier 1-2 latency requirements (I-10).
 """
+
 from __future__ import annotations
 
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import deal
 import structlog
 
-from synapse_common.models import ConsensusDecision
+if TYPE_CHECKING:
+    from synapse_common.models import ConsensusDecision
 
 logger = structlog.get_logger(__name__)
 
@@ -91,8 +93,7 @@ class GuardrailEngine:
             if category in ESSENTIAL_CATEGORIES and multiplier > 1.3:
                 pa["multiplier"] = 1.3  # CLIP — do not reject
                 violations.append(
-                    f"Essential price cap CLIPPED: {category} "
-                    f"from {multiplier:.2f} to 1.3",
+                    f"Essential price cap CLIPPED: {category} from {multiplier:.2f} to 1.3",
                 )
 
     @staticmethod

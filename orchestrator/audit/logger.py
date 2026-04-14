@@ -4,18 +4,21 @@ SYNAPSE Orchestrator — Append-only PostgreSQL audit logger (I-4).
 Every consensus decision is persisted with full provenance.
 DELETE and UPDATE are revoked at the database level.
 """
+
 from __future__ import annotations
 
-from typing import Any
-from uuid import UUID
+from typing import TYPE_CHECKING
 
 import deal
 import structlog
-from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
-
-from synapse_common.models import ConsensusDecision
 
 from orchestrator.audit.models import AuditConsensusRow
+
+if TYPE_CHECKING:
+    from uuid import UUID
+
+    from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
+    from synapse_common.models import ConsensusDecision
 
 logger = structlog.get_logger(__name__)
 
@@ -42,9 +45,7 @@ class AuditLogger:
                 decision_id=decision.decision_id,
                 tier=str(decision.tier.value),
                 phase_reached=decision.phase_reached,
-                proposals=[
-                    p.model_dump(mode="json") for p in decision.proposals
-                ],
+                proposals=[p.model_dump(mode="json") for p in decision.proposals],
                 selected_action=decision.selected_action,
                 pareto_weights=decision.pareto_weights,
                 confidence=decision.confidence,
@@ -52,9 +53,7 @@ class AuditLogger:
                 escalated=decision.escalated_to_human,
                 human_override=decision.human_override,
                 execution_confirmations=decision.execution_confirmations,
-                context_messages=[
-                    m.model_dump(mode="json") for m in decision.context_messages
-                ],
+                context_messages=[m.model_dump(mode="json") for m in decision.context_messages],
                 audit_trace=decision.audit_trace,
                 pareto_front=decision.pareto_front,
             )

@@ -4,18 +4,19 @@ Handles: Route carbon estimation -> waste survival prediction ->
          ESG report assembly with provenance -> schema validation -> Kafka publish.
 All within Tier 2 SLA (<500ms) (I-10).
 """
+
 from __future__ import annotations
 
 import time
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 from uuid import uuid4
 
 import structlog
+from synapse_common.models import SynapseBaseModel
 
 from agents.sustainability_agent.models.carbon import CarbonTracker
 from agents.sustainability_agent.models.waste import WastePredictionModel
-from synapse_common.models import SynapseBaseModel
 
 logger = structlog.get_logger(__name__)
 
@@ -74,7 +75,7 @@ class SustainabilityPipeline:
     ) -> CarbonReport:
         """Generate a full sustainability/carbon report."""
         start_time = time.monotonic()
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
 
         delivery_co2 = self._carbon.track_route(fuel_liters, distance_km)
         compute_co2 = self._carbon.track_compute()

@@ -1,4 +1,5 @@
 """SYNAPSE Inventory Sentinel -- A2A JSON-RPC Handler (I-9)."""
+
 from __future__ import annotations
 
 import json
@@ -6,9 +7,9 @@ from typing import Any
 from uuid import UUID, uuid4
 
 import structlog
+from synapse_common.models import AgentName, AgentProposal, DecisionTier
 
 from agents.inventory_sentinel.inference.pipeline import InventorySentinelPipeline
-from synapse_common.models import AgentName, AgentProposal, DecisionTier
 
 logger = structlog.get_logger(__name__)
 

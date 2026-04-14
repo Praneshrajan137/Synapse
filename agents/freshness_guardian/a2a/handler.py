@@ -5,6 +5,7 @@ Implements the three mandatory A2A methods:
   2. debate_respond(proposals, round_number) -> revised AgentProposal
   3. execute(consensus_action) -> ExecutionResult
 """
+
 from __future__ import annotations
 
 import json
@@ -12,13 +13,13 @@ from typing import Any
 from uuid import UUID, uuid4
 
 import structlog
+from synapse_common.models import AgentName, AgentProposal, DecisionTier
 
 from agents.freshness_guardian.inference.pipeline import (
     FreshnessGuardianPipeline,
     FreshnessRequest,
 )
 from agents.freshness_guardian.state_machine import FreshnessGuardianStateMachine
-from synapse_common.models import AgentName, AgentProposal, DecisionTier
 
 logger = structlog.get_logger(__name__)
 
@@ -63,9 +64,7 @@ class FreshnessGuardianA2AHandler:
             alert = self._pipeline.assess(req)
             alerts.append(alert.model_dump(mode="json"))
 
-        avg_confidence = (
-            sum(a["confidence"] for a in alerts) / len(alerts) if alerts else 0.0
-        )
+        avg_confidence = sum(a["confidence"] for a in alerts) / len(alerts) if alerts else 0.0
 
         proposal = AgentProposal(
             agent_name=AgentName.FRESHNESS_GUARDIAN,

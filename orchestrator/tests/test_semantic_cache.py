@@ -1,4 +1,5 @@
 """SYNAPSE Orchestrator — Semantic decision cache tests (ADR-018)."""
+
 from __future__ import annotations
 
 import pytest

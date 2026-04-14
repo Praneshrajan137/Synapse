@@ -2,6 +2,7 @@
 SYNAPSE Disruption Shield -- Configuration via Pydantic BaseSettings.
 All thresholds, model paths, and connection strings are environment-configurable.
 """
+
 from __future__ import annotations
 
 from pydantic import Field

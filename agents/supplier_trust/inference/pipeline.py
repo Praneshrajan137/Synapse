@@ -1,20 +1,22 @@
 """SYNAPSE Supplier Trust -- Inference Pipeline."""
+
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import numpy as np
 import structlog
 import torch
-from torch import Tensor
 
 from agents.supplier_trust.config import SupplierTrustConfig
 from agents.supplier_trust.models.bayesian_lead import (
     BayesianLeadTimeModel,
     LeadTimePosterior,
 )
-from agents.supplier_trust.models.trust_gnn import SupplierTrustGNN
+
+if TYPE_CHECKING:
+    from agents.supplier_trust.models.trust_gnn import SupplierTrustGNN
 
 logger = structlog.get_logger(__name__)
 

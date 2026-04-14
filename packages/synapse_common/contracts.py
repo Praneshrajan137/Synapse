@@ -1,6 +1,7 @@
 """
 SYNAPSE Design-by-Contract — Runtime invariant enforcement via deal (ADR-015, Layer 5).
 """
+
 from __future__ import annotations
 
 from typing import Any
@@ -8,7 +9,7 @@ from typing import Any
 import deal
 
 
-@deal.post(lambda result: result is not None and hasattr(result, 'id'))
+@deal.post(lambda result: result is not None and hasattr(result, "id"))
 def validate_audit_insertion(result: Any) -> Any:
     """Every audit insertion must return a non-None result with an id."""
     return result
@@ -33,7 +34,7 @@ def ensure_append_only(old_length: int, new_length: int) -> bool:
 
 def jitter_bounds(delay: float, cap: float, base: float, attempt: int) -> bool:
     """Full Jitter delay must be in [0, min(cap, base * 2^attempt)] (ADR-016)."""
-    max_expected = min(cap, base * (2 ** attempt))
+    max_expected = min(cap, base * (2**attempt))
     result: bool = 0 <= delay <= max_expected
     return result
 

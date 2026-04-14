@@ -2,6 +2,7 @@
 SYNAPSE Pricing Oracle -- Metamorphic Tests (Layer 4).
 Behavioral invariants that must hold across model retraining.
 """
+
 from __future__ import annotations
 
 import pytest

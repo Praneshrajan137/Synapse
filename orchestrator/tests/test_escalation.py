@@ -1,12 +1,11 @@
 """SYNAPSE Orchestrator — HITL escalation flow tests (I-5)."""
+
 from __future__ import annotations
 
 import asyncio
 from unittest.mock import MagicMock
-from uuid import uuid4
 
 import pytest
-
 from synapse_common.models import ConsensusDecision, DecisionTier
 
 from orchestrator.hitl.escalation import HITLEscalation, WebSocketManager

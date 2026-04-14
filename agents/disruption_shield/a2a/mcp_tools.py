@@ -2,12 +2,15 @@
 SYNAPSE Disruption Shield -- MCP Tool Definitions (I-9).
 Agent-to-tool communication uses MCP exclusively.
 """
+
 from __future__ import annotations
 
 MCP_TOOLS: list[dict[str, object]] = [
     {
         "name": "rl_disruption_detect",
-        "description": "Run anomaly ensemble on supply chain signals and produce disruption alert. Tier 2-3.",
+        "description": (
+            "Run anomaly ensemble on supply chain signals and produce disruption alert. Tier 2-3."
+        ),
         "input_schema": {
             "type": "object",
             "properties": {
@@ -31,7 +34,9 @@ MCP_TOOLS: list[dict[str, object]] = [
     },
     {
         "name": "pinecone_get_playbooks",
-        "description": "Retrieve historical disruption recovery playbooks from Pinecone vector store. Tier 2.",
+        "description": (
+            "Retrieve historical disruption recovery playbooks from Pinecone vector store. Tier 2."
+        ),
         "input_schema": {
             "type": "object",
             "properties": {
@@ -49,7 +54,9 @@ MCP_TOOLS: list[dict[str, object]] = [
     },
     {
         "name": "ollama_generate_reasoning",
-        "description": "Generate reasoning chain via DeepSeek-R1 on Ollama for disruption analysis. Tier 3.",
+        "description": (
+            "Generate reasoning chain via DeepSeek-R1 on Ollama for disruption analysis. Tier 3."
+        ),
         "input_schema": {
             "type": "object",
             "properties": {

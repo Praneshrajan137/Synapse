@@ -6,6 +6,7 @@ Uses INDEPENDENT reward function from rewards.py (I-2).
 Usage:
   python -m agents.demand_prophet.training.train [--epochs 50] [--batch-size 64]
 """
+
 from __future__ import annotations
 
 import argparse
@@ -19,7 +20,6 @@ import yaml
 
 from agents.demand_prophet.config import DemandProphetConfig
 from agents.demand_prophet.models.hybrid import DemandProphetHybrid
-from agents.demand_prophet.training.conformal import ConformalCalibrator
 from agents.demand_prophet.training.rewards import crps_loss  # noqa: F401
 
 logger = structlog.get_logger(__name__)
@@ -49,13 +49,9 @@ def generate_synthetic_data(
     for s in range(num_skus):
         for st in range(num_stores):
             trend = np.linspace(0, 0.1 * base_demand[s], num_days)
-            seasonality = 0.2 * base_demand[s] * np.sin(
-                2 * np.pi * np.arange(num_days) / 7
-            )
+            seasonality = 0.2 * base_demand[s] * np.sin(2 * np.pi * np.arange(num_days) / 7)
             noise = rng.normal(0, 0.1 * base_demand[s], num_days)
-            demand_data[s, st, :] = np.maximum(
-                base_demand[s] + trend + seasonality + noise, 0
-            )
+            demand_data[s, st, :] = np.maximum(base_demand[s] + trend + seasonality + noise, 0)
 
     event_signals = np.zeros(num_days)
     event_days = rng.choice(num_days, size=min(10, num_days // 7), replace=False)

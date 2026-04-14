@@ -2,6 +2,7 @@
 SYNAPSE Demand Prophet -- Reward function unit tests.
 Verifies I-2 (independent reward) and reward component correctness.
 """
+
 from __future__ import annotations
 
 import ast
@@ -13,7 +14,6 @@ from agents.demand_prophet.training.rewards import (
     calibration_gap,
     compute_reward,
     crps_loss,
-    event_bonus,
 )
 
 

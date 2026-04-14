@@ -5,6 +5,7 @@ NO CROSS-AGENT IMPORTS. Cross-agent import = automatic PR rejection.
 
 Reward: R = -CRPS_loss - 0.5*calibration_gap + event_bonus
 """
+
 from __future__ import annotations
 
 import structlog

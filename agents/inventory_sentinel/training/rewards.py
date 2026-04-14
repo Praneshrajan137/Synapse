@@ -6,10 +6,13 @@ L1 Strategic: R = fill_rate - 0.3*holding_cost - 2.0*stockout - 0.5*waste_rate
 L2 Tactical:  R = service_level + freshness - 0.4*holding_cost - 3.0*perishable_waste
 L3 Operational: R = -avg_pick_time + freshness_exposure_bonus
 """
+
 from __future__ import annotations
 
-import torch
-from torch import Tensor
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from torch import Tensor
 
 
 def compute_l1_strategic_reward(

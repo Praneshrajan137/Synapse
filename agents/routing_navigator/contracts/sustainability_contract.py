@@ -1,8 +1,8 @@
 """SYNAPSE -- Consumer Contract: Sustainability Agent -> Routing Navigator."""
+
 from __future__ import annotations
 
 import pytest
-
 from synapse_common.models import RoutePlan
 
 pytestmark = pytest.mark.contract

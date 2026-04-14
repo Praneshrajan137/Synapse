@@ -3,17 +3,20 @@ SYNAPSE Inventory Sentinel -- Flower Federated Learning Client (I-11).
 Cross-store model training: only gradient updates shared, never raw data.
 DPDPA 2023 compliant -- raw demand data never leaves store boundaries.
 """
+
 from __future__ import annotations
 
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import structlog
+
+if TYPE_CHECKING:
+    from flwr.common import NDArrays, Scalar
 
 logger = structlog.get_logger(__name__)
 
 try:
     import flwr as fl
-    from flwr.common import NDArrays, Scalar
 
     HAS_FLOWER = True
 except ImportError:
@@ -38,7 +41,6 @@ class InventoryFlowerClient:
         """Return model parameters (gradients only -- I-11)."""
         if self.model is None:
             return []
-        import torch
 
         return [val.cpu().numpy() for val in self.model.parameters()]
 
@@ -48,7 +50,7 @@ class InventoryFlowerClient:
             return
         import torch
 
-        for param, new_val in zip(self.model.parameters(), parameters):
+        for param, new_val in zip(self.model.parameters(), parameters, strict=False):
             param.data = torch.tensor(new_val, dtype=param.dtype)
 
     def fit(

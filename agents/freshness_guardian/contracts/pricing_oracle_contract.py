@@ -2,6 +2,7 @@
 SYNAPSE -- Consumer-Driven Contract: Pricing Oracle -> Freshness Guardian.
 Pricing Oracle EXPECTS these fields from Freshness Guardian alerts.
 """
+
 from __future__ import annotations
 
 import pytest

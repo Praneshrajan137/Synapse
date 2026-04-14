@@ -4,6 +4,7 @@ SYNAPSE Disruption Shield — DeepSeek-R1 Reasoning via Ollama (I-1: zero cost).
 Generates structured reasoning chains from anomaly scores and affected nodes.
 Uses httpx for async-capable HTTP. Falls back gracefully if Ollama is down (I-7).
 """
+
 from __future__ import annotations
 
 import json

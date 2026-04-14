@@ -3,10 +3,11 @@ SYNAPSE Pricing Oracle -- FastAPI Inference Server.
 Endpoints: POST /price, GET /health, GET /metrics, POST /a2a
 Port: 8005
 """
+
 from __future__ import annotations
 
 from contextlib import asynccontextmanager
-from typing import Any, AsyncIterator
+from typing import TYPE_CHECKING, Any
 
 import structlog
 from fastapi import FastAPI, HTTPException
@@ -16,6 +17,9 @@ from pydantic import BaseModel, Field
 from agents.pricing_oracle.a2a.handler import PricingOracleA2AHandler
 from agents.pricing_oracle.config import PricingOracleConfig
 from agents.pricing_oracle.inference.pipeline import PricingOraclePipeline
+
+if TYPE_CHECKING:
+    from collections.abc import AsyncIterator
 
 logger = structlog.get_logger(__name__)
 

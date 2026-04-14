@@ -1,8 +1,9 @@
 """SYNAPSE Supplier Trust -- FastAPI Server. Port: 8007."""
+
 from __future__ import annotations
 
 from contextlib import asynccontextmanager
-from typing import Any, AsyncIterator
+from typing import TYPE_CHECKING, Any
 
 import structlog
 from fastapi import FastAPI, HTTPException
@@ -12,6 +13,9 @@ from agents.supplier_trust.inference.pipeline import (
     SupplierTrustPipeline,
     TrustScoreResult,
 )
+
+if TYPE_CHECKING:
+    from collections.abc import AsyncIterator
 
 logger = structlog.get_logger(__name__)
 _pipeline: SupplierTrustPipeline | None = None

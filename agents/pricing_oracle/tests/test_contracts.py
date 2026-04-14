@@ -2,10 +2,10 @@
 SYNAPSE Pricing Oracle -- Contract tests (Layer 5).
 Consumer-driven contracts: what Pricing Oracle guarantees to its consumers.
 """
+
 from __future__ import annotations
 
 import pytest
-
 from synapse_common.models import PricingDecision
 
 pytestmark = pytest.mark.contract

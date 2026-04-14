@@ -3,6 +3,7 @@ SYNAPSE Domain Models — Pydantic v2 models for all domain entities.
 Every agent output MUST validate against these models (I-3).
 All serialization uses sort_keys=True, separators=(',',':') for KV-cache preservation (I-13).
 """
+
 from __future__ import annotations
 
 import json
@@ -31,6 +32,7 @@ class SynapseBaseModel(BaseModel):
 
 class DecisionTier(StrEnum):
     """Four decision tiers with explicit latency SLAs (I-10)."""
+
     TIER_1 = "tier_1"
     TIER_2 = "tier_2"
     TIER_3 = "tier_3"
@@ -39,6 +41,7 @@ class DecisionTier(StrEnum):
 
 class AgentName(StrEnum):
     """All eight SYNAPSE agents."""
+
     DEMAND_PROPHET = "demand_prophet"
     ROUTING_NAVIGATOR = "routing_navigator"
     INVENTORY_SENTINEL = "inventory_sentinel"
@@ -51,6 +54,7 @@ class AgentName(StrEnum):
 
 class MessageStatus(StrEnum):
     """Status for context messages — append-only, never deleted (I-14)."""
+
     ACTIVE = "active"
     SUPERSEDED = "superseded"
     REJECTED = "rejected"
@@ -59,6 +63,7 @@ class MessageStatus(StrEnum):
 
 class HitlTimeoutAction(StrEnum):
     """Configurable action on HITL escalation timeout."""
+
     DEFER = "defer"
     EXECUTE_TIER1 = "execute_tier1"
     EXECUTE_LAST_KNOWN_GOOD = "execute_last_known_good"
@@ -69,6 +74,7 @@ class ContextMessage(SynapseBaseModel):
     Immutable context message for Orchestrator runtime context.
     Once created, NEVER modified or deleted (I-14, ADR-023).
     """
+
     message_id: UUID = Field(default_factory=uuid4)
     timestamp: datetime = Field(default_factory=lambda: datetime.now(UTC))
     source: str
@@ -80,6 +86,7 @@ class ContextMessage(SynapseBaseModel):
 
 class AgentProposal(SynapseBaseModel):
     """Standard A2A proposal from any agent to the Orchestrator."""
+
     agent_name: AgentName
     decision_id: UUID
     utility_score: float = Field(ge=0.0, le=1.0)
@@ -91,6 +98,7 @@ class AgentProposal(SynapseBaseModel):
 
 class ConsensusDecision(SynapseBaseModel):
     """Final Orchestrator decision with full provenance (I-4)."""
+
     decision_id: UUID = Field(default_factory=uuid4)
     timestamp: datetime = Field(default_factory=lambda: datetime.now(UTC))
     tier: DecisionTier
@@ -111,6 +119,7 @@ class ConsensusDecision(SynapseBaseModel):
 
 class DemandForecast(SynapseBaseModel):
     """Demand Prophet output — consumed by 5 agents."""
+
     sku_id: str
     store_id: str
     forecast_timestamp: datetime
@@ -123,6 +132,7 @@ class DemandForecast(SynapseBaseModel):
 
 class RoutePlan(SynapseBaseModel):
     """Routing Navigator output."""
+
     route_id: UUID = Field(default_factory=uuid4)
     rider_id: str
     store_id: str
@@ -135,6 +145,7 @@ class RoutePlan(SynapseBaseModel):
 
 class InventoryAction(SynapseBaseModel):
     """Inventory Sentinel output."""
+
     store_id: str
     sku_id: str
     action_type: str
@@ -146,6 +157,7 @@ class InventoryAction(SynapseBaseModel):
 
 class PricingDecision(SynapseBaseModel):
     """Pricing Oracle output — Hard 1.3x cap on essentials enforced (I-6)."""
+
     sku_id: str
     store_id: str
     category_id: str

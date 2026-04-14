@@ -2,6 +2,7 @@
 SYNAPSE Metrics — Prometheus metrics exposed by every agent.
 Includes KV-cache metrics (I-13) and tier latency metrics (I-10).
 """
+
 from __future__ import annotations
 
 from prometheus_client import Counter, Gauge, Histogram, Info

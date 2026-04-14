@@ -1,4 +1,5 @@
 """SYNAPSE Supplier Trust -- Test fixtures."""
+
 from __future__ import annotations
 
 import sys

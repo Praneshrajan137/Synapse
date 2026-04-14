@@ -1,19 +1,35 @@
 """SYNAPSE Routing Navigator -- Agent Lifecycle FSM (ADR-024). Shared base (I-2)."""
+
 from __future__ import annotations
 
 from synapse_common.fsm import AgentState, BaseAgentStateMachine, Transition
 
 TRANSITIONS: list[Transition] = [
-    Transition(AgentState.IDLE, AgentState.PROPOSING, "route_request_received",
-               guard="kafka_healthy and osrm_available", timeout_seconds=2.0),
-    Transition(AgentState.PROPOSING, AgentState.DEBATING, "proposal_submitted",
-               guard="confidence >= 0.0", timeout_seconds=5.0),
-    Transition(AgentState.DEBATING, AgentState.EXECUTING, "consensus_reached",
-               guard="orchestrator_approved", timeout_seconds=30.0),
-    Transition(AgentState.EXECUTING, AgentState.LEARNING, "execution_confirmed",
-               timeout_seconds=10.0),
-    Transition(AgentState.LEARNING, AgentState.IDLE, "policy_updated",
-               timeout_seconds=5.0),
+    Transition(
+        AgentState.IDLE,
+        AgentState.PROPOSING,
+        "route_request_received",
+        guard="kafka_healthy and osrm_available",
+        timeout_seconds=2.0,
+    ),
+    Transition(
+        AgentState.PROPOSING,
+        AgentState.DEBATING,
+        "proposal_submitted",
+        guard="confidence >= 0.0",
+        timeout_seconds=5.0,
+    ),
+    Transition(
+        AgentState.DEBATING,
+        AgentState.EXECUTING,
+        "consensus_reached",
+        guard="orchestrator_approved",
+        timeout_seconds=30.0,
+    ),
+    Transition(
+        AgentState.EXECUTING, AgentState.LEARNING, "execution_confirmed", timeout_seconds=10.0
+    ),
+    Transition(AgentState.LEARNING, AgentState.IDLE, "policy_updated", timeout_seconds=5.0),
     Transition(AgentState.PROPOSING, AgentState.ERROR, "exception_raised"),
     Transition(AgentState.EXECUTING, AgentState.ERROR, "exception_raised"),
     Transition(AgentState.ERROR, AgentState.IDLE, "error_handled", timeout_seconds=30.0),

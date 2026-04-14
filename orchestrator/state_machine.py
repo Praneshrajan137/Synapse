@@ -5,6 +5,7 @@ The Orchestrator has additional states (COLLECTING, ARBITRATING, ESCALATED) beyo
 the standard agent FSM.  It mirrors ``BaseAgentStateMachine`` interface from
 ``synapse_common.fsm`` while using an extended state enum.
 """
+
 from __future__ import annotations
 
 import time
@@ -12,7 +13,6 @@ from enum import Enum
 from typing import Any
 
 import structlog
-
 from synapse_common.fsm import RECITATION_INTERVAL
 
 logger = structlog.get_logger(__name__)

@@ -3,10 +3,11 @@ SYNAPSE -- Shared Agent Finite State Machine base types.
 All agents import AgentState and Transition from here, NOT from each other.
 This prevents cross-agent coupling while maintaining FSM consistency.
 """
+
 from __future__ import annotations
 
 import time
-from enum import Enum
+from enum import StrEnum
 from typing import Any
 
 import structlog
@@ -16,7 +17,7 @@ logger = structlog.get_logger(__name__)
 RECITATION_INTERVAL: int = 10
 
 
-class AgentState(str, Enum):
+class AgentState(StrEnum):
     """Six-state FSM shared across all SYNAPSE agents."""
 
     IDLE = "IDLE"

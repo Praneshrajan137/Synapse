@@ -2,6 +2,7 @@
 SYNAPSE Sustainability Agent -- Model unit tests.
 Verifies carbon tracking, waste prediction, and invariant compliance.
 """
+
 from __future__ import annotations
 
 import numpy as np
@@ -122,5 +123,5 @@ class TestWastePredictionModel:
         curve = result["survival_curve"]
         for i in range(1, len(curve)):
             assert curve[i] <= curve[i - 1] + 1e-9, (
-                f"Survival curve not monotonic at t={i}: {curve[i]} > {curve[i-1]}"
+                f"Survival curve not monotonic at t={i}: {curve[i]} > {curve[i - 1]}"
             )

@@ -2,6 +2,7 @@
 SYNAPSE Pricing Oracle -- MCP Tool Definitions (I-9).
 Agent-to-tool communication uses MCP exclusively.
 """
+
 from __future__ import annotations
 
 MCP_TOOLS: list[dict[str, object]] = [

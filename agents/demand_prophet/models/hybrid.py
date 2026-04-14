@@ -4,6 +4,7 @@ output = gate * tft_out + (1 - gate) * hgt_projected_out
 
 The gate learns to balance spatial vs temporal features per-sample.
 """
+
 from __future__ import annotations
 
 from typing import Any
@@ -87,10 +88,7 @@ class DemandProphetHybrid(nn.Module):
         )
 
         self.fusion_gates = nn.ModuleDict(
-            {
-                horizon: FusionGate(num_quantiles * 2, gating_hidden)
-                for horizon in VALID_HORIZONS
-            }
+            {horizon: FusionGate(num_quantiles * 2, gating_hidden) for horizon in VALID_HORIZONS}
         )
 
         self.num_quantiles = num_quantiles

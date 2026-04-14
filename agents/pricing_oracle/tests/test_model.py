@@ -2,9 +2,8 @@
 SYNAPSE Pricing Oracle -- Model unit tests.
 Verifies MADDPG forward pass, essential cap enforcement, and causal elasticity.
 """
-from __future__ import annotations
 
-import math
+from __future__ import annotations
 
 import numpy as np
 import pytest
@@ -85,7 +84,8 @@ class TestPricingMADDPG:
             actions = model.forward(dummy_observations)
             essential_actions = actions["essential"]
             assert (essential_actions <= ESSENTIAL_CAP).all(), (
-                f"INV-PO-001 violated: essential multiplier {essential_actions.max().item()} > {ESSENTIAL_CAP}"
+                "INV-PO-001 violated: essential multiplier"
+                f" {essential_actions.max().item()} > {ESSENTIAL_CAP}"
             )
 
     def test_essential_cap_enforced_in_select_actions(
@@ -128,9 +128,7 @@ class TestPricingMADDPG:
             out1 = model.forward(dummy_observations)
             out2 = model.forward(dummy_observations)
         for cat in CATEGORIES:
-            assert torch.allclose(out1[cat], out2[cat]), (
-                f"Non-deterministic output for {cat}"
-            )
+            assert torch.allclose(out1[cat], out2[cat]), f"Non-deterministic output for {cat}"
 
     def test_enforce_essential_cap_utility(self) -> None:
         assert PricingMADDPG.enforce_essential_cap(1.5) == ESSENTIAL_CAP

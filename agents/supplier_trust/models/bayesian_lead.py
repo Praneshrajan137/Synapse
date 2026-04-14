@@ -4,9 +4,8 @@ SYNAPSE Supplier Trust -- Bayesian Lead-Time Estimation via Pyro.
 LogNormal distribution with informative priors.  Uses pyro.infer.SVI with
 AutoNormal guide.  Returns FULL POSTERIOR: mean_days, std_days, p10_days, p90_days.
 """
-from __future__ import annotations
 
-from typing import Any
+from __future__ import annotations
 
 import pyro
 import pyro.distributions as dist

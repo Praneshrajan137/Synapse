@@ -1,12 +1,12 @@
 """SYNAPSE Orchestrator — deal pre/postcondition verification."""
+
 from __future__ import annotations
 
 from uuid import uuid4
 
 import deal
 import pytest
-
-from synapse_common.models import ConsensusDecision, ContextMessage, DecisionTier
+from synapse_common.models import ConsensusDecision, DecisionTier
 
 from orchestrator.guardrails.rules import execute_consensus
 
@@ -58,10 +58,10 @@ class TestExecuteConsensusContract:
 
 class TestContextAppendOnlyContract:
     def test_append_context_rejects_non_context_message(self) -> None:
-        from orchestrator.consensus.protocol import ConsensusProtocol
         from unittest.mock import MagicMock
 
         from orchestrator.config import OrchestratorConfig
+        from orchestrator.consensus.protocol import ConsensusProtocol
 
         cfg = OrchestratorConfig(postgresql_url="sqlite+aiosqlite:///", pinecone_api_key=None)
         proto = ConsensusProtocol(

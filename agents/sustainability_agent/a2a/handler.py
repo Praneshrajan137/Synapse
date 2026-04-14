@@ -5,6 +5,7 @@ Implements the three mandatory A2A methods:
   2. debate_respond(proposals, round_number) -> revised AgentProposal
   3. execute(consensus_action) -> ExecutionResult
 """
+
 from __future__ import annotations
 
 import json
@@ -12,10 +13,10 @@ from typing import Any
 from uuid import UUID, uuid4
 
 import structlog
+from synapse_common.models import AgentName, AgentProposal, DecisionTier
 
 from agents.sustainability_agent.inference.pipeline import SustainabilityPipeline
 from agents.sustainability_agent.state_machine import SustainabilityAgentStateMachine
-from synapse_common.models import AgentName, AgentProposal, DecisionTier
 
 logger = structlog.get_logger(__name__)
 

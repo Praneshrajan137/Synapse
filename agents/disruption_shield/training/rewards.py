@@ -5,6 +5,7 @@ NO CROSS-AGENT IMPORTS. Cross-agent import = automatic PR rejection.
 
 R = early_detection - 10*false_positive - 50*missed_disruption + recovery_speed
 """
+
 from __future__ import annotations
 
 import structlog

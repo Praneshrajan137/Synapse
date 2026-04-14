@@ -5,6 +5,7 @@ Embeds disruption context using sentence-transformers all-mpnet-base-v2,
 queries Pinecone for top-k historical playbooks, enforces 200ms SLA (INV-DS-002).
 Falls back to cached playbooks if Pinecone is unavailable (I-7).
 """
+
 from __future__ import annotations
 
 import time

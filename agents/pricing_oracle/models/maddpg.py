@@ -7,15 +7,18 @@ post-action — it is never part of the learned policy.
 
 Environment: PettingZoo AEC (Agent Environment Cycle).
 """
+
 from __future__ import annotations
 
-from typing import Final
+from typing import TYPE_CHECKING, Final
 
-import numpy as np
 import structlog
 import torch
 import torch.nn as nn
 from torch import Tensor
+
+if TYPE_CHECKING:
+    import numpy as np
 
 logger = structlog.get_logger(__name__)
 
@@ -104,26 +107,34 @@ class PricingMADDPG(nn.Module):
         self.obs_dim = obs_dim
         self.action_dim = action_dim
 
-        self.actors = nn.ModuleList([
-            ActorNetwork(obs_dim, action_dim, actor_hidden_dim, actor_num_layers)
-            for _ in range(num_agents)
-        ])
+        self.actors = nn.ModuleList(
+            [
+                ActorNetwork(obs_dim, action_dim, actor_hidden_dim, actor_num_layers)
+                for _ in range(num_agents)
+            ]
+        )
 
         total_obs = num_agents * obs_dim
         total_act = num_agents * action_dim
-        self.critics = nn.ModuleList([
-            CriticNetwork(total_obs, total_act, critic_hidden_dim, critic_num_layers)
-            for _ in range(num_agents)
-        ])
+        self.critics = nn.ModuleList(
+            [
+                CriticNetwork(total_obs, total_act, critic_hidden_dim, critic_num_layers)
+                for _ in range(num_agents)
+            ]
+        )
 
-        self.target_actors = nn.ModuleList([
-            ActorNetwork(obs_dim, action_dim, actor_hidden_dim, actor_num_layers)
-            for _ in range(num_agents)
-        ])
-        self.target_critics = nn.ModuleList([
-            CriticNetwork(total_obs, total_act, critic_hidden_dim, critic_num_layers)
-            for _ in range(num_agents)
-        ])
+        self.target_actors = nn.ModuleList(
+            [
+                ActorNetwork(obs_dim, action_dim, actor_hidden_dim, actor_num_layers)
+                for _ in range(num_agents)
+            ]
+        )
+        self.target_critics = nn.ModuleList(
+            [
+                CriticNetwork(total_obs, total_act, critic_hidden_dim, critic_num_layers)
+                for _ in range(num_agents)
+            ]
+        )
 
         for i in range(num_agents):
             self.target_actors[i].load_state_dict(self.actors[i].state_dict())
@@ -200,15 +211,9 @@ class PricingMADDPG(nn.Module):
 
     def get_model_summary(self) -> dict[str, int]:
         """Return parameter counts for logging and MLflow."""
-        actor_params = sum(
-            p.numel() for actor in self.actors for p in actor.parameters()
-        )
-        critic_params = sum(
-            p.numel() for critic in self.critics for p in critic.parameters()
-        )
-        target_params = sum(
-            p.numel() for ta in self.target_actors for p in ta.parameters()
-        ) + sum(
+        actor_params = sum(p.numel() for actor in self.actors for p in actor.parameters())
+        critic_params = sum(p.numel() for critic in self.critics for p in critic.parameters())
+        target_params = sum(p.numel() for ta in self.target_actors for p in ta.parameters()) + sum(
             p.numel() for tc in self.target_critics for p in tc.parameters()
         )
 

@@ -8,6 +8,7 @@ Survival analysis is the correct framework because:
 2. We have right-censored data (items sold before expiry)
 3. Covariates (temperature, humidity) affect the hazard rate
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -82,21 +83,28 @@ class ShelfLifeModel:
         """Predict remaining shelf life and quality score."""
         if not self.fitted:
             return self._fallback_predict(
-                sku_id, store_id, temperature_deviation_hours,
-                initial_shelf_life_days, days_since_receipt,
+                sku_id,
+                store_id,
+                temperature_deviation_hours,
+                initial_shelf_life_days,
+                days_since_receipt,
             )
 
-        covariates = pd.DataFrame([{
-            "temperature_deviation_hours": temperature_deviation_hours,
-            "humidity_deviation_pct": humidity_deviation_pct,
-            "initial_shelf_life_days": initial_shelf_life_days,
-            "is_cold_chain": 1.0 if is_cold_chain else 0.0,
-        }])
+        covariates = pd.DataFrame(
+            [
+                {
+                    "temperature_deviation_hours": temperature_deviation_hours,
+                    "humidity_deviation_pct": humidity_deviation_pct,
+                    "initial_shelf_life_days": initial_shelf_life_days,
+                    "is_cold_chain": 1.0 if is_cold_chain else 0.0,
+                }
+            ]
+        )
 
         surv_prob = float(
-            self.model.predict_survival_function(
-                covariates, times=[days_since_receipt]
-            ).values[0][0]
+            self.model.predict_survival_function(covariates, times=[days_since_receipt]).values[0][
+                0
+            ]
         )
 
         median_life = float(self.model.predict_median(covariates).values[0])
@@ -148,9 +156,9 @@ class ShelfLifeModel:
         data = {
             "temperature_deviation_hours": rng.exponential(2.0, n_samples),
             "humidity_deviation_pct": rng.normal(5.0, 3.0, n_samples).clip(0),
-            "initial_shelf_life_days": rng.choice(
-                [3.0, 5.0, 7.0, 14.0, 30.0], n_samples
-            ).astype(float),
+            "initial_shelf_life_days": rng.choice([3.0, 5.0, 7.0, 14.0, 30.0], n_samples).astype(
+                float
+            ),
             "is_cold_chain": rng.binomial(1, 0.4, n_samples).astype(float),
         }
 

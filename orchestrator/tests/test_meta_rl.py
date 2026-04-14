@@ -1,4 +1,5 @@
 """SYNAPSE Orchestrator — Meta-RL weight learning tests (I-2)."""
+
 from __future__ import annotations
 
 import numpy as np
@@ -42,7 +43,7 @@ class TestPolicyGradient:
     def test_no_update_with_small_history(self) -> None:
         agent = MetaRLAgent()
         initial = agent.weights.copy()
-        for i in range(5):
+        for _i in range(5):
             agent.update({"demand_accuracy": 0.4})
         assert np.allclose(agent.weights, initial)
 

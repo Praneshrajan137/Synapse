@@ -2,12 +2,12 @@
 SYNAPSE -- Consumer-Driven Contract: Pricing Oracle -> Demand Prophet.
 Pricing Oracle EXPECTS these fields and properties from Demand Prophet forecasts.
 """
+
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import pytest
-
 from synapse_common.models import DemandForecast
 
 pytestmark = pytest.mark.contract
@@ -20,7 +20,7 @@ class TestDemandProphetContract:
         return DemandForecast(
             sku_id="SKU001",
             store_id="STORE_BLR_001",
-            forecast_timestamp=datetime.now(timezone.utc),
+            forecast_timestamp=datetime.now(UTC),
             horizons={"15min": 10.0, "1h": 40.0, "6h": 200.0, "24h": 800.0, "7d": 5000.0},
             lower_90={"15min": 5.0, "1h": 20.0, "6h": 100.0, "24h": 400.0, "7d": 2500.0},
             upper_90={"15min": 15.0, "1h": 60.0, "6h": 300.0, "24h": 1200.0, "7d": 7500.0},

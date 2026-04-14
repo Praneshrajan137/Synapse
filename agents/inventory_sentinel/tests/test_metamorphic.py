@@ -1,4 +1,5 @@
 """SYNAPSE Inventory Sentinel -- Metamorphic Tests (Layer 4)."""
+
 from __future__ import annotations
 
 import pytest

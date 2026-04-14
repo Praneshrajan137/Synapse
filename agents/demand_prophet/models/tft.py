@@ -6,6 +6,7 @@ GNN neighbor embeddings modulate TFT variable selection weights.
 Components: Variable Selection Networks, Gated Residual Networks,
 Interpretable Multi-Head Attention, Quantile output heads.
 """
+
 from __future__ import annotations
 
 import math
@@ -13,7 +14,7 @@ import math
 import structlog
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
+import torch.nn.functional as F  # noqa: N812
 from torch import Tensor
 
 logger = structlog.get_logger(__name__)
@@ -94,10 +95,8 @@ class VariableSelectionNetwork(nn.Module):
             dropout=dropout,
         )
 
-    def forward(
-        self, inputs: list[Tensor], context: Tensor | None = None
-    ) -> tuple[Tensor, Tensor]:
-        processed = [grn(inp) for grn, inp in zip(self.variable_grns, inputs)]
+    def forward(self, inputs: list[Tensor], context: Tensor | None = None) -> tuple[Tensor, Tensor]:
+        processed = [grn(inp) for grn, inp in zip(self.variable_grns, inputs, strict=False)]
         stacked = torch.stack(processed, dim=-2)
         flattened = stacked.reshape(*stacked.shape[:-2], -1)
 

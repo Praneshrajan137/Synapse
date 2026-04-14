@@ -2,11 +2,12 @@
 SYNAPSE Routing Navigator -- Autoregressive Pointer-Network Decoder.
 Produces a permutation of visit order using attention-based pointing.
 """
+
 from __future__ import annotations
 
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
+import torch.nn.functional as F  # noqa: N812
 from torch import Tensor
 
 
@@ -63,10 +64,7 @@ class PointerDecoder(nn.Module):
             logits = logits.masked_fill(visited, float("-inf"))
             probs = F.softmax(logits, dim=-1)
 
-            if greedy:
-                selected = probs.argmax(dim=-1)
-            else:
-                selected = torch.multinomial(probs, 1).squeeze(-1)
+            selected = probs.argmax(dim=-1) if greedy else torch.multinomial(probs, 1).squeeze(-1)
 
             log_prob = torch.log(probs.gather(1, selected.unsqueeze(1)) + 1e-8).squeeze(-1)
 

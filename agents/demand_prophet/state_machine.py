@@ -2,6 +2,7 @@
 SYNAPSE Demand Prophet -- Agent Lifecycle FSM with Objective Recitation (ADR-024).
 Uses shared BaseAgentStateMachine from synapse_common.fsm (I-2: no cross-agent imports).
 """
+
 from __future__ import annotations
 
 from synapse_common.fsm import AgentState, BaseAgentStateMachine, Transition

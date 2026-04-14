@@ -1,10 +1,11 @@
 """SYNAPSE Orchestrator — Audit immutability tests (I-4)."""
+
 from __future__ import annotations
 
 from uuid import uuid4
 
 import pytest
-
+from pydantic import ValidationError
 from synapse_common.models import ConsensusDecision, DecisionTier
 
 
@@ -48,7 +49,7 @@ class TestAuditImmutability:
             confidence=0.8,
             audit_trace=["test"],
         )
-        with pytest.raises(Exception):
+        with pytest.raises(ValidationError):
             d.confidence = 0.99  # type: ignore[misc]
 
     def test_model_copy_creates_new_instance(self) -> None:

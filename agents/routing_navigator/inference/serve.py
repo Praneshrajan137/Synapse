@@ -1,16 +1,20 @@
 """SYNAPSE Routing Navigator -- FastAPI Inference Server. Port: 8002."""
+
 from __future__ import annotations
 
 import time
 from contextlib import asynccontextmanager
-from typing import Any, AsyncIterator
+from typing import TYPE_CHECKING, Any
 
 import structlog
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel, Field
+from synapse_common.models import RoutePlan
 
 from agents.routing_navigator.inference.pipeline import RoutingNavigatorPipeline
-from synapse_common.models import RoutePlan
+
+if TYPE_CHECKING:
+    from collections.abc import AsyncIterator
 
 logger = structlog.get_logger(__name__)
 _pipeline: RoutingNavigatorPipeline | None = None
@@ -57,4 +61,8 @@ async def route(request: RouteRequest) -> RouteResponse:
 
 @app.get("/health")
 async def health() -> dict[str, Any]:
-    return {"status": "healthy", "agent": "routing_navigator", "model_loaded": _pipeline is not None}
+    return {
+        "status": "healthy",
+        "agent": "routing_navigator",
+        "model_loaded": _pipeline is not None,
+    }

@@ -4,15 +4,15 @@ Handles: Feast feature retrieval -> Neo4j graph query -> model inference ->
          conformal intervals -> schema validation -> Kafka publish.
 All within Tier 2 SLA (<500ms) (I-10).
 """
+
 from __future__ import annotations
 
 import time
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 import numpy as np
 import structlog
-
 from synapse_common.models import DemandForecast
 
 logger = structlog.get_logger(__name__)
@@ -90,14 +90,10 @@ class DemandProphetPipeline:
         horizons: set[str],
     ) -> None:
         if not (1 <= len(sku_ids) <= 500):
-            raise ValueError(
-                f"PRE-DP-001: SKU count {len(sku_ids)} outside bounds [1, 500]"
-            )
+            raise ValueError(f"PRE-DP-001: SKU count {len(sku_ids)} outside bounds [1, 500]")
         if not horizons.issubset(VALID_HORIZONS):
             invalid = horizons - VALID_HORIZONS
-            raise ValueError(
-                f"PRE-DP-004: Invalid horizons {invalid}. Valid: {VALID_HORIZONS}"
-            )
+            raise ValueError(f"PRE-DP-004: Invalid horizons {invalid}. Valid: {VALID_HORIZONS}")
 
     def _get_features(self, sku_ids: list[str], store_id: str) -> dict[str, Any]:
         if self._feast is None:
@@ -144,7 +140,7 @@ class DemandProphetPipeline:
         intervals: dict[str, tuple[np.ndarray, np.ndarray]] | None,
     ) -> list[DemandForecast]:
         forecasts: list[DemandForecast] = []
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
 
         for i, sku_id in enumerate(sku_ids):
             horizons_dict: dict[str, float] = {}

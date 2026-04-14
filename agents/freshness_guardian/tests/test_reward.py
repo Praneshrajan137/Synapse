@@ -2,12 +2,12 @@
 SYNAPSE Freshness Guardian — Reward function tests.
 Verifies I-2 (independent reward) and reward component correctness.
 """
+
 from __future__ import annotations
 
 import ast
 from pathlib import Path
 
-import pytest
 import torch
 
 from agents.freshness_guardian.training.rewards import compute_reward

@@ -5,6 +5,7 @@ NO CROSS-AGENT IMPORTS. Cross-agent import = automatic PR rejection.
 
 Reward: R = -carbon_per_delivery - 0.5*waste_rate + 0.3*prediction_accuracy
 """
+
 from __future__ import annotations
 
 import structlog
@@ -75,11 +76,7 @@ def compute_reward(
     w_penalty = waste_rate_penalty(items_wasted, items_total)
     a_bonus = prediction_accuracy_bonus(predicted_co2_kg, actual_co2_kg)
 
-    total = (
-        -carbon_weight * c_penalty
-        - waste_weight * w_penalty
-        + accuracy_weight * a_bonus
-    )
+    total = -carbon_weight * c_penalty - waste_weight * w_penalty + accuracy_weight * a_bonus
 
     logger.info(
         "reward_computed",

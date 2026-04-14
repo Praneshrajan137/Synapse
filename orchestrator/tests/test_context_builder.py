@@ -1,9 +1,6 @@
 """SYNAPSE Orchestrator — KV-cache preservation tests (I-13)."""
+
 from __future__ import annotations
-
-import json
-
-import pytest
 
 from synapse_common.models import ContextMessage
 

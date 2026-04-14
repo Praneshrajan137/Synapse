@@ -2,10 +2,10 @@
 SYNAPSE Sustainability Agent -- Contract tests (Layer 5).
 Consumer-driven contracts verifying upstream expectations.
 """
+
 from __future__ import annotations
 
 import pytest
-
 from synapse_common.models import RoutePlan
 
 pytestmark = pytest.mark.contract

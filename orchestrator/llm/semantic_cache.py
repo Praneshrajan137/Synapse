@@ -4,6 +4,7 @@ SYNAPSE Orchestrator — Pinecone semantic decision cache (ADR-018).
 Caches Tier 3-4 decisions so repeated scenarios can be resolved at Tier 1 speed.
 Uses cosine similarity >= 0.92 and a 24-hour TTL.
 """
+
 from __future__ import annotations
 
 import asyncio

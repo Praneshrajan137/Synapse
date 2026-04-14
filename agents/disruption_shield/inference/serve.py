@@ -3,10 +3,11 @@ SYNAPSE Disruption Shield -- FastAPI Inference Server.
 Endpoints: POST /detect, GET /health, GET /metrics, POST /a2a
 Port: 8006
 """
+
 from __future__ import annotations
 
 from contextlib import asynccontextmanager
-from typing import AsyncIterator
+from typing import TYPE_CHECKING
 
 import structlog
 from fastapi import FastAPI, HTTPException
@@ -18,6 +19,9 @@ from agents.disruption_shield.inference.pipeline import (
     DisruptionRequest,
     DisruptionShieldPipeline,
 )
+
+if TYPE_CHECKING:
+    from collections.abc import AsyncIterator
 
 logger = structlog.get_logger(__name__)
 
@@ -37,7 +41,9 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 app = FastAPI(
     title="SYNAPSE Disruption Shield",
     version="1.0.0",
-    description="Supply chain disruption detection via anomaly ensemble, reasoning, and playbook retrieval",
+    description=(
+        "Supply chain disruption detection via anomaly ensemble, reasoning, and playbook retrieval"
+    ),
     lifespan=lifespan,
 )
 

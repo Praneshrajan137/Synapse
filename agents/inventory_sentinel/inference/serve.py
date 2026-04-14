@@ -1,15 +1,19 @@
 """SYNAPSE Inventory Sentinel -- FastAPI Server. Port: 8003."""
+
 from __future__ import annotations
 
 from contextlib import asynccontextmanager
-from typing import Any, AsyncIterator
+from typing import TYPE_CHECKING, Any
 
 import structlog
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel, Field
+from synapse_common.models import InventoryAction
 
 from agents.inventory_sentinel.inference.pipeline import InventorySentinelPipeline
-from synapse_common.models import InventoryAction
+
+if TYPE_CHECKING:
+    from collections.abc import AsyncIterator
 
 logger = structlog.get_logger(__name__)
 _pipeline: InventorySentinelPipeline | None = None

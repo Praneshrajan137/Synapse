@@ -5,6 +5,7 @@ Implements the three mandatory A2A methods:
   2. debate_respond(proposals, round_number) -> revised AgentProposal
   3. execute(consensus_action) -> ExecutionResult
 """
+
 from __future__ import annotations
 
 import json
@@ -12,10 +13,10 @@ from typing import Any
 from uuid import UUID, uuid4
 
 import structlog
+from synapse_common.models import AgentName, AgentProposal, DecisionTier
 
 from agents.pricing_oracle.inference.pipeline import PricingOraclePipeline
 from agents.pricing_oracle.state_machine import PricingOracleStateMachine
-from synapse_common.models import AgentName, AgentProposal, DecisionTier
 
 logger = structlog.get_logger(__name__)
 
@@ -63,9 +64,7 @@ class PricingOracleA2AHandler:
             base_prices=base_prices,
         )
 
-        avg_confidence = (
-            sum(u.confidence for u in updates) / len(updates) if updates else 0.0
-        )
+        avg_confidence = sum(u.confidence for u in updates) / len(updates) if updates else 0.0
 
         proposal = AgentProposal(
             agent_name=AgentName.PRICING_ORACLE,

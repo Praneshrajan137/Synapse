@@ -3,10 +3,11 @@ SYNAPSE Disruption Shield — Inference Pipeline.
 Orchestrates anomaly ensemble, reasoning chain, and playbook retrieval
 to produce a DisruptionAlert.
 """
+
 from __future__ import annotations
 
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 import numpy as np
@@ -58,9 +59,7 @@ class DisruptionAlert(BaseModel):
     severity: str
     summary: str
     playbooks: list[PlaybookSummary]
-    timestamp: str = Field(
-        default_factory=lambda: datetime.now(timezone.utc).isoformat()
-    )
+    timestamp: str = Field(default_factory=lambda: datetime.now(UTC).isoformat())
     confidence: float = Field(ge=0.0, le=1.0)
 
 

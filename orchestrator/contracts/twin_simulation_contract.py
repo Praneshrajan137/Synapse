@@ -4,6 +4,7 @@ SYNAPSE Orchestrator — Consumer-driven contract: Digital Twin what-if response
 The Orchestrator (consumer) expects the Digital Twin to return Monte Carlo
 results conforming to ``digital_twin.simulation.monte_carlo.MonteCarloOutput``.
 """
+
 from __future__ import annotations
 
 import pytest

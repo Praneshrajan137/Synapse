@@ -6,6 +6,7 @@ Consumers:
   - Inventory Sentinel: expects alert_level and affected nodes for stock adjustment
   - Routing Navigator: expects disruption severity for route replanning
 """
+
 from __future__ import annotations
 
 import numpy as np

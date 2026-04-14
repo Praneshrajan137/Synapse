@@ -6,13 +6,15 @@ Three-layer protocol:
   Layer 2: Append-only context messages (never reorder, never remove).
   Layer 3: Deterministic JSON serialization (sort_keys, compact separators).
 """
+
 from __future__ import annotations
 
 import hashlib
 import json
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
-from synapse_common.models import ContextMessage
+if TYPE_CHECKING:
+    from synapse_common.models import ContextMessage
 
 SYSTEM_PROMPT: str = (
     "You are the SYNAPSE Orchestrator, a multi-agent consensus engine.\n"
@@ -57,7 +59,8 @@ class ContextBuilder:
         self._system_prompt_hash = _FROZEN_HASH
 
     def build_ollama_messages(
-        self, context_messages: list[ContextMessage],
+        self,
+        context_messages: list[ContextMessage],
     ) -> list[dict[str, str]]:
         """Return message list with a frozen system prompt prefix."""
         messages: list[dict[str, str]] = [

@@ -5,6 +5,7 @@ Implements the three mandatory A2A methods:
   2. debate_respond(proposals, round_number) -> revised AgentProposal
   3. execute(consensus_action) -> ExecutionResult
 """
+
 from __future__ import annotations
 
 import json
@@ -12,10 +13,10 @@ from typing import Any
 from uuid import UUID, uuid4
 
 import structlog
+from synapse_common.models import AgentName, AgentProposal, DecisionTier
 
 from agents.demand_prophet.inference.pipeline import DemandProphetPipeline
 from agents.demand_prophet.state_machine import DemandProphetStateMachine
-from synapse_common.models import AgentName, AgentProposal, DecisionTier
 
 logger = structlog.get_logger(__name__)
 
@@ -56,9 +57,7 @@ class DemandProphetA2AHandler:
 
         forecasts = self._pipeline.predict(sku_ids, store_id)
 
-        avg_confidence = (
-            sum(f.confidence for f in forecasts) / len(forecasts) if forecasts else 0.0
-        )
+        avg_confidence = sum(f.confidence for f in forecasts) / len(forecasts) if forecasts else 0.0
 
         proposal = AgentProposal(
             agent_name=AgentName.DEMAND_PROPHET,

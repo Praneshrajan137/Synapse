@@ -3,10 +3,11 @@ SYNAPSE Freshness Guardian -- FastAPI Inference Server.
 Endpoints: POST /freshness, GET /health, GET /metrics, POST /a2a
 Port: 8004
 """
+
 from __future__ import annotations
 
 from contextlib import asynccontextmanager
-from typing import AsyncIterator
+from typing import TYPE_CHECKING
 
 import structlog
 from fastapi import FastAPI, HTTPException
@@ -18,6 +19,9 @@ from agents.freshness_guardian.inference.pipeline import (
     FreshnessGuardianPipeline,
     FreshnessRequest,
 )
+
+if TYPE_CHECKING:
+    from collections.abc import AsyncIterator
 
 logger = structlog.get_logger(__name__)
 

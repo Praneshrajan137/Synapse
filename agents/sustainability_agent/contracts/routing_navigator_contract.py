@@ -2,10 +2,10 @@
 SYNAPSE -- Consumer-Driven Contract: Sustainability Agent -> Routing Navigator.
 Sustainability Agent EXPECTS fuel_estimate_liters and distance_km from route plans.
 """
+
 from __future__ import annotations
 
 import pytest
-
 from synapse_common.models import RoutePlan
 
 pytestmark = pytest.mark.contract
@@ -38,9 +38,7 @@ class TestRoutingNavigatorContract:
     def test_fuel_and_distance_consistent(self) -> None:
         r = self._make_route()
         if r.total_distance_km == 0.0:
-            assert r.fuel_estimate_liters == 0.0, (
-                "Contract: zero distance must mean zero fuel"
-            )
+            assert r.fuel_estimate_liters == 0.0, "Contract: zero distance must mean zero fuel"
 
     def test_deterministic_serialization(self) -> None:
         r = self._make_route()

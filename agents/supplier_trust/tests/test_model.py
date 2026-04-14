@@ -1,4 +1,5 @@
 """SYNAPSE Supplier Trust -- Model unit tests."""
+
 from __future__ import annotations
 
 import pyro
@@ -24,23 +25,31 @@ class TestSupplierTrustGNN:
         data["darkstore"].x = torch.randn(n_stores, 10)
 
         data["supplier", "supplies", "sku"].edge_index = torch.tensor(
-            [[0, 1, 2, 3, 4], [0, 1, 2, 3, 4]], dtype=torch.long,
+            [[0, 1, 2, 3, 4], [0, 1, 2, 3, 4]],
+            dtype=torch.long,
         )
         data["sku", "stocked_at", "darkstore"].edge_index = torch.tensor(
-            [[0, 1, 2, 3, 4], [0, 1, 2, 0, 1]], dtype=torch.long,
+            [[0, 1, 2, 3, 4], [0, 1, 2, 0, 1]],
+            dtype=torch.long,
         )
         data["supplier", "delivers_to", "darkstore"].edge_index = torch.tensor(
-            [[0, 1, 2], [0, 1, 2]], dtype=torch.long,
+            [[0, 1, 2], [0, 1, 2]],
+            dtype=torch.long,
         )
         data["darkstore", "orders_from", "supplier"].edge_index = torch.tensor(
-            [[0, 1, 2], [0, 1, 2]], dtype=torch.long,
+            [[0, 1, 2], [0, 1, 2]],
+            dtype=torch.long,
         )
         return data
 
     def test_forward_pass(self, hetero_data: HeteroData) -> None:
         model = SupplierTrustGNN(
-            supplier_in_dim=16, sku_in_dim=12, store_in_dim=10,
-            hidden_dim=32, out_dim=16, num_layers=2,
+            supplier_in_dim=16,
+            sku_in_dim=12,
+            store_in_dim=10,
+            hidden_dim=32,
+            out_dim=16,
+            num_layers=2,
         )
         out = model(hetero_data)
         assert "supplier" in out
@@ -52,16 +61,24 @@ class TestSupplierTrustGNN:
 
     def test_get_supplier_embeddings(self, hetero_data: HeteroData) -> None:
         model = SupplierTrustGNN(
-            supplier_in_dim=16, sku_in_dim=12, store_in_dim=10,
-            hidden_dim=32, out_dim=16, num_layers=2,
+            supplier_in_dim=16,
+            sku_in_dim=12,
+            store_in_dim=10,
+            hidden_dim=32,
+            out_dim=16,
+            num_layers=2,
         )
         emb = model.get_supplier_embeddings(hetero_data)
         assert emb.shape == (5, 16)
 
     def test_gradient_flow(self, hetero_data: HeteroData) -> None:
         model = SupplierTrustGNN(
-            supplier_in_dim=16, sku_in_dim=12, store_in_dim=10,
-            hidden_dim=32, out_dim=16, num_layers=2,
+            supplier_in_dim=16,
+            sku_in_dim=12,
+            store_in_dim=10,
+            hidden_dim=32,
+            out_dim=16,
+            num_layers=2,
         )
         out = model(hetero_data)
         loss = out["supplier"].sum()

@@ -6,6 +6,7 @@ quality score, current stock level, and demand forecast.
 INV-FG-002: days_to_expiry = 0 -> markdown_applied = True
 INV-FG-004: markdown_pct increases monotonically as days_to_expiry decreases
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass

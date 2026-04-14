@@ -4,6 +4,7 @@ Wraps CodeCarbon EmissionsTracker for compute emissions and provides
 fuel-based CO2 estimation for delivery routes. Integrates with
 Routing Navigator fuel_estimate_liters (PRE-SA-001).
 """
+
 from __future__ import annotations
 
 from typing import Any

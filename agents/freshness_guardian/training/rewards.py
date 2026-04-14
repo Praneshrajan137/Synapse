@@ -5,6 +5,7 @@ NO CROSS-AGENT IMPORTS. Cross-agent import = automatic PR rejection.
 
 R = freshness_accuracy + 0.4*markdown_timing - 2.0*fssai_violation - 0.3*unnecessary_markdown
 """
+
 from __future__ import annotations
 
 import structlog
@@ -59,9 +60,7 @@ def unnecessary_markdown_penalty(
 ) -> Tensor:
     """Penalty for applying markdown when item is still fresh."""
     unnecessary = (
-        (markdown_applied > 0.5)
-        & (days_to_expiry > 7)
-        & (quality_score > expiry_threshold)
+        (markdown_applied > 0.5) & (days_to_expiry > 7) & (quality_score > expiry_threshold)
     )
     return unnecessary.float().mean()
 
@@ -87,9 +86,7 @@ def compute_reward(
     accuracy = freshness_accuracy_reward(predicted_quality, actual_quality)
     timing = markdown_timing_reward(markdown_applied, days_to_expiry, was_sold)
     fssai = fssai_violation_penalty(temperature_deviation_hours, fssai_logged)
-    unnecessary = unnecessary_markdown_penalty(
-        markdown_applied, days_to_expiry, predicted_quality
-    )
+    unnecessary = unnecessary_markdown_penalty(markdown_applied, days_to_expiry, predicted_quality)
 
     total = (
         accuracy_weight * accuracy

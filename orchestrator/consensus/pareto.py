@@ -4,9 +4,10 @@ SYNAPSE Orchestrator — Pareto arbitration via NSGA-II (pymoo).
 Given N agent proposals each evaluated against 8 objectives, finds the
 Pareto-optimal weight vector and selects the knee point.
 """
+
 from __future__ import annotations
 
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import numpy as np
 import structlog
@@ -14,7 +15,8 @@ from pymoo.algorithms.moo.nsga2 import NSGA2
 from pymoo.core.problem import Problem
 from pymoo.optimize import minimize
 
-from synapse_common.models import AgentProposal
+if TYPE_CHECKING:
+    from synapse_common.models import AgentProposal
 
 logger = structlog.get_logger(__name__)
 
@@ -85,14 +87,14 @@ class _WeightOptProblem(Problem):
 
     def _evaluate(
         self,
-        X: np.ndarray,
+        X: np.ndarray,  # noqa: N803
         out: dict[str, Any],
         *args: Any,
         **kwargs: Any,
     ) -> None:
         # X shape: (pop_size, 8) — candidate weight vectors
         # For each weight vector, compute weighted utility per objective
-        F = np.zeros((X.shape[0], 8))
+        F = np.zeros((X.shape[0], 8))  # noqa: N806
         for i, w in enumerate(X):
             normalised_w = w / (w.sum() + 1e-12)
             blended = self._U.T @ np.ones(self._U.shape[0])  # sum across proposals
@@ -123,14 +125,15 @@ def run_pareto_arbitration(
     normalised = (pareto_front - ideal) / denom
 
     weights_arr = np.array(
-        [weight_vector.get(obj, 1.0) for obj in OBJECTIVES], dtype=np.float64,
+        [weight_vector.get(obj, 1.0) for obj in OBJECTIVES],
+        dtype=np.float64,
     )
     weighted_dist = np.sqrt(np.sum((normalised * weights_arr) ** 2, axis=1))
     knee_idx = int(np.argmin(weighted_dist))
 
     selected_raw = pareto_solutions[knee_idx]
     selected_normalised = selected_raw / (selected_raw.sum() + 1e-12) * 8.0
-    selected_weights = dict(zip(OBJECTIVES, selected_normalised.tolist()))
+    selected_weights = dict(zip(OBJECTIVES, selected_normalised.tolist(), strict=False))
 
     logger.info(
         "pareto_arbitration_complete",
@@ -142,7 +145,7 @@ def run_pareto_arbitration(
     return {
         "selected_weights": selected_weights,
         "pareto_front": [
-            dict(zip(OBJECTIVES, (-row).tolist())) for row in pareto_front
+            dict(zip(OBJECTIVES, (-row).tolist(), strict=False)) for row in pareto_front
         ],
         "knee_index": knee_idx,
         "n_solutions": len(pareto_front),

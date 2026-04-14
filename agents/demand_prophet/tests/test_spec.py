@@ -1,4 +1,5 @@
 """Auto-generated spec tests for demand_prophet from spec.yaml."""
+
 from __future__ import annotations
 
 import pytest
@@ -9,7 +10,7 @@ class TestInvDp001:
 
     def test_inv_dp_001(self) -> None:
         # Assertion: output.lower_90 is not None and output.upper_90 is not None
-        pytest.skip("NOT IMPLEMENTED — implement demand_prophet to make this pass")
+        pytest.skip("NOT IMPLEMENTED â€” implement demand_prophet to make this pass")
 
 
 class TestInvDp002:
@@ -17,7 +18,7 @@ class TestInvDp002:
 
     def test_inv_dp_002(self) -> None:
         # Assertion: empirical_coverage(output.lower_90, output.upper_90, actuals) >= 0.85
-        pytest.skip("NOT IMPLEMENTED — implement demand_prophet to make this pass")
+        pytest.skip("NOT IMPLEMENTED â€” implement demand_prophet to make this pass")
 
 
 class TestInvDp003:
@@ -25,7 +26,7 @@ class TestInvDp003:
 
     def test_inv_dp_003(self) -> None:
         # Assertion: 0.0 <= output.confidence <= 1.0
-        pytest.skip("NOT IMPLEMENTED — implement demand_prophet to make this pass")
+        pytest.skip("NOT IMPLEMENTED â€” implement demand_prophet to make this pass")
 
 
 class TestInvDp004:
@@ -33,7 +34,7 @@ class TestInvDp004:
 
     def test_inv_dp_004(self) -> None:
         # Assertion: set(output.horizons.keys()) == {'15min', '1h', '6h', '24h', '7d'}
-        pytest.skip("NOT IMPLEMENTED — implement demand_prophet to make this pass")
+        pytest.skip("NOT IMPLEMENTED â€” implement demand_prophet to make this pass")
 
 
 class TestInvDp005:
@@ -41,7 +42,7 @@ class TestInvDp005:
 
     def test_inv_dp_005(self) -> None:
         # Assertion: jsonschema.validate(output.dict(), demand_forecast_schema) passes
-        pytest.skip("NOT IMPLEMENTED — implement demand_prophet to make this pass")
+        pytest.skip("NOT IMPLEMENTED â€” implement demand_prophet to make this pass")
 
 
 class TestPreDp001:

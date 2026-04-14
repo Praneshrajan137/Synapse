@@ -8,10 +8,11 @@ Models:
 
 Ensemble score = 0.3*IF + 0.3*LSTM + 0.4*GNN  (INV-DS-007: result in [0, 1])
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import numpy as np
 import structlog
@@ -20,10 +21,12 @@ import torch.nn as nn
 from sklearn.ensemble import IsolationForest
 from torch import Tensor
 
+if TYPE_CHECKING:
+    from torch_geometric.data import Data
+
 logger = structlog.get_logger(__name__)
 
 try:
-    from torch_geometric.data import Data
     from torch_geometric.nn import GCNConv
 
     _HAS_TORCH_GEOMETRIC = True
@@ -46,6 +49,7 @@ class EnsembleResult:
 # ---------------------------------------------------------------------------
 # Model 1: Isolation Forest wrapper
 # ---------------------------------------------------------------------------
+
 
 class IsolationForestDetector:
     """Isolation Forest for point anomaly detection on tabular features."""
@@ -86,6 +90,7 @@ class IsolationForestDetector:
 # Model 2: LSTM Autoencoder
 # ---------------------------------------------------------------------------
 
+
 class LSTMEncoder(nn.Module):
     """LSTM encoder: sequences -> latent representation."""
 
@@ -102,9 +107,7 @@ class LSTMEncoder(nn.Module):
 class LSTMDecoder(nn.Module):
     """LSTM decoder: latent -> reconstructed sequences."""
 
-    def __init__(
-        self, latent_dim: int, hidden_dim: int, output_dim: int, seq_len: int
-    ) -> None:
+    def __init__(self, latent_dim: int, hidden_dim: int, output_dim: int, seq_len: int) -> None:
         super().__init__()
         self.seq_len = seq_len
         self.fc = nn.Linear(latent_dim, hidden_dim)
@@ -203,6 +206,7 @@ else:
 # Ensemble
 # ---------------------------------------------------------------------------
 
+
 class AnomalyEnsemble:
     """Weighted three-model ensemble: 0.3*IF + 0.3*LSTM + 0.4*GNN."""
 
@@ -237,7 +241,7 @@ class AnomalyEnsemble:
 
         Each sub-model that is unavailable contributes 0.0 and logs a warning.
         """
-        n_samples = tabular_features.shape[0]
+        tabular_features.shape[0]
 
         if_scores = self.isolation_forest.score(tabular_features)
         if_mean = float(np.mean(if_scores))
@@ -257,9 +261,7 @@ class AnomalyEnsemble:
             logger.info("gnn_skipped", reason="no graph data provided")
 
         ensemble = (
-            self.if_weight * if_mean
-            + self.lstm_weight * lstm_mean
-            + self.gnn_weight * gnn_mean
+            self.if_weight * if_mean + self.lstm_weight * lstm_mean + self.gnn_weight * gnn_mean
         )
         ensemble = max(0.0, min(1.0, ensemble))
 

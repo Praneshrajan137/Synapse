@@ -2,6 +2,7 @@
 SYNAPSE Freshness Guardian — Model Tests.
 Tests shelf life prediction and markdown engine.
 """
+
 from __future__ import annotations
 
 import pytest
@@ -36,7 +37,8 @@ class TestShelfLifeModel:
     def test_higher_temp_deviation_lower_quality(self, fitted_model: ShelfLifeModel) -> None:
         """MR-FG-002: Higher temperature deviation -> lower quality score."""
         pred_good = fitted_model.predict(
-            "SKU-0001", "BLR-DS-001",
+            "SKU-0001",
+            "BLR-DS-001",
             temperature_deviation_hours=0.0,
             humidity_deviation_pct=0.0,
             initial_shelf_life_days=7,
@@ -44,7 +46,8 @@ class TestShelfLifeModel:
             days_since_receipt=3.0,
         )
         pred_bad = fitted_model.predict(
-            "SKU-0001", "BLR-DS-001",
+            "SKU-0001",
+            "BLR-DS-001",
             temperature_deviation_hours=10.0,
             humidity_deviation_pct=0.0,
             initial_shelf_life_days=7,

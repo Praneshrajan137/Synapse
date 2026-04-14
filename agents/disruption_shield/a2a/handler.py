@@ -5,6 +5,7 @@ Implements the three mandatory A2A methods:
   2. debate_respond(proposals, round_number) -> revised AgentProposal
   3. execute(consensus_action) -> ExecutionResult
 """
+
 from __future__ import annotations
 
 import json
@@ -12,13 +13,13 @@ from typing import Any
 from uuid import UUID, uuid4
 
 import structlog
+from synapse_common.models import AgentName, AgentProposal, DecisionTier
 
 from agents.disruption_shield.inference.pipeline import (
     DisruptionRequest,
     DisruptionShieldPipeline,
 )
 from agents.disruption_shield.state_machine import DisruptionShieldStateMachine
-from synapse_common.models import AgentName, AgentProposal, DecisionTier
 
 logger = structlog.get_logger(__name__)
 

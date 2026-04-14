@@ -5,6 +5,7 @@ Post-training calibration producing guaranteed coverage intervals.
 INV-DP-001: Every forecast MUST include conformal intervals.
 INV-DP-002: 90% interval achieves >=85% empirical coverage.
 """
+
 from __future__ import annotations
 
 import numpy as np
@@ -70,9 +71,7 @@ class ConformalCalibrator:
 
             calibrated_lower = lower_raw - adjustment_lower
             calibrated_upper = upper_raw + adjustment_upper
-            coverage = float(
-                np.mean((actual >= calibrated_lower) & (actual <= calibrated_upper))
-            )
+            coverage = float(np.mean((actual >= calibrated_lower) & (actual <= calibrated_upper)))
             coverages[horizon] = coverage
 
             logger.info(

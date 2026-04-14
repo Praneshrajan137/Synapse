@@ -5,13 +5,12 @@ Canonical domain models (ContextMessage, AgentProposal, ConsensusDecision, etc.)
 are imported from ``synapse_common.models`` and re-exported here for convenience.
 Orchestrator-only models are defined below.
 """
+
 from __future__ import annotations
 
-from typing import Any
-from uuid import UUID
+from typing import TYPE_CHECKING, Any
 
 from pydantic import Field
-
 from synapse_common.models import (
     AgentName,
     AgentProposal,
@@ -22,6 +21,9 @@ from synapse_common.models import (
     MessageStatus,
     SynapseBaseModel,
 )
+
+if TYPE_CHECKING:
+    from uuid import UUID
 
 __all__ = [
     "AgentName",

@@ -2,6 +2,7 @@
 SYNAPSE Pricing Oracle -- Reward function unit tests.
 Verifies I-2 (independent reward) and reward component correctness.
 """
+
 from __future__ import annotations
 
 import ast

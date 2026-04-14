@@ -4,13 +4,16 @@ Uses lifelines KaplanMeierFitter for non-parametric survival curves and
 CoxPHFitter for covariate-based hazard modelling. Connects with quality
 scores from Freshness Guardian.
 """
+
 from __future__ import annotations
 
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import numpy as np
-import pandas as pd
 import structlog
+
+if TYPE_CHECKING:
+    import pandas as pd
 
 logger = structlog.get_logger(__name__)
 
@@ -89,9 +92,7 @@ class WastePredictionModel:
         waste_probability = 1.0 - survival_at_t
 
         timeline = np.arange(0, days_ahead + 1)
-        survival_curve = [
-            float(self._km_fitter.predict(t)) for t in timeline
-        ]
+        survival_curve = [float(self._km_fitter.predict(t)) for t in timeline]
 
         hazard_rate = 0.0
         if self._cox_fitter is not None and covariates is not None:

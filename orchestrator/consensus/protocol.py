@@ -9,17 +9,17 @@ Phase 5 (LEARNING):     Meta-RL weight update, semantic cache update.
 
 Tier 1-2 fast path (80 % of decisions): Phase 1 -> Phase 4 -> Phase 5.
 """
+
 from __future__ import annotations
 
 import asyncio
 import json
 import time
-from typing import Any
-from uuid import uuid4
+from datetime import UTC
+from typing import TYPE_CHECKING, Any
 
 import deal
 import structlog
-
 from synapse_common.a2a_sdk import send_a2a_request
 from synapse_common.metrics import (
     CONSENSUS_DEBATE_ROUNDS,
@@ -36,18 +36,20 @@ from synapse_common.models import (
     MessageStatus,
 )
 
-from orchestrator.audit.logger import AuditLogger
-from orchestrator.config import OrchestratorConfig
 from orchestrator.consensus.models import ConflictReport, TierClassification
 from orchestrator.consensus.pareto import OBJECTIVES, run_pareto_arbitration
-from orchestrator.consensus.tier_router import TierRouter
-from orchestrator.guardrails.rules import GuardrailEngine
-from orchestrator.hitl.escalation import HITLEscalation
-from orchestrator.llm.context_builder import ContextBuilder
-from orchestrator.llm.ollama_client import OllamaClient
-from orchestrator.llm.semantic_cache import SemanticDecisionCache
-from orchestrator.meta_rl.meta_agent import MetaRLAgent
-from orchestrator.state_machine import OrchestratorState, OrchestratorStateMachine
+from orchestrator.state_machine import OrchestratorStateMachine
+
+if TYPE_CHECKING:
+    from orchestrator.audit.logger import AuditLogger
+    from orchestrator.config import OrchestratorConfig
+    from orchestrator.consensus.tier_router import TierRouter
+    from orchestrator.guardrails.rules import GuardrailEngine
+    from orchestrator.hitl.escalation import HITLEscalation
+    from orchestrator.llm.context_builder import ContextBuilder
+    from orchestrator.llm.ollama_client import OllamaClient
+    from orchestrator.llm.semantic_cache import SemanticDecisionCache
+    from orchestrator.meta_rl.meta_agent import MetaRLAgent
 
 logger = structlog.get_logger(__name__)
 
@@ -127,7 +129,8 @@ class ConsensusProtocol:
     # ── Main entry point ────────────────────────────────────────────────
 
     async def run_consensus(
-        self, decision_request: dict[str, Any],
+        self,
+        decision_request: dict[str, Any],
     ) -> ConsensusDecision:
         """Execute the full consensus lifecycle for a single decision."""
         self._reset()
@@ -136,14 +139,16 @@ class ConsensusProtocol:
         classification = self._tier_router.classify(decision_request)
         tier = classification.tier
 
-        self._append_context(ContextMessage(
-            source="orchestrator",
-            content={
-                "type": "decision_request",
-                "tier": tier.value,
-                "request": decision_request,
-            },
-        ))
+        self._append_context(
+            ContextMessage(
+                source="orchestrator",
+                content={
+                    "type": "decision_request",
+                    "tier": tier.value,
+                    "request": decision_request,
+                },
+            )
+        )
 
         try:
             if tier in (DecisionTier.TIER_1, DecisionTier.TIER_2):
@@ -194,7 +199,9 @@ class ConsensusProtocol:
         conflict = self._detect_conflicts(proposals)
         if conflict.has_conflict:
             proposals, debate_rounds = await self._phase_debate(
-                proposals, tier, classification,
+                proposals,
+                tier,
+                classification,
             )
 
         pareto_result = await self._phase_arbitrate(proposals)
@@ -222,7 +229,8 @@ class ConsensusProtocol:
     # ── Phase 1: Proposal collection ────────────────────────────────────
 
     async def _phase_collect(
-        self, request: dict[str, Any],
+        self,
+        request: dict[str, Any],
     ) -> list[AgentProposal]:
         self._fsm.transition("decision_request_received")
 
@@ -231,24 +239,29 @@ class ConsensusProtocol:
             for name, url in AGENT_ENDPOINTS.items()
         }
         results = await asyncio.gather(
-            *tasks.values(), return_exceptions=True,
+            *tasks.values(),
+            return_exceptions=True,
         )
 
         proposals: list[AgentProposal] = []
-        for name, result in zip(tasks.keys(), results):
+        for name, result in zip(tasks.keys(), results, strict=False):
             if isinstance(result, AgentProposal):
                 proposals.append(result)
                 CONSENSUS_PROPOSALS_RECEIVED.labels(agent_name=name).inc()
-                self._append_context(ContextMessage(
-                    source=name,
-                    content=json.loads(result.to_deterministic_json()),
-                ))
+                self._append_context(
+                    ContextMessage(
+                        source=name,
+                        content=json.loads(result.to_deterministic_json()),
+                    )
+                )
             else:
-                self._append_context(ContextMessage(
-                    source=name,
-                    content={"error": str(result)},
-                    status=MessageStatus.ERROR,
-                ))
+                self._append_context(
+                    ContextMessage(
+                        source=name,
+                        content={"error": str(result)},
+                        status=MessageStatus.ERROR,
+                    )
+                )
         return proposals
 
     async def _request_proposal(
@@ -291,14 +304,16 @@ class ConsensusProtocol:
                     messages=messages,
                     prefill=mask.get("prefill"),
                 )
-                self._append_context(ContextMessage(
-                    source="orchestrator",
-                    content={
-                        "type": "debate_round",
-                        "round": round_num,
-                        "llm_analysis": llm_response.get("message", {}).get("content", ""),
-                    },
-                ))
+                self._append_context(
+                    ContextMessage(
+                        source="orchestrator",
+                        content={
+                            "type": "debate_round",
+                            "round": round_num,
+                            "llm_analysis": llm_response.get("message", {}).get("content", ""),
+                        },
+                    )
+                )
 
             if self._check_convergence(proposals):
                 break
@@ -309,21 +324,25 @@ class ConsensusProtocol:
     # ── Phase 3: Pareto arbitration ─────────────────────────────────────
 
     async def _phase_arbitrate(
-        self, proposals: list[AgentProposal],
+        self,
+        proposals: list[AgentProposal],
     ) -> dict[str, Any]:
         self._fsm.transition("convergence_or_max_rounds")
         weights = self._meta_rl.get_weights(self._system_state())
         result: dict[str, Any] = run_pareto_arbitration(proposals, weights)
-        self._append_context(ContextMessage(
-            source="orchestrator",
-            content={"type": "pareto_result", "knee_index": result["knee_index"]},
-        ))
+        self._append_context(
+            ContextMessage(
+                source="orchestrator",
+                content={"type": "pareto_result", "knee_index": result["knee_index"]},
+            )
+        )
         return result
 
     # ── Phase 4: Execution dispatch ─────────────────────────────────────
 
     async def _phase_execute(
-        self, decision: ConsensusDecision,
+        self,
+        decision: ConsensusDecision,
     ) -> ConsensusDecision:
         self._fsm.transition("pareto_solution_selected")
 
@@ -431,10 +450,10 @@ class ConsensusProtocol:
         )
 
     def _system_state(self) -> dict[str, Any]:
-        from datetime import datetime, timezone
+        from datetime import datetime
 
         return {
-            "hour_of_day": datetime.now(timezone.utc).hour,
+            "hour_of_day": datetime.now(UTC).hour,
             "active_disruptions": 0,
             "avg_fill_rate": 0.95,
         }

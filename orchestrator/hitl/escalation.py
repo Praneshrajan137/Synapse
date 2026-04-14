@@ -8,17 +8,19 @@ The human has ``TIMEOUT_SECONDS`` to approve, reject, or modify.
 Timeout fallback is configurable: DEFER (default), EXECUTE_TIER1, or
 EXECUTE_LAST_KNOWN_GOOD (S-11 fix).
 """
+
 from __future__ import annotations
 
 import asyncio
 import json
-from typing import Any
-from uuid import UUID
+from typing import TYPE_CHECKING, Any
 
 import structlog
-
 from synapse_common.metrics import HITL_ESCALATIONS_TOTAL, HITL_OVERRIDES_TOTAL
 from synapse_common.models import ConsensusDecision, HitlTimeoutAction
+
+if TYPE_CHECKING:
+    from uuid import UUID
 
 logger = structlog.get_logger(__name__)
 
@@ -104,7 +106,7 @@ class HITLEscalation:
                     "human_override": human_response,
                 },
             )
-        except asyncio.TimeoutError:
+        except TimeoutError:
             logger.warning(
                 "hitl_timeout",
                 decision_id=str(decision.decision_id),

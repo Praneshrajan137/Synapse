@@ -7,20 +7,21 @@ Features:
   - Request coalescing (identical in-flight requests share a single future)
   - KV-cache hit-rate Prometheus metrics (I-13)
 """
+
 from __future__ import annotations
 
 import asyncio
 import hashlib
 import json
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import httpx
 import structlog
-
 from synapse_common.metrics import OLLAMA_CACHE_HIT_RATE, OLLAMA_PREFILL_TOKENS
 from synapse_common.retry import retry_with_jitter
 
-from orchestrator.config import OrchestratorConfig
+if TYPE_CHECKING:
+    from orchestrator.config import OrchestratorConfig
 
 logger = structlog.get_logger(__name__)
 
@@ -116,9 +117,7 @@ class OllamaClient:
                     error=str(exc),
                 )
                 last_exc = exc
-        raise RuntimeError(
-            f"All models in fallback chain exhausted: {chain}"
-        ) from last_exc
+        raise RuntimeError(f"All models in fallback chain exhausted: {chain}") from last_exc
 
     async def _raw_chat(
         self,

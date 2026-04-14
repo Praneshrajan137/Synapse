@@ -3,19 +3,23 @@ SYNAPSE Demand Prophet -- FastAPI Inference Server.
 Endpoints: POST /predict, GET /health, GET /metrics
 Port: 8001
 """
+
 from __future__ import annotations
 
 from contextlib import asynccontextmanager
-from typing import Any, AsyncIterator
+from typing import TYPE_CHECKING
 
 import structlog
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import Response
 from pydantic import BaseModel, Field
+from synapse_common.models import DemandForecast
 
 from agents.demand_prophet.config import DemandProphetConfig
 from agents.demand_prophet.inference.pipeline import DemandProphetPipeline
-from synapse_common.models import DemandForecast
+
+if TYPE_CHECKING:
+    from collections.abc import AsyncIterator
 
 logger = structlog.get_logger(__name__)
 

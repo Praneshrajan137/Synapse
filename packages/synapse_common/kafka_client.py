@@ -2,6 +2,7 @@
 SYNAPSE Kafka Client — Unified producer/consumer with schema validation (I-3).
 All agents use this client. Direct kafka-python usage is a PR rejection.
 """
+
 from __future__ import annotations
 
 import json
@@ -22,6 +23,7 @@ SERIALIZATION_KWARGS: dict[str, Any] = {
 
 class KafkaConfig(BaseModel):
     """Kafka connection configuration."""
+
     bootstrap_servers: str = "localhost:9092"
     group_id: str = "synapse-default"
     auto_offset_reset: str = "earliest"
@@ -32,10 +34,12 @@ class SynapseProducer:
     """Thread-safe Kafka producer with deterministic serialization."""
 
     def __init__(self, config: KafkaConfig) -> None:
-        self._producer = Producer({
-            "bootstrap.servers": config.bootstrap_servers,
-            "message.max.bytes": 10485760,
-        })
+        self._producer = Producer(
+            {
+                "bootstrap.servers": config.bootstrap_servers,
+                "message.max.bytes": 10485760,
+            }
+        )
         self._config = config
 
     def produce(
@@ -46,9 +50,7 @@ class SynapseProducer:
     ) -> None:
         """Produce message with deterministic JSON serialization (I-13)."""
         if isinstance(value, BaseModel):
-            serialized = json.dumps(
-                value.model_dump(mode="json"), **SERIALIZATION_KWARGS
-            )
+            serialized = json.dumps(value.model_dump(mode="json"), **SERIALIZATION_KWARGS)
         else:
             serialized = json.dumps(value, **SERIALIZATION_KWARGS)
 
@@ -67,12 +69,14 @@ class SynapseConsumer:
     """Kafka consumer with type-safe deserialization."""
 
     def __init__(self, config: KafkaConfig, topics: list[str]) -> None:
-        self._consumer = Consumer({
-            "bootstrap.servers": config.bootstrap_servers,
-            "group.id": config.group_id,
-            "auto.offset.reset": config.auto_offset_reset,
-            "enable.auto.commit": config.enable_auto_commit,
-        })
+        self._consumer = Consumer(
+            {
+                "bootstrap.servers": config.bootstrap_servers,
+                "group.id": config.group_id,
+                "auto.offset.reset": config.auto_offset_reset,
+                "enable.auto.commit": config.enable_auto_commit,
+            }
+        )
         self._consumer.subscribe(topics)
 
     def poll(self, timeout: float = 1.0) -> dict[str, Any] | None:

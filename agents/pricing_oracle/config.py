@@ -2,6 +2,7 @@
 SYNAPSE Pricing Oracle -- Configuration via Pydantic BaseSettings.
 All thresholds, model paths, and connection strings are environment-configurable.
 """
+
 from __future__ import annotations
 
 from pydantic import Field
@@ -58,9 +59,7 @@ class PricingOracleConfig(BaseSettings):
     # -- Inference --
     max_batch_size: int = Field(default=200, description="Max SKUs per batch (PRE-PO-004)")
     inference_timeout_ms: int = Field(default=500, description="Tier 2 SLA")
-    confidence_threshold: float = Field(
-        default=0.7, description="HITL escalation threshold (I-5)"
-    )
+    confidence_threshold: float = Field(default=0.7, description="HITL escalation threshold (I-5)")
 
     # -- Infrastructure --
     kafka_bootstrap: str = Field(default="kafka:9092")
@@ -69,9 +68,7 @@ class PricingOracleConfig(BaseSettings):
     neo4j_user: str = Field(default="neo4j")
     neo4j_password: str = Field(default="synapse_graph_2026")
     mlflow_tracking_uri: str = Field(default="http://mlflow:5000")
-    model_checkpoint_path: str = Field(
-        default="/app/models/pricing_oracle_best.pt"
-    )
+    model_checkpoint_path: str = Field(default="/app/models/pricing_oracle_best.pt")
 
     # -- Server --
     host: str = Field(default="0.0.0.0")

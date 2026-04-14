@@ -1,13 +1,11 @@
 """SYNAPSE Orchestrator — NeMo Guardrails tests (I-6, I-5)."""
+
 from __future__ import annotations
 
-from uuid import uuid4
-
 import pytest
-
 from synapse_common.models import ConsensusDecision, DecisionTier
 
-from orchestrator.guardrails.rules import ESSENTIAL_CATEGORIES, GuardrailEngine
+from orchestrator.guardrails.rules import GuardrailEngine
 
 
 @pytest.fixture()

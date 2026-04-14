@@ -4,6 +4,7 @@ NO CROSS-AGENT IMPORTS. Cross-agent import = automatic PR rejection.
 
 R = w1*time_saved + w2*fuel_saved + w3*freshness + w4*Gini(rider_earnings)
 """
+
 from __future__ import annotations
 
 import torch
@@ -66,10 +67,7 @@ def compute_reward(
     fairness = 1.0 - gini
 
     total = (
-        w_time * time_saved
-        + w_fuel * fuel_saved
-        + w_freshness * freshness
-        + w_fairness * fairness
+        w_time * time_saved + w_fuel * fuel_saved + w_freshness * freshness + w_fairness * fairness
     )
 
     return {

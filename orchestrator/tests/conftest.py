@@ -3,12 +3,13 @@ SYNAPSE Orchestrator — Shared test fixtures.
 
 Provides mock agents, mock Ollama, mock Kafka, and other test doubles.
 """
+
 from __future__ import annotations
 
 import sys
 from pathlib import Path
 from typing import Any
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import MagicMock
 from uuid import uuid4
 
 import pytest
@@ -19,7 +20,6 @@ from synapse_common.models import (  # noqa: E402
     AgentName,
     AgentProposal,
     ConsensusDecision,
-    ContextMessage,
     DecisionTier,
 )
 

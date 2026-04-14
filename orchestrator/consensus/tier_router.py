@@ -5,13 +5,13 @@ Classifies incoming decisions into one of four tiers, determining whether
 the fast-path (Tier 1-2) or full consensus (Tier 3-4) is used.
 80 % of decisions MUST be Tier 1 to satisfy I-10.
 """
+
 from __future__ import annotations
 
 import asyncio
 from typing import Any
 
 import structlog
-
 from synapse_common.models import DecisionTier
 
 from orchestrator.consensus.models import TierClassification

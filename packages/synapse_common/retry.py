@@ -4,6 +4,7 @@ ALL retries in SYNAPSE must use this module. Fixed-delay retries are a PR reject
 Implementation: Full Jitter — sleep = random(0, min(cap, base * 2^attempt))
 Reference: AWS Architecture Blog — Exponential Backoff and Jitter
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -27,7 +28,7 @@ def full_jitter_delay(
     cap: float = 60.0,
 ) -> float:
     """Compute Full Jitter delay: random(0, min(cap, base * 2^attempt))."""
-    exponential = min(cap, base_delay * (2 ** attempt))
+    exponential = min(cap, base_delay * (2**attempt))
     return random.uniform(0, exponential)  # noqa: S311
 
 

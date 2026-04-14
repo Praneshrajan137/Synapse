@@ -1,10 +1,14 @@
 """SYNAPSE Supplier Trust -- MCP Tool Definitions (I-9)."""
+
 from __future__ import annotations
 
 MCP_TOOLS: list[dict[str, object]] = [
     {
         "name": "score_supplier_trust",
-        "description": "Score a supplier's trustworthiness using GNN embeddings and Bayesian lead-time model. Tier 2-3.",
+        "description": (
+            "Score a supplier's trustworthiness using GNN embeddings"
+            " and Bayesian lead-time model. Tier 2-3."
+        ),
         "input_schema": {
             "type": "object",
             "properties": {
@@ -27,7 +31,9 @@ MCP_TOOLS: list[dict[str, object]] = [
     },
     {
         "name": "estimate_lead_time",
-        "description": "Bayesian posterior estimation for supplier lead times. Returns mean, std, p10, p90.",
+        "description": (
+            "Bayesian posterior estimation for supplier lead times. Returns mean, std, p10, p90."
+        ),
         "input_schema": {
             "type": "object",
             "properties": {

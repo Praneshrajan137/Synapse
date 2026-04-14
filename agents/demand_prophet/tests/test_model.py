@@ -2,12 +2,13 @@
 SYNAPSE Demand Prophet -- Model unit tests.
 Verifies forward pass, output shapes, and invariant compliance.
 """
+
 from __future__ import annotations
 
 import pytest
 import torch
 
-from agents.demand_prophet.models.hgt import HGTEncoder, NODE_TYPES
+from agents.demand_prophet.models.hgt import HGTEncoder
 from agents.demand_prophet.models.hybrid import DemandProphetHybrid
 from agents.demand_prophet.models.tft import VALID_HORIZONS, TemporalFusionTransformer
 

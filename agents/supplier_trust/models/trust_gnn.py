@@ -5,15 +5,18 @@ Uses PyG HeteroConv with typed nodes: Supplier, SKU, DarkStore.
 Message-passing on heterogeneous edges captures supplier–product–store
 relationships over time windows.
 """
+
 from __future__ import annotations
 
-from typing import Any
+from typing import TYPE_CHECKING
 
 import structlog
 import torch
 from torch import Tensor, nn
-from torch_geometric.data import HeteroData
 from torch_geometric.nn import HeteroConv, SAGEConv
+
+if TYPE_CHECKING:
+    from torch_geometric.data import HeteroData
 
 logger = structlog.get_logger(__name__)
 
@@ -41,11 +44,13 @@ class SupplierTrustGNN(nn.Module):
         super().__init__()
         self.num_layers = num_layers
 
-        self.projections = nn.ModuleDict({
-            "supplier": nn.Linear(supplier_in_dim, hidden_dim),
-            "sku": nn.Linear(sku_in_dim, hidden_dim),
-            "darkstore": nn.Linear(store_in_dim, hidden_dim),
-        })
+        self.projections = nn.ModuleDict(
+            {
+                "supplier": nn.Linear(supplier_in_dim, hidden_dim),
+                "sku": nn.Linear(sku_in_dim, hidden_dim),
+                "darkstore": nn.Linear(store_in_dim, hidden_dim),
+            }
+        )
 
         self.convs = nn.ModuleList()
         self.norms = nn.ModuleList()
@@ -57,11 +62,15 @@ class SupplierTrustGNN(nn.Module):
                 ("darkstore", "orders_from", "supplier"): SAGEConv(hidden_dim, hidden_dim),
             }
             self.convs.append(HeteroConv(conv_dict, aggr="mean"))
-            self.norms.append(nn.ModuleDict({
-                "supplier": nn.LayerNorm(hidden_dim),
-                "sku": nn.LayerNorm(hidden_dim),
-                "darkstore": nn.LayerNorm(hidden_dim),
-            }))
+            self.norms.append(
+                nn.ModuleDict(
+                    {
+                        "supplier": nn.LayerNorm(hidden_dim),
+                        "sku": nn.LayerNorm(hidden_dim),
+                        "darkstore": nn.LayerNorm(hidden_dim),
+                    }
+                )
+            )
 
         self.dropout = nn.Dropout(dropout)
         self.head = nn.Linear(hidden_dim, out_dim)

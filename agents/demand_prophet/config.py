@@ -2,6 +2,7 @@
 SYNAPSE Demand Prophet -- Configuration via Pydantic BaseSettings.
 All thresholds, model paths, and connection strings are environment-configurable.
 """
+
 from __future__ import annotations
 
 from pydantic import Field
@@ -63,9 +64,7 @@ class DemandProphetConfig(BaseSettings):
     reward_event_bonus: float = Field(default=0.1)
 
     # -- Forecast Horizons --
-    valid_horizons: frozenset[str] = Field(
-        default=frozenset({"15min", "1h", "6h", "24h", "7d"})
-    )
+    valid_horizons: frozenset[str] = Field(default=frozenset({"15min", "1h", "6h", "24h", "7d"}))
 
     # -- Server --
     host: str = Field(default="0.0.0.0")

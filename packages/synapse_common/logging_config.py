@@ -2,6 +2,7 @@
 SYNAPSE Structured Logging — All agents use structlog.
 NEVER use print() for logging. NEVER use bare except.
 """
+
 from __future__ import annotations
 
 import logging

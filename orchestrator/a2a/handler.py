@@ -6,9 +6,9 @@ Exposes three standard methods:
   2. debate_respond(proposals, round_number) -> revised context
   3. execute(consensus_action) -> execution confirmation
 """
+
 from __future__ import annotations
 
-import json
 from typing import Any
 from uuid import uuid4
 

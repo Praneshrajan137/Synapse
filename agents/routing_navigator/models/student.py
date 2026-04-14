@@ -2,6 +2,7 @@
 SYNAPSE Routing Navigator -- Distilled 2-Layer MLP Student.
 Target: Tier 1 inference under 100ms (INV-RN-006).
 """
+
 from __future__ import annotations
 
 import torch

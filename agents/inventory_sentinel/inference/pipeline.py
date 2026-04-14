@@ -1,11 +1,11 @@
 """SYNAPSE Inventory Sentinel -- Inference Pipeline."""
+
 from __future__ import annotations
 
 from typing import Any
 
 import numpy as np
 import structlog
-
 from synapse_common.models import InventoryAction
 
 logger = structlog.get_logger(__name__)

@@ -4,12 +4,12 @@ SYNAPSE Orchestrator — Consumer-driven contract: all 8 agents' proposal() resp
 The Orchestrator (consumer) expects every agent (producer) to return proposals
 conforming to ``synapse_common.models.AgentProposal``.
 """
+
 from __future__ import annotations
 
 from uuid import uuid4
 
 import pytest
-
 from synapse_common.models import AgentName, AgentProposal, DecisionTier
 
 AGENT_NAMES: list[str] = [a.value for a in AgentName]

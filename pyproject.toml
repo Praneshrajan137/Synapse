@@ -13,6 +13,9 @@ line-length = 100
 select = ["E", "F", "W", "I", "N", "UP", "ANN", "B", "A", "SIM", "TCH"]
 ignore = ["ANN401"]
 
+[tool.ruff.lint.flake8-type-checking]
+runtime-evaluated-base-classes = ["pydantic.BaseModel"]
+
 [tool.ruff.format]
 quote-style = "double"
 indent-style = "space"

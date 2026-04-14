@@ -1,4 +1,5 @@
 """SYNAPSE Routing Navigator -- Reward function tests (I-2 isolation)."""
+
 from __future__ import annotations
 
 import ast

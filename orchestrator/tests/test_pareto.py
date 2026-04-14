@@ -1,10 +1,10 @@
 """SYNAPSE Orchestrator — NSGA-II Pareto arbitration tests."""
+
 from __future__ import annotations
 
 from uuid import uuid4
 
 import pytest
-
 from synapse_common.models import AgentName, AgentProposal, DecisionTier
 
 from orchestrator.consensus.pareto import (

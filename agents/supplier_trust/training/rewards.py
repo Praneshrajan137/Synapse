@@ -9,6 +9,7 @@ Components:
   - trust_bias: penalises systematic over/under-trust of suppliers
   - calibration: rewards well-calibrated posterior uncertainty intervals
 """
+
 from __future__ import annotations
 
 import torch
@@ -51,7 +52,8 @@ def compute_prediction_accuracy(
     """Symmetric MAPE-based accuracy: 1 - sMAPE."""
     epsilon = 1e-8
     smape = torch.mean(
-        2.0 * torch.abs(predicted_days - observed_days)
+        2.0
+        * torch.abs(predicted_days - observed_days)
         / (torch.abs(predicted_days) + torch.abs(observed_days) + epsilon)
     )
     return torch.clamp(1.0 - smape, min=0.0, max=1.0)

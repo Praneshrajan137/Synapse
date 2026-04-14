@@ -1,4 +1,5 @@
 """SYNAPSE Routing Navigator -- Configuration via Pydantic BaseSettings."""
+
 from __future__ import annotations
 
 from pydantic import Field

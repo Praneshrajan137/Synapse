@@ -1,14 +1,13 @@
 """SYNAPSE Orchestrator — Append-only context tests (I-14)."""
+
 from __future__ import annotations
 
 from unittest.mock import MagicMock
 
-import pytest
-
 from synapse_common.models import ContextMessage, MessageStatus
 
-from orchestrator.consensus.protocol import ConsensusProtocol
 from orchestrator.config import OrchestratorConfig
+from orchestrator.consensus.protocol import ConsensusProtocol
 
 
 def _proto() -> ConsensusProtocol:
@@ -79,7 +78,6 @@ class TestAppendOnlyContext:
         for i in range(6):
             proto._append_context(ContextMessage(source=f"a{i}", content={"i": i}))
         recitations = [
-            m for m in proto._context_messages
-            if m.content.get("type") == "objective_recitation"
+            m for m in proto._context_messages if m.content.get("type") == "objective_recitation"
         ]
         assert len(recitations) >= 1

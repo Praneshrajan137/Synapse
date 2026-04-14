@@ -4,12 +4,12 @@ Node types: SKU, DarkStore, Zone, WeatherRegion, EventVenue
 Edge types: co_purchased, substitutes, stored_at, weather_affected, near_event
 I-3: All outputs are ontology-bound -- validated against typed schema.
 """
+
 from __future__ import annotations
 
 from typing import Any
 
 import structlog
-import torch
 import torch.nn as nn
 from torch import Tensor
 
@@ -112,9 +112,7 @@ class HGTEncoder(nn.Module):
                 logger.debug("missing_node_type", node_type=ntype)
 
         edge_index_dict = {
-            etype: data[etype].edge_index
-            for etype in EDGE_TYPES
-            if etype in data.edge_types
+            etype: data[etype].edge_index for etype in EDGE_TYPES if etype in data.edge_types
         }
 
         for i, conv in enumerate(self.convs):

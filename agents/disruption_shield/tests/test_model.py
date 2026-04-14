@@ -2,6 +2,7 @@
 SYNAPSE Disruption Shield — Model Tests.
 Tests anomaly ensemble forward pass and individual model components.
 """
+
 from __future__ import annotations
 
 import numpy as np

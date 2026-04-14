@@ -1,12 +1,10 @@
 """SYNAPSE Orchestrator — Consensus FSM tests (INV-ORC-002, INV-ORC-006)."""
+
 from __future__ import annotations
 
-from unittest.mock import AsyncMock, MagicMock, patch
-from uuid import uuid4
+from unittest.mock import MagicMock
 
-import pytest
-
-from synapse_common.models import AgentName, AgentProposal, DecisionTier
+from synapse_common.models import AgentProposal, DecisionTier
 
 from orchestrator.config import OrchestratorConfig
 from orchestrator.consensus.protocol import ConsensusProtocol
@@ -60,7 +58,6 @@ class TestTierFastPath:
         )
         proto._tier_router.classify.return_value = tier_class
         # Fast-path only reaches phase 4 (skipping 2, 3)
-        decision_request = {"store_id": "store_001"}
         # The fast_path method internally goes COLLECTING -> EXECUTING
         # We verify the phase_reached is 4
 

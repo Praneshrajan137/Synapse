@@ -5,6 +5,7 @@ Learns the optimal Pareto weight vector over time using a simple policy
 gradient on the rolling decision-outcome history.  NEVER modifies per-agent
 reward functions (I-2).
 """
+
 from __future__ import annotations
 
 from collections import deque
@@ -60,7 +61,7 @@ class MetaRLAgent:
             adjusted[1] *= 1.2  # route_efficiency during lunch peak
 
         adjusted = adjusted / adjusted.sum() * self.n_objectives
-        return dict(zip(OBJECTIVES, adjusted.tolist()))
+        return dict(zip(OBJECTIVES, adjusted.tolist(), strict=False))
 
     def update(self, outcome: dict[str, float]) -> None:
         """Update weights based on an observed decision outcome."""
@@ -81,7 +82,7 @@ class MetaRLAgent:
 
         logger.info(
             "meta_rl_weights_updated",
-            weights=dict(zip(OBJECTIVES, self.weights.tolist())),
+            weights=dict(zip(OBJECTIVES, self.weights.tolist(), strict=False)),
             history_len=len(self.outcome_history),
         )
 

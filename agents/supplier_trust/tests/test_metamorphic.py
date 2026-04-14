@@ -1,4 +1,5 @@
 """SYNAPSE Supplier Trust -- Metamorphic Tests (Layer 4)."""
+
 from __future__ import annotations
 
 import pytest
@@ -22,7 +23,8 @@ class TestMetamorphicRelations:
         return SupplierTrustPipeline()
 
     def test_mr_st_001_late_deliveries_decrease_trust(
-        self, pipeline: SupplierTrustPipeline,
+        self,
+        pipeline: SupplierTrustPipeline,
     ) -> None:
         """MR-ST-001: More late deliveries must decrease trust score.
 
@@ -47,7 +49,8 @@ class TestMetamorphicRelations:
         )
 
     def test_mr_st_002_perfect_history_high_trust(
-        self, pipeline: SupplierTrustPipeline,
+        self,
+        pipeline: SupplierTrustPipeline,
     ) -> None:
         """MR-ST-002: Perfect delivery history should yield trust >= 0.8."""
         perfect_history = _make_history(50, on_time=True, lead_time=3.0)
@@ -55,12 +58,11 @@ class TestMetamorphicRelations:
             supplier_id="SUP-MR-002",
             delivery_history=perfect_history,
         )
-        assert result.trust_score >= 0.8, (
-            f"Perfect-history trust {result.trust_score} < 0.8"
-        )
+        assert result.trust_score >= 0.8, f"Perfect-history trust {result.trust_score} < 0.8"
 
     def test_all_late_low_trust(
-        self, pipeline: SupplierTrustPipeline,
+        self,
+        pipeline: SupplierTrustPipeline,
     ) -> None:
         """All-late supplier should have significantly lower trust than all-on-time."""
         good = pipeline.score(

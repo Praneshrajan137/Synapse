@@ -2,10 +2,11 @@
 SYNAPSE Freshness Guardian — Inference Pipeline.
 Processes freshness assessment requests and produces FreshnessAlert outputs.
 """
+
 from __future__ import annotations
 
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 import structlog
@@ -45,9 +46,7 @@ class FreshnessAlert(BaseModel):
     rebalance_recommended: bool
     target_store_id: str | None = None
     fssai_compliant: bool
-    timestamp: str = Field(
-        default_factory=lambda: datetime.now(timezone.utc).isoformat()
-    )
+    timestamp: str = Field(default_factory=lambda: datetime.now(UTC).isoformat())
     confidence: float = Field(ge=0.0, le=1.0)
 
 

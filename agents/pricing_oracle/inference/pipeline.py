@@ -4,6 +4,7 @@ Handles: Feast feature retrieval -> causal elasticity -> MADDPG action ->
          essential cap enforcement -> schema validation -> Kafka publish.
 All within Tier 2 SLA (<500ms) (I-10).
 """
+
 from __future__ import annotations
 
 import time
@@ -13,7 +14,6 @@ import deal
 import numpy as np
 import structlog
 import torch
-
 from synapse_common.models import PricingDecision
 
 logger = structlog.get_logger(__name__)
@@ -26,9 +26,16 @@ class PricingUpdate:
     """Lightweight output container for a single SKU pricing update."""
 
     __slots__ = (
-        "sku_id", "store_id", "category", "is_essential",
-        "base_price", "multiplier", "final_price",
-        "elasticity_estimate", "confidence", "justification_trace",
+        "sku_id",
+        "store_id",
+        "category",
+        "is_essential",
+        "base_price",
+        "multiplier",
+        "final_price",
+        "elasticity_estimate",
+        "confidence",
+        "justification_trace",
     )
 
     def __init__(
@@ -88,15 +95,11 @@ class PricingOraclePipeline:
         self._kafka = kafka_producer
 
     @deal.pre(
-        lambda self, sku_ids, store_id, categories, base_prices, **kw: (
-            len(sku_ids) >= 1
-        ),
+        lambda self, sku_ids, store_id, categories, base_prices, **kw: (len(sku_ids) >= 1),
         message="PRE-PO-004: At least one SKU required",
     )
     @deal.pre(
-        lambda self, sku_ids, store_id, categories, base_prices, **kw: (
-            len(sku_ids) <= 200
-        ),
+        lambda self, sku_ids, store_id, categories, base_prices, **kw: (len(sku_ids) <= 200),
         message="PRE-PO-004: Maximum 200 SKUs per batch",
     )
     @deal.pre(
@@ -123,8 +126,12 @@ class PricingOraclePipeline:
         raw_multipliers = self._run_inference(features, categories)
 
         updates = self._build_updates(
-            sku_ids, store_id, categories, base_prices,
-            raw_multipliers, elasticities,
+            sku_ids,
+            store_id,
+            categories,
+            base_prices,
+            raw_multipliers,
+            elasticities,
         )
 
         elapsed_ms = (time.monotonic() - start_time) * 1000
@@ -152,14 +159,10 @@ class PricingOraclePipeline:
         base_prices: list[float],
     ) -> None:
         if not (1 <= len(sku_ids) <= 200):
-            raise ValueError(
-                f"PRE-PO-004: SKU count {len(sku_ids)} outside bounds [1, 200]"
-            )
+            raise ValueError(f"PRE-PO-004: SKU count {len(sku_ids)} outside bounds [1, 200]")
         for cat in categories:
             if cat not in VALID_CATEGORIES:
-                raise ValueError(
-                    f"PRE-PO-001: Invalid category '{cat}'. Valid: {VALID_CATEGORIES}"
-                )
+                raise ValueError(f"PRE-PO-001: Invalid category '{cat}'. Valid: {VALID_CATEGORIES}")
         for bp in base_prices:
             if bp <= 0.0:
                 raise ValueError(f"PRE-PO-003: Base price must be positive, got {bp}")
@@ -237,9 +240,7 @@ class PricingOraclePipeline:
 
     @deal.post(
         lambda result: all(
-            u.multiplier <= ESSENTIAL_CAP
-            for u in result
-            if u.category == "essential"
+            u.multiplier <= ESSENTIAL_CAP for u in result if u.category == "essential"
         ),
         message="POST-PO-003: Essential cap must be enforced on all essential items",
     )

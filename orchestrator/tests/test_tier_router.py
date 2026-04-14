@@ -1,8 +1,8 @@
 """SYNAPSE Orchestrator — Tier classification tests (I-10)."""
+
 from __future__ import annotations
 
 import pytest
-
 from synapse_common.models import DecisionTier
 
 from orchestrator.consensus.tier_router import TierRouter
@@ -19,17 +19,21 @@ class TestTierClassification:
         assert result.tier == DecisionTier.TIER_1
 
     def test_two_agents_moderate_confidence_is_tier2(self, router: TierRouter) -> None:
-        result = router.classify({
-            "agents_involved": ["demand_prophet", "inventory_sentinel"],
-            "avg_confidence": 0.8,
-        })
+        result = router.classify(
+            {
+                "agents_involved": ["demand_prophet", "inventory_sentinel"],
+                "avg_confidence": 0.8,
+            }
+        )
         assert result.tier == DecisionTier.TIER_2
 
     def test_many_agents_low_confidence_is_tier3(self, router: TierRouter) -> None:
-        result = router.classify({
-            "agents_involved": ["a", "b", "c", "d"],
-            "avg_confidence": 0.35,
-        })
+        result = router.classify(
+            {
+                "agents_involved": ["a", "b", "c", "d"],
+                "avg_confidence": 0.35,
+            }
+        )
         assert result.tier == DecisionTier.TIER_3
 
     def test_disruption_active_is_tier4(self, router: TierRouter) -> None:

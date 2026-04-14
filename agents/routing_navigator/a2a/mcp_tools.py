@@ -1,4 +1,5 @@
 """SYNAPSE Routing Navigator -- MCP Tool Definitions (I-9)."""
+
 from __future__ import annotations
 
 MCP_TOOLS: list[dict[str, object]] = [

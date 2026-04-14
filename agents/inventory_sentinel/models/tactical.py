@@ -3,6 +3,7 @@ SYNAPSE Inventory Sentinel -- L2 Tactical Agent.
 Scope: Per-store, per-SKU decisions conditioned on L1 strategic output.
 Action: reorder_point (continuous), safety_stock_mult (1.0-3.0), reorder_qty (discrete).
 """
+
 from __future__ import annotations
 
 import torch
@@ -13,9 +14,7 @@ from torch import Tensor
 class TacticalAgent(nn.Module):
     """L2 Tactical: per-store SKU-level inventory decisions."""
 
-    def __init__(
-        self, obs_dim: int = 120, hidden_dim: int = 128, l1_dim: int = 100
-    ) -> None:
+    def __init__(self, obs_dim: int = 120, hidden_dim: int = 128, l1_dim: int = 100) -> None:
         super().__init__()
         combined_dim = obs_dim + l1_dim
 

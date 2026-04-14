@@ -2,6 +2,7 @@
 SYNAPSE Sustainability Agent -- Metamorphic Tests (Layer 4).
 Behavioral invariants that must hold across model retraining.
 """
+
 from __future__ import annotations
 
 import pytest
@@ -40,9 +41,7 @@ class TestMetamorphicRelations:
         report_high = pipeline.report(fuel_liters=5.0, distance_km=50.0)
         assert report_high.delivery_co2_kg >= report_low.delivery_co2_kg
 
-    def test_mr_sa_004_longer_horizon_higher_waste(
-        self, pipeline: SustainabilityPipeline
-    ) -> None:
+    def test_mr_sa_004_longer_horizon_higher_waste(self, pipeline: SustainabilityPipeline) -> None:
         """MR-SA-004: Longer prediction horizon -> higher waste probability."""
         report_short = pipeline.report(fuel_liters=1.0, distance_km=10.0, days_ahead=3)
         report_long = pipeline.report(fuel_liters=1.0, distance_km=10.0, days_ahead=14)

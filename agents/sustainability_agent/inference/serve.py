@@ -3,10 +3,11 @@ SYNAPSE Sustainability Agent -- FastAPI Inference Server.
 Endpoints: POST /report, GET /health, GET /metrics
 Port: 8008
 """
+
 from __future__ import annotations
 
 from contextlib import asynccontextmanager
-from typing import Any, AsyncIterator
+from typing import TYPE_CHECKING
 
 import structlog
 from fastapi import FastAPI, HTTPException
@@ -15,6 +16,9 @@ from pydantic import BaseModel, Field
 
 from agents.sustainability_agent.config import SustainabilityAgentConfig
 from agents.sustainability_agent.inference.pipeline import CarbonReport, SustainabilityPipeline
+
+if TYPE_CHECKING:
+    from collections.abc import AsyncIterator
 
 logger = structlog.get_logger(__name__)
 
