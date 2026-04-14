@@ -9,7 +9,7 @@ the standard agent FSM.  It mirrors ``BaseAgentStateMachine`` interface from
 from __future__ import annotations
 
 import time
-from enum import Enum
+from enum import StrEnum
 from typing import Any
 
 import structlog
@@ -18,7 +18,7 @@ from synapse_common.fsm import RECITATION_INTERVAL
 logger = structlog.get_logger(__name__)
 
 
-class OrchestratorState(str, Enum):
+class OrchestratorState(StrEnum):
     """Extended state enum for the Orchestrator consensus lifecycle."""
 
     IDLE = "IDLE"
