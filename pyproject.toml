@@ -59,6 +59,7 @@ markers = [
     "oracle: digital twin oracle tests",
     "mutation: mutation testing targets",
 ]
+asyncio_mode = "strict"
 addopts = "--strict-markers -v --tb=short"
 
 [tool.coverage.run]

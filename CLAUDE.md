@@ -57,8 +57,24 @@
 - Neo4j CREATE fails on uniqueness constraint re-run — use MERGE for idempotency
 - Redis/Kafka/Neo4j do not expose /metrics natively — need exporters for Prometheus
 
+### Sprint 5 Error Patterns
+- E-S5-01: Chaos tests must be self-contained with simulated components, not depend on running services
+- E-S5-02: Locust load tests require `--headless` flag for CI; `--html` for local debugging
+- E-S5-03: Schemathesis requires OpenAPI spec at `/openapi.json` on each agent — ensure FastAPI auto-generates this
+- E-S5-04: mutmut uses `.mutmut-cache/` — added to `.gitignore`
+- E-S5-05: DragonflyDB uses same port 6379 internally — mapped to 6380 externally to avoid Redis collision
+- E-S5-06: Nginx rate limiting uses `$binary_remote_addr` — Docker-internal IPs exempt via geo module
+- E-S5-07: pytest-asyncio requires `asyncio_mode = "strict"` in `pyproject.toml` (set in Sprint 5)
+- E-S5-08: python-jose requires `[cryptography]` extra for RS256 support
+- E-S5-09: psycopg2-binary is for dev/test only; production uses psycopg2 with libpq
+- E-S5-10: Mutation testing on reward functions requires `test_reward.py` to exist for EVERY agent
+- E-S5-11: Chaos test fixture names must be namespaced (`chaos_*`) to avoid collision with orchestrator conftest
+- E-S5-12: All RNG-dependent chaos tests must use `np.random.default_rng(seed)` for determinism in CI
+- E-S5-13: `import logging` in shared packages replaced with structlog in Sprint 5 (retry.py, kafka_client.py, a2a_sdk.py)
+
 ## Sprint Status
 - **Sprint 1**: Infrastructure foundation (Docker, Neo4j, Kafka, Redis, PostgreSQL, shared packages, proto schemas, SDD framework, CI pipeline)
 - **Sprint 2**: Agent implementation (Demand Prophet, Inventory Sentinel, Routing Navigator)
 - **Sprint 3**: Orchestrator + Digital Twin
 - **Sprint 4**: Remaining agents + API Gateway + Frontend
+- **Sprint 5**: Hardening — Chaos engineering (9 failure modes), load testing, security (JWT, audit immutability, nginx), mutation testing, Schemathesis API fuzz, DragonflyDB evaluation (ADR-019)

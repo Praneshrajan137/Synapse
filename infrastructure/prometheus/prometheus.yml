@@ -9,6 +9,7 @@ global:
 rule_files:
   - "alert_rules.yml"
   - "alert_rules_sprint4.yml"
+  - "sprint5_alert_rules.yml"
 
 scrape_configs:
   # ── Prometheus self-monitoring ──

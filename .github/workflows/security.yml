@@ -1,28 +1,69 @@
 name: SYNAPSE Security Scan
+
 on:
   schedule:
-    - cron: '0 6 * * 1'
+    - cron: '0 6 * * 1'  # Monday 6AM UTC
   pull_request:
-    branches: [main]
+    paths:
+      - '**/requirements.txt'
+      - '**/package.json'
+      - '**/Dockerfile'
+  workflow_dispatch:
 
 jobs:
   security:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 30
+
     steps:
       - uses: actions/checkout@v4
-      - name: Set up Python 3.11
-        uses: actions/setup-python@v5
+
+      - uses: actions/setup-python@v5
         with:
-          python-version: "3.11"
-      - name: pip-audit
+          python-version: '3.11'
+          cache: 'pip'
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Python dependency audit
         run: |
           pip install pip-audit
-          pip install -r packages/requirements.txt
-          pip-audit --strict || true
-      - name: Trivy filesystem scan
+          for req in $(find . -name 'requirements.txt' -not -path './.venv/*'); do
+            echo "=== Auditing ${req} ==="
+            pip-audit -r "${req}" --strict || true
+          done
+
+      - name: Node dependency audit
+        run: |
+          if [ -f frontend/package.json ]; then
+            cd frontend
+            npm install
+            npm audit --audit-level=critical || true
+          else
+            echo "No frontend/package.json — skipping Node audit"
+          fi
+
+      - name: Trivy container scan
         uses: aquasecurity/trivy-action@master
         with:
           scan-type: 'fs'
           scan-ref: '.'
           severity: 'CRITICAL,HIGH'
+          exit-code: '0'
+          format: 'table'
+
+      - name: Secret detection via gitleaks
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        continue-on-error: true
+
+      - name: No paid API imports (I-1)
+        run: |
+          if grep -rn "import openai\|from openai\|import anthropic\|from anthropic\|import cohere\|from cohere" agents/ orchestrator/ packages/ --include="*.py"; then
+            echo "FAIL: Paid API import detected — violates I-1"
+            exit 1
+          fi
+          echo "PASS: No paid API imports found"

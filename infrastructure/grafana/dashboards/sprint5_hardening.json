@@ -1,0 +1,226 @@
+{
+  "dashboard": {
+    "id": null,
+    "uid": "synapse-sprint5-hardening",
+    "title": "SYNAPSE Sprint 5 Hardening",
+    "tags": ["synapse", "sprint5", "hardening", "chaos", "security"],
+    "timezone": "browser",
+    "schemaVersion": 39,
+    "version": 1,
+    "refresh": "30s",
+    "panels": [
+      {
+        "id": 1,
+        "title": "Chaos: GNN Fallback Rate",
+        "type": "timeseries",
+        "gridPos": {"h": 6, "w": 8, "x": 0, "y": 0},
+        "targets": [
+          {
+            "expr": "rate(synapse_demand_prophet_gnn_fallback_total[5m])",
+            "legendFormat": "GNN fallback/sec"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "thresholds": {
+              "steps": [
+                {"value": 0, "color": "green"},
+                {"value": 0.05, "color": "yellow"},
+                {"value": 0.1, "color": "red"}
+              ]
+            }
+          }
+        }
+      },
+      {
+        "id": 2,
+        "title": "Chaos: LLM Hallucination Rate",
+        "type": "timeseries",
+        "gridPos": {"h": 6, "w": 8, "x": 8, "y": 0},
+        "targets": [
+          {
+            "expr": "rate(synapse_orchestrator_llm_fallback_total[5m])",
+            "legendFormat": "LLM fallback/sec"
+          }
+        ]
+      },
+      {
+        "id": 3,
+        "title": "Chaos: Deadlock Tiebreaks",
+        "type": "timeseries",
+        "gridPos": {"h": 6, "w": 8, "x": 16, "y": 0},
+        "targets": [
+          {
+            "expr": "rate(synapse_orchestrator_deadlock_total[10m])",
+            "legendFormat": "deadlocks/sec"
+          }
+        ]
+      },
+      {
+        "id": 4,
+        "title": "Chaos: Twin KL Divergence",
+        "type": "gauge",
+        "gridPos": {"h": 6, "w": 6, "x": 0, "y": 6},
+        "targets": [
+          {
+            "expr": "synapse_twin_kl_divergence",
+            "legendFormat": "KL divergence"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "min": 0,
+            "max": 0.5,
+            "thresholds": {
+              "steps": [
+                {"value": 0, "color": "green"},
+                {"value": 0.05, "color": "yellow"},
+                {"value": 0.1, "color": "red"}
+              ]
+            }
+          }
+        }
+      },
+      {
+        "id": 5,
+        "title": "Chaos: RL Reward Variance Ratio",
+        "type": "gauge",
+        "gridPos": {"h": 6, "w": 6, "x": 6, "y": 6},
+        "targets": [
+          {
+            "expr": "synapse_rl_reward_variance_ratio",
+            "legendFormat": "variance ratio"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "min": 0,
+            "max": 10,
+            "thresholds": {
+              "steps": [
+                {"value": 0, "color": "green"},
+                {"value": 2, "color": "yellow"},
+                {"value": 3, "color": "red"}
+              ]
+            }
+          }
+        }
+      },
+      {
+        "id": 6,
+        "title": "Chaos: Ollama Restarts/hr",
+        "type": "stat",
+        "gridPos": {"h": 6, "w": 6, "x": 12, "y": 6},
+        "targets": [
+          {
+            "expr": "increase(synapse_ollama_restart_total[1h])",
+            "legendFormat": "restarts"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "thresholds": {
+              "steps": [
+                {"value": 0, "color": "green"},
+                {"value": 2, "color": "yellow"},
+                {"value": 3, "color": "red"}
+              ]
+            }
+          }
+        }
+      },
+      {
+        "id": 7,
+        "title": "Chaos: Kafka Consumer Lag",
+        "type": "timeseries",
+        "gridPos": {"h": 6, "w": 6, "x": 18, "y": 6},
+        "targets": [
+          {
+            "expr": "synapse_kafka_consumer_lag_ms",
+            "legendFormat": "lag (ms)"
+          }
+        ]
+      },
+      {
+        "id": 10,
+        "title": "Load: API p50/p95/p99 Latency",
+        "type": "timeseries",
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 12},
+        "targets": [
+          {
+            "expr": "histogram_quantile(0.50, rate(synapse_api_request_duration_seconds_bucket[5m]))",
+            "legendFormat": "p50"
+          },
+          {
+            "expr": "histogram_quantile(0.95, rate(synapse_api_request_duration_seconds_bucket[5m]))",
+            "legendFormat": "p95"
+          },
+          {
+            "expr": "histogram_quantile(0.99, rate(synapse_api_request_duration_seconds_bucket[5m]))",
+            "legendFormat": "p99"
+          }
+        ]
+      },
+      {
+        "id": 11,
+        "title": "Load: Throughput (req/sec)",
+        "type": "timeseries",
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 12},
+        "targets": [
+          {
+            "expr": "sum(rate(synapse_api_request_duration_seconds_count[5m]))",
+            "legendFormat": "total req/sec"
+          }
+        ]
+      },
+      {
+        "id": 12,
+        "title": "Load: Error Rate",
+        "type": "timeseries",
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 20},
+        "targets": [
+          {
+            "expr": "sum(rate(synapse_api_request_errors_total[5m]))",
+            "legendFormat": "errors/sec"
+          }
+        ]
+      },
+      {
+        "id": 20,
+        "title": "Security: Auth Failures/sec",
+        "type": "timeseries",
+        "gridPos": {"h": 8, "w": 8, "x": 0, "y": 28},
+        "targets": [
+          {
+            "expr": "rate(synapse_auth_failure_total[5m])",
+            "legendFormat": "auth failures/sec"
+          }
+        ]
+      },
+      {
+        "id": 21,
+        "title": "Security: Rate Limit Hits",
+        "type": "timeseries",
+        "gridPos": {"h": 8, "w": 8, "x": 8, "y": 28},
+        "targets": [
+          {
+            "expr": "rate(synapse_rate_limit_exceeded_total[1m])",
+            "legendFormat": "rate limit hits/min"
+          }
+        ]
+      },
+      {
+        "id": 22,
+        "title": "Security: HITL Escalations",
+        "type": "stat",
+        "gridPos": {"h": 8, "w": 8, "x": 16, "y": 28},
+        "targets": [
+          {
+            "expr": "sum(rate(synapse_hitl_escalations_total[5m])) * 60",
+            "legendFormat": "escalations/min"
+          }
+        ]
+      }
+    ]
+  }
+}

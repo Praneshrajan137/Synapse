@@ -6,15 +6,15 @@ MCP (Anthropic) for agent-to-tool communication. NEVER conflate.
 from __future__ import annotations
 
 import json
-import logging
 from typing import Any
 from uuid import uuid4
 
 import httpx
+import structlog
 
 from synapse_common.models import SynapseBaseModel
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 JSON_KWARGS: dict[str, Any] = {"sort_keys": True, "separators": (",", ":")}
 

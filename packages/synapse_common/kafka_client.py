@@ -5,13 +5,13 @@ All agents use this client. Direct kafka-python usage is a PR rejection.
 from __future__ import annotations
 
 import json
-import logging
 from typing import Any
 
+import structlog
 from confluent_kafka import Consumer, Producer
 from pydantic import BaseModel
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 SERIALIZATION_KWARGS: dict[str, Any] = {
     "sort_keys": True,
@@ -84,7 +84,7 @@ class SynapseConsumer:
             raw: dict[str, Any] = json.loads(msg.value().decode("utf-8"))  # type: ignore[union-attr]
             return raw
         except (json.JSONDecodeError, AttributeError) as e:
-            logger.error("Failed to deserialize Kafka message: %s", e)
+            logger.error("kafka_deserialize_failed", error=str(e))
             return None
 
     def close(self) -> None:

@@ -8,14 +8,15 @@ from __future__ import annotations
 
 import asyncio
 import functools
-import logging
 import random
 from typing import TYPE_CHECKING, Any, TypeVar
+
+import structlog
 
 if TYPE_CHECKING:
     from collections.abc import Callable
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 T = TypeVar("T")
 
@@ -57,20 +58,20 @@ def retry_with_jitter(
                     if attempt < max_retries:
                         delay = full_jitter_delay(base_delay, attempt, cap)
                         logger.warning(
-                            "Retry %d/%d for %s after %.2fs: %s",
-                            attempt + 1,
-                            max_retries,
-                            func.__name__,
-                            delay,
-                            str(e),
+                            "retry_attempt",
+                            attempt=attempt + 1,
+                            max_retries=max_retries,
+                            func=func.__name__,
+                            delay_seconds=round(delay, 2),
+                            error=str(e),
                         )
                         await asyncio.sleep(delay)
                     else:
                         logger.error(
-                            "All %d retries exhausted for %s: %s",
-                            max_retries,
-                            func.__name__,
-                            str(e),
+                            "retries_exhausted",
+                            max_retries=max_retries,
+                            func=func.__name__,
+                            error=str(e),
                         )
             raise last_exception  # type: ignore[misc]
 
@@ -87,20 +88,20 @@ def retry_with_jitter(
                     if attempt < max_retries:
                         delay = full_jitter_delay(base_delay, attempt, cap)
                         logger.warning(
-                            "Retry %d/%d for %s after %.2fs: %s",
-                            attempt + 1,
-                            max_retries,
-                            func.__name__,
-                            delay,
-                            str(e),
+                            "retry_attempt",
+                            attempt=attempt + 1,
+                            max_retries=max_retries,
+                            func=func.__name__,
+                            delay_seconds=round(delay, 2),
+                            error=str(e),
                         )
                         time.sleep(delay)
                     else:
                         logger.error(
-                            "All %d retries exhausted for %s: %s",
-                            max_retries,
-                            func.__name__,
-                            str(e),
+                            "retries_exhausted",
+                            max_retries=max_retries,
+                            func=func.__name__,
+                            error=str(e),
                         )
             raise last_exception  # type: ignore[misc]
 

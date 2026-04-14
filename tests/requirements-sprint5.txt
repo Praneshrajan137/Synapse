@@ -1,0 +1,5 @@
+# Sprint 5: Hardening test dependencies (net-new only)
+# Base deps installed via: packages/requirements.txt + packages/requirements-dev.txt
+locust>=2.15.0,<3.0
+python-jose[cryptography]>=3.3.0,<4.0
+psycopg2-binary>=2.9.9,<3.0

@@ -1,22 +1,76 @@
 name: SYNAPSE Mutation Testing
+
 on:
   schedule:
-    - cron: '0 4 * * 0'
+    - cron: '0 2 * * 0'  # Sunday 2AM UTC
+  workflow_dispatch:
+
+env:
+  PYTHONPATH: "."
 
 jobs:
   mutation:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 60
+
     steps:
       - uses: actions/checkout@v4
-      - name: Set up Python 3.11
-        uses: actions/setup-python@v5
+
+      - uses: actions/setup-python@v5
         with:
-          python-version: "3.11"
-      - name: Install dependencies
-        run: pip install -r packages/requirements.txt -r packages/requirements-dev.txt
-      - name: Run mutmut on guardrails
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install project dependencies
         run: |
-          cd packages
-          mutmut run --paths-to-mutate=synapse_common/contracts.py --tests-dir=tests/ || true
-          mutmut results
+          pip install -r packages/requirements.txt -r packages/requirements-dev.txt
+          pip install -r orchestrator/requirements.txt
+          if [ -f agents/requirements-sprint2.txt ]; then pip install -r agents/requirements-sprint2.txt; fi
+          if [ -f agents/requirements-sprint3.txt ]; then pip install -r agents/requirements-sprint3.txt; fi
+
+      - name: Run mutation tests — Reward Functions
+        run: |
+          for agent in demand_prophet routing_navigator inventory_sentinel pricing_oracle freshness_guardian disruption_shield supplier_trust sustainability_agent; do
+            REWARD_FILE="agents/${agent}/training/rewards.py"
+            TEST_FILE="agents/${agent}/tests/test_reward.py"
+            if [ -f "${REWARD_FILE}" ] && [ -f "${TEST_FILE}" ]; then
+              echo "=== Mutating ${agent} rewards ==="
+              mutmut run \
+                --paths-to-mutate="${REWARD_FILE}" \
+                --tests-dir="agents/${agent}/tests/" \
+                --runner="python -m pytest ${TEST_FILE} -x -q" \
+                || true
+              mutmut results || true
+            else
+              echo "=== SKIP ${agent}: reward or test file missing ==="
+            fi
+          done
+
+      - name: Run mutation tests — Guardrails
+        run: |
+          if [ -f "orchestrator/guardrails/rules.py" ]; then
+            mutmut run \
+              --paths-to-mutate="orchestrator/guardrails/rules.py" \
+              --tests-dir="orchestrator/tests/" \
+              --runner="python -m pytest orchestrator/tests/ -x -q -k guardrail" \
+              || true
+            mutmut results || true
+          fi
+
+      - name: Run mutation tests — Audit
+        run: |
+          if [ -f "orchestrator/audit/logger.py" ]; then
+            mutmut run \
+              --paths-to-mutate="orchestrator/audit/logger.py" \
+              --tests-dir="orchestrator/tests/" \
+              --runner="python -m pytest orchestrator/tests/ -x -q -k audit" \
+              || true
+            mutmut results || true
+          fi
+
+      - name: Upload mutation results
+        uses: actions/upload-artifact@v4
+        with:
+          name: mutation-results
+          path: .mutmut-cache/
+          retention-days: 30

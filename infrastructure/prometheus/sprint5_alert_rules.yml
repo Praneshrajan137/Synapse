@@ -1,0 +1,113 @@
+# ============================================================================
+# SYNAPSE Sprint 5 — Hardening Prometheus Alert Rules
+# ============================================================================
+groups:
+  - name: synapse_sprint5_hardening
+    interval: 15s
+    rules:
+      # --- Chaos Engineering Alerts ---
+      - alert: GNNAnomalousSpikeRate
+        expr: rate(synapse_demand_prophet_gnn_fallback_total[5m]) > 0.1
+        for: 2m
+        labels:
+          severity: warning
+          agent: demand_prophet
+          invariant: "I-7"
+        annotations:
+          summary: "GNN fallback rate elevated"
+          description: "Demand Prophet falling back to EMA more than 10% of requests"
+
+      - alert: LLMHallucinationRate
+        expr: rate(synapse_orchestrator_llm_fallback_total[5m]) > 0.05
+        for: 3m
+        labels:
+          severity: critical
+          agent: orchestrator
+          invariant: "I-7"
+        annotations:
+          summary: "LLM hallucination rate elevated"
+          description: "Ollama producing invalid JSON in >5% of requests"
+
+      - alert: ConsensusDeadlockRate
+        expr: rate(synapse_orchestrator_deadlock_total[10m]) > 0.02
+        for: 5m
+        labels:
+          severity: warning
+          agent: orchestrator
+        annotations:
+          summary: "Consensus deadlock rate elevated"
+          description: "More than 2% of consensus rounds hitting deadlock tiebreak"
+
+      - alert: DigitalTwinDivergence
+        expr: synapse_twin_kl_divergence > 0.1
+        for: 1m
+        labels:
+          severity: critical
+          component: digital_twin
+          invariant: "I-12"
+        annotations:
+          summary: "Digital Twin KL divergence exceeded threshold"
+          description: "Twin divergence {{ $value }} exceeds 0.1 threshold — force re-sync"
+
+      - alert: RLRewardVarianceSpike
+        expr: synapse_rl_reward_variance_ratio > 3.0
+        for: 2m
+        labels:
+          severity: critical
+          component: rl_training
+        annotations:
+          summary: "RL reward variance spike detected"
+          description: "Reward variance {{ $value }}x baseline — policy may be unstable"
+
+      # --- Load Testing / Performance Alerts ---
+      - alert: APILatencyP99High
+        expr: histogram_quantile(0.99, rate(synapse_api_request_duration_seconds_bucket[5m])) > 2.0
+        for: 3m
+        labels:
+          severity: warning
+          component: api_gateway
+          invariant: "I-10"
+        annotations:
+          summary: "API p99 latency exceeds 2s"
+          description: "p99 latency at {{ $value }}s — investigate load or resource constraints"
+
+      - alert: KafkaConsumerLagHigh
+        expr: synapse_kafka_consumer_lag_ms > 5000
+        for: 2m
+        labels:
+          severity: warning
+          component: kafka
+        annotations:
+          summary: "Kafka consumer lag exceeds 5s"
+          description: "Consumer lag at {{ $value }}ms — may indicate backpressure"
+
+      - alert: OllamaRestartCount
+        expr: increase(synapse_ollama_restart_total[1h]) > 3
+        for: 1m
+        labels:
+          severity: critical
+          component: ollama
+        annotations:
+          summary: "Ollama restarting frequently"
+          description: "{{ $value }} restarts in last hour — investigate OOM or crash loop"
+
+      # --- Security Alerts ---
+      - alert: AuthenticationFailureRate
+        expr: rate(synapse_auth_failure_total[5m]) > 1.0
+        for: 2m
+        labels:
+          severity: warning
+          component: security
+        annotations:
+          summary: "Authentication failure rate elevated"
+          description: "{{ $value }} auth failures/sec — potential brute force attempt"
+
+      - alert: RateLimitExceeded
+        expr: rate(synapse_rate_limit_exceeded_total[1m]) > 10
+        for: 1m
+        labels:
+          severity: warning
+          component: nginx
+        annotations:
+          summary: "Rate limiting triggered frequently"
+          description: "{{ $value }} rate limit hits/min"

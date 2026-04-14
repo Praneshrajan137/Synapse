@@ -1,7 +1,7 @@
 # ============================================================================
 # SYNAPSE Makefile — Development Automation
 # ============================================================================
-.PHONY: help up down test lint typecheck verify-infra seed generate-spec-tests fuzz mutate clean
+.PHONY: help up down test lint typecheck verify-infra seed generate-spec-tests fuzz mutate clean chaos-test load-test security-test dragonfly-eval sprint5-verify verify-services
 
 SHELL := /bin/bash
 COMPOSE := docker compose -f docker/docker-compose.yml --env-file docker/.env
@@ -210,3 +210,59 @@ verify-sprint3: ## Verify all Sprint 3 deliverables
 	PYTHONPATH=. pytest tests/integration/test_sprint3_agents.py -v --tb=short
 	python scripts/check_spec_coverage.py
 	@echo "Sprint 3 verification complete."
+
+# ============================================================================
+# Sprint 5: Hardening Targets
+# ============================================================================
+.PHONY: chaos-test load-test fuzz mutate security-test dragonfly-eval sprint5-verify verify-services
+
+verify-services: ## Check that Docker services are healthy before running integration tests
+	@echo "Verifying Docker services..."
+	@$(COMPOSE) ps --format "table {{.Name}}\t{{.Status}}" | grep -q "healthy" || \
+		(echo "ERROR: Services not healthy. Run 'make up' first." && exit 1)
+	@echo "Services verified."
+
+chaos-test: ## Run all 9 chaos engineering tests
+	PYTHONPATH=. python -m pytest tests/chaos/ -v --tb=short -m chaos
+
+load-test: verify-services ## Run Locust load tests (requires running services)
+	bash tests/load/run_load_tests.sh
+
+fuzz: verify-services ## Run Schemathesis API fuzz tests (requires running services)
+	bash tests/api_fuzz/run_fuzz.sh
+
+mutate: ## Run mutation tests on rewards, guardrails, audit
+	bash tests/mutation/run_mutation.sh
+
+security-test: ## Run security test suite
+	PYTHONPATH=. python -m pytest tests/security/ -v --tb=short
+
+dragonfly-eval: ## Run DragonflyDB evaluation (ADR-019)
+	PYTHONPATH=. python -m pytest tests/evaluation/test_dragonflydb.py -v --tb=short
+
+sprint5-verify: ## Full Sprint 5 quality gate verification
+	@echo "============================================="
+	@echo "SYNAPSE Sprint 5 Quality Gate Verification"
+	@echo "============================================="
+	@echo ""
+	@echo "--- 1. Chaos Engineering (9 failure modes) ---"
+	$(MAKE) chaos-test
+	@echo ""
+	@echo "--- 2. Security Tests ---"
+	$(MAKE) security-test
+	@echo ""
+	@echo "--- 3. Mutation Testing ---"
+	$(MAKE) mutate
+	@echo ""
+	@echo "--- 4. Schemathesis API Fuzz (requires services) ---"
+	$(MAKE) fuzz || echo "SKIP: Services not running"
+	@echo ""
+	@echo "--- 5. DragonflyDB Evaluation (requires services) ---"
+	$(MAKE) dragonfly-eval || echo "SKIP: DragonflyDB/Redis not running"
+	@echo ""
+	@echo "--- 6. Load Testing (requires services) ---"
+	$(MAKE) load-test || echo "SKIP: Services not running"
+	@echo ""
+	@echo "============================================="
+	@echo "Sprint 5 Verification Complete"
+	@echo "============================================="
