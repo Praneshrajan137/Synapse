@@ -115,13 +115,22 @@ class DemandProphetPipeline:
         return self._ema_fallback(features)
 
     def _ema_fallback(self, features: dict[str, Any]) -> dict[str, np.ndarray]:
-        """EMA fallback when model unavailable (I-7: graceful degradation)."""
-        num_skus = features.get("num_skus", 1)
-        rng = np.random.default_rng(42)
+        """EMA fallback when model unavailable (I-7: graceful degradation).
+
+        Forecasts are deterministic per (sku_id, horizon) so that permuting
+        the input SKU order does not change per-SKU outputs (MR-DP-004).
+        """
+        sku_ids: list[str] = features.get("sku_ids") or []
+        num_skus = len(sku_ids) if sku_ids else int(features.get("num_skus", 1))
         predictions: dict[str, np.ndarray] = {}
 
-        for horizon in VALID_HORIZONS:
-            base = rng.uniform(5, 50, size=(num_skus,))
+        for h_idx, horizon in enumerate(VALID_HORIZONS):
+            base = np.empty(num_skus, dtype=np.float64)
+            for i in range(num_skus):
+                # Seed from (sku_id, horizon) so order permutations are invariant.
+                key = sku_ids[i] if i < len(sku_ids) else f"__idx_{i}__"
+                seed = (abs(hash((key, horizon))) ^ (h_idx * 0x9E3779B1)) & 0xFFFFFFFF
+                base[i] = np.random.default_rng(seed).uniform(5, 50)
             predictions[horizon] = np.stack(
                 [base * 0.8, base, base * 1.2],
                 axis=1,
