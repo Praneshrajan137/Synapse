@@ -31,9 +31,8 @@ import structlog
 
 logger = structlog.get_logger(__name__)
 
-LANGSMITH_ENABLED = (
-    os.environ.get("SYNAPSE_LANGSMITH_ENABLED", "false").lower() == "true"
-    and bool(os.environ.get("LANGSMITH_API_KEY"))
+LANGSMITH_ENABLED = os.environ.get("SYNAPSE_LANGSMITH_ENABLED", "false").lower() == "true" and bool(
+    os.environ.get("LANGSMITH_API_KEY")
 )
 PROJECT = os.environ.get("LANGSMITH_PROJECT", "synapse")
 

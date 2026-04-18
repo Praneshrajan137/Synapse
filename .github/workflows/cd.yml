@@ -38,6 +38,10 @@ jobs:
           - orchestrator
     steps:
       - uses: actions/checkout@v4
+      - name: Compute lowercase image repo
+        id: repo
+        run: |
+          echo "slug=$(echo '${{ github.repository }}' | tr '[:upper:]' '[:lower:]')" >> "$GITHUB_OUTPUT"
       - uses: docker/setup-qemu-action@v3
       - uses: docker/setup-buildx-action@v3
       - name: Log in to GHCR
@@ -66,8 +70,8 @@ jobs:
           cache-from: type=gha,scope=${{ matrix.component }}
           cache-to: type=gha,scope=${{ matrix.component }},mode=max
           tags: |
-            ghcr.io/${{ github.repository }}/${{ matrix.component }}:${{ github.sha }}
-            ghcr.io/${{ github.repository }}/${{ matrix.component }}:latest
+            ghcr.io/${{ steps.repo.outputs.slug }}/${{ matrix.component }}:${{ github.sha }}
+            ghcr.io/${{ steps.repo.outputs.slug }}/${{ matrix.component }}:latest
 
   promote-models:
     name: MLflow Staging -> Production (canary)
