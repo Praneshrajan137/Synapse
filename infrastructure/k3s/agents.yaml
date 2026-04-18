@@ -1,0 +1,54 @@
+# SYNAPSE agents — Kubernetes Deployments for k3s production.
+# Mirrors docker-compose.yml agent services. Uses GHCR images published by
+# cd.yml. Each agent gets its own Deployment + Service + HPA.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: demand-prophet
+  namespace: synapse
+spec:
+  replicas: 2
+  selector: {matchLabels: {app: demand-prophet}}
+  template:
+    metadata: {labels: {app: demand-prophet}}
+    spec:
+      containers:
+        - name: demand-prophet
+          image: ghcr.io/synapse/demand_prophet:latest
+          ports: [{containerPort: 8080, name: http}]
+          env:
+            - {name: KAFKA_BOOTSTRAP, value: kafka.synapse.svc.cluster.local:9092}
+            - {name: FEAST_REDIS, value: redis.synapse.svc.cluster.local:6379}
+            - {name: SYNAPSE_OTEL_ENDPOINT, value: "http://otel-collector.synapse.svc.cluster.local:4318/v1/traces"}
+          resources:
+            requests: {cpu: 500m, memory: 1Gi}
+            limits: {cpu: "2", memory: 4Gi}
+          livenessProbe:
+            httpGet: {path: /health, port: 8080}
+            initialDelaySeconds: 30
+            periodSeconds: 15
+          readinessProbe:
+            httpGet: {path: /ready, port: 8080}
+            initialDelaySeconds: 10
+            periodSeconds: 5
+---
+apiVersion: v1
+kind: Service
+metadata: {name: demand-prophet, namespace: synapse}
+spec:
+  selector: {app: demand-prophet}
+  ports: [{port: 8080, targetPort: 8080, name: http}]
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata: {name: demand-prophet-hpa, namespace: synapse}
+spec:
+  scaleTargetRef: {apiVersion: apps/v1, kind: Deployment, name: demand-prophet}
+  minReplicas: 2
+  maxReplicas: 6
+  metrics:
+    - type: Resource
+      resource: {name: cpu, target: {type: Utilization, averageUtilization: 70}}
+# Similar Deployment/Service/HPA blocks must exist for each of the
+# remaining 7 agents. Emit them via Helm or kustomize overlays to avoid
+# duplication; placeholder here keeps the namespace + one canonical agent.

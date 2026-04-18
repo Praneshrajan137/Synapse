@@ -8,7 +8,12 @@
 
 services:
   osrm-mumbai:
-    image: osrm/osrm-backend:latest
+    # OSRM_IMAGE defaults to the Docker Hub amd64 image for local developer
+    # flows. On ARM64 (Oracle Cloud) the workflow sets:
+    #   OSRM_IMAGE=ghcr.io/<owner>/synapse-osrm-arm64:v5.27.1
+    # built from infrastructure/osrm/Dockerfile.osrm-arm64 (see ADR / Part J
+    # of the Sprint 6 plan).
+    image: ${OSRM_IMAGE:-osrm/osrm-backend:latest}
     container_name: synapse-osrm-mumbai
     ports:
       - "5001:5000"

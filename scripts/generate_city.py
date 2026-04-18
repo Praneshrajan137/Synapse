@@ -274,9 +274,9 @@ def _generate_suppliers(
         suppliers.append({
             "id": f"SUP-{prefix}-{i + 1:03d}",
             "name": f"{city.title()} Supplier {i + 1}",
-            "lead_time_mean": round(float(rng.normal(
+            "lead_time_mean": round(float(np.clip(rng.normal(
                 profile["avg_lead_time_days"], profile["lead_time_std"]
-            ).clip(0.5, 7.0)), 2),
+            ), 0.5, 7.0)), 2),
             "lead_time_std": round(float(rng.uniform(0.3, profile["lead_time_std"])), 2),
             "reliability_score": round(float(rng.uniform(0.7, 0.98)), 3),
             "monsoon_lead_time_multiplier": profile.get("monsoon_lead_time_multiplier", 1.0),
@@ -416,7 +416,7 @@ def _generate_weather_history(
                 precip = float(rng.exponential(30.0 * m_intensity))
                 precip_prob = min(0.3 + m_intensity * 0.6, 1.0)
                 humidity = min(humidity + m_intensity * 15, 99.0)
-                wind = rng.uniform(10, 60 * m_intensity)
+                wind = rng.uniform(10, max(60 * m_intensity, 11.0))
                 visibility = max(rng.uniform(0.5, 10) * (1 - m_intensity), 0.3)
 
             records.append({
@@ -448,7 +448,9 @@ def generate_city(city: str, n_stores: int, n_days: int, seed: int, output_dir: 
     riders = _generate_riders(rng, city, zones)
     events = profile.get("events", [])
 
-    start_date = date(2025, 1, 1)
+    # Mumbai start date covers monsoon months (Jun-Sep) for monsoon_intensity (E-S6-09).
+    # Bengaluru has no monsoon months defined, so January is fine.
+    start_date = date(2025, 6, 1) if city == "mumbai" else date(2025, 1, 1)
 
     # Write JSON files
     for name, data in [

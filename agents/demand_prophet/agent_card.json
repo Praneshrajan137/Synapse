@@ -41,5 +41,19 @@
     "consumes": ["synapse.orchestrator.decision"]
   },
   "feast_features": ["sku_demand_signals", "weather_context", "event_calendar"],
-  "dependencies": ["feast", "kafka", "neo4j", "mlflow"]
+  "dependencies": ["feast", "kafka", "neo4j", "mlflow"],
+  "cities": ["bengaluru", "mumbai"],
+  "city_specific_config": {
+    "bengaluru": {
+      "feast_repo": "data_fabric/feast",
+      "osrm_port": 5000,
+      "redis_db": 0
+    },
+    "mumbai": {
+      "feast_repo": "data_fabric/feast/mumbai",
+      "osrm_port": 5001,
+      "redis_db": 1,
+      "extra_features": ["monsoon_intensity"]
+    }
+  }
 }

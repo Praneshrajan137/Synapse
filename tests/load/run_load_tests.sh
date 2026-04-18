@@ -1,20 +1,62 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# SYNAPSE Sprint 5 Load Testing Protocol
+# SYNAPSE Load Testing Protocol — 6 named scenarios
 # Prerequisites: pip install locust
+# Usage:
+#   bash tests/load/run_load_tests.sh                  # default 3-scenario legacy flow
+#   bash tests/load/run_load_tests.sh --all            # all 6 v4.0 scenarios sequentially
+#   SYNAPSE_LOAD_SCENARIO=ipl_burst bash tests/load/run_load_tests.sh --single
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 HOST="${SYNAPSE_API_HOST:-http://localhost:8000}"
 RESULTS_DIR="${SCRIPT_DIR}/results"
 mkdir -p "${RESULTS_DIR}"
 TIMESTAMP=$(date -u +%Y%m%dT%H%M%SZ)
+MODE="${1:-legacy}"
 
 echo "============================================="
-echo "SYNAPSE Load Testing Protocol — Sprint 5"
+echo "SYNAPSE Load Testing Protocol — v4.0"
 echo "Target: ${HOST}"
 echo "Timestamp: ${TIMESTAMP}"
+echo "Mode: ${MODE}"
 echo "============================================="
+
+run_scenario() {
+    local scenario="$1" users="$2" spawn="$3" duration="$4"
+    echo ""
+    echo "--- Scenario: ${scenario} (${users} users, ${spawn}/s, ${duration}) ---"
+    SYNAPSE_LOAD_SCENARIO="${scenario}" locust \
+      -f "${SCRIPT_DIR}/locustfile.py" \
+      --host="${HOST}" \
+      --users "${users}" \
+      --spawn-rate "${spawn}" \
+      --run-time "${duration}" \
+      --headless \
+      --csv="${RESULTS_DIR}/${scenario}_${TIMESTAMP}" \
+      --html="${RESULTS_DIR}/${scenario}_${TIMESTAMP}.html" \
+      2>&1 | tee "${RESULTS_DIR}/${scenario}_${TIMESTAMP}.log"
+}
+
+if [[ "${MODE}" == "--all" ]]; then
+    run_scenario sustained          100 10 10m
+    run_scenario ipl_burst          250 50 5m
+    run_scenario multi_disruption   50  5  10m
+    run_scenario hitl_flood         200 20 5m
+    run_scenario kafka_backpressure 80  8  10m
+    run_scenario neo4j_concurrent   60  6  10m
+    echo "============================================="
+    echo "All 6 v4.0 load scenarios complete"
+    echo "Results: ${RESULTS_DIR}/"
+    echo "============================================="
+    exit 0
+fi
+
+if [[ "${MODE}" == "--single" ]]; then
+    scenario="${SYNAPSE_LOAD_SCENARIO:-sustained}"
+    run_scenario "${scenario}" 100 10 10m
+    exit 0
+fi
 
 # ── Pre-flight: verify target is reachable ──
 echo ""

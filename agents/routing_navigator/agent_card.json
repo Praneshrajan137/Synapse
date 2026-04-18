@@ -26,5 +26,20 @@
     "consumes": ["synapse.demand.forecast", "synapse.orchestrator.decision"]
   },
   "feast_features": ["routing_context", "store_operational_state"],
-  "dependencies": ["feast", "kafka", "osrm"]
+  "dependencies": ["feast", "kafka", "osrm"],
+  "cities": ["bengaluru", "mumbai"],
+  "city_specific_config": {
+    "bengaluru": {
+      "feast_repo": "data_fabric/feast",
+      "osrm_host": "osrm-bengaluru",
+      "osrm_port": 5000,
+      "redis_db": 0
+    },
+    "mumbai": {
+      "feast_repo": "data_fabric/feast/mumbai",
+      "osrm_host": "osrm-mumbai",
+      "osrm_port": 5001,
+      "redis_db": 1
+    }
+  }
 }

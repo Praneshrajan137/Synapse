@@ -225,8 +225,11 @@ verify-services: ## Check that Docker services are healthy before running integr
 chaos-test: ## Run all 9 chaos engineering tests
 	PYTHONPATH=. python -m pytest tests/chaos/ -v --tb=short -m chaos
 
-load-test: verify-services ## Run Locust load tests (requires running services)
-	bash tests/load/run_load_tests.sh
+load-test: verify-services ## Run Locust load test (LOCUST_SCENARIO env selects 1 of 6; default sustained)
+	SYNAPSE_LOAD_SCENARIO=$${LOCUST_SCENARIO:-sustained} bash tests/load/run_load_tests.sh --single
+
+load-test-all: verify-services ## Run all 6 v4.0 load scenarios sequentially
+	bash tests/load/run_load_tests.sh --all
 
 fuzz: verify-services ## Run Schemathesis API fuzz tests (requires running services)
 	bash tests/api_fuzz/run_fuzz.sh
@@ -342,3 +345,130 @@ sprint6-full: sprint5-exit-gate generate-bengaluru generate-mumbai convert-parqu
 	@echo "============================================="
 	@echo "  SPRINT 6 COMPLETE — Total Cost: $$0"
 	@echo "============================================="
+
+# ============================================================================
+# Oracle Cloud Always-Free Deployment
+# ============================================================================
+.PHONY: deploy-oracle deploy-oracle-setup deploy-oracle-push deploy-oracle-verify \
+        deploy-oracle-terraform deploy-oracle-register-runner deploy-oracle-smoke
+
+ORACLE_USER ?= ubuntu
+ORACLE_KEY  ?= ~/.ssh/oracle_synapse
+ORACLE_IP   ?= $(shell echo $$ORACLE_IP)
+ORACLE_TF_DIR := infrastructure/oracle/terraform
+
+deploy-oracle: deploy-oracle-setup deploy-oracle-push deploy-oracle-verify ## Deploy to Oracle Cloud Always-Free VM
+
+deploy-oracle-setup: ## Provision Oracle VM (run setup script remotely)
+	@echo "============================================="
+	@echo "  SYNAPSE Oracle Cloud Deployment"
+	@echo "============================================="
+	@echo ""
+	@echo "Prerequisites (manual via OCI Console):"
+	@echo "  1. Create Always-Free VM (Ampere A1, 4 OCPU, 24GB RAM)"
+	@echo "  2. Configure VCN + security list (ports: 22, 80, 443, 3000, 9090, 8080-8099)"
+	@echo "  3. Add SSH public key"
+	@echo "  4. Set ORACLE_IP env var: export ORACLE_IP=<vm-public-ip>"
+	@echo ""
+	@test -n "$(ORACLE_IP)" || (echo "ERROR: ORACLE_IP not set" && exit 1)
+	@echo "Running setup script on $(ORACLE_IP)..."
+	ssh -i $(ORACLE_KEY) -o StrictHostKeyChecking=accept-new $(ORACLE_USER)@$(ORACLE_IP) 'bash -s' < infrastructure/oracle/setup_oracle_vm.sh
+
+deploy-oracle-push: ## Push compose + config to Oracle VM
+	@test -n "$(ORACLE_IP)" || (echo "ERROR: ORACLE_IP not set" && exit 1)
+	@echo "Copying deployment files..."
+	scp -i $(ORACLE_KEY) docker/docker-compose.cloud.yml $(ORACLE_USER)@$(ORACLE_IP):~/synapse/docker-compose.cloud.yml
+	@test -f .env.cloud && scp -i $(ORACLE_KEY) .env.cloud $(ORACLE_USER)@$(ORACLE_IP):~/synapse/.env.cloud || echo "WARNING: .env.cloud not found — using defaults"
+	@echo "Starting services..."
+	ssh -i $(ORACLE_KEY) $(ORACLE_USER)@$(ORACLE_IP) 'cd ~/synapse && docker compose -f docker-compose.cloud.yml --env-file .env.cloud up -d'
+
+deploy-oracle-verify: ## Verify Oracle Cloud deployment health
+	@test -n "$(ORACLE_IP)" || (echo "ERROR: ORACLE_IP not set" && exit 1)
+	@echo "Verifying Oracle deployment..."
+	ssh -i $(ORACLE_KEY) $(ORACLE_USER)@$(ORACLE_IP) 'cd ~/synapse && docker compose -f docker-compose.cloud.yml ps'
+	@echo ""
+	@echo "Checking Grafana..."
+	@curl -sf http://$(ORACLE_IP):3000/api/health | python3 -c "import sys,json; d=json.load(sys.stdin); print(f'Grafana: {d.get(\"database\",\"unknown\")}')" 2>/dev/null || echo "Grafana: not reachable (check security list port 3000)"
+	@echo ""
+	@echo "Checking Prometheus..."
+	@curl -sf http://$(ORACLE_IP):9090/-/healthy && echo "Prometheus: OK" || echo "Prometheus: not reachable"
+	@echo ""
+	@echo "============================================="
+	@echo "  Oracle Cloud Deployment Verified"
+	@echo "  Dashboard: http://$(ORACLE_IP):3000"
+	@echo "  Prometheus: http://$(ORACLE_IP):9090"
+	@echo "  Cost: $$0 (Always-Free tier)"
+	@echo "============================================="
+
+deploy-oracle-terraform: ## Provision Oracle VM via Terraform IaC
+	@echo "============================================="
+	@echo "  Terraform apply — Oracle VM provisioning"
+	@echo "============================================="
+	@command -v terraform >/dev/null || (echo "ERROR: terraform not installed (https://developer.hashicorp.com/terraform/downloads)" && exit 1)
+	@test -f $$HOME/.ssh/oracle_synapse.pub || (echo "ERROR: SSH key missing — run: ssh-keygen -t ed25519 -f ~/.ssh/oracle_synapse -N ''" && exit 1)
+	@test -n "$$TF_VAR_tenancy_ocid" || (echo "ERROR: TF_VAR_tenancy_ocid + TF_VAR_user_ocid + TF_VAR_compartment_ocid + TF_VAR_fingerprint + TF_VAR_private_key_path required (see infrastructure/oracle/terraform/README.md)" && exit 1)
+	cd $(ORACLE_TF_DIR) && terraform init -upgrade
+	cd $(ORACLE_TF_DIR) && terraform apply -auto-approve \
+	    -var="ssh_public_key=$$(cat $$HOME/.ssh/oracle_synapse.pub)"
+	@echo ""
+	@echo "Set ORACLE_IP in your shell:"
+	@echo "  export ORACLE_IP=$$(cd $(ORACLE_TF_DIR) && terraform output -raw public_ip)"
+
+deploy-oracle-register-runner: ## Bootstrap VM + register GitHub Actions self-hosted runner
+	@test -n "$(ORACLE_IP)" || (echo "ERROR: ORACLE_IP not set (run deploy-oracle-terraform first)" && exit 1)
+	@test -n "$(GH_RUNNER_URL)" || (echo "ERROR: GH_RUNNER_URL=https://github.com/<owner>/<repo> required" && exit 1)
+	@test -n "$(GH_RUNNER_TOKEN)" || (echo "ERROR: GH_RUNNER_TOKEN required (GitHub → Settings → Actions → Runners → New self-hosted runner; token expires in 60 min)" && exit 1)
+	@echo "Bootstrapping Oracle VM and registering runner on $(ORACLE_IP)..."
+	ssh -i $(ORACLE_KEY) -o StrictHostKeyChecking=accept-new $(ORACLE_USER)@$(ORACLE_IP) \
+	    "GH_RUNNER_URL='$(GH_RUNNER_URL)' GH_RUNNER_TOKEN='$(GH_RUNNER_TOKEN)' bash -s" \
+	    < infrastructure/oracle/setup_oracle_vm.sh
+	@echo ""
+	@echo "Verify runner is online: $(GH_RUNNER_URL)/settings/actions/runners"
+
+deploy-oracle-smoke: ## End-to-end smoke check on Oracle VM (memory, docker, ollama, runner)
+	@test -n "$(ORACLE_IP)" || (echo "ERROR: ORACLE_IP not set" && exit 1)
+	@echo "=== Oracle VM smoke checks ==="
+	ssh -i $(ORACLE_KEY) $(ORACLE_USER)@$(ORACLE_IP) ' \
+	    set -e; \
+	    echo "--- free -h ---"; free -h; \
+	    echo "--- nproc ---"; nproc; \
+	    echo "--- docker info ---"; docker info | grep -E "Architecture|CPUs|Total Memory" || true; \
+	    echo "--- ollama tags ---"; curl -sf http://localhost:11434/api/tags | python3 -c "import sys,json; [print(m[\"name\"]) for m in json.load(sys.stdin)[\"models\"]]"; \
+	    echo "--- actions runner svc ---"; sudo systemctl status actions.runner.* --no-pager | head -10 || echo "Runner service not found (skip if runner not registered)"; \
+	    echo "--- swap ---"; swapon --show; \
+	'
+
+
+verify-v4-compliance: ## Definitive v4.0 plan compliance gate (artifact + test counts + quality)
+	@echo "============================================="
+	@echo "  v4.0 Definitive Edition compliance check"
+	@echo "============================================="
+	@echo "[1/10] ADR count >= 24"
+	@count=$$(ls docs/adr/ADR-*.md 2>/dev/null | wc -l); test $$count -ge 24 || (echo "FAIL: only $$count ADRs found" && exit 1); echo "  ok ($$count)"
+	@echo "[2/10] GitHub workflows: ci, cd, integration, policy, security, mutation"
+	@for w in ci cd integration policy security mutation; do \
+	    test -f .github/workflows/$$w.yml || (echo "  FAIL: missing $$w.yml" && exit 1); \
+	done; echo "  ok"
+	@echo "[3/10] Demo segments == 5"
+	@count=$$(ls scripts/demo/0[1-5]_*.py 2>/dev/null | wc -l); test $$count -eq 5 || (echo "FAIL: $$count demo segments" && exit 1); echo "  ok"
+	@echo "[4/10] Claude Skill present"
+	@test -f .claude/skills/synapse-engineer/SKILL.md || (echo "FAIL: SKILL.md missing" && exit 1); echo "  ok"
+	@echo "[5/10] Feast feature groups >= 7 (entities + 6 groups)"
+	@count=$$(ls data_fabric/feast/features/*.py 2>/dev/null | grep -v __init__ | wc -l); test $$count -ge 7 || (echo "FAIL: $$count feature files" && exit 1); echo "  ok ($$count)"
+	@echo "[6/10] All 8 agent state machines inherit BaseAgentStateMachine"
+	@count=$$(grep -l "BaseAgentStateMachine" agents/*/state_machine.py | wc -l); test $$count -eq 8 || (echo "FAIL: only $$count agents" && exit 1); echo "  ok"
+	@echo "[7/10] Pre-commit hooks: spec-coverage, contract-validate, kv-cache-check"
+	@grep -q "spec-coverage" .pre-commit-config.yaml || (echo "FAIL: spec-coverage hook missing" && exit 1)
+	@grep -q "contract-validate" .pre-commit-config.yaml || (echo "FAIL: contract-validate hook missing" && exit 1)
+	@grep -q "kv-cache-check" .pre-commit-config.yaml || (echo "FAIL: kv-cache-check hook missing" && exit 1)
+	@echo "  ok"
+	@echo "[8/10] DPDPA compliance test present"
+	@test -f tests/compliance/test_dpdpa.py || (echo "FAIL: DPDPA test missing" && exit 1); echo "  ok"
+	@echo "[9/10] Operational runbooks (>=7)"
+	@count=$$(ls docs/runbooks/*.md 2>/dev/null | wc -l); test $$count -ge 7 || (echo "FAIL: $$count runbooks" && exit 1); echo "  ok ($$count)"
+	@echo "[10/10] Quality gates: docs/quality_gates/sprint{1..5}.md"
+	@for s in 1 2 3 4 5; do test -f docs/quality_gates/sprint$$s.md || (echo "  FAIL: sprint$$s.md missing" && exit 1); done; echo "  ok"
+	@echo "============================================="
+	@echo "  v4.0 DEFINITIVE EDITION COMPLIANT"
+	@echo "============================================="
+

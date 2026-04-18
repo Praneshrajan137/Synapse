@@ -106,5 +106,50 @@ fi
 
 sudo netfilter-persistent save || true
 
+# ── GitHub Actions self-hosted runner (ARM64) ─────────────────────────────
+# Opt-in: set GH_RUNNER_URL + GH_RUNNER_TOKEN to register this VM as a runner.
+# Token is ephemeral (60-minute TTL); obtain from GitHub repo → Settings →
+# Actions → Runners → New self-hosted runner → Linux → ARM64.
+#
+# Labels applied: self-hosted, linux, arm64, oracle — matches
+# `.github/workflows/sprint6-e2e-oracle.yml`'s `runs-on` selector.
+if [ -n "${GH_RUNNER_URL:-}" ] && [ -n "${GH_RUNNER_TOKEN:-}" ]; then
+    echo "=== Installing GitHub Actions self-hosted runner ==="
+    RUNNER_VERSION="${GH_RUNNER_VERSION:-2.319.1}"
+    RUNNER_DIR="$HOME/actions-runner"
+    if [ ! -d "$RUNNER_DIR" ]; then
+        mkdir -p "$RUNNER_DIR"
+        cd "$RUNNER_DIR"
+        curl -o actions-runner.tar.gz -L \
+            "https://github.com/actions/runner/releases/download/v${RUNNER_VERSION}/actions-runner-linux-arm64-${RUNNER_VERSION}.tar.gz"
+        tar xzf ./actions-runner.tar.gz
+        rm actions-runner.tar.gz
+    fi
+    cd "$RUNNER_DIR"
+
+    # Unregister previous runner if present (idempotent re-runs)
+    if [ -f .runner ]; then
+        sudo ./svc.sh stop 2>/dev/null || true
+        sudo ./svc.sh uninstall 2>/dev/null || true
+        ./config.sh remove --token "$GH_RUNNER_TOKEN" 2>/dev/null || true
+    fi
+
+    ./config.sh \
+        --unattended \
+        --url "$GH_RUNNER_URL" \
+        --token "$GH_RUNNER_TOKEN" \
+        --name "synapse-oracle-arm64" \
+        --labels "self-hosted,linux,arm64,oracle" \
+        --work "_work" \
+        --replace
+
+    sudo ./svc.sh install "$USER"
+    sudo ./svc.sh start
+    echo "=== Runner registered. Verify: GitHub → Settings → Actions → Runners ==="
+else
+    echo "=== Skipping runner registration (GH_RUNNER_URL/GH_RUNNER_TOKEN not set) ==="
+    echo "=== To register later, re-run this script with both env vars set. ==="
+fi
+
 echo "=== Setup complete. Log out and back in for Docker group + venv. ==="
 echo "=== Then: git clone <repo> && cd synapse && make up-cloud ==="

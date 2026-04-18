@@ -41,5 +41,16 @@
     "consumes": ["synapse.inventory.state"]
   },
   "feast_features": ["perishable_state", "store_operational_state"],
-  "dependencies": ["feast", "kafka"]
+  "dependencies": ["feast", "kafka"],
+  "cities": ["bengaluru", "mumbai"],
+  "city_specific_config": {
+    "bengaluru": {
+      "feast_repo": "data_fabric/feast",
+      "redis_db": 0
+    },
+    "mumbai": {
+      "feast_repo": "data_fabric/feast/mumbai",
+      "redis_db": 1
+    }
+  }
 }

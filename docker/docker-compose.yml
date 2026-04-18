@@ -328,3 +328,43 @@ services:
       timeout: 5s
       retries: 5
     restart: unless-stopped
+
+  # ── Observability (v4.0 §15) ───────────────────────────────────────────
+  jaeger:
+    image: jaegertracing/all-in-one:1.54
+    container_name: synapse-jaeger
+    <<: *common-labels
+    environment:
+      COLLECTOR_OTLP_ENABLED: "true"
+    ports:
+      - "16686:16686"  # UI
+      - "14250:14250"  # collector gRPC
+    networks:
+      - infra-net
+    restart: unless-stopped
+
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:0.97.0
+    container_name: synapse-otel-collector
+    <<: *common-labels
+    command: ["--config=/etc/otel-collector.yaml"]
+    volumes:
+      - ../infrastructure/observability/otel-collector.yaml:/etc/otel-collector.yaml:ro
+    ports:
+      - "4317:4317"  # OTLP gRPC
+      - "4318:4318"  # OTLP HTTP
+    depends_on:
+      - jaeger
+    networks:
+      - infra-net
+    restart: unless-stopped
+
+  pushgateway:
+    image: prom/pushgateway:v1.7.0
+    container_name: synapse-pushgateway
+    <<: *common-labels
+    ports:
+      - "9091:9091"
+    networks:
+      - infra-net
+    restart: unless-stopped

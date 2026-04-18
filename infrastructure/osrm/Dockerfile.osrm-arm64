@@ -1,0 +1,65 @@
+# ============================================================================
+# SYNAPSE — OSRM v5.27.1 multi-stage build for linux/arm64
+#
+# Why this exists: osrm/osrm-backend on Docker Hub publishes only amd64
+# manifests (verified 2024). On the Oracle ARM64 VM (I-1 constraint) we must
+# build from source. Upstream osrm-backend compiles cleanly on aarch64 with
+# the same dependency set used by the official amd64 image.
+#
+# Build:
+#   docker buildx build --platform linux/arm64 \
+#       -t ghcr.io/<owner>/synapse-osrm-arm64:v5.27.1 \
+#       -f infrastructure/osrm/Dockerfile.osrm-arm64 \
+#       --push infrastructure/osrm
+#
+# Runtime (matches the osrm/osrm-backend ENTRYPOINT contract):
+#   docker run -p 5000:5000 -v $(pwd)/data/mumbai:/data \
+#       ghcr.io/<owner>/synapse-osrm-arm64:v5.27.1 \
+#       osrm-routed --algorithm mld /data/mumbai_extract.osrm
+# ============================================================================
+
+ARG OSRM_VERSION=v5.27.1
+
+# ── Stage 1: build ────────────────────────────────────────────────────────────
+FROM debian:bookworm-slim AS builder
+ARG OSRM_VERSION
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        build-essential cmake git ca-certificates pkg-config \
+        libboost-all-dev libbz2-dev libxml2-dev libzip-dev \
+        libtbb-dev lua5.4 liblua5.4-dev libluabind-dev \
+        libstxxl-dev libosmpbf-dev libprotobuf-dev protobuf-compiler \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /src
+RUN git clone --depth 1 --branch ${OSRM_VERSION} https://github.com/Project-OSRM/osrm-backend.git .
+
+RUN mkdir build \
+    && cd build \
+    && cmake .. -DCMAKE_BUILD_TYPE=Release -DENABLE_LTO=OFF \
+    && cmake --build . -j "$(nproc)" \
+    && cmake --install .
+
+# ── Stage 2: runtime ──────────────────────────────────────────────────────────
+FROM debian:bookworm-slim
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        libboost-date-time1.74.0 libboost-chrono1.74.0 libboost-filesystem1.74.0 \
+        libboost-iostreams1.74.0 libboost-program-options1.74.0 \
+        libboost-regex1.74.0 libboost-thread1.74.0 \
+        libbz2-1.0 libxml2 libzip4 libtbb12 liblua5.4-0 libprotobuf32 \
+        curl \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY --from=builder /usr/local/bin/osrm-* /usr/local/bin/
+COPY --from=builder /usr/local/lib/libosrm* /usr/local/lib/
+COPY --from=builder /usr/local/share/osrm /usr/local/share/osrm
+
+RUN ldconfig
+
+EXPOSE 5000
+WORKDIR /data
+
+# Match the upstream image's ENTRYPOINT contract (no default CMD — compose
+# supplies `osrm-routed --algorithm mld /data/mumbai_extract.osrm`).
+ENTRYPOINT []

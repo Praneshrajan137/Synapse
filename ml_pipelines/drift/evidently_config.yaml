@@ -1,0 +1,66 @@
+# SYNAPSE Drift Detection — Evidently AI configuration
+# v4.0 plan §10.3 + §15
+# Runs every 6h via .github/workflows/cd.yml cron; emits results to
+# Prometheus (synapse_drift_alert) and Kafka topic `synapse.drift.alert`.
+
+reference_window:
+  days: 14  # rolling baseline
+
+evaluation_window:
+  hours: 6  # compare last 6h vs 14-day baseline
+
+# Per-agent drift spec
+agents:
+  demand_prophet:
+    target_column: demand_mean_forecast
+    feature_columns:
+      - rolling_mean_7d
+      - rolling_std_7d
+      - trend_slope
+      - seasonality_idx
+    tests:
+      - data_drift  # PSI
+      - target_drift  # Wasserstein
+      - conformal_coverage_90  # custom, must stay >= 0.85 (E-S6-04)
+
+  routing_navigator:
+    target_column: predicted_route_time
+    feature_columns:
+      - traffic_congestion_idx
+      - weather_eta_multiplier
+      - monsoon_wind_kmh
+    tests:
+      - data_drift
+      - target_drift
+
+  inventory_sentinel:
+    target_column: safety_stock_multiplier
+    feature_columns:
+      - rolling_mean_7d
+      - lead_time_mean_days
+      - lead_time_std_days
+    tests:
+      - data_drift
+      - target_drift
+
+  pricing_oracle:
+    target_column: price_multiplier
+    feature_columns:
+      - own_price_elasticity
+      - cross_price_elasticity_mean
+      - recent_markdown_pct
+    tests:
+      - data_drift
+      - target_drift
+      - essential_cap_breach  # I-6 safeguard
+
+thresholds:
+  psi_warn: 0.1
+  psi_alert: 0.25
+  coverage_alert: 0.85  # below this fires model-rollback playbook
+
+outputs:
+  prometheus_gateway: "http://pushgateway:9091"
+  kafka_topic: "synapse.drift.alert"
+  kafka_bootstrap: "kafka:9092"
+  html_report_dir: "artifacts/drift"

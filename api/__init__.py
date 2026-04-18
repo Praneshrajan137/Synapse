@@ -1,0 +1,1 @@
+"""SYNAPSE API Gateway package."""

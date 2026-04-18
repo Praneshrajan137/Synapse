@@ -41,5 +41,16 @@
     "consumes": ["synapse.twin.divergence"]
   },
   "feast_features": ["supply_chain_signals", "node_operational_state"],
-  "dependencies": ["feast", "kafka", "pinecone", "ollama"]
+  "dependencies": ["feast", "kafka", "pinecone", "ollama"],
+  "cities": ["bengaluru", "mumbai"],
+  "city_specific_config": {
+    "bengaluru": {
+      "feast_repo": "data_fabric/feast",
+      "redis_db": 0
+    },
+    "mumbai": {
+      "feast_repo": "data_fabric/feast/mumbai",
+      "redis_db": 1
+    }
+  }
 }

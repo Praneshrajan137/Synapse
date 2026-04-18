@@ -1,0 +1,134 @@
+name: SYNAPSE Policy Gate
+# Policy gate: Twin Oracle (500 scenarios), DPDPA compliance, Digital Twin
+# KL divergence regression, audit-log immutability smoke test.
+#
+# v4.0 plan §11 — one of the six mandatory workflows.
+# Runs on any model-artifact change or merge to main.
+on:
+  push:
+    branches: [main]
+    paths:
+      - "agents/*/training/**"
+      - "agents/*/models/**"
+      - "digital_twin/**"
+      - "orchestrator/guardrails/**"
+      - "orchestrator/audit/**"
+  pull_request:
+    branches: [main]
+    paths:
+      - "agents/*/training/**"
+      - "agents/*/models/**"
+      - "digital_twin/**"
+      - "orchestrator/guardrails/**"
+      - "orchestrator/audit/**"
+  workflow_dispatch:
+
+jobs:
+  twin-oracle:
+    name: Digital Twin Oracle (500 scenarios)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: "3.11", cache: "pip"}
+      - run: pip install -r packages/requirements.txt -r packages/requirements-dev.txt
+      - name: Run oracle scenarios
+        run: |
+          PYTHONPATH=. pytest tests/oracle/ -v --tb=short --maxfail=3
+
+  dpdpa:
+    name: DPDPA 2023 Compliance
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: "3.11", cache: "pip"}
+      - run: pip install -r packages/requirements.txt -r packages/requirements-dev.txt
+      - name: Federated gradient-only aggregation (I-11)
+        run: |
+          PYTHONPATH=. pytest tests/compliance/ -v --tb=short
+
+  audit-immutability:
+    name: Audit log immutability (I-4)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    services:
+      postgres:
+        image: postgres:15-alpine
+        env:
+          POSTGRES_USER: synapse
+          POSTGRES_PASSWORD: synapse_audit_2026
+          POSTGRES_DB: synapse_audit
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U synapse"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: "3.11", cache: "pip"}
+      - run: pip install -r packages/requirements.txt -r packages/requirements-dev.txt
+      - name: Apply audit schema
+        env:
+          PGPASSWORD: synapse_audit_2026
+        run: |
+          psql -h localhost -U synapse -d synapse_audit -f infrastructure/postgres/init_audit.sql
+      - name: Attempt UPDATE + DELETE under app role (must fail)
+        env:
+          PGPASSWORD: synapse_audit_2026
+        run: |
+          PYTHONPATH=. pytest tests/security/test_audit_immutability.py -v --tb=short
+
+  license-policy:
+    name: License policy (constraints.txt honored)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: "3.11", cache: "pip"}
+      - name: Install project + constraints
+        run: |
+          pip install --constraint constraints.txt \
+            -r packages/requirements.txt -r packages/requirements-dev.txt
+          pip install pip-licenses
+      - name: Verify forbidden packages absent
+        run: |
+          python -m piplicenses --format=json > /tmp/licenses.json
+          python - <<'PY'
+          import json, sys
+          forbidden = {"rfc3987"}
+          data = json.load(open("/tmp/licenses.json"))
+          violations = [p for p in data if p["Name"].lower() in forbidden]
+          if violations:
+              print("LICENSE POLICY VIOLATION:")
+              for v in violations:
+                  print(f"  {v['Name']} {v['Version']} ({v['License']})")
+              sys.exit(1)
+          print(f"License policy: OK ({len(data)} packages scanned)")
+          PY
+
+  policy-summary:
+    name: Policy gate summary
+    runs-on: ubuntu-latest
+    needs: [twin-oracle, dpdpa, audit-immutability, license-policy]
+    if: always()
+    steps:
+      - name: Gate outcome
+        run: |
+          echo "Twin Oracle:    ${{ needs.twin-oracle.result }}"
+          echo "DPDPA:          ${{ needs.dpdpa.result }}"
+          echo "Audit:          ${{ needs.audit-immutability.result }}"
+          echo "License policy: ${{ needs.license-policy.result }}"
+          if [ "${{ needs.twin-oracle.result }}" != "success" ] || \
+             [ "${{ needs.dpdpa.result }}" != "success" ] || \
+             [ "${{ needs.audit-immutability.result }}" != "success" ] || \
+             [ "${{ needs.license-policy.result }}" != "success" ]; then
+            echo "Policy gate FAILED"
+            exit 1
+          fi
+          echo "Policy gate PASSED"

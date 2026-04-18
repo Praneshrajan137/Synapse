@@ -1,0 +1,120 @@
+name: SYNAPSE CD
+# Continuous delivery: build + push multi-arch container images to GHCR,
+# then trigger a canary deploy to the Oracle Cloud runner.
+#
+# v4.0 plan §11 — one of the six mandatory workflows.
+on:
+  push:
+    branches: [main]
+    tags: ["v*.*.*"]
+  workflow_dispatch:
+    inputs:
+      deploy_target:
+        description: "Deploy target"
+        type: choice
+        options: [oracle-canary, oracle-prod, skip]
+        default: oracle-canary
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  build-images:
+    name: Build + push agent/orchestrator images
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    strategy:
+      matrix:
+        component:
+          - demand_prophet
+          - routing_navigator
+          - inventory_sentinel
+          - pricing_oracle
+          - disruption_shield
+          - supplier_trust
+          - sustainability_agent
+          - freshness_guardian
+          - orchestrator
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-qemu-action@v3
+      - uses: docker/setup-buildx-action@v3
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Resolve Dockerfile path
+        id: ctx
+        run: |
+          if [ "${{ matrix.component }}" = "orchestrator" ]; then
+            echo "context=." >> $GITHUB_OUTPUT
+            echo "dockerfile=orchestrator/Dockerfile" >> $GITHUB_OUTPUT
+          else
+            echo "context=." >> $GITHUB_OUTPUT
+            echo "dockerfile=agents/${{ matrix.component }}/Dockerfile" >> $GITHUB_OUTPUT
+          fi
+      - name: Build + push (amd64 + arm64)
+        uses: docker/build-push-action@v5
+        with:
+          context: ${{ steps.ctx.outputs.context }}
+          file: ${{ steps.ctx.outputs.dockerfile }}
+          platforms: linux/amd64,linux/arm64
+          push: true
+          cache-from: type=gha,scope=${{ matrix.component }}
+          cache-to: type=gha,scope=${{ matrix.component }},mode=max
+          tags: |
+            ghcr.io/${{ github.repository }}/${{ matrix.component }}:${{ github.sha }}
+            ghcr.io/${{ github.repository }}/${{ matrix.component }}:latest
+
+  promote-models:
+    name: MLflow Staging -> Production (canary)
+    runs-on: ubuntu-latest
+    needs: build-images
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+      - run: pip install mlflow==2.13.0
+      - name: Promote canary
+        env:
+          MLFLOW_TRACKING_URI: ${{ secrets.MLFLOW_TRACKING_URI }}
+        run: |
+          python -c "
+          import mlflow, os, sys
+          client = mlflow.tracking.MlflowClient(tracking_uri=os.environ['MLFLOW_TRACKING_URI'])
+          for m in ['demand_prophet_hgt_tft', 'routing_navigator_policy', 'inventory_sentinel_l2']:
+              try:
+                  versions = client.get_latest_versions(m, stages=['Staging'])
+                  if not versions:
+                      print(f'{m}: no Staging version — skipping')
+                      continue
+                  v = versions[0]
+                  client.transition_model_version_stage(m, v.version, 'Production', archive_existing_versions=True)
+                  print(f'{m}: v{v.version} Staging -> Production')
+              except Exception as exc:
+                  print(f'{m}: promotion failed: {exc}', file=sys.stderr)
+                  sys.exit(1)
+          "
+
+  deploy-oracle-canary:
+    name: Oracle canary deploy
+    runs-on: [self-hosted, oracle, arm64]
+    needs: build-images
+    if: inputs.deploy_target == 'oracle-canary' || github.event_name == 'push'
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - name: Pull latest images
+        run: |
+          docker compose -f docker/docker-compose.cloud.yml pull
+          docker compose -f docker/docker-compose.cloud.yml -f docker/docker-compose.mumbai.yml up -d --no-deps --pull always
+      - name: Smoke test
+        run: |
+          curl -fsS http://localhost:8085/health
+          make sprint6-verify

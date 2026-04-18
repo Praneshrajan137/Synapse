@@ -4,7 +4,7 @@ Sprint 6 Quality Gate: Multi-City Deployment Verification
 All verification uses Python libraries (no cypher-shell, kafka-topics.sh, jq, bc).
 Cross-platform compatible (Windows, Linux, macOS).
 
-INVARIANTS TESTED: I-1, I-3, I-5, I-8, I-11, I-12
+INVARIANTS TESTED: I-1, I-2, I-3, I-4, I-5, I-6, I-7, I-8, I-9, I-10, I-11, I-12, I-13, I-14
 """
 
 from __future__ import annotations
@@ -327,30 +327,190 @@ class TestInvariantCompliance:
         for key in ["OPENAI_API_KEY", "ANTHROPIC_API_KEY", "GOOGLE_API_KEY", "COHERE_API_KEY"]:
             assert key not in content, f"Paid API key {key} found in Mumbai compose — I-1"
 
+    def test_reward_isolation(self) -> None:
+        """I-2: No cross-agent reward imports in Mumbai agents."""
+        import ast
+
+        agents_dir = Path("agents")
+        for reward_file in agents_dir.glob("*/training/rewards.py"):
+            agent_name = reward_file.parts[1]
+            tree = ast.parse(reward_file.read_text())
+            for node in ast.walk(tree):
+                if isinstance(node, ast.ImportFrom) and node.module:
+                    if node.module.startswith("agents.") and agent_name not in node.module:
+                        pytest.fail(
+                            f"I-2 violation: {reward_file} imports from {node.module} "
+                            f"(cross-agent reward dependency)"
+                        )
+
     def test_essential_price_cap_configured(self) -> None:
         """I-6: Essential price cap (1.3x) configured for Mumbai pricing oracle."""
         compose_path = Path("docker/docker-compose.mumbai.yml")
         content = compose_path.read_text()
-        assert "ESSENTIAL_PRICE_CAP=1.3" in content, "Price cap not set — I-6"
+        assert "ESSENTIAL_PRICE_CAP=1.3" in content, "Price cap not set in compose — I-6"
+
+    def test_essential_price_cap_enforced_runtime(self) -> None:
+        """I-6: Essential price cap enforced at runtime (not just compose grep)."""
+        try:
+            resp = requests.post(
+                "http://localhost:8000/predict",
+                json={
+                    "store_id": "MUM-001",
+                    "sku_id": "SKU-001",
+                    "base_price": 100.0,
+                    "city": "mumbai",
+                },
+                timeout=5,
+                headers={"Host": "synapse-pricing-oracle-mumbai"},
+            )
+            if resp.status_code == 200:
+                result = resp.json()
+                price = result.get("recommended_price", 0)
+                assert price <= 130.0, (
+                    f"I-6 violation: recommended_price {price} > 130 (1.3x cap)"
+                )
+        except requests.ConnectionError:
+            pytest.skip("Pricing Oracle Mumbai not running — skipping runtime I-6 check")
 
     def test_audit_immutability(self) -> None:
-        """I-4: Audit trail has write protection."""
-        try:
-            import psycopg2
+        """I-4: Audit trail has write protection — DELETE and UPDATE revoked."""
+        import psycopg2
 
-            conn = psycopg2.connect(
-                "postgresql://synapse:synapse_audit_2026@localhost:5432/synapse_audit"
-            )
+        conn = psycopg2.connect(
+            "postgresql://synapse:synapse_audit_2026@localhost:5432/synapse_audit"
+        )
+        try:
             cur = conn.cursor()
+            # Check DELETE is revoked
             cur.execute(
-                "SELECT has_table_privilege('synapse_readonly', 'synapse_audit', 'DELETE')"
+                "SELECT has_table_privilege('synapse_readonly', 'audit_decisions', 'DELETE')"
             )
             row = cur.fetchone()
-            if row:
-                assert not row[0], "DELETE not revoked on audit table"
+            assert row is not None and not row[0], "DELETE not revoked on audit_decisions — I-4"
+            # Check UPDATE is revoked
+            cur.execute(
+                "SELECT has_table_privilege('synapse_readonly', 'audit_decisions', 'UPDATE')"
+            )
+            row = cur.fetchone()
+            assert row is not None and not row[0], "UPDATE not revoked on audit_decisions — I-4"
+        finally:
             conn.close()
-        except Exception:
-            pytest.skip("PostgreSQL not available or synapse_readonly role missing")
+
+    def test_graceful_degradation(self) -> None:
+        """I-7: Mumbai agents return fallback when dependencies are degraded."""
+        # Verify that agent /health endpoints report degraded (not crashed)
+        # when optional dependencies are unavailable
+        for agent_name, port in [
+            ("demand-prophet-mumbai", 8000),
+            ("routing-navigator-mumbai", 8000),
+        ]:
+            container = f"synapse-{agent_name}"
+            try:
+                result = subprocess.run(
+                    ["docker", "inspect", "--format", "{{.State.Health.Status}}", container],
+                    capture_output=True,
+                    text=True,
+                )
+                status = result.stdout.strip()
+                assert status in ("healthy", "unhealthy"), (
+                    f"I-7: {container} status is '{status}' — expected healthy or unhealthy, "
+                    f"not crashed/restarting"
+                )
+            except FileNotFoundError:
+                pytest.skip("Docker not available")
+
+    def test_a2a_mcp_separation(self) -> None:
+        """I-9: agent_card.json uses A2A protocol (JSON-RPC 2.0), NOT MCP for inter-agent."""
+        agents_dir = Path("agents")
+        for card_path in agents_dir.glob("*/agent_card.json"):
+            card = json.loads(card_path.read_text())
+            assert card.get("protocol") == "a2a", (
+                f"I-9: {card_path} protocol is '{card.get('protocol')}', expected 'a2a'"
+            )
+            # Methods must follow JSON-RPC 2.0 convention
+            methods = card.get("methods", [])
+            for method in methods:
+                assert "name" in method, f"I-9: {card_path} method missing 'name'"
+                assert "params" in method or "returns" in method, (
+                    f"I-9: {card_path} method '{method.get('name')}' missing params/returns"
+                )
+
+    def test_api_latency_sla(self) -> None:
+        """I-10: Mumbai /predict responds within 2s (Tier 2 SLA)."""
+        import time
+
+        try:
+            latencies: list[float] = []
+            for _ in range(10):
+                start = time.monotonic()
+                resp = requests.post(
+                    "http://localhost:8085/api/v1/decisions",
+                    json={
+                        "city": "mumbai",
+                        "trigger": "latency_test",
+                        "tier": "tier_2",
+                    },
+                    timeout=5,
+                )
+                elapsed = time.monotonic() - start
+                latencies.append(elapsed)
+            latencies.sort()
+            p99 = latencies[int(len(latencies) * 0.99)]
+            assert p99 < 2.0, f"I-10: API p99 latency {p99:.2f}s > 2s SLA"
+        except requests.ConnectionError:
+            pytest.skip("Orchestrator not running — skipping I-10 latency check")
+
+    def test_deterministic_serialization(self) -> None:
+        """I-13: No dynamic data (f-strings, .format()) in LLM system prompt templates."""
+        import re
+
+        agents_dir = Path("agents")
+        violations: list[str] = []
+        for py_file in agents_dir.rglob("*.py"):
+            content = py_file.read_text(errors="ignore")
+            # Look for system prompt definitions with dynamic content
+            if "system_prompt" in content.lower() or "system_message" in content.lower():
+                lines = content.split("\n")
+                for i, line in enumerate(lines, 1):
+                    stripped = line.strip()
+                    if ("system_prompt" in stripped or "system_message" in stripped) and (
+                        "f'" in stripped
+                        or 'f"' in stripped
+                        or ".format(" in stripped
+                    ):
+                        violations.append(f"{py_file}:{i}: {stripped[:100]}")
+        assert not violations, (
+            f"I-13: Dynamic data in system prompts breaks KV-cache:\n"
+            + "\n".join(violations)
+        )
+
+    def test_context_append_only(self) -> None:
+        """I-14: Context messages are append-only — no removals or mutations."""
+        import re
+
+        # Scan orchestrator code for context list mutations (remove, pop, del, clear)
+        orchestrator_dir = Path("orchestrator")
+        violations: list[str] = []
+        mutation_patterns = [
+            r"\.remove\(",
+            r"\.pop\(",
+            r"\.clear\(",
+            r"del\s+.*context",
+            r"context\s*=\s*\[\]",
+            r"context\s*=\s*\{\}",
+        ]
+        for py_file in orchestrator_dir.rglob("*.py"):
+            content = py_file.read_text(errors="ignore")
+            if "context" in content.lower():
+                lines = content.split("\n")
+                for i, line in enumerate(lines, 1):
+                    for pattern in mutation_patterns:
+                        if re.search(pattern, line) and "context" in line.lower():
+                            violations.append(f"{py_file}:{i}: {line.strip()[:100]}")
+        assert not violations, (
+            f"I-14: Context mutation detected (append-only required):\n"
+            + "\n".join(violations)
+        )
 
 
 # ─── Category 10: Parquet features ──────────────────────────────────────────

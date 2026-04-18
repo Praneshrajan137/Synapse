@@ -1,0 +1,83 @@
+name: SYNAPSE Integration
+# Layer 2-4 tests: Schemathesis (API fuzz), consumer-driven contracts,
+# metamorphic relations. Runs on PRs to main and nightly.
+#
+# v4.0 plan §11 — one of the six mandatory workflows.
+on:
+  pull_request:
+    branches: [main]
+  schedule:
+    - cron: "0 4 * * *"
+  workflow_dispatch:
+
+jobs:
+  schemathesis:
+    name: API Fuzz (Schemathesis)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      redis:
+        image: redis:7-alpine
+        ports: ["6379:6379"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: "3.11", cache: "pip"}
+      - run: |
+          pip install -r packages/requirements.txt -r packages/requirements-dev.txt
+          pip install schemathesis hypothesis
+      - name: Boot each agent in stub mode + fuzz /predict
+        run: |
+          bash tests/api_fuzz/run_fuzz.sh
+
+  contracts:
+    name: Consumer-driven Contracts
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: "3.11", cache: "pip"}
+      - run: pip install -r packages/requirements.txt -r packages/requirements-dev.txt
+      - name: Run contract tests
+        run: |
+          # Every producer/consumer contract pair must type-match via Pydantic.
+          pytest -m contract --tb=short --maxfail=5
+
+  metamorphic:
+    name: Metamorphic Relations (12 MRs)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: "3.11", cache: "pip"}
+      - run: pip install -r packages/requirements.txt -r packages/requirements-dev.txt
+      - name: Run metamorphic relation tests
+        run: |
+          pytest agents/*/tests/test_metamorphic.py -v --tb=short
+
+  integration-e2e:
+    name: End-to-end integration (base stack)
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: "3.11", cache: "pip"}
+      - run: pip install -r packages/requirements.txt -r packages/requirements-dev.txt
+      - name: Start base compose
+        run: |
+          docker compose -f docker/docker-compose.yml up -d kafka redis neo4j postgres
+          sleep 30  # TODO(ADR-016): replace with readiness probe
+      - name: Integration tests
+        run: |
+          PYTHONPATH=. pytest tests/integration/ -v --tb=short
+      - name: Collect logs on failure
+        if: failure()
+        run: docker compose -f docker/docker-compose.yml logs --no-color > integration-logs.txt
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: integration-logs
+          path: integration-logs.txt

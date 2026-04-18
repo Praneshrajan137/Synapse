@@ -17,27 +17,53 @@ scrape_configs:
     static_configs:
       - targets: ["localhost:9090"]
 
-  # ── Infrastructure (Sprint 2: add redis_exporter, jmx_exporter, neo4j metrics) ──
-  # Redis, Kafka, and Neo4j do not expose /metrics natively.
-  # Uncomment after adding exporter sidecars.
-  # - job_name: "redis"
-  #   static_configs:
-  #     - targets: ["redis-exporter:9121"]
-  # - job_name: "kafka"
-  #   static_configs:
-  #     - targets: ["kafka-jmx-exporter:9404"]
-  # - job_name: "neo4j"
-  #   static_configs:
-  #     - targets: ["neo4j:2004"]
+  # ── Infrastructure Exporters ──
+  - job_name: "redis"
+    static_configs:
+      - targets: ["redis-exporter:9121"]
+        labels:
+          service: "redis"
+  - job_name: "kafka"
+    static_configs:
+      - targets: ["kafka-jmx-exporter:9404"]
+        labels:
+          service: "kafka"
+  - job_name: "neo4j"
+    metrics_path: /metrics
+    static_configs:
+      - targets: ["neo4j:2004"]
+        labels:
+          service: "neo4j"
 
-  # ── Agent Services (populated in Sprint 2+) ──
+  # ── Agent Services (Bengaluru) ──
   - job_name: "synapse-agents"
     static_configs:
-      - targets: []
-    # Will be populated dynamically as agents come online:
-    # demand_prophet:8001, routing_navigator:8002, inventory_sentinel:8003
-    # freshness_guardian:8004, pricing_oracle:8005, disruption_shield:8006
-    # supplier_trust:8007, sustainability_agent:8008
+      - targets:
+          - "demand-prophet:8001"
+          - "routing-navigator:8002"
+          - "inventory-sentinel:8003"
+          - "freshness-guardian:8004"
+          - "pricing-oracle:8005"
+          - "disruption-shield:8006"
+          - "supplier-trust:8007"
+          - "sustainability-agent:8008"
+        labels:
+          city: "bengaluru"
+
+  # ── Agent Services (Mumbai — Sprint 6) ──
+  - job_name: "synapse-agents-mumbai"
+    static_configs:
+      - targets:
+          - "demand-prophet-mumbai:8000"
+          - "routing-navigator-mumbai:8000"
+          - "inventory-sentinel-mumbai:8000"
+          - "freshness-guardian-mumbai:8000"
+          - "pricing-oracle-mumbai:8000"
+          - "disruption-shield-mumbai:8000"
+          - "supplier-trust-mumbai:8000"
+          - "sustainability-agent-mumbai:8000"
+        labels:
+          city: "mumbai"
 
   # ── Orchestrator (Sprint 4) ──
   - job_name: "synapse-orchestrator"

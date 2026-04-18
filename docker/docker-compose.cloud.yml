@@ -302,6 +302,68 @@ services:
           cpus: "0.5"
           memory: 2G
 
+  # ── Orchestrator (Sprint 3) ──
+  # Required for Sprint 6 verification — sprint6-verify exercises orchestrator
+  # consensus + audit trail. Omitting it reduces the run to "agents only" and
+  # fails I-14 (context append-only) + I-5 (confidence-gated execution) tests.
+  orchestrator:
+    build:
+      context: ..
+      dockerfile: orchestrator/Dockerfile
+    platform: linux/arm64
+    environment:
+      <<: *common-env
+      SYNAPSE_ORCHESTRATOR_KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      SYNAPSE_ORCHESTRATOR_REDIS_URL: redis://redis:6379
+      SYNAPSE_ORCHESTRATOR_NEO4J_URI: ${NEO4J_AURA_URI:-bolt://neo4j:7687}
+      SYNAPSE_ORCHESTRATOR_OLLAMA_BASE_URL: http://host.docker.internal:11434
+      SYNAPSE_ORCHESTRATOR_POSTGRESQL_URL: postgresql+asyncpg://synapse_app:synapse_app_2026@postgres:5432/synapse_audit
+      SYNAPSE_ORCHESTRATOR_PINECONE_API_KEY: ${PINECONE_API_KEY:-}
+      SYNAPSE_ORCHESTRATOR_CONFIDENCE_THRESHOLD: "0.7"
+    <<: *extra-hosts
+    ports: ["8090:8085"]
+    depends_on:
+      kafka: { condition: service_healthy }
+      redis: { condition: service_healthy }
+      postgres: { condition: service_healthy }
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8085/health')"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 1G
+
+  # ── nginx (Sprint 5 — rate limiting + TLS termination entrypoint) ──
+  # Verification gates I-6 (essential price cap headers), rate limiting
+  # semantics (geo-exempt Docker-internal CIDRs per E-S5-06), and edge
+  # routing. Required for sprint6-verify::TestNginxRouting and sprint5
+  # security gate replay.
+  nginx:
+    image: nginx:1.25-alpine
+    platform: linux/arm64
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ../infrastructure/nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+    depends_on:
+      orchestrator: { condition: service_healthy }
+    healthcheck:
+      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:80/ || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+    deploy:
+      resources:
+        limits:
+          cpus: "0.1"
+          memory: 128M
+
 volumes:
   kafka_data:
   redis_data:
@@ -311,14 +373,22 @@ volumes:
   grafana_data:
 
 # ============================================================================
-# RESOURCE BUDGET (Oracle Cloud Always-Free: 4 OCPUs, 24GB RAM)
+# RESOURCE BUDGET (Oracle Cloud Always-Free: 4 OCPUs, 24GB RAM + 8GB swap)
 # ============================================================================
 # Infrastructure: Kafka(3G) + Redis(512M) + Postgres(512M) + MLflow(512M)
 #                 + Prometheus(512M) + Grafana(256M) = ~5.3GB
 # Sprint 2 Agents: DP(1G) + RN(1G) + IS(1G) = 3GB
 # Sprint 3 Agents: FG(768M) + PO(1G) + DS(1G) + ST(768M) + SA(512M) = 4GB
 # Digital Twin: 2GB
+# Orchestrator: 1GB
+# nginx: 128MB
 # Ollama (host): ~4-6GB (one model at a time via swapping)
 # OS + overhead: ~2GB
-# TOTAL: ~20-22GB — fits in 24GB with model swapping
+# TOTAL Bengaluru stack: ~22-23GB
+#
+# With Mumbai overlay (docker-compose.mumbai.yml — 9 additional containers,
+# each 512MB-1GB, ~6-8GB total), headroom drops to ~-4 to -6GB. The 8GB
+# swap buffer absorbs this. For pure Bengaluru verification use cloud only.
+# For full Sprint 6 (Bengaluru + Mumbai) the workflow calls mumbai-up after
+# training has completed and agents have quiesced to steady-state memory.
 # ============================================================================

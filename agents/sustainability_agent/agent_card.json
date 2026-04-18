@@ -47,5 +47,16 @@
     "consumes": ["synapse.routing.plan"]
   },
   "feast_features": ["route_carbon_signals", "product_shelf_life", "quality_scores"],
-  "dependencies": ["feast", "kafka", "mlflow", "codecarbon"]
+  "dependencies": ["feast", "kafka", "mlflow", "codecarbon"],
+  "cities": ["bengaluru", "mumbai"],
+  "city_specific_config": {
+    "bengaluru": {
+      "feast_repo": "data_fabric/feast",
+      "redis_db": 0
+    },
+    "mumbai": {
+      "feast_repo": "data_fabric/feast/mumbai",
+      "redis_db": 1
+    }
+  }
 }

@@ -1,0 +1,20 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: synapse
+  labels:
+    app.kubernetes.io/part-of: synapse
+    synapse.io/version: v4.0
+---
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: synapse-quota
+  namespace: synapse
+spec:
+  hard:
+    requests.cpu: "16"
+    requests.memory: 32Gi
+    limits.cpu: "32"
+    limits.memory: 64Gi
+    pods: "80"

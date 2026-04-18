@@ -72,3 +72,82 @@ jobs:
         with:
           name: coverage-report
           path: packages/coverage.xml
+
+  sprint6-verify:
+    name: Sprint 6 Multi-City Verification
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    needs: quality-gates
+    if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop' || startsWith(github.ref, 'refs/heads/sprint-')
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+      - name: Install dependencies
+        run: |
+          pip install -r packages/requirements.txt -r packages/requirements-dev.txt
+          pip install jsonschema pyyaml feast mlflow neo4j confluent-kafka psycopg2-binary
+      - name: Agent card validation (E-S6-13)
+        run: |
+          python -c "
+          import json, sys
+          from pathlib import Path
+          errors = []
+          for card in Path('agents').glob('*/agent_card.json'):
+              data = json.loads(card.read_text())
+              if 'cities' not in data:
+                  errors.append(f'{card}: missing cities array — E-S6-13')
+              if 'city_specific_config' not in data:
+                  errors.append(f'{card}: missing city_specific_config — E-S6-13')
+              if data.get('protocol') != 'a2a':
+                  errors.append(f'{card}: protocol must be a2a — I-9')
+          if errors:
+              print('\n'.join(errors))
+              sys.exit(1)
+          print(f'All {len(list(Path(\"agents\").glob(\"*/agent_card.json\")))} agent cards valid')
+          "
+      - name: Invariant static checks (I-2, I-9, I-13, I-14)
+        run: |
+          # I-2: Reward isolation
+          for f in $(find agents/ -name "rewards.py"); do
+            agent_dir=$(echo $f | cut -d'/' -f2)
+            if grep -n "from agents\." "$f" | grep -v "from agents.$agent_dir"; then
+              echo "$f: Cross-agent import violates I-2"
+              exit 1
+            fi
+          done
+          echo "I-2 (reward isolation): OK"
+
+          # I-13: No dynamic data in system prompts
+          if grep -rn "system_prompt.*f['\"]" agents/ orchestrator/ 2>/dev/null | grep -v "#"; then
+            echo "I-13 violation: dynamic data in system prompts"
+            exit 1
+          fi
+          echo "I-13 (deterministic serialization): OK"
+
+          # I-14: No context mutation in orchestrator
+          if grep -rn "\.remove\|\.pop\|\.clear" orchestrator/ 2>/dev/null | grep -i context | grep -v "#" | grep -v test; then
+            echo "I-14 violation: context mutation detected"
+            exit 1
+          fi
+          echo "I-14 (context append-only): OK"
+      - name: Schema output validation (I-3)
+        run: python scripts/validate_schemas.py
+      - name: A/B test framework (hermetic)
+        run: |
+          PYTHONPATH=. pytest ml_pipelines/ab_test/test_ab_framework.py -v --tb=short
+
+
+  v4-compliance:
+    name: v4.0 Definitive Edition Compliance (informational)
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    continue-on-error: true  # informational signal during stabilization
+    steps:
+      - uses: actions/checkout@v4
+      - name: Compliance gate
+        run: make verify-v4-compliance
+

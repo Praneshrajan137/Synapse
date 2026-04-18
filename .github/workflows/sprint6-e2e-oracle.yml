@@ -1,0 +1,180 @@
+name: Sprint 6 E2E — Oracle Cloud (quality-preserving)
+
+# Quality-preserving remote execution of Sprint 6 verification.
+#
+# Runs on the Oracle Cloud Always-Free ARM64 VM (24 GB RAM) registered as a
+# GitHub Actions self-hosted runner. This is the ONLY $0 path that keeps the
+# full stack live: real Ollama, all 9 Mumbai containers, orchestrator, nginx,
+# full Kafka/Neo4j heap sizes. See plans/cheerful-wiggling-boole.md Part J.
+#
+# Prerequisites (one-time):
+#   1. terraform apply in infrastructure/oracle/terraform/
+#   2. Bootstrap VM via infrastructure/oracle/setup_oracle_vm.sh with
+#      GH_RUNNER_URL + GH_RUNNER_TOKEN env vars set.
+#   3. (Optional) Provision Neo4j Aura free tier and store
+#      NEO4J_AURA_URI / NEO4J_AURA_USER / NEO4J_AURA_PASSWORD as repo secrets.
+
+on:
+  workflow_dispatch:
+    inputs:
+      run_demo:
+        description: "Run demo after verification"
+        type: boolean
+        default: true
+      speed_factor:
+        description: "Demo speed factor (higher = faster)"
+        type: string
+        default: "3.0"
+      skip_transfer_train:
+        description: "Skip transfer-train (useful for re-runs after models cached)"
+        type: boolean
+        default: false
+
+concurrency:
+  group: sprint6-e2e-oracle
+  cancel-in-progress: false
+
+jobs:
+  sprint6-e2e:
+    name: Sprint 6 End-to-End (Oracle ARM64)
+    runs-on: [self-hosted, linux, arm64, oracle]
+    timeout-minutes: 180
+
+    env:
+      # Swap Docker Hub OSRM for the ARM64 build (built once, cached in GHCR).
+      OSRM_IMAGE: ghcr.io/${{ github.repository_owner }}/synapse-osrm-arm64:v5.27.1
+      # Neo4j Aura (optional — if unset, compose brings up local Neo4j container).
+      NEO4J_AURA_URI: ${{ secrets.NEO4J_AURA_URI }}
+      NEO4J_AURA_USER: ${{ secrets.NEO4J_AURA_USER }}
+      NEO4J_AURA_PASSWORD: ${{ secrets.NEO4J_AURA_PASSWORD }}
+      PINECONE_API_KEY: ${{ secrets.PINECONE_API_KEY }}
+      PYTHONPATH: ${{ github.workspace }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Preflight — VM resources
+        run: |
+          echo "=== RAM ==="
+          free -h
+          echo "=== CPUs ==="
+          nproc
+          echo "=== Disk ==="
+          df -h /
+          echo "=== Docker ==="
+          docker info | grep -E "Architecture|CPUs|Total Memory" || true
+          echo "=== Ollama (host) ==="
+          curl -sf http://localhost:11434/api/tags | python3 -c "import sys,json; [print(m['name']) for m in json.load(sys.stdin)['models']]" || echo "Ollama not reachable on host"
+
+      - name: Python 3.11 venv + deps
+        run: |
+          source "$HOME/.venv/synapse/bin/activate"
+          pip install --quiet -r packages/requirements.txt -r packages/requirements-dev.txt
+          pip install --quiet feast mlflow neo4j confluent-kafka psycopg2-binary jsonschema pyyaml requests
+
+      - name: Ensure ARM64 OSRM image present
+        run: |
+          if ! docker image inspect "$OSRM_IMAGE" >/dev/null 2>&1; then
+            echo "Building $OSRM_IMAGE (first run only, ~20 min)…"
+            docker buildx build \
+                --platform linux/arm64 \
+                --tag "$OSRM_IMAGE" \
+                --load \
+                -f infrastructure/osrm/Dockerfile.osrm-arm64 \
+                infrastructure/osrm
+          else
+            echo "$OSRM_IMAGE already cached."
+          fi
+
+      - name: M0 — Start base infrastructure
+        run: |
+          source "$HOME/.venv/synapse/bin/activate"
+          make up
+          make verify-infra
+
+      - name: M1–M3 — Generate + convert city data
+        run: |
+          source "$HOME/.venv/synapse/bin/activate"
+          make generate-bengaluru
+          make sprint5-exit-gate
+          make generate-mumbai
+          make convert-parquet-mumbai
+
+      - name: M3b — OSRM Mumbai data prep (extract/partition/customize)
+        run: |
+          source "$HOME/.venv/synapse/bin/activate"
+          bash scripts/setup_osrm_mumbai.sh
+
+      - name: M4 — Seed Neo4j (Bengaluru + Mumbai)
+        run: |
+          source "$HOME/.venv/synapse/bin/activate"
+          make seed
+          make seed-mumbai
+
+      - name: Feast Mumbai apply + materialize
+        run: |
+          source "$HOME/.venv/synapse/bin/activate"
+          cd data_fabric/feast/mumbai
+          feast apply
+          feast materialize-incremental "$(date -u +%Y-%m-%dT%H:%M:%S)"
+
+      - name: M5 — Transfer learning (7 agents)
+        if: ${{ !inputs.skip_transfer_train }}
+        run: |
+          source "$HOME/.venv/synapse/bin/activate"
+          make transfer-train
+
+      - name: M6 — Cold-start baselines
+        run: |
+          source "$HOME/.venv/synapse/bin/activate"
+          make cold-start-baseline
+
+      - name: M7 — A/B tests
+        run: |
+          source "$HOME/.venv/synapse/bin/activate"
+          make ab-test
+
+      - name: M8a — Mumbai overlay up (9 containers)
+        run: make mumbai-up
+
+      - name: M8b — Sprint 6 verification (39 + 8 invariant tests)
+        run: |
+          source "$HOME/.venv/synapse/bin/activate"
+          PYTHONPATH=. pytest scripts/verify/test_multi_city.py \
+              -v --tb=short \
+              --junitxml=artifacts/junit.xml
+
+      - name: Demo execution
+        if: ${{ inputs.run_demo }}
+        run: bash scripts/demo/run_demo.sh mumbai ${{ inputs.speed_factor }}
+
+      - name: Capture evidence artifacts
+        if: always()
+        run: |
+          mkdir -p artifacts
+          docker compose -f docker/docker-compose.yml -f docker/docker-compose.mumbai.yml ps \
+              > artifacts/compose-ps.txt || true
+          free -h > artifacts/memory-after.txt || true
+          cp packages/coverage.xml artifacts/ 2>/dev/null || true
+          docker exec synapse-mlflow sqlite3 /mlflow/mlflow.db .dump \
+              > artifacts/mlflow.sql 2>/dev/null || true
+          curl -s "http://localhost:3000/render/d-solo/synapse-overview?panelId=1&width=1200&height=600" \
+              -o artifacts/grafana-overview.png 2>/dev/null || true
+          curl -s "http://localhost:9090/api/v1/rules" \
+              -o artifacts/prometheus-rules.json 2>/dev/null || true
+          dmesg | tail -200 > artifacts/dmesg-tail.txt 2>/dev/null || true
+
+      - name: Upload evidence artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: sprint6-e2e-evidence
+          path: artifacts/
+          retention-days: 30
+
+      - name: Teardown (preserve volumes)
+        if: always()
+        run: |
+          make mumbai-down || true
+          docker compose -f docker/docker-compose.yml stop || true
+          docker image prune -af --filter "until=168h" || true

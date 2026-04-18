@@ -1,0 +1,23 @@
+# License-policy constraints for SYNAPSE.
+#
+# Enforced via:   pip install --constraint constraints.txt -r requirements.txt
+# Audited by:     .github/workflows/policy.yml  (license-policy job)
+# Sourced from:   docs/license_audit.md
+#
+# CLAUDE.md license policy:
+#   Allowed:      MIT, Apache-2.0, BSD-2-Clause, BSD-3-Clause, PSF, ISC, MPL-2.0
+#   Conditional:  LGPL (linking-only OK; never modify LGPL code in-tree)
+#   Forbidden:    GPL-3.0, AGPL-3.0, non-commercial, paid SaaS
+#
+# Any entry below represents a transitive dependency that has been flagged
+# as a policy violation. Pinning to an impossible version string causes pip
+# to refuse installation, which both surfaces the violation loudly and
+# prevents accidental re-introduction in downstream transitive trees.
+
+# -----------------------------------------------------------------------------
+# rfc3987 (1.3.8) — GPL-3.0+
+# -----------------------------------------------------------------------------
+# Typically pulled via `jsonschema[format]`. Use `jsonschema[format_nongpl]`
+# instead, or `rfc3987-syntax` (BSD-3-Clause) if URI RFC validation is needed.
+# See docs/license_audit.md "Remediation log (2026-04-18)".
+rfc3987==999.999.999  # license-blocked (GPL-3.0+ policy violation)

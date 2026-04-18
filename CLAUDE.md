@@ -92,6 +92,11 @@
 - E-S6-17: Convergence speedup measures epoch at which transfer model achieves within 5% of Bengaluru's final metric, not early-stop epoch
 - E-S6-18: A/B test control must be cold-start Mumbai model (not Bengaluru Production) for meaningful comparison
 - E-S6-19: OSRM data prep (download/extract/process) is separate from container lifecycle (Docker Compose). Do not duplicate
+- E-S6-20: `rng.normal()` with scalar args returns Python float, not ndarray — use `np.clip()` not `.clip()` method
+- E-S6-21: `rng.uniform(low, high)` requires low < high — monsoon wind formula `rng.uniform(10, 60*m_intensity)` fails when m_intensity < 0.17; use `max(60*m_intensity, 11.0)` for high
+- E-S6-22: Mumbai data generation MUST use start_date in monsoon window (June 1) not January 1, otherwise monsoon_intensity is all zeros and E-S6-09 tests fail
+- E-S6-23: `make deploy-oracle` requires ORACLE_IP env var; VM must be provisioned manually via OCI Console first
+- E-S6-24: Demo script (`scripts/demo/run_demo.sh`) must poll Kafka consumer group lag via Python confluent-kafka (not kafka-consumer-groups.sh) for cross-platform compatibility
 
 ## Sprint Status
 - **Sprint 1**: Infrastructure foundation (Docker, Neo4j, Kafka, Redis, PostgreSQL, shared packages, proto schemas, SDD framework, CI pipeline)
