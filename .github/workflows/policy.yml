@@ -32,7 +32,9 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with: {python-version: "3.11", cache: "pip"}
-      - run: pip install -r packages/requirements.txt -r packages/requirements-dev.txt
+      - run: |
+          pip install -r packages/requirements.txt -r packages/requirements-dev.txt
+          pip install "numpy>=1.26,<2.0" "pandas>=2.2,<3.0" scipy
       - name: Run oracle scenarios
         run: |
           PYTHONPATH=. pytest tests/oracle/ -v --tb=short --maxfail=3

@@ -91,6 +91,25 @@ ALTER DEFAULT PRIVILEGES IN SCHEMA public
     GRANT USAGE, SELECT ON SEQUENCES TO synapse_app;
 
 -- ════════════════════════════════════════════════════════════════════════════
+-- DPDPA 2023 Article 12 (right-to-erasure): operator-scoped DELETE role.
+-- Separate role from synapse_app — the application NEVER gets DELETE.
+-- Only this privileged operator role can execute erasure requests by
+-- decision_id when a data subject exercises their DPDPA rights.
+-- ════════════════════════════════════════════════════════════════════════════
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT FROM pg_catalog.pg_roles WHERE rolname = 'synapse_erasure_operator') THEN
+        CREATE ROLE synapse_erasure_operator WITH LOGIN PASSWORD 'synapse_erasure_2026' NOSUPERUSER NOCREATEDB NOCREATEROLE;
+    END IF;
+END
+$$;
+
+GRANT CONNECT ON DATABASE synapse_audit TO synapse_erasure_operator;
+GRANT USAGE ON SCHEMA public TO synapse_erasure_operator;
+GRANT SELECT ON audit_decisions TO synapse_erasure_operator;
+GRANT DELETE ON audit_decisions TO synapse_erasure_operator;
+
+-- ════════════════════════════════════════════════════════════════════════════
 -- Self-test: verify synapse_app can INSERT but NOT DELETE or UPDATE.
 -- This runs at init time to catch configuration errors immediately.
 -- ════════════════════════════════════════════════════════════════════════════
