@@ -50,7 +50,9 @@ jobs:
           # (e.g. agents/demand_prophet/tests/test_reward.py) don't break
           # collection in this lightweight job.
           set +e
-          pytest -m contract packages/tests agents/*/contracts/ tests/ --tb=short --maxfail=5
+          # Narrow to tests/integration (not tests/) — tests/chaos, tests/oracle
+          # import numpy/torch and are not part of the contract layer.
+          pytest -m contract packages/tests agents/*/contracts/ tests/integration --tb=short --maxfail=5
           code=$?
           set -e
           # Exit code 5 = "no tests collected" — non-fatal until contracts land.
