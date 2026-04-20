@@ -34,13 +34,13 @@ class _NoopTracer:
 
     def start_as_current_span(self, *_args: Any, **_kwargs: Any) -> Any:  # noqa: ANN401
         class _Ctx:
-            def __enter__(self_inner) -> "_Ctx":
-                return self_inner
+            def __enter__(self) -> _Ctx:
+                return self
 
-            def __exit__(self_inner, *_: Any) -> None:
+            def __exit__(self, *_: Any) -> None:
                 return None
 
-            def set_attribute(self_inner, *_: Any, **__: Any) -> None:
+            def set_attribute(self, *_: Any, **__: Any) -> None:
                 return None
 
         return _Ctx()

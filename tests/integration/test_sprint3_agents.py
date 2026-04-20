@@ -69,12 +69,14 @@ class TestPricingOracleHealth:
         results = pipeline.price(
             sku_ids=["SKU-0001", "SKU-0002"],
             store_id="BLR-DS-001",
-            categories=["essentials", "snacks"],
+            categories=["essential", "snack"],
+            base_prices=[100.0, 50.0],
         )
         assert len(results) >= 1
         for r in results:
-            assert r.get("confidence", 0) >= 0
-            assert r.get("final_price", 0) > 0
+            # PricingUpdate Pydantic model — access via attributes.
+            assert r.confidence >= 0
+            assert r.final_price > 0
 
     def test_essential_cap_enforced(self) -> None:
         """INV-PO-001: Essential multiplier NEVER exceeds 1.3x."""
@@ -86,11 +88,12 @@ class TestPricingOracleHealth:
         results = pipeline.price(
             sku_ids=["SKU-0001"],
             store_id="BLR-DS-001",
-            categories=["essentials"],
+            categories=["essential"],
+            base_prices=[100.0],
         )
         for r in results:
-            if r.get("is_essential"):
-                assert r.get("multiplier", 0) <= 1.3
+            if getattr(r, "is_essential", False):
+                assert r.multiplier <= 1.3
 
 
 class TestDisruptionShieldHealth:
@@ -99,13 +102,20 @@ class TestDisruptionShieldHealth:
     def test_anomaly_ensemble_produces_scores(self) -> None:
         import numpy as np
 
-        from agents.disruption_shield.models.anomaly_ensemble import AnomalyEnsemble
+        from agents.disruption_shield.models.anomaly_ensemble import (
+            AnomalyEnsemble,
+            EnsembleResult,
+        )
 
         ensemble = AnomalyEnsemble()
+        # Fit the isolation forest so decision_function is defined.
+        training = np.random.randn(32, 10).astype(np.float32)
+        ensemble.isolation_forest.fit(training)
+
         features = np.random.randn(5, 10).astype(np.float32)
-        scores = ensemble.score(features)
-        assert "ensemble_weighted" in scores
-        assert 0 <= scores["ensemble_weighted"] <= 1
+        result = ensemble.score(features)
+        assert isinstance(result, EnsembleResult)
+        assert 0 <= result.ensemble_score <= 1
 
 
 class TestSupplierTrustHealth:
@@ -118,11 +128,14 @@ class TestSupplierTrustHealth:
         )
 
         pipeline = SupplierTrustPipeline()
+        # is_new_vendor=True takes the _score_new_vendor path; empty history
+        # would otherwise raise PRE-ST-002 for an existing supplier.
         result = pipeline.score(
             supplier_id="NEW-SUP-999",
             delivery_history=[],
+            is_new_vendor=True,
         )
-        assert result.get("trust_score", 0) >= 0.3
+        assert result.trust_score >= 0.3
 
 
 class TestSustainabilityAgentHealth:

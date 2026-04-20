@@ -82,7 +82,8 @@ class IsolationForestDetector:
             logger.warning("isolation_forest_not_fitted", fallback="uniform_score")
             return np.full(features.shape[0], 0.5)
         raw = self._model.decision_function(features)
-        normalized = 1.0 - (raw - raw.min()) / (raw.ptp() + 1e-8)
+        # `ndarray.ptp()` was removed in numpy 2.0; use np.ptp(...) for forward compat.
+        normalized = 1.0 - (raw - raw.min()) / (np.ptp(raw) + 1e-8)
         return np.clip(normalized, 0.0, 1.0)
 
 
