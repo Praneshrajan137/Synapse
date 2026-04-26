@@ -4,10 +4,15 @@ import time
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 
+import numpy as np
 import pytest
 import structlog
 
 logger = structlog.get_logger()
+
+# CLAUDE.md error pattern E-S5-12: all RNG-dependent chaos tests must use
+# ``np.random.default_rng(seed)`` so that re-runs in CI are bit-identical.
+CHAOS_RNG_SEED = 42
 
 
 class ChaosTestClock:
@@ -35,6 +40,16 @@ class ChaosTestClock:
 @pytest.fixture()
 def chaos_clock() -> ChaosTestClock:
     return ChaosTestClock()
+
+
+@pytest.fixture()
+def chaos_rng() -> np.random.Generator:
+    """Deterministic RNG for chaos tests (E-S5-12).
+
+    Use this fixture instead of ``np.random.default_rng()`` (no seed) or
+    module-level constants, so reruns in CI sample the same trajectories.
+    """
+    return np.random.default_rng(CHAOS_RNG_SEED)
 
 
 @pytest.fixture()

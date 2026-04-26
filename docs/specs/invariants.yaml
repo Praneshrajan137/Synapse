@@ -1,0 +1,242 @@
+# ============================================================================
+# SYNAPSE — Consolidated System Invariants (I-1 .. I-14)
+#
+# Single source of truth for the 14 cross-cutting invariants referenced
+# throughout CLAUDE.md, ADRs, and per-agent spec.yaml files. Each invariant
+# names the test(s) that prove it, so traceability is grep-able.
+#
+# To regenerate the traceability matrix:
+#     python scripts/check_spec_coverage.py --invariants docs/specs/invariants.yaml
+# ============================================================================
+version: "1.0.0"
+project: synapse
+owner: synapse-platform-team
+
+invariants:
+  - id: I-1
+    name: Zero paid dependencies
+    description: >
+      No paid API clients (openai, anthropic, cohere, replicate) and no
+      cloud-billable services in the default stack. License audit allows only
+      MIT, Apache-2.0, BSD-2/3, PSF, ISC, MPL-2.0.
+    severity: critical
+    enforced_by:
+      - type: ci_grep
+        path: .github/workflows/ci.yml
+        step: "No paid API imports (I-1)"
+      - type: ci_step
+        path: .github/workflows/ci.yml
+        step: "License audit (I-1)"
+    tests: []
+    status: green
+
+  - id: I-2
+    name: Reward isolation per agent
+    description: >
+      Each agent's training/rewards.py MUST NOT import from another agent's
+      package. Cross-agent reward leakage destroys the multi-objective
+      Pareto trade-off and produces collapsed policies.
+    severity: critical
+    enforced_by:
+      - type: ci_grep
+        path: .github/workflows/ci.yml
+        step: "Reward isolation check (I-2)"
+    tests:
+      - agents/*/tests/test_reward.py
+    status: green
+
+  - id: I-3
+    name: Schema-validated agent outputs
+    description: >
+      Every agent output MUST validate against proto/domain/*.schema.json
+      before being published to Kafka or returned via A2A.
+    severity: critical
+    enforced_by:
+      - type: ci_step
+        path: .github/workflows/ci.yml
+        step: "Schema validation"
+      - type: code
+        path: scripts/validate_schemas.py
+    tests:
+      - tests/integration/test_agent_pipeline.py
+    status: green
+
+  - id: I-4
+    name: Immutable audit log
+    description: >
+      orchestrator/audit/ writes append-only records to a PostgreSQL table
+      owned by a non-superuser app role; REVOKE on UPDATE/DELETE is enforced
+      by the role rather than by the owner (CLAUDE.md error pattern).
+    severity: critical
+    enforced_by:
+      - type: code
+        path: orchestrator/audit/
+      - type: code
+        path: infrastructure/postgres/init.sql
+    tests:
+      - orchestrator/tests/test_audit.py
+    status: green
+
+  - id: I-5
+    name: Confidence-gated execution with HITL
+    description: >
+      An agent proposal whose confidence falls below the configured threshold
+      MUST be routed to the HITL queue rather than executed automatically.
+    severity: critical
+    enforced_by:
+      - type: code
+        path: orchestrator/hitl/escalation.py
+      - type: code
+        path: orchestrator/guardrails/rules.py
+    tests:
+      - orchestrator/tests/test_hitl_escalation.py
+    status: green
+
+  - id: I-6
+    name: Explainable consensus
+    description: >
+      Every consensus decision MUST include the per-agent utility scores and
+      the Pareto rationale that produced the winner. orchestrator/consensus
+      records this into the audit trail.
+    severity: high
+    enforced_by:
+      - type: code
+        path: orchestrator/consensus/
+    tests:
+      - orchestrator/tests/test_consensus.py
+    status: green
+
+  - id: I-7
+    name: Recitation interval bounded
+    description: >
+      packages/synapse_common/fsm.py enforces a maximum recitation interval
+      so agent state machines cannot live-lock by re-reciting context.
+    severity: high
+    enforced_by:
+      - type: code
+        path: packages/synapse_common/fsm.py
+    tests:
+      - packages/tests/test_fsm.py
+    status: green
+
+  - id: I-8
+    name: Deterministic JSON serialization
+    description: >
+      All cross-process JSON MUST be produced with
+      json.dumps(obj, sort_keys=True, separators=(',',':')) so KV-cache
+      keys are stable across runs and across machines (paired with I-13).
+    severity: critical
+    enforced_by:
+      - type: code
+        path: packages/synapse_common/models.py
+    tests:
+      - packages/tests/test_models.py
+    status: green
+
+  - id: I-9
+    name: A2A vs MCP protocol separation
+    description: >
+      Agent-to-agent calls use A2A (JSON-RPC 2.0). Agent-to-tool calls use
+      MCP. The two MUST NOT be conflated; agent_card.json declares
+      protocol="a2a" and is checked in CI.
+    severity: critical
+    enforced_by:
+      - type: ci_step
+        path: .github/workflows/ci.yml
+        step: "Agent card validation (E-S6-13)"
+    tests:
+      - packages/tests/test_a2a_sdk.py
+    status: green
+
+  - id: I-10
+    name: Spec-first agents
+    description: >
+      Each agent has spec.yaml. test_spec.py is generated from it; CI fails
+      if specs and tests drift. Tests are RED before implementation, GREEN
+      after.
+    severity: high
+    enforced_by:
+      - type: ci_step
+        path: .github/workflows/ci.yml
+        step: "Spec validation"
+      - type: code
+        path: scripts/generate_tests_from_spec.py
+      - type: code
+        path: scripts/check_spec_coverage.py
+    tests:
+      - agents/*/tests/test_spec.py
+    status: yellow
+    notes: >
+      Sprint 7 (R1): replace pytest.skip stubs with executable assertions.
+
+  - id: I-11
+    name: 7-layer testing pyramid
+    description: >
+      SDD, Fuzz, Contract, Metamorphic, DbC, Oracle, Mutation. Coverage
+      minimum 80% on all packages. Mutation survival <15% rewards,
+      <10% guardrails/audit.
+    severity: critical
+    enforced_by:
+      - type: ci_step
+        path: .github/workflows/ci.yml
+        step: "Unit tests"
+      - type: ci_step
+        path: .github/workflows/mutation.yml
+        step: "Run mutation tests"
+      - type: code
+        path: scripts/check_mutation_threshold.py
+    tests:
+      - tests/fuzz/
+      - tests/oracle/
+      - agents/*/tests/test_metamorphic.py
+      - agents/*/contracts/
+    status: yellow
+    notes: >
+      Fuzz layer needs Schemathesis bodies (R2); DbC layer absent (R3);
+      contract coverage incomplete on 3 agents.
+
+  - id: I-12
+    name: Twin–live divergence alerting
+    description: >
+      digital_twin/sync/divergence_monitor.py raises an alert on
+      synapse.twin.divergence when KL(twin || live) exceeds the threshold
+      (default 0.1).
+    severity: high
+    enforced_by:
+      - type: code
+        path: digital_twin/sync/divergence_monitor.py
+    tests:
+      - digital_twin/tests/test_simulation.py::TestKLDivergence
+    status: green
+
+  - id: I-13
+    name: KV-cache preservation
+    description: >
+      No dynamic data in LLM system prompts. orchestrator/llm/context_builder
+      keeps the system prompt static and threads dynamic context through
+      user-role messages so prompt caching can hit on the static prefix.
+    severity: critical
+    enforced_by:
+      - type: ci_grep
+        path: .github/workflows/ci.yml
+        step: "Invariant static checks (I-2, I-9, I-13, I-14)"
+      - type: code
+        path: orchestrator/llm/context_builder.py
+    tests:
+      - orchestrator/tests/test_llm.py
+    status: green
+
+  - id: I-14
+    name: Append-only runtime context
+    description: >
+      Orchestrator never removes items from the runtime context — it appends
+      with a status field. A grep gate in CI rejects .remove/.pop/.clear on
+      anything named *context*.
+    severity: critical
+    enforced_by:
+      - type: ci_grep
+        path: .github/workflows/ci.yml
+        step: "Invariant static checks (I-2, I-9, I-13, I-14)"
+    tests:
+      - orchestrator/tests/test_state_machine.py
+    status: green

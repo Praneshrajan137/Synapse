@@ -1,0 +1,33 @@
+# Prometheus JMX exporter config for the Kafka KRaft broker.
+# E6 elevation: Kafka does not expose /metrics natively; this sidecar
+# scrapes broker JMX over RMI and translates to Prometheus text format.
+# Reference: https://github.com/prometheus/jmx_exporter
+hostPort: kafka:9999
+lowercaseOutputName: true
+lowercaseOutputLabelNames: true
+rules:
+  # Broker-level metrics
+  - pattern: kafka.server<type=(.+), name=(.+), clientId=(.+), topic=(.+), partition=(.+)><>Value
+    name: kafka_server_$1_$2
+    labels:
+      clientId: "$3"
+      topic: "$4"
+      partition: "$5"
+  - pattern: kafka.server<type=(.+), name=(.+), topic=(.+), partition=(.+)><>Value
+    name: kafka_server_$1_$2
+    labels:
+      topic: "$3"
+      partition: "$4"
+  - pattern: kafka.server<type=(.+), name=(.+), topic=(.+)><>Value
+    name: kafka_server_$1_$2
+    labels:
+      topic: "$3"
+  - pattern: kafka.server<type=(.+), name=(.+)><>Value
+    name: kafka_server_$1_$2
+  # Controller / network / request handler
+  - pattern: kafka.controller<type=(.+), name=(.+)><>Value
+    name: kafka_controller_$1_$2
+  - pattern: kafka.network<type=(.+), name=(.+)><>Value
+    name: kafka_network_$1_$2
+  - pattern: kafka.log<type=(.+), name=(.+)><>Value
+    name: kafka_log_$1_$2

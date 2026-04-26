@@ -1,7 +1,7 @@
 # ============================================================================
 # SYNAPSE Makefile — Development Automation
 # ============================================================================
-.PHONY: help up down test lint typecheck verify-infra seed generate-spec-tests fuzz mutate clean chaos-test load-test security-test dragonfly-eval sprint5-verify verify-services
+.PHONY: help up down test lint typecheck verify-infra seed generate-spec-tests fuzz mutate clean chaos-test load-test security-test dragonfly-eval sprint5-verify verify-services doctor
 
 SHELL := /bin/bash
 COMPOSE := docker compose -f docker/docker-compose.yml --env-file docker/.env
@@ -9,7 +9,10 @@ COMPOSE := docker compose -f docker/docker-compose.yml --env-file docker/.env
 help: ## Show this help
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-25s\033[0m %s\n", $$1, $$2}'
 
-up: ## Start all Docker services
+doctor: ## Pre-flight: verify host can run the demo (Ollama, Docker, ports, seed data)
+	@python scripts/preflight/doctor.py
+
+up: doctor ## Start all Docker services (runs doctor first)
 	cp -n docker/.env.template docker/.env || true
 	$(COMPOSE) up -d
 	@echo "Waiting for services to be healthy..."

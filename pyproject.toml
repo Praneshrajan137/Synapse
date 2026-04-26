@@ -56,6 +56,82 @@ ignore_missing_imports = true
 module = "langsmith.*"
 ignore_missing_imports = true
 
+[[tool.mypy.overrides]]
+module = "torch.*"
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = "torch_geometric.*"
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = "mapie.*"
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = "simpy.*"
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = "prophet.*"
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = "lightgbm.*"
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = "mlflow.*"
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = "feast.*"
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = "flwr.*"
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = "ray.*"
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = "schemathesis.*"
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = "hypothesis.*"
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = "neo4j.*"
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = "redis.*"
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = "sklearn.*"
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = "scipy.*"
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = "pandas.*"
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = "matplotlib.*"
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = "ollama.*"
+ignore_missing_imports = true
+
 [tool.pytest.ini_options]
 minversion = "7.0"
 testpaths = ["packages/tests", "agents", "orchestrator", "tests"]
@@ -69,6 +145,8 @@ markers = [
     "chaos: chaos engineering tests",
     "oracle: digital twin oracle tests",
     "mutation: mutation testing targets",
+    "dbc: design-by-contract tests (Layer 5)",
+    "integration: tests requiring live infra (Feast/Neo4j/MLflow/Kafka)",
 ]
 asyncio_mode = "strict"
 addopts = "--strict-markers -v --tb=short"

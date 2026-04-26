@@ -11,7 +11,7 @@ env:
 jobs:
   mutation:
     runs-on: ubuntu-latest
-    timeout-minutes: 60
+    timeout-minutes: 90
 
     steps:
       - uses: actions/checkout@v4
@@ -28,49 +28,61 @@ jobs:
           if [ -f agents/requirements-sprint2.txt ]; then pip install -r agents/requirements-sprint2.txt; fi
           if [ -f agents/requirements-sprint3.txt ]; then pip install -r agents/requirements-sprint3.txt; fi
 
-      - name: Run mutation tests — Reward Functions
+      - name: Run mutation tests — Reward Functions (< 15% survival, CLAUDE.md gate)
         run: |
-          for agent in demand_prophet routing_navigator inventory_sentinel pricing_oracle freshness_guardian disruption_shield supplier_trust sustainability_agent; do
+          set -e
+          AGENTS="demand_prophet routing_navigator inventory_sentinel pricing_oracle freshness_guardian disruption_shield supplier_trust sustainability_agent"
+          for agent in $AGENTS; do
             REWARD_FILE="agents/${agent}/training/rewards.py"
             TEST_FILE="agents/${agent}/tests/test_reward.py"
             if [ -f "${REWARD_FILE}" ] && [ -f "${TEST_FILE}" ]; then
               echo "=== Mutating ${agent} rewards ==="
+              rm -rf .mutmut-cache
               mutmut run \
                 --paths-to-mutate="${REWARD_FILE}" \
                 --tests-dir="agents/${agent}/tests/" \
-                --runner="python -m pytest ${TEST_FILE} -x -q" \
-                || true
-              mutmut results || true
+                --runner="python -m pytest ${TEST_FILE} -x -q"
+              mutmut results
+              python scripts/check_mutation_threshold.py \
+                --threshold 15 --label "rewards/${agent}"
+              mv .mutmut-cache ".mutmut-cache-${agent}"
             else
               echo "=== SKIP ${agent}: reward or test file missing ==="
             fi
           done
 
-      - name: Run mutation tests — Guardrails
+      - name: Run mutation tests — Guardrails (< 10% survival, CLAUDE.md gate)
         run: |
           if [ -f "orchestrator/guardrails/rules.py" ]; then
+            rm -rf .mutmut-cache
             mutmut run \
               --paths-to-mutate="orchestrator/guardrails/rules.py" \
               --tests-dir="orchestrator/tests/" \
-              --runner="python -m pytest orchestrator/tests/ -x -q -k guardrail" \
-              || true
-            mutmut results || true
+              --runner="python -m pytest orchestrator/tests/ -x -q -k guardrail"
+            mutmut results
+            python scripts/check_mutation_threshold.py \
+              --threshold 10 --label "guardrails"
+            mv .mutmut-cache .mutmut-cache-guardrails
           fi
 
-      - name: Run mutation tests — Audit
+      - name: Run mutation tests — Audit (< 10% survival, CLAUDE.md gate)
         run: |
           if [ -f "orchestrator/audit/logger.py" ]; then
+            rm -rf .mutmut-cache
             mutmut run \
               --paths-to-mutate="orchestrator/audit/logger.py" \
               --tests-dir="orchestrator/tests/" \
-              --runner="python -m pytest orchestrator/tests/ -x -q -k audit" \
-              || true
-            mutmut results || true
+              --runner="python -m pytest orchestrator/tests/ -x -q -k audit"
+            mutmut results
+            python scripts/check_mutation_threshold.py \
+              --threshold 10 --label "audit"
+            mv .mutmut-cache .mutmut-cache-audit
           fi
 
       - name: Upload mutation results
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: mutation-results
-          path: .mutmut-cache/
+          path: .mutmut-cache-*
           retention-days: 30
