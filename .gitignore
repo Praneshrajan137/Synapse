@@ -72,3 +72,6 @@ dump.rdb
 
 # Local scratch (plan extraction, ephemeral notes)
 .tmp/
+
+# Claude Code local worktrees
+.claude/
