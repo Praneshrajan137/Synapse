@@ -1,3 +1,4 @@
+# ruff: noqa: E501
 """Auto-generated spec tests for supplier_trust from spec.yaml.
 
 Regenerate with::
@@ -8,13 +9,13 @@ Add the marker token  S P E C _ T E S T S _ H A N D _ W R I T T E N
 (without spaces, prefixed with #) to opt out of regeneration once you
 have curated real assertions on top of the generated stubs.
 """
+
 from __future__ import annotations
 
 import json
 from pathlib import Path
 
 import pytest
-
 from synapse_common.fsm import AgentState
 
 from agents.supplier_trust.state_machine import SupplierTrustStateMachine
@@ -31,7 +32,7 @@ class TestInvSt001:
     """
 
     def test_inv_st_001(self) -> None:
-        pytest.skip("INTEGRATION: assertion in spec.yaml -- wired in tests/integration/ or tests/oracle/")
+        pytest.skip("INTEGRATION: see spec.yaml")
 
 
 @pytest.mark.integration
@@ -42,7 +43,7 @@ class TestInvSt002:
     """
 
     def test_inv_st_002(self) -> None:
-        pytest.skip("INTEGRATION: assertion in spec.yaml -- wired in tests/integration/ or tests/oracle/")
+        pytest.skip("INTEGRATION: see spec.yaml")
 
 
 @pytest.mark.integration
@@ -53,7 +54,7 @@ class TestInvSt003:
     """
 
     def test_inv_st_003(self) -> None:
-        pytest.skip("INTEGRATION: assertion in spec.yaml -- wired in tests/integration/ or tests/oracle/")
+        pytest.skip("INTEGRATION: see spec.yaml")
 
 
 @pytest.mark.integration
@@ -64,7 +65,7 @@ class TestInvSt004:
     """
 
     def test_inv_st_004(self) -> None:
-        pytest.skip("INTEGRATION: assertion in spec.yaml -- wired in tests/integration/ or tests/oracle/")
+        pytest.skip("INTEGRATION: see spec.yaml")
 
 
 @pytest.mark.integration
@@ -75,7 +76,7 @@ class TestInvSt005:
     """
 
     def test_inv_st_005(self) -> None:
-        pytest.skip("INTEGRATION: assertion in spec.yaml -- wired in tests/integration/ or tests/oracle/")
+        pytest.skip("INTEGRATION: see spec.yaml")
 
 
 @pytest.mark.integration
@@ -86,7 +87,7 @@ class TestInvSt006:
     """
 
     def test_inv_st_006(self) -> None:
-        pytest.skip("INTEGRATION: assertion in spec.yaml -- wired in tests/integration/ or tests/oracle/")
+        pytest.skip("INTEGRATION: see spec.yaml")
 
 
 @pytest.mark.integration
@@ -97,10 +98,10 @@ class TestPreSt001:
     """
 
     def test_pre_st_001_valid(self) -> None:
-        pytest.skip("INTEGRATION: precondition exercised in tests/integration/")
+        pytest.skip("INTEGRATION: precondition path")
 
     def test_pre_st_001_invalid(self) -> None:
-        pytest.skip("INTEGRATION: violation path exercised in tests/integration/")
+        pytest.skip("INTEGRATION: violation path")
 
 
 @pytest.mark.integration
@@ -111,10 +112,10 @@ class TestPreSt002:
     """
 
     def test_pre_st_002_valid(self) -> None:
-        pytest.skip("INTEGRATION: precondition exercised in tests/integration/")
+        pytest.skip("INTEGRATION: precondition path")
 
     def test_pre_st_002_invalid(self) -> None:
-        pytest.skip("INTEGRATION: violation path exercised in tests/integration/")
+        pytest.skip("INTEGRATION: violation path")
 
 
 @pytest.mark.integration
@@ -125,10 +126,10 @@ class TestPreSt003:
     """
 
     def test_pre_st_003_valid(self) -> None:
-        pytest.skip("INTEGRATION: precondition exercised in tests/integration/")
+        pytest.skip("INTEGRATION: precondition path")
 
     def test_pre_st_003_invalid(self) -> None:
-        pytest.skip("INTEGRATION: violation path exercised in tests/integration/")
+        pytest.skip("INTEGRATION: violation path")
 
 
 @pytest.mark.integration
@@ -139,7 +140,7 @@ class TestPostSt001:
     """
 
     def test_post_st_001(self) -> None:
-        pytest.skip("INTEGRATION: postcondition exercised in tests/integration/")
+        pytest.skip("INTEGRATION: postcondition path")
 
 
 @pytest.mark.integration
@@ -150,7 +151,7 @@ class TestPostSt002:
     """
 
     def test_post_st_002(self) -> None:
-        pytest.skip("INTEGRATION: postcondition exercised in tests/integration/")
+        pytest.skip("INTEGRATION: postcondition path")
 
 
 @pytest.mark.integration
@@ -161,7 +162,7 @@ class TestPostSt003:
     """
 
     def test_post_st_003(self) -> None:
-        pytest.skip("INTEGRATION: postcondition exercised in tests/integration/")
+        pytest.skip("INTEGRATION: postcondition path")
 
 
 class TestStateMachine:
@@ -267,7 +268,7 @@ class TestMrSt001:
     """
 
     def test_mr_st_001(self) -> None:
-        pytest.skip("Asserted in test_metamorphic.py against the trained model")
+        pytest.skip("Asserted in test_metamorphic.py")
 
 
 @pytest.mark.metamorphic
@@ -279,5 +280,4 @@ class TestMrSt002:
     """
 
     def test_mr_st_002(self) -> None:
-        pytest.skip("Asserted in test_metamorphic.py against the trained model")
-
+        pytest.skip("Asserted in test_metamorphic.py")

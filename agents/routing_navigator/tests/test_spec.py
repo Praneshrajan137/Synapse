@@ -1,3 +1,4 @@
+# ruff: noqa: E501
 """Auto-generated spec tests for routing_navigator from spec.yaml.
 
 Regenerate with::
@@ -8,13 +9,13 @@ Add the marker token  S P E C _ T E S T S _ H A N D _ W R I T T E N
 (without spaces, prefixed with #) to opt out of regeneration once you
 have curated real assertions on top of the generated stubs.
 """
+
 from __future__ import annotations
 
 import json
 from pathlib import Path
 
 import pytest
-
 from synapse_common.fsm import AgentState
 
 from agents.routing_navigator.state_machine import RoutingNavigatorStateMachine
@@ -31,7 +32,7 @@ class TestInvRn001:
     """
 
     def test_inv_rn_001(self) -> None:
-        pytest.skip("INTEGRATION: assertion in spec.yaml -- wired in tests/integration/ or tests/oracle/")
+        pytest.skip("INTEGRATION: see spec.yaml")
 
 
 @pytest.mark.integration
@@ -42,7 +43,7 @@ class TestInvRn002:
     """
 
     def test_inv_rn_002(self) -> None:
-        pytest.skip("INTEGRATION: assertion in spec.yaml -- wired in tests/integration/ or tests/oracle/")
+        pytest.skip("INTEGRATION: see spec.yaml")
 
 
 @pytest.mark.integration
@@ -53,7 +54,7 @@ class TestInvRn003:
     """
 
     def test_inv_rn_003(self) -> None:
-        pytest.skip("INTEGRATION: assertion in spec.yaml -- wired in tests/integration/ or tests/oracle/")
+        pytest.skip("INTEGRATION: see spec.yaml")
 
 
 @pytest.mark.integration
@@ -64,7 +65,7 @@ class TestInvRn004:
     """
 
     def test_inv_rn_004(self) -> None:
-        pytest.skip("INTEGRATION: assertion in spec.yaml -- wired in tests/integration/ or tests/oracle/")
+        pytest.skip("INTEGRATION: see spec.yaml")
 
 
 @pytest.mark.integration
@@ -75,7 +76,7 @@ class TestInvRn005:
     """
 
     def test_inv_rn_005(self) -> None:
-        pytest.skip("INTEGRATION: assertion in spec.yaml -- wired in tests/integration/ or tests/oracle/")
+        pytest.skip("INTEGRATION: see spec.yaml")
 
 
 @pytest.mark.integration
@@ -86,7 +87,7 @@ class TestInvRn006:
     """
 
     def test_inv_rn_006(self) -> None:
-        pytest.skip("INTEGRATION: assertion in spec.yaml -- wired in tests/integration/ or tests/oracle/")
+        pytest.skip("INTEGRATION: see spec.yaml")
 
 
 @pytest.mark.integration
@@ -97,7 +98,7 @@ class TestInvRn007:
     """
 
     def test_inv_rn_007(self) -> None:
-        pytest.skip("INTEGRATION: assertion in spec.yaml -- wired in tests/integration/ or tests/oracle/")
+        pytest.skip("INTEGRATION: see spec.yaml")
 
 
 @pytest.mark.integration
@@ -108,7 +109,7 @@ class TestInvRn008:
     """
 
     def test_inv_rn_008(self) -> None:
-        pytest.skip("INTEGRATION: assertion in spec.yaml -- wired in tests/integration/ or tests/oracle/")
+        pytest.skip("INTEGRATION: see spec.yaml")
 
 
 @pytest.mark.integration
@@ -119,7 +120,7 @@ class TestInvRn009:
     """
 
     def test_inv_rn_009(self) -> None:
-        pytest.skip("INTEGRATION: assertion in spec.yaml -- wired in tests/integration/ or tests/oracle/")
+        pytest.skip("INTEGRATION: see spec.yaml")
 
 
 @pytest.mark.integration
@@ -130,10 +131,10 @@ class TestPreRn001:
     """
 
     def test_pre_rn_001_valid(self) -> None:
-        pytest.skip("INTEGRATION: precondition exercised in tests/integration/")
+        pytest.skip("INTEGRATION: precondition path")
 
     def test_pre_rn_001_invalid(self) -> None:
-        pytest.skip("INTEGRATION: violation path exercised in tests/integration/")
+        pytest.skip("INTEGRATION: violation path")
 
 
 @pytest.mark.integration
@@ -144,10 +145,10 @@ class TestPreRn002:
     """
 
     def test_pre_rn_002_valid(self) -> None:
-        pytest.skip("INTEGRATION: precondition exercised in tests/integration/")
+        pytest.skip("INTEGRATION: precondition path")
 
     def test_pre_rn_002_invalid(self) -> None:
-        pytest.skip("INTEGRATION: violation path exercised in tests/integration/")
+        pytest.skip("INTEGRATION: violation path")
 
 
 @pytest.mark.integration
@@ -158,10 +159,10 @@ class TestPreRn003:
     """
 
     def test_pre_rn_003_valid(self) -> None:
-        pytest.skip("INTEGRATION: precondition exercised in tests/integration/")
+        pytest.skip("INTEGRATION: precondition path")
 
     def test_pre_rn_003_invalid(self) -> None:
-        pytest.skip("INTEGRATION: violation path exercised in tests/integration/")
+        pytest.skip("INTEGRATION: violation path")
 
 
 @pytest.mark.integration
@@ -172,10 +173,10 @@ class TestPreRn004:
     """
 
     def test_pre_rn_004_valid(self) -> None:
-        pytest.skip("INTEGRATION: precondition exercised in tests/integration/")
+        pytest.skip("INTEGRATION: precondition path")
 
     def test_pre_rn_004_invalid(self) -> None:
-        pytest.skip("INTEGRATION: violation path exercised in tests/integration/")
+        pytest.skip("INTEGRATION: violation path")
 
 
 @pytest.mark.integration
@@ -186,7 +187,7 @@ class TestPostRn001:
     """
 
     def test_post_rn_001(self) -> None:
-        pytest.skip("INTEGRATION: postcondition exercised in tests/integration/")
+        pytest.skip("INTEGRATION: postcondition path")
 
 
 @pytest.mark.integration
@@ -197,7 +198,7 @@ class TestPostRn002:
     """
 
     def test_post_rn_002(self) -> None:
-        pytest.skip("INTEGRATION: postcondition exercised in tests/integration/")
+        pytest.skip("INTEGRATION: postcondition path")
 
 
 @pytest.mark.integration
@@ -208,7 +209,7 @@ class TestPostRn003:
     """
 
     def test_post_rn_003(self) -> None:
-        pytest.skip("INTEGRATION: postcondition exercised in tests/integration/")
+        pytest.skip("INTEGRATION: postcondition path")
 
 
 class TestStateMachine:
@@ -314,7 +315,7 @@ class TestMrRn001:
     """
 
     def test_mr_rn_001(self) -> None:
-        pytest.skip("Asserted in test_metamorphic.py against the trained model")
+        pytest.skip("Asserted in test_metamorphic.py")
 
 
 @pytest.mark.metamorphic
@@ -326,5 +327,4 @@ class TestMrRn002:
     """
 
     def test_mr_rn_002(self) -> None:
-        pytest.skip("Asserted in test_metamorphic.py against the trained model")
-
+        pytest.skip("Asserted in test_metamorphic.py")

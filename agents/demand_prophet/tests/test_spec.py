@@ -14,6 +14,7 @@ SPEC_TESTS_HAND_WRITTEN marker on line 1.
 
 Reference: docs/specs/invariants.yaml (I-10).
 """
+
 from __future__ import annotations
 
 import json
@@ -38,10 +39,7 @@ VALID_HORIZONS: set[str] = {"15min", "1h", "6h", "24h", "7d"}
 def _schema() -> dict[str, Any]:
     """Load the demand_forecast JSON schema once per module."""
     schema_path = (
-        Path(__file__).resolve().parents[3]
-        / "proto"
-        / "domain"
-        / "demand_forecast.schema.json"
+        Path(__file__).resolve().parents[3] / "proto" / "domain" / "demand_forecast.schema.json"
     )
     return json.loads(schema_path.read_text(encoding="utf-8"))
 
@@ -259,9 +257,7 @@ class TestPostDp004:
     """POST-DP-004: Kafka publish on synapse.demand.forecast."""
 
     def test_post_dp_004(self) -> None:
-        pytest.skip(
-            "Kafka publish verified by tests/integration/test_agent_pipeline.py."
-        )
+        pytest.skip("Kafka publish verified by tests/integration/test_agent_pipeline.py.")
 
 
 @pytest.mark.integration

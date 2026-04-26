@@ -85,7 +85,11 @@ def _slug(spec_id: str) -> str:
 
 
 def _emit_header(agent_name: str, schema_file: str | None) -> list[str]:
+    # ``# ruff: noqa: E501`` is intentional: assertion strings copied verbatim
+    # from spec.yaml may exceed the 100-col line limit, and we prefer fidelity
+    # to the source spec over wrapped/truncated docstrings in generated code.
     lines = [
+        "# ruff: noqa: E501",
         f'"""Auto-generated spec tests for {agent_name} from spec.yaml.',
         "",
         "Regenerate with::",
@@ -102,7 +106,8 @@ def _emit_header(agent_name: str, schema_file: str | None) -> list[str]:
         "from pathlib import Path",
         "",
         "import pytest",
-        "",
+        # ruff treats synapse_common as third-party (grouped with pytest)
+        # and agents.* as first-party (separate group below the blank line).
         "from synapse_common.fsm import AgentState",
         "",
     ]
@@ -110,7 +115,7 @@ def _emit_header(agent_name: str, schema_file: str | None) -> list[str]:
     if sm is not None:
         module_path, class_name = sm
         lines.append(f"from {module_path} import {class_name}")
-        lines.append("")
+    lines.append("")
     if schema_file is not None:
         lines.extend(
             [
@@ -135,8 +140,7 @@ def _emit_invariant_block(inv: dict[str, str]) -> list[str]:
         '    """',
         "",
         f"    def test_{slug}(self) -> None:",
-        f'        pytest.skip("INTEGRATION: assertion in spec.yaml -- '
-        f'wired in tests/integration/ or tests/oracle/")',
+        f'        pytest.skip("INTEGRATION: see spec.yaml")',
         "",
     ]
 
@@ -154,10 +158,10 @@ def _emit_pre_block(pre: dict[str, str]) -> list[str]:
         '    """',
         "",
         f"    def test_{slug}_valid(self) -> None:",
-        f'        pytest.skip("INTEGRATION: precondition exercised in tests/integration/")',
+        f'        pytest.skip("INTEGRATION: precondition path")',
         "",
         f"    def test_{slug}_invalid(self) -> None:",
-        f'        pytest.skip("INTEGRATION: violation path exercised in tests/integration/")',
+        f'        pytest.skip("INTEGRATION: violation path")',
         "",
     ]
 
@@ -175,7 +179,7 @@ def _emit_post_block(post: dict[str, str]) -> list[str]:
         '    """',
         "",
         f"    def test_{slug}(self) -> None:",
-        f'        pytest.skip("INTEGRATION: postcondition exercised in tests/integration/")',
+        f'        pytest.skip("INTEGRATION: postcondition path")',
         "",
     ]
 
@@ -267,7 +271,7 @@ def _emit_metamorphic_block(mr: dict[str, str]) -> list[str]:
         '    """',
         "",
         f"    def test_{slug}(self) -> None:",
-        f'        pytest.skip("Asserted in test_metamorphic.py against the trained model")',
+        f'        pytest.skip("Asserted in test_metamorphic.py")',
         "",
     ]
 
