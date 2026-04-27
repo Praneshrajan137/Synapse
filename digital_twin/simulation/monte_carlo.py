@@ -71,13 +71,20 @@ def _run_single_scenario(
         order_arrival_rate=2.0 * shock.demand_multiplier,
         pick_pack_mean_min=8.0 * shock.lead_time_multiplier,
     )
-    sim = SupplyChainSimulation(config=config, seed=seed)
+    sim = SupplyChainSimulation(
+        config=config,
+        seed=seed,
+        failure_rate_multiplier=shock.failure_rate_multiplier,
+        spoilage_rate_multiplier=shock.spoilage_rate_multiplier,
+    )
     metrics = sim.run(duration_hours=duration_hours)
     return {
         "seed": seed,
         "orders_created": metrics.orders_created,
         "orders_delivered": metrics.orders_delivered,
         "avg_delivery_time_min": metrics.avg_delivery_time_min,
+        "avg_travel_time_min": metrics.avg_travel_time_min,
+        "avg_pick_pack_time_min": metrics.avg_pick_pack_time_min,
         "spoilage_rate": metrics.spoilage_rate,
         "restocks_triggered": metrics.restocks_triggered,
     }
@@ -137,6 +144,8 @@ class MonteCarloRunner:
             "orders_created",
             "orders_delivered",
             "avg_delivery_time_min",
+            "avg_travel_time_min",
+            "avg_pick_pack_time_min",
             "spoilage_rate",
             "restocks_triggered",
         ]

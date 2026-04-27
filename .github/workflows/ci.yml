@@ -25,8 +25,15 @@ jobs:
         run: ruff check packages/synapse_common/ agents/ orchestrator/ --output-format=github
       - name: Ruff format check
         run: ruff format --check packages/synapse_common/ agents/ orchestrator/
-      - name: MyPy strict type check
+      - name: MyPy strict type check (packages — blocking)
         run: mypy --strict packages/synapse_common/
+      - name: MyPy strict type check (orchestrator — blocking)
+        run: mypy --strict orchestrator/ --exclude orchestrator/tests
+      - name: MyPy strict type check (agents — informational, target=blocking)
+        # TODO(R5): flip continue-on-error to false once all agents are clean.
+        # Tracked in plans/now-we-have-completed-joyful-goose.md (R5).
+        continue-on-error: true
+        run: mypy --strict agents/ --exclude 'agents/.*/tests' --exclude 'agents/.*/training'
       - name: Schema validation
         run: python scripts/validate_schemas.py
       - name: Spec validation

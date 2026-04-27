@@ -89,6 +89,41 @@ services:
       retries: 5
     restart: unless-stopped
 
+  # E6 elevation: prometheus.yml scrapes redis-exporter:9121 and
+  # kafka-jmx-exporter:9404; CLAUDE.md notes Redis/Kafka don't expose /metrics
+  # natively. These sidecar containers translate native metrics to a
+  # Prometheus-readable surface so the Grafana dashboards have data.
+  redis-exporter:
+    image: oliver006/redis_exporter:v1.61.0
+    container_name: synapse-redis-exporter
+    <<: *common-labels
+    environment:
+      - REDIS_ADDR=redis://redis:6379
+    ports:
+      - "9121:9121"
+    networks:
+      - infra-net
+    depends_on:
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+
+  kafka-jmx-exporter:
+    image: bitnami/jmx-exporter:1.0.1
+    container_name: synapse-kafka-jmx-exporter
+    <<: *common-labels
+    command: ["9404", "/etc/jmx-exporter/config.yml"]
+    volumes:
+      - ../infrastructure/prometheus/kafka_jmx_exporter.yml:/etc/jmx-exporter/config.yml:ro
+    ports:
+      - "9404:9404"
+    networks:
+      - infra-net
+    depends_on:
+      kafka:
+        condition: service_healthy
+    restart: unless-stopped
+
   neo4j:
     image: neo4j:5-community
     container_name: synapse-neo4j
