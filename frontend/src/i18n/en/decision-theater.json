@@ -1,0 +1,14 @@
+{
+  "title": "Decision Theater",
+  "subtitle": "Audit-anchored history with server-side filtering. Click a row to replay the 5-phase consensus.",
+  "search.placeholder": "Search decisions…",
+  "filters.tier": "Tier",
+  "filters.escalated_only": "Escalated only",
+  "table.time": "Time",
+  "table.decision": "Decision",
+  "table.tier": "Tier",
+  "table.phase": "Phase",
+  "table.confidence": "Confidence",
+  "table.escalated": "Escalated",
+  "table.replay": "Replay"
+}

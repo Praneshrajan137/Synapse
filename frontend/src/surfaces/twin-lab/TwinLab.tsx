@@ -1,0 +1,104 @@
+import { useState } from "react";
+import { useMutation } from "@tanstack/react-query";
+import { toast } from "sonner";
+import { Badge } from "@ds/primitives";
+import { ScenarioBuilder, type ScenarioRequest } from "./ScenarioBuilder";
+import { DivergenceMeter } from "./DivergenceMeter";
+import { SupplyNetwork3D } from "./SupplyNetwork3D";
+import { useTopology } from "./useTopology";
+import { useSynapseApi } from "@hooks/use-synapse-api";
+import type { TwinState } from "@domain/twin-state";
+
+/**
+ * Twin Lab — P3 elevation. Live KL divergence, 3D supply network, and
+ * what-if scenario runner against the digital twin's /simulate endpoint.
+ */
+export function TwinLab() {
+  const api = useSynapseApi();
+  const topology = useTopology();
+  const [result, setResult] = useState<TwinState | null>(null);
+
+  const sim = useMutation({
+    mutationFn: (req: ScenarioRequest) => api.simulate(req),
+    onSuccess: (data) => {
+      setResult(data);
+      toast.success(`Scenario complete — KL=${data.kl_divergence.toFixed(3)}`);
+    },
+    onError: (err: Error) => {
+      toast.error(`Simulation failed: ${err.message}`);
+    },
+  });
+
+  const klValue = result?.kl_divergence ?? 0;
+
+  return (
+    <section className="space-y-5">
+      <header className="flex flex-wrap items-end justify-between gap-3">
+        <div className="space-y-0.5">
+          <h1 className="text-2xl font-semibold text-ink">Twin Lab</h1>
+          <p className="text-sm text-ink-muted">
+            Run what-if scenarios against the digital twin (I-12). KL divergence vs
+            live distribution is tracked per run.
+          </p>
+        </div>
+        {result?.sync_status && (
+          <Badge tone={result.sync_status === "synced" ? "success" : "warning"}>
+            {result.sync_status}
+          </Badge>
+        )}
+      </header>
+
+      <DivergenceMeter value={klValue} />
+
+      <div className="grid gap-4 lg:grid-cols-[1fr_320px]">
+        <SupplyNetwork3D
+          nodes={topology.data?.nodes ?? []}
+          edges={topology.data?.edges ?? []}
+        />
+        <ScenarioBuilder pending={sim.isPending} onRun={(req) => sim.mutate(req)} />
+      </div>
+
+      {result && (
+        <section className="syn-card-raised space-y-2 p-4">
+          <h2 className="text-sm font-semibold text-ink">Latest scenario</h2>
+          <dl className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs md:grid-cols-4">
+            <div>
+              <dt className="text-ink-muted">Snapshot</dt>
+              <dd className="font-mono text-ink">{result.snapshot_id.slice(0, 12)}</dd>
+            </div>
+            <div>
+              <dt className="text-ink-muted">KL</dt>
+              <dd className="font-mono text-ink">{result.kl_divergence.toFixed(4)}</dd>
+            </div>
+            <div>
+              <dt className="text-ink-muted">Sync</dt>
+              <dd className="font-mono text-ink">{result.sync_status}</dd>
+            </div>
+            {result.simulation_metrics?.avg_delivery_time_min !== undefined && (
+              <div>
+                <dt className="text-ink-muted">Avg delivery</dt>
+                <dd className="font-mono text-ink">
+                  {result.simulation_metrics.avg_delivery_time_min.toFixed(1)}m
+                </dd>
+              </div>
+            )}
+            {result.simulation_metrics?.fill_rate !== undefined && (
+              <div>
+                <dt className="text-ink-muted">Fill rate</dt>
+                <dd className="font-mono text-ink">
+                  {(result.simulation_metrics.fill_rate * 100).toFixed(1)}%
+                </dd>
+              </div>
+            )}
+            {result.node_counts?.dark_stores !== undefined && (
+              <div>
+                <dt className="text-ink-muted">Stores</dt>
+                <dd className="font-mono text-ink">{result.node_counts.dark_stores}</dd>
+              </div>
+            )}
+          </dl>
+        </section>
+      )}
+    </section>
+  );
+}

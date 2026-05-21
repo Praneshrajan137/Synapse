@@ -1,0 +1,102 @@
+{
+  "uid": "synapse-frontend",
+  "title": "SYNAPSE — Frontend Health",
+  "schemaVersion": 39,
+  "version": 1,
+  "tags": ["synapse", "frontend"],
+  "timezone": "",
+  "panels": [
+    {
+      "id": 1,
+      "title": "LCP (Largest Contentful Paint)",
+      "type": "timeseries",
+      "datasource": "Prometheus",
+      "gridPos": { "x": 0, "y": 0, "w": 12, "h": 8 },
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.75, sum by (le, path) (rate(synapse_fe_lcp_seconds_bucket[5m])))",
+          "legendFormat": "p75 {{path}}"
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "title": "INP (Interaction to Next Paint)",
+      "type": "timeseries",
+      "datasource": "Prometheus",
+      "gridPos": { "x": 12, "y": 0, "w": 12, "h": 8 },
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.75, sum by (le, path) (rate(synapse_fe_inp_seconds_bucket[5m])))",
+          "legendFormat": "p75 {{path}}"
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "title": "CLS",
+      "type": "timeseries",
+      "datasource": "Prometheus",
+      "gridPos": { "x": 0, "y": 8, "w": 8, "h": 8 },
+      "targets": [
+        {
+          "expr": "avg by (path) (synapse_fe_cls)",
+          "legendFormat": "{{path}}"
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "title": "Tier budget violations / min",
+      "type": "stat",
+      "datasource": "Prometheus",
+      "gridPos": { "x": 8, "y": 8, "w": 8, "h": 8 },
+      "targets": [
+        {
+          "expr": "sum by (tier) (rate(synapse_fe_tier_budget_violations_total[5m]))",
+          "legendFormat": "{{tier}}"
+        }
+      ]
+    },
+    {
+      "id": 5,
+      "title": "Schema violation rate",
+      "type": "timeseries",
+      "datasource": "Prometheus",
+      "gridPos": { "x": 16, "y": 8, "w": 8, "h": 8 },
+      "targets": [
+        {
+          "expr": "rate(synapse_fe_schema_violations_total[5m])",
+          "legendFormat": "{{schema_id}}"
+        }
+      ]
+    },
+    {
+      "id": 6,
+      "title": "WS reconnect count",
+      "type": "stat",
+      "datasource": "Prometheus",
+      "gridPos": { "x": 0, "y": 16, "w": 8, "h": 6 },
+      "targets": [
+        {
+          "expr": "sum(increase(synapse_fe_ws_reconnect_total[1h]))"
+        }
+      ]
+    },
+    {
+      "id": 7,
+      "title": "CSP violations / hour",
+      "type": "stat",
+      "datasource": "Prometheus",
+      "gridPos": { "x": 8, "y": 16, "w": 8, "h": 6 },
+      "targets": [
+        {
+          "expr": "sum(increase(synapse_fe_csp_violations_total[1h]))"
+        }
+      ]
+    }
+  ],
+  "templating": { "list": [] },
+  "time": { "from": "now-1h", "to": "now" },
+  "refresh": "30s"
+}

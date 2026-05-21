@@ -1,0 +1,158 @@
+import { useMemo, useState } from "react";
+import { Link } from "react-router-dom";
+import { useQuery } from "@tanstack/react-query";
+import { Badge } from "@ds/primitives";
+import { ConfidenceChip, TierBadge } from "@ds/compounds";
+import { useSynapseApi } from "@hooks/use-synapse-api";
+import { useCityStore } from "@state/city.store";
+import { fmt } from "@lib/formatters";
+
+/**
+ * Audit Vault — compliance-grade read-only view of audit_decisions joined
+ * with audit_escalations (P3). Search by token-ref, filter by city /
+ * escalated / tier. CSV export (FE-INV-027 — no PII).
+ */
+export function AuditVault() {
+  const api = useSynapseApi();
+  const city = useCityStore((s) => s.city);
+  const [search, setSearch] = useState("");
+
+  const audit = useQuery({
+    queryKey: ["audit-vault", { city }],
+    queryFn: () => api.listRecentDecisions({ limit: 200, city }),
+  });
+
+  const rows = audit.data?.decisions ?? [];
+  const filtered = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    if (!q) return rows;
+    return rows.filter((r) => JSON.stringify(r).toLowerCase().includes(q));
+  }, [rows, search]);
+
+  function exportCsv() {
+    const header = [
+      "audit_id",
+      "decision_id",
+      "city",
+      "tier",
+      "phase_reached",
+      "confidence",
+      "escalated",
+      "created_at",
+    ];
+    const lines = [
+      header.join(","),
+      ...filtered.map((r) =>
+        [
+          r.audit_id,
+          r.decision_id,
+          r.city ?? "",
+          r.tier,
+          r.phase_reached,
+          r.confidence.toFixed(4),
+          r.escalated ? "true" : "false",
+          r.created_at ?? "",
+        ]
+          .map((v) => `"${String(v).replace(/"/g, '""')}"`)
+          .join(","),
+      ),
+    ];
+    const blob = new Blob([lines.join("\n")], { type: "text/csv;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `synapse-audit-${city}-${new Date().toISOString().slice(0, 10)}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
+  return (
+    <section className="space-y-4">
+      <header className="flex flex-wrap items-end justify-between gap-3">
+        <div className="space-y-0.5">
+          <h1 className="text-2xl font-semibold text-ink">Audit Vault</h1>
+          <p className="text-sm text-ink-muted">
+            Append-only decision provenance (I-4). Operator identity is rendered by
+            Vault-token reference only (FE-INV-019). Export contains zero PII.
+          </p>
+        </div>
+        <div className="flex items-center gap-2">
+          <input
+            type="search"
+            placeholder="Search…"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="h-9 w-64 rounded-md border border-border bg-surface px-3 text-sm text-ink placeholder:text-ink-subtle focus-visible:shadow-focus focus-visible:outline-none"
+          />
+          <button
+            type="button"
+            onClick={exportCsv}
+            className="h-9 rounded-md border border-border bg-surface-raised px-3 text-sm font-medium text-ink hover:bg-surface focus-visible:outline-none focus-visible:shadow-focus"
+          >
+            Export CSV
+          </button>
+        </div>
+      </header>
+
+      <div className="syn-card overflow-hidden">
+        <table className="w-full text-left text-sm">
+          <thead className="bg-surface-raised text-2xs uppercase tracking-wide text-ink-muted">
+            <tr>
+              <th className="px-3 py-2">Audit</th>
+              <th className="px-3 py-2">Decision</th>
+              <th className="px-3 py-2">Tier</th>
+              <th className="px-3 py-2">Conf.</th>
+              <th className="px-3 py-2">Esc.</th>
+              <th className="px-3 py-2">City</th>
+              <th className="px-3 py-2">When</th>
+              <th className="px-3 py-2 sr-only">View</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-border">
+            {audit.isLoading && (
+              <tr>
+                <td colSpan={8} className="px-3 py-8 text-center text-ink-muted">
+                  Loading…
+                </td>
+              </tr>
+            )}
+            {!audit.isLoading && filtered.length === 0 && (
+              <tr>
+                <td colSpan={8} className="px-3 py-8 text-center text-ink-muted">
+                  No audit rows match.
+                </td>
+              </tr>
+            )}
+            {filtered.map((r) => (
+              <tr key={r.audit_id} className="hover:bg-surface-raised/50">
+                <td className="px-3 py-2 font-mono text-2xs text-ink-muted">{r.audit_id}</td>
+                <td className="px-3 py-2 font-mono text-2xs text-ink">{fmt.shortId(r.decision_id)}</td>
+                <td className="px-3 py-2">
+                  <TierBadge tier={r.tier} />
+                </td>
+                <td className="px-3 py-2">
+                  <ConfidenceChip value={r.confidence} />
+                </td>
+                <td className="px-3 py-2">
+                  {r.escalated ? <Badge tone="warning">esc.</Badge> : <Badge tone="neutral">auto</Badge>}
+                </td>
+                <td className="px-3 py-2 text-2xs text-ink-muted">{r.city ?? city}</td>
+                <td className="px-3 py-2 text-2xs text-ink-muted">
+                  {fmt.relativeTime(r.created_at ?? new Date().toISOString())}
+                </td>
+                <td className="px-3 py-2 text-right">
+                  <Link
+                    to={`/decisions/${r.decision_id}`}
+                    className="text-2xs font-medium text-accent hover:underline"
+                  >
+                    Open →
+                  </Link>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </section>
+  );
+}

@@ -1,0 +1,13 @@
+{
+  "title": "Demo Theater",
+  "subtitle": "5-segment narrative arc synced to scripts/demo/run_demo.sh.",
+  "segments.living_map": "Living Map",
+  "segments.ipl_signal": "IPL Surge",
+  "segments.disruption": "Disruption",
+  "segments.debate": "Debate",
+  "segments.evidence": "Evidence",
+  "controls.run": "Run from beginning",
+  "controls.cancel": "Cancel",
+  "evidence.header": "Evidence",
+  "evidence.waiting": "Waiting for demo to write artifacts…"
+}

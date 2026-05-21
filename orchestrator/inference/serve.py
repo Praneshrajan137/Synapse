@@ -171,6 +171,48 @@ async def a2a_endpoint(request: dict[str, Any]) -> dict[str, Any]:
     return _a2a_handler.handle_request(request)
 
 
+class HitlResolveRequest(BaseModel):
+    audit_escalation_id: int
+    operator_token_ref: str
+    action: str = Field(..., pattern="^(approved|rejected|modified)$")
+    reason: str
+    modified_action: dict[str, Any] | None = None
+
+
+@app.post("/api/v1/hitl/{decision_id}/resolve")
+async def hitl_resolve(
+    decision_id: UUID, payload: HitlResolveRequest
+) -> dict[str, Any]:
+    """Resolve a pending HITL escalation and broadcast override_confirm.
+
+    Called by the gateway's ``POST /api/v1/decisions/{id}/override`` after
+    the audit row is persisted (FE-INV-021). Trust boundary is the gateway;
+    this endpoint is reachable only over the internal Docker network.
+    """
+    if _hitl is None or _ws_manager is None:
+        raise HTTPException(status_code=503, detail="HITL not initialised")
+    await _hitl.receive_human_response(
+        decision_id,
+        {
+            "action": payload.action,
+            "reason": payload.reason,
+            "modified_action": payload.modified_action,
+            "operator_token_ref": payload.operator_token_ref,
+            "audit_escalation_id": payload.audit_escalation_id,
+        },
+    )
+    confirm_envelope = {
+        "type": "override_confirm",
+        "decision_id": str(decision_id),
+        "audit_escalation_id": payload.audit_escalation_id,
+        "operator_token_ref": payload.operator_token_ref,
+        "action": payload.action,
+        "status": "applied",
+    }
+    await _ws_manager.broadcast(confirm_envelope)
+    return {"status": "resolved", "decision_id": str(decision_id)}
+
+
 @app.websocket("/ws/escalation")
 async def ws_escalation(websocket: WebSocket) -> None:
     await websocket.accept()

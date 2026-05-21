@@ -20,7 +20,17 @@ import os
 import structlog
 from fastapi import FastAPI
 
-from api.routers import agents, decisions, orders
+from api.routers import (
+    agents,
+    auth,
+    decisions,
+    demo,
+    firehose,
+    orders,
+    telemetry,
+    topology,
+)
+from api.routers import metrics as metrics_router
 
 try:
     from synapse_common.tracing import instrument_fastapi
@@ -41,6 +51,17 @@ app = FastAPI(
 app.include_router(orders.router, prefix="/api/v1/orders", tags=["orders"])
 app.include_router(decisions.router, prefix="/api/v1/decisions", tags=["decisions"])
 app.include_router(agents.router, prefix="/api/v1/agents", tags=["agents"])
+app.include_router(auth.router, prefix="/api/v1/auth", tags=["auth"])
+# Also mount the JWKS endpoint at the standard RFC 8615 location.
+app.include_router(auth.router, prefix="", tags=["auth"], include_in_schema=False)
+# P2: per-agent metrics proxy + multiplexed Kafka firehose WS.
+app.include_router(metrics_router.router, prefix="/api/v1/metrics", tags=["metrics"])
+app.include_router(firehose.router, prefix="/ws", tags=["firehose"])
+# P3: Neo4j supply network topology for Twin Lab.
+app.include_router(topology.router, prefix="/api/v1", tags=["topology"])
+# P4: demo runner + telemetry sink + CSP report endpoint.
+app.include_router(demo.router, prefix="/api/v1/demo", tags=["demo"])
+app.include_router(telemetry.router, prefix="/api/v1", tags=["telemetry"])
 
 
 @app.get("/health")
