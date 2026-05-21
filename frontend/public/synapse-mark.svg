@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" role="img" aria-label="SYNAPSE">
+  <rect width="32" height="32" rx="7" fill="#05070D" />
+  <g stroke="#5BE2FF" stroke-width="1.6" stroke-linecap="round" fill="none" opacity="0.85">
+    <path d="M16 16 L7 7" />
+    <path d="M16 16 L25 8" />
+    <path d="M16 16 L8 24" />
+    <path d="M16 16 L24 25" />
+  </g>
+  <g fill="#5BE2FF">
+    <circle cx="7" cy="7" r="2" />
+    <circle cx="25" cy="8" r="2" />
+    <circle cx="8" cy="24" r="2" />
+    <circle cx="24" cy="25" r="2" />
+  </g>
+  <circle cx="16" cy="16" r="4.6" fill="#0C111B" stroke="#5BE2FF" stroke-width="1.8" />
+  <circle cx="16" cy="16" r="1.8" fill="#5BE2FF" />
+</svg>

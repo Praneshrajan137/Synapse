@@ -1,0 +1,233 @@
+/*
+ * SYNAPSE — Synaptic Calm Interface
+ * Global stylesheet. Tailwind v4 CSS-first configuration.
+ *
+ * The @theme block is the single source of truth for design tokens.
+ * Every token here also has a typed mirror in src/ui/tokens/*.ts for
+ * JS consumers (canvas, three.js, deck.gl) that need raw values.
+ *
+ * This is a dark-canvas interface by design (plan section 3.1 — "the
+ * silence"). A light theme is deferred to Phase 10 polish.
+ */
+
+@import "tailwindcss";
+
+/* ----------------------------------------------------------------------
+ * Design tokens — Synaptic Calm
+ * -------------------------------------------------------------------- */
+@theme {
+  /* Canvas — "the silence" */
+  --color-void: #05070d;
+  --color-paper: #0c111b;
+  --color-elevated: #141b2a;
+  --color-membrane: #1b2336;
+
+  /* Ink — "the voice" */
+  --color-ink-primary: #e6edf8;
+  --color-ink-secondary: #9aa7bd;
+  --color-ink-hint: #5c6a82;
+  --color-ink-disabled: #364154;
+
+  /* Lines */
+  --color-line-faint: rgba(154, 167, 189, 0.08);
+  --color-line-strong: rgba(154, 167, 189, 0.16);
+
+  /* Signals — "the meaning" (semantic, never decorative) */
+  --color-sig-live: #5be2ff;
+  --color-sig-think: #b68cff;
+  --color-sig-warn: #ffb454;
+  --color-sig-stop: #ff6b6b;
+  --color-sig-ok: #7be9a7;
+  --color-sig-trace: #4ecdc4;
+
+  /* The Eight — agent sigil hues (Okabe-Ito-derived) */
+  --color-agent-demand: #6f8cff;
+  --color-agent-routing: #5be2ff;
+  --color-agent-inventory: #7be9a7;
+  --color-agent-freshness: #c2f26b;
+  --color-agent-pricing: #ffd466;
+  --color-agent-disruption: #ff7a8a;
+  --color-agent-supplier: #b68cff;
+  --color-agent-sustain: #4ecdc4;
+
+  /* Typography */
+  --font-display: "Geist", "Inter Display", system-ui, sans-serif;
+  --font-ui: "Inter Variable", "Inter", system-ui, sans-serif;
+  --font-mono: "Geist Mono", "JetBrains Mono", ui-monospace, monospace;
+
+  /* Modular type scale (ratio 1.2) */
+  --text-2xs: 0.75rem;
+  --text-xs: 0.875rem;
+  --text-sm: 1rem;
+  --text-base: 1.1875rem;
+  --text-lg: 1.4375rem;
+  --text-xl: 1.75rem;
+  --text-2xl: 2.0625rem;
+  --text-3xl: 2.5rem;
+  --text-4xl: 3rem;
+  --text-5xl: 3.625rem;
+
+  /* Radii */
+  --radius-xs: 4px;
+  --radius-sm: 6px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --radius-xl: 16px;
+
+  /* Elevation — soft, low-contrast in the dark */
+  --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.4), 0 8px 24px rgba(0, 0, 0, 0.24);
+  --shadow-overlay: 0 8px 16px rgba(0, 0, 0, 0.48), 0 24px 64px rgba(0, 0, 0, 0.4);
+}
+
+/* ----------------------------------------------------------------------
+ * Base layer
+ * -------------------------------------------------------------------- */
+@layer base {
+  *,
+  *::before,
+  *::after {
+    box-sizing: border-box;
+  }
+
+  html {
+    color-scheme: dark;
+    -webkit-text-size-adjust: 100%;
+    text-rendering: optimizeLegibility;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  body {
+    margin: 0;
+    min-height: 100vh;
+    background-color: var(--color-void);
+    color: var(--color-ink-primary);
+    font-family: var(--font-ui);
+    font-size: var(--text-sm);
+    line-height: 1.5;
+    font-feature-settings: "cv11", "ss01";
+  }
+
+  /* Tabular numerals everywhere a value can update live (KPIs, timers).
+   * Prevents digit jitter — see plan tenet T-7. */
+  .tnum {
+    font-variant-numeric: tabular-nums;
+    font-feature-settings: "tnum";
+  }
+
+  code,
+  pre,
+  kbd {
+    font-family: var(--font-mono);
+  }
+
+  /* Visible, consistent focus ring — accessibility budget, plan 10.2. */
+  :focus-visible {
+    outline: 2px solid var(--color-sig-live);
+    outline-offset: 2px;
+    border-radius: var(--radius-xs);
+  }
+
+  ::selection {
+    background-color: color-mix(in oklab, var(--color-sig-live) 32%, transparent);
+    color: var(--color-ink-primary);
+  }
+
+  /* Quiet, on-brand scrollbars */
+  ::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: var(--color-line-strong);
+    border-radius: 999px;
+    border: 2px solid transparent;
+    background-clip: padding-box;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: var(--color-ink-hint);
+    background-clip: padding-box;
+  }
+}
+
+/* ----------------------------------------------------------------------
+ * Z-index ladder — keep every layered surface honest. Mirrors the
+ * zIndex token in src/ui/tokens/spacing.ts.
+ * -------------------------------------------------------------------- */
+@utility z-sidebar {
+  z-index: 200;
+}
+@utility z-feed {
+  z-index: 250;
+}
+@utility z-statusbar {
+  z-index: 300;
+}
+@utility z-overlay {
+  z-index: 1000;
+}
+@utility z-command {
+  z-index: 1100;
+}
+@utility z-hailer {
+  z-index: 1200;
+}
+@utility z-toast {
+  z-index: 1300;
+}
+
+/* ----------------------------------------------------------------------
+ * Named keyframes — the ambient motion vocabulary (plan section 3.4).
+ * All are stripped under prefers-reduced-motion by the rule below.
+ * -------------------------------------------------------------------- */
+@keyframes synapse-flow {
+  to {
+    stroke-dashoffset: -32;
+  }
+}
+
+@keyframes synapse-ping {
+  0% {
+    transform: scale(1);
+    opacity: 0.5;
+  }
+  100% {
+    transform: scale(2.6);
+    opacity: 0;
+  }
+}
+
+@keyframes synapse-breathe {
+  0%,
+  100% {
+    opacity: 0.55;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+.animate-flow {
+  stroke-dasharray: 6 10;
+  animation: synapse-flow 1.1s linear infinite;
+}
+.animate-breathe {
+  animation: synapse-breathe 2.4s ease-in-out infinite;
+}
+
+/* ----------------------------------------------------------------------
+ * Reduced motion — plan tenet: prefers-reduced-motion strips all motion
+ * to fades. No exception.
+ * -------------------------------------------------------------------- */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

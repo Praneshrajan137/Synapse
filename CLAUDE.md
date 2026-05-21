@@ -98,6 +98,18 @@
 - E-S6-23: `make deploy-oracle` requires ORACLE_IP env var; VM must be provisioned manually via OCI Console first
 - E-S6-24: Demo script (`scripts/demo/run_demo.sh`) must poll Kafka consumer group lag via Python confluent-kafka (not kafka-consumer-groups.sh) for cross-platform compatibility
 
+### Sprint 7 Error Patterns (Synaptic Calm frontend)
+- E-S7-01: Vitest 2.x nests its own Vite — fold the `test` block into `vite.config.ts` and import `defineConfig` from `vitest/config`, or bump to Vitest 3 to dedupe
+- E-S7-02: `@opentelemetry/resources` 1.x exports the `Resource` class, not `resourceFromAttributes` (that is the 2.x API)
+- E-S7-03: jsdom omits `matchMedia`, `ResizeObserver` and `scrollIntoView` — polyfill all three in `src/test/setup.ts`
+- E-S7-04: Playwright E2E must run against the production `preview` build, not `dev` — cold Vite dep-optimization exceeds the navigation timeout
+- E-S7-05: MSW and the PWA service worker contend for the same scope — register the PWA SW only when `VITE_MOCK_API=false`
+- E-S7-06: mock `makeDecision(id)` must derive timestamps from a fixed epoch, never `Date.now()`, or replay is non-deterministic (tenet T-1)
+- E-S7-07: test render helper must wrap components in `<Routes><Route path>` or `useParams` returns `{}`
+- E-S7-08: Biome `useSemanticElements` flags `role="group"` on a toggle-button group — suppress with `biome-ignore`, a `<fieldset>` is for forms
+- E-S7-09: frontend tokens have two sources — `styles/globals.css` `@theme` and `ui/tokens/*.ts`; `colors.test.ts` guards against drift
+- E-S7-10: jest-axe ships no types — provide a `declare module "jest-axe"` shim and augment Vitest's `Assertion`
+
 ## Sprint Status
 - **Sprint 1**: Infrastructure foundation (Docker, Neo4j, Kafka, Redis, PostgreSQL, shared packages, proto schemas, SDD framework, CI pipeline)
 - **Sprint 2**: Agent implementation (Demand Prophet, Inventory Sentinel, Routing Navigator)
@@ -105,3 +117,4 @@
 - **Sprint 4**: Remaining agents + API Gateway + Frontend
 - **Sprint 5**: Hardening — Chaos engineering (9 failure modes), load testing, security (JWT, audit immutability, nginx), mutation testing, Schemathesis API fuzz, DragonflyDB evaluation (ADR-019)
 - **Sprint 6**: Multi-city deployment — Mumbai via transfer learning, A/B testing framework, cold-start baselines, Feast multi-city, OSRM Mumbai, Docker Compose overlay, Grafana multi-city dashboard, demo choreography
+- **Sprint 7**: Synaptic Calm frontend — strangler-fig rebuild of `frontend/` (TS strict, Tailwind v4 token system, 7 surfaces: Bridge/Theater/Council/Replay/Twin/Inspector/Streams, design system, generative UI, voice PTT, Demo Mode, i18n, PWA, OTel tracing). See ADR-025.

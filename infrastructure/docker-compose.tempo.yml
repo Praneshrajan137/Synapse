@@ -1,0 +1,26 @@
+# SYNAPSE — distributed tracing overlay.
+#
+# Adds Grafana Tempo as a trace store. The Synaptic Calm frontend exports
+# OTLP-HTTP spans to localhost:4318 (see frontend/src/infrastructure/
+# telemetry/otel.ts). Run alongside the base stack:
+#
+#   docker compose -f docker-compose.yml -f infrastructure/docker-compose.tempo.yml up -d
+#
+# Then add a Tempo datasource in Grafana pointing at http://tempo:3200.
+
+services:
+  tempo:
+    image: grafana/tempo:2.6.1
+    container_name: synapse-tempo
+    command: ["-config.file=/etc/tempo/tempo.yaml"]
+    volumes:
+      - ./infrastructure/tempo/tempo.yaml:/etc/tempo/tempo.yaml:ro
+      - tempo-data:/var/tempo
+    ports:
+      - "3200:3200" # Tempo HTTP query API
+      - "4318:4318" # OTLP HTTP — frontend browser exporter target
+      - "4317:4317" # OTLP gRPC — Python services (future)
+    restart: unless-stopped
+
+volumes:
+  tempo-data:

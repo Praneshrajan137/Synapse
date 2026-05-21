@@ -1,0 +1,62 @@
+# Synaptic Calm — surface specification
+# SDD: every invariant below must have a corresponding test. The spec is
+# authored before the surface is built (Phase 6). This file is the
+# canonical example of the per-surface spec format; Phases 4-9 add the
+# remaining surface specs (bridge, theater, replay, twin, inspector,
+# streams, steering).
+
+surface: Council
+purpose: >-
+  HITL override interface — single decision focus, 300s window. The
+  operator interrogates one high-stakes escalated decision and acts.
+route: /council
+phase: 6
+
+invariants:
+  - id: UI-COUNCIL-001
+    statement: Countdown ring is always visible and accurate to within 1s of server time.
+    test: tests/e2e/council/countdown.spec.ts
+    maps_to: I-5
+
+  - id: UI-COUNCIL-002
+    statement: Approve/Reject/Modify actions cannot be submitted without a non-empty reason.
+    test: src/ui/components/RecommendedActionCard.test.tsx
+    maps_to: I-4
+
+  - id: UI-COUNCIL-003
+    statement: >-
+      Context tail is append-only — no DOM mutation or reorder of existing
+      rows once rendered.
+    test: src/ui/components/ContextTail.test.tsx
+    maps_to: I-14
+
+  - id: UI-COUNCIL-004
+    statement: Voice PTT transcripts are attached to the override's reason field.
+    test: tests/e2e/council/voice-ptt.spec.ts
+    maps_to: I-4
+
+  - id: UI-COUNCIL-005
+    statement: >-
+      Timeout escalation falls back to the configured policy
+      (DEFER / EXECUTE_TIER1 / EXECUTE_LAST_KNOWN_GOOD).
+    test: tests/e2e/council/timeout-fallback.spec.ts
+    maps_to: I-5
+
+  - id: UI-COUNCIL-006
+    statement: >-
+      Confidence ring renders within plus/minus 2px of the computed angle
+      for confidence values across [0.0, 1.0].
+    test: src/ui/components/EscalationHeader.test.tsx
+    maps_to: I-5
+
+performance:
+  LCP_ms: 1000
+  TBT_ms: 100
+  CLS: 0.0
+  TTI_ms: 1500
+
+a11y:
+  level: WCAG-2.2-AAA
+  keyboard: full
+  screenreader: live-region-required
+  reduced_motion: required
