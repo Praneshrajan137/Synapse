@@ -1,0 +1,137 @@
+# SYNAPSE Orchestrator SLOs (Sprint 8, WS-4).
+#
+# Format: synapse-slo/v1 -- consumed by scripts/slo_to_alerts.py to emit
+# Prometheus multi-window-multi-burn alert rules.
+#
+# Each SLO has:
+#   name           -- snake_case slug, used in alert names.
+#   description    -- one-line operator summary.
+#   target_sli     -- availability target as a percent (99.5 = 99.5% good
+#                     events / 28d). Error budget = 100 - target_sli.
+#   window_days    -- compliance window. 28d is the standard.
+#   metric         -- how to express the SLI in PromQL.
+#   burn_rates     -- multi-window-multi-burn alert pairs (Google SRE workbook).
+#
+# Tier-1 (RL-only)  -> 100 ms p99,  target 99.5% (1 in 200 may go slow).
+# Tier-2 (cheap LLM)-> 500 ms p99,  target 99.0%.
+# Tier-3 (debate)   -> 15 s   p99,  target 99.0%.
+# Tier-4 (Monte Carlo+LLM) -> 120 s p99, target 98.0% (rare, expensive).
+
+version: synapse-slo/v1
+service: synapse-orchestrator
+labels:
+  team: synapse-platform
+
+slos:
+  - name: tier1_latency
+    description: "Tier 1 (RL-only) decisions complete under 100ms p99"
+    target_sli: 99.5
+    window_days: 28
+    metric:
+      type: latency_bucket
+      bucket_metric: synapse_inference_latency_seconds_bucket
+      threshold_seconds: 0.1
+      labels:
+        tier: tier_1
+        agent_name: orchestrator
+    burn_rates:
+      - severity: page
+        long_window: 1h
+        short_window: 5m
+        burn: 14.4
+      - severity: page
+        long_window: 6h
+        short_window: 30m
+        burn: 6.0
+      - severity: ticket
+        long_window: 3d
+        short_window: 6h
+        burn: 1.0
+
+  - name: tier2_latency
+    description: "Tier 2 (cheap LLM) decisions complete under 500ms p99"
+    target_sli: 99.0
+    window_days: 28
+    metric:
+      type: latency_bucket
+      bucket_metric: synapse_inference_latency_seconds_bucket
+      threshold_seconds: 0.5
+      labels:
+        tier: tier_2
+        agent_name: orchestrator
+    burn_rates:
+      - severity: page
+        long_window: 1h
+        short_window: 5m
+        burn: 14.4
+      - severity: page
+        long_window: 6h
+        short_window: 30m
+        burn: 6.0
+      - severity: ticket
+        long_window: 3d
+        short_window: 6h
+        burn: 1.0
+
+  - name: tier3_latency
+    description: "Tier 3 (multi-agent debate) decisions complete under 15s p99"
+    target_sli: 99.0
+    window_days: 28
+    metric:
+      type: latency_bucket
+      bucket_metric: synapse_inference_latency_seconds_bucket
+      threshold_seconds: 15.0
+      labels:
+        tier: tier_3
+        agent_name: orchestrator
+    burn_rates:
+      - severity: page
+        long_window: 1h
+        short_window: 5m
+        burn: 14.4
+      - severity: ticket
+        long_window: 6h
+        short_window: 30m
+        burn: 6.0
+
+  - name: tier4_latency
+    description: "Tier 4 (Monte Carlo + LLM) decisions complete under 120s p99"
+    target_sli: 98.0
+    window_days: 28
+    metric:
+      type: latency_bucket
+      bucket_metric: synapse_inference_latency_seconds_bucket
+      threshold_seconds: 120.0
+      labels:
+        tier: tier_4
+        agent_name: orchestrator
+    burn_rates:
+      - severity: ticket
+        long_window: 6h
+        short_window: 30m
+        burn: 6.0
+      - severity: ticket
+        long_window: 3d
+        short_window: 6h
+        burn: 1.0
+
+  - name: outbox_publish_freshness
+    description: "Audit outbox rows transition to PUBLISHED within 30s of insertion"
+    target_sli: 99.5
+    window_days: 28
+    metric:
+      type: availability_ratio
+      good_query: |
+        sum(rate(synapse_outbox_published_total[{{.window}}]))
+      total_query: |
+        sum(rate(synapse_outbox_published_total[{{.window}}])) +
+        sum(rate(synapse_outbox_failed_total[{{.window}}]))
+    burn_rates:
+      - severity: page
+        long_window: 1h
+        short_window: 5m
+        burn: 14.4
+      - severity: ticket
+        long_window: 6h
+        short_window: 30m
+        burn: 6.0

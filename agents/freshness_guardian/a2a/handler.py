@@ -14,6 +14,7 @@ from uuid import UUID, uuid4
 
 import structlog
 from synapse_common.models import AgentName, AgentProposal, DecisionTier
+from synapse_common.schemas import validate_agent_payload
 
 from agents.freshness_guardian.inference.pipeline import (
     FreshnessGuardianPipeline,
@@ -83,7 +84,11 @@ class FreshnessGuardianA2AHandler:
         self._fsm.transition("proposal_submitted")
         self._fsm.record_tool_call()
 
-        return json.loads(proposal.to_deterministic_json())
+        # I-3: validate every emitted payload against proto/domain/.
+        validate_agent_payload("freshness_guardian", proposal.payload)
+
+        result: dict[str, Any] = json.loads(proposal.to_deterministic_json())
+        return result
 
     def debate_respond(self, params: dict[str, Any]) -> dict[str, Any]:
         round_number = params.get("round_number", 1)

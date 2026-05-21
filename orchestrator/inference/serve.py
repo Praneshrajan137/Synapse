@@ -21,11 +21,13 @@ from fastapi.responses import Response
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from synapse_common.kafka_client import KafkaConfig, SynapseProducer
+from synapse_common.lifespan import ShutdownCoordinator
 
 from orchestrator.a2a.handler import OrchestratorA2AHandler
 from orchestrator.audit.logger import AuditLogger
 from orchestrator.audit.models import Base as AuditBase
 from orchestrator.config import OrchestratorConfig
+from orchestrator.consensus.brownout import BrownoutPolicy
 from orchestrator.consensus.protocol import ConsensusProtocol
 from orchestrator.consensus.tier_router import TierRouter
 from orchestrator.guardrails.rules import GuardrailEngine
@@ -34,6 +36,7 @@ from orchestrator.llm.context_builder import ContextBuilder
 from orchestrator.llm.ollama_client import OllamaClient
 from orchestrator.llm.semantic_cache import SemanticDecisionCache
 from orchestrator.meta_rl.meta_agent import MetaRLAgent
+from orchestrator.outbox.dispatcher import OutboxDispatcher
 
 if TYPE_CHECKING:
     from collections.abc import AsyncIterator
@@ -45,25 +48,34 @@ _protocol: ConsensusProtocol | None = None
 _ws_manager: WebSocketManager | None = None
 _a2a_handler: OrchestratorA2AHandler | None = None
 _hitl: HITLEscalation | None = None
+_dispatcher: OutboxDispatcher | None = None
+_brownout: BrownoutPolicy | None = None
+_shutdown: ShutdownCoordinator | None = None
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     global _config, _protocol, _ws_manager, _a2a_handler, _hitl
+    global _dispatcher, _brownout, _shutdown
 
     _config = OrchestratorConfig()
+    _shutdown = ShutdownCoordinator()
+    _shutdown.install_signal_handlers()
 
     engine = create_async_engine(_config.postgresql_url, echo=False)
     async with engine.begin() as conn:
         await conn.run_sync(AuditBase.metadata.create_all)
     session_factory = async_sessionmaker(engine, expire_on_commit=False)
+    _shutdown.register("postgres_engine", engine.dispose)
 
     kafka_cfg = KafkaConfig(bootstrap_servers=_config.kafka_bootstrap_servers)
     try:
-        kafka_producer = SynapseProducer(kafka_cfg)
+        kafka_producer: SynapseProducer | None = SynapseProducer(kafka_cfg)
     except Exception:
         kafka_producer = None
         logger.warning("kafka_unavailable_at_startup")
+    if kafka_producer is not None:
+        _shutdown.register("kafka_producer", kafka_producer.close)
 
     tier_router = TierRouter()
     guardrails = GuardrailEngine(confidence_threshold=_config.confidence_threshold)
@@ -77,6 +89,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     )
     ctx_builder = ContextBuilder()
     ollama_client = OllamaClient(_config)
+    _shutdown.register("ollama_client", ollama_client.close)
     meta_rl = MetaRLAgent(
         lr=_config.meta_rl_learning_rate,
         history_size=_config.meta_rl_history_size,
@@ -85,6 +98,19 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         api_key=_config.pinecone_api_key,
         index_name=_config.pinecone_decision_cache_index,
     )
+
+    _brownout = BrownoutPolicy()
+
+    if kafka_producer is not None:
+        _dispatcher = OutboxDispatcher(
+            session_factory=session_factory,
+            producer=kafka_producer,
+        )
+        await _dispatcher.start()
+        # Stop the dispatcher BEFORE flushing the kafka producer so any
+        # in-flight transition gets to commit PUBLISHED before the
+        # producer goes away. Reverse-order registration handles this.
+        _shutdown.register("outbox_dispatcher", _dispatcher.stop)
 
     _protocol = ConsensusProtocol(
         config=_config,
@@ -100,10 +126,16 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     )
     _a2a_handler = OrchestratorA2AHandler(consensus_protocol=_protocol)
 
-    logger.info("orchestrator_started", port=_config.port)
-    yield
-
-    await ollama_client.close()
+    logger.info(
+        "orchestrator_started",
+        port=_config.port,
+        outbox_dispatcher=_dispatcher is not None,
+        brownout_level=_brownout.current_level.value,
+    )
+    try:
+        yield
+    finally:
+        await _shutdown.shutdown()
 
 
 app = FastAPI(
@@ -150,11 +182,40 @@ async def create_decision(request: DecisionRequest) -> DecisionResponse:
 
 @app.get("/health")
 async def health() -> dict[str, Any]:
+    """Liveness probe — returns 200 while the process is up."""
     return {
         "status": "healthy",
         "agent": "orchestrator",
         "version": "0.4.0",
     }
+
+
+@app.get("/health/live")
+async def liveness() -> dict[str, Any]:
+    return {"status": "ok", "service": "synapse-orchestrator"}
+
+
+@app.get("/health/ready")
+async def readiness() -> dict[str, Any]:
+    """Readiness probe — false during shutdown, also reports sub-system state."""
+    deps: dict[str, Any] = {
+        "protocol": _protocol is not None,
+        "a2a_handler": _a2a_handler is not None,
+        "outbox_dispatcher_running": (
+            _dispatcher is not None and _dispatcher.running
+        ),
+        "outbox_published": _dispatcher.published_count if _dispatcher else 0,
+        "outbox_failed": _dispatcher.failed_count if _dispatcher else 0,
+        "brownout_level": (
+            _brownout.current_level.value if _brownout else "unknown"
+        ),
+    }
+    ready = (
+        _protocol is not None
+        and _a2a_handler is not None
+        and (_shutdown is None or _shutdown.ready)
+    )
+    return {"status": "ready" if ready else "not_ready", "checks": deps}
 
 
 @app.get("/metrics")

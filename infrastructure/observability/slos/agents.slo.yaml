@@ -1,0 +1,162 @@
+# SYNAPSE Agent inference SLOs (Sprint 8, WS-4).
+#
+# One SLO per agent for inference latency. Thresholds derived from the
+# tier each agent typically operates at (per its A2A handler default).
+
+version: synapse-slo/v1
+service: synapse-agents
+labels:
+  team: synapse-platform
+
+slos:
+  - name: demand_prophet_inference_latency
+    description: "demand_prophet inference completes under 500ms p99 (Tier 2 SLA, INV-DP-008)"
+    target_sli: 99.0
+    window_days: 28
+    metric:
+      type: latency_bucket
+      bucket_metric: synapse_inference_latency_seconds_bucket
+      threshold_seconds: 0.5
+      labels:
+        agent_name: demand_prophet
+    burn_rates:
+      - severity: page
+        long_window: 1h
+        short_window: 5m
+        burn: 14.4
+      - severity: ticket
+        long_window: 6h
+        short_window: 30m
+        burn: 6.0
+
+  - name: routing_navigator_inference_latency
+    description: "routing_navigator inference completes under 100ms p99 (Tier 1)"
+    target_sli: 99.5
+    window_days: 28
+    metric:
+      type: latency_bucket
+      bucket_metric: synapse_inference_latency_seconds_bucket
+      threshold_seconds: 0.1
+      labels:
+        agent_name: routing_navigator
+    burn_rates:
+      - severity: page
+        long_window: 1h
+        short_window: 5m
+        burn: 14.4
+      - severity: ticket
+        long_window: 6h
+        short_window: 30m
+        burn: 6.0
+
+  - name: inventory_sentinel_inference_latency
+    description: "inventory_sentinel inference completes under 500ms p99 (Tier 2)"
+    target_sli: 99.0
+    window_days: 28
+    metric:
+      type: latency_bucket
+      bucket_metric: synapse_inference_latency_seconds_bucket
+      threshold_seconds: 0.5
+      labels:
+        agent_name: inventory_sentinel
+    burn_rates:
+      - severity: page
+        long_window: 1h
+        short_window: 5m
+        burn: 14.4
+
+  - name: pricing_oracle_inference_latency
+    description: "pricing_oracle inference completes under 500ms p99 (Tier 2)"
+    target_sli: 99.0
+    window_days: 28
+    metric:
+      type: latency_bucket
+      bucket_metric: synapse_inference_latency_seconds_bucket
+      threshold_seconds: 0.5
+      labels:
+        agent_name: pricing_oracle
+    burn_rates:
+      - severity: page
+        long_window: 1h
+        short_window: 5m
+        burn: 14.4
+
+  - name: freshness_guardian_inference_latency
+    description: "freshness_guardian inference completes under 100ms p99 (Tier 1)"
+    target_sli: 99.5
+    window_days: 28
+    metric:
+      type: latency_bucket
+      bucket_metric: synapse_inference_latency_seconds_bucket
+      threshold_seconds: 0.1
+      labels:
+        agent_name: freshness_guardian
+    burn_rates:
+      - severity: page
+        long_window: 1h
+        short_window: 5m
+        burn: 14.4
+
+  - name: disruption_shield_inference_latency
+    description: "disruption_shield inference completes under 500ms p99 (Tier 2)"
+    target_sli: 99.0
+    window_days: 28
+    metric:
+      type: latency_bucket
+      bucket_metric: synapse_inference_latency_seconds_bucket
+      threshold_seconds: 0.5
+      labels:
+        agent_name: disruption_shield
+    burn_rates:
+      - severity: page
+        long_window: 1h
+        short_window: 5m
+        burn: 14.4
+
+  - name: supplier_trust_inference_latency
+    description: "supplier_trust inference completes under 500ms p99 (Tier 2)"
+    target_sli: 99.0
+    window_days: 28
+    metric:
+      type: latency_bucket
+      bucket_metric: synapse_inference_latency_seconds_bucket
+      threshold_seconds: 0.5
+      labels:
+        agent_name: supplier_trust
+    burn_rates:
+      - severity: page
+        long_window: 1h
+        short_window: 5m
+        burn: 14.4
+
+  - name: sustainability_agent_inference_latency
+    description: "sustainability_agent inference completes under 500ms p99 (Tier 2)"
+    target_sli: 99.0
+    window_days: 28
+    metric:
+      type: latency_bucket
+      bucket_metric: synapse_inference_latency_seconds_bucket
+      threshold_seconds: 0.5
+      labels:
+        agent_name: sustainability_agent
+    burn_rates:
+      - severity: page
+        long_window: 1h
+        short_window: 5m
+        burn: 14.4
+
+  - name: kafka_consumer_lag
+    description: "Kafka consumer-group lag stays below 1000 messages p99"
+    target_sli: 99.0
+    window_days: 28
+    metric:
+      type: availability_ratio
+      good_query: |
+        sum(synapse_kafka_consume_lag < bool 1000)
+      total_query: |
+        sum(synapse_kafka_consume_lag >= bool 0)
+    burn_rates:
+      - severity: ticket
+        long_window: 1h
+        short_window: 5m
+        burn: 14.4
