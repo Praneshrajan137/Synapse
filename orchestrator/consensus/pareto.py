@@ -3,6 +3,12 @@ SYNAPSE Orchestrator — Pareto arbitration via NSGA-II (pymoo).
 
 Given N agent proposals each evaluated against 8 objectives, finds the
 Pareto-optimal weight vector and selects the knee point.
+
+Sprint-7 elevation:
+  * Returns a structured `ConsensusRationale` (ADR-028): dominated count,
+    selected vs runner-up scores, trade-off vector, and weight-sensitivity.
+  * Pre/post contracts (ADR-015 Layer 5) enforce input shape and result
+    completeness at runtime.
 """
 
 from __future__ import annotations
@@ -14,6 +20,8 @@ import structlog
 from pymoo.algorithms.moo.nsga2 import NSGA2
 from pymoo.core.problem import Problem
 from pymoo.optimize import minimize
+
+from synapse_common.dbc import post, pre
 
 if TYPE_CHECKING:
     from synapse_common.models import AgentProposal
@@ -102,13 +110,76 @@ class _WeightOptProblem(Problem):
         out["F"] = F
 
 
+def _build_rationale(
+    pareto_front: np.ndarray,
+    weighted_dist: np.ndarray,
+    knee_idx: int,
+    weights: dict[str, float],
+) -> dict[str, Any]:
+    """Construct a ConsensusRationale dict (ADR-028).
+
+    `pareto_front` rows are negated objective values (minimised). We invert here
+    so all reported scores are in the natural "higher is better" frame.
+    """
+    n = pareto_front.shape[0]
+    selected_neg = pareto_front[knee_idx]
+    selected_pos = (-selected_neg).tolist()
+
+    # Runner-up = next-closest knee candidate by weighted_dist.
+    if n > 1:
+        order = np.argsort(weighted_dist)
+        runner_up_idx = int(order[1])
+        runner_up_pos = (-pareto_front[runner_up_idx]).tolist()
+    else:
+        runner_up_idx = knee_idx
+        runner_up_pos = selected_pos
+
+    # Trade-off: per-objective gap (selected - runner_up). Positive = selected
+    # better on that objective; negative = it traded that objective away.
+    tradeoff = [selected_pos[i] - runner_up_pos[i] for i in range(len(OBJECTIVES))]
+
+    # Sensitivity: ∂selection / ∂weight, approximated by the partial derivative
+    # of weighted_dist with respect to each weight at the knee. We compute it
+    # analytically: dist² = Σ (wᵢ * normalisedᵢ)² → ∂(dist²)/∂wᵢ = 2 wᵢ normᵢ².
+    ideal = pareto_front.min(axis=0)
+    nadir = pareto_front.max(axis=0)
+    denom = nadir - ideal + 1e-8
+    normalised = (pareto_front[knee_idx] - ideal) / denom
+    weight_arr = np.array([weights.get(o, 1.0) for o in OBJECTIVES], dtype=np.float64)
+    sensitivity = (2.0 * weight_arr * (normalised**2)).tolist()
+
+    return {
+        "selected_scores": dict(zip(OBJECTIVES, selected_pos, strict=False)),
+        "runner_up_scores": dict(zip(OBJECTIVES, runner_up_pos, strict=False)),
+        "tradeoff_vector": dict(zip(OBJECTIVES, tradeoff, strict=False)),
+        "sensitivity": dict(zip(OBJECTIVES, sensitivity, strict=False)),
+        "dominated_alternatives": max(0, n - 1),
+        "knee_distance": float(weighted_dist[knee_idx]),
+        "weights_used": dict(weights),
+    }
+
+
+@pre(lambda proposals, weight_vector, pop_size=50, n_gen=100: len(proposals) > 0)
+@pre(lambda proposals, weight_vector, pop_size=50, n_gen=100: pop_size > 0 and n_gen > 0)
+@post(
+    lambda result: (
+        "selected_weights" in result
+        and "pareto_front" in result
+        and "rationale" in result
+        and 0 <= result["knee_index"] < result["n_solutions"]
+    )
+)
 def run_pareto_arbitration(
     proposals: list[AgentProposal],
     weight_vector: dict[str, float],
     pop_size: int = 50,
     n_gen: int = 100,
 ) -> dict[str, Any]:
-    """Run NSGA-II and return Pareto front with knee-point selection."""
+    """Run NSGA-II and return Pareto front + knee-point selection + rationale.
+
+    The returned `rationale` (ADR-028) is the audit-trail anchor for I-2: every
+    Tier-3/4 decision must persist it so post-hoc challenges are answerable.
+    """
     utility_matrix = _build_utility_matrix(proposals)
 
     problem = _WeightOptProblem(utility_matrix)
@@ -118,7 +189,6 @@ def run_pareto_arbitration(
     pareto_front: np.ndarray = result.F
     pareto_solutions: np.ndarray = result.X
 
-    # Knee-point selection: weighted distance to ideal
     ideal = pareto_front.min(axis=0)
     nadir = pareto_front.max(axis=0)
     denom = nadir - ideal + 1e-8
@@ -135,11 +205,14 @@ def run_pareto_arbitration(
     selected_normalised = selected_raw / (selected_raw.sum() + 1e-12) * 8.0
     selected_weights = dict(zip(OBJECTIVES, selected_normalised.tolist(), strict=False))
 
+    rationale = _build_rationale(pareto_front, weighted_dist, knee_idx, weight_vector)
+
     logger.info(
         "pareto_arbitration_complete",
         n_proposals=len(proposals),
         pareto_front_size=len(pareto_front),
         knee_index=knee_idx,
+        knee_distance=rationale["knee_distance"],
     )
 
     return {
@@ -149,4 +222,5 @@ def run_pareto_arbitration(
         ],
         "knee_index": knee_idx,
         "n_solutions": len(pareto_front),
+        "rationale": rationale,
     }

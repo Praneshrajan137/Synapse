@@ -46,6 +46,12 @@ class AuditConsensusRow(Base):
     audit_trace: Any = Column(JSONB, nullable=False)
     pareto_front: Any = Column(JSONB, nullable=True)
     outcome: Any = Column(JSONB, nullable=True)
+    # ADR-027 — causal envelope persistence
+    correlation_id: Any = Column(String(64), nullable=True, index=True)
+    causation_chain: Any = Column(JSONB, nullable=True)
+    # ADR-028 — explainable consensus
+    rationale: Any = Column(JSONB, nullable=True)
+    counterfactuals: Any = Column(JSONB, nullable=True)
     created_at: Any = Column(
         DateTime(timezone=True),
         nullable=False,

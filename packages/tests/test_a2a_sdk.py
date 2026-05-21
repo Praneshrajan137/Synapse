@@ -18,20 +18,20 @@ from synapse_common.a2a_sdk import (
 class TestA2ARequest:
 
     def test_auto_generates_id(self) -> None:
-        req = A2ARequest(method="propose", params={"value": 1})
+        req = A2ARequest(method="proposal", params={"value": 1})
         assert req.id != ""
         assert req.jsonrpc == "2.0"
 
     def test_explicit_id_preserved(self) -> None:
-        req = A2ARequest(method="propose", params={}, id="custom-123")
+        req = A2ARequest(method="proposal", params={}, id="custom-123")
         assert req.id == "custom-123"
 
     def test_default_params_empty(self) -> None:
-        req = A2ARequest(method="ping")
+        req = A2ARequest(method="execute")
         assert req.params == {}
 
     def test_frozen(self) -> None:
-        req = A2ARequest(method="ping")
+        req = A2ARequest(method="execute")
         with pytest.raises(Exception):
             req.method = "other"  # type: ignore[misc]
 
@@ -58,10 +58,10 @@ class TestAgentCard:
             version="0.1.0",
             url="http://localhost:8001",
             capabilities=["forecast"],
-            supported_methods=["propose", "debate_respond"],
+            supported_methods=["proposal", "debate_respond", "execute"],
         )
         assert card.name == "demand_prophet"
-        assert len(card.supported_methods) == 2
+        assert len(card.supported_methods) == 3
 
 
 _RealAsyncClient = httpx.AsyncClient
@@ -82,7 +82,7 @@ class TestSendA2ARequest:
             response_body["id"] = body["id"]
             assert request.url.path == "/a2a"
             assert request.headers["content-type"] == "application/json"
-            assert body["method"] == "propose"
+            assert body["method"] == "proposal"
             return httpx.Response(200, json=response_body)
 
         transport = httpx.MockTransport(handler)
@@ -95,7 +95,7 @@ class TestSendA2ARequest:
             )
             resp = await send_a2a_request(
                 target_url="http://agent-a:8000",
-                method="propose",
+                method="proposal",
                 params={"price": 42.0},
             )
 
@@ -118,6 +118,6 @@ class TestSendA2ARequest:
             with pytest.raises(httpx.HTTPStatusError):
                 await send_a2a_request(
                     target_url="http://agent-a:8000",
-                    method="propose",
+                    method="proposal",
                     params={},
                 )

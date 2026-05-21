@@ -40,7 +40,44 @@
       "items": { "type": "string" },
       "default": []
     },
-    "audit_id": { "type": ["string", "null"], "format": "uuid" }
+    "audit_id": { "type": ["string", "null"], "format": "uuid" },
+    "rationale": {
+      "type": ["object", "null"],
+      "description": "ConsensusRationale recorded at the Pareto knee. ADR-028.",
+      "properties": {
+        "selected_scores": { "type": "object" },
+        "runner_up_scores": { "type": "object" },
+        "tradeoff_vector": { "type": "object" },
+        "sensitivity": { "type": "object" },
+        "dominated_alternatives": { "type": "integer", "minimum": 0 },
+        "knee_distance": { "type": "number", "minimum": 0.0 },
+        "weights_used": { "type": "object" }
+      }
+    },
+    "counterfactuals": {
+      "type": ["array", "null"],
+      "description": "Per-objective counterfactual sweep at decision time. ADR-028.",
+      "items": {
+        "type": "object",
+        "properties": {
+          "objective": { "type": "string" },
+          "delta": { "type": "number" },
+          "original_knee_index": { "type": "integer", "minimum": 0 },
+          "new_knee_index": { "type": "integer", "minimum": 0 },
+          "flipped": { "type": "boolean" },
+          "biggest_shift": { "type": "object" }
+        }
+      }
+    },
+    "correlation_id": {
+      "type": ["string", "null"],
+      "description": "Stable id for the originating user/decision flow. ADR-027."
+    },
+    "causation_chain": {
+      "type": ["array", "null"],
+      "description": "Ordered list of upstream a2a request ids that caused this decision. ADR-027.",
+      "items": { "type": "string" }
+    }
   },
   "additionalProperties": false
 }

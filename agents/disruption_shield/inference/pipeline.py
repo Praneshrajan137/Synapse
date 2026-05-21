@@ -2,13 +2,17 @@
 SYNAPSE Disruption Shield — Inference Pipeline.
 Orchestrates anomaly ensemble, reasoning chain, and playbook retrieval
 to produce a DisruptionAlert.
+
+Sprint-8 elevation:
+  * Optional `GraphClient` for Neo4j blast-radius queries (ADR-005, WS-8.4).
+  * DbC pre/post contracts (ADR-015 Layer 5).
 """
 
 from __future__ import annotations
 
 import uuid
 from datetime import UTC, datetime
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import numpy as np
 import structlog
@@ -21,6 +25,10 @@ from agents.disruption_shield.inference.playbook_retriever import (
 )
 from agents.disruption_shield.models.anomaly_ensemble import AnomalyEnsemble
 from agents.disruption_shield.models.reasoning import DeepSeekReasoner
+from synapse_common.dbc import post, pre
+
+if TYPE_CHECKING:
+    from synapse_common.graph_client import GraphClient
 
 logger = structlog.get_logger(__name__)
 
@@ -72,8 +80,10 @@ class DisruptionShieldPipeline:
         ensemble: AnomalyEnsemble | None = None,
         reasoner: DeepSeekReasoner | None = None,
         retriever: PlaybookRetriever | None = None,
+        graph_client: "GraphClient | None" = None,
     ) -> None:
         self._config = config or DisruptionShieldConfig()
+        self._graph = graph_client
 
         self.ensemble = ensemble or AnomalyEnsemble(
             if_weight=self._config.if_weight,
@@ -104,6 +114,9 @@ class DisruptionShieldPipeline:
             sla_ms=self._config.pinecone_sla_ms,
         )
 
+    @pre(lambda self, request: len(request.node_ids) >= 1)
+    @post(lambda result: 0 <= result.alert_level <= 3)
+    @post(lambda result: 0.0 <= result.confidence <= 1.0)
     def detect(self, request: DisruptionRequest) -> DisruptionAlert:
         """Run full disruption detection pipeline."""
         tabular = np.array(request.tabular_features)
@@ -174,6 +187,25 @@ class DisruptionShieldPipeline:
             summary=reasoning.get("summary", ""),
             playbooks=playbooks,
             confidence=confidence,
+        )
+
+    def blast_radius(
+        self,
+        node_id: str,
+        *,
+        city: str = "bengaluru",
+        hops: int = 2,
+    ) -> list[dict[str, Any]]:
+        """Query Neo4j for downstream nodes within `hops` of `node_id` (WS-8.4).
+
+        Returns a list of `{kind, id}` dicts the orchestrator can use to gate
+        Tier-3/4 mitigation playbooks. Empty list when the graph is offline.
+        """
+        if self._graph is None:
+            return []
+        return self._graph.query(
+            "disruption_blast_radius",
+            {"node_id": node_id, "city": city, "hops": hops},
         )
 
     def _compute_alert_level(self, ensemble_score: float) -> int:

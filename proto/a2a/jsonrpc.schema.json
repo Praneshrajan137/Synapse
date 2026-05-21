@@ -8,7 +8,17 @@
     "jsonrpc": {"type": "string", "const": "2.0"},
     "method": {"type": "string", "enum": ["proposal", "debate_respond", "execute"]},
     "params": {"type": "object"},
-    "id": {"type": "string", "minLength": 1}
+    "id": {"type": "string", "minLength": 1},
+    "correlation_id": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Stable id for the originating user/decision flow. Propagated unchanged across every a2a hop. ADR-027."
+    },
+    "causation_id": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Id of the immediately upstream a2a call that caused this one. Forms a parent edge in the causal DAG. ADR-027."
+    }
   },
   "additionalProperties": false
 }

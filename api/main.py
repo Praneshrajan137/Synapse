@@ -21,6 +21,7 @@ import structlog
 from fastapi import FastAPI
 
 from api.routers import agents, decisions, orders
+from synapse_common.idempotency import IdempotencyMiddleware
 
 try:
     from synapse_common.tracing import instrument_fastapi
@@ -36,6 +37,14 @@ app = FastAPI(
     title="SYNAPSE API Gateway",
     version="1.0.0",
     description="Front door to the SYNAPSE multi-agent quick-commerce platform",
+)
+
+# Idempotency-Key middleware (ADR-029). Mutating endpoints honour
+# `Idempotency-Key`; replays inside the TTL window return the cached response
+# stamped with `X-Idempotent-Replay: true`. Degrades open if Redis is down (I-7).
+app.add_middleware(
+    IdempotencyMiddleware,
+    redis_url=os.environ.get("SYNAPSE_REDIS_URL", "redis://redis:6379/0"),
 )
 
 app.include_router(orders.router, prefix="/api/v1/orders", tags=["orders"])

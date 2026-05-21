@@ -276,6 +276,34 @@ def _emit_metamorphic_block(mr: dict[str, str]) -> list[str]:
     ]
 
 
+def _emit_dbc_block(item: dict[str, str], kind: str) -> list[str]:
+    """Emit a DbC stub (Layer 5) for one pre/post/inv (WS-8.5).
+
+    The stub is marked `pytest.mark.dbc` so the runner can collect the layer
+    independently. Hand-written DbC tests should land in
+    `tests/dbc/test_<agent>_contracts.py`; this stub is a *coverage*
+    placeholder so `scripts/check_spec_coverage.py` can verify each spec
+    invariant has a matching @deal contract.
+    """
+    cls = _class_name(item["id"]) + "Dbc"
+    slug = _slug(item["id"])
+    desc = item.get("description", "")
+    check = item.get("check") or item.get("assertion", "")
+    return [
+        "",
+        "@pytest.mark.dbc",
+        f"class {cls}:",
+        f'    """DbC ({kind}) {item["id"]}: {desc}',
+        "",
+        f"    Check: {check}",
+        '    """',
+        "",
+        f"    def test_dbc_{slug}(self) -> None:",
+        f'        pytest.skip("DBC: contract enforced via @deal decorator on the production callable")',
+        "",
+    ]
+
+
 def _emit_schema_block(agent_name: str, schema_file: str | None) -> list[str]:
     if schema_file is None:
         return []
@@ -316,10 +344,13 @@ def generate_test_file(spec_path: Path, force: bool = False) -> bool:
     lines = _emit_header(agent_name, schema_file)
     for inv in spec.get("invariants", []):
         lines.extend(_emit_invariant_block(inv))
+        lines.extend(_emit_dbc_block(inv, "invariant"))
     for pre in spec.get("preconditions", []):
         lines.extend(_emit_pre_block(pre))
+        lines.extend(_emit_dbc_block(pre, "precondition"))
     for post in spec.get("postconditions", []):
         lines.extend(_emit_post_block(post))
+        lines.extend(_emit_dbc_block(post, "postcondition"))
     lines.extend(_emit_state_machine_block(agent_name, spec.get("state_machine", {})))
     lines.extend(_emit_schema_block(agent_name, schema_file))
     for mr in spec.get("metamorphic_relations", []):

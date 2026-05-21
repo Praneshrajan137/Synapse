@@ -1,5 +1,9 @@
 """
 SYNAPSE Design-by-Contract — Runtime invariant enforcement via deal (ADR-015, Layer 5).
+
+Re-exports `validates_schema` from synapse_common.schema_registry for
+boundary validation (ADR-025) so a single import surface covers both
+intra-process invariants (`deal`) and inter-process schema enforcement.
 """
 
 from __future__ import annotations
@@ -7,6 +11,14 @@ from __future__ import annotations
 from typing import Any
 
 import deal
+
+from synapse_common.schema_registry import (
+    SchemaRegistry,
+    SchemaViolation,
+    get_registry,
+    validate as validate_schema,
+    validates_schema,
+)
 
 
 @deal.post(lambda result: result is not None and hasattr(result, "id"))
@@ -52,4 +64,9 @@ __all__ = [
     "ensure_append_only",
     "jitter_bounds",
     "safe_positive_result",
+    "SchemaRegistry",
+    "SchemaViolation",
+    "get_registry",
+    "validate_schema",
+    "validates_schema",
 ]

@@ -1,6 +1,9 @@
 """
 SYNAPSE Kafka Client — Unified producer/consumer with schema validation (I-3).
 All agents use this client. Direct kafka-python usage is a PR rejection.
+
+Outbound payloads can be validated against a JSON Schema (proto/*.schema.json)
+when `schema` is supplied to `produce()` (ADR-025).
 """
 
 from __future__ import annotations
@@ -11,6 +14,8 @@ from typing import Any
 import structlog
 from confluent_kafka import Consumer, Producer
 from pydantic import BaseModel
+
+from synapse_common.schema_registry import get_registry
 
 logger = structlog.get_logger(__name__)
 
@@ -47,8 +52,17 @@ class SynapseProducer:
         topic: str,
         value: dict[str, Any] | BaseModel,
         key: str | None = None,
+        schema: str | None = None,
     ) -> None:
-        """Produce message with deterministic JSON serialization (I-13)."""
+        """Produce a message with deterministic JSON serialization (I-13).
+
+        When `schema` is provided the payload is validated against the named
+        JSON Schema (e.g. 'domain.inventory_action') before publish. Validation
+        failures raise SchemaViolation and the message is NOT sent.
+        """
+        if schema is not None:
+            get_registry().validate(value, schema)
+
         if isinstance(value, BaseModel):
             serialized = json.dumps(value.model_dump(mode="json"), **SERIALIZATION_KWARGS)
         else:

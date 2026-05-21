@@ -97,7 +97,13 @@ class AgentProposal(SynapseBaseModel):
 
 
 class ConsensusDecision(SynapseBaseModel):
-    """Final Orchestrator decision with full provenance (I-4)."""
+    """Final Orchestrator decision with full provenance (I-4).
+
+    Sprint-7 additions (additive, backward-compatible):
+      * `rationale` — Pareto-knee explainability record (ADR-028)
+      * `counterfactuals` — sensitivity sweep around the knee (ADR-028)
+      * `correlation_id` / `causation_chain` — causal DAG linkage (ADR-027)
+    """
 
     decision_id: UUID = Field(default_factory=uuid4)
     timestamp: datetime = Field(default_factory=lambda: datetime.now(UTC))
@@ -115,6 +121,10 @@ class ConsensusDecision(SynapseBaseModel):
     context_messages: list[ContextMessage] = Field(default_factory=list)
     execution_confirmations: list[str] = Field(default_factory=list)
     audit_id: UUID | None = None
+    rationale: dict[str, Any] | None = None
+    counterfactuals: list[dict[str, Any]] | None = None
+    correlation_id: str | None = None
+    causation_chain: list[str] | None = None
 
 
 class DemandForecast(SynapseBaseModel):

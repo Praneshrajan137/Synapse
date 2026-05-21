@@ -56,6 +56,10 @@ class AuditLogger:
                 context_messages=[m.model_dump(mode="json") for m in decision.context_messages],
                 audit_trace=decision.audit_trace,
                 pareto_front=decision.pareto_front,
+                correlation_id=decision.correlation_id,
+                causation_chain=decision.causation_chain,
+                rationale=decision.rationale,
+                counterfactuals=decision.counterfactuals,
             )
             session.add(row)
             await session.commit()
