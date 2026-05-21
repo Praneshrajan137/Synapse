@@ -1,0 +1,186 @@
+{
+  "app": {
+    "name": "SYNAPSE अॅटलस कंसोल",
+    "tagline": "स्वायत्त पुरवठा साखळी समजण्यायोग्य करा."
+  },
+  "nav": {
+    "livingCity": "जिवंत शहर",
+    "missionControl": "मिशन कंट्रोल",
+    "decisionTrace": "निर्णय मागोवा",
+    "twinStudio": "ट्विन स्टुडिओ",
+    "agentFloor": "एजंट फ्लोअर",
+    "auditVault": "लेखापरीक्षण कक्ष",
+    "settings": "सेटिंग्ज",
+    "logout": "साइन आउट"
+  },
+  "city": {
+    "label": "शहर",
+    "bengaluru": "बेंगळुरू",
+    "mumbai": "मुंबई",
+    "switchAria": "सक्रिय शहर बदला"
+  },
+  "locale": {
+    "label": "भाषा",
+    "en-IN": "English",
+    "hi-IN": "हिन्दी",
+    "kn-IN": "ಕನ್ನಡ",
+    "mr-IN": "मराठी"
+  },
+  "theme": {
+    "label": "थीम",
+    "light": "हलका",
+    "dark": "गडद",
+    "system": "सिस्टमशी जुळवा"
+  },
+  "auth": {
+    "signIn": "साइन इन",
+    "signOut": "साइन आउट",
+    "username": "वापरकर्ता नाव",
+    "password": "पासवर्ड",
+    "submit": "साइन इन करा",
+    "elevateForPii": "PII पाहण्यासाठी पासवर्ड पुष्टी करा",
+    "errors": {
+      "invalid": "अवैध वापरकर्ता नाव किंवा पासवर्ड.",
+      "expired": "तुमचा सत्र संपला आहे. पुन्हा साइन इन करा.",
+      "csrf": "सुरक्षा टोकन जुळत नाही — कृपया पुनः लोड करा."
+    }
+  },
+  "tier": {
+    "tier_1": "स्तर 1 — स्वयं",
+    "tier_2": "स्तर 2 — सहमती",
+    "tier_3": "स्तर 3 — चर्चा",
+    "tier_4": "स्तर 4 — संकट",
+    "latency": "p99 < {limit_ms, number}ms"
+  },
+  "missionControl": {
+    "title": "मिशन कंट्रोल",
+    "queueEmpty": "कोणतेही प्रलंबित एस्केलेशन नाहीत — एजंट विश्वासाच्या मर्यादेत आहेत.",
+    "queueLiveAria": "{count, plural, =0 {कोणतेही एस्केलेशन नाहीत} =1 {एक एस्केलेशन} other {# एस्केलेशन}} निर्णयाची वाट पाहत आहेत.",
+    "escalation": {
+      "approve": "मंजूर करा",
+      "reject": "नाकारा",
+      "modify": "बदला",
+      "countdown": "{seconds, number} सेकंद बाकी",
+      "guardrailViolations": "{count, plural, one {# गार्डरेल उल्लंघन} other {# गार्डरेल उल्लंघने}}",
+      "confidence": "विश्वास {value, number, percent}",
+      "approvedAria": "एस्केलेशन मंजूर केले",
+      "rejectedAria": "एस्केलेशन नाकारले"
+    },
+    "hotkeys": {
+      "next": "पुढील (j)",
+      "prev": "मागील (k)",
+      "approve": "मंजूर करा (Enter)",
+      "reject": "नाकारा (r)",
+      "modify": "बदला (m)",
+      "help": "शॉर्टकट दाखवा (?)"
+    }
+  },
+  "decisionTrace": {
+    "title": "निर्णय मागोवा",
+    "filters": {
+      "tier": "स्तर",
+      "agent": "एजंट",
+      "escalated": "फक्त एस्केलेटेड",
+      "override": "फक्त ओव्हरराइड",
+      "search": "तर्क शोधा",
+      "since": "पासून",
+      "until": "पर्यंत"
+    },
+    "table": {
+      "tier": "स्तर",
+      "decisionId": "निर्णय आयडी",
+      "confidence": "विश्वास",
+      "phase": "टप्पा",
+      "outcome": "परिणाम",
+      "createdAt": "वेळ"
+    },
+    "drawer": {
+      "phases": "5-टप्प्यांचा मागोवा",
+      "debateRounds": "चर्चा फेऱ्या",
+      "paretoFront": "पॅरेटो फ्रंट",
+      "auditChain": "लेखापरीक्षण साखळी पुरावा",
+      "exportJson": "JSON निर्यात",
+      "exportPdf": "PDF पुरावा निर्यात"
+    },
+    "scrubber": {
+      "speed": "रीप्ले गती",
+      "speed1x": "1×",
+      "speed5x": "5×",
+      "speed30x": "30×"
+    }
+  },
+  "livingCity": {
+    "title": "जिवंत शहर",
+    "kpi": {
+      "ordersPerMin": "ऑर्डर / मिनिट",
+      "avgDelivery": "सरासरी डिलिव्हरी",
+      "fillRate": "पूर्ण दर",
+      "wasteRate": "अपव्यय दर",
+      "co2PerDelivery": "CO₂ / डिलिव्हरी"
+    },
+    "layers": {
+      "darkStores": "डार्क स्टोअर्स",
+      "riders": "रायडर्स",
+      "routes": "सक्रिय मार्ग",
+      "freshnessHeatmap": "ताजेपणा हीटमॅप",
+      "disruptions": "व्यत्यय"
+    }
+  },
+  "twinStudio": {
+    "title": "ट्विन स्टुडिओ",
+    "form": {
+      "demand_multiplier": "मागणी गुणक",
+      "lead_time_multiplier": "लीड-टाइम गुणक",
+      "failure_rate_multiplier": "अपयश दर गुणक",
+      "spoilage_rate_multiplier": "नासाडी दर गुणक",
+      "n_scenarios": "परिस्थिती",
+      "duration_hours": "कालावधी (तास)",
+      "run": "सिम्युलेशन चालवा"
+    },
+    "results": {
+      "klDivergence": "लाइव्ह विरुद्ध KL विचलन",
+      "klOverThreshold": "ट्विन विचलित — KL > 0.1",
+      "fanOut": "परिस्थिती फॅन-आउट (p10 / p50 / p90)",
+      "counterfactual": "वास्तविक विरुद्ध प्रतितथ्य फरक"
+    }
+  },
+  "agentFloor": {
+    "title": "एजंट फ्लोअर",
+    "agents": {
+      "demand_prophet": "डिमांड प्रॉफेट",
+      "routing_navigator": "रूटिंग नेव्हिगेटर",
+      "inventory_sentinel": "इन्व्हेंटरी सेंटिनेल",
+      "pricing_oracle": "प्राइसिंग ऑरॅकल",
+      "disruption_shield": "डिसरप्शन शील्ड",
+      "freshness_guardian": "ताजेपणा रक्षक",
+      "supplier_trust": "पुरवठादार विश्वास",
+      "sustainability_agent": "शाश्वतता एजंट"
+    },
+    "state": {
+      "IDLE": "निष्क्रिय",
+      "PROPOSING": "प्रस्तावित करत आहे",
+      "DEBATING": "चर्चा करत आहे",
+      "EXECUTING": "अंमलबजावणी करत आहे",
+      "LEARNING": "शिकत आहे",
+      "ERROR": "त्रुटी"
+    }
+  },
+  "auditVault": {
+    "title": "लेखापरीक्षण कक्ष",
+    "chainOk": "लेखापरीक्षण साखळी सत्यापित",
+    "chainBroken": "लेखापरीक्षण साखळी तुटली — निर्यात अवरोधित. प्लॅटफॉर्मशी संपर्क साधा.",
+    "showPii": "PII दाखवा",
+    "redactedNotice": "PII गुप्त. दाखवण्यासाठी पुनः-प्रमाणीकरण आवश्यक."
+  },
+  "common": {
+    "loading": "लोड होत आहे…",
+    "error": "काहीतरी चुकले.",
+    "retry": "पुन्हा प्रयत्न करा",
+    "cancel": "रद्द करा",
+    "confirm": "पुष्टी करा",
+    "close": "बंद करा",
+    "saved": "जतन केले",
+    "demoMode": "डेमो",
+    "residencyChip": "डेटा: ap-south-1 · 90 दिवस"
+  }
+}

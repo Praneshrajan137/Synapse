@@ -1,0 +1,30 @@
+{
+  "$schema": "https://raw.githubusercontent.com/stryker-mutator/stryker-js/master/packages/core/schema/stryker-schema.json",
+  "_comment": "SYNAPSE Atlas Console — mutation gate. Plan §6 acceptance: ≥80% mutants killed on critical files. Targets the surface-of-no-return: canonicalisation, hash chain, ranker, fetcher, demo-mode. We do NOT mutate UI components — visual + a11y assertions are the right tool there.",
+  "packageManager": "pnpm",
+  "reporters": ["clear-text", "html", "json"],
+  "testRunner": "vitest",
+  "vitest": {
+    "configFile": "vitest.config.ts"
+  },
+  "checkers": ["typescript"],
+  "tsconfigFile": "tsconfig.app.json",
+  "coverageAnalysis": "perTest",
+  "mutate": [
+    "src/shared/canonical-json.ts",
+    "src/shared/hash/sha256.ts",
+    "src/shared/api/fetcher.ts",
+    "src/shared/demo/index.ts",
+    "src/surfaces/$city/mission-control/model/ranker.ts",
+    "src/surfaces/$city/decisions/model/audit-hash.ts"
+  ],
+  "thresholds": {
+    "high": 90,
+    "low": 80,
+    "break": 80
+  },
+  "timeoutMS": 30000,
+  "concurrency": 4,
+  "ignoreStatic": true,
+  "tempDirName": ".stryker-tmp"
+}

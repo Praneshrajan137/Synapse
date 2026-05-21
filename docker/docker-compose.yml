@@ -327,6 +327,34 @@ services:
   # LAYER 6: Sprint 5 — Security & Evaluation
   # ════════════════════════════════════════════════════════════════════════════
 
+  # Atlas Console — ops control surface (plan/atlas-console S1).
+  # Multi-stage build: pnpm + Vite → nginx-unprivileged static serve on :8080.
+  # The reverse-proxy nginx (below) routes / → synapse-frontend:8080.
+  synapse-frontend:
+    build:
+      context: ..
+      dockerfile: frontend/Dockerfile
+      args:
+        NODE_VERSION: "20.18.0"
+        PNPM_VERSION: "9.12.3"
+    container_name: synapse-frontend
+    <<: *common-labels
+    environment:
+      # Inside the compose network the gateway is reachable as the orchestrator
+      # service name. Outside (browser → nginx → synapse-frontend), the SPA
+      # speaks to the same origin so the dev proxy in vite.config.ts is unused.
+      - VITE_API_TARGET=http://orchestrator:8085
+      - VITE_WS_TARGET=ws://orchestrator:8085
+    networks:
+      - frontend-net
+    healthcheck:
+      test: ["CMD-SHELL", "wget --quiet --spider --tries=1 http://localhost:8080/healthz || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    restart: unless-stopped
+
   nginx:
     image: nginx:1.25-alpine
     container_name: synapse-nginx
@@ -340,6 +368,7 @@ services:
       - agents-net
     depends_on:
       - orchestrator
+      - synapse-frontend
     healthcheck:
       test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:80/ || exit 1"]
       interval: 15s

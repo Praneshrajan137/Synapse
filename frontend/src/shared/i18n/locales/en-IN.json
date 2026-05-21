@@ -1,0 +1,186 @@
+{
+  "app": {
+    "name": "SYNAPSE Atlas Console",
+    "tagline": "Make the autonomous supply chain legible."
+  },
+  "nav": {
+    "livingCity": "Living City",
+    "missionControl": "Mission Control",
+    "decisionTrace": "Decision Trace",
+    "twinStudio": "Twin Studio",
+    "agentFloor": "Agent Floor",
+    "auditVault": "Audit Vault",
+    "settings": "Settings",
+    "logout": "Sign out"
+  },
+  "city": {
+    "label": "City",
+    "bengaluru": "Bengaluru",
+    "mumbai": "Mumbai",
+    "switchAria": "Switch active city"
+  },
+  "locale": {
+    "label": "Language",
+    "en-IN": "English",
+    "hi-IN": "हिन्दी",
+    "kn-IN": "ಕನ್ನಡ",
+    "mr-IN": "मराठी"
+  },
+  "theme": {
+    "label": "Theme",
+    "light": "Light",
+    "dark": "Dark",
+    "system": "Match system"
+  },
+  "auth": {
+    "signIn": "Sign in",
+    "signOut": "Sign out",
+    "username": "Username",
+    "password": "Password",
+    "submit": "Sign in",
+    "elevateForPii": "Confirm your password to view PII",
+    "errors": {
+      "invalid": "Invalid username or password.",
+      "expired": "Your session has expired. Sign in again.",
+      "csrf": "Security token mismatch — please reload."
+    }
+  },
+  "tier": {
+    "tier_1": "Tier 1 — Auto",
+    "tier_2": "Tier 2 — Consensus",
+    "tier_3": "Tier 3 — Debate",
+    "tier_4": "Tier 4 — Crisis",
+    "latency": "p99 < {limit_ms, number}ms"
+  },
+  "missionControl": {
+    "title": "Mission Control",
+    "queueEmpty": "No escalations pending — the agents are within confidence.",
+    "queueLiveAria": "{count, plural, =0 {No escalations} =1 {One escalation} other {# escalations}} awaiting decision.",
+    "escalation": {
+      "approve": "Approve",
+      "reject": "Reject",
+      "modify": "Modify",
+      "countdown": "{seconds, number}s remaining",
+      "guardrailViolations": "{count, plural, one {# guardrail violation} other {# guardrail violations}}",
+      "confidence": "Confidence {value, number, percent}",
+      "approvedAria": "Escalation approved",
+      "rejectedAria": "Escalation rejected"
+    },
+    "hotkeys": {
+      "next": "Next (j)",
+      "prev": "Previous (k)",
+      "approve": "Approve (Enter)",
+      "reject": "Reject (r)",
+      "modify": "Modify (m)",
+      "help": "Show shortcuts (?)"
+    }
+  },
+  "decisionTrace": {
+    "title": "Decision Trace",
+    "filters": {
+      "tier": "Tier",
+      "agent": "Agent",
+      "escalated": "Escalated only",
+      "override": "Overridden only",
+      "search": "Search reasoning",
+      "since": "Since",
+      "until": "Until"
+    },
+    "table": {
+      "tier": "Tier",
+      "decisionId": "Decision ID",
+      "confidence": "Confidence",
+      "phase": "Phase",
+      "outcome": "Outcome",
+      "createdAt": "Time"
+    },
+    "drawer": {
+      "phases": "5-phase trace",
+      "debateRounds": "Debate rounds",
+      "paretoFront": "Pareto front",
+      "auditChain": "Audit chain proof",
+      "exportJson": "Export JSON",
+      "exportPdf": "Export PDF evidence"
+    },
+    "scrubber": {
+      "speed": "Replay speed",
+      "speed1x": "1×",
+      "speed5x": "5×",
+      "speed30x": "30×"
+    }
+  },
+  "livingCity": {
+    "title": "Living City",
+    "kpi": {
+      "ordersPerMin": "Orders / min",
+      "avgDelivery": "Avg delivery",
+      "fillRate": "Fill rate",
+      "wasteRate": "Waste rate",
+      "co2PerDelivery": "CO₂ / delivery"
+    },
+    "layers": {
+      "darkStores": "Dark stores",
+      "riders": "Riders",
+      "routes": "Active routes",
+      "freshnessHeatmap": "Freshness heatmap",
+      "disruptions": "Disruptions"
+    }
+  },
+  "twinStudio": {
+    "title": "Twin Studio",
+    "form": {
+      "demand_multiplier": "Demand multiplier",
+      "lead_time_multiplier": "Lead-time multiplier",
+      "failure_rate_multiplier": "Failure-rate multiplier",
+      "spoilage_rate_multiplier": "Spoilage-rate multiplier",
+      "n_scenarios": "Scenarios",
+      "duration_hours": "Duration (hours)",
+      "run": "Run simulation"
+    },
+    "results": {
+      "klDivergence": "KL divergence vs live",
+      "klOverThreshold": "Twin diverging — KL > 0.1",
+      "fanOut": "Scenario fan-out (p10 / p50 / p90)",
+      "counterfactual": "Counterfactual diff vs actual"
+    }
+  },
+  "agentFloor": {
+    "title": "Agent Floor",
+    "agents": {
+      "demand_prophet": "Demand Prophet",
+      "routing_navigator": "Routing Navigator",
+      "inventory_sentinel": "Inventory Sentinel",
+      "pricing_oracle": "Pricing Oracle",
+      "disruption_shield": "Disruption Shield",
+      "freshness_guardian": "Freshness Guardian",
+      "supplier_trust": "Supplier Trust",
+      "sustainability_agent": "Sustainability Agent"
+    },
+    "state": {
+      "IDLE": "Idle",
+      "PROPOSING": "Proposing",
+      "DEBATING": "Debating",
+      "EXECUTING": "Executing",
+      "LEARNING": "Learning",
+      "ERROR": "Error"
+    }
+  },
+  "auditVault": {
+    "title": "Audit Vault",
+    "chainOk": "Audit chain verified",
+    "chainBroken": "Audit chain broken — export blocked. Contact platform.",
+    "showPii": "Reveal PII",
+    "redactedNotice": "PII redacted. Reveal requires re-authentication."
+  },
+  "common": {
+    "loading": "Loading…",
+    "error": "Something went wrong.",
+    "retry": "Retry",
+    "cancel": "Cancel",
+    "confirm": "Confirm",
+    "close": "Close",
+    "saved": "Saved",
+    "demoMode": "DEMO",
+    "residencyChip": "data: ap-south-1 · retained 90d"
+  }
+}

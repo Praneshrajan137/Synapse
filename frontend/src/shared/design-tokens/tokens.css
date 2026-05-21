@@ -1,0 +1,138 @@
+/* ----------------------------------------------------------------------------
+ * SYNAPSE Atlas Console — design tokens
+ *
+ * - Single source of truth for colour, radius, motion. Tailwind references
+ *   these via the rgb(var(--...) / <alpha-value>) pattern.
+ * - Light + dark themes via [data-theme="..."]. Default = "dark" since the
+ *   ops persona spends shift hours in low-ambient-light control rooms.
+ * - Safety-critical palette (--color-safety-*) is colour-blind-distinguishable
+ *   AND clears AAA contrast (7:1) on bg/fg. Storybook a11y AAA stories
+ *   enforce this — ADR-028.
+ *
+ * Format: triplet "R G B" so Tailwind's `<alpha-value>` opacity utility works.
+ * Pick contrasts by L*a*b*, not eyeballing — see scripts/check-contrast.mjs.
+ *
+ * Accessibility:
+ *   - prefers-reduced-motion: media query at the bottom turns off all
+ *     non-essential transitions. Time-scrubber, KL sparkline, force-graph
+ *     read this CSS variable rather than the JS API for consistency.
+ *   - Focus rings use --color-ring with 2px outline + offset.
+ * ------------------------------------------------------------------------- */
+
+@layer base {
+  :root,
+  [data-theme="light"] {
+    /* Surfaces */
+    --color-bg: 248 250 252; /* slate-50 */
+    --color-fg: 15 23 42; /* slate-900 — 17.4:1 vs bg, AAA */
+    --color-muted: 226 232 240; /* slate-200 */
+    --color-muted-fg: 71 85 105; /* slate-600 */
+    --color-card: 255 255 255;
+    --color-card-fg: 15 23 42;
+    --color-border: 203 213 225; /* slate-300 */
+    --color-ring: 30 64 175; /* blue-800 — focus ring AAA */
+
+    /* Brand */
+    --color-primary: 30 64 175; /* blue-800 */
+    --color-primary-fg: 248 250 252;
+    --color-accent: 14 116 144; /* cyan-700 */
+    --color-accent-fg: 248 250 252;
+
+    /* Decision tiers (I-8) */
+    --color-tier-1: 21 128 61; /* green-700 */
+    --color-tier-2: 30 64 175; /* blue-800 */
+    --color-tier-3: 161 98 7; /* amber-700 */
+    --color-tier-4: 153 27 27; /* red-800 */
+
+    /* Safety-critical (AAA on bg) */
+    --color-safety-ok: 21 128 61; /* green-700, 5.4:1 on light bg */
+    --color-safety-warn: 161 98 7; /* amber-700, 5.6:1 */
+    --color-safety-alert: 194 65 12; /* orange-700, 6.1:1 */
+    --color-safety-critical: 127 29 29; /* red-900, 8.6:1 — AAA */
+
+    /* Confidence */
+    --color-confidence-high: 21 128 61;
+    --color-confidence-mid: 161 98 7;
+    --color-confidence-low: 153 27 27;
+
+    --radius: 0.5rem;
+    --motion-fast: 120ms;
+    --motion-base: 200ms;
+    --motion-slow: 320ms;
+  }
+
+  [data-theme="dark"] {
+    /* Surfaces */
+    --color-bg: 2 6 23; /* slate-950 */
+    --color-fg: 248 250 252; /* slate-50 — 18.5:1 vs bg, AAA */
+    --color-muted: 30 41 59; /* slate-800 */
+    --color-muted-fg: 148 163 184; /* slate-400 */
+    --color-card: 15 23 42; /* slate-900 */
+    --color-card-fg: 248 250 252;
+    --color-border: 30 41 59;
+    --color-ring: 96 165 250; /* blue-400 — visible at low ambient */
+
+    /* Brand */
+    --color-primary: 96 165 250; /* blue-400 */
+    --color-primary-fg: 2 6 23;
+    --color-accent: 34 211 238; /* cyan-400 */
+    --color-accent-fg: 2 6 23;
+
+    /* Decision tiers (I-8) — high-saturation duals for night ops */
+    --color-tier-1: 74 222 128; /* green-400 */
+    --color-tier-2: 96 165 250; /* blue-400 */
+    --color-tier-3: 251 191 36; /* amber-400 */
+    --color-tier-4: 248 113 113; /* red-400 */
+
+    /* Safety-critical (AAA on dark bg) */
+    --color-safety-ok: 134 239 172; /* green-300, 12.7:1 */
+    --color-safety-warn: 252 211 77; /* amber-300, 13.5:1 */
+    --color-safety-alert: 253 186 116; /* orange-300, 12.6:1 */
+    --color-safety-critical: 254 202 202; /* red-200, 14.8:1 — AAA */
+
+    /* Confidence */
+    --color-confidence-high: 74 222 128;
+    --color-confidence-mid: 251 191 36;
+    --color-confidence-low: 248 113 113;
+  }
+
+  /* Default theme — dark. Storybook decorators flip via data-theme. */
+  html {
+    background-color: rgb(var(--color-bg));
+    color: rgb(var(--color-fg));
+    font-family: "InterVariable", "Inter", system-ui, sans-serif;
+    text-rendering: optimizeLegibility;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  html:not([data-theme]) {
+    /* Operators run in low-ambient control rooms — dark is the default. */
+    color-scheme: dark;
+  }
+
+  /* Focus ring — AAA, AAA, AAA. Never outline:none without an alternative. */
+  *:focus-visible {
+    outline: 2px solid rgb(var(--color-ring));
+    outline-offset: 2px;
+    border-radius: 2px;
+  }
+
+  /* Reduced motion — turn off non-essential transitions. */
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.001ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.001ms !important;
+      scroll-behavior: auto !important;
+    }
+  }
+
+  /* Forced-colors mode (Windows high-contrast) — fall back to system colours. */
+  @media (forced-colors: active) {
+    *:focus-visible {
+      outline: 2px solid Highlight;
+    }
+  }
+}

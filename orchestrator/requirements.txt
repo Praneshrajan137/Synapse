@@ -20,3 +20,15 @@ opentelemetry-api==1.25.0
 opentelemetry-sdk==1.25.0
 opentelemetry-instrumentation-fastapi==0.46b0
 numpy>=1.26.0
+
+# ─── Atlas Console BFF + SSE bridge (plan §11/B1+B3, ADR-025/026/027) ─────
+# python-jose: RS256 JWT minted server-side, held in Redis db=2 session store.
+# passlib[bcrypt]: password hashing for the BFF login endpoint.
+# sse-starlette: text/event-stream responder for the Kafka topic tail bridge.
+# All MIT / Apache-2.0 / BSD — on the I-1 license allow-list.
+python-jose[cryptography]>=3.3.0,<4.0
+passlib[bcrypt]>=1.7.4,<2.0
+sse-starlette>=2.1.0,<3.0
+psycopg2-binary>=2.9.9,<3.0
+prometheus-fastapi-instrumentator>=7.0.0,<8.0
+requests>=2.32.0,<3.0

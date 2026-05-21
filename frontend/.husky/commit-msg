@@ -1,0 +1,5 @@
+#!/usr/bin/env sh
+# SYNAPSE Atlas Console — commit-msg hook.
+# Enforce Conventional Commits per commitlint.config.cjs.
+
+cd frontend && pnpm exec commitlint --edit "$1"

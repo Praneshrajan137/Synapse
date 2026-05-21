@@ -1,0 +1,638 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "SYNAPSE API Gateway",
+    "version": "1.0.0-s2",
+    "description": "Atlas Console BFF surface. Hand-curated S2 snapshot covering /auth, /api/v1/{decisions,orders,agents,rum,stream}. The CI gate `tests/contract/test_openapi_byte_equality.py` keeps this in lockstep with the live FastAPI app (B5)."
+  },
+  "servers": [
+    {
+      "url": "http://localhost",
+      "description": "Local dev (via reverse-proxy nginx on port 80)"
+    }
+  ],
+  "tags": [
+    { "name": "auth", "description": "BFF cookie session — ADR-027" },
+    { "name": "decisions", "description": "Consensus decisions + audit trail" },
+    { "name": "orders", "description": "Demand intake" },
+    { "name": "agents", "description": "Agent health" },
+    { "name": "stream", "description": "Kafka topic tails over SSE — ADR-026" },
+    { "name": "rum", "description": "Real-User-Monitoring + CSP reports" }
+  ],
+  "paths": {
+    "/auth/login": {
+      "post": {
+        "tags": ["auth"],
+        "operationId": "login",
+        "summary": "Verify credentials and start a BFF cookie session",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": { "schema": { "$ref": "#/components/schemas/LoginRequest" } }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Authenticated",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/LoginResponse" } }
+            },
+            "headers": {
+              "Set-Cookie": {
+                "description": "Opaque session id (HttpOnly, Secure, SameSite=Strict)",
+                "schema": { "type": "string" }
+              }
+            }
+          },
+          "401": { "$ref": "#/components/responses/Unauthorized" }
+        }
+      }
+    },
+    "/auth/logout": {
+      "post": {
+        "tags": ["auth"],
+        "operationId": "logout",
+        "summary": "Invalidate the current session",
+        "responses": {
+          "200": {
+            "description": "Logged out",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/StatusOk" } } }
+          },
+          "401": { "$ref": "#/components/responses/Unauthorized" }
+        },
+        "security": [{ "sessionCookie": [] }]
+      }
+    },
+    "/auth/refresh": {
+      "post": {
+        "tags": ["auth"],
+        "operationId": "refresh",
+        "summary": "Rolling refresh of the session and CSRF token",
+        "responses": {
+          "200": {
+            "description": "Refreshed",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/LoginResponse" } }
+            }
+          },
+          "401": { "$ref": "#/components/responses/Unauthorized" }
+        },
+        "security": [{ "sessionCookie": [] }]
+      }
+    },
+    "/auth/session": {
+      "get": {
+        "tags": ["auth"],
+        "operationId": "whoami",
+        "summary": "Return persona + claims for the current session",
+        "responses": {
+          "200": {
+            "description": "Session metadata (authenticated:false if anonymous)",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/SessionResponse" } }
+            }
+          }
+        }
+      }
+    },
+    "/auth/reauth": {
+      "post": {
+        "tags": ["auth"],
+        "operationId": "reauth",
+        "summary": "Short-lived elevation for PII reveal (Audit Vault)",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": { "schema": { "$ref": "#/components/schemas/ReauthRequest" } }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Elevated",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ReauthResponse" } }
+            }
+          },
+          "401": { "$ref": "#/components/responses/Unauthorized" }
+        },
+        "security": [{ "sessionCookie": [] }]
+      }
+    },
+
+    "/api/v1/decisions/": {
+      "post": {
+        "tags": ["decisions"],
+        "operationId": "submitDecision",
+        "summary": "Trigger a consensus decision (proxied to orchestrator)",
+        "requestBody": {
+          "required": true,
+          "content": { "application/json": { "schema": { "$ref": "#/components/schemas/DecisionRequest" } } }
+        },
+        "responses": {
+          "200": {
+            "description": "Decision result",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/DecisionResponse" } } }
+          },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "503": { "$ref": "#/components/responses/UpstreamUnavailable" }
+        },
+        "security": [{ "sessionCookie": [], "csrfHeader": [] }]
+      }
+    },
+    "/api/v1/decisions/recent": {
+      "get": {
+        "tags": ["decisions"],
+        "operationId": "recentDecisions",
+        "summary": "Recent decisions (paged via opaque cursor — S3)",
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": { "type": "integer", "minimum": 1, "maximum": 200, "default": 20 }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "description": "Opaque keyset cursor returned in `next_cursor`.",
+            "schema": { "type": ["string", "null"], "minLength": 1, "maxLength": 200 }
+          },
+          {
+            "name": "tier",
+            "in": "query",
+            "schema": { "$ref": "#/components/schemas/Tier" }
+          },
+          {
+            "name": "escalated",
+            "in": "query",
+            "schema": { "type": "boolean" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Recent rows",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/RecentDecisionsResponse" } } }
+          },
+          "400": { "$ref": "#/components/responses/BadRequest" },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "503": { "$ref": "#/components/responses/UpstreamUnavailable" }
+        },
+        "security": [{ "sessionCookie": [] }]
+      }
+    },
+    "/api/v1/decisions/{decision_id}": {
+      "get": {
+        "tags": ["decisions"],
+        "operationId": "getDecision",
+        "summary": "Full audit_consensus row for one decision (B2)",
+        "parameters": [
+          {
+            "name": "decision_id",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string", "format": "uuid" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Full audit_consensus row",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ConsensusDecision" } } }
+          },
+          "400": { "$ref": "#/components/responses/BadRequest" },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "404": { "$ref": "#/components/responses/NotFound" },
+          "503": { "$ref": "#/components/responses/UpstreamUnavailable" }
+        },
+        "security": [{ "sessionCookie": [] }]
+      }
+    },
+
+    "/api/v1/orders/": {
+      "post": {
+        "tags": ["orders"],
+        "operationId": "createOrder",
+        "summary": "Publish a demand order to Kafka",
+        "requestBody": {
+          "required": true,
+          "content": { "application/json": { "schema": { "$ref": "#/components/schemas/OrderRequest" } } }
+        },
+        "responses": {
+          "200": {
+            "description": "Accepted",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/OrderAccepted" } } }
+          },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "503": { "$ref": "#/components/responses/UpstreamUnavailable" }
+        },
+        "security": [{ "sessionCookie": [], "csrfHeader": [] }]
+      }
+    },
+
+    "/api/v1/agents/": {
+      "get": {
+        "tags": ["agents"],
+        "operationId": "listAgents",
+        "summary": "Per-agent health snapshot across the 8 agents",
+        "responses": {
+          "200": {
+            "description": "Agent statuses",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/AgentStatusList" } } }
+          },
+          "401": { "$ref": "#/components/responses/Unauthorized" }
+        },
+        "security": [{ "sessionCookie": [] }]
+      }
+    },
+
+    "/api/v1/rum/": {
+      "post": {
+        "tags": ["rum"],
+        "operationId": "ingestRum",
+        "summary": "Web-vitals beacon + CSP report-to ingest (B4 + B7)",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": { "schema": { "$ref": "#/components/schemas/RumBatch" } },
+            "application/reports+json": {
+              "schema": { "type": "array", "items": { "type": "object" } }
+            },
+            "application/csp-report": {
+              "schema": { "type": "object" }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Accepted",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/RumAccepted" } } }
+          }
+        }
+      }
+    },
+
+    "/api/v1/audit/{decision_id}/pdf": {
+      "get": {
+        "tags": ["audit"],
+        "operationId": "exportDecisionPdf",
+        "summary": "Deterministic PDF evidence pack for one decision (S5 / Audit Vault)",
+        "description": "Returns a byte-deterministic PDF — two requests for the same decision MUST be byte-identical. Includes the full audit_consensus row in canonical JSON form. Response header `X-Atlas-Audit-SHA256` carries the digest.",
+        "parameters": [
+          {
+            "name": "decision_id",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string", "format": "uuid" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "PDF body",
+            "headers": {
+              "X-Atlas-Audit-SHA256": { "schema": { "type": "string", "minLength": 64, "maxLength": 64 } }
+            },
+            "content": {
+              "application/pdf": { "schema": { "type": "string", "format": "binary" } }
+            }
+          },
+          "400": { "$ref": "#/components/responses/BadRequest" },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "404": { "$ref": "#/components/responses/NotFound" },
+          "503": { "$ref": "#/components/responses/UpstreamUnavailable" }
+        },
+        "security": [{ "sessionCookie": [] }]
+      }
+    },
+    "/api/v1/stream/{topic}": {
+      "get": {
+        "tags": ["stream"],
+        "operationId": "streamTopic",
+        "summary": "Tail a Kafka topic over Server-Sent Events (B1)",
+        "description": "Returns text/event-stream. Each SSE event id is `partition:offset`; reconnect with the standard `Last-Event-ID` header to resume from the next offset.",
+        "parameters": [
+          {
+            "name": "topic",
+            "in": "path",
+            "required": true,
+            "schema": { "$ref": "#/components/schemas/UserVisibleTopic" }
+          },
+          {
+            "name": "lastEventId",
+            "in": "query",
+            "required": false,
+            "schema": { "type": "string", "pattern": "^[0-9]+:[0-9]+$" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "SSE stream",
+            "content": {
+              "text/event-stream": {
+                "schema": { "type": "string", "description": "newline-delimited SSE events" }
+              }
+            }
+          },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "404": { "$ref": "#/components/responses/NotFound" }
+        },
+        "security": [{ "sessionCookie": [] }]
+      }
+    },
+
+    "/health": {
+      "get": {
+        "tags": ["agents"],
+        "operationId": "health",
+        "summary": "Gateway liveness",
+        "responses": {
+          "200": {
+            "description": "ok",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/StatusOk" } } }
+          }
+        }
+      }
+    },
+    "/ready": {
+      "get": {
+        "tags": ["agents"],
+        "operationId": "ready",
+        "summary": "Gateway readiness",
+        "responses": {
+          "200": {
+            "description": "ok",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/StatusOk" } } }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "sessionCookie": {
+        "type": "apiKey",
+        "in": "cookie",
+        "name": "synapse_session",
+        "description": "Opaque session id minted by /auth/login. HttpOnly + Secure + SameSite=Strict."
+      },
+      "csrfHeader": {
+        "type": "apiKey",
+        "in": "header",
+        "name": "X-CSRF",
+        "description": "Double-submit token returned at login. Required on POST/PUT/PATCH/DELETE."
+      }
+    },
+    "responses": {
+      "BadRequest": {
+        "description": "Malformed request",
+        "content": { "application/json": { "schema": { "$ref": "#/components/schemas/HTTPError" } } }
+      },
+      "Unauthorized": {
+        "description": "Missing / expired session, or CSRF check failed",
+        "content": { "application/json": { "schema": { "$ref": "#/components/schemas/HTTPError" } } }
+      },
+      "NotFound": {
+        "description": "No such resource",
+        "content": { "application/json": { "schema": { "$ref": "#/components/schemas/HTTPError" } } }
+      },
+      "UpstreamUnavailable": {
+        "description": "An upstream service (orchestrator / Postgres / Kafka) is unreachable",
+        "content": { "application/json": { "schema": { "$ref": "#/components/schemas/HTTPError" } } }
+      }
+    },
+    "schemas": {
+      "HTTPError": {
+        "type": "object",
+        "required": ["detail"],
+        "properties": { "detail": { "type": "string" } }
+      },
+      "StatusOk": {
+        "type": "object",
+        "required": ["status"],
+        "properties": {
+          "status": { "type": "string", "example": "ok" },
+          "service": { "type": "string" }
+        }
+      },
+      "City": {
+        "type": "string",
+        "enum": ["bengaluru", "mumbai"]
+      },
+      "Tier": {
+        "type": "string",
+        "enum": ["tier_1", "tier_2", "tier_3", "tier_4"]
+      },
+      "UserVisibleTopic": {
+        "type": "string",
+        "enum": [
+          "synapse.demand.forecast",
+          "synapse.routing.plan",
+          "synapse.inventory.reorder",
+          "synapse.orchestrator.escalation",
+          "synapse.disruption.alert",
+          "synapse.pricing.update",
+          "synapse.freshness.alert",
+          "synapse.orchestrator.decision",
+          "synapse.audit.log",
+          "synapse.metrics.agent"
+        ]
+      },
+
+      "LoginRequest": {
+        "type": "object",
+        "required": ["username", "password"],
+        "properties": {
+          "username": { "type": "string", "minLength": 1, "maxLength": 128 },
+          "password": { "type": "string", "minLength": 1, "maxLength": 256 }
+        }
+      },
+      "LoginResponse": {
+        "type": "object",
+        "required": ["persona", "csrf_token", "expires_at", "claims"],
+        "properties": {
+          "persona": { "type": "string" },
+          "csrf_token": { "type": "string", "description": "Send back as X-CSRF on mutating requests" },
+          "expires_at": { "type": "string", "format": "date-time" },
+          "claims": { "type": "object", "additionalProperties": true }
+        }
+      },
+      "SessionResponse": {
+        "type": "object",
+        "required": ["authenticated"],
+        "properties": {
+          "authenticated": { "type": "boolean" },
+          "persona": { "type": ["string", "null"] },
+          "expires_at": { "type": ["string", "null"], "format": "date-time" },
+          "elevated_until": { "type": ["string", "null"], "format": "date-time" },
+          "claims": { "type": "object", "additionalProperties": true }
+        }
+      },
+      "ReauthRequest": {
+        "type": "object",
+        "required": ["password"],
+        "properties": { "password": { "type": "string", "minLength": 1, "maxLength": 256 } }
+      },
+      "ReauthResponse": {
+        "type": "object",
+        "required": ["status", "elevated_until"],
+        "properties": {
+          "status": { "type": "string", "example": "ok" },
+          "elevated_until": { "type": "string", "format": "date-time" }
+        }
+      },
+
+      "DecisionRequest": {
+        "type": "object",
+        "additionalProperties": true,
+        "properties": {
+          "order_id": { "type": ["string", "null"], "format": "uuid" },
+          "store_id": { "type": ["string", "null"] },
+          "items": { "type": "array", "items": { "type": "object", "additionalProperties": true } },
+          "agents_involved": { "type": "array", "items": { "type": "string" } },
+          "disruption_active": { "type": "boolean" },
+          "requires_twin_simulation": { "type": "boolean" },
+          "city": { "$ref": "#/components/schemas/City" }
+        }
+      },
+      "DecisionResponse": {
+        "type": "object",
+        "required": ["decision_id", "tier", "confidence", "phase_reached", "escalated"],
+        "properties": {
+          "decision_id": { "type": "string", "format": "uuid" },
+          "tier": { "$ref": "#/components/schemas/Tier" },
+          "confidence": { "type": "number", "minimum": 0, "maximum": 1 },
+          "phase_reached": { "type": "integer", "minimum": 1, "maximum": 5 },
+          "audit_id": { "type": ["string", "null"], "format": "uuid" },
+          "escalated": { "type": "boolean" }
+        }
+      },
+      "RecentDecisionRow": {
+        "type": "object",
+        "required": ["audit_id", "decision_id", "tier", "created_at"],
+        "properties": {
+          "audit_id": { "type": "string", "format": "uuid" },
+          "decision_id": { "type": "string", "format": "uuid" },
+          "tier": { "$ref": "#/components/schemas/Tier" },
+          "created_at": { "type": "string", "format": "date-time" }
+        }
+      },
+      "RecentDecisionsResponse": {
+        "type": "object",
+        "required": ["decisions", "count", "next_cursor"],
+        "properties": {
+          "decisions": { "type": "array", "items": { "$ref": "#/components/schemas/RecentDecisionRow" } },
+          "count": { "type": "integer", "minimum": 0 },
+          "next_cursor": {
+            "type": ["string", "null"],
+            "description": "Opaque cursor for the next page; null when no more rows."
+          }
+        }
+      },
+      "ConsensusDecision": {
+        "type": "object",
+        "required": [
+          "id",
+          "decision_id",
+          "timestamp",
+          "tier",
+          "phase_reached",
+          "proposals",
+          "selected_action",
+          "pareto_weights",
+          "confidence",
+          "debate_rounds",
+          "escalated",
+          "execution_confirmations",
+          "context_messages",
+          "audit_trace",
+          "created_at"
+        ],
+        "properties": {
+          "id": { "type": "string", "format": "uuid" },
+          "decision_id": { "type": "string", "format": "uuid" },
+          "timestamp": { "type": "string", "format": "date-time" },
+          "tier": { "$ref": "#/components/schemas/Tier" },
+          "phase_reached": { "type": "integer", "minimum": 1, "maximum": 5 },
+          "proposals": { "type": "array", "items": { "type": "object", "additionalProperties": true } },
+          "selected_action": { "type": "object", "additionalProperties": true },
+          "pareto_weights": { "type": "object", "additionalProperties": true },
+          "confidence": { "type": "number", "minimum": 0, "maximum": 1 },
+          "debate_rounds": { "type": "integer", "minimum": 0 },
+          "escalated": { "type": "boolean" },
+          "human_override": { "type": ["object", "null"], "additionalProperties": true },
+          "execution_confirmations": { "type": "array", "items": { "type": "object", "additionalProperties": true } },
+          "context_messages": { "type": "array", "items": { "type": "object", "additionalProperties": true } },
+          "audit_trace": { "type": "array", "items": { "type": "object", "additionalProperties": true } },
+          "pareto_front": { "type": ["array", "null"], "items": { "type": "object", "additionalProperties": true } },
+          "outcome": { "type": ["object", "null"], "additionalProperties": true },
+          "created_at": { "type": "string", "format": "date-time" }
+        }
+      },
+
+      "OrderRequest": {
+        "type": "object",
+        "required": ["city", "store_id", "sku_id", "quantity"],
+        "properties": {
+          "city": { "$ref": "#/components/schemas/City" },
+          "store_id": { "type": "string" },
+          "sku_id": { "type": "string" },
+          "quantity": { "type": "integer", "minimum": 1 }
+        }
+      },
+      "OrderAccepted": {
+        "type": "object",
+        "required": ["status", "city"],
+        "properties": {
+          "status": { "type": "string", "example": "accepted" },
+          "city": { "$ref": "#/components/schemas/City" }
+        }
+      },
+
+      "AgentStatusList": {
+        "type": "object",
+        "required": ["agents", "count"],
+        "properties": {
+          "agents": {
+            "type": "object",
+            "additionalProperties": { "type": "string" }
+          },
+          "count": { "type": "integer", "minimum": 0 }
+        }
+      },
+
+      "RumSample": {
+        "type": "object",
+        "required": ["name", "value", "route"],
+        "properties": {
+          "name": { "type": "string", "enum": ["LCP", "TBT", "INP", "FCP", "CLS", "TTFB"] },
+          "value": { "type": "number", "minimum": 0 },
+          "rating": { "type": ["string", "null"], "enum": ["good", "needs-improvement", "poor", null] },
+          "route": { "type": "string", "maxLength": 256 },
+          "nav_type": { "type": ["string", "null"], "maxLength": 32 }
+        }
+      },
+      "RumBatch": {
+        "type": "object",
+        "required": ["session_id", "samples"],
+        "properties": {
+          "session_id": { "type": "string", "minLength": 8, "maxLength": 128 },
+          "user_agent": { "type": ["string", "null"], "maxLength": 512 },
+          "samples": {
+            "type": "array",
+            "minItems": 0,
+            "maxItems": 64,
+            "items": { "$ref": "#/components/schemas/RumSample" }
+          }
+        }
+      },
+      "RumAccepted": {
+        "type": "object",
+        "required": ["status", "kind"],
+        "properties": {
+          "status": { "type": "string", "enum": ["ok", "rejected"] },
+          "kind": { "type": "string", "enum": ["rum", "csp", "empty"] },
+          "samples_recorded": { "type": "string" },
+          "reason": { "type": "string" }
+        }
+      }
+    }
+  },
+  "security": []
+}

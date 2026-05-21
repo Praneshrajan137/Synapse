@@ -1,0 +1,43 @@
+# SYNAPSE — code-owners registry.
+#
+# Plan §12 + ADR-028 + docs/security/frontend-threat-model.md.
+# Paths listed here REQUIRE the named owner's review before merge.
+# `@synapse/*` are GitHub team handles; substitute the real handles
+# when the org is configured.
+#
+# Order matters — last match wins.
+
+# ─── Default ──────────────────────────────────────────────────────────────
+*       @synapse/platform
+
+# ─── Frontend ─────────────────────────────────────────────────────────────
+frontend/                                      @synapse/frontend
+frontend/src/shared/design-tokens/             @synapse/design @synapse/a11y
+frontend/.storybook/                           @synapse/design @synapse/a11y
+frontend/.storybook/test-runner.ts             @synapse/a11y
+frontend/src/shared/api/fetcher.ts             @synapse/frontend @synapse/security
+frontend/src/shared/canonical-json.ts          @synapse/frontend @synapse/security
+frontend/src/shared/hash/                      @synapse/frontend @synapse/security
+frontend/src/surfaces/$city/decisions/model/audit-hash.ts        @synapse/security
+frontend/src/surfaces/$city/mission-control/model/ranker.ts      @synapse/frontend
+frontend/src/surfaces/$city/audit/                              @synapse/security @synapse/compliance
+frontend/stryker.conf.json                     @synapse/frontend @synapse/security
+frontend/i18next-parser.config.cjs             @synapse/frontend @synapse/i18n
+frontend/src/shared/i18n/                       @synapse/i18n
+
+# ─── Backend BFF + audit ──────────────────────────────────────────────────
+api/routers/auth.py                            @synapse/security @synapse/platform
+api/routers/audit.py                           @synapse/security @synapse/compliance
+api/routers/sse.py                             @synapse/platform
+api/middleware/                                @synapse/security @synapse/platform
+
+# ─── Edge / nginx ─────────────────────────────────────────────────────────
+infrastructure/nginx/                          @synapse/security @synapse/platform
+
+# ─── ADRs + docs ──────────────────────────────────────────────────────────
+docs/adr/                                      @synapse/architecture
+docs/security/                                 @synapse/security
+docs/runbooks/                                 @synapse/sre
+
+# ─── OpenAPI snapshot ─────────────────────────────────────────────────────
+packages/openapi/openapi.json                  @synapse/platform @synapse/frontend

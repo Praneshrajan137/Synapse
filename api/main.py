@@ -20,7 +20,8 @@ import os
 import structlog
 from fastapi import FastAPI
 
-from api.routers import agents, decisions, orders
+from api.middleware.session import SessionMiddleware
+from api.routers import agents, audit, auth, decisions, orders, rum, sse
 
 try:
     from synapse_common.tracing import instrument_fastapi
@@ -38,9 +39,33 @@ app = FastAPI(
     description="Front door to the SYNAPSE multi-agent quick-commerce platform",
 )
 
+# BFF session resolver. Runs before routers; gates protected paths and stashes
+# session payload on request.state.session. See api/middleware/session.py
+# and ADR-027 (BFF cookie session over JWT-in-memory).
+app.add_middleware(SessionMiddleware)
+
+# Atlas Console BFF auth. Login / logout / refresh / session / reauth.
+# Path-prefixed at /auth/* (PUBLIC in SessionMiddleware so login itself is
+# reachable without a session).
+app.include_router(auth.router, prefix="/auth", tags=["auth"])
+
+# Atlas Console SSE bridge — Kafka topic tail. Plan §11/B1.
+# Protected by SessionMiddleware (path starts with /api/v1/stream/).
+app.include_router(sse.router, prefix="/api/v1/stream", tags=["stream"])
+
 app.include_router(orders.router, prefix="/api/v1/orders", tags=["orders"])
 app.include_router(decisions.router, prefix="/api/v1/decisions", tags=["decisions"])
 app.include_router(agents.router, prefix="/api/v1/agents", tags=["agents"])
+
+# Audit Vault — deterministic PDF evidence pack (plan §5.6 / S5).
+# Protected by SessionMiddleware (PROTECTED_PREFIXES already covers
+# /api/v1/audit). The export endpoint is byte-deterministic so two
+# pulls of the same decision_id are identical for FSSAI / DPDPA.
+app.include_router(audit.router, prefix="/api/v1/audit", tags=["audit"])
+
+# RUM ingest (web-vitals beacon + CSP report-to). Public — browser can
+# beacon before login. Plan §11/B4 + B7. See SessionMiddleware PUBLIC list.
+app.include_router(rum.router, prefix="/api/v1/rum", tags=["rum"])
 
 
 @app.get("/health")

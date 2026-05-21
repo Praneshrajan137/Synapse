@@ -1,0 +1,5 @@
+#!/usr/bin/env sh
+# SYNAPSE Atlas Console — pre-commit hook.
+# lint-staged runs ESLint + Prettier on staged files only.
+
+cd frontend && pnpm exec lint-staged

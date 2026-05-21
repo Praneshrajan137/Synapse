@@ -1,0 +1,29 @@
+# SYNAPSE Atlas Console
+node_modules
+dist
+storybook-static
+playwright-report
+test-results
+coverage
+.lighthouseci
+*.tsbuildinfo
+*.log
+.env
+.env.local
+.env.*.local
+.DS_Store
+stats.html
+sbom.cdx.json
+
+# Generated artifacts (kept gitignored, baseline restored from .gitkeep)
+src/routeTree.gen.ts
+src/shared/api/__generated__/**
+!src/shared/api/__generated__/.gitkeep
+src/shared/schemas/__generated__/**
+!src/shared/schemas/__generated__/.gitkeep
+
+# Editor
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json.example
+.idea

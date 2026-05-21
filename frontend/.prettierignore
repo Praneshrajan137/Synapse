@@ -1,0 +1,11 @@
+dist
+storybook-static
+playwright-report
+test-results
+coverage
+.lighthouseci
+node_modules
+src/routeTree.gen.ts
+src/shared/api/__generated__
+src/shared/schemas/__generated__
+pnpm-lock.yaml

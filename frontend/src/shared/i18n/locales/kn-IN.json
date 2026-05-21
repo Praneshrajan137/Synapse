@@ -1,0 +1,186 @@
+{
+  "app": {
+    "name": "SYNAPSE ಅಟ್ಲಸ್ ಕನ್ಸೋಲ್",
+    "tagline": "ಸ್ವಾಯತ್ತ ಪೂರೈಕೆ ಸರಪಳಿಯನ್ನು ಸ್ಪಷ್ಟಪಡಿಸಿ."
+  },
+  "nav": {
+    "livingCity": "ಜೀವಂತ ನಗರ",
+    "missionControl": "ಮಿಷನ್ ನಿಯಂತ್ರಣ",
+    "decisionTrace": "ನಿರ್ಣಯ ಜಾಡು",
+    "twinStudio": "ಟ್ವಿನ್ ಸ್ಟುಡಿಯೊ",
+    "agentFloor": "ಏಜೆಂಟ್ ಫ್ಲೋರ್",
+    "auditVault": "ಲೆಕ್ಕಪರಿಶೋಧನಾ ಕಕ್ಷೆ",
+    "settings": "ಸೆಟ್ಟಿಂಗ್‌ಗಳು",
+    "logout": "ಸೈನ್ ಔಟ್"
+  },
+  "city": {
+    "label": "ನಗರ",
+    "bengaluru": "ಬೆಂಗಳೂರು",
+    "mumbai": "ಮುಂಬೈ",
+    "switchAria": "ಸಕ್ರಿಯ ನಗರವನ್ನು ಬದಲಾಯಿಸಿ"
+  },
+  "locale": {
+    "label": "ಭಾಷೆ",
+    "en-IN": "English",
+    "hi-IN": "हिन्दी",
+    "kn-IN": "ಕನ್ನಡ",
+    "mr-IN": "मराठी"
+  },
+  "theme": {
+    "label": "ಥೀಮ್",
+    "light": "ತಿಳಿ",
+    "dark": "ಕಡು",
+    "system": "ಸಿಸ್ಟಮ್‌ಗೆ ಹೊಂದಿಸಿ"
+  },
+  "auth": {
+    "signIn": "ಸೈನ್ ಇನ್",
+    "signOut": "ಸೈನ್ ಔಟ್",
+    "username": "ಬಳಕೆದಾರ ಹೆಸರು",
+    "password": "ಪಾಸ್‌ವರ್ಡ್",
+    "submit": "ಸೈನ್ ಇನ್ ಮಾಡಿ",
+    "elevateForPii": "PII ನೋಡಲು ಪಾಸ್‌ವರ್ಡ್ ದೃಢೀಕರಿಸಿ",
+    "errors": {
+      "invalid": "ಅಮಾನ್ಯ ಬಳಕೆದಾರ ಹೆಸರು ಅಥವಾ ಪಾಸ್‌ವರ್ಡ್.",
+      "expired": "ನಿಮ್ಮ ಸೆಷನ್ ಮುಕ್ತಾಯವಾಗಿದೆ. ಮತ್ತೆ ಸೈನ್ ಇನ್ ಮಾಡಿ.",
+      "csrf": "ಭದ್ರತಾ ಟೋಕನ್ ಹೊಂದಿಕೆಯಾಗಿಲ್ಲ — ದಯವಿಟ್ಟು ಮರು-ಲೋಡ್ ಮಾಡಿ."
+    }
+  },
+  "tier": {
+    "tier_1": "ಶ್ರೇಣಿ 1 — ಸ್ವಯಂ",
+    "tier_2": "ಶ್ರೇಣಿ 2 — ಸಮ್ಮತಿ",
+    "tier_3": "ಶ್ರೇಣಿ 3 — ಚರ್ಚೆ",
+    "tier_4": "ಶ್ರೇಣಿ 4 — ಬಿಕ್ಕಟ್ಟು",
+    "latency": "p99 < {limit_ms, number}ms"
+  },
+  "missionControl": {
+    "title": "ಮಿಷನ್ ನಿಯಂತ್ರಣ",
+    "queueEmpty": "ಯಾವುದೇ ಬಾಕಿ ಎಸ್ಕಲೇಷನ್‌ಗಳಿಲ್ಲ — ಏಜೆಂಟ್‌ಗಳು ವಿಶ್ವಾಸದ ವ್ಯಾಪ್ತಿಯಲ್ಲಿವೆ.",
+    "queueLiveAria": "{count, plural, =0 {ಯಾವುದೇ ಎಸ್ಕಲೇಷನ್‌ಗಳಿಲ್ಲ} =1 {ಒಂದು ಎಸ್ಕಲೇಷನ್} other {# ಎಸ್ಕಲೇಷನ್‌ಗಳು}} ನಿರ್ಣಯಕ್ಕಾಗಿ ಕಾಯುತ್ತಿವೆ.",
+    "escalation": {
+      "approve": "ಅನುಮೋದಿಸಿ",
+      "reject": "ತಿರಸ್ಕರಿಸಿ",
+      "modify": "ಮಾರ್ಪಡಿಸಿ",
+      "countdown": "{seconds, number} ಸೆಕೆಂಡ್ ಬಾಕಿ",
+      "guardrailViolations": "{count, plural, one {# ಗಾರ್ಡ್‌ರೈಲ್ ಉಲ್ಲಂಘನೆ} other {# ಗಾರ್ಡ್‌ರೈಲ್ ಉಲ್ಲಂಘನೆಗಳು}}",
+      "confidence": "ವಿಶ್ವಾಸ {value, number, percent}",
+      "approvedAria": "ಎಸ್ಕಲೇಷನ್ ಅನುಮೋದಿಸಲಾಗಿದೆ",
+      "rejectedAria": "ಎಸ್ಕಲೇಷನ್ ತಿರಸ್ಕರಿಸಲಾಗಿದೆ"
+    },
+    "hotkeys": {
+      "next": "ಮುಂದಿನ (j)",
+      "prev": "ಹಿಂದಿನ (k)",
+      "approve": "ಅನುಮೋದಿಸಿ (Enter)",
+      "reject": "ತಿರಸ್ಕರಿಸಿ (r)",
+      "modify": "ಮಾರ್ಪಡಿಸಿ (m)",
+      "help": "ಶಾರ್ಟ್‌ಕಟ್ ತೋರಿಸಿ (?)"
+    }
+  },
+  "decisionTrace": {
+    "title": "ನಿರ್ಣಯ ಜಾಡು",
+    "filters": {
+      "tier": "ಶ್ರೇಣಿ",
+      "agent": "ಏಜೆಂಟ್",
+      "escalated": "ಎಸ್ಕಲೇಟೆಡ್ ಮಾತ್ರ",
+      "override": "ಓವರ್‌ರೈಡ್ ಮಾತ್ರ",
+      "search": "ತಾರ್ಕಿಕತೆ ಹುಡುಕಿ",
+      "since": "ಇಂದ",
+      "until": "ತನಕ"
+    },
+    "table": {
+      "tier": "ಶ್ರೇಣಿ",
+      "decisionId": "ನಿರ್ಣಯ ID",
+      "confidence": "ವಿಶ್ವಾಸ",
+      "phase": "ಹಂತ",
+      "outcome": "ಫಲಿತಾಂಶ",
+      "createdAt": "ಸಮಯ"
+    },
+    "drawer": {
+      "phases": "5-ಹಂತದ ಜಾಡು",
+      "debateRounds": "ಚರ್ಚಾ ಸುತ್ತುಗಳು",
+      "paretoFront": "ಪರೆಟೊ ಮುಂಭಾಗ",
+      "auditChain": "ಲೆಕ್ಕಪರಿಶೋಧನಾ ಸರಪಳಿ ಪುರಾವೆ",
+      "exportJson": "JSON ರಫ್ತು",
+      "exportPdf": "PDF ಪುರಾವೆ ರಫ್ತು"
+    },
+    "scrubber": {
+      "speed": "ಮರು-ಪ್ಲೇ ವೇಗ",
+      "speed1x": "1×",
+      "speed5x": "5×",
+      "speed30x": "30×"
+    }
+  },
+  "livingCity": {
+    "title": "ಜೀವಂತ ನಗರ",
+    "kpi": {
+      "ordersPerMin": "ಆದೇಶಗಳು / ನಿಮಿಷ",
+      "avgDelivery": "ಸರಾಸರಿ ವಿತರಣೆ",
+      "fillRate": "ಪೂರೈಕೆ ದರ",
+      "wasteRate": "ತ್ಯಾಜ್ಯ ದರ",
+      "co2PerDelivery": "CO₂ / ವಿತರಣೆ"
+    },
+    "layers": {
+      "darkStores": "ಡಾರ್ಕ್ ಸ್ಟೋರ್‌ಗಳು",
+      "riders": "ರೈಡರ್‌ಗಳು",
+      "routes": "ಸಕ್ರಿಯ ಮಾರ್ಗಗಳು",
+      "freshnessHeatmap": "ತಾಜಾತನ ಹೀಟ್‌ಮ್ಯಾಪ್",
+      "disruptions": "ಅಡ್ಡಿಗಳು"
+    }
+  },
+  "twinStudio": {
+    "title": "ಟ್ವಿನ್ ಸ್ಟುಡಿಯೊ",
+    "form": {
+      "demand_multiplier": "ಬೇಡಿಕೆ ಗುಣಕ",
+      "lead_time_multiplier": "ಲೀಡ್-ಸಮಯ ಗುಣಕ",
+      "failure_rate_multiplier": "ವೈಫಲ್ಯ ದರ ಗುಣಕ",
+      "spoilage_rate_multiplier": "ಹಾಳಾಗುವ ದರ ಗುಣಕ",
+      "n_scenarios": "ಸನ್ನಿವೇಶಗಳು",
+      "duration_hours": "ಅವಧಿ (ಗಂಟೆ)",
+      "run": "ಸಿಮ್ಯುಲೇಷನ್ ರನ್ ಮಾಡಿ"
+    },
+    "results": {
+      "klDivergence": "ಲೈವ್‌ನಿಂದ KL ವಿಚಲನ",
+      "klOverThreshold": "ಟ್ವಿನ್ ವಿಚಲಿತ — KL > 0.1",
+      "fanOut": "ಸನ್ನಿವೇಶ ಫ್ಯಾನ್-ಔಟ್ (p10 / p50 / p90)",
+      "counterfactual": "ವಾಸ್ತವದಿಂದ ಪ್ರತಿತಥ್ಯ ವ್ಯತ್ಯಾಸ"
+    }
+  },
+  "agentFloor": {
+    "title": "ಏಜೆಂಟ್ ಫ್ಲೋರ್",
+    "agents": {
+      "demand_prophet": "ಬೇಡಿಕೆ ಭವಿಷ್ಯವಾಣಿ",
+      "routing_navigator": "ರೂಟಿಂಗ್ ನ್ಯಾವಿಗೇಟರ್",
+      "inventory_sentinel": "ಇನ್ವೆಂಟರಿ ಸೆಂಟಿನೆಲ್",
+      "pricing_oracle": "ಬೆಲೆ ಒರಾಕಲ್",
+      "disruption_shield": "ಅಡ್ಡಿ ಗುರಾಣಿ",
+      "freshness_guardian": "ತಾಜಾತನ ರಕ್ಷಕ",
+      "supplier_trust": "ಪೂರೈಕೆದಾರ ವಿಶ್ವಾಸ",
+      "sustainability_agent": "ಸುಸ್ಥಿರತೆ ಏಜೆಂಟ್"
+    },
+    "state": {
+      "IDLE": "ನಿಷ್ಕ್ರಿಯ",
+      "PROPOSING": "ಪ್ರಸ್ತಾವಿಸುತ್ತಿದೆ",
+      "DEBATING": "ಚರ್ಚಿಸುತ್ತಿದೆ",
+      "EXECUTING": "ಕಾರ್ಯಗತಗೊಳಿಸುತ್ತಿದೆ",
+      "LEARNING": "ಕಲಿಯುತ್ತಿದೆ",
+      "ERROR": "ದೋಷ"
+    }
+  },
+  "auditVault": {
+    "title": "ಲೆಕ್ಕಪರಿಶೋಧನಾ ಕಕ್ಷೆ",
+    "chainOk": "ಲೆಕ್ಕಪರಿಶೋಧನಾ ಸರಪಳಿ ಪರಿಶೀಲಿಸಲಾಗಿದೆ",
+    "chainBroken": "ಲೆಕ್ಕಪರಿಶೋಧನಾ ಸರಪಳಿ ಮುರಿದಿದೆ — ರಫ್ತು ನಿರ್ಬಂಧಿಸಲಾಗಿದೆ. ಪ್ಲಾಟ್‌ಫಾರ್ಮ್ ಸಂಪರ್ಕಿಸಿ.",
+    "showPii": "PII ತೋರಿಸಿ",
+    "redactedNotice": "PII ಮುಚ್ಚಲಾಗಿದೆ. ತೋರಿಸಲು ಮರು-ದೃಢೀಕರಣ ಅಗತ್ಯ."
+  },
+  "common": {
+    "loading": "ಲೋಡ್ ಆಗುತ್ತಿದೆ…",
+    "error": "ಏನೋ ತಪ್ಪಾಗಿದೆ.",
+    "retry": "ಮರುಪ್ರಯತ್ನಿಸಿ",
+    "cancel": "ರದ್ದುಮಾಡಿ",
+    "confirm": "ದೃಢೀಕರಿಸಿ",
+    "close": "ಮುಚ್ಚಿ",
+    "saved": "ಉಳಿಸಲಾಗಿದೆ",
+    "demoMode": "ಡೆಮೋ",
+    "residencyChip": "ಡೇಟಾ: ap-south-1 · 90 ದಿನ"
+  }
+}
