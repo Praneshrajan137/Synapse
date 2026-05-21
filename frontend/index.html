@@ -1,9 +1,24 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" data-theme="dark">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="color-scheme" content="dark light" />
     <title>SYNAPSE HITL Console</title>
+    <script>
+      // No-flash theme: apply the saved theme before first paint.
+      // Default is dark — operators run in low-ambient control rooms.
+      (function () {
+        try {
+          var t = localStorage.getItem("synapse-theme");
+          if (t === "light" || t === "dark") {
+            document.documentElement.setAttribute("data-theme", t);
+          }
+        } catch (e) {
+          /* localStorage unavailable — keep the dark default */
+        }
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>

@@ -1,41 +1,71 @@
 import React, { useState } from "react";
 
+const SCENARIOS = [
+  { value: "demand_spike", label: "Demand Spike" },
+  { value: "supplier_failure", label: "Supplier Failure" },
+  { value: "route_disruption", label: "Route Disruption" },
+  { value: "weather_event", label: "Weather Event" },
+];
+
+function PageHeader({ title, subtitle }) {
+  return (
+    <header className="mb-5">
+      <h1 className="text-xl font-bold tracking-tight text-text-primary">{title}</h1>
+      {subtitle && <p className="mt-0.5 text-sm text-text-tertiary">{subtitle}</p>}
+    </header>
+  );
+}
+
 export default function DigitalTwin() {
   const [scenario, setScenario] = useState("demand_spike");
   const [running, setRunning] = useState(false);
 
   return (
-    <div>
-      <h1 style={{ fontSize: 24, fontWeight: 700, marginBottom: 16 }}>Digital Twin</h1>
-      <div style={{ display: "flex", gap: 24 }}>
-        <div style={{ flex: 1 }}>
-          <div style={{ background: "#1e293b", borderRadius: 12, height: 400, display: "flex", alignItems: "center", justifyContent: "center", color: "#64748b" }}>
-            3D Supply Network (react-force-graph-3d)
-          </div>
+    <div className="mx-auto max-w-[1400px] animate-fade-in">
+      <PageHeader
+        title="Digital Twin"
+        subtitle="What-if simulation against the live supply-network model (I-12)"
+      />
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-[1fr_320px]">
+        <div className="panel flex min-h-[440px] items-center justify-center p-6 text-center text-sm text-text-tertiary">
+          3D Supply Network — react-force-graph-3d (nodes coloured by owning agent)
         </div>
-        <div style={{ width: 320 }}>
-          <div style={{ background: "#1e293b", borderRadius: 12, padding: 20 }}>
-            <h3 style={{ marginBottom: 12 }}>What-If Scenario</h3>
-            <label style={{ color: "#94a3b8", fontSize: 13 }}>Disruption Type</label>
-            <select
-              value={scenario}
-              onChange={(e) => setScenario(e.target.value)}
-              style={{ width: "100%", padding: 8, borderRadius: 6, border: "1px solid #334155", background: "#0f172a", color: "#e2e8f0", marginBottom: 12 }}
-            >
-              <option value="demand_spike">Demand Spike</option>
-              <option value="supplier_failure">Supplier Failure</option>
-              <option value="route_disruption">Route Disruption</option>
-              <option value="weather_event">Weather Event</option>
-            </select>
-            <button
-              onClick={() => setRunning(true)}
-              disabled={running}
-              style={{ width: "100%", padding: "10px 0", borderRadius: 6, border: "none", background: running ? "#334155" : "#3b82f6", color: "#fff", cursor: running ? "not-allowed" : "pointer" }}
-            >
-              {running ? "Running Monte Carlo..." : "Run Simulation"}
-            </button>
-          </div>
-        </div>
+
+        <aside className="panel h-fit p-5">
+          <h2 className="text-sm font-semibold uppercase tracking-wide text-text-secondary">
+            What-If Scenario
+          </h2>
+
+          <label htmlFor="scenario" className="mt-4 block text-xs font-medium text-text-tertiary">
+            Disruption Type
+          </label>
+          <select
+            id="scenario"
+            value={scenario}
+            onChange={(e) => setScenario(e.target.value)}
+            className="mt-1.5 w-full rounded-md border border-border-subtle bg-surface-raised px-3 py-2 text-sm text-text-primary focus-visible:border-brand-base focus-visible:outline-none"
+          >
+            {SCENARIOS.map((s) => (
+              <option key={s.value} value={s.value}>
+                {s.label}
+              </option>
+            ))}
+          </select>
+
+          <button
+            type="button"
+            onClick={() => setRunning(true)}
+            disabled={running}
+            className="mt-4 w-full rounded-md px-4 py-2.5 text-sm font-semibold text-brand-fg transition-transform hover:-translate-y-px disabled:cursor-not-allowed disabled:opacity-60"
+            style={{ background: running ? "var(--color-surface-overlay)" : "var(--color-brand-base)" }}
+          >
+            {running ? "Running Monte Carlo…" : "Run Simulation"}
+          </button>
+          <p className="mt-3 text-[11px] leading-relaxed text-text-tertiary">
+            Simulation runs as a Tier 4 decision — Monte Carlo rollouts validated against the
+            twin's KL-divergence bound.
+          </p>
+        </aside>
       </div>
     </div>
   );

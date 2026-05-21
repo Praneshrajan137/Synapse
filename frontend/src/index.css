@@ -1,0 +1,64 @@
+/* SYNAPSE HITL Console — global stylesheet.
+ * Order matters: chromatic tokens load first so CSS variables exist before
+ * Tailwind's base layer references them. */
+@import "@chromatic/tokens.css";
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  * {
+    border-color: var(--color-border-subtle);
+  }
+  body {
+    margin: 0;
+    font-family: "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
+    -webkit-font-smoothing: antialiased;
+    background-color: var(--color-surface-canvas);
+    color: var(--color-text-primary);
+  }
+  ::selection {
+    background: color-mix(in oklab, var(--color-brand-base) 35%, transparent);
+  }
+  /* Slim, tokenised scrollbars — part of the lit surface system. */
+  ::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: var(--color-border-strong);
+    border-radius: 9999px;
+    border: 2px solid var(--color-surface-canvas);
+  }
+}
+
+@layer components {
+  /* Elevated panel — the lit-surface primitive. */
+  .panel {
+    background-color: var(--color-surface-panel);
+    border: 1px solid var(--color-border-subtle);
+    border-radius: var(--radius-lg);
+  }
+
+  /* "Physics of light" — an identity-coloured glow. The consumer sets
+   * --accent to an agent / tier / state colour. Glow is a halo of emitted
+   * light, strongest on the dark theme. */
+  .glow-accent {
+    box-shadow:
+      0 0 0 1px color-mix(in oklab, var(--accent) 55%, transparent),
+      0 4px 26px -8px color-mix(in oklab, var(--accent) 55%, transparent);
+  }
+  .accent-tint {
+    background-color: color-mix(in oklab, var(--accent) 12%, var(--color-surface-panel));
+    border: 1px solid color-mix(in oklab, var(--accent) 34%, transparent);
+  }
+
+  /* Confidence / tier legends rendered straight from the token gradients. */
+  .gradient-confidence {
+    background-image: var(--gradient-confidence);
+  }
+  .gradient-tier {
+    background-image: var(--gradient-tier);
+  }
+}

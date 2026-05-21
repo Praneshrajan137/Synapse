@@ -4,6 +4,7 @@
   "version": "0.4.0",
   "type": "module",
   "scripts": {
+    "tokens:build": "node ../design-system/color/build/build.mjs",
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview"

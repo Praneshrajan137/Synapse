@@ -1,0 +1,40 @@
+{
+  "$description": "SYNAPSE Chromatic — agent identity registry (FROZEN, INV-CLR-012). One earned hue per agent: nominal data on the OKLCH Hue axis. Lightness is staggered across the 8 (both themes) so they stay distinct under color-vision-deficiency simulation (INV-CLR-005) — equal-lightness categorical palettes collapse under CVD. dark = bright variant for dark canvas; light = deep variant for light canvas. Changing any hue requires a version bump + ADR supersede note.",
+  "ref": {
+    "$type": "color",
+    "agent": {
+      "demand_prophet": {
+        "$description": "Foresight / forecasting oracle — indigo-violet.",
+        "$value": { "light": "oklch(0.54 0.185 292)", "dark": "oklch(0.715 0.170 292)" }
+      },
+      "routing_navigator": {
+        "$description": "Paths / movement — azure (the colour of maps).",
+        "$value": { "light": "oklch(0.44 0.160 248)", "dark": "oklch(0.640 0.160 248)" }
+      },
+      "inventory_sentinel": {
+        "$description": "Watchful stock sentinel — magenta.",
+        "$value": { "light": "oklch(0.50 0.205 330)", "dark": "oklch(0.685 0.180 330)" }
+      },
+      "freshness_guardian": {
+        "$description": "Perishability / produce — green.",
+        "$value": { "light": "oklch(0.56 0.155 145)", "dark": "oklch(0.790 0.160 145)" }
+      },
+      "pricing_oracle": {
+        "$description": "Economic value — amber-gold.",
+        "$value": { "light": "oklch(0.64 0.145 80)", "dark": "oklch(0.840 0.165 80)" }
+      },
+      "disruption_shield": {
+        "$description": "Risk / defence — red-orange.",
+        "$value": { "light": "oklch(0.50 0.190 30)", "dark": "oklch(0.660 0.175 30)" }
+      },
+      "supplier_trust": {
+        "$description": "Steady reliability — cyan-teal.",
+        "$value": { "light": "oklch(0.60 0.115 207)", "dark": "oklch(0.755 0.135 207)" }
+      },
+      "sustainability_agent": {
+        "$description": "Environment / carbon — emerald.",
+        "$value": { "light": "oklch(0.46 0.115 168)", "dark": "oklch(0.700 0.130 168)" }
+      }
+    }
+  }
+}
