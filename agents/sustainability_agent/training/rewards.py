@@ -60,9 +60,9 @@ def compute_reward(
     predicted_co2_kg: float,
     actual_co2_kg: float,
     baseline_co2_kg: float = 1.0,
-    carbon_weight: float = 1.0,
-    waste_weight: float = 0.5,
-    accuracy_weight: float = 0.3,
+    carbon_weight: float | None = None,
+    waste_weight: float | None = None,
+    accuracy_weight: float | None = None,
 ) -> dict[str, float]:
     """
     Compute the full Sustainability Agent reward.
@@ -71,7 +71,28 @@ def compute_reward(
         + accuracy_weight * prediction_accuracy
 
     THIS IS THE ONLY REWARD FUNCTION FOR SUSTAINABILITY AGENT (I-2).
+
+    Sprint 9 (ADR-031 cutover): spec-generated WEIGHTS is source-of-truth.
     """
+    from synapse_common.reward_shadow import shadow_check
+
+    from agents.sustainability_agent.training import reward_config
+
+    if carbon_weight is None:
+        carbon_weight = reward_config.WEIGHTS["carbon_weight"]
+    if waste_weight is None:
+        waste_weight = reward_config.WEIGHTS["waste_weight"]
+    if accuracy_weight is None:
+        accuracy_weight = reward_config.WEIGHTS["accuracy_weight"]
+
+    shadow_check(
+        "sustainability_agent",
+        reward_config.WEIGHTS,
+        carbon_weight=carbon_weight,
+        waste_weight=waste_weight,
+        accuracy_weight=accuracy_weight,
+    )
+
     c_penalty = carbon_penalty(co2_kg, baseline_co2_kg)
     w_penalty = waste_rate_penalty(items_wasted, items_total)
     a_bonus = prediction_accuracy_bonus(predicted_co2_kg, actual_co2_kg)

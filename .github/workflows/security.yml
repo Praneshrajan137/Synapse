@@ -8,10 +8,16 @@ on:
       - '**/requirements.txt'
       - '**/package.json'
       - '**/Dockerfile'
+      - 'pyproject.toml'
+      - 'uv.lock'
+      - 'infrastructure/security/**'
+  push:
+    branches: [main, develop]
   workflow_dispatch:
 
 jobs:
   security:
+    name: Gated security scans (Sprint 9 §M-sec-5)
     runs-on: ubuntu-latest
     timeout-minutes: 30
 
@@ -27,38 +33,49 @@ jobs:
         with:
           node-version: '20'
 
-      - name: Python dependency audit
+      - name: Python dependency audit (blocking)
         run: |
           pip install pip-audit
           for req in $(find . -name 'requirements.txt' -not -path './.venv/*'); do
             echo "=== Auditing ${req} ==="
-            pip-audit -r "${req}" --strict || true
+            pip-audit -r "${req}" --strict
           done
 
-      - name: Node dependency audit
+      - name: Node dependency audit (blocking)
         run: |
           if [ -f frontend/package.json ]; then
             cd frontend
             npm install
-            npm audit --audit-level=critical || true
+            npm audit --audit-level=critical
           else
             echo "No frontend/package.json — skipping Node audit"
           fi
 
-      - name: Trivy container scan
+      - name: Trivy container scan (blocking on CRITICAL/HIGH)
         uses: aquasecurity/trivy-action@master
         with:
           scan-type: 'fs'
           scan-ref: '.'
           severity: 'CRITICAL,HIGH'
-          exit-code: '0'
+          exit-code: '1'
           format: 'table'
 
-      - name: Secret detection via gitleaks
+      - name: Secret detection via gitleaks (blocking)
         uses: gitleaks/gitleaks-action@v2
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        continue-on-error: true
+
+      - name: Bandit Python SAST (blocking)
+        run: |
+          pip install bandit
+          bandit -r packages/ orchestrator/ agents/ \
+                 --severity-level high \
+                 --confidence-level high
+
+      - name: Semgrep security-audit (blocking)
+        uses: returntocorp/semgrep-action@v1
+        with:
+          config: p/security-audit
 
       - name: No paid API imports (I-1)
         run: |
@@ -67,3 +84,33 @@ jobs:
             exit 1
           fi
           echo "PASS: No paid API imports found"
+
+  sbom:
+    name: SBOM generation (Sprint 9 §M-sec-1)
+    runs-on: ubuntu-latest
+    needs: security
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: |
+          pip install cyclonedx-bom
+          python scripts/generate_sbom.py --check
+      - uses: actions/upload-artifact@v4
+        with:
+          name: synapse-sbom
+          path: infrastructure/sbom/
+
+  cve-budget:
+    name: CVE budget enforcement (Sprint 9 §M-sec-6)
+    runs-on: ubuntu-latest
+    needs: security
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: |
+          pip install pip-audit
+          python scripts/check_cve_budget.py

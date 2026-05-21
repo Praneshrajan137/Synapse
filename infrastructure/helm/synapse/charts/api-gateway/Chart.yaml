@@ -1,0 +1,6 @@
+apiVersion: v2
+name: api-gateway
+description: SYNAPSE API Gateway (FastAPI front door) — Sprint 9 §M-prod-1.
+type: application
+version: 0.9.0
+appVersion: "9.0.0"

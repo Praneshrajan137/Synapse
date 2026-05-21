@@ -1,0 +1,53 @@
+# Flagger Canary CRD for the orchestrator (Sprint 9 §M-prod-4, ADR-034).
+#
+# Promotion gate runs:
+#   1. Built-in success-rate + latency checks against the Linkerd dataplane.
+#   2. A custom webhook that calls `synapse eval run --suite golden` and
+#      asserts overall tier-routing accuracy >= 80% (Sprint 9 floor).
+#
+# Webhook target lives at infrastructure/flagger/webhook_eval.py — a FastAPI
+# microservice deployed alongside Flagger that translates the canary's HTTP
+# call into the eval runner + returns 200 on pass / 4xx on regression.
+
+apiVersion: flagger.app/v1beta1
+kind: Canary
+metadata:
+  name: orchestrator
+  namespace: synapse
+spec:
+  targetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: orchestrator
+  progressDeadlineSeconds: 600
+  service:
+    port: 8085
+    portDiscovery: true
+  analysis:
+    interval: 1m
+    threshold: 5
+    maxWeight: 50
+    stepWeight: 10
+    metrics:
+      - name: request-success-rate
+        thresholdRange:
+          min: 99.0
+        interval: 1m
+      - name: request-duration
+        thresholdRange:
+          max: 100  # Tier-1 p99 budget, ms
+        interval: 1m
+    webhooks:
+      - name: golden-trace-eval
+        type: rollout
+        url: http://flagger-eval-webhook.synapse:8080/eval
+        timeout: 120s
+        metadata:
+          suite: golden
+          tier_floor: "0.80"
+      - name: kv-cache-hit-rate
+        type: rollout
+        url: http://flagger-eval-webhook.synapse:8080/kv-cache
+        timeout: 60s
+        metadata:
+          floor: "0.70"

@@ -7,11 +7,10 @@ Order -> forecast -> inventory -> route -> consensus -> audit trail entry.
 from __future__ import annotations
 
 import asyncio
-import sys
+from uuid import uuid4
 
 import httpx
 import structlog
-from uuid import uuid4
 
 logger = structlog.get_logger(__name__)
 

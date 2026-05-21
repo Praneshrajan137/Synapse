@@ -7,12 +7,30 @@ from typing import Any
 import httpx
 import pytest
 
+from synapse_common import clients
 from synapse_common.a2a_sdk import (
     A2ARequest,
     A2AResponse,
     AgentCard,
     send_a2a_request,
 )
+from synapse_common.breakers import reset_registry as reset_breakers
+
+
+@pytest.fixture(autouse=True)
+def _reset_singletons() -> Any:
+    """Sprint-7: shared httpx + breaker singletons leak across tests.
+
+    The Sprint-7 SDK uses ``synapse_common.clients.get_client('a2a')``
+    (process-shared) and a per-host circuit breaker. Reset both so each
+    test sees a fresh state and ``httpx.AsyncClient`` monkey-patches
+    take effect.
+    """
+    clients._CLIENTS.clear()  # type: ignore[attr-defined]
+    reset_breakers()
+    yield
+    clients._CLIENTS.clear()  # type: ignore[attr-defined]
+    reset_breakers()
 
 
 class TestA2ARequest:

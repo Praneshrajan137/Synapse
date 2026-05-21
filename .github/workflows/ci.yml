@@ -80,6 +80,44 @@ jobs:
           name: coverage-report
           path: packages/coverage.xml
 
+  sprint7-contracts:
+    name: Sprint 7 Contracts (WS-1/WS-2 gates)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    needs: quality-gates
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+      - name: Install dependencies
+        run: |
+          pip install -r packages/requirements.txt -r packages/requirements-dev.txt
+          pip install jsonschema pyyaml aiosqlite pytest-asyncio sqlalchemy
+      - name: Topic registry contract
+        run: pytest tests/contracts/test_kafka_topic_registry.py -v --tb=short
+      - name: Async hygiene contract
+        run: pytest tests/contracts/test_async_hygiene.py -v --tb=short
+      - name: JSON-determinism contract
+        run: pytest tests/contracts/test_json_determinism.py -v --tb=short
+      - name: Schema-at-handler-boundary contract
+        run: pytest tests/contracts/test_schema_at_handler_boundary.py -v --tb=short
+      - name: SLO + burn-rate rules
+        run: pytest tests/observability/ -v --tb=short
+      - name: Burn-rate generator drift gate
+        run: python scripts/generate_burn_alerts.py --check
+      - name: Integration tests (idempotency, outbox, traceparent, KV-cache, brownout, replay)
+        run: |
+          pytest tests/integration/test_idempotency_replay.py \
+                 tests/integration/test_outbox_after_crash.py \
+                 tests/integration/test_traceparent_e2e.py \
+                 tests/integration/test_kv_cache_stability.py \
+                 tests/integration/test_brownout_transitions.py \
+                 tests/integration/test_replay_determinism.py \
+                 -v --tb=short
+
   sprint6-verify:
     name: Sprint 6 Multi-City Verification
     runs-on: ubuntu-latest
@@ -157,4 +195,134 @@ jobs:
       - uses: actions/checkout@v4
       - name: Compliance gate
         run: make verify-v4-compliance
+
+  sprint8-spec:
+    name: Sprint 8 Spec-as-Source (WS-3 gates)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    needs: quality-gates
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+      - name: Install dependencies
+        run: |
+          pip install -r packages/requirements.txt -r packages/requirements-dev.txt
+          pip install jsonschema pyyaml
+      - name: spec-validate
+        run: python scripts/spec_cli.py validate
+      - name: spec-reward-check
+        run: python scripts/spec_cli.py generate-reward-config --check
+      - name: spec-alerts-check
+        run: python scripts/spec_cli.py generate-alerts --check
+      - name: extended spec coverage gate (INV + MR + reward.weights)
+        run: python scripts/check_spec_coverage.py
+
+  sprint8-eval:
+    name: Sprint 8 Eval Harness (WS-5 gates, PR-only)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    needs: quality-gates
+    if: github.event_name == 'pull_request'
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+      - name: Install dependencies
+        run: |
+          pip install -r packages/requirements.txt -r packages/requirements-dev.txt
+          pip install jsonschema pyyaml aiosqlite pytest-asyncio sqlalchemy
+      - name: synapse eval run --suite golden
+        run: PYTHONPATH=".:packages" python tests/eval/run.py --print
+      - name: tier-routing accuracy gate
+        run: pytest tests/eval/test_tier_routing_accuracy.py -v --tb=short
+      - name: replay equivalence
+        run: pytest tests/eval/test_replay_equivalence.py -v --tb=short
+      - name: KV-cache hit-rate floor
+        run: pytest tests/observability/test_kv_cache_hit_rate.py -v --tb=short
+
+  sprint9-supply:
+    name: Sprint 9 Supply Chain (WS-6 gates)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    needs: quality-gates
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+      - name: Install dependencies
+        run: |
+          pip install -r packages/requirements.txt -r packages/requirements-dev.txt
+          pip install jsonschema pyyaml
+      - name: SBOM drift gate
+        run: python scripts/generate_sbom.py --check
+      - name: LLM-prompt PII guard
+        run: python scripts/check_llm_prompt_pii.py
+      - name: C4 diagram drift gate
+        run: python scripts/generate_diagrams.py --check
+      - name: 200-trace generator drift gate
+        run: python tests/eval/generate_traces.py --check
+
+  sprint9-helm:
+    name: Sprint 9 Helm + Topology (WS-10 gates)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    needs: quality-gates
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Helm
+        uses: azure/setup-helm@v4
+        with:
+          version: 'v3.14.0'
+      - name: Install kubeval
+        run: |
+          curl -L https://github.com/instrumenta/kubeval/releases/latest/download/kubeval-linux-amd64.tar.gz \
+            | tar xz -C /tmp
+          sudo mv /tmp/kubeval /usr/local/bin/
+      - name: helm lint
+        run: helm lint infrastructure/helm/synapse
+      - name: helm template + kubeval (bengaluru)
+        run: |
+          helm template synapse infrastructure/helm/synapse \
+            -f infrastructure/helm/synapse/values-bengaluru.yaml \
+            > /tmp/manifests-blr.yaml
+          kubeval --ignore-missing-schemas /tmp/manifests-blr.yaml
+      - name: helm template + kubeval (mumbai)
+        run: |
+          helm template synapse infrastructure/helm/synapse \
+            -f infrastructure/helm/synapse/values-mumbai.yaml \
+            > /tmp/manifests-mum.yaml
+          kubeval --ignore-missing-schemas /tmp/manifests-mum.yaml
+
+  sprint7-chaos-gating:
+    name: Sprint 7 Chaos Tests (brownout-relevant, blocking)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    needs: sprint7-contracts
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+      - name: Install dependencies
+        run: |
+          pip install -r packages/requirements.txt -r packages/requirements-dev.txt
+          pip install jsonschema pyyaml aiosqlite pytest-asyncio sqlalchemy
+      - name: Kafka failure chaos (brownout signal)
+        run: pytest tests/chaos/test_kafka_failure.py -v --tb=short
+      - name: Ollama crash chaos (brownout signal)
+        run: pytest tests/chaos/test_ollama_crash.py -v --tb=short
+      - name: City isolation chaos (E-S6-05)
+        run: pytest tests/chaos/test_city_isolation.py -v --tb=short
 

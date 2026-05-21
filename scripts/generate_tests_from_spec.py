@@ -140,7 +140,7 @@ def _emit_invariant_block(inv: dict[str, str]) -> list[str]:
         '    """',
         "",
         f"    def test_{slug}(self) -> None:",
-        f'        pytest.skip("INTEGRATION: see spec.yaml")',
+        '        pytest.skip("INTEGRATION: see spec.yaml")',
         "",
     ]
 
@@ -158,10 +158,10 @@ def _emit_pre_block(pre: dict[str, str]) -> list[str]:
         '    """',
         "",
         f"    def test_{slug}_valid(self) -> None:",
-        f'        pytest.skip("INTEGRATION: precondition path")',
+        '        pytest.skip("INTEGRATION: precondition path")',
         "",
         f"    def test_{slug}_invalid(self) -> None:",
-        f'        pytest.skip("INTEGRATION: violation path")',
+        '        pytest.skip("INTEGRATION: violation path")',
         "",
     ]
 
@@ -179,7 +179,7 @@ def _emit_post_block(post: dict[str, str]) -> list[str]:
         '    """',
         "",
         f"    def test_{slug}(self) -> None:",
-        f'        pytest.skip("INTEGRATION: postcondition path")',
+        '        pytest.skip("INTEGRATION: postcondition path")',
         "",
     ]
 
@@ -239,7 +239,7 @@ def _emit_state_machine_block(agent_name: str, sm_spec: dict) -> list[str]:
             [
                 f"        assert sm.state == AgentState.{t['from']}",
                 f'        ok = sm.transition("{t["trigger"]}")',
-                f"        assert ok is True",
+                "        assert ok is True",
                 f"        assert sm.state == AgentState.{t['to']}",
                 "",
             ]
@@ -249,7 +249,7 @@ def _emit_state_machine_block(agent_name: str, sm_spec: dict) -> list[str]:
         [
             "    def test_invalid_trigger_returns_false(self) -> None:",
             f"        sm = {class_name}()",
-            f'        assert sm.transition("__nonsense__") is False',
+            '        assert sm.transition("__nonsense__") is False',
             f"        assert sm.state == AgentState.{initial_state}",
             "",
         ]
@@ -271,7 +271,7 @@ def _emit_metamorphic_block(mr: dict[str, str]) -> list[str]:
         '    """',
         "",
         f"    def test_{slug}(self) -> None:",
-        f'        pytest.skip("Asserted in test_metamorphic.py")',
+        '        pytest.skip("Asserted in test_metamorphic.py")',
         "",
     ]
 

@@ -1,0 +1,6 @@
+apiVersion: v2
+name: demand-prophet
+description: SYNAPSE Demand Prophet agent (Sprint 9 representative agent subchart).
+type: application
+version: 0.9.0
+appVersion: "9.0.0"

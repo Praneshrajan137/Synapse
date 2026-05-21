@@ -169,7 +169,7 @@ class TestNeo4jMumbai:
     def test_no_cross_city_contamination(self) -> None:
         """E-S6-05: Bengaluru data must be untouched."""
         rows = _neo4j_query("MATCH (s:DarkStore {city:'bengaluru'}) RETURN count(s) AS c")
-        assert rows[0]["c"] == 25, f"Bengaluru DarkStores corrupted — E-S6-05"
+        assert rows[0]["c"] == 25, "Bengaluru DarkStores corrupted — E-S6-05"
 
     def test_sku_sharing_verified(self) -> None:
         rows = _neo4j_query("MATCH (k:SKU) RETURN count(k) AS c")
@@ -400,7 +400,7 @@ class TestInvariantCompliance:
         """I-7: Mumbai agents return fallback when dependencies are degraded."""
         # Verify that agent /health endpoints report degraded (not crashed)
         # when optional dependencies are unavailable
-        for agent_name, port in [
+        for agent_name, _port in [
             ("demand-prophet-mumbai", 8000),
             ("routing-navigator-mumbai", 8000),
         ]:
@@ -443,7 +443,7 @@ class TestInvariantCompliance:
             latencies: list[float] = []
             for _ in range(10):
                 start = time.monotonic()
-                resp = requests.post(
+                requests.post(
                     "http://localhost:8085/api/v1/decisions",
                     json={
                         "city": "mumbai",
@@ -462,7 +462,6 @@ class TestInvariantCompliance:
 
     def test_deterministic_serialization(self) -> None:
         """I-13: No dynamic data (f-strings, .format()) in LLM system prompt templates."""
-        import re
 
         agents_dir = Path("agents")
         violations: list[str] = []
@@ -480,7 +479,7 @@ class TestInvariantCompliance:
                     ):
                         violations.append(f"{py_file}:{i}: {stripped[:100]}")
         assert not violations, (
-            f"I-13: Dynamic data in system prompts breaks KV-cache:\n"
+            "I-13: Dynamic data in system prompts breaks KV-cache:\n"
             + "\n".join(violations)
         )
 
@@ -508,7 +507,7 @@ class TestInvariantCompliance:
                         if re.search(pattern, line) and "context" in line.lower():
                             violations.append(f"{py_file}:{i}: {line.strip()[:100]}")
         assert not violations, (
-            f"I-14: Context mutation detected (append-only required):\n"
+            "I-14: Context mutation detected (append-only required):\n"
             + "\n".join(violations)
         )
 

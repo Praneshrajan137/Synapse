@@ -96,6 +96,40 @@
           }
         }
       }
+    },
+    "reward": {
+      "description": "Sprint 8 — spec-driven reward weights, shadow mode (ADR-031). Optional; agents without RL training omit this block.",
+      "type": "object",
+      "required": ["weights"],
+      "properties": {
+        "weights": {
+          "type": "object",
+          "description": "Map of named scalar weights consumed by agents/<name>/training/rewards.py.",
+          "additionalProperties": {"type": "number"}
+        },
+        "scale": {
+          "type": "number",
+          "description": "Optional multiplicative scale applied to the final reward."
+        },
+        "notes": {"type": "string"}
+      }
+    },
+    "alerts": {
+      "description": "Sprint 8 — spec-driven Prometheus alerts. Each entry references an existing INV-* id; the generator emits a multi-window rule per critical-severity entry.",
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["invariant_id", "threshold_metric", "comparison", "threshold"],
+        "properties": {
+          "invariant_id": {"type": "string", "pattern": "^INV-[A-Z]+-\\d{3}$"},
+          "threshold_metric": {"type": "string", "description": "Prometheus query expression evaluated against the threshold."},
+          "comparison": {"type": "string", "enum": ["gt", "lt", "ge", "le", "eq"]},
+          "threshold": {"type": "number"},
+          "window": {"type": "string", "default": "5m"},
+          "severity": {"type": "string", "enum": ["critical", "high", "medium"], "default": "critical"},
+          "runbook": {"type": "string"}
+        }
+      }
     }
   }
 }

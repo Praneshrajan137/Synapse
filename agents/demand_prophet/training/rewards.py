@@ -76,16 +76,41 @@ def compute_reward(
     lower_bound: Tensor,
     upper_bound: Tensor,
     event_signals: Tensor | None = None,
-    crps_weight: float = 1.0,
-    calibration_weight: float = 0.5,
-    event_weight: float = 0.1,
+    crps_weight: float | None = None,
+    calibration_weight: float | None = None,
+    event_weight: float | None = None,
 ) -> dict[str, Tensor]:
     """
     Compute the full Demand Prophet reward.
     R = -crps_weight*CRPS - calibration_weight*calibration_gap + event_weight*event_bonus
 
     THIS IS THE ONLY REWARD FUNCTION FOR DEMAND PROPHET (I-2).
+
+    Sprint 9 (ADR-031 cutover): spec-generated ``reward_config.WEIGHTS``
+    is the source-of-truth for weights. Callers may still pass explicit
+    kwargs; divergence from the spec increments
+    ``synapse_reward_weight_divergence_total`` (shadow_check remains as
+    the override-observability gate).
     """
+    from synapse_common.reward_shadow import shadow_check
+
+    from agents.demand_prophet.training import reward_config
+
+    if crps_weight is None:
+        crps_weight = reward_config.WEIGHTS["crps_weight"]
+    if calibration_weight is None:
+        calibration_weight = reward_config.WEIGHTS["calibration_weight"]
+    if event_weight is None:
+        event_weight = reward_config.WEIGHTS["event_weight"]
+
+    shadow_check(
+        "demand_prophet",
+        reward_config.WEIGHTS,
+        crps_weight=crps_weight,
+        calibration_weight=calibration_weight,
+        event_weight=event_weight,
+    )
+
     crps = crps_loss(predictions, actuals)
     cal_gap = calibration_gap(lower_bound, upper_bound, actuals)
 

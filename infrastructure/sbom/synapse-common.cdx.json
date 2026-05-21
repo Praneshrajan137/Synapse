@@ -1,0 +1,70 @@
+{
+  "bomFormat": "CycloneDX",
+  "components": [
+    {
+      "bom-ref": "pkg:pypi/confluent-kafka@unknown",
+      "name": "confluent-kafka",
+      "purl": "pkg:pypi/confluent-kafka@unknown",
+      "type": "library",
+      "version": "unknown"
+    },
+    {
+      "bom-ref": "pkg:pypi/deal@unknown",
+      "name": "deal",
+      "purl": "pkg:pypi/deal@unknown",
+      "type": "library",
+      "version": "unknown"
+    },
+    {
+      "bom-ref": "pkg:pypi/httpx@unknown",
+      "name": "httpx",
+      "purl": "pkg:pypi/httpx@unknown",
+      "type": "library",
+      "version": "unknown"
+    },
+    {
+      "bom-ref": "pkg:pypi/jsonschema@unknown",
+      "name": "jsonschema",
+      "purl": "pkg:pypi/jsonschema@unknown",
+      "type": "library",
+      "version": "unknown"
+    },
+    {
+      "bom-ref": "pkg:pypi/prometheus-client@unknown",
+      "name": "prometheus-client",
+      "purl": "pkg:pypi/prometheus-client@unknown",
+      "type": "library",
+      "version": "unknown"
+    },
+    {
+      "bom-ref": "pkg:pypi/pydantic@unknown",
+      "name": "pydantic",
+      "purl": "pkg:pypi/pydantic@unknown",
+      "type": "library",
+      "version": "unknown"
+    },
+    {
+      "bom-ref": "pkg:pypi/redis@unknown",
+      "name": "redis",
+      "purl": "pkg:pypi/redis@unknown",
+      "type": "library",
+      "version": "unknown"
+    },
+    {
+      "bom-ref": "pkg:pypi/structlog@unknown",
+      "name": "structlog",
+      "purl": "pkg:pypi/structlog@unknown",
+      "type": "library",
+      "version": "unknown"
+    }
+  ],
+  "metadata": {
+    "component": {
+      "name": "synapse-common",
+      "type": "application",
+      "version": "1.0.0"
+    }
+  },
+  "specVersion": "1.5",
+  "version": 1
+}

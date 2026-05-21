@@ -172,3 +172,22 @@ contracts:
       - "elasticity_estimate is finite"
       - "sku_id and store_id are non-empty strings"
       - "proposal includes utility_score, confidence, justification_trace per A2A spec"
+
+reward:
+  weights:
+    revenue_weight: 1.0
+    elasticity_weight: 0.5
+    essential_penalty_weight: -5.0
+    competitor_gap_weight: -2.0
+  scale: 1.0
+  notes: essential_penalty_weight is the soft-component of the 1.3x cap (I-6 enforces
+    hard cap). Shadow mode ADR-031.
+
+alerts:
+- invariant_id: INV-PO-001
+  threshold_metric: sum(rate(synapse_pricing_oracle_essential_cap_violation_total[5m]))
+  comparison: gt
+  threshold: 0.0
+  window: 1m
+  severity: critical
+  runbook: https://github.com/Praneshrajan137/synapse/blob/main/docs/runbooks/essential_cap_violation.md

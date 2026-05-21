@@ -1,0 +1,154 @@
+{
+  "bomFormat": "CycloneDX",
+  "components": [
+    {
+      "bom-ref": "pkg:pypi/asyncpg@0.29.0",
+      "name": "asyncpg",
+      "purl": "pkg:pypi/asyncpg@0.29.0",
+      "type": "library",
+      "version": "0.29.0"
+    },
+    {
+      "bom-ref": "pkg:pypi/confluent-kafka@unknown",
+      "name": "confluent-kafka",
+      "purl": "pkg:pypi/confluent-kafka@unknown",
+      "type": "library",
+      "version": "unknown"
+    },
+    {
+      "bom-ref": "pkg:pypi/deal@4.24.4",
+      "name": "deal",
+      "purl": "pkg:pypi/deal@4.24.4",
+      "type": "library",
+      "version": "4.24.4"
+    },
+    {
+      "bom-ref": "pkg:pypi/fastapi@0.111.0",
+      "name": "fastapi",
+      "purl": "pkg:pypi/fastapi@0.111.0",
+      "type": "library",
+      "version": "0.111.0"
+    },
+    {
+      "bom-ref": "pkg:pypi/httpx@0.27.0",
+      "name": "httpx",
+      "purl": "pkg:pypi/httpx@0.27.0",
+      "type": "library",
+      "version": "0.27.0"
+    },
+    {
+      "bom-ref": "pkg:pypi/neo4j@5.22.0",
+      "name": "neo4j",
+      "purl": "pkg:pypi/neo4j@5.22.0",
+      "type": "library",
+      "version": "5.22.0"
+    },
+    {
+      "bom-ref": "pkg:pypi/numpy@unknown",
+      "name": "numpy",
+      "purl": "pkg:pypi/numpy@unknown",
+      "type": "library",
+      "version": "unknown"
+    },
+    {
+      "bom-ref": "pkg:pypi/opentelemetry-api@1.25.0",
+      "name": "opentelemetry-api",
+      "purl": "pkg:pypi/opentelemetry-api@1.25.0",
+      "type": "library",
+      "version": "1.25.0"
+    },
+    {
+      "bom-ref": "pkg:pypi/opentelemetry-instrumentation-fastapi@0.46b0",
+      "name": "opentelemetry-instrumentation-fastapi",
+      "purl": "pkg:pypi/opentelemetry-instrumentation-fastapi@0.46b0",
+      "type": "library",
+      "version": "0.46b0"
+    },
+    {
+      "bom-ref": "pkg:pypi/opentelemetry-sdk@1.25.0",
+      "name": "opentelemetry-sdk",
+      "purl": "pkg:pypi/opentelemetry-sdk@1.25.0",
+      "type": "library",
+      "version": "1.25.0"
+    },
+    {
+      "bom-ref": "pkg:pypi/pinecone@5.0.1",
+      "name": "pinecone",
+      "purl": "pkg:pypi/pinecone@5.0.1",
+      "type": "library",
+      "version": "5.0.1"
+    },
+    {
+      "bom-ref": "pkg:pypi/prometheus-client@0.20.0",
+      "name": "prometheus-client",
+      "purl": "pkg:pypi/prometheus-client@0.20.0",
+      "type": "library",
+      "version": "0.20.0"
+    },
+    {
+      "bom-ref": "pkg:pypi/pydantic-settings@2.3.4",
+      "name": "pydantic-settings",
+      "purl": "pkg:pypi/pydantic-settings@2.3.4",
+      "type": "library",
+      "version": "2.3.4"
+    },
+    {
+      "bom-ref": "pkg:pypi/pydantic@2.7.4",
+      "name": "pydantic",
+      "purl": "pkg:pypi/pydantic@2.7.4",
+      "type": "library",
+      "version": "2.7.4"
+    },
+    {
+      "bom-ref": "pkg:pypi/pymoo@0.6.1.3",
+      "name": "pymoo",
+      "purl": "pkg:pypi/pymoo@0.6.1.3",
+      "type": "library",
+      "version": "0.6.1.3"
+    },
+    {
+      "bom-ref": "pkg:pypi/redis@5.0.7",
+      "name": "redis",
+      "purl": "pkg:pypi/redis@5.0.7",
+      "type": "library",
+      "version": "5.0.7"
+    },
+    {
+      "bom-ref": "pkg:pypi/sqlalchemy@2.0.31",
+      "name": "sqlalchemy",
+      "purl": "pkg:pypi/sqlalchemy@2.0.31",
+      "type": "library",
+      "version": "2.0.31"
+    },
+    {
+      "bom-ref": "pkg:pypi/structlog@unknown",
+      "name": "structlog",
+      "purl": "pkg:pypi/structlog@unknown",
+      "type": "library",
+      "version": "unknown"
+    },
+    {
+      "bom-ref": "pkg:pypi/uvicorn@0.30.1",
+      "name": "uvicorn",
+      "purl": "pkg:pypi/uvicorn@0.30.1",
+      "type": "library",
+      "version": "0.30.1"
+    },
+    {
+      "bom-ref": "pkg:pypi/websockets@12.0",
+      "name": "websockets",
+      "purl": "pkg:pypi/websockets@12.0",
+      "type": "library",
+      "version": "12.0"
+    }
+  ],
+  "metadata": {
+    "component": {
+      "name": "orchestrator",
+      "type": "application",
+      "version": "1.0.0"
+    }
+  },
+  "specVersion": "1.5",
+  "version": 1
+}

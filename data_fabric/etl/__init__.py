@@ -5,10 +5,10 @@ A backward-compat shim remains at scripts/convert_to_parquet.py.
 """
 
 from data_fabric.etl.parquet_etl import (
+    convert_all,
     convert_demand_features,
     convert_store_features,
     convert_weather_features,
-    convert_all,
 )
 
 __all__ = [

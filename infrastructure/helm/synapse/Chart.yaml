@@ -1,0 +1,33 @@
+apiVersion: v2
+name: synapse
+description: |
+  SYNAPSE multi-agent quick-commerce platform — Sprint-9 skeleton
+  (api + orchestrator + demand_prophet). Remaining 7 agents are added
+  in Sprint 10 by templating from the demand_prophet subchart. See
+  ADR-034 (Production Topology Skeleton).
+type: application
+version: 0.9.0
+appVersion: "9.0.0"
+keywords:
+  - synapse
+  - supply-chain
+  - quick-commerce
+maintainers:
+  - name: SYNAPSE Team
+home: https://github.com/Praneshrajan137/synapse
+sources:
+  - https://github.com/Praneshrajan137/synapse
+
+dependencies:
+  - name: api-gateway
+    version: "0.9.0"
+    repository: "file://./charts/api-gateway"
+    condition: api-gateway.enabled
+  - name: orchestrator
+    version: "0.9.0"
+    repository: "file://./charts/orchestrator"
+    condition: orchestrator.enabled
+  - name: demand-prophet
+    version: "0.9.0"
+    repository: "file://./charts/demand-prophet"
+    condition: demand-prophet.enabled

@@ -1,0 +1,25 @@
+{
+  "agents_involved": [
+    "demand_prophet",
+    "pricing_oracle",
+    "supplier_trust",
+    "sustainability_agent"
+  ],
+  "avg_confidence": 0.337,
+  "city": "bengaluru",
+  "description": "tier_3 bengaluru demand_prophet,pricing_oracle,supplier_trust,sustainability_agent confidence=0.337",
+  "disruption_active": false,
+  "expected_essential": false,
+  "expected_invariants": [
+    "INV-DP-002",
+    "INV-DP-006",
+    "INV-PO-001"
+  ],
+  "expected_tier": "tier_3",
+  "payload": {
+    "sku_id": "SKU-0047",
+    "store_id": "BEN-STR-043"
+  },
+  "requires_twin_simulation": false,
+  "trace_id": "tier3-ben-0186-BEN-STR-043-SKU-0047"
+}

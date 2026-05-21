@@ -95,3 +95,117 @@ CONSENSUS_PROPOSALS_RECEIVED = Counter(
     "Agent proposals received per consensus round",
     ["agent_name"],
 )
+
+# WS-1 Resilience Mesh
+BREAKER_STATE = Gauge(
+    "synapse_breaker_state",
+    "Circuit breaker state per named dependency (0=closed, 1=half_open, 2=open)",
+    ["name"],
+)
+
+BROWNOUT_DECISIONS_TOTAL = Counter(
+    "synapse_brownout_decisions_total",
+    "Decisions shed or downgraded by the brownout policy",
+    ["level", "city"],
+)
+
+# WS-2 Distributed Correctness
+OUTBOX_LAG_SECONDS = Gauge(
+    "synapse_outbox_lag_seconds",
+    "Age in seconds of the oldest PENDING audit_outbox row",
+)
+
+OUTBOX_DISPATCH_TOTAL = Counter(
+    "synapse_outbox_dispatch_total",
+    "Outbox rows dispatched to Kafka by status",
+    ["status"],
+)
+
+IDEMPOTENT_HIT_TOTAL = Counter(
+    "synapse_idempotent_hit_total",
+    "Idempotency-Key replay outcomes",
+    ["outcome"],
+)
+
+# WS-4 Observability cost-telemetry shell
+LLM_TOKENS = Histogram(
+    "synapse_llm_tokens",
+    "Ollama tokens per LLM call by tier/model/direction",
+    ["tier", "model", "direction"],
+    buckets=[50, 100, 250, 500, 1000, 2000, 5000, 10000, 20000, 50000],
+)
+
+# Sprint 8 — WS-3 Spec-as-Source-of-Truth
+REWARD_WEIGHT_DIVERGENCE_TOTAL = Counter(
+    "synapse_reward_weight_divergence_total",
+    "Reward-weight drift between spec.yaml-generated config and runtime kwargs "
+    "(shadow mode, ADR-031)",
+    ["agent", "key"],
+)
+
+SPEC_VALIDATION_FAILED_TOTAL = Counter(
+    "synapse_spec_validation_failed_total",
+    "Spec validation failures emitted by scripts/spec_cli.py validate",
+    ["agent", "severity"],
+)
+
+# Sprint 8 — WS-8 Performance Hardening
+TIER_BUDGET_EXCEEDED_TOTAL = Counter(
+    "synapse_tier_budget_exceeded_total",
+    "Decisions whose handler latency exceeded its tier budget (ADR-032)",
+    ["tier"],
+)
+
+# Sprint 8 — WS-5 AI Eval harness
+EVAL_TRACE_LATENCY = Histogram(
+    "synapse_eval_trace_latency_seconds",
+    "Wall-clock latency per golden-trace replay",
+    ["tier", "city"],
+    buckets=[0.005, 0.01, 0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0, 15.0, 60.0, 120.0],
+)
+
+EVAL_TRACE_OUTCOME_TOTAL = Counter(
+    "synapse_eval_trace_outcome_total",
+    "Golden-trace replay outcomes",
+    ["tier", "city", "outcome"],
+)
+
+# Sprint 9 — WS-6 Supply Chain Security
+AUDIT_CHAIN_LENGTH = Gauge(
+    "synapse_audit_chain_length",
+    "Total rows in the chained audit table; monotonically increasing",
+)
+
+AUDIT_CHAIN_TAMPER_DETECTED = Counter(
+    "synapse_audit_chain_tamper_detected_total",
+    "Tamper events detected by synapse audit verify or the anchorer",
+    ["source"],
+)
+
+# Sprint 9 — WS-7 Data Lifecycle & Compliance
+ARCHIVE_ROWS_MOVED_TOTAL = Counter(
+    "synapse_archive_rows_moved_total",
+    "Audit rows successfully moved to the MinIO Parquet archive by the daily worker",
+    ["table"],
+)
+
+PII_REDACTION_TOTAL = Counter(
+    "synapse_pii_redaction_total",
+    "Structlog log records where the redact_pii processor scrubbed at least one field",
+    ["field"],
+)
+
+# Sprint 9 — WS-5 carryover: live LLM-as-judge
+LLM_JUDGE_LATENCY_SECONDS = Histogram(
+    "synapse_llm_judge_latency_seconds",
+    "Wall-clock latency per LLM-as-judge scoring call (live mode only)",
+    ["model"],
+    buckets=[0.5, 1.0, 2.5, 5.0, 10.0, 30.0, 60.0, 120.0],
+)
+
+# Sprint 9 — WS-5 carryover: drift scheduler
+DRIFT_PSI_VALUE = Gauge(
+    "synapse_drift_psi_value",
+    "Most-recent Population Stability Index per Feast feature view, keyed by city",
+    ["feature", "city"],
+)

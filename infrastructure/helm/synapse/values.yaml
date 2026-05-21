@@ -1,0 +1,72 @@
+# SYNAPSE Helm values — defaults (Sprint 9 §M-prod-1, ADR-034).
+#
+# Per-city overrides live in:
+#   - values-bengaluru.yaml
+#   - values-mumbai.yaml
+# Multi-city deployment runs two Helm releases with different value files,
+# sharing the same Postgres + Kafka.
+
+global:
+  city: bengaluru
+  imageRegistry: ghcr.io/praneshrajan137/synapse
+  imageTag: latest
+  imagePullPolicy: IfNotPresent
+  serviceMesh:
+    linkerd:
+      enabled: true
+  observability:
+    prometheus:
+      scrape: true
+      port: 9090
+
+api-gateway:
+  enabled: true
+  replicaCount: 2
+  image:
+    repository: api-gateway
+  service:
+    port: 8000
+  env:
+    SYNAPSE_API_POSTGRES_DSN: "postgresql+asyncpg://synapse_app@postgres:5432/synapse_audit"
+    KAFKA_BOOTSTRAP: "kafka:9092"
+  resources:
+    requests: {cpu: 200m, memory: 256Mi}
+    limits: {cpu: 1, memory: 1Gi}
+
+orchestrator:
+  enabled: true
+  replicaCount: 3
+  image:
+    repository: orchestrator
+  service:
+    port: 8085
+  env:
+    SYNAPSE_ORCHESTRATOR_POSTGRES_DSN: "postgresql+asyncpg://synapse_app@postgres:5432/synapse_audit"
+    SYNAPSE_ORCHESTRATOR_OLLAMA_URL: "http://ollama:11434"
+    KAFKA_BOOTSTRAP: "kafka:9092"
+  resources:
+    requests: {cpu: 500m, memory: 512Mi}
+    limits: {cpu: 2, memory: 2Gi}
+  autoscaling:
+    keda:
+      enabled: true
+      minReplicas: 2
+      maxReplicas: 20
+  canary:
+    flagger:
+      enabled: true
+      stepWeight: 10
+      maxWeight: 50
+
+demand-prophet:
+  enabled: true
+  replicaCount: 2
+  image:
+    repository: demand-prophet
+  service:
+    port: 8001
+  env:
+    KAFKA_BOOTSTRAP: "kafka:9092"
+  resources:
+    requests: {cpu: 500m, memory: 1Gi}
+    limits: {cpu: 2, memory: 4Gi}

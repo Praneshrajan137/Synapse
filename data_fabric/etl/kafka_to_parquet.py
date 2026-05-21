@@ -30,7 +30,7 @@ from typing import Any
 import pyarrow as pa
 import pyarrow.parquet as pq
 import structlog
-from confluent_kafka import Consumer, KafkaError, KafkaException, TopicPartition
+from confluent_kafka import Consumer, KafkaError, KafkaException
 
 log = structlog.get_logger()
 

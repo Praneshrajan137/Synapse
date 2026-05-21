@@ -78,9 +78,9 @@ def main() -> None:
         if found:
             print(f"  OK {name} ({tier}) — installed")
             if test_model_inference(name):
-                print(f"    OK Inference OK")
+                print("    OK Inference OK")
             else:
-                print(f"    FAIL Inference FAILED")
+                print("    FAIL Inference FAILED")
                 all_pass = False
         else:
             print(f"  MISSING {name} ({tier}) — NOT INSTALLED")

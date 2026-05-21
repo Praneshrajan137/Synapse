@@ -5,10 +5,10 @@ Run: python scripts/verify/test_consensus.py
 from __future__ import annotations
 
 import asyncio
+from uuid import uuid4
 
 import httpx
 import structlog
-from uuid import uuid4
 
 logger = structlog.get_logger(__name__)
 

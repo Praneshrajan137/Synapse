@@ -1,0 +1,20 @@
+{
+  "agents_involved": [
+    "inventory_sentinel"
+  ],
+  "avg_confidence": 0.967,
+  "city": "mumbai",
+  "description": "tier_1 mumbai inventory_sentinel confidence=0.967",
+  "disruption_active": false,
+  "expected_essential": false,
+  "expected_invariants": [
+    "INV-IS-002"
+  ],
+  "expected_tier": "tier_1",
+  "payload": {
+    "sku_id": "SKU-0105",
+    "store_id": "MUM-STR-016"
+  },
+  "requires_twin_simulation": false,
+  "trace_id": "tier1-mum-0133-MUM-STR-016-SKU-0105"
+}

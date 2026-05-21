@@ -8,7 +8,6 @@ from datetime import timedelta
 
 from feast import FeatureView, Field, FileSource
 from feast.types import Float64, Int64, String
-
 from features.entities import city
 
 event_source = FileSource(

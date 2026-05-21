@@ -54,12 +54,37 @@ def compute_reward(
     rider_earnings: Tensor,
     freshness_violations: int,
     total_routes: int,
-    w_time: float = 0.4,
-    w_fuel: float = 0.2,
-    w_freshness: float = 0.25,
-    w_fairness: float = 0.15,
+    w_time: float | None = None,
+    w_fuel: float | None = None,
+    w_freshness: float | None = None,
+    w_fairness: float | None = None,
 ) -> dict[str, Tensor]:
-    """Compute full Routing Navigator reward (I-2: agent-scoped only)."""
+    """Compute full Routing Navigator reward (I-2: agent-scoped only).
+
+    Sprint 9 (ADR-031 cutover): spec-generated WEIGHTS is source-of-truth.
+    """
+    from synapse_common.reward_shadow import shadow_check
+
+    from agents.routing_navigator.training import reward_config
+
+    if w_time is None:
+        w_time = reward_config.WEIGHTS["w_time"]
+    if w_fuel is None:
+        w_fuel = reward_config.WEIGHTS["w_fuel"]
+    if w_freshness is None:
+        w_freshness = reward_config.WEIGHTS["w_freshness"]
+    if w_fairness is None:
+        w_fairness = reward_config.WEIGHTS["w_fairness"]
+
+    shadow_check(
+        "routing_navigator",
+        reward_config.WEIGHTS,
+        w_time=w_time,
+        w_fuel=w_fuel,
+        w_freshness=w_freshness,
+        w_fairness=w_fairness,
+    )
+
     time_saved = compute_time_saved(route_times, baseline_times)
     fuel_saved = compute_fuel_saved(route_fuel, baseline_fuel)
     freshness = compute_freshness(freshness_violations, total_routes)

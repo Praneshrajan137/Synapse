@@ -76,7 +76,7 @@ def scripted_summary(city: str) -> dict[str, Any]:
 
 def render(summary: dict[str, Any]) -> None:
     print(f"Decision ID:       {summary.get('decision_id', 'N/A')}")
-    print(f"Tier:              3 (LLM + RL)")
+    print("Tier:              3 (LLM + RL)")
     print(f"Consensus action:  {summary.get('consensus_action', 'N/A')}")
     print(f"Confidence:        {summary.get('confidence', 'N/A')}")
     print(f"Debate rounds:     {summary.get('debate_rounds', 'N/A')}")

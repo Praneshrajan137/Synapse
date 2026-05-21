@@ -168,3 +168,28 @@ contracts:
       - "sku_id and store_id are non-empty strings"
       - "horizons dict contains all 5 requested keys"
       - "proposal includes utility_score, confidence, justification_trace per A2A spec"
+
+reward:
+  weights:
+    crps_weight: 1.0
+    calibration_weight: 0.5
+    event_weight: 0.1
+  scale: 1.0
+  notes: Reward = -crps_weight*CRPS - calibration_weight*calibration_gap + event_weight*event_bonus.
+    Shadow mode ADR-031.
+
+alerts:
+- invariant_id: INV-DP-002
+  threshold_metric: avg_over_time(synapse_demand_prophet_coverage_p90{}[5m])
+  comparison: lt
+  threshold: 0.85
+  window: 10m
+  severity: critical
+  runbook: https://github.com/Praneshrajan137/synapse/blob/main/docs/runbooks/conformal_coverage_loss.md
+- invariant_id: INV-DP-006
+  threshold_metric: sum(rate(synapse_demand_prophet_negative_horizon_total[5m]))
+  comparison: gt
+  threshold: 0.0
+  window: 1m
+  severity: critical
+  runbook: https://github.com/Praneshrajan137/synapse/blob/main/docs/runbooks/forecast_negative_values.md

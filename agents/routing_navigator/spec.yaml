@@ -147,3 +147,12 @@ contracts:
       - "output includes total_distance_km (non-negative float)"
       - "route legs include per-leg distance_km"
       - "proposal includes utility_score, confidence, justification_trace per A2A spec"
+
+reward:
+  weights:
+    w_time: 0.4
+    w_fuel: 0.2
+    w_freshness: 0.25
+    w_fairness: 0.15
+  scale: 1.0
+  notes: Sums to 1.0. Shadow mode ADR-031.

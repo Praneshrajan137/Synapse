@@ -1,0 +1,11 @@
+replicaCount: 2
+image:
+  repository: api-gateway
+  pullPolicy: IfNotPresent
+service:
+  port: 8000
+env: {}
+resources:
+  requests: {cpu: 200m, memory: 256Mi}
+  limits: {cpu: 1, memory: 1Gi}
+podLabels: {}

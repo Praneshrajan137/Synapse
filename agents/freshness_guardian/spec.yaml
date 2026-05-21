@@ -150,3 +150,12 @@ contracts:
       - "markdown_pct in [0, 100]"
       - "fssai_compliant is boolean"
       - "timestamp is valid ISO-8601"
+
+reward:
+  weights:
+    accuracy_weight: 1.0
+    timing_weight: 0.4
+    fssai_weight: 2.0
+    unnecessary_weight: 0.3
+  scale: 1.0
+  notes: fssai_weight=2.0 enforces regulatory compliance. Shadow mode ADR-031.

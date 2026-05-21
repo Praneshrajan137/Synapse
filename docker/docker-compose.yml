@@ -166,6 +166,8 @@ services:
       - postgres-data:/var/lib/postgresql/data
       - ../infrastructure/postgres/init_audit.sql:/docker-entrypoint-initdb.d/01_init_audit.sql:ro
       - ../infrastructure/postgres/02_sprint4_consensus.sql:/docker-entrypoint-initdb.d/02_sprint4_consensus.sql:ro
+      - ../infrastructure/postgres/03_sprint7_outbox.sql:/docker-entrypoint-initdb.d/03_sprint7_outbox.sql:ro
+      - ../infrastructure/postgres/04_sprint9_audit_chain.sql:/docker-entrypoint-initdb.d/04_sprint9_audit_chain.sql:ro
     networks:
       - infra-net
       - agents-net

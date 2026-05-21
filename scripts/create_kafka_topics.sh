@@ -1,7 +1,9 @@
 #!/usr/bin/env bash
 # ============================================================================
 # SYNAPSE — Kafka Topic Provisioner
-# Reads topics.json and creates all 16 topics with correct configuration.
+# Reads topics.json (count is dynamic; was 16 in Sprint 1, became 17 in Sprint 7
+# per ADR-029 — orders ingress) and creates each topic with the declared
+# partition count and retention.
 # Run AFTER Kafka is healthy: ./scripts/create_kafka_topics.sh
 # ============================================================================
 set -euo pipefail

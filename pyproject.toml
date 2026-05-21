@@ -5,6 +5,14 @@ description = "Supply Yield Network with Autonomous Planning, Sensing & Executio
 requires-python = ">=3.11"
 license = {text = "Apache-2.0"}
 
+# Sprint 9 §M-sec-3 — uv hash-pinned dependency lock.
+# Generate with: `uv lock --emit-hashes`
+# Verify in CI:  `uv lock --check`
+[tool.uv]
+managed = true
+package = true
+required-version = ">=0.4.0"
+
 [tool.ruff]
 target-version = "py311"
 line-length = 100
@@ -35,6 +43,16 @@ warn_unused_ignores = true
 [[tool.mypy.overrides]]
 module = "deal.*"
 ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = "jsonschema.*"
+ignore_missing_imports = true
+follow_imports = "skip"
+
+[[tool.mypy.overrides]]
+module = "yaml.*"
+ignore_missing_imports = true
+follow_imports = "skip"
 
 [[tool.mypy.overrides]]
 module = "pymoo.*"
@@ -147,6 +165,7 @@ markers = [
     "mutation: mutation testing targets",
     "dbc: design-by-contract tests (Layer 5)",
     "integration: tests requiring live infra (Feast/Neo4j/MLflow/Kafka)",
+    "eval: Sprint-8 evaluation harness (golden traces, tier-routing accuracy, replay equivalence)",
 ]
 asyncio_mode = "strict"
 addopts = "--strict-markers -v --tb=short"

@@ -1,0 +1,15 @@
+groups:
+- name: synapse-pricing_oracle-invariants
+  interval: 30s
+  rules:
+  - alert: pricing_oracle-inv-po-001
+    expr: (sum(rate(synapse_pricing_oracle_essential_cap_violation_total[5m]))) >
+      0.0
+    for: 1m
+    labels:
+      severity: critical
+      agent: pricing_oracle
+      invariant: INV-PO-001
+    annotations:
+      summary: Essential category pricing never exceeds 1.3x base price (I-6)
+      runbook_url: https://github.com/Praneshrajan137/synapse/blob/main/docs/runbooks/essential_cap_violation.md

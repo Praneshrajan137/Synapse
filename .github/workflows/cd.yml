@@ -61,6 +61,7 @@ jobs:
             echo "dockerfile=agents/${{ matrix.component }}/Dockerfile" >> $GITHUB_OUTPUT
           fi
       - name: Build + push (amd64 + arm64)
+        id: build
         uses: docker/build-push-action@v5
         with:
           context: ${{ steps.ctx.outputs.context }}
@@ -72,6 +73,28 @@ jobs:
           tags: |
             ghcr.io/${{ steps.repo.outputs.slug }}/${{ matrix.component }}:${{ github.sha }}
             ghcr.io/${{ steps.repo.outputs.slug }}/${{ matrix.component }}:latest
+
+      # Sprint 9 §M-sec-2 (ADR-033 sibling): cosign keyless signing via GitHub OIDC.
+      - name: Install cosign
+        uses: sigstore/cosign-installer@v3
+        with:
+          cosign-release: 'v2.2.4'
+
+      - name: Sign image (keyless, GitHub OIDC)
+        env:
+          COSIGN_EXPERIMENTAL: "1"
+        run: |
+          cosign sign --yes \
+            "ghcr.io/${{ steps.repo.outputs.slug }}/${{ matrix.component }}@${{ steps.build.outputs.digest }}"
+
+      - name: Verify signature
+        env:
+          COSIGN_EXPERIMENTAL: "1"
+        run: |
+          cosign verify \
+            --certificate-identity-regexp "^https://github.com/${{ github.repository }}/.github/workflows/.*" \
+            --certificate-oidc-issuer "https://token.actions.githubusercontent.com" \
+            "ghcr.io/${{ steps.repo.outputs.slug }}/${{ matrix.component }}@${{ steps.build.outputs.digest }}"
 
   promote-models:
     name: MLflow Staging -> Production (canary)

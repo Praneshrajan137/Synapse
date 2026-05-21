@@ -1,7 +1,7 @@
 # ============================================================================
 # SYNAPSE Makefile — Development Automation
 # ============================================================================
-.PHONY: help up down test lint typecheck verify-infra seed generate-spec-tests fuzz mutate clean chaos-test load-test security-test dragonfly-eval sprint5-verify verify-services doctor
+.PHONY: help up down test lint typecheck verify-infra seed generate-spec-tests fuzz mutate clean chaos-test load-test security-test dragonfly-eval sprint5-verify verify-services doctor dev slo-rules slo-rules-check contracts-test spec-validate spec-reward-config spec-reward-check spec-alerts spec-alerts-check eval profile
 
 SHELL := /bin/bash
 COMPOSE := docker compose -f docker/docker-compose.yml --env-file docker/.env
@@ -18,6 +18,114 @@ up: doctor ## Start all Docker services (runs doctor first)
 	@echo "Waiting for services to be healthy..."
 	@sleep 10
 	$(COMPOSE) ps
+
+dev: doctor ## Start dev stack and poll until services healthy (<90s target, Sprint 7 M15)
+	cp -n docker/.env.template docker/.env || true
+	$(COMPOSE) up -d
+	@echo "Polling for healthy services (timeout 90s)…"
+	@start_ts=$$(date +%s); \
+	while true; do \
+	  unhealthy=$$($(COMPOSE) ps --format json 2>/dev/null | python -c "import sys,json; rows=[json.loads(l) for l in sys.stdin if l.strip()]; print('\n'.join(r.get('Name','?') for r in rows if r.get('Health') not in ('healthy','') and r.get('State')!='running'))" 2>/dev/null || echo "?"); \
+	  now=$$(date +%s); \
+	  if [ -z "$$unhealthy" ] || [ "$$unhealthy" = "?" ]; then echo "  ✓ all services healthy"; break; fi; \
+	  if [ $$((now - start_ts)) -gt 90 ]; then echo "  ✗ timeout after 90s; unhealthy: $$unhealthy"; exit 1; fi; \
+	  sleep 2; \
+	done
+	$(COMPOSE) ps
+
+slo-rules: ## Regenerate Prometheus burn-rate rules from SLO YAMLs
+	python scripts/generate_burn_alerts.py
+
+slo-rules-check: ## Fail if generated burn-rate rules diverge (CI gate)
+	python scripts/generate_burn_alerts.py --check
+
+contracts-test: ## Run WS-1/WS-2 contracts test suite
+	pytest tests/contracts/ -v --tb=short
+
+# Sprint 8 (WS-3 spec-as-source)
+spec-validate: ## Validate every agents/*/spec.yaml against agent_spec_schema.json
+	python scripts/spec_cli.py validate
+
+spec-reward-config: ## Regenerate agents/<name>/training/reward_config.py from spec
+	python scripts/spec_cli.py generate-reward-config
+
+spec-reward-check: ## CI gate — fail if reward_config.py is out of sync with spec
+	python scripts/spec_cli.py generate-reward-config --check
+
+spec-alerts: ## Regenerate infrastructure/prometheus/rules/<agent>_invariants.yml from spec
+	python scripts/spec_cli.py generate-alerts
+
+spec-alerts-check: ## CI gate — fail if generated invariant rules diverge
+	python scripts/spec_cli.py generate-alerts --check
+
+# Sprint 8 (WS-5 eval harness)
+eval: ## Run the golden-trace eval suite (Sprint 8)
+	python -m scripts.synapse_cli.eval run --suite golden --print
+
+# Sprint 8 (WS-8 perf)
+profile: ## Profile a representative load with pyinstrument (SYNAPSE_PROFILE=1)
+	@mkdir -p build/profile
+	SYNAPSE_PROFILE=1 python -m pyinstrument -o build/profile/api_$$(date +%Y%m%d_%H%M%S).html -- python -c "from api.main import app; import uvicorn; uvicorn.run(app, host='127.0.0.1', port=8000)" || true
+
+# Sprint 9 (WS-6 supply chain)
+sbom: ## Regenerate CycloneDX SBOMs (one per service)
+	python scripts/generate_sbom.py
+
+sbom-check: ## CI gate — fail if on-disk SBOMs drift from generator output
+	python scripts/generate_sbom.py --check
+
+cve-budget: ## Enforce the 7-day CRITICAL / 30-day HIGH SLA from infrastructure/security/cve-budget.json
+	python scripts/check_cve_budget.py
+
+cve-budget-update: ## Stamp first_seen for new CVEs (operator step)
+	python scripts/check_cve_budget.py --update-registry
+
+audit-verify: ## Walk the audit chained-hash table (synapse audit verify --since=…)
+	python -m scripts.synapse_cli.audit_verify $(SINCE_ARGS)
+
+audit-anchor: ## Capture today's audit chain head to infrastructure/audit_anchors/
+	python -m orchestrator.audit.anchorer
+
+llm-prompt-pii-check: ## Pre-commit / CI guard for raw PII in LLM prompts
+	python scripts/check_llm_prompt_pii.py
+
+# Sprint 9 (WS-7 lifecycle)
+audit-archive: ## Trigger an ad-hoc archival of rows older than SYNAPSE_AUDIT_ARCHIVE_DAYS
+	python -m orchestrator.audit.archiver
+
+feast-compact: ## Run the nightly Feast compaction job ad-hoc
+	python -m data_fabric.jobs.feast_compact
+
+dpdpa-cascade: ## Smoke-test the DPDPA cascade helper (dry-run with mock clients)
+	python -c "from synapse_common.dpdpa import cascade_erasure; r = cascade_erasure('test-sid', cities=['bengaluru']); print(r)"
+
+scheduler-list: ## List all scheduled jobs (Sprint 9 M5)
+	python -m data_fabric.scheduler list
+
+# Sprint 9 (WS-9 polish)
+diagrams: ## Regenerate Mermaid C4 diagrams under docs/diagrams/
+	python scripts/generate_diagrams.py
+
+diagrams-check: ## CI gate — fail if on-disk diagrams drift
+	python scripts/generate_diagrams.py --check
+
+new-agent: ## Scaffold a new agent (NAME=foo make new-agent)
+	python -m scripts.synapse_cli.new_agent --name $(NAME)
+
+# Sprint 9 (WS-10 topology)
+helm-lint: ## helm lint infrastructure/helm/synapse
+	helm lint infrastructure/helm/synapse
+
+helm-template: ## helm template + kubeval for both city values
+	helm template synapse infrastructure/helm/synapse -f infrastructure/helm/synapse/values-bengaluru.yaml | kubeval --ignore-missing-schemas
+	helm template synapse infrastructure/helm/synapse -f infrastructure/helm/synapse/values-mumbai.yaml | kubeval --ignore-missing-schemas
+
+# Sprint 9 — golden traces
+traces: ## Regenerate the 200 deterministic golden traces
+	python tests/eval/generate_traces.py
+
+traces-check: ## CI gate — fail if on-disk golden traces drift
+	python tests/eval/generate_traces.py --check
 
 down: ## Stop all Docker services
 	$(COMPOSE) down

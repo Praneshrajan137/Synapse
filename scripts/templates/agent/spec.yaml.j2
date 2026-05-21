@@ -1,0 +1,51 @@
+agent_name: {{ name }}
+version: "0.1.0"
+description: "{{ description }}"
+architecture:
+  language: python
+  protocol: a2a
+
+invariants:
+  - id: "INV-{{ short }}-001"
+    description: "{{ name }} produces a valid {{ name }} payload."
+    assertion: "schema.validate(output)"
+    severity: critical
+
+preconditions:
+  - id: "PRE-{{ short }}-001"
+    description: "Inputs include city and store_id."
+    check: "ctx.city in ('bengaluru','mumbai') and ctx.store_id"
+
+postconditions:
+  - id: "POST-{{ short }}-001"
+    description: "Decision id is preserved end-to-end."
+    check: "output.decision_id == input.decision_id"
+
+state_machine:
+  initial_state: IDLE
+  states: [IDLE, PROPOSING, EXECUTING, LEARNING, ERROR]
+  transitions:
+    - from: IDLE
+      to: PROPOSING
+      trigger: request_received
+    - from: PROPOSING
+      to: EXECUTING
+      trigger: consensus_reached
+    - from: EXECUTING
+      to: LEARNING
+      trigger: execution_confirmed
+    - from: LEARNING
+      to: IDLE
+      trigger: cycle_complete
+
+metamorphic_relations: []
+
+contracts:
+  - producer: {{ name }}
+    expectations:
+      - "deterministic JSON output (sort_keys=True)"
+
+reward:
+  weights: {}
+  scale: 1.0
+  notes: "Sprint 10 promotes named weights once the policy lands."

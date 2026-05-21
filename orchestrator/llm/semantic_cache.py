@@ -72,6 +72,37 @@ class SemanticDecisionCache:
             logger.warning("semantic_cache_check_failed", error=str(exc))
         return None
 
+    async def retrieve_batch(
+        self,
+        queries: list[tuple[list[float], str]],
+    ) -> dict[str, dict[str, Any] | None]:
+        """Batched cache lookup (Sprint 8 WS-8 §M14).
+
+        ``queries`` is a list of ``(embedding, context_hash)`` tuples. Returns
+        a dict keyed by ``context_hash`` mapping to the cached decision (or
+        ``None`` on miss). One Pinecone call per query — but issued in
+        parallel via ``asyncio.gather`` so total wall-clock is bounded by the
+        slowest single query rather than the sum.
+
+        Sprint 9 cuts over call sites to use this method; Sprint 8 ships the
+        API + a unit test only.
+        """
+        if not self.available:
+            return {context_hash: None for _, context_hash in queries}
+        if not queries:
+            return {}
+
+        async def _one(
+            embedding: list[float], context_hash: str
+        ) -> tuple[str, dict[str, Any] | None]:
+            cached = await self.check_cache(embedding, context_hash)
+            return context_hash, cached
+
+        results = await asyncio.gather(
+            *(_one(embedding, context_hash) for embedding, context_hash in queries)
+        )
+        return dict(results)
+
     async def store_decision(
         self,
         query_embedding: list[float],

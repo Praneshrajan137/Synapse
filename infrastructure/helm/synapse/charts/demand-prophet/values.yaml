@@ -1,0 +1,11 @@
+replicaCount: 2
+image:
+  repository: demand-prophet
+  pullPolicy: IfNotPresent
+service:
+  port: 8001
+env: {}
+resources:
+  requests: {cpu: 500m, memory: 1Gi}
+  limits: {cpu: 2, memory: 4Gi}
+podLabels: {}

@@ -32,11 +32,20 @@ class ConformalCalibrator:
         self,
         alpha: float = 0.1,
         coverage_target: float = 0.85,
+        city_stratify: bool = False,
     ) -> None:
+        """Sprint 8 (E-S6-04, ADR-031 sibling): ``city_stratify=True`` keys
+        the quantile-adjustment dict by ``city`` so Mumbai's monsoon-skewed
+        distribution gets its own calibration on Mumbai holdout. Sprint 9
+        wires the nightly scheduler at ``data_fabric/jobs/conformal_recal.py``.
+        """
         self.alpha = alpha
         self.coverage_target = coverage_target
+        self.city_stratify = city_stratify
         self._calibrated = False
         self._quantile_adjustments: dict[str, tuple[float, float]] = {}
+        # When city_stratify=True, this maps city -> (horizon -> (adj_lo, adj_hi)).
+        self._city_quantile_adjustments: dict[str, dict[str, tuple[float, float]]] = {}
 
     def fit(
         self,
@@ -123,3 +132,31 @@ class ConformalCalibrator:
     def get_adjustments(self) -> dict[str, tuple[float, float]]:
         """Return calibration adjustments for MLflow logging."""
         return self._quantile_adjustments.copy()
+
+    def fit_city(
+        self,
+        city: str,
+        predictions: dict[str, np.ndarray],
+        actuals: dict[str, np.ndarray],
+    ) -> dict[str, float]:
+        """Calibrate per city, keyed under ``self._city_quantile_adjustments[city]``.
+
+        Only valid when ``city_stratify=True``. Saves the city's adjustment dict
+        while leaving any other city's calibration intact (Mumbai holdout per E-S6-04).
+        """
+        if not self.city_stratify:
+            raise RuntimeError(
+                "fit_city requires city_stratify=True on the calibrator. "
+                "Bengaluru intervals are INVALID for Mumbai distribution (E-S6-04)."
+            )
+        saved_dict = self._quantile_adjustments
+        # Re-use fit() against a fresh adjustment dict, then capture it under the city.
+        self._quantile_adjustments = {}
+        coverages = self.fit(predictions, actuals)
+        self._city_quantile_adjustments[city] = self._quantile_adjustments
+        self._quantile_adjustments = saved_dict
+        return coverages
+
+    def get_city_adjustments(self, city: str) -> dict[str, tuple[float, float]]:
+        """Return per-city adjustments (empty if the city was never fit)."""
+        return self._city_quantile_adjustments.get(city, {}).copy()

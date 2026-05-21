@@ -1,0 +1,21 @@
+{
+  "agents_involved": [
+    "demand_prophet"
+  ],
+  "avg_confidence": 0.956,
+  "city": "bengaluru",
+  "description": "tier_1 bengaluru demand_prophet confidence=0.956",
+  "disruption_active": false,
+  "expected_essential": false,
+  "expected_invariants": [
+    "INV-DP-002",
+    "INV-DP-006"
+  ],
+  "expected_tier": "tier_1",
+  "payload": {
+    "sku_id": "SKU-0133",
+    "store_id": "BEN-STR-042"
+  },
+  "requires_twin_simulation": false,
+  "trace_id": "tier1-ben-0076-BEN-STR-042-SKU-0133"
+}

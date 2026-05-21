@@ -78,16 +78,42 @@ def compute_reward(
     hours_before_impact: Tensor,
     time_to_recovery_hours: Tensor,
     playbook_applied: Tensor,
-    early_detection_weight: float = 1.0,
-    false_positive_weight: float = 10.0,
-    missed_disruption_weight: float = 50.0,
-    recovery_speed_weight: float = 1.0,
+    early_detection_weight: float | None = None,
+    false_positive_weight: float | None = None,
+    missed_disruption_weight: float | None = None,
+    recovery_speed_weight: float | None = None,
 ) -> dict[str, Tensor]:
     """Compute full Disruption Shield reward.
 
     THIS IS THE ONLY REWARD FUNCTION FOR DISRUPTION SHIELD (I-2).
     It imports NOTHING from other agents.
+
+    Sprint 9 (ADR-031 cutover): spec-generated ``reward_config.WEIGHTS``
+    is the source-of-truth. Callers may still pass explicit kwargs;
+    divergence increments ``synapse_reward_weight_divergence_total``.
     """
+    from synapse_common.reward_shadow import shadow_check
+
+    from agents.disruption_shield.training import reward_config
+
+    if early_detection_weight is None:
+        early_detection_weight = reward_config.WEIGHTS["early_detection_weight"]
+    if false_positive_weight is None:
+        false_positive_weight = reward_config.WEIGHTS["false_positive_weight"]
+    if missed_disruption_weight is None:
+        missed_disruption_weight = reward_config.WEIGHTS["missed_disruption_weight"]
+    if recovery_speed_weight is None:
+        recovery_speed_weight = reward_config.WEIGHTS["recovery_speed_weight"]
+
+    shadow_check(
+        "disruption_shield",
+        reward_config.WEIGHTS,
+        early_detection_weight=early_detection_weight,
+        false_positive_weight=false_positive_weight,
+        missed_disruption_weight=missed_disruption_weight,
+        recovery_speed_weight=recovery_speed_weight,
+    )
+
     early = early_detection_reward(predicted_alert, actual_disruption, hours_before_impact)
     fp = false_positive_penalty(predicted_alert, actual_disruption)
     missed = missed_disruption_penalty(predicted_alert, actual_disruption)

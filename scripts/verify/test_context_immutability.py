@@ -5,7 +5,6 @@ Run: python scripts/verify/test_context_immutability.py
 from __future__ import annotations
 
 import structlog
-
 from synapse_common.models import ContextMessage, MessageStatus
 
 from orchestrator.config import OrchestratorConfig

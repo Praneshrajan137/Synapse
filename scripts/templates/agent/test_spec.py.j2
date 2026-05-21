@@ -1,0 +1,31 @@
+"""Auto-generated spec tests for {{ name }}. Sprint 9 §M-dx-1."""
+
+from __future__ import annotations
+
+import pytest
+
+from agents.{{ name }}.state_machine import {{ class_name }}StateMachine
+
+
+@pytest.mark.contract
+def test_state_machine_initial_state() -> None:
+    fsm = {{ class_name }}StateMachine()
+    assert fsm.state == fsm.INITIAL
+
+
+@pytest.mark.contract
+def test_state_machine_happy_path() -> None:
+    """INV-{{ short }}-001-fsm: full lifecycle returns to IDLE."""
+    fsm = {{ class_name }}StateMachine()
+    fsm.transition("request_received")
+    fsm.transition("consensus_reached")
+    fsm.transition("execution_confirmed")
+    fsm.transition("cycle_complete")
+    assert fsm.state == "IDLE"
+
+
+@pytest.mark.contract
+def test_state_machine_invalid_transition_raises() -> None:
+    fsm = {{ class_name }}StateMachine()
+    with pytest.raises(RuntimeError):
+        fsm.transition("not_a_real_trigger")

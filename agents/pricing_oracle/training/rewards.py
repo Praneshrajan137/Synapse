@@ -100,10 +100,10 @@ def compute_reward(
     elasticity_estimates: Tensor,
     is_essential: Tensor,
     competitor_multipliers: Tensor | None = None,
-    revenue_weight: float = 1.0,
-    elasticity_weight: float = 0.5,
-    essential_penalty_weight: float = -5.0,
-    competitor_gap_weight: float = -2.0,
+    revenue_weight: float | None = None,
+    elasticity_weight: float | None = None,
+    essential_penalty_weight: float | None = None,
+    competitor_gap_weight: float | None = None,
 ) -> dict[str, Tensor]:
     """
     Compute the full Pricing Oracle reward.
@@ -115,7 +115,31 @@ def compute_reward(
 
     The essential_penalty_weight is -5.0 by default, making any cap violation
     catastrophically negative. THIS IS THE ONLY REWARD FUNCTION FOR PRICING ORACLE (I-2).
+
+    Sprint 9 (ADR-031 cutover): spec-generated WEIGHTS is source-of-truth.
     """
+    from synapse_common.reward_shadow import shadow_check
+
+    from agents.pricing_oracle.training import reward_config
+
+    if revenue_weight is None:
+        revenue_weight = reward_config.WEIGHTS["revenue_weight"]
+    if elasticity_weight is None:
+        elasticity_weight = reward_config.WEIGHTS["elasticity_weight"]
+    if essential_penalty_weight is None:
+        essential_penalty_weight = reward_config.WEIGHTS["essential_penalty_weight"]
+    if competitor_gap_weight is None:
+        competitor_gap_weight = reward_config.WEIGHTS["competitor_gap_weight"]
+
+    shadow_check(
+        "pricing_oracle",
+        reward_config.WEIGHTS,
+        revenue_weight=revenue_weight,
+        elasticity_weight=elasticity_weight,
+        essential_penalty_weight=essential_penalty_weight,
+        competitor_gap_weight=competitor_gap_weight,
+    )
+
     rev = revenue_component(multipliers, base_prices, demand_quantities)
     elast = elasticity_alignment(multipliers, elasticity_estimates)
     cap_viol = essential_cap_violation(multipliers, is_essential)

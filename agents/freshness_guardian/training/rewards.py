@@ -73,16 +73,40 @@ def compute_reward(
     was_sold: Tensor,
     temperature_deviation_hours: Tensor,
     fssai_logged: Tensor,
-    accuracy_weight: float = 1.0,
-    timing_weight: float = 0.4,
-    fssai_weight: float = 2.0,
-    unnecessary_weight: float = 0.3,
+    accuracy_weight: float | None = None,
+    timing_weight: float | None = None,
+    fssai_weight: float | None = None,
+    unnecessary_weight: float | None = None,
 ) -> dict[str, Tensor]:
     """Compute full Freshness Guardian reward.
 
     THIS IS THE ONLY REWARD FUNCTION FOR FRESHNESS GUARDIAN (I-2).
     It imports NOTHING from other agents.
+
+    Sprint 9 (ADR-031 cutover): spec-generated WEIGHTS is source-of-truth.
     """
+    from synapse_common.reward_shadow import shadow_check
+
+    from agents.freshness_guardian.training import reward_config
+
+    if accuracy_weight is None:
+        accuracy_weight = reward_config.WEIGHTS["accuracy_weight"]
+    if timing_weight is None:
+        timing_weight = reward_config.WEIGHTS["timing_weight"]
+    if fssai_weight is None:
+        fssai_weight = reward_config.WEIGHTS["fssai_weight"]
+    if unnecessary_weight is None:
+        unnecessary_weight = reward_config.WEIGHTS["unnecessary_weight"]
+
+    shadow_check(
+        "freshness_guardian",
+        reward_config.WEIGHTS,
+        accuracy_weight=accuracy_weight,
+        timing_weight=timing_weight,
+        fssai_weight=fssai_weight,
+        unnecessary_weight=unnecessary_weight,
+    )
+
     accuracy = freshness_accuracy_reward(predicted_quality, actual_quality)
     timing = markdown_timing_reward(markdown_applied, days_to_expiry, was_sold)
     fssai = fssai_violation_penalty(temperature_deviation_hours, fssai_logged)
