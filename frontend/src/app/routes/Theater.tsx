@@ -1,5 +1,5 @@
 import { useDecision, useRecentDecisions } from "@/application/decisions";
-import { useSound } from "@/aux/sound";
+import { useSound } from "@/aux-ui/sound";
 import type { ConsensusPhase } from "@/domain/decision";
 import { ContextTape } from "@/ui/components/ContextTape";
 import { PhaseRibbon } from "@/ui/components/PhaseRibbon";

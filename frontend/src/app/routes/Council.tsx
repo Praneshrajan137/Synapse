@@ -1,5 +1,5 @@
 import { useEscalations } from "@/application/decisions";
-import { PayloadRenderer } from "@/aux/payload-renderers";
+import { PayloadRenderer } from "@/aux-ui/payload-renderers";
 import { ContextTape } from "@/ui/components/ContextTape";
 import { CounterfactualPanel } from "@/ui/components/CounterfactualPanel";
 import { EscalationHeader } from "@/ui/components/EscalationHeader";

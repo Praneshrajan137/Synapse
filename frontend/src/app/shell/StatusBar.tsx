@@ -1,6 +1,6 @@
 import { useUIStore } from "@/app/store/uiStore";
 import { useHealth } from "@/application/system/useHealth";
-import { useSound } from "@/aux/sound";
+import { useSound } from "@/aux-ui/sound";
 import { CITIES, CITY_LABEL } from "@/domain/city";
 import { cn } from "@/ui/lib/cn";
 import { Kbd, Switch, Tooltip } from "@/ui/primitives";

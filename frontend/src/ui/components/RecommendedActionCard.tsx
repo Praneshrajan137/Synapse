@@ -1,4 +1,4 @@
-import { PayloadRenderer } from "@/aux/payload-renderers";
+import { PayloadRenderer } from "@/aux-ui/payload-renderers";
 import type { AgentProposal, Escalation } from "@/domain/decision";
 import { AgentSigil } from "@/ui/icons";
 import { AGENT_LABEL } from "@/ui/icons/AgentSigil";

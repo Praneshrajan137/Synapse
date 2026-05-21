@@ -1,5 +1,5 @@
 import { useSubmitOverride } from "@/application/decisions";
-import { useVoicePTT } from "@/aux/voice";
+import { useVoicePTT } from "@/aux-ui/voice";
 import type { Escalation, HumanOverride } from "@/domain/decision";
 import { cn } from "@/ui/lib/cn";
 import { signed } from "@/ui/lib/format";

@@ -1,6 +1,6 @@
 import { useUIStore } from "@/app/store/uiStore";
-import { DemoOverlay } from "@/aux/demo-mode";
-import { useGlobalKeyboard } from "@/aux/keyboard";
+import { DemoOverlay } from "@/aux-ui/demo-mode";
+import { useGlobalKeyboard } from "@/aux-ui/keyboard";
 import { TooltipProvider } from "@/ui/primitives";
 import type { ReactNode } from "react";
 import { CommandPalette } from "./CommandPalette";

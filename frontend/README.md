@@ -41,7 +41,7 @@ Hexagonal / DDD-aligned:
 - `src/application` — React Query use-case hooks
 - `src/infrastructure` — API client, realtime hooks, telemetry
 - `src/ui` — tokens, primitives, components, charts, viz
-- `src/aux` — frontier AUX (payload renderers, voice, sound, demo mode, keyboard)
+- `src/aux-ui` — frontier AUX (payload renderers, voice, sound, demo mode, keyboard)
 - `src/app` — routes, shell, stores
 - `src/mocks` — MSW gateway with deterministic mock data
 

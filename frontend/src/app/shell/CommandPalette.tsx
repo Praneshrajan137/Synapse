@@ -1,5 +1,5 @@
 import { useUIStore } from "@/app/store/uiStore";
-import { useSound } from "@/aux/sound";
+import { useSound } from "@/aux-ui/sound";
 import { CITIES, CITY_LABEL } from "@/domain/city";
 import { cn } from "@/ui/lib/cn";
 import * as Dialog from "@radix-ui/react-dialog";
