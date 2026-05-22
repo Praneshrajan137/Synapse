@@ -7,7 +7,7 @@ DELETE and UPDATE are revoked at the database level.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, cast
 
 import deal
 import structlog
@@ -67,4 +67,4 @@ class AuditLogger:
                 audit_id=str(row.id),
                 tier=str(decision.tier.value),
             )
-            return row.id  # type: ignore[return-value]
+            return cast("UUID", row.id)

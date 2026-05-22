@@ -7,6 +7,7 @@ conforming to ``synapse_common.models.AgentProposal``.
 
 from __future__ import annotations
 
+from typing import Any
 from uuid import uuid4
 
 import pytest
@@ -15,7 +16,7 @@ from synapse_common.models import AgentName, AgentProposal, DecisionTier
 AGENT_NAMES: list[str] = [a.value for a in AgentName]
 
 
-def _mock_agent_response(agent_name: str) -> dict:
+def _mock_agent_response(agent_name: str) -> dict[str, Any]:
     return {
         "agent_name": agent_name,
         "decision_id": str(uuid4()),
