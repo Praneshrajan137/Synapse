@@ -45,9 +45,8 @@
    * --accent to an agent / tier / state colour. Glow is a halo of emitted
    * light, strongest on the dark theme. */
   .glow-accent {
-    box-shadow:
-      0 0 0 1px color-mix(in oklab, var(--accent) 55%, transparent),
-      0 4px 26px -8px color-mix(in oklab, var(--accent) 55%, transparent);
+    box-shadow: 0 0 0 1px color-mix(in oklab, var(--accent) 55%, transparent), 0 4px 26px -8px
+      color-mix(in oklab, var(--accent) 55%, transparent);
   }
   .accent-tint {
     background-color: color-mix(in oklab, var(--accent) 12%, var(--color-surface-panel));

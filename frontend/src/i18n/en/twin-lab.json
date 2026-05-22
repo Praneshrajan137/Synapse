@@ -1,0 +1,8 @@
+{
+  "title": "Twin Lab",
+  "subtitle": "Run what-if scenarios against the digital twin (I-12). KL divergence vs live distribution is tracked per run.",
+  "scenario.header": "Scenario",
+  "scenario.run": "Run simulation",
+  "scenario.running": "Running Monte Carlo…",
+  "kl_divergence": "KL divergence"
+}

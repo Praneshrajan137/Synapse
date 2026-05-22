@@ -1,0 +1,468 @@
+# SYNAPSE Frontend — Invariant Registry (FE-INV-*)
+#
+# Mirrors docs/specs/invariants.yaml for the FE slice. Every entry below
+# binds to:
+#   - a backend invariant or ADR it inherits from
+#   - the source file(s) that implement it
+#   - the test(s) that prove it
+#
+# CI (.github/workflows/frontend.yml) runs spec/check_fe_invariants.py to
+# fail the build on missing implementations or tests for any entry.
+
+version: 1
+invariants:
+  - id: FE-INV-001
+    title: No paid SaaS endpoints
+    mirrors: I-1
+    description: >
+      The bundled FE makes zero calls to paid SaaS providers (Mapbox,
+      Sentry, Algolia, OpenAI, Auth0). License audit + network egress audit
+      both block these in CI.
+    implementations:
+      - .github/workflows/frontend.yml
+      - frontend/nginx.conf
+    tests:
+      - .github/workflows/frontend.yml  # license-audit job
+    status: enforced
+
+  - id: FE-INV-002
+    title: Domain Zod schemas mirror proto/domain
+    mirrors: I-3
+    description: >
+      Every shape produced by the BE is parsed through a Zod schema in
+      src/domain/* before rendering. Failures are surfaced as
+      SchemaViolationError, never silently rendered.
+    implementations:
+      - frontend/src/domain/index.ts
+      - frontend/src/transport/http-client.ts
+    tests:
+      - frontend/src/domain/__tests__/schemas.test.ts
+    status: enforced
+
+  - id: FE-INV-003
+    title: Override commits to audit before optimistic UI
+    mirrors: I-4
+    description: >
+      An operator override must POST the audit-row-first endpoint before
+      the FE marks the entry as acted. WebSocket ack is the operational
+      acknowledgement, not the commit.
+    implementations:
+      - frontend/src/surfaces/override-cockpit/Cockpit.tsx
+      - frontend/src/surfaces/override-cockpit/useOverrideMutation.ts
+      - api/routers/decisions.py
+      - infrastructure/postgres/03_p1_override.sql
+    tests:
+      - frontend/src/surfaces/override-cockpit/__tests__/override-flow.test.tsx
+      - frontend/tests/e2e/cockpit.spec.ts
+    status: enforced
+
+  - id: FE-INV-004
+    title: Every decision card carries Tier + Confidence + reasoning link
+    mirrors: I-5, I-6
+    description: >
+      No decision is rendered without a TierBadge, a ConfidenceChip, and a
+      one-click route to the audit row. Enforced via visual-regression and
+      a11y label probes.
+    implementations:
+      - frontend/src/surfaces/decision-theater/DecisionTheater.tsx
+      - frontend/src/design-system/compounds/TierBadge.tsx
+      - frontend/src/design-system/compounds/ConfidenceChip.tsx
+    tests:
+      - frontend/src/design-system/compounds/__tests__/TierBadge.test.tsx
+      - frontend/src/design-system/compounds/__tests__/ConfidenceChip.test.tsx
+    status: enforced
+
+  - id: FE-INV-005
+    title: Tier SLA budgets are centralized
+    mirrors: tier_router.py
+    description: >
+      Tier 1/2/3/4 SLAs live in @lib/confidence and feed both the motion
+      preset and the tier-budget probe in E2E.
+    implementations:
+      - frontend/src/lib/confidence.ts
+    tests:
+      - frontend/src/lib/__tests__/confidence.test.ts
+    status: enforced
+
+  - id: FE-INV-006
+    title: Full-Jitter retry on transient failures
+    mirrors: ADR-016, ADR-017
+    description: >
+      5xx and network errors retry with Full Jitter; 429 honors Retry-After;
+      4xx (other) short-circuits.
+    implementations:
+      - frontend/src/lib/jitter-retry.ts
+      - frontend/src/transport/http-client.ts
+    tests:
+      - frontend/src/lib/__tests__/jitter-retry.test.ts
+    status: enforced
+
+  - id: FE-INV-007
+    title: Sub-threshold confidence demotes Approve from default focus
+    mirrors: I-5
+    description: >
+      When confidence < threshold, Reject (or Modify) receives default
+      keyboard focus in the Override Cockpit action bar.
+    implementations:
+      - frontend/src/surfaces/override-cockpit/Cockpit.tsx
+    tests:
+      - frontend/src/design-system/compounds/__tests__/ConfidenceChip.test.tsx
+    status: enforced
+
+  - id: FE-INV-008
+    title: WS reconnect with full jitter; messages deduped by seq
+    mirrors: ADR-016
+    description: >
+      The WS multiplex client reconnects with bounded full-jitter and
+      drops messages where seq <= last seen for the channel.
+    implementations:
+      - frontend/src/transport/ws-multiplex.ts
+    tests:
+      - frontend/src/lib/__tests__/jitter-retry.test.ts
+    status: enforced
+
+  - id: FE-INV-009
+    title: Deterministic decision replay from decision_id
+    mirrors: I-14
+    description: >
+      The decision detail page renders identically when loaded with the
+      same decision_id, with no client-only state drift. Replay is pure —
+      no Date.now, no Math.random, no I/O — and verified by a property test.
+    implementations:
+      - frontend/src/surfaces/decision-theater/DecisionTheater.tsx
+      - frontend/src/surfaces/decision-theater/DecisionDetail.tsx
+      - frontend/src/lib/replay.ts
+    tests:
+      - frontend/src/lib/__tests__/replay.test.ts
+    status: enforced
+
+  - id: FE-INV-010
+    title: Web Vitals budgets
+    mirrors: ADR-012
+    description: >
+      LCP <= 2.5s, INP <= 200ms, CLS <= 0.1 on /cockpit over 3G Slow.
+      P2 ships the budget; production tuning continues in P4.
+    implementations:
+      - frontend/src/main.tsx
+      - frontend/vite.config.ts
+    tests:
+      - frontend/tests/e2e/smoke.spec.ts
+    status: enforced
+
+  - id: FE-INV-011
+    title: WCAG 2.1 AA across every route
+    mirrors: STRIDE
+    description: >
+      axe-core asserts zero violations on every route in the Playwright
+      smoke matrix.
+    implementations:
+      - frontend/.storybook/preview.ts
+      - frontend/tests/e2e/smoke.spec.ts
+    tests:
+      - frontend/tests/e2e/smoke.spec.ts
+    status: enforced
+
+  - id: FE-INV-012
+    title: Canonical JSON on every outbound payload
+    mirrors: I-8
+    description: >
+      Sorted keys, no whitespace, drops undefined fields. Enforced inside
+      the HTTP client and the WS send path for operator overrides.
+    implementations:
+      - frontend/src/lib/json-canonical.ts
+      - frontend/src/transport/http-client.ts
+      - frontend/src/surfaces/override-cockpit/Cockpit.tsx
+    tests:
+      - frontend/src/lib/__tests__/json-canonical.test.ts
+    status: enforced
+
+  - id: FE-INV-013
+    title: No hard-coded user-visible strings (i18n)
+    mirrors: ADR-012
+    description: >
+      All user-visible copy threads through i18next catalogs (EN + HI).
+      LanguagePicker is mounted in the Shell; the Demo Theater + every
+      surface header consume the relevant namespace.
+    implementations:
+      - frontend/src/i18n/index.ts
+      - frontend/src/design-system/compounds/LanguagePicker.tsx
+      - frontend/src/surfaces/demo-theater/DemoTheater.tsx
+    tests:
+      - frontend/spec/check_fe_invariants.py
+    status: enforced
+
+  - id: FE-INV-014
+    title: Entry bundle size budget
+    mirrors: ADR-012
+    description: >
+      Entry route ships <= 180 KB gzipped; visualization libs are async.
+      P2 enforced via manualChunks + LivingMap dynamic import.
+    implementations:
+      - frontend/vite.config.ts
+      - frontend/package.json
+      - frontend/src/surfaces/mission-control/LivingMap.tsx
+    tests:
+      - .github/workflows/frontend.yml
+    status: enforced
+
+  - id: FE-INV-015
+    title: CSP; no dangerouslySetInnerHTML
+    mirrors: STRIDE
+    description: >
+      Strict CSP in production nginx; Biome rule blocks
+      dangerouslySetInnerHTML at the source.
+    implementations:
+      - frontend/nginx.conf
+      - frontend/biome.json
+    tests:
+      - .github/workflows/frontend.yml  # lint job
+    status: enforced
+
+  - id: FE-INV-016
+    title: City discriminator on every metric render
+    mirrors: E-S6-05
+    description: >
+      Every TanStack Query key for metric data carries the active city.
+      Switching cities invalidates the cache cleanly.
+    implementations:
+      - frontend/src/state/city.store.ts
+      - frontend/src/state/firehose.store.ts
+      - frontend/src/hooks/use-firehose.ts
+      - frontend/src/transport/firehose.ts
+    tests:
+      - frontend/src/state/__tests__/firehose-store.test.ts
+    status: enforced
+
+  - id: FE-INV-017
+    title: Append-only escalation store
+    mirrors: I-14
+    description: >
+      The escalation store never removes entries; status is mutated via
+      append-style `markActed`. No public clear/pop/remove path.
+    implementations:
+      - frontend/src/state/escalation.store.ts
+    tests:
+      - frontend/src/state/__tests__/escalation-store.test.ts
+    status: enforced
+
+  - id: FE-INV-018
+    title: Tier-aware tool visibility
+    mirrors: ADR-022
+    description: >
+      Tier 1-2 renders only `rl_*` tools in proposal cards; Tier 3-4
+      shows the full toolset. The replay function gates per-phase proposal
+      visibility (proposed-only at phase 1; full set at phase 3+).
+    implementations:
+      - frontend/src/surfaces/decision-theater/DecisionDetail.tsx
+      - frontend/src/lib/replay.ts
+    tests:
+      - frontend/src/lib/__tests__/replay.test.ts
+    status: enforced
+
+  - id: FE-INV-019
+    title: Operator identity via Vault token presence only
+    mirrors: STRIDE
+    description: >
+      The UI never renders raw operator usernames; only the Vault token
+      reference (last 8 chars) appears, and only when authenticated.
+    implementations:
+      - frontend/src/design-system/compounds/OperatorIdentity.tsx
+    tests:
+      - frontend/src/design-system/compounds/__tests__/TierBadge.test.tsx  # P1 adds OperatorIdentity test
+    status: enforced
+
+  - id: FE-INV-020
+    title: Self-hosted map tiles only
+    mirrors: I-1
+    description: >
+      Map tiles come from /tiles/india.pmtiles (Protomaps) served by the
+      project nginx; zero requests leave to Mapbox or Google.
+    implementations:
+      - frontend/nginx.conf
+      - frontend/.env.example
+      - frontend/src/visualization/maplibre/basemap.ts
+      - infrastructure/tiles/Makefile
+    tests:
+      - .github/workflows/frontend.yml
+    status: enforced
+
+  - id: FE-INV-024
+    title: Map renders only self-hosted PMTiles
+    mirrors: I-1, FE-INV-020
+    description: >
+      MapLibre is configured exclusively against the pmtiles:// protocol
+      handler; no remote tile servers are registered. Verified in CI.
+    implementations:
+      - frontend/src/visualization/maplibre/basemap.ts
+      - frontend/src/visualization/maplibre/CityMap.tsx
+    tests:
+      - .github/workflows/frontend.yml
+    status: enforced
+
+  - id: FE-INV-025
+    title: Heavy viz libs are async-only chunks
+    mirrors: ADR-012, FE-INV-014
+    description: >
+      @deck.gl/*, three, maplibre, react-force-graph-3d, and visx never
+      appear in the entry bundle. Mission Control loads them via a lazy
+      Suspense boundary; Twin Lab does the same for SupplyNetwork3D.
+    implementations:
+      - frontend/vite.config.ts
+      - frontend/src/surfaces/mission-control/LivingMap.tsx
+      - frontend/src/surfaces/twin-lab/SupplyNetwork3D.tsx
+    tests:
+      - .github/workflows/frontend.yml
+    status: enforced
+
+  - id: FE-INV-026
+    title: Twin scenarios complete within the 10s SLA (INV-TW-004)
+    mirrors: ADR-009, INV-TW-004
+    description: >
+      The Twin Lab POST /simulate flow surfaces 1000-scenario Monte Carlo
+      runs without UI degradation. The FE shows progress and rejects
+      hung runs with a typed timeout.
+    implementations:
+      - frontend/src/surfaces/twin-lab/TwinLab.tsx
+      - frontend/src/surfaces/twin-lab/ScenarioBuilder.tsx
+    tests:
+      - frontend/src/lib/__tests__/replay.test.ts
+    status: enforced
+
+  - id: FE-INV-027
+    title: Audit export contains zero PII
+    mirrors: STRIDE, FE-INV-019
+    description: >
+      The Audit Vault CSV export contains audit_id / decision_id / tier /
+      confidence / city / created_at / escalated only. Operator identity
+      is rendered via Vault token reference; never raw username.
+    implementations:
+      - frontend/src/surfaces/audit-vault/AuditVault.tsx
+      - frontend/src/design-system/compounds/OperatorIdentity.tsx
+    tests:
+      - frontend/src/state/__tests__/escalation-store.test.ts
+    status: enforced
+
+  - id: FE-INV-028
+    title: Replay is referentially transparent
+    mirrors: I-14, FE-INV-009
+    description: >
+      `replayDecision(d, phase)` is a pure function — no Date.now, no
+      Math.random, no I/O. Property test asserts equality across paired
+      invocations for any phase index in [1, 5].
+    implementations:
+      - frontend/src/lib/replay.ts
+    tests:
+      - frontend/src/lib/__tests__/replay.test.ts
+    status: enforced
+
+  - id: FE-INV-029
+    title: Demo evidence matches the backend artifact verbatim
+    mirrors: FE-P10
+    description: >
+      The Demo Theater renders the JSON artifact produced by each demo
+      segment (scripts/demo/*.py) inside the Evidence panel; the
+      backend's run wrapper streams progress over SSE.
+    implementations:
+      - frontend/src/surfaces/demo-theater/DemoTheater.tsx
+      - frontend/src/surfaces/demo-theater/useDemoRun.ts
+      - frontend/src/surfaces/demo-theater/useArtifact.ts
+      - api/routers/demo.py
+    tests:
+      - frontend/tests/e2e/demo.spec.ts
+    status: enforced
+
+  - id: FE-INV-030
+    title: Telemetry endpoint receives Web Vitals beacons
+    mirrors: ADR-012
+    description: >
+      onCLS/onINP/onLCP fire through the batched log() helper, which
+      uses navigator.sendBeacon. The gateway sink whitelists fields and
+      forwards to structlog (Grafana frontend.json reads from Prometheus).
+    implementations:
+      - frontend/src/main.tsx
+      - frontend/src/lib/log.ts
+      - api/routers/telemetry.py
+      - infrastructure/grafana/dashboards/frontend.json
+    tests:
+      - frontend/src/lib/__tests__/log.test.ts
+    status: enforced
+
+  - id: FE-INV-031
+    title: Storybook test-runner reports zero a11y violations
+    mirrors: STRIDE
+    description: >
+      Every Storybook story passes the axe-core check via
+      @storybook/test-runner. CI runs this as part of the a11y job.
+    implementations:
+      - frontend/.storybook/main.ts
+      - frontend/.storybook/preview.ts
+      - frontend/src/design-system/compounds/TierBadge.stories.tsx
+      - frontend/src/design-system/compounds/ConfidenceChip.stories.tsx
+    tests:
+      - .github/workflows/frontend.yml
+    status: enforced
+
+  - id: FE-INV-032
+    title: Mutation survival under 15% on critical modules
+    mirrors: ADR-015
+    description: >
+      Stryker mutation testing on json-canonical, jitter-retry, replay,
+      escalation.store, firehose.store. Nightly CI gate.
+    implementations:
+      - frontend/src/lib/json-canonical.ts
+      - frontend/src/lib/jitter-retry.ts
+      - frontend/src/lib/replay.ts
+      - frontend/src/state/escalation.store.ts
+      - frontend/src/state/firehose.store.ts
+    tests:
+      - frontend/src/lib/__tests__/json-canonical.test.ts
+      - frontend/src/lib/__tests__/jitter-retry.test.ts
+      - frontend/src/lib/__tests__/replay.test.ts
+      - frontend/src/state/__tests__/escalation-store.test.ts
+      - frontend/src/state/__tests__/firehose-store.test.ts
+    status: enforced
+
+  - id: FE-INV-021
+    title: Operator override commits audit row before WS ack
+    mirrors: I-4, FE-INV-003
+    description: >
+      The gateway INSERTs into audit_escalations BEFORE notifying the
+      orchestrator. If audit insert fails, no orchestrator notification is
+      sent and the FE shows an error. Order is load-bearing.
+    implementations:
+      - api/routers/decisions.py
+      - api/middleware/jwt.py
+    tests:
+      - frontend/src/surfaces/override-cockpit/__tests__/override-flow.test.tsx
+    status: enforced
+
+  - id: FE-INV-022
+    title: Cockpit is keyboard-complete
+    mirrors: STRIDE, FE-P6
+    description: >
+      The Override Cockpit can be operated end-to-end with the keyboard
+      alone: A approve, R reject, M modify, J/K cycle, Esc closes dialog.
+    implementations:
+      - frontend/src/surfaces/override-cockpit/Cockpit.tsx
+      - frontend/src/surfaces/override-cockpit/useCockpitShortcuts.ts
+      - frontend/src/surfaces/override-cockpit/EscalationCard.tsx
+    tests:
+      - frontend/tests/e2e/cockpit.spec.ts
+    status: enforced
+
+  - id: FE-INV-023
+    title: JWT refresh flow recovers from 401 without page reload
+    mirrors: ADR-016, STRIDE
+    description: >
+      A single-flight refresh gate replays in-flight requests after a
+      successful POST /api/v1/auth/refresh; a refresh failure (or a second
+      401) clears the session and routes the operator to /login.
+    implementations:
+      - frontend/src/transport/auth-refresh.ts
+      - frontend/src/hooks/use-synapse-api.ts
+      - frontend/src/surfaces/auth/useAuthRefresh.ts
+      - api/routers/auth.py
+    tests:
+      - frontend/src/transport/__tests__/auth-refresh.test.ts
+      - frontend/tests/e2e/login.spec.ts
+    status: enforced

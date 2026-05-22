@@ -1,0 +1,13 @@
+{
+  "title": "डेमो थिएटर",
+  "subtitle": "scripts/demo/run_demo.sh के साथ समन्वयित 5-खंड कथा चाप।",
+  "segments.living_map": "जीवंत मानचित्र",
+  "segments.ipl_signal": "IPL सर्ज",
+  "segments.disruption": "व्यवधान",
+  "segments.debate": "बहस",
+  "segments.evidence": "साक्ष्य",
+  "controls.run": "शुरू से चलाएँ",
+  "controls.cancel": "रद्द करें",
+  "evidence.header": "साक्ष्य",
+  "evidence.waiting": "डेमो द्वारा आर्टिफ़ैक्ट लिखने की प्रतीक्षा…"
+}

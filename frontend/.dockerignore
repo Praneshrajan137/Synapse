@@ -1,0 +1,11 @@
+node_modules
+dist
+coverage
+.vite
+.storybook-static
+playwright-report
+test-results
+tests
+.git
+.github
+*.md

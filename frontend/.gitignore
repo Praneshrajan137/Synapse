@@ -1,0 +1,16 @@
+node_modules
+dist
+coverage
+.vite
+.cache
+.storybook-static
+playwright-report
+test-results
+*.log
+.DS_Store
+.env
+.env.local
+.env.*.local
+.turbo
+src/transport/openapi.gen.ts
+src/domain/*.generated.ts

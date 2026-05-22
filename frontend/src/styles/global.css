@@ -1,0 +1,49 @@
+@import "./tokens.css";
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
+
+  body {
+    @apply bg-canvas text-ink font-sans antialiased;
+    font-feature-settings: "ss01", "cv11", "tnum";
+  }
+
+  *:focus-visible {
+    outline: none;
+    box-shadow: var(--syn-focus-ring);
+  }
+
+  /* Tabular numerals for ops dashboards */
+  .tabular-nums {
+    font-variant-numeric: tabular-nums;
+  }
+}
+
+@layer components {
+  .syn-card {
+    @apply bg-surface rounded-lg border border-border shadow-e1;
+  }
+
+  .syn-card-raised {
+    @apply bg-surface-raised rounded-lg border border-border shadow-e2;
+  }
+
+  .syn-skeleton {
+    @apply animate-shimmer rounded;
+    background: linear-gradient(
+      90deg,
+      rgb(var(--syn-surface-raised) / 0.8) 0%,
+      rgb(var(--syn-border) / 0.4) 50%,
+      rgb(var(--syn-surface-raised) / 0.8) 100%
+    );
+    background-size: 200% 100%;
+  }
+}

@@ -1,0 +1,12 @@
+{
+  "title": "Audit Vault",
+  "subtitle": "Append-only decision provenance (I-4). Operator identity is rendered by Vault-token reference only (FE-INV-019). Export contains zero PII.",
+  "export.csv": "Export CSV",
+  "table.audit": "Audit",
+  "table.decision": "Decision",
+  "table.tier": "Tier",
+  "table.confidence": "Conf.",
+  "table.escalated": "Esc.",
+  "table.city": "City",
+  "table.when": "When"
+}

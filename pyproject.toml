@@ -41,6 +41,11 @@ module = "deal.*"
 ignore_missing_imports = true
 
 [[tool.mypy.overrides]]
+# python-jose ships no type stubs and there is no types-python-jose on PyPI.
+module = "jose.*"
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
 module = "pymoo.*"
 ignore_missing_imports = true
 

@@ -1,0 +1,10 @@
+{
+  "title": "Mission Control",
+  "subtitle": "Live KPI band, decision firehose, and the city's living map.",
+  "tile.orders_min": "Decisions / min",
+  "tile.avg_delivery_min": "Avg route time",
+  "tile.confidence": "Avg confidence",
+  "tile.escalations": "Escalations",
+  "tile.disruptions": "Active disruptions",
+  "tile.routes": "Routes / window"
+}

@@ -1,0 +1,11 @@
+{
+  "title": "Override Cockpit",
+  "subtitle": "Confidence-gated escalations stream in over the WebSocket. Acting commits an immutable audit row (I-4); the orchestrator is notified only after.",
+  "queue_header": "Queue · {{count}} pending",
+  "all_clear": "All clear. No escalations awaiting human judgement.",
+  "approve_required_reason": "Approve — reason required",
+  "audit_preview.title": "Audit preview",
+  "audit_preview.will_insert": "will INSERT",
+  "reason.label": "Reason",
+  "reason.required": "Reason is required"
+}

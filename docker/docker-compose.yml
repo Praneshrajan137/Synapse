@@ -166,6 +166,8 @@ services:
       - postgres-data:/var/lib/postgresql/data
       - ../infrastructure/postgres/init_audit.sql:/docker-entrypoint-initdb.d/01_init_audit.sql:ro
       - ../infrastructure/postgres/02_sprint4_consensus.sql:/docker-entrypoint-initdb.d/02_sprint4_consensus.sql:ro
+      - ../infrastructure/postgres/03_p1_override.sql:/docker-entrypoint-initdb.d/03_p1_override.sql:ro
+      - ../infrastructure/postgres/04_p3_city.sql:/docker-entrypoint-initdb.d/04_p3_city.sql:ro
     networks:
       - infra-net
       - agents-net
@@ -327,6 +329,27 @@ services:
   # LAYER 6: Sprint 5 — Security & Evaluation
   # ════════════════════════════════════════════════════════════════════════════
 
+  frontend:
+    build:
+      context: ../frontend
+      dockerfile: Dockerfile
+      args:
+        VITE_BUILD_SHA: ${BUILD_SHA:-dev}
+    container_name: synapse-frontend
+    <<: *common-labels
+    ports:
+      - "3001:8080"
+    networks:
+      - frontend-net
+    depends_on:
+      - orchestrator
+    healthcheck:
+      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:8080/healthz || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
   nginx:
     image: nginx:1.25-alpine
     container_name: synapse-nginx
@@ -340,6 +363,7 @@ services:
       - agents-net
     depends_on:
       - orchestrator
+      - frontend
     healthcheck:
       test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:80/ || exit 1"]
       interval: 15s

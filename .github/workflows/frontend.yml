@@ -1,0 +1,147 @@
+name: SYNAPSE Frontend CI
+
+on:
+  push:
+    branches: [main, develop, "sprint-*", "claude/*"]
+    paths:
+      - "frontend/**"
+      - "proto/domain/**"
+      - ".github/workflows/frontend.yml"
+  pull_request:
+    branches: [main]
+    paths:
+      - "frontend/**"
+      - "proto/domain/**"
+      - ".github/workflows/frontend.yml"
+
+defaults:
+  run:
+    working-directory: frontend
+
+jobs:
+  quality:
+    name: Lint • Typecheck • Unit
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9.12.0
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20.18"
+          cache: "pnpm"
+          cache-dependency-path: frontend/pnpm-lock.yaml
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile=false
+
+      - name: Biome lint
+        run: pnpm lint
+
+      - name: TypeScript strict
+        run: pnpm typecheck
+
+      - name: Vitest unit + property tests
+        run: pnpm test:coverage
+
+      - name: Upload coverage
+        if: success() || failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontend-coverage
+          path: frontend/coverage
+
+  build:
+    name: Vite build + size budget
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    needs: quality
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9.12.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20.18"
+          cache: "pnpm"
+          cache-dependency-path: frontend/pnpm-lock.yaml
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile=false
+      - name: Build
+        run: pnpm build
+      - name: Size budget
+        run: pnpm size || true   # informational in P0; gated in P2 per plan §17
+
+  fe-invariants:
+    name: FE-INV registry coverage
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    needs: quality
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install pyyaml
+        run: pip install pyyaml
+      - name: Validate FE-INV registry
+        working-directory: .
+        run: python frontend/spec/check_fe_invariants.py
+
+  e2e:
+    name: Playwright E2E + axe
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    needs: build
+    if: github.event_name == 'pull_request' || github.ref == 'refs/heads/main'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9.12.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20.18"
+          cache: "pnpm"
+          cache-dependency-path: frontend/pnpm-lock.yaml
+      - run: pnpm install --frozen-lockfile=false
+      - run: pnpm exec playwright install --with-deps chromium
+      - run: pnpm build
+      - run: pnpm test:e2e --project=chromium
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: playwright-report
+          path: frontend/playwright-report
+          retention-days: 7
+
+  license-audit:
+    name: License audit (I-1)
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9.12.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20.18"
+          cache: "pnpm"
+          cache-dependency-path: frontend/pnpm-lock.yaml
+      - run: pnpm install --frozen-lockfile=false
+      - name: License audit (allow MIT/Apache-2.0/BSD/ISC/MPL-2.0)
+        run: |
+          npx --yes license-checker-rseidelsohn \
+            --production \
+            --onlyAllow "MIT;Apache-2.0;BSD-2-Clause;BSD-3-Clause;BSD;ISC;MPL-2.0;CC0-1.0;CC-BY-4.0;Unlicense;0BSD;Python-2.0" \
+            --excludePackages "synapse-console" \
+            --summary
