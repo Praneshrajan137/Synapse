@@ -203,9 +203,7 @@ class RS256Manager:
         except JWTError as exc:
             raise TokenError(str(exc)) from exc
         if claims.get("type") != expected_type:
-            raise TokenError(
-                f"expected {expected_type} token, got {claims.get('type')!r}"
-            )
+            raise TokenError(f"expected {expected_type} token, got {claims.get('type')!r}")
         return OperatorContext(
             subject=str(claims["sub"]),
             role=Role.coerce(claims["role"]),

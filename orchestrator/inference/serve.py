@@ -180,9 +180,7 @@ class HitlResolveRequest(BaseModel):
 
 
 @app.post("/api/v1/hitl/{decision_id}/resolve")
-async def hitl_resolve(
-    decision_id: UUID, payload: HitlResolveRequest
-) -> dict[str, Any]:
+async def hitl_resolve(decision_id: UUID, payload: HitlResolveRequest) -> dict[str, Any]:
     """Resolve a pending HITL escalation and broadcast override_confirm.
 
     Called by the gateway's ``POST /api/v1/decisions/{id}/override`` after
