@@ -1,6 +1,6 @@
-import { forwardRef, type ButtonHTMLAttributes } from "react";
-import { cva, type VariantProps } from "class-variance-authority";
 import { cn } from "@lib/cn";
+import { type VariantProps, cva } from "class-variance-authority";
+import { type ButtonHTMLAttributes, forwardRef } from "react";
 
 const button = cva(
   [
@@ -19,8 +19,7 @@ const button = cva(
         danger: "bg-signal-danger text-ink-inverse hover:opacity-90",
         warning: "bg-signal-warning text-ink-inverse hover:opacity-90",
         ghost: "bg-transparent text-ink hover:bg-surface-raised",
-        outline:
-          "bg-transparent border border-border text-ink hover:border-border-strong",
+        outline: "bg-transparent border border-border text-ink hover:border-border-strong",
       },
       size: {
         sm: "h-8 px-3 text-sm",

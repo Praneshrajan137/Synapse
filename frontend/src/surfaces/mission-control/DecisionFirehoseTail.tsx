@@ -1,6 +1,6 @@
-import { useFirehoseStore } from "@state/firehose.store";
 import { ConfidenceChip, TierBadge } from "@ds/compounds";
 import { fmt } from "@lib/formatters";
+import { useFirehoseStore } from "@state/firehose.store";
 
 /**
  * Live tail of the `decision` channel. Last 12 rows; click navigates to

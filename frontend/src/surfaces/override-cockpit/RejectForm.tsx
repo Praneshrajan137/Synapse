@@ -1,5 +1,5 @@
-import { useState, type FormEvent } from "react";
 import { Button } from "@ds/primitives";
+import { type FormEvent, useState } from "react";
 
 interface RejectFormProps {
   readonly onCancel: () => void;

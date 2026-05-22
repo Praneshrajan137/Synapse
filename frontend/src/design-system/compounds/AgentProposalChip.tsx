@@ -3,12 +3,12 @@ import { ConfidenceChip } from "./ConfidenceChip";
 
 interface AgentProposalChipProps {
   readonly agentName: string;
-  readonly utilityScore?: number;
-  readonly confidence?: number;
-  readonly status?: "proposed" | "rejected" | "selected" | "modified";
-  readonly isWinner?: boolean;
-  readonly className?: string;
-  readonly onClick?: () => void;
+  readonly utilityScore?: number | undefined;
+  readonly confidence?: number | undefined;
+  readonly status?: "proposed" | "rejected" | "selected" | "modified" | undefined;
+  readonly isWinner?: boolean | undefined;
+  readonly className?: string | undefined;
+  readonly onClick?: (() => void) | undefined;
 }
 
 const STATUS_CLASS = {
@@ -54,8 +54,7 @@ export function AgentProposalChip({
       </div>
       {utilityScore !== undefined && (
         <div className="text-2xs text-ink-muted">
-          Utility{" "}
-          <span className="font-mono text-ink">{utilityScore.toFixed(3)}</span>
+          Utility <span className="font-mono text-ink">{utilityScore.toFixed(3)}</span>
         </div>
       )}
       {isWinner && (

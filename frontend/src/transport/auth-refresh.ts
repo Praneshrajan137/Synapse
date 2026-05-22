@@ -12,7 +12,7 @@ export function createRefreshGate(): RefreshGate {
   let inflight: Promise<void> | null = null;
 
   return {
-    async withRefreshRetry<T>(call, refresh) {
+    async withRefreshRetry<T>(call: () => Promise<T>, refresh: () => Promise<void>): Promise<T> {
       try {
         return await call();
       } catch (err) {

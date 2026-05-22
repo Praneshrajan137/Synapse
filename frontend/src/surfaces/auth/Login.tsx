@@ -1,10 +1,10 @@
-import { useState, type FormEvent } from "react";
-import { Navigate, useLocation, useNavigate } from "react-router-dom";
-import { toast } from "sonner";
 import { Button } from "@ds/primitives";
 import { useSynapseApi } from "@hooks/use-synapse-api";
-import { useSessionStore, type Role } from "@state/session.store";
+import { type Role, useSessionStore } from "@state/session.store";
 import { HttpError } from "@transport/errors";
+import { type FormEvent, useState } from "react";
+import { Navigate, useLocation, useNavigate } from "react-router-dom";
+import { toast } from "sonner";
 
 const DEFAULT_ROUTES: Record<Role, string> = {
   anonymous: "/login",
@@ -66,15 +66,12 @@ export function Login() {
         <header className="space-y-1">
           <h1 className="text-xl font-semibold text-ink">SYNAPSE Console</h1>
           <p className="text-xs text-ink-muted">
-            Sign in with your operator credentials. Your refresh token lives in an
-            HttpOnly cookie; nothing operator-identifying is logged client-side
-            (FE-INV-019).
+            Sign in with your operator credentials. Your refresh token lives in an HttpOnly cookie;
+            nothing operator-identifying is logged client-side (FE-INV-019).
           </p>
         </header>
         <label className="block text-sm">
-          <span className="block text-2xs uppercase tracking-wide text-ink-muted">
-            Operator ID
-          </span>
+          <span className="block text-2xs uppercase tracking-wide text-ink-muted">Operator ID</span>
           <input
             type="email"
             required
@@ -85,9 +82,7 @@ export function Login() {
           />
         </label>
         <label className="block text-sm">
-          <span className="block text-2xs uppercase tracking-wide text-ink-muted">
-            Password
-          </span>
+          <span className="block text-2xs uppercase tracking-wide text-ink-muted">Password</span>
           <input
             type="password"
             required

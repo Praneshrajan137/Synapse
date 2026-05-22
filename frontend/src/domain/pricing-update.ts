@@ -26,9 +26,9 @@ export const PricingUpdateSchema = z
     audit_id: ZUuid.optional(),
   })
   .strict()
-  .refine(
-    (v) => !v.is_essential || v.multiplier <= 1.3,
-    { message: "Essential SKU multiplier exceeds 1.3 cap (I-6 hard guardrail)", path: ["multiplier"] },
-  );
+  .refine((v) => !v.is_essential || v.multiplier <= 1.3, {
+    message: "Essential SKU multiplier exceeds 1.3 cap (I-6 hard guardrail)",
+    path: ["multiplier"],
+  });
 
 export type PricingUpdate = z.infer<typeof PricingUpdateSchema>;

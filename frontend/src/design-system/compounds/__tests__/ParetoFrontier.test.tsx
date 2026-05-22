@@ -1,7 +1,7 @@
-import { describe, expect, it } from "vitest";
+import { ParetoFrontier, type ParetoPoint } from "@ds/compounds/ParetoFrontier";
 import { render, screen } from "@testing-library/react";
 import fc from "fast-check";
-import { ParetoFrontier, type ParetoPoint } from "@ds/compounds/ParetoFrontier";
+import { describe, expect, it } from "vitest";
 
 // FE-INV-028 (P3) precursor: ParetoFrontier never highlights a dominated
 // point as "selected" — the selection prop is operator-controlled, but

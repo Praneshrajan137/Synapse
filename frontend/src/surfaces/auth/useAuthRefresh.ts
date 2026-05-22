@@ -1,6 +1,6 @@
-import { useEffect } from "react";
-import { useSessionStore } from "@state/session.store";
 import { useSynapseApi } from "@hooks/use-synapse-api";
+import { useSessionStore } from "@state/session.store";
+import { useEffect } from "react";
 
 const REFRESH_BUFFER_MS = 60_000; // refresh 60s before expiry
 

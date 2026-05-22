@@ -1,6 +1,6 @@
-import { describe, expect, it } from "vitest";
-import { render, screen } from "@testing-library/react";
 import { TierBadge } from "@ds/compounds/TierBadge";
+import { render, screen } from "@testing-library/react";
+import { describe, expect, it } from "vitest";
 
 describe("TierBadge", () => {
   it("renders the tier label", () => {

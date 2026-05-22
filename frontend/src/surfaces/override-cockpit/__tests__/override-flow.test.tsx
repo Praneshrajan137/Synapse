@@ -1,5 +1,5 @@
-import { describe, expect, it, beforeEach, vi } from "vitest";
 import { useEscalationStore } from "@state/escalation.store";
+import { beforeEach, describe, expect, it } from "vitest";
 
 // FE-INV-003 / FE-INV-021 — operator override must commit the audit row
 // BEFORE the local store marks the entry as acted. The mutation's onSuccess

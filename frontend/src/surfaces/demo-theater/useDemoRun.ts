@@ -1,7 +1,7 @@
-import { useEffect, useRef, useState } from "react";
-import { useSessionStore } from "@state/session.store";
-import { useCityStore } from "@state/city.store";
 import { log } from "@lib/log";
+import { useCityStore } from "@state/city.store";
+import { useSessionStore } from "@state/session.store";
+import { useEffect, useRef, useState } from "react";
 
 export type DemoSegmentId =
   | "01_living_map"
@@ -68,7 +68,7 @@ export function useDemoRun(): UseDemoRunResult {
         kind: params?.kind ?? "warehouse_offline",
       });
       const headers: Record<string, string> = { "Content-Type": "application/json" };
-      if (accessToken) headers["Authorization"] = `Bearer ${accessToken}`;
+      if (accessToken) headers.Authorization = `Bearer ${accessToken}`;
       const resp = await fetch(`/api/v1/demo/run?${q.toString()}`, {
         method: "POST",
         headers,
@@ -129,9 +129,13 @@ export function useDemoRun(): UseDemoRunResult {
   async function cancel(): Promise<void> {
     if (!jobId) return;
     const headers: Record<string, string> = {};
-    if (accessToken) headers["Authorization"] = `Bearer ${accessToken}`;
+    if (accessToken) headers.Authorization = `Bearer ${accessToken}`;
     try {
-      await fetch(`/api/v1/demo/${jobId}/cancel`, { method: "POST", headers, credentials: "include" });
+      await fetch(`/api/v1/demo/${jobId}/cancel`, {
+        method: "POST",
+        headers,
+        credentials: "include",
+      });
     } catch {
       /* swallow */
     }

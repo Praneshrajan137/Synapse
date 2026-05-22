@@ -1,6 +1,6 @@
-import { describe, expect, it, beforeEach } from "vitest";
-import { useEscalationStore } from "@state/escalation.store";
 import type { EscalationMessage } from "@domain/escalation";
+import { useEscalationStore } from "@state/escalation.store";
+import { beforeEach, describe, expect, it } from "vitest";
 
 // FE-INV-017 — escalation store is append-only. The store exposes no
 // .remove/.pop/.clear path; markActed mutates a single entry's status.

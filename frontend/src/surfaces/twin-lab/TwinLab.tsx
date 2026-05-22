@@ -1,13 +1,13 @@
-import { useState } from "react";
-import { useMutation } from "@tanstack/react-query";
-import { toast } from "sonner";
+import type { TwinState } from "@domain/twin-state";
 import { Badge } from "@ds/primitives";
-import { ScenarioBuilder, type ScenarioRequest } from "./ScenarioBuilder";
+import { useSynapseApi } from "@hooks/use-synapse-api";
+import { useMutation } from "@tanstack/react-query";
+import { useState } from "react";
+import { toast } from "sonner";
 import { DivergenceMeter } from "./DivergenceMeter";
+import { ScenarioBuilder, type ScenarioRequest } from "./ScenarioBuilder";
 import { SupplyNetwork3D } from "./SupplyNetwork3D";
 import { useTopology } from "./useTopology";
-import { useSynapseApi } from "@hooks/use-synapse-api";
-import type { TwinState } from "@domain/twin-state";
 
 /**
  * Twin Lab — P3 elevation. Live KL divergence, 3D supply network, and
@@ -37,8 +37,8 @@ export function TwinLab() {
         <div className="space-y-0.5">
           <h1 className="text-2xl font-semibold text-ink">Twin Lab</h1>
           <p className="text-sm text-ink-muted">
-            Run what-if scenarios against the digital twin (I-12). KL divergence vs
-            live distribution is tracked per run.
+            Run what-if scenarios against the digital twin (I-12). KL divergence vs live
+            distribution is tracked per run.
           </p>
         </div>
         {result?.sync_status && (
@@ -51,10 +51,7 @@ export function TwinLab() {
       <DivergenceMeter value={klValue} />
 
       <div className="grid gap-4 lg:grid-cols-[1fr_320px]">
-        <SupplyNetwork3D
-          nodes={topology.data?.nodes ?? []}
-          edges={topology.data?.edges ?? []}
-        />
+        <SupplyNetwork3D nodes={topology.data?.nodes ?? []} edges={topology.data?.edges ?? []} />
         <ScenarioBuilder pending={sim.isPending} onRun={(req) => sim.mutate(req)} />
       </div>
 

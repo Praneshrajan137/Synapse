@@ -1,5 +1,5 @@
+import { type WsMultiplex, type WsState, createWsMultiplex } from "@transport/ws-multiplex";
 import { useEffect, useRef, useState } from "react";
-import { createWsMultiplex, type WsMultiplex, type WsState } from "@transport/ws-multiplex";
 
 // React adapter around the WS multiplex. One multiplex per URL per mount tree.
 // Component callers subscribe via the returned `on` helper, which returns

@@ -1,6 +1,6 @@
-import { Badge } from "../primitives/Badge";
 import { TIER_DESCRIPTION, TIER_LABEL, TIER_SLA_MS, type Tier } from "@lib/confidence";
 import { fmt } from "@lib/formatters";
+import { Badge } from "../primitives/Badge";
 
 interface TierBadgeProps {
   readonly tier: Tier;

@@ -1,5 +1,5 @@
-import { describe, expect, it } from "vitest";
 import fc from "fast-check";
+import { describe, expect, it } from "vitest";
 import { canonicalJson } from "../json-canonical";
 
 // FE-INV-012 — canonical JSON outbound.
@@ -31,13 +31,10 @@ describe("canonicalJson", () => {
 
   it("is deterministic regardless of insertion order (property test)", () => {
     fc.assert(
-      fc.property(
-        fc.dictionary(fc.string({ minLength: 1, maxLength: 8 }), fc.integer()),
-        (obj) => {
-          const reversed = Object.fromEntries(Object.entries(obj).reverse());
-          return canonicalJson(obj) === canonicalJson(reversed);
-        },
-      ),
+      fc.property(fc.dictionary(fc.string({ minLength: 1, maxLength: 8 }), fc.integer()), (obj) => {
+        const reversed = Object.fromEntries(Object.entries(obj).reverse());
+        return canonicalJson(obj) === canonicalJson(reversed);
+      }),
       { numRuns: 200 },
     );
   });

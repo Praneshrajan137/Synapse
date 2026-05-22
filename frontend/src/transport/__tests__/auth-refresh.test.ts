@@ -1,6 +1,6 @@
-import { describe, expect, it, vi } from "vitest";
 import { createRefreshGate } from "@transport/auth-refresh";
 import { HttpError } from "@transport/errors";
+import { describe, expect, it, vi } from "vitest";
 
 // FE-INV-023 — single-flight refresh recovers from 401 without page reload.
 describe("createRefreshGate", () => {
@@ -44,7 +44,10 @@ describe("createRefreshGate", () => {
     const gate = createRefreshGate();
     let resolveRefresh!: () => void;
     const refresh = vi.fn().mockImplementation(
-      () => new Promise<void>((res) => { resolveRefresh = res; }),
+      () =>
+        new Promise<void>((res) => {
+          resolveRefresh = res;
+        }),
     );
 
     const callA = vi

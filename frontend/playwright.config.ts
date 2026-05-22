@@ -1,16 +1,21 @@
 import { defineConfig, devices } from "@playwright/test";
 
+const isCi = !!process.env.CI;
+const baseUrlOverride = process.env.PLAYWRIGHT_BASE_URL;
+
 export default defineConfig({
   testDir: "./tests/e2e",
   fullyParallel: true,
-  forbidOnly: !!process.env.CI,
-  retries: process.env.CI ? 1 : 0,
-  workers: process.env.CI ? 2 : undefined,
-  reporter: process.env.CI ? [["html", { open: "never" }], ["github"]] : "list",
+  forbidOnly: isCi,
+  retries: isCi ? 1 : 0,
+  // `workers` is omitted off-CI so Playwright picks its default — passing an
+  // explicit `undefined` is rejected under `exactOptionalPropertyTypes`.
+  ...(isCi ? { workers: 2 } : {}),
+  reporter: isCi ? [["html", { open: "never" }], ["github"]] : "list",
   timeout: 30_000,
   expect: { timeout: 5_000 },
   use: {
-    baseURL: process.env.PLAYWRIGHT_BASE_URL ?? "http://localhost:3001",
+    baseURL: baseUrlOverride ?? "http://localhost:3001",
     trace: "on-first-retry",
     screenshot: "only-on-failure",
     video: "retain-on-failure",
@@ -21,12 +26,16 @@ export default defineConfig({
     { name: "webkit", use: { ...devices["Desktop Safari"] } },
     { name: "mobile-cockpit", use: { ...devices["iPhone 14"] }, testMatch: /cockpit\.spec\.ts/ },
   ],
-  webServer: process.env.PLAYWRIGHT_BASE_URL
-    ? undefined
+  // When PLAYWRIGHT_BASE_URL is set the suite runs against an already-running
+  // server, so `webServer` is omitted entirely rather than set to `undefined`.
+  ...(baseUrlOverride
+    ? {}
     : {
-        command: "pnpm preview --port 3001",
-        url: "http://localhost:3001",
-        reuseExistingServer: !process.env.CI,
-        timeout: 60_000,
-      },
+        webServer: {
+          command: "pnpm preview --port 3001",
+          url: "http://localhost:3001",
+          reuseExistingServer: !isCi,
+          timeout: 60_000,
+        },
+      }),
 });

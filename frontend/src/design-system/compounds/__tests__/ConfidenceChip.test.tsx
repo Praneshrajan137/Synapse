@@ -1,6 +1,6 @@
-import { describe, expect, it } from "vitest";
-import { render, screen } from "@testing-library/react";
 import { ConfidenceChip } from "@ds/compounds/ConfidenceChip";
+import { render, screen } from "@testing-library/react";
+import { describe, expect, it } from "vitest";
 
 describe("ConfidenceChip", () => {
   it("renders the percentage and color-band class", () => {

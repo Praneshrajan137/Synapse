@@ -17,10 +17,7 @@ const DEFAULTS = {
 } as const;
 
 /** Full Jitter backoff: sleep = random_between(0, min(cap, base * 2^attempt)) */
-export function fullJitterDelay(
-  attempt: number,
-  opts: JitterRetryOptions = {},
-): number {
+export function fullJitterDelay(attempt: number, opts: JitterRetryOptions = {}): number {
   const base = opts.baseMs ?? DEFAULTS.baseMs;
   const cap = opts.capMs ?? DEFAULTS.capMs;
   const rng = opts.random ?? Math.random;

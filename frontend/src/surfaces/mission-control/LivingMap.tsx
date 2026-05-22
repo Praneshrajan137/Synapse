@@ -1,6 +1,6 @@
-import { Suspense, lazy, useMemo } from "react";
-import { storeLayer, routeArcLayer, demandHeatmapLayer } from "@viz/deck-gl/layers";
 import { useFirehoseStore } from "@state/firehose.store";
+import { demandHeatmapLayer, routeArcLayer, storeLayer } from "@viz/deck-gl/layers";
+import { Suspense, lazy, useMemo } from "react";
 
 // CityMap pulls in maplibre + deck.gl + pmtiles — lazy-load it so the
 // initial bundle stays inside FE-INV-014's 180KB gz budget.

@@ -1,5 +1,5 @@
-import { useQuery } from "@tanstack/react-query";
 import { useCityStore } from "@state/city.store";
+import { useQuery } from "@tanstack/react-query";
 
 export interface TopologyNode {
   readonly id: string;

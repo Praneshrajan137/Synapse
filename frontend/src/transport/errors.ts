@@ -2,7 +2,7 @@
 // and telemetry; never throws bare `Error`.
 
 export class HttpError extends Error {
-  override readonly name = "HttpError";
+  override readonly name: string = "HttpError";
   constructor(
     readonly status: number,
     readonly statusText: string,
@@ -15,7 +15,10 @@ export class HttpError extends Error {
 
 export class NetworkError extends Error {
   override readonly name = "NetworkError";
-  constructor(readonly url: string, override readonly cause?: unknown) {
+  constructor(
+    readonly url: string,
+    override readonly cause?: unknown,
+  ) {
     super(`Network failure: ${url}`);
   }
 }

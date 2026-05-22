@@ -1,12 +1,12 @@
-import { createWsMultiplex, type WsMultiplex } from "./ws-multiplex";
-import { ConsensusDecisionSchema, type ConsensusDecision } from "@domain/consensus-decision";
-import { DisruptionAlertSchema, type DisruptionAlert } from "@domain/disruption-alert";
-import { DemandForecastSchema, type DemandForecast } from "@domain/demand-forecast";
-import { RoutePlanSchema, type RoutePlan } from "@domain/route-plan";
-import { TwinStateSchema, type TwinState } from "@domain/twin-state";
-import { FreshnessAlertSchema, type FreshnessAlert } from "@domain/freshness-alert";
-import { PricingUpdateSchema, type PricingUpdate } from "@domain/pricing-update";
+import { type ConsensusDecision, ConsensusDecisionSchema } from "@domain/consensus-decision";
+import { type DemandForecast, DemandForecastSchema } from "@domain/demand-forecast";
+import { type DisruptionAlert, DisruptionAlertSchema } from "@domain/disruption-alert";
+import { type FreshnessAlert, FreshnessAlertSchema } from "@domain/freshness-alert";
+import { type PricingUpdate, PricingUpdateSchema } from "@domain/pricing-update";
 import type { City } from "@domain/primitives";
+import { type RoutePlan, RoutePlanSchema } from "@domain/route-plan";
+import { type TwinState, TwinStateSchema } from "@domain/twin-state";
+import { type WsMultiplex, createWsMultiplex } from "./ws-multiplex";
 
 // Typed wrapper around the WS multiplex pointed at /ws/firehose.
 // Server envelope: { topic, seq, ts, payload }. We unwrap and Zod-validate
@@ -55,10 +55,10 @@ export interface FirehoseClient {
 }
 
 export interface CreateFirehoseOptions {
-  readonly host?: string;
+  readonly host?: string | undefined;
   readonly topics: ReadonlyArray<FirehoseChannel>;
   readonly city: City;
-  readonly sinceSeq?: number;
+  readonly sinceSeq?: number | undefined;
 }
 
 export function createFirehose(opts: CreateFirehoseOptions): FirehoseClient {
@@ -85,10 +85,10 @@ export function createFirehose(opts: CreateFirehoseOptions): FirehoseClient {
         const schema = SCHEMAS[channel];
         if (!schema) {
           // metric channel is open-shape; pass through as-is.
-          listener(
-            (envelope.payload ?? {}) as ChannelPayloadMap[typeof channel],
-            { seq: envelope.seq, ts: envelope.ts },
-          );
+          listener((envelope.payload ?? {}) as ChannelPayloadMap[typeof channel], {
+            seq: envelope.seq,
+            ts: envelope.ts,
+          });
           return;
         }
         const parsed = schema.safeParse(envelope.payload);
@@ -97,10 +97,10 @@ export function createFirehose(opts: CreateFirehoseOptions): FirehoseClient {
           console.warn(`firehose_${channel}_rejected`, parsed.error.issues);
           return;
         }
-        listener(
-          parsed.data as ChannelPayloadMap[typeof channel],
-          { seq: envelope.seq, ts: envelope.ts },
-        );
+        listener(parsed.data as ChannelPayloadMap[typeof channel], {
+          seq: envelope.seq,
+          ts: envelope.ts,
+        });
       });
     },
   };

@@ -25,8 +25,7 @@ const PRESET: Record<WsState, { tone: string; text: string; pulse: boolean }> = 
 export function ConnectionPill({ state, label }: ConnectionPillProps) {
   const cfg = PRESET[state];
   return (
-    <span
-      role="status"
+    <output
       aria-live="polite"
       className={cn(
         "inline-flex items-center gap-1.5 rounded-sm px-1.5 py-0.5 text-2xs font-medium",
@@ -35,13 +34,10 @@ export function ConnectionPill({ state, label }: ConnectionPillProps) {
     >
       <span
         aria-hidden
-        className={cn(
-          "h-1.5 w-1.5 rounded-full",
-          cfg.pulse && "animate-pulse-confidence",
-        )}
+        className={cn("h-1.5 w-1.5 rounded-full", cfg.pulse && "animate-pulse-confidence")}
         style={{ background: "currentColor" }}
       />
       {label ?? cfg.text}
-    </span>
+    </output>
   );
 }

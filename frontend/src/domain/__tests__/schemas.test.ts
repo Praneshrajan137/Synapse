@@ -1,4 +1,3 @@
-import { describe, expect, it } from "vitest";
 import {
   ConsensusDecisionSchema,
   DemandForecastSchema,
@@ -8,6 +7,7 @@ import {
   PricingUpdateSchema,
   RoutePlanSchema,
 } from "@domain/index";
+import { describe, expect, it } from "vitest";
 
 // FE-INV-002 — every domain Zod mirror parses valid samples and rejects
 // samples that violate the canonical JSON-schema constraints.

@@ -1,20 +1,15 @@
-import { useFirehoseStore } from "@state/firehose.store";
 import { Badge } from "@ds/primitives";
+import { useFirehoseStore } from "@state/firehose.store";
 
 /**
  * Surfaces the most-recent disruption alert from the firehose. Banner is
  * dismissed automatically when the underlying ring buffer cycles past it.
  */
 export function DisruptionBanner() {
-  const latest = useFirehoseStore(
-    (s) => s.disruptions.items[s.disruptions.items.length - 1],
-  );
+  const latest = useFirehoseStore((s) => s.disruptions.items[s.disruptions.items.length - 1]);
   if (!latest) return null;
   return (
-    <div
-      role="alert"
-      className="syn-card-raised border-l-4 border-confidence-risk px-4 py-3"
-    >
+    <div role="alert" className="syn-card-raised border-l-4 border-confidence-risk px-4 py-3">
       <div className="flex flex-wrap items-center gap-2">
         <Badge tone="danger">Disruption</Badge>
         <span className="text-sm font-semibold text-ink">

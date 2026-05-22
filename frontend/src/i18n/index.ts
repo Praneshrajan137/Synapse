@@ -8,25 +8,25 @@ import i18n from "i18next";
 import LanguageDetector from "i18next-browser-languagedetector";
 import { initReactI18next } from "react-i18next";
 
-import enCommon from "./en/common.json";
-import enCockpit from "./en/cockpit.json";
-import enMission from "./en/mission-control.json";
-import enDecisions from "./en/decision-theater.json";
 import enAgents from "./en/agent-council.json";
-import enTwin from "./en/twin-lab.json";
-import enDemo from "./en/demo-theater.json";
 import enAudit from "./en/audit-vault.json";
 import enAuth from "./en/auth.json";
+import enCockpit from "./en/cockpit.json";
+import enCommon from "./en/common.json";
+import enDecisions from "./en/decision-theater.json";
+import enDemo from "./en/demo-theater.json";
+import enMission from "./en/mission-control.json";
+import enTwin from "./en/twin-lab.json";
 
-import hiCommon from "./hi/common.json";
-import hiCockpit from "./hi/cockpit.json";
-import hiMission from "./hi/mission-control.json";
-import hiDecisions from "./hi/decision-theater.json";
 import hiAgents from "./hi/agent-council.json";
-import hiTwin from "./hi/twin-lab.json";
-import hiDemo from "./hi/demo-theater.json";
 import hiAudit from "./hi/audit-vault.json";
 import hiAuth from "./hi/auth.json";
+import hiCockpit from "./hi/cockpit.json";
+import hiCommon from "./hi/common.json";
+import hiDecisions from "./hi/decision-theater.json";
+import hiDemo from "./hi/demo-theater.json";
+import hiMission from "./hi/mission-control.json";
+import hiTwin from "./hi/twin-lab.json";
 
 export type Locale = "en" | "hi" | "kn" | "mr";
 
@@ -82,5 +82,5 @@ export { i18n };
 
 /** Stable thin wrapper so non-React callers can still translate. */
 export function t(key: string, options?: Record<string, unknown>): string {
-  return i18n.t(key, options) as unknown as string;
+  return i18n.t(key, options ?? {}) as unknown as string;
 }

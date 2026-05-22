@@ -1,7 +1,7 @@
-import { describe, expect, it } from "vitest";
-import fc from "fast-check";
-import { replayDecision, phaseName } from "@lib/replay";
 import type { ConsensusDecision } from "@domain/consensus-decision";
+import { phaseName, replayDecision } from "@lib/replay";
+import fc from "fast-check";
+import { describe, expect, it } from "vitest";
 
 // FE-INV-009 + FE-INV-028 — replay is referentially transparent (pure).
 
@@ -13,7 +13,12 @@ function fixture(overrides: Partial<ConsensusDecision> = {}): ConsensusDecision 
     proposals: [
       { agent_name: "demand_prophet", status: "proposed", confidence: 0.82, utility_score: 0.71 },
       { agent_name: "routing_navigator", status: "rejected", confidence: 0.6, utility_score: 0.5 },
-      { agent_name: "inventory_sentinel", status: "selected", confidence: 0.9, utility_score: 0.85 },
+      {
+        agent_name: "inventory_sentinel",
+        status: "selected",
+        confidence: 0.9,
+        utility_score: 0.85,
+      },
     ],
     selected_action: { action_type: "reorder", agent_name: "inventory_sentinel" },
     pareto_weights: { cost: 0.4, time: 0.3, freshness: 0.3 },

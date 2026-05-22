@@ -1,5 +1,5 @@
-import { Component, type ErrorInfo, type PropsWithChildren, type ReactNode } from "react";
 import { Button } from "@ds/primitives/Button";
+import { Component, type ErrorInfo, type PropsWithChildren, type ReactNode } from "react";
 
 interface State {
   readonly error: Error | null;
@@ -47,8 +47,8 @@ export class ErrorBoundary extends Component<PropsWithChildren, State> {
       >
         <h2 className="text-lg font-semibold text-confidence-risk">Console crashed</h2>
         <p className="mt-2 text-sm text-ink-muted">
-          The interface hit an unrecoverable error. The audit trail is unaffected — every
-          operator action is committed before optimistic UI updates (I-4).
+          The interface hit an unrecoverable error. The audit trail is unaffected — every operator
+          action is committed before optimistic UI updates (I-4).
         </p>
         <pre className="mt-4 max-h-64 overflow-auto rounded bg-surface-sunken p-3 text-2xs text-ink-muted">
           {this.state.error.name}: {this.state.error.message}

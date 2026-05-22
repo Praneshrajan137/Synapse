@@ -4,13 +4,7 @@
 // We use it on every outgoing body so payload bytes hash-stable across runs
 // (critical for KV-cache stability on the LLM round-trip, I-13).
 
-type JsonValue =
-  | null
-  | boolean
-  | number
-  | string
-  | JsonValue[]
-  | { [key: string]: JsonValue };
+type JsonValue = null | boolean | number | string | JsonValue[] | { [key: string]: JsonValue };
 
 function isPlainObject(v: unknown): v is Record<string, unknown> {
   return typeof v === "object" && v !== null && !Array.isArray(v);
@@ -41,6 +35,9 @@ function canonicalize(value: unknown): JsonValue {
   if (Array.isArray(value)) {
     return value.map((v) => (v === undefined ? null : canonicalize(v)));
   }
+  // Dates: ISO string (matches Python pydantic default). Checked before the
+  // plain-object branch — a Date is an object, so isPlainObject() matches it.
+  if (value instanceof Date) return value.toISOString();
   if (isPlainObject(value)) {
     const keys = Object.keys(value).sort();
     const out: Record<string, JsonValue> = {};
@@ -51,8 +48,6 @@ function canonicalize(value: unknown): JsonValue {
     }
     return out;
   }
-  // Dates: ISO string (matches Python pydantic default).
-  if (value instanceof Date) return value.toISOString();
   // bigint / symbol / function — refuse.
   throw new TypeError(`canonicalJson: unsupported value of type ${typeof value}`);
 }

@@ -1,9 +1,9 @@
-import { useEffect, type PropsWithChildren } from "react";
+import { applyTheme, useThemeStore } from "@state/theme.store";
+import { useAuthRefresh } from "@surfaces/auth/useAuthRefresh";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { ReactQueryDevtools } from "@tanstack/react-query-devtools";
+import { type PropsWithChildren, useEffect } from "react";
 import { Toaster } from "sonner";
-import { useThemeStore, applyTheme } from "@state/theme.store";
-import { useAuthRefresh } from "@surfaces/auth/useAuthRefresh";
 import { ErrorBoundary } from "./error-boundary";
 
 // Single QueryClient for the SPA. retry=2 / staleTime=5s preserves the

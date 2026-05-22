@@ -1,4 +1,4 @@
-import { useMemo, lazy, Suspense } from "react";
+import { Suspense, lazy, useMemo } from "react";
 import type { TopologyEdge, TopologyNode } from "./useTopology";
 
 // react-force-graph-3d pulls in three.js + force layout — lazy-load it so
@@ -34,7 +34,10 @@ export function SupplyNetwork3D({ nodes, edges, height = 420 }: SupplyNetwork3DP
   return (
     <Suspense
       fallback={
-        <div className="syn-card flex items-center justify-center text-sm text-ink-muted" style={{ height }}>
+        <div
+          className="syn-card flex items-center justify-center text-sm text-ink-muted"
+          style={{ height }}
+        >
           Loading 3D supply network…
         </div>
       }

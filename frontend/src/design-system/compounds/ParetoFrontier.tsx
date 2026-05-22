@@ -1,9 +1,9 @@
-import { useMemo } from "react";
-import { Group } from "@visx/group";
+import { cn } from "@lib/cn";
 import { AxisBottom, AxisLeft } from "@visx/axis";
+import { Group } from "@visx/group";
 import { scaleLinear } from "@visx/scale";
 import { Circle } from "@visx/shape";
-import { cn } from "@lib/cn";
+import { useMemo } from "react";
 
 export interface ParetoPoint {
   readonly id: string;
@@ -14,14 +14,14 @@ export interface ParetoPoint {
 
 interface ParetoFrontierProps {
   readonly points: ReadonlyArray<ParetoPoint>;
-  readonly selectedId?: string;
-  readonly xLabel?: string;
-  readonly yLabel?: string;
-  readonly width?: number;
-  readonly height?: number;
-  readonly onSelect?: (id: string) => void;
-  readonly weights?: Readonly<Record<string, number>>;
-  readonly className?: string;
+  readonly selectedId?: string | undefined;
+  readonly xLabel?: string | undefined;
+  readonly yLabel?: string | undefined;
+  readonly width?: number | undefined;
+  readonly height?: number | undefined;
+  readonly onSelect?: ((id: string) => void) | undefined;
+  readonly weights?: Readonly<Record<string, number>> | undefined;
+  readonly className?: string | undefined;
 }
 
 const MARGIN = { top: 16, right: 16, bottom: 32, left: 40 };

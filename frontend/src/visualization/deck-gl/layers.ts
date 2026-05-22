@@ -1,5 +1,5 @@
-import { ScatterplotLayer, ArcLayer, IconLayer } from "@deck.gl/layers";
 import { HeatmapLayer } from "@deck.gl/aggregation-layers";
+import { ArcLayer, IconLayer, ScatterplotLayer } from "@deck.gl/layers";
 import type { RoutePlan } from "@domain/route-plan";
 
 // Deck.gl layer factories. Pure constructors — the surface assembles
@@ -38,8 +38,8 @@ export function routeArcLayer(routes: ReadonlyArray<RoutePlan>) {
       const prev = stops[idx];
       return {
         id: `${route.route_id}-${idx}`,
-        source: [Number(prev?.["lon"] ?? 0), Number(prev?.["lat"] ?? 0)],
-        target: [Number(stop["lon"] ?? 0), Number(stop["lat"] ?? 0)],
+        source: [Number(prev?.lon ?? 0), Number(prev?.lat ?? 0)],
+        target: [Number(stop.lon ?? 0), Number(stop.lat ?? 0)],
         riskColor: (route.freshness_violations ?? 0) > 0 ? 1 : 0,
       };
     });

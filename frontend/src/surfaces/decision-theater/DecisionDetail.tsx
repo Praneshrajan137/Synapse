@@ -1,24 +1,22 @@
-import { useState, useMemo } from "react";
-import { Link, useParams } from "react-router-dom";
-import { useQuery } from "@tanstack/react-query";
-import * as Slider from "@radix-ui/react-slider";
+import { ConsensusDecisionSchema } from "@domain/consensus-decision";
 import {
   AgentProposalChip,
   ConfidenceChip,
   ParetoFrontier,
+  type ParetoPoint,
   ReasoningTimeline,
   TierBadge,
-  type ParetoPoint,
 } from "@ds/compounds";
 import { Badge } from "@ds/primitives";
-import { ConsensusDecisionSchema } from "@domain/consensus-decision";
-import { useSynapseApi } from "@hooks/use-synapse-api";
-import { replayDecision, phaseName } from "@lib/replay";
 import { fmt } from "@lib/formatters";
+import { phaseName, replayDecision } from "@lib/replay";
+import * as Slider from "@radix-ui/react-slider";
+import { useQuery } from "@tanstack/react-query";
+import { useMemo, useState } from "react";
+import { Link, useParams } from "react-router-dom";
 
 export function DecisionDetail() {
   const { id } = useParams<{ id: string }>();
-  const api = useSynapseApi();
   // POC: api/v1/decisions/{id} returns a richer row; we map it into our
   // ConsensusDecision Zod schema for replay purity.
   const query = useQuery({
@@ -33,20 +31,20 @@ export function DecisionDetail() {
       const raw = (await resp.json()) as Record<string, unknown>;
       // Re-shape into ConsensusDecision shape for the replay function.
       const candidate = {
-        decision_id: raw["decision_id"] ?? id,
-        timestamp: raw["created_at"] ?? new Date().toISOString(),
-        tier: raw["tier"] ?? "tier_2",
-        proposals: raw["proposals"] ?? [],
-        selected_action: raw["selected_action"] ?? {},
-        pareto_weights: raw["pareto_weights"] ?? {},
-        confidence: raw["confidence"] ?? 0,
-        audit_trace: raw["audit_trace"] ?? [],
-        phase_reached: raw["phase_reached"] ?? 1,
-        debate_rounds: raw["debate_rounds"] ?? 0,
-        human_override: raw["human_override"] ?? null,
-        context_messages: raw["context_messages"] ?? [],
-        execution_confirmations: raw["execution_confirmations"] ?? [],
-        escalated_to_human: raw["escalated"] ?? false,
+        decision_id: raw.decision_id ?? id,
+        timestamp: raw.created_at ?? new Date().toISOString(),
+        tier: raw.tier ?? "tier_2",
+        proposals: raw.proposals ?? [],
+        selected_action: raw.selected_action ?? {},
+        pareto_weights: raw.pareto_weights ?? {},
+        confidence: raw.confidence ?? 0,
+        audit_trace: raw.audit_trace ?? [],
+        phase_reached: raw.phase_reached ?? 1,
+        debate_rounds: raw.debate_rounds ?? 0,
+        human_override: raw.human_override ?? null,
+        context_messages: raw.context_messages ?? [],
+        execution_confirmations: raw.execution_confirmations ?? [],
+        escalated_to_human: raw.escalated ?? false,
       };
       const parsed = ConsensusDecisionSchema.safeParse(candidate);
       if (!parsed.success) {
@@ -101,16 +99,12 @@ export function DecisionDetail() {
           ← Decision Theater
         </Link>
         <div className="flex flex-wrap items-center gap-2">
-          <h1 className="font-mono text-xl font-semibold text-ink">
-            {decision.decision_id}
-          </h1>
+          <h1 className="font-mono text-xl font-semibold text-ink">{decision.decision_id}</h1>
           <TierBadge tier={decision.tier} />
           <ConfidenceChip value={decision.confidence} />
           {decision.escalated_to_human && <Badge tone="warning">Escalated</Badge>}
         </div>
-        <p className="text-2xs text-ink-subtle">
-          Committed {fmt.relativeTime(decision.timestamp)}
-        </p>
+        <p className="text-2xs text-ink-subtle">Committed {fmt.relativeTime(decision.timestamp)}</p>
       </header>
 
       <section className="grid gap-4 lg:grid-cols-[220px_minmax(0,1fr)]">
@@ -157,9 +151,18 @@ export function DecisionDetail() {
                     <AgentProposalChip
                       key={`${agentName}-${i}`}
                       agentName={agentName}
-                      utilityScore={typeof p.utility_score === "number" ? p.utility_score : undefined}
+                      utilityScore={
+                        typeof p.utility_score === "number" ? p.utility_score : undefined
+                      }
                       confidence={typeof p.confidence === "number" ? p.confidence : undefined}
-                      status={(p.status as "proposed" | "rejected" | "selected" | "modified" | undefined) ?? "proposed"}
+                      status={
+                        (p.status as
+                          | "proposed"
+                          | "rejected"
+                          | "selected"
+                          | "modified"
+                          | undefined) ?? "proposed"
+                      }
                     />
                   );
                 })}

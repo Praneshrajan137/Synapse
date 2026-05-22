@@ -1,5 +1,5 @@
-import { useQuery } from "@tanstack/react-query";
 import { useCityStore } from "@state/city.store";
+import { useQuery } from "@tanstack/react-query";
 
 interface CityStore {
   readonly id: string;
@@ -24,9 +24,9 @@ export function useCityStores() {
         (s): s is CityStore =>
           typeof s === "object" &&
           s !== null &&
-          typeof (s as Record<string, unknown>)["id"] === "string" &&
-          typeof (s as Record<string, unknown>)["lat"] === "number" &&
-          typeof (s as Record<string, unknown>)["lon"] === "number",
+          typeof (s as Record<string, unknown>).id === "string" &&
+          typeof (s as Record<string, unknown>).lat === "number" &&
+          typeof (s as Record<string, unknown>).lon === "number",
       );
     },
     staleTime: 5 * 60_000,

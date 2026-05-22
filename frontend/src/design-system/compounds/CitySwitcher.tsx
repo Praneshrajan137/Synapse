@@ -1,6 +1,6 @@
-import { useCityStore } from "@state/city.store";
 import type { City } from "@domain/primitives";
 import { cn } from "@lib/cn";
+import { useCityStore } from "@state/city.store";
 
 const OPTIONS: ReadonlyArray<{ value: City; label: string }> = [
   { value: "bengaluru", label: "Bengaluru" },
@@ -26,6 +26,7 @@ export function CitySwitcher() {
         return (
           <button
             key={opt.value}
+            // biome-ignore lint/a11y/useSemanticElements: styled segmented control — the radiogroup/radio ARIA pattern is intentional
             type="button"
             role="radio"
             aria-checked={active}

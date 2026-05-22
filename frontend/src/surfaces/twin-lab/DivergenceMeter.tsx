@@ -24,7 +24,10 @@ export function DivergenceMeter({ value, className }: DivergenceMeterProps) {
         <span className="font-mono text-ink">{value.toFixed(3)}</span>
       </div>
       <div className="relative h-2 w-full overflow-hidden rounded bg-surface-raised">
-        <div className={cn("h-full rounded transition-all duration-medium ease-standard", toneClass)} style={{ width: `${pct}%` }} />
+        <div
+          className={cn("h-full rounded transition-all duration-medium ease-standard", toneClass)}
+          style={{ width: `${pct}%` }}
+        />
         <span className="absolute left-[25%] top-0 h-full w-px bg-confidence-warn/60" aria-hidden />
         <span className="absolute left-[50%] top-0 h-full w-px bg-confidence-risk/60" aria-hidden />
       </div>

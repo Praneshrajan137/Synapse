@@ -1,7 +1,7 @@
-import { useMemo, useRef } from "react";
-import { createSynapseApi, type SynapseApi } from "@transport/synapse-api";
-import { createRefreshGate } from "@transport/auth-refresh";
 import { useSessionStore } from "@state/session.store";
+import { createRefreshGate } from "@transport/auth-refresh";
+import { type SynapseApi, createSynapseApi } from "@transport/synapse-api";
+import { useMemo, useRef } from "react";
 
 // Single SynapseApi per render tree, with bearer token wired through.
 // 401 responses on any call trigger a single-flight /refresh; failure
@@ -36,9 +36,7 @@ export function useSynapseApi(): SynapseApi {
             async () => {
               try {
                 const r = await base.refresh();
-                useSessionStore
-                  .getState()
-                  .rotateAccessToken(r.access_token, r.expires_in);
+                useSessionStore.getState().rotateAccessToken(r.access_token, r.expires_in);
               } catch {
                 useSessionStore.getState().clearAuth();
                 throw new Error("session expired");

@@ -48,7 +48,11 @@ export function ConfidenceChip({
           : `Confidence ${pct}% (threshold ${Math.round(threshold * 100)}%)`
       }
     >
-      <span className="h-1.5 w-1.5 rounded-full" style={{ background: "currentColor" }} aria-hidden />
+      <span
+        className="h-1.5 w-1.5 rounded-full"
+        style={{ background: "currentColor" }}
+        aria-hidden
+      />
       {pct}%
     </span>
   );

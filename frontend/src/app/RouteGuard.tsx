@@ -1,6 +1,6 @@
-import { type PropsWithChildren } from "react";
+import { type Role, useSessionStore } from "@state/session.store";
+import type { PropsWithChildren } from "react";
 import { Navigate, useLocation } from "react-router-dom";
-import { useSessionStore, type Role } from "@state/session.store";
 
 const RANK: Record<Role, number> = {
   anonymous: 0,

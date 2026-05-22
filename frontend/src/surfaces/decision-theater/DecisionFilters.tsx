@@ -1,7 +1,7 @@
+import type { City } from "@domain/primitives";
 import { Badge } from "@ds/primitives";
 import { cn } from "@lib/cn";
 import type { Tier } from "@lib/confidence";
-import type { City } from "@domain/primitives";
 
 export interface DecisionFiltersState {
   readonly tier: Tier | null;
@@ -35,7 +35,9 @@ export function DecisionFilters({ value, onChange }: DecisionFiltersProps) {
             className={cn(
               "rounded px-2 py-0.5 text-2xs font-medium uppercase tracking-wide transition-colors duration-fast ease-standard",
               "focus-visible:outline-none focus-visible:shadow-focus",
-              active ? "bg-accent text-ink-inverse" : "bg-surface-raised text-ink-muted hover:text-ink",
+              active
+                ? "bg-accent text-ink-inverse"
+                : "bg-surface-raised text-ink-muted hover:text-ink",
             )}
             aria-pressed={active}
           >

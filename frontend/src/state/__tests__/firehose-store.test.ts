@@ -1,6 +1,6 @@
-import { describe, expect, it, beforeEach } from "vitest";
-import { useFirehoseStore } from "@state/firehose.store";
 import type { ConsensusDecision } from "@domain/consensus-decision";
+import { useFirehoseStore } from "@state/firehose.store";
+import { beforeEach, describe, expect, it } from "vitest";
 
 // FE-INV-016 + FE-INV-017 — firehose store is append-only and city-flushable.
 
@@ -35,7 +35,7 @@ describe("firehose store (append-only ring buffers)", () => {
       .appendDecision(makeDecision("22222222-2222-4222-8222-222222222222"), 2);
     const s = useFirehoseStore.getState();
     expect(s.decisions.items).toHaveLength(2);
-    expect(s.lastSeq["decision"]).toBe(2);
+    expect(s.lastSeq.decision).toBe(2);
   });
 
   it("respects cap (oldest dropped, never mutated in place)", () => {
@@ -44,10 +44,7 @@ describe("firehose store (append-only ring buffers)", () => {
     const before = store.decisions.items;
     for (let i = 0; i < cap + 5; i++) {
       const padded = String(i).padStart(8, "0");
-      store.appendDecision(
-        makeDecision(`${padded}-0000-4000-8000-000000000000`),
-        i + 1,
-      );
+      store.appendDecision(makeDecision(`${padded}-0000-4000-8000-000000000000`), i + 1);
     }
     const after = useFirehoseStore.getState().decisions.items;
     expect(after).toHaveLength(cap);

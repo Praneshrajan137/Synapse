@@ -6,81 +6,81 @@
 :root,
 [data-theme="dark"] {
   /* Surfaces */
-  --syn-canvas:           2 6 23;       /* slate-950 */
-  --syn-surface:          15 23 42;     /* slate-900 */
-  --syn-surface-raised:   30 41 59;     /* slate-800 */
-  --syn-surface-sunken:   2 6 23;
-  --syn-ink:              226 232 240;  /* slate-200 */
-  --syn-ink-muted:        148 163 184;  /* slate-400 */
-  --syn-ink-subtle:       100 116 139;  /* slate-500 */
-  --syn-ink-inverse:      15 23 42;
-  --syn-border:           51 65 85;     /* slate-700 */
-  --syn-border-strong:    100 116 139;
+  --syn-canvas: 2 6 23; /* slate-950 */
+  --syn-surface: 15 23 42; /* slate-900 */
+  --syn-surface-raised: 30 41 59; /* slate-800 */
+  --syn-surface-sunken: 2 6 23;
+  --syn-ink: 226 232 240; /* slate-200 */
+  --syn-ink-muted: 148 163 184; /* slate-400 */
+  --syn-ink-subtle: 100 116 139; /* slate-500 */
+  --syn-ink-inverse: 15 23 42;
+  --syn-border: 51 65 85; /* slate-700 */
+  --syn-border-strong: 100 116 139;
 
   /* Tier palette (tier_router.py SLAs) */
-  --syn-tier-1:           52 211 153;   /* emerald-400 :: <100ms */
-  --syn-tier-2:           56 189 248;   /* sky-400     :: <500ms */
-  --syn-tier-3:           251 191 36;   /* amber-400   :: 2-15s  */
-  --syn-tier-4:           251 113 133;  /* rose-400    :: 15-120s */
+  --syn-tier-1: 52 211 153; /* emerald-400 :: <100ms */
+  --syn-tier-2: 56 189 248; /* sky-400     :: <500ms */
+  --syn-tier-3: 251 191 36; /* amber-400   :: 2-15s  */
+  --syn-tier-4: 251 113 133; /* rose-400    :: 15-120s */
 
   /* Confidence ramp (I-5) */
-  --syn-confidence-ok:    34 197 94;    /* green-500  :: >=0.9 */
-  --syn-confidence-warn:  234 179 8;    /* yellow-500 :: 0.7-0.9 */
-  --syn-confidence-risk:  239 68 68;    /* red-500    :: <0.7 */
+  --syn-confidence-ok: 34 197 94; /* green-500  :: >=0.9 */
+  --syn-confidence-warn: 234 179 8; /* yellow-500 :: 0.7-0.9 */
+  --syn-confidence-risk: 239 68 68; /* red-500    :: <0.7 */
 
   /* Semantic signals */
-  --syn-signal-info:      56 189 248;
-  --syn-signal-success:   34 197 94;
-  --syn-signal-warning:   234 179 8;
-  --syn-signal-danger:    239 68 68;
-  --syn-accent:           129 140 248;  /* indigo-400 */
+  --syn-signal-info: 56 189 248;
+  --syn-signal-success: 34 197 94;
+  --syn-signal-warning: 234 179 8;
+  --syn-signal-danger: 239 68 68;
+  --syn-accent: 129 140 248; /* indigo-400 */
 
   /* Radius */
-  --syn-radius-xs:        2px;
-  --syn-radius-sm:        4px;
-  --syn-radius-md:        6px;
-  --syn-radius-lg:        8px;
-  --syn-radius-xl:        12px;
+  --syn-radius-xs: 2px;
+  --syn-radius-sm: 4px;
+  --syn-radius-md: 6px;
+  --syn-radius-lg: 8px;
+  --syn-radius-xl: 12px;
 
   /* Elevation */
-  --syn-elev-0:           0 0 0 0 rgba(0,0,0,0);
-  --syn-elev-1:           0 1px 2px rgba(2,6,23,0.4);
-  --syn-elev-2:           0 4px 8px rgba(2,6,23,0.45);
-  --syn-elev-3:           0 8px 16px rgba(2,6,23,0.5);
-  --syn-elev-4:           0 16px 32px rgba(2,6,23,0.55);
-  --syn-focus-ring:       0 0 0 2px rgba(56,189,248,0.65);
+  --syn-elev-0: 0 0 0 0 rgba(0, 0, 0, 0);
+  --syn-elev-1: 0 1px 2px rgba(2, 6, 23, 0.4);
+  --syn-elev-2: 0 4px 8px rgba(2, 6, 23, 0.45);
+  --syn-elev-3: 0 8px 16px rgba(2, 6, 23, 0.5);
+  --syn-elev-4: 0 16px 32px rgba(2, 6, 23, 0.55);
+  --syn-focus-ring: 0 0 0 2px rgba(56, 189, 248, 0.65);
 
   /* Motion — tier-aware (FE-P2) */
-  --syn-motion-instant:   0ms;
-  --syn-motion-fast:      120ms;
-  --syn-motion-medium:    240ms;
-  --syn-motion-slow:      480ms;
-  --syn-ease-standard:    cubic-bezier(0.2, 0, 0, 1);
-  --syn-ease-emphasized:  cubic-bezier(0.3, 0, 0.8, 0.15);
+  --syn-motion-instant: 0ms;
+  --syn-motion-fast: 120ms;
+  --syn-motion-medium: 240ms;
+  --syn-motion-slow: 480ms;
+  --syn-ease-standard: cubic-bezier(0.2, 0, 0, 1);
+  --syn-ease-emphasized: cubic-bezier(0.3, 0, 0.8, 0.15);
 }
 
 [data-theme="light"] {
-  --syn-canvas:           248 250 252;
-  --syn-surface:          255 255 255;
-  --syn-surface-raised:   241 245 249;
-  --syn-surface-sunken:   226 232 240;
-  --syn-ink:              15 23 42;
-  --syn-ink-muted:        51 65 85;
-  --syn-ink-subtle:       100 116 139;
-  --syn-ink-inverse:      248 250 252;
-  --syn-border:           203 213 225;
-  --syn-border-strong:    148 163 184;
+  --syn-canvas: 248 250 252;
+  --syn-surface: 255 255 255;
+  --syn-surface-raised: 241 245 249;
+  --syn-surface-sunken: 226 232 240;
+  --syn-ink: 15 23 42;
+  --syn-ink-muted: 51 65 85;
+  --syn-ink-subtle: 100 116 139;
+  --syn-ink-inverse: 248 250 252;
+  --syn-border: 203 213 225;
+  --syn-border-strong: 148 163 184;
 }
 
 [data-theme="hc"] {
   /* High-contrast (WCAG AAA) */
-  --syn-canvas:           0 0 0;
-  --syn-surface:          0 0 0;
-  --syn-surface-raised:   17 17 17;
-  --syn-ink:              255 255 255;
-  --syn-ink-muted:        229 231 235;
-  --syn-border-strong:    255 255 255;
-  --syn-focus-ring:       0 0 0 3px rgba(255,255,255,1);
+  --syn-canvas: 0 0 0;
+  --syn-surface: 0 0 0;
+  --syn-surface-raised: 17 17 17;
+  --syn-ink: 255 255 255;
+  --syn-ink-muted: 229 231 235;
+  --syn-border-strong: 255 255 255;
+  --syn-focus-ring: 0 0 0 3px rgba(255, 255, 255, 1);
 }
 
 /* prefers-reduced-motion (FE-P6) */
@@ -90,8 +90,8 @@
   [data-theme="light"],
   [data-theme="hc"] {
     --syn-motion-instant: 0ms;
-    --syn-motion-fast:    0ms;
-    --syn-motion-medium:  0ms;
-    --syn-motion-slow:    0ms;
+    --syn-motion-fast: 0ms;
+    --syn-motion-medium: 0ms;
+    --syn-motion-slow: 0ms;
   }
 }

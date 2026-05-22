@@ -14,9 +14,9 @@ export const PricingDecisionSchema = z
     final_price: z.number().positive(),
   })
   .strict()
-  .refine(
-    (v) => !v.is_essential || v.multiplier <= 1.3,
-    { message: "Essential multiplier exceeds 1.3 cap (I-6)", path: ["multiplier"] },
-  );
+  .refine((v) => !v.is_essential || v.multiplier <= 1.3, {
+    message: "Essential multiplier exceeds 1.3 cap (I-6)",
+    path: ["multiplier"],
+  });
 
 export type PricingDecision = z.infer<typeof PricingDecisionSchema>;

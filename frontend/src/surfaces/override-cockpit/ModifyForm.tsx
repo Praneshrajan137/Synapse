@@ -1,10 +1,14 @@
-import { useState, type FormEvent } from "react";
 import { Button } from "@ds/primitives";
+import { type FormEvent, useState } from "react";
 
 interface ModifyFormProps {
   readonly initialAction: Record<string, unknown>;
   readonly onCancel: () => void;
-  readonly onSubmit: (action: { action: "modified"; reason: string; modified_action: Record<string, unknown> }) => void;
+  readonly onSubmit: (action: {
+    action: "modified";
+    reason: string;
+    modified_action: Record<string, unknown>;
+  }) => void;
   readonly pending?: boolean;
 }
 

@@ -65,7 +65,7 @@ export function createWsMultiplex(config: WsMultiplexConfig): WsMultiplex {
     let socket: WebSocket;
     try {
       socket = new WebSocket(config.url());
-    } catch (err) {
+    } catch (_err) {
       scheduleReconnect();
       return;
     }

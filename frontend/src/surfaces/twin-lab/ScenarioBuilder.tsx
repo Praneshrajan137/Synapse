@@ -1,5 +1,5 @@
-import { useState, type FormEvent } from "react";
 import { Button } from "@ds/primitives";
+import { type FormEvent, useState } from "react";
 
 interface ScenarioBuilderProps {
   readonly pending?: boolean;
@@ -72,7 +72,11 @@ export function ScenarioBuilder({ pending, onRun }: ScenarioBuilderProps) {
   }
 
   return (
-    <form onSubmit={handleSubmit} className="syn-card-raised space-y-3 p-4" aria-label="Scenario builder">
+    <form
+      onSubmit={handleSubmit}
+      className="syn-card-raised space-y-3 p-4"
+      aria-label="Scenario builder"
+    >
       <header className="flex items-center justify-between">
         <h2 className="text-sm font-semibold text-ink">Scenario</h2>
       </header>
@@ -90,14 +94,38 @@ export function ScenarioBuilder({ pending, onRun }: ScenarioBuilderProps) {
         ))}
       </div>
 
-      <Slider label="Demand ×" value={request.demand_multiplier} min={0.1} max={5} step={0.1}
-        onChange={(v) => update("demand_multiplier", v)} />
-      <Slider label="Lead time ×" value={request.lead_time_multiplier} min={0.5} max={5} step={0.1}
-        onChange={(v) => update("lead_time_multiplier", v)} />
-      <Slider label="Failure ×" value={request.failure_rate_multiplier} min={0.5} max={5} step={0.1}
-        onChange={(v) => update("failure_rate_multiplier", v)} />
-      <Slider label="Spoilage ×" value={request.spoilage_rate_multiplier} min={0.5} max={5} step={0.1}
-        onChange={(v) => update("spoilage_rate_multiplier", v)} />
+      <Slider
+        label="Demand ×"
+        value={request.demand_multiplier}
+        min={0.1}
+        max={5}
+        step={0.1}
+        onChange={(v) => update("demand_multiplier", v)}
+      />
+      <Slider
+        label="Lead time ×"
+        value={request.lead_time_multiplier}
+        min={0.5}
+        max={5}
+        step={0.1}
+        onChange={(v) => update("lead_time_multiplier", v)}
+      />
+      <Slider
+        label="Failure ×"
+        value={request.failure_rate_multiplier}
+        min={0.5}
+        max={5}
+        step={0.1}
+        onChange={(v) => update("failure_rate_multiplier", v)}
+      />
+      <Slider
+        label="Spoilage ×"
+        value={request.spoilage_rate_multiplier}
+        min={0.5}
+        max={5}
+        step={0.1}
+        onChange={(v) => update("spoilage_rate_multiplier", v)}
+      />
 
       <div className="grid grid-cols-2 gap-2 text-2xs">
         <label className="block">

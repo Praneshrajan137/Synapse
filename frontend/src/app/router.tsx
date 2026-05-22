@@ -1,16 +1,16 @@
-import { createBrowserRouter, Navigate } from "react-router-dom";
-import { Shell } from "./Shell";
-import { RouteGuard } from "./RouteGuard";
-import { MissionControl } from "@surfaces/mission-control/MissionControl";
-import { Cockpit } from "@surfaces/override-cockpit/Cockpit";
-import { DecisionTheater } from "@surfaces/decision-theater/DecisionTheater";
-import { DecisionDetail } from "@surfaces/decision-theater/DecisionDetail";
-import { AuditVault } from "@surfaces/audit-vault/AuditVault";
 import { AgentCouncil } from "@surfaces/agent-council/AgentCouncil";
 import { AgentDetail } from "@surfaces/agent-council/AgentDetail";
-import { TwinLab } from "@surfaces/twin-lab/TwinLab";
-import { DemoTheater } from "@surfaces/demo-theater/DemoTheater";
+import { AuditVault } from "@surfaces/audit-vault/AuditVault";
 import { Login } from "@surfaces/auth/Login";
+import { DecisionDetail } from "@surfaces/decision-theater/DecisionDetail";
+import { DecisionTheater } from "@surfaces/decision-theater/DecisionTheater";
+import { DemoTheater } from "@surfaces/demo-theater/DemoTheater";
+import { MissionControl } from "@surfaces/mission-control/MissionControl";
+import { Cockpit } from "@surfaces/override-cockpit/Cockpit";
+import { TwinLab } from "@surfaces/twin-lab/TwinLab";
+import { Navigate, createBrowserRouter } from "react-router-dom";
+import { RouteGuard } from "./RouteGuard";
+import { Shell } from "./Shell";
 
 export const router = createBrowserRouter([
   { path: "/login", element: <Login /> },

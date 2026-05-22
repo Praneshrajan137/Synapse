@@ -4,9 +4,7 @@ import { http, HttpResponse } from "msw";
 // Contract drift between these and OpenAPI codegen will fail CI in P0+.
 
 export const handlers = [
-  http.get(/\/health$/, () =>
-    HttpResponse.json({ status: "ok", service: "synapse-api" }),
-  ),
+  http.get(/\/health$/, () => HttpResponse.json({ status: "ok", service: "synapse-api" })),
   http.get(/\/ready$/, () =>
     HttpResponse.json({ status: "ready", orchestrator: "http://localhost:8085" }),
   ),
@@ -25,7 +23,5 @@ export const handlers = [
       count: 8,
     }),
   ),
-  http.get(/\/api\/v1\/decisions\/recent/, () =>
-    HttpResponse.json({ decisions: [], count: 0 }),
-  ),
+  http.get(/\/api\/v1\/decisions\/recent/, () => HttpResponse.json({ decisions: [], count: 0 })),
 ];

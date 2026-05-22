@@ -1,11 +1,11 @@
+import { ConfidenceChip, TierBadge } from "@ds/compounds";
+import { Badge } from "@ds/primitives";
+import { useSynapseApi } from "@hooks/use-synapse-api";
+import { fmt } from "@lib/formatters";
+import { useCityStore } from "@state/city.store";
+import { useQuery } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import { useQuery } from "@tanstack/react-query";
-import { Badge } from "@ds/primitives";
-import { ConfidenceChip, TierBadge } from "@ds/compounds";
-import { useSynapseApi } from "@hooks/use-synapse-api";
-import { useCityStore } from "@state/city.store";
-import { fmt } from "@lib/formatters";
 
 /**
  * Audit Vault — compliance-grade read-only view of audit_decisions joined
@@ -72,8 +72,8 @@ export function AuditVault() {
         <div className="space-y-0.5">
           <h1 className="text-2xl font-semibold text-ink">Audit Vault</h1>
           <p className="text-sm text-ink-muted">
-            Append-only decision provenance (I-4). Operator identity is rendered by
-            Vault-token reference only (FE-INV-019). Export contains zero PII.
+            Append-only decision provenance (I-4). Operator identity is rendered by Vault-token
+            reference only (FE-INV-019). Export contains zero PII.
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -126,7 +126,9 @@ export function AuditVault() {
             {filtered.map((r) => (
               <tr key={r.audit_id} className="hover:bg-surface-raised/50">
                 <td className="px-3 py-2 font-mono text-2xs text-ink-muted">{r.audit_id}</td>
-                <td className="px-3 py-2 font-mono text-2xs text-ink">{fmt.shortId(r.decision_id)}</td>
+                <td className="px-3 py-2 font-mono text-2xs text-ink">
+                  {fmt.shortId(r.decision_id)}
+                </td>
                 <td className="px-3 py-2">
                   <TierBadge tier={r.tier} />
                 </td>
@@ -134,7 +136,11 @@ export function AuditVault() {
                   <ConfidenceChip value={r.confidence} />
                 </td>
                 <td className="px-3 py-2">
-                  {r.escalated ? <Badge tone="warning">esc.</Badge> : <Badge tone="neutral">auto</Badge>}
+                  {r.escalated ? (
+                    <Badge tone="warning">esc.</Badge>
+                  ) : (
+                    <Badge tone="neutral">auto</Badge>
+                  )}
                 </td>
                 <td className="px-3 py-2 text-2xs text-ink-muted">{r.city ?? city}</td>
                 <td className="px-3 py-2 text-2xs text-ink-muted">

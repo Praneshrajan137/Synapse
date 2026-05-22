@@ -1,7 +1,7 @@
-import { canonicalJson } from "@lib/json-canonical";
 import { decideRetry, sleep } from "@lib/jitter-retry";
+import { canonicalJson } from "@lib/json-canonical";
+import type { ZodSchema, ZodTypeAny, ZodTypeDef } from "zod";
 import { HttpError, NetworkError, RateLimitError, SchemaViolationError } from "./errors";
-import type { ZodSchema, ZodTypeAny } from "zod";
 
 // Typed HTTP client.
 // - Canonical JSON outbound (FE-INV-012 / I-8).
@@ -12,9 +12,9 @@ import type { ZodSchema, ZodTypeAny } from "zod";
 
 export interface HttpClientConfig {
   readonly baseUrl: string;
-  readonly getAccessToken?: () => string | null;
-  readonly onAuthExpired?: () => Promise<void> | void;
-  readonly defaultHeaders?: Readonly<Record<string, string>>;
+  readonly getAccessToken?: (() => string | null) | undefined;
+  readonly onAuthExpired?: (() => Promise<void> | void) | undefined;
+  readonly defaultHeaders?: Readonly<Record<string, string>> | undefined;
 }
 
 export interface RequestOptions<T> {
@@ -24,7 +24,9 @@ export interface RequestOptions<T> {
   readonly body?: unknown;
   readonly headers?: Readonly<Record<string, string>>;
   readonly signal?: AbortSignal;
-  readonly schema?: ZodSchema<T>;
+  // Output type must be `T`; the input type is left open so schemas with
+  // `.default()`/transforms (input ≠ output) still satisfy the constraint.
+  readonly schema?: ZodSchema<T, ZodTypeDef, unknown>;
   readonly idempotent?: boolean;
   readonly schemaId?: string;
 }
@@ -76,9 +78,9 @@ async function request<T>(
       const res = await fetch(url, {
         method,
         headers,
-        body: bodyString,
+        body: bodyString ?? null,
         credentials: "include",
-        signal: opts.signal,
+        signal: opts.signal ?? null,
       });
 
       if (res.status === 401) {

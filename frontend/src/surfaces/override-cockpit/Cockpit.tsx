@@ -1,14 +1,14 @@
-import { useEffect, useMemo, useState } from "react";
+import { EscalationMessageSchema } from "@domain/escalation";
+import { ConnectionPill } from "@ds/compounds";
+import { Badge } from "@ds/primitives";
 import { useWs } from "@hooks/use-ws";
 import { useEscalationStore } from "@state/escalation.store";
-import { EscalationMessageSchema } from "@domain/escalation";
-import { Badge } from "@ds/primitives";
-import { ConnectionPill } from "@ds/compounds";
-import { EscalationQueue } from "./EscalationQueue";
-import { EscalationCard } from "./EscalationCard";
+import { useEffect, useMemo, useState } from "react";
 import { AuditPreview } from "./AuditPreview";
-import { useOverrideMutation } from "./useOverrideMutation";
+import { EscalationCard } from "./EscalationCard";
+import { EscalationQueue } from "./EscalationQueue";
 import { useCockpitShortcuts } from "./useCockpitShortcuts";
+import { useOverrideMutation } from "./useOverrideMutation";
 
 const WS_URL = `${window.location.protocol === "https:" ? "wss" : "ws"}://${
   window.location.host
@@ -82,9 +82,7 @@ export function Cockpit() {
         if (!activeEntry) return;
         // sub-threshold approves require a reason — open the dialog rather
         // than firing directly (matches FE-INV-007 intent).
-        document
-          .querySelector<HTMLButtonElement>('button[aria-keyshortcuts="A"]')
-          ?.click();
+        document.querySelector<HTMLButtonElement>('button[aria-keyshortcuts="A"]')?.click();
       },
       reject: () =>
         document.querySelector<HTMLButtonElement>('button[aria-keyshortcuts="R"]')?.click(),
@@ -114,8 +112,8 @@ export function Cockpit() {
           <h1 className="text-2xl font-semibold text-ink">Override Cockpit</h1>
           <p className="text-sm text-ink-muted">
             Confidence-gated escalations stream in via{" "}
-            <code className="font-mono text-ink">/ws/escalation</code>. Acting commits an
-            immutable audit row (I-4); the orchestrator is notified only after.
+            <code className="font-mono text-ink">/ws/escalation</code>. Acting commits an immutable
+            audit row (I-4); the orchestrator is notified only after.
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -123,15 +121,11 @@ export function Cockpit() {
           <Badge tone="neutral" aria-label={`${pending.length} pending escalations`}>
             {pending.length} pending
           </Badge>
-          <span
-            role="status"
-            aria-live="polite"
-            className="sr-only"
-          >
+          <output aria-live="polite" className="sr-only">
             {pending.length === 0
               ? "No escalations awaiting human judgement."
               : `${pending.length} escalations pending.`}
-          </span>
+          </output>
         </div>
       </header>
 
@@ -143,9 +137,7 @@ export function Cockpit() {
               message={activeEntry.message}
               receivedAt={activeEntry.received_at}
               pending={override.isPending}
-              onCommit={(payload) =>
-                override.mutate({ decision_id: activeEntry.id, ...payload })
-              }
+              onCommit={(payload) => override.mutate({ decision_id: activeEntry.id, ...payload })}
             />
             <div className="hidden lg:block">
               <AuditPreview message={activeEntry.message} />

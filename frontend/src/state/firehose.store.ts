@@ -1,9 +1,9 @@
-import { create } from "zustand";
 import type { ConsensusDecision } from "@domain/consensus-decision";
-import type { DisruptionAlert } from "@domain/disruption-alert";
 import type { DemandForecast } from "@domain/demand-forecast";
+import type { DisruptionAlert } from "@domain/disruption-alert";
 import type { RoutePlan } from "@domain/route-plan";
 import type { TwinState } from "@domain/twin-state";
+import { create } from "zustand";
 
 // Per-channel bounded ring buffers (append-only — FE-INV-017). Switching
 // city flushes the channels (the underlying topics carry city-scoped data,

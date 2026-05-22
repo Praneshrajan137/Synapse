@@ -1,5 +1,5 @@
-import { create } from "zustand";
 import type { EscalationMessage } from "@domain/escalation";
+import { create } from "zustand";
 
 // Append-only escalation feed (mirror of I-14).
 // We never mutate or remove items; "dismissed" or "acted upon" status is

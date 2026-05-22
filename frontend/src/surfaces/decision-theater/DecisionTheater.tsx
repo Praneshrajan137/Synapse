@@ -1,12 +1,12 @@
+import { ConfidenceChip, TierBadge } from "@ds/compounds";
+import { Badge } from "@ds/primitives";
+import { useSynapseApi } from "@hooks/use-synapse-api";
+import { fmt } from "@lib/formatters";
+import { useCityStore } from "@state/city.store";
+import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
 import { Link } from "react-router-dom";
-import { useQuery } from "@tanstack/react-query";
-import { Badge } from "@ds/primitives";
-import { ConfidenceChip, TierBadge } from "@ds/compounds";
 import { DecisionFilters, type DecisionFiltersState } from "./DecisionFilters";
-import { useSynapseApi } from "@hooks/use-synapse-api";
-import { useCityStore } from "@state/city.store";
-import { fmt } from "@lib/formatters";
 
 const INITIAL: DecisionFiltersState = { tier: null, city: null, escalatedOnly: false };
 
@@ -18,7 +18,7 @@ export function DecisionTheater() {
   const [search, setSearch] = useState("");
 
   const decisions = useQuery({
-    queryKey: ["decisions", "recent", { city, ...filters }],
+    queryKey: ["decisions", "recent", { ...filters, city }],
     queryFn: () =>
       api.listRecentDecisions({
         limit: 100,
@@ -39,8 +39,8 @@ export function DecisionTheater() {
         <div className="space-y-0.5">
           <h1 className="text-2xl font-semibold text-ink">Decision Theater</h1>
           <p className="text-sm text-ink-muted">
-            Audit-anchored history with server-side filtering. Click a row to replay the
-            5-phase consensus.
+            Audit-anchored history with server-side filtering. Click a row to replay the 5-phase
+            consensus.
           </p>
         </div>
         <input

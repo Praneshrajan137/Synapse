@@ -1,5 +1,13 @@
-import { LineChart, Line, ReferenceLine, XAxis, YAxis, Tooltip, ResponsiveContainer } from "recharts";
 import { cn } from "@lib/cn";
+import {
+  Line,
+  LineChart,
+  ReferenceLine,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from "recharts";
 
 interface CalibrationCurveProps {
   readonly points: ReadonlyArray<{ nominal: number; empirical: number }>;
@@ -28,11 +36,7 @@ export function CalibrationCurve({
             domain={[0, 1]}
             tick={{ fill: "rgb(148 163 184)", fontSize: 10 }}
           />
-          <YAxis
-            type="number"
-            domain={[0, 1]}
-            tick={{ fill: "rgb(148 163 184)", fontSize: 10 }}
-          />
+          <YAxis type="number" domain={[0, 1]} tick={{ fill: "rgb(148 163 184)", fontSize: 10 }} />
           <Tooltip
             contentStyle={{
               background: "rgb(15 23 42)",
@@ -48,12 +52,17 @@ export function CalibrationCurve({
             stroke="rgb(100 116 139)"
             strokeDasharray="2 2"
           />
-          <ReferenceLine y={target} stroke="rgb(34 197 94)" strokeDasharray="4 2" label={{
-            value: `${(target * 100).toFixed(0)}% target`,
-            position: "right",
-            fill: "rgb(34 197 94)",
-            fontSize: 10,
-          }} />
+          <ReferenceLine
+            y={target}
+            stroke="rgb(34 197 94)"
+            strokeDasharray="4 2"
+            label={{
+              value: `${(target * 100).toFixed(0)}% target`,
+              position: "right",
+              fill: "rgb(34 197 94)",
+              fontSize: 10,
+            }}
+          />
           <Line
             type="monotone"
             dataKey="empirical"

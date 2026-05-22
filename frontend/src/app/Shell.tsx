@@ -1,6 +1,6 @@
-import { NavLink, Outlet } from "react-router-dom";
 import { CitySwitcher, LanguagePicker, OperatorIdentity } from "@ds/compounds";
 import { cn } from "@lib/cn";
+import { NavLink, Outlet } from "react-router-dom";
 
 const NAV_ITEMS = [
   { path: "/", label: "Mission Control", end: true },
@@ -28,23 +28,19 @@ export function Shell() {
             className="h-5 w-5 rounded-sm bg-gradient-to-br from-tier-2 via-accent to-tier-3"
           />
           <span className="text-sm font-semibold tracking-wide text-ink">SYNAPSE</span>
-          <span className="hidden text-2xs uppercase text-ink-subtle md:inline">
-            Console
-          </span>
+          <span className="hidden text-2xs uppercase text-ink-subtle md:inline">Console</span>
         </div>
         <nav aria-label="Primary" className="flex flex-1 items-center gap-1 overflow-x-auto">
           {NAV_ITEMS.map((item) => (
             <NavLink
               key={item.path}
               to={item.path}
-              end={"end" in item ? item.end : undefined}
+              {...("end" in item ? { end: item.end } : {})}
               className={({ isActive }) =>
                 cn(
                   "rounded px-3 py-1.5 text-xs font-medium transition-colors duration-fast ease-standard",
                   "focus-visible:outline-none focus-visible:shadow-focus",
-                  isActive
-                    ? "bg-surface-raised text-ink"
-                    : "text-ink-muted hover:text-ink",
+                  isActive ? "bg-surface-raised text-ink" : "text-ink-muted hover:text-ink",
                 )
               }
             >

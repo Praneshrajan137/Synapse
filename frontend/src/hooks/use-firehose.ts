@@ -1,8 +1,8 @@
-import { useEffect, useRef, useState } from "react";
-import { createFirehose, type FirehoseChannel, type FirehoseClient } from "@transport/firehose";
 import { useCityStore } from "@state/city.store";
 import { useFirehoseStore } from "@state/firehose.store";
+import { type FirehoseChannel, type FirehoseClient, createFirehose } from "@transport/firehose";
 import type { WsState } from "@transport/ws-multiplex";
+import { useEffect, useRef, useState } from "react";
 
 interface UseFirehoseOptions {
   readonly topics: ReadonlyArray<FirehoseChannel>;
@@ -61,7 +61,7 @@ export function useFirehose({ topics }: UseFirehoseOptions): UseFirehoseResult {
     }
 
     return () => {
-      offs.forEach((off) => off());
+      for (const off of offs) off();
       offState();
       client.close();
       ref.current = null;

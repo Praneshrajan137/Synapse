@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { ZConfidence, ZIsoTimestamp, ZTier, ZUuid } from "./primitives";
+import { ZCity, ZConfidence, ZIsoTimestamp, ZTier, ZUuid } from "./primitives";
 
 // Shape of a row from GET /api/v1/decisions/recent (api/routers/decisions.py:32-62).
 // Audit immutability per I-4 — read-only on the FE.
@@ -12,6 +12,7 @@ export const AuditRowSchema = z
     phase_reached: z.number().int().min(1).max(5),
     confidence: ZConfidence,
     escalated: z.boolean(),
+    city: ZCity.optional(),
     selected_action: z.record(z.unknown()).optional(),
     pareto_weights: z.record(z.number()).optional(),
     proposals: z.array(z.record(z.unknown())).optional(),

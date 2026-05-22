@@ -1,14 +1,11 @@
+import { type AgentHealthResponse, AgentHealthResponseSchema } from "@domain/agent-health";
+import { type AuditListResponse, AuditListResponseSchema } from "@domain/audit-row";
+import { type ConsensusDecision, ConsensusDecisionSchema } from "@domain/consensus-decision";
+import type { City } from "@domain/primitives";
+import { type TwinState, TwinStateSchema } from "@domain/twin-state";
+import type { Tier } from "@lib/confidence";
 import { z } from "zod";
 import { createHttpClient } from "./http-client";
-import { AgentHealthResponseSchema, type AgentHealthResponse } from "@domain/agent-health";
-import { AuditListResponseSchema, type AuditListResponse } from "@domain/audit-row";
-import {
-  ConsensusDecisionSchema,
-  type ConsensusDecision,
-} from "@domain/consensus-decision";
-import { TwinStateSchema, type TwinState } from "@domain/twin-state";
-import type { City } from "@domain/primitives";
-import type { Tier } from "@lib/confidence";
 
 // ─── Auth schemas (mirror api/routers/auth.py) ────────────────────────────
 export const LoginResponseSchema = z
@@ -52,9 +49,9 @@ export type OverrideApiResponse = z.infer<typeof OverrideApiResponseSchema>;
 export interface SynapseApiDeps {
   readonly orchestratorUrl: string;
   readonly gatewayUrl: string;
-  readonly twinUrl?: string;
-  readonly getAccessToken?: () => string | null;
-  readonly onAuthExpired?: () => Promise<void> | void;
+  readonly twinUrl?: string | undefined;
+  readonly getAccessToken?: (() => string | null) | undefined;
+  readonly onAuthExpired?: (() => Promise<void> | void) | undefined;
 }
 
 export function createSynapseApi(deps: SynapseApiDeps) {
@@ -77,19 +74,20 @@ export function createSynapseApi(deps: SynapseApiDeps) {
   return {
     // Gateway — api/main.py
     health: () => gateway.get<{ status: string; service: string }>("/health"),
-    ready: () =>
-      gateway.get<{ status: string; orchestrator: string }>("/ready"),
+    ready: () => gateway.get<{ status: string; orchestrator: string }>("/ready"),
     listAgents: (): Promise<AgentHealthResponse> =>
       gateway.get("/api/v1/agents", {
         schema: AgentHealthResponseSchema,
         schemaId: "AgentHealthResponse",
       }),
-    listRecentDecisions: (params: {
-      limit?: number;
-      city?: City;
-      tier?: Tier;
-      escalated?: boolean;
-    } = {}): Promise<AuditListResponse> =>
+    listRecentDecisions: (
+      params: {
+        limit?: number;
+        city?: City;
+        tier?: Tier;
+        escalated?: boolean;
+      } = {},
+    ): Promise<AuditListResponse> =>
       gateway.get("/api/v1/decisions/recent", {
         query: params,
         schema: AuditListResponseSchema,
@@ -114,7 +112,7 @@ export function createSynapseApi(deps: SynapseApiDeps) {
       disruption_active?: boolean;
       requires_twin_simulation?: boolean;
     }): Promise<ConsensusDecision> =>
-      orchestrator.post("/api/v1/decisions", body, {
+      orchestrator.post<ConsensusDecision>("/api/v1/decisions", body, {
         idempotent: false,
         schema: ConsensusDecisionSchema,
         schemaId: "ConsensusDecision",

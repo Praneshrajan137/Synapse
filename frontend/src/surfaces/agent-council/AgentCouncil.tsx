@@ -1,14 +1,10 @@
-import { Link } from "react-router-dom";
-import { useQuery } from "@tanstack/react-query";
-import { Badge } from "@ds/primitives";
+import { AGENT_NAMES, type AgentMetrics, type AgentName } from "@domain/agent-health";
 import { ConfidenceChip } from "@ds/compounds";
-import {
-  AGENT_NAMES,
-  type AgentMetrics,
-  type AgentName,
-} from "@domain/agent-health";
+import { Badge } from "@ds/primitives";
 import { useSynapseApi } from "@hooks/use-synapse-api";
 import { fmt } from "@lib/formatters";
+import { useQuery } from "@tanstack/react-query";
+import { Link } from "react-router-dom";
 
 const TONE_FOR_STATUS = (status: string): "success" | "warning" | "danger" | "neutral" => {
   if (status === "healthy") return "success";
@@ -30,17 +26,13 @@ export function AgentCouncil() {
       <header className="space-y-1">
         <h1 className="text-2xl font-semibold text-ink">Agent Council</h1>
         <p className="text-sm text-ink-muted">
-          8 specialised agents — independent rewards (I-2). Per-agent latency
-          percentiles and calibration coverage are sourced from Prometheus
-          via the gateway.
+          8 specialised agents — independent rewards (I-2). Per-agent latency percentiles and
+          calibration coverage are sourced from Prometheus via the gateway.
         </p>
       </header>
       <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4">
         {AGENT_NAMES.map((name) => {
-          const value = agents.data?.agents?.[name] as
-            | AgentMetrics
-            | string
-            | undefined;
+          const value = agents.data?.agents?.[name] as AgentMetrics | string | undefined;
           const metrics: AgentMetrics =
             typeof value === "string" ? { status: value } : (value ?? { status: "unknown" });
           return (
@@ -75,19 +67,14 @@ export function AgentCouncil() {
                 </div>
                 <div>
                   <dt>dec/min</dt>
-                  <dd className="font-mono text-ink">
-                    {metrics.decisions_per_min ?? "—"}
-                  </dd>
+                  <dd className="font-mono text-ink">{metrics.decisions_per_min ?? "—"}</dd>
                 </div>
               </dl>
               {metrics.calibration_coverage_90 !== null &&
                 metrics.calibration_coverage_90 !== undefined && (
                   <div className="flex items-center justify-between text-2xs text-ink-muted">
                     <span>Calibration 90%</span>
-                    <ConfidenceChip
-                      value={metrics.calibration_coverage_90}
-                      threshold={0.85}
-                    />
+                    <ConfidenceChip value={metrics.calibration_coverage_90} threshold={0.85} />
                   </div>
                 )}
             </Link>

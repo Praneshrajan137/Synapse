@@ -23,8 +23,7 @@ export function buildBasemapStyle(tilesUrl: string): maplibregl.StyleSpecificati
         url: `pmtiles://${tilesUrl}`,
       },
     },
-    glyphs:
-      "https://protomaps.github.io/basemaps-assets/fonts/{fontstack}/{range}.pbf",
+    glyphs: "https://protomaps.github.io/basemaps-assets/fonts/{fontstack}/{range}.pbf",
     layers: [
       {
         id: "background",

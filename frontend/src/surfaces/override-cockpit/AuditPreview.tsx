@@ -1,5 +1,5 @@
-import { useSessionStore } from "@state/session.store";
 import type { EscalationMessage } from "@domain/escalation";
+import { useSessionStore } from "@state/session.store";
 
 interface AuditPreviewProps {
   readonly message: EscalationMessage;
@@ -30,23 +30,24 @@ export function AuditPreview({ message, pendingAction, pendingReason }: AuditPre
     <aside aria-label="Audit row preview" className="syn-card-raised h-full p-4">
       <header className="mb-3 flex items-center justify-between">
         <h2 className="text-sm font-semibold text-ink">Audit preview</h2>
-        <span className="text-2xs uppercase tracking-wide text-confidence-warn">
-          will INSERT
-        </span>
+        <span className="text-2xs uppercase tracking-wide text-confidence-warn">will INSERT</span>
       </header>
       <dl className="space-y-1.5 text-xs">
         {Object.entries(row).map(([key, value]) => (
           <div key={key} className="flex justify-between gap-3">
             <dt className="font-mono text-ink-muted">{key}</dt>
-            <dd className="max-w-[60%] truncate text-right font-mono text-ink" title={String(value)}>
+            <dd
+              className="max-w-[60%] truncate text-right font-mono text-ink"
+              title={String(value)}
+            >
               {typeof value === "boolean" ? String(value) : (value as string)}
             </dd>
           </div>
         ))}
       </dl>
       <p className="mt-3 text-2xs text-ink-subtle">
-        The row is INSERT-only into <code className="font-mono">audit_escalations</code>;
-        I-4 prohibits UPDATE/DELETE.
+        The row is INSERT-only into <code className="font-mono">audit_escalations</code>; I-4
+        prohibits UPDATE/DELETE.
       </p>
     </aside>
   );

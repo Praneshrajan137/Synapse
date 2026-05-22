@@ -1,8 +1,8 @@
-import { useMemo } from "react";
-import { cn } from "@lib/cn";
 import { ConfidenceChip, TierBadge } from "@ds/compounds";
+import { cn } from "@lib/cn";
 import { fmt } from "@lib/formatters";
 import type { EscalationEntry } from "@state/escalation.store";
+import { useMemo } from "react";
 
 interface EscalationQueueProps {
   readonly entries: ReadonlyArray<EscalationEntry>;
@@ -25,10 +25,7 @@ export function EscalationQueue({ entries, activeId, onSelect }: EscalationQueue
   );
 
   return (
-    <aside
-      aria-label="Escalation queue"
-      className="syn-card flex h-full flex-col overflow-hidden"
-    >
+    <aside aria-label="Escalation queue" className="syn-card flex h-full flex-col overflow-hidden">
       <header className="border-b border-border px-3 py-2 text-2xs uppercase tracking-wide text-ink-muted">
         Queue · {entries.filter((e) => e.status === "pending").length} pending
       </header>

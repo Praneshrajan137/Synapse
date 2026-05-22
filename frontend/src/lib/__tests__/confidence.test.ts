@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { confidenceBand, isBelowThreshold, TIER_SLA_MS } from "../confidence";
+import { TIER_SLA_MS, confidenceBand, isBelowThreshold } from "../confidence";
 
 // FE-INV-005 — tier SLAs encoded centrally so UX motion preset can read them.
 describe("confidence helpers", () => {

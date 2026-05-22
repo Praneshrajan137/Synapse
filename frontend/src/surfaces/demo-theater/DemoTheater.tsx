@@ -1,9 +1,9 @@
+import { Badge, Button } from "@ds/primitives";
+import { cn } from "@lib/cn";
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Button, Badge } from "@ds/primitives";
-import { cn } from "@lib/cn";
-import { SEGMENTS, useDemoRun, type DemoSegmentId } from "./useDemoRun";
 import { useArtifact } from "./useArtifact";
+import { type DemoSegmentId, SEGMENTS, useDemoRun } from "./useDemoRun";
 
 const SEGMENT_LABEL_KEY: Record<DemoSegmentId, string> = {
   "01_living_map": "segments.living_map",
@@ -35,7 +35,11 @@ export function DemoTheater() {
   useEffect(() => {
     function onKey(ev: KeyboardEvent) {
       const target = ev.target;
-      if (target instanceof HTMLElement && (target.tagName === "INPUT" || target.tagName === "TEXTAREA")) return;
+      if (
+        target instanceof HTMLElement &&
+        (target.tagName === "INPUT" || target.tagName === "TEXTAREA")
+      )
+        return;
       const idx = Number(ev.key);
       if (idx >= 1 && idx <= SEGMENTS.length) {
         const next = SEGMENTS[idx - 1];
@@ -72,12 +76,18 @@ export function DemoTheater() {
       </header>
 
       {demo.error && (
-        <div role="alert" className="syn-card border-l-4 border-confidence-risk p-3 text-sm text-confidence-risk">
+        <div
+          role="alert"
+          className="syn-card border-l-4 border-confidence-risk p-3 text-sm text-confidence-risk"
+        >
           {demo.error}
         </div>
       )}
 
-      <ol aria-label="Demo segments" className="flex flex-wrap gap-2 rounded-md bg-surface-raised p-1">
+      <ol
+        aria-label="Demo segments"
+        className="flex flex-wrap gap-2 rounded-md bg-surface-raised p-1"
+      >
         {SEGMENTS.map((id, i) => {
           const isActive = id === selected;
           const isCurrent = id === demo.currentSegment;
@@ -119,13 +129,9 @@ export function DemoTheater() {
 
         <aside aria-label={t("evidence.header")} className="syn-card-raised space-y-2 p-4">
           <h2 className="text-sm font-semibold text-ink">{t("evidence.header")}</h2>
-          {artifact.isLoading && (
-            <p className="text-xs text-ink-muted">{t("evidence.waiting")}</p>
-          )}
+          {artifact.isLoading && <p className="text-xs text-ink-muted">{t("evidence.waiting")}</p>}
           {artifact.isError && (
-            <p className="text-xs text-confidence-risk">
-              {(artifact.error as Error).message}
-            </p>
+            <p className="text-xs text-confidence-risk">{(artifact.error as Error).message}</p>
           )}
           {artifact.data && (
             <pre className="max-h-96 overflow-auto whitespace-pre-wrap rounded bg-surface-sunken p-2 font-mono text-2xs text-ink">

@@ -1,8 +1,8 @@
-import { useFirehose } from "@hooks/use-firehose";
 import { ConnectionPill } from "@ds/compounds";
-import { KPIBand } from "./KPIBand";
-import { DisruptionBanner } from "./DisruptionBanner";
+import { useFirehose } from "@hooks/use-firehose";
 import { DecisionFirehoseTail } from "./DecisionFirehoseTail";
+import { DisruptionBanner } from "./DisruptionBanner";
+import { KPIBand } from "./KPIBand";
 import { LivingMap } from "./LivingMap";
 import { useCityStores } from "./useCityStores";
 
@@ -25,7 +25,10 @@ export function MissionControl() {
             Live KPI band, decision firehose, and the city's living map.
           </p>
         </div>
-        <ConnectionPill state={firehose.state} label={firehose.connected ? "Firehose live" : "Firehose"} />
+        <ConnectionPill
+          state={firehose.state}
+          label={firehose.connected ? "Firehose live" : "Firehose"}
+        />
       </header>
 
       <DisruptionBanner />

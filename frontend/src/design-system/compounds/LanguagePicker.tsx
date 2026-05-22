@@ -1,5 +1,5 @@
-import { useTranslation } from "react-i18next";
 import { cn } from "@lib/cn";
+import { useTranslation } from "react-i18next";
 
 interface LanguagePickerProps {
   readonly className?: string;
@@ -15,16 +15,14 @@ export function LanguagePicker({ className }: LanguagePickerProps) {
     <div
       role="radiogroup"
       aria-label={t("language")}
-      className={cn(
-        "inline-flex items-center rounded-md bg-surface-raised p-0.5",
-        className,
-      )}
+      className={cn("inline-flex items-center rounded-md bg-surface-raised p-0.5", className)}
     >
       {LANGUAGES.map((lng) => {
         const isActive = lng === active;
         return (
           <button
             key={lng}
+            // biome-ignore lint/a11y/useSemanticElements: styled segmented control — the radiogroup/radio ARIA pattern is intentional
             type="button"
             role="radio"
             aria-checked={isActive}

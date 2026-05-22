@@ -1,12 +1,12 @@
-import { useMemo } from "react";
-import { useParams, Link } from "react-router-dom";
-import { useQuery } from "@tanstack/react-query";
-import { Badge } from "@ds/primitives";
-import { CalibrationCurve, ConfidenceChip, TierBadge } from "@ds/compounds";
 import { AGENT_NAMES, type AgentMetrics, type AgentName } from "@domain/agent-health";
+import { CalibrationCurve, ConfidenceChip, TierBadge } from "@ds/compounds";
+import { Badge } from "@ds/primitives";
 import { useSynapseApi } from "@hooks/use-synapse-api";
-import { useFirehoseStore } from "@state/firehose.store";
 import { fmt } from "@lib/formatters";
+import { useFirehoseStore } from "@state/firehose.store";
+import { useQuery } from "@tanstack/react-query";
+import { useMemo } from "react";
+import { Link, useParams } from "react-router-dom";
 
 function isAgentName(value: string | undefined): value is AgentName {
   return !!value && (AGENT_NAMES as readonly string[]).includes(value);
@@ -24,29 +24,16 @@ export function AgentDetail() {
 
   const decisions = useFirehoseStore((s) => s.decisions.items);
 
-  if (!isAgentName(name)) {
-    return (
-      <section className="space-y-2">
-        <h1 className="text-2xl font-semibold text-ink">Unknown agent</h1>
-        <p className="text-sm text-ink-muted">
-          <Link to="/agents" className="text-accent underline">
-            Back to Agent Council
-          </Link>
-        </p>
-      </section>
-    );
-  }
-
-  const value = agents.data?.agents?.[name] as AgentMetrics | string | undefined;
+  // All hooks run unconditionally (rules-of-hooks); the unknown-agent guard
+  // is deferred until after every hook below.
+  const value = agents.data?.agents?.[name ?? ""] as AgentMetrics | string | undefined;
   const metrics: AgentMetrics =
     typeof value === "string" ? { status: value } : (value ?? { status: "unknown" });
 
   const lastDecisions = useMemo(
     () =>
       decisions
-        .filter((d) =>
-          d.proposals.some((p) => (p as Record<string, unknown>)["agent_name"] === name),
-        )
+        .filter((d) => d.proposals.some((p) => (p as Record<string, unknown>).agent_name === name))
         .slice(-12)
         .reverse(),
     [decisions, name],
@@ -62,6 +49,19 @@ export function AgentDetail() {
     }));
   }, [metrics.calibration_coverage_90]);
 
+  if (!isAgentName(name)) {
+    return (
+      <section className="space-y-2">
+        <h1 className="text-2xl font-semibold text-ink">Unknown agent</h1>
+        <p className="text-sm text-ink-muted">
+          <Link to="/agents" className="text-accent underline">
+            Back to Agent Council
+          </Link>
+        </p>
+      </section>
+    );
+  }
+
   return (
     <section className="space-y-4">
       <header className="flex flex-wrap items-end justify-between gap-3">
@@ -69,13 +69,9 @@ export function AgentDetail() {
           <Link to="/agents" className="text-2xs text-ink-muted hover:text-ink">
             ← Agent Council
           </Link>
-          <h1 className="text-2xl font-semibold capitalize text-ink">
-            {name.replace(/_/g, " ")}
-          </h1>
+          <h1 className="text-2xl font-semibold capitalize text-ink">{name.replace(/_/g, " ")}</h1>
         </div>
-        <Badge tone={metrics.status === "healthy" ? "success" : "warning"}>
-          {metrics.status}
-        </Badge>
+        <Badge tone={metrics.status === "healthy" ? "success" : "warning"}>{metrics.status}</Badge>
       </header>
 
       <div className="grid gap-4 md:grid-cols-3">
@@ -103,10 +99,7 @@ export function AgentDetail() {
           metrics.calibration_coverage_90 !== undefined && (
             <div className="flex items-center gap-2 text-xs">
               <span className="text-ink-muted">Current:</span>
-              <ConfidenceChip
-                value={metrics.calibration_coverage_90}
-                threshold={0.85}
-              />
+              <ConfidenceChip value={metrics.calibration_coverage_90} threshold={0.85} />
             </div>
           )}
       </section>

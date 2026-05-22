@@ -18,12 +18,7 @@ const BAND_HEX: Record<ReturnType<typeof confidenceBand>, string> = {
  * a11y baked in. Falls back gracefully under prefers-reduced-motion (no
  * animated stroke).
  */
-export function ConfidenceGauge({
-  value,
-  size = 100,
-  thickness = 6,
-  label,
-}: ConfidenceGaugeProps) {
+export function ConfidenceGauge({ value, size = 100, thickness = 6, label }: ConfidenceGaugeProps) {
   const clamped = Math.max(0, Math.min(1, value));
   const pct = Math.round(clamped * 100);
   const ramp = confidenceBand(clamped);

@@ -1,7 +1,7 @@
-import { useMemo } from "react";
 import { KPITile } from "@ds/compounds";
-import { useFirehoseStore } from "@state/firehose.store";
 import { fmt } from "@lib/formatters";
+import { useFirehoseStore } from "@state/firehose.store";
+import { useMemo } from "react";
 
 /**
  * KPI band derived from the firehose store. Tiles update as decisions /

@@ -1,16 +1,16 @@
-import { useMemo, useState } from "react";
-import * as Dialog from "@radix-ui/react-dialog";
+import type { EscalationMessage } from "@domain/escalation";
 import {
   AgentProposalChip,
   ConfidenceGauge,
   ParetoFrontier,
-  TierBadge,
   type ParetoPoint,
+  TierBadge,
 } from "@ds/compounds";
 import { Button } from "@ds/primitives";
-import { fmt } from "@lib/formatters";
 import { isBelowThreshold } from "@lib/confidence";
-import type { EscalationMessage } from "@domain/escalation";
+import { fmt } from "@lib/formatters";
+import * as Dialog from "@radix-ui/react-dialog";
+import { useMemo, useState } from "react";
 import { ApproveForm } from "./ApproveForm";
 import { ModifyForm } from "./ModifyForm";
 import { RejectForm } from "./RejectForm";
@@ -46,17 +46,17 @@ export function EscalationCard({ message, receivedAt, pending, onCommit }: Escal
   const paretoPoints: ParetoPoint[] = useMemo(
     () =>
       proposals.map((p, i) => {
-        const utility = typeof p["utility_score"] === "number" ? (p["utility_score"] as number) : 0;
-        const confidence = typeof p["confidence"] === "number" ? (p["confidence"] as number) : 0;
+        const utility = typeof p.utility_score === "number" ? (p.utility_score as number) : 0;
+        const confidence = typeof p.confidence === "number" ? (p.confidence as number) : 0;
         const agentName =
-          typeof p["agent_name"] === "string" ? (p["agent_name"] as string) : `proposal-${i}`;
+          typeof p.agent_name === "string" ? (p.agent_name as string) : `proposal-${i}`;
         return { id: `${agentName}-${i}`, x: utility, y: confidence, label: agentName };
       }),
     [proposals],
   );
 
   const selectedAgent =
-    (message.recommended_action?.["agent_name"] as string | undefined) ?? proposals[0]?.["agent_name"];
+    (message.recommended_action?.agent_name as string | undefined) ?? proposals[0]?.agent_name;
 
   function handleSubmit(payload: {
     action: "approved" | "rejected" | "modified";
@@ -100,11 +100,11 @@ export function EscalationCard({ message, receivedAt, pending, onCommit }: Escal
         <div className="grid grid-cols-1 gap-2 md:grid-cols-2 xl:grid-cols-3">
           {proposals.map((p, i) => {
             const agentName =
-              typeof p["agent_name"] === "string" ? (p["agent_name"] as string) : `proposal-${i}`;
+              typeof p.agent_name === "string" ? (p.agent_name as string) : `proposal-${i}`;
             const utility =
-              typeof p["utility_score"] === "number" ? (p["utility_score"] as number) : undefined;
+              typeof p.utility_score === "number" ? (p.utility_score as number) : undefined;
             const confidence =
-              typeof p["confidence"] === "number" ? (p["confidence"] as number) : undefined;
+              typeof p.confidence === "number" ? (p.confidence as number) : undefined;
             return (
               <AgentProposalChip
                 key={`${agentName}-${i}`}
@@ -144,7 +144,10 @@ export function EscalationCard({ message, receivedAt, pending, onCommit }: Escal
 
       {/* Sticky action bar */}
       <footer className="sticky bottom-0 mt-auto flex flex-wrap items-center justify-end gap-2 border-t border-border bg-surface-raised px-2 pb-2 pt-3">
-        <Dialog.Root open={dialog === "reject"} onOpenChange={(o) => setDialog(o ? "reject" : null)}>
+        <Dialog.Root
+          open={dialog === "reject"}
+          onOpenChange={(o) => setDialog(o ? "reject" : null)}
+        >
           <Dialog.Trigger asChild>
             <Button variant="danger" size="md" aria-keyshortcuts="R" autoFocus={below}>
               Reject (R)
@@ -159,7 +162,10 @@ export function EscalationCard({ message, receivedAt, pending, onCommit }: Escal
           </OverrideDialog>
         </Dialog.Root>
 
-        <Dialog.Root open={dialog === "modify"} onOpenChange={(o) => setDialog(o ? "modify" : null)}>
+        <Dialog.Root
+          open={dialog === "modify"}
+          onOpenChange={(o) => setDialog(o ? "modify" : null)}
+        >
           <Dialog.Trigger asChild>
             <Button variant="warning" size="md" aria-keyshortcuts="M">
               Modify (M)
@@ -175,7 +181,10 @@ export function EscalationCard({ message, receivedAt, pending, onCommit }: Escal
           </OverrideDialog>
         </Dialog.Root>
 
-        <Dialog.Root open={dialog === "approve"} onOpenChange={(o) => setDialog(o ? "approve" : null)}>
+        <Dialog.Root
+          open={dialog === "approve"}
+          onOpenChange={(o) => setDialog(o ? "approve" : null)}
+        >
           <Dialog.Trigger asChild>
             <Button variant="success" size="md" aria-keyshortcuts="A" autoFocus={!below}>
               Approve (A)

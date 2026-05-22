@@ -1,15 +1,16 @@
-import { useEffect, useRef } from "react";
-import maplibregl, { type Map as MapLibreMap } from "maplibre-gl";
+import type { LayersList } from "@deck.gl/core";
 import { DeckGL } from "@deck.gl/react";
-import { registerPMTilesProtocol, buildBasemapStyle } from "./basemap";
 import { useCityStore } from "@state/city.store";
+import maplibregl, { type Map as MapLibreMap } from "maplibre-gl";
+import { useEffect, useRef } from "react";
+import { buildBasemapStyle, registerPMTilesProtocol } from "./basemap";
 import "maplibre-gl/dist/maplibre-gl.css";
 
 const TILES_URL = import.meta.env.VITE_TILES_URL ?? "/tiles/india.pmtiles";
 
 interface CityMapProps {
-  readonly layers?: readonly unknown[];
-  readonly height?: number | string;
+  readonly layers?: LayersList | undefined;
+  readonly height?: number | string | undefined;
 }
 
 const CITY_VIEWS: Record<string, { longitude: number; latitude: number; zoom: number }> = {
@@ -26,7 +27,7 @@ export function CityMap({ layers = [], height = 420 }: CityMapProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<MapLibreMap | null>(null);
   const city = useCityStore((s) => s.city);
-  const view = CITY_VIEWS[city] ?? CITY_VIEWS["bengaluru"]!;
+  const view = CITY_VIEWS[city] ?? CITY_VIEWS.bengaluru!;
 
   useEffect(() => {
     registerPMTilesProtocol();
@@ -64,7 +65,7 @@ export function CityMap({ layers = [], height = 420 }: CityMapProps) {
         initialViewState={view}
         controller
         layers={[...layers]}
-        style={{ position: "absolute", inset: 0, pointerEvents: "none" }}
+        style={{ position: "absolute", inset: "0", pointerEvents: "none" }}
       />
     </div>
   );
