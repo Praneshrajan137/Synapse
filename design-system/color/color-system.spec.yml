@@ -1,0 +1,201 @@
+# ============================================================================
+# SYNAPSE Chromatic System — Formal Specification (SDD layer)
+#
+# Spec-first: this file is the single source of truth for the color system.
+# Every INV-CLR invariant below has a matching test in tests/ — enforced by
+# scripts/check-spec-coverage.mjs. See ADR-025.
+#
+# NOTE: filename is `.spec.yml` (not `spec.yaml`) so the repo's agent
+# `spec-validate` pre-commit hook does NOT validate it against the agent
+# schema. The `color-spec-validate` hook validates it against
+# schema/color-spec.schema.json instead.
+# ============================================================================
+system_name: synapse-color
+version: "1.0.0"
+description: >
+  Perceptual OKLCH design-token color system for the SYNAPSE multi-agent
+  quick-commerce platform. Encodes agent identity, decision tier, and
+  confidence as orthogonal perceptual dimensions; dual-theme; governed by
+  contrast and color-vision-deficiency invariants.
+
+principles:
+  - id: PR-CLR-001
+    statement: >
+      Orthogonal Encoding — nominal data (agent identity) maps to OKLCH Hue;
+      ordinal data (decision tier) maps to OKLCH Lightness; continuous data
+      (confidence) maps to a diverging scale interpolated in OKLab. Each data
+      type uses the perceptual dimension that natively fits it.
+  - id: PR-CLR-002
+    statement: >
+      Every hue is earned — a color exists only as the encoding of one domain
+      concept. No decorative or arbitrary color. Enforced by INV-CLR-009.
+  - id: PR-CLR-003
+    statement: >
+      Color is an enhancement, never the sole carrier of meaning. Every
+      color-coded state is mirrored by text, icon, or shape (INV-CLR-011).
+  - id: PR-CLR-004
+    statement: >
+      Author in OKLCH, deliver gamut-mapped. Authored chroma may exceed sRGB;
+      the build maps every emitted value into gamut (INV-CLR-008).
+
+thresholds:
+  wcag_text_normal: 4.5
+  wcag_text_large: 3.0
+  wcag_ui_component: 3.0
+  apca_primary_lc: 75.0
+  apca_secondary_lc: 60.0
+  apca_tertiary_lc: 45.0
+  agent_pair_min_hue_deg: 20.0
+  agent_pair_min_deltaeok: 0.090
+  agent_pair_min_deltaeok_cvd: 0.020
+  semantic_min_deltaeok: 0.080
+  semantic_min_deltaeok_cvd: 0.020
+  confidence_gate_low: 0.70
+  confidence_gate_high: 0.80
+
+invariants:
+  - id: "INV-CLR-001"
+    description: "Every semantic token resolves to a concrete value in both light and dark themes"
+    assertion: "for all t in semantic_tokens: t.resolved('light') is not None and t.resolved('dark') is not None"
+    severity: critical
+
+  - id: "INV-CLR-002"
+    description: "Every text-on-surface pair meets WCAG 2.1 AA contrast in both themes"
+    assertion: "wcag(text, surface) >= 4.5 for body text and >= 3.0 for large text, both themes"
+    severity: critical
+
+  - id: "INV-CLR-003"
+    description: "Every text-on-surface pair meets its APCA Lc target for its emphasis tier, both themes"
+    assertion: "abs(apca(text,surface)) >= apca_primary_lc for primary, >= apca_secondary_lc for secondary, >= apca_tertiary_lc for tertiary"
+    severity: high
+
+  - id: "INV-CLR-004"
+    description: "All 28 agent-identity color pairs are perceptually distinct under normal vision"
+    assertion: "for all pairs (a,b): hue_distance(a,b) >= agent_pair_min_hue_deg and deltaEOK(a,b) >= agent_pair_min_deltaeok, both themes"
+    severity: critical
+
+  - id: "INV-CLR-005"
+    description: "The 8 agent colors remain mutually distinguishable under deuteranopia, protanopia, and tritanopia simulation"
+    assertion: "for each cvd in {deuter,protan,trit}: min pairwise deltaEOK(cvd(a),cvd(b)) >= agent_pair_min_deltaeok_cvd"
+    severity: critical
+
+  - id: "INV-CLR-006"
+    description: "Decision-tier colors are strictly monotonic in OKLCH lightness, encoding tier order (I-8)"
+    assertion: "L(tier1) > L(tier2) > L(tier3) > L(tier4)"
+    severity: critical
+
+  - id: "INV-CLR-007"
+    description: "Confidence color map is continuous and traverses red->amber->green->teal; stops anchored exactly at the I-5 gates"
+    assertion: "confidence stops at positions {0.00,0.70,0.80,1.00}; hue strictly increasing across stops; confidenceColor continuous on [0,1]"
+    severity: critical
+
+  - id: "INV-CLR-008"
+    description: "Every emitted color value is within sRGB gamut"
+    assertion: "for all emitted tokens: inGamut('rgb', token.value) is True"
+    severity: high
+
+  - id: "INV-CLR-009"
+    description: "No raw hex/rgb/hsl color literal appears in frontend component source — color only via tokens"
+    assertion: "grep for #rrggbb / rgb( / hsl( in frontend/src/**/*.{jsx,js} returns nothing outside generated files"
+    severity: critical
+
+  - id: "INV-CLR-010"
+    description: "The token build is deterministic — rebuilding yields byte-identical dist artifacts"
+    assertion: "sha256(build()) == sha256(build()) for tokens.css, tokens.ts, tailwind-preset.cjs, tokens.json"
+    severity: high
+
+  - id: "INV-CLR-011"
+    description: "Color is never the sole information channel — every color-coded state also carries text, icon, or shape"
+    assertion: "every status/tier/confidence/agent affordance in frontend exposes a non-color signal"
+    severity: high
+
+  - id: "INV-CLR-012"
+    description: "The agent-to-hue assignment is frozen; changing it requires a version bump and a supersede note"
+    assertion: "agent hue map matches the frozen registry; the 8 agent keys are exactly the SYNAPSE agent set"
+    severity: high
+
+  - id: "INV-CLR-013"
+    description: "prefers-reduced-motion, prefers-contrast, and forced-colors each have a defined fallback in tokens.css"
+    assertion: "tokens.css contains @media blocks for prefers-reduced-motion, prefers-contrast, and forced-colors"
+    severity: high
+
+  - id: "INV-CLR-014"
+    description: "The 5 semantic state colors are mutually distinguishable in both themes and under CVD simulation. (Agent/semantic hue families intentionally overlap — risk is red, value is gold — and are kept apart by disjoint UI roles, not hue distance; see ADR-025.)"
+    assertion: "for all semantic pairs (s1,s2): deltaEOK >= semantic_min_deltaeok normal and >= semantic_min_deltaeok_cvd under each CVD"
+    severity: high
+
+preconditions:
+  - id: "PRE-CLR-001"
+    description: "All token JSON files validate against the DTCG token schema"
+    check: "jsonschema.validate(token_file, dtcg_tokens_schema) passes for every file in tokens/"
+  - id: "PRE-CLR-002"
+    description: "Every {reference} in the token graph resolves to a defined token"
+    check: "no dangling references after resolution"
+
+postconditions:
+  - id: "POST-CLR-001"
+    description: "Every color in dist/tokens.json is sRGB in-gamut and has a valid hex fallback"
+    check: "inGamut('rgb', value) and /^#[0-9a-f]{6}$/.test(hexFallback)"
+  - id: "POST-CLR-002"
+    description: "dist artifacts are committed and match a fresh build"
+    check: "git diff --exit-code design-system/color/dist/ is empty after build"
+
+metamorphic_relations:
+  - id: "MR-CLR-001"
+    description: "Theme inversion preserves legibility"
+    transform: "switch every surface/text pair from light theme to dark theme"
+    expected: "WCAG and APCA contrast invariants (INV-CLR-002/003) hold in both themes"
+  - id: "MR-CLR-002"
+    description: "Color-vision-deficiency simulation preserves agent distinctness"
+    transform: "apply deuteranopia / protanopia / tritanopia simulation to the agent palette"
+    expected: "agent colors remain mutually distinguishable (INV-CLR-005)"
+  - id: "MR-CLR-003"
+    description: "Increasing confidence advances along the red->teal axis"
+    transform: "increase a confidence value in [0,1]"
+    expected: "the mapped color's OKLCH hue coordinate is non-decreasing"
+
+palettes:
+  surface:
+    description: "Elevation ramp — hue-tinted neutrals, canvas to overlay"
+    encoding: neutral
+    members: [canvas, panel, raised, overlay, border-subtle, border-strong]
+  agent:
+    description: "8 agent identities — categorical, encoded on the Hue axis"
+    encoding: hue
+    members:
+      - demand_prophet
+      - routing_navigator
+      - inventory_sentinel
+      - freshness_guardian
+      - pricing_oracle
+      - disruption_shield
+      - supplier_trust
+      - sustainability_agent
+  tier:
+    description: "4 decision tiers — ordinal, encoded on the Lightness axis (I-8)"
+    encoding: lightness
+    members: [tier-1, tier-2, tier-3, tier-4]
+  confidence:
+    description: "Confidence — continuous diverging scale, gated at 0.70/0.80 (I-5)"
+    encoding: diverging
+    members: [low, escalation-band, autonomous]
+  semantic:
+    description: "State feedback — success, warning, danger, info, neutral"
+    encoding: categorical
+    members: [success, warning, danger, info, neutral]
+
+testing_layers:
+  - layer: "1-SDD"
+    applies: "Every INV-CLR has a test; check-spec-coverage.mjs blocks gaps"
+  - layer: "2-Fuzz"
+    applies: "Random OKLCH inputs and random confidence in [0,1] never crash the resolver and always yield in-gamut output"
+  - layer: "3-Contract"
+    applies: "Token JSON validates against dtcg-tokens.schema.json; tokens.ts exposes a typed API"
+  - layer: "4-Metamorphic"
+    applies: "Theme inversion and CVD simulation as metamorphic transforms (MR-CLR-001/002/003)"
+  - layer: "5-DbC"
+    applies: "Pre/postconditions on resolveToken, interpolateConfidence, gamutMap"
+  - layer: "6-Oracle"
+    applies: "Independently-computed reference WCAG/APCA values as the oracle for contrast.mjs"
+  - layer: "7-Mutation"
+    applies: "Mutating token values (swap two agent hues, shift a tier lightness) must fail the suite"

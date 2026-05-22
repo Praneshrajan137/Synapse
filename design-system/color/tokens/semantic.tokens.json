@@ -1,0 +1,97 @@
+{
+  "$description": "SYNAPSE Chromatic — semantic tokens. Meaning-bound, theme-aware aliases. These are the tokens emitted as CSS custom properties and Tailwind utilities. Components reference ONLY these, never primitives.",
+  "color": {
+    "$type": "color",
+    "surface": {
+      "$description": "Elevation ramp — canvas (page) to overlay (modals/popovers).",
+      "canvas": { "$value": { "light": "{ref.neutral.972}", "dark": "{ref.neutral.160}" } },
+      "panel": { "$value": { "light": "{ref.neutral.990}", "dark": "{ref.neutral.205}" } },
+      "raised": { "$value": { "light": "{ref.neutral.990}", "dark": "{ref.neutral.255}" } },
+      "overlay": { "$value": { "light": "{ref.neutral.990}", "dark": "{ref.neutral.310}" } }
+    },
+    "border": {
+      "subtle": { "$value": { "light": "{ref.neutral.945}", "dark": "{ref.neutral.255}" } },
+      "strong": { "$value": { "light": "{ref.neutral.900}", "dark": "{ref.neutral.380}" } }
+    },
+    "text": {
+      "$description": "Type hierarchy — primary (body), secondary (labels), tertiary (muted), inverse (on coloured fills).",
+      "primary": { "$value": { "light": "{ref.neutral.240}", "dark": "{ref.neutral.972}" } },
+      "secondary": { "$value": { "light": "{ref.neutral.430}", "dark": "{ref.neutral.760}" } },
+      "tertiary": { "$value": { "light": "{ref.neutral.480}", "dark": "{ref.neutral.720}" } },
+      "inverse": { "$value": { "light": "{ref.neutral.990}", "dark": "{ref.neutral.115}" } }
+    },
+    "brand": {
+      "$description": "SYNAPSE system identity — the cognition hue (H258); shares the tier family. base is tuned bright in dark theme so a near-black label on a brand button clears APCA.",
+      "base": { "$value": { "light": "oklch(0.52 0.150 258)", "dark": "oklch(0.80 0.135 258)" } },
+      "emphasis": { "$value": { "light": "oklch(0.44 0.165 258)", "dark": "oklch(0.87 0.095 258)" } },
+      "fg": { "$value": { "light": "{ref.neutral.990}", "dark": "{ref.neutral.115}" } }
+    },
+    "focus": {
+      "ring": { "$value": { "light": "oklch(0.52 0.150 258)", "dark": "oklch(0.81 0.120 258)" } }
+    },
+    "agent": {
+      "$description": "8 agent identities — categorical, Hue axis. Scoped to identity affordances only.",
+      "demand-prophet": { "$value": "{ref.agent.demand_prophet}" },
+      "routing-navigator": { "$value": "{ref.agent.routing_navigator}" },
+      "inventory-sentinel": { "$value": "{ref.agent.inventory_sentinel}" },
+      "freshness-guardian": { "$value": "{ref.agent.freshness_guardian}" },
+      "pricing-oracle": { "$value": "{ref.agent.pricing_oracle}" },
+      "disruption-shield": { "$value": "{ref.agent.disruption_shield}" },
+      "supplier-trust": { "$value": "{ref.agent.supplier_trust}" },
+      "sustainability-agent": { "$value": "{ref.agent.sustainability_agent}" }
+    },
+    "tier": {
+      "$description": "4 decision tiers — ordinal, Lightness axis (I-8).",
+      "1": { "$value": "{ref.tier.1}" },
+      "2": { "$value": "{ref.tier.2}" },
+      "3": { "$value": "{ref.tier.3}" },
+      "4": { "$value": "{ref.tier.4}" }
+    },
+    "confidence": {
+      "$description": "Confidence zones bounded by the I-5 gates. low < 0.70 <= escalation < 0.80 <= autonomous; peak is the 1.00 anchor of the continuous scale.",
+      "low": { "$value": "{ref.confidence.low}" },
+      "escalation": { "$value": "{ref.confidence.caution}" },
+      "autonomous": { "$value": "{ref.confidence.gain}" },
+      "peak": { "$value": "{ref.confidence.high}" }
+    },
+    "state": {
+      "$description": "State feedback — separated from agent colours by lightness/chroma (INV-CLR-014).",
+      "success": { "$value": "{ref.state.success}" },
+      "warning": { "$value": "{ref.state.warning}" },
+      "danger": { "$value": "{ref.state.danger}" },
+      "info": { "$value": "{ref.state.info}" },
+      "neutral": { "$value": "{ref.state.neutral}" }
+    },
+    "hitl": {
+      "$description": "Human-in-the-loop decision outcomes (I-5 escalation console).",
+      "approve": { "$value": "{ref.state.success}" },
+      "reject": { "$value": "{ref.state.danger}" },
+      "modify": { "$value": "{ref.state.warning}" },
+      "pending": { "$value": "{ref.state.info}" }
+    }
+  },
+  "motion": {
+    "$description": "Motion tokens — all consuming components must respect prefers-reduced-motion (INV-CLR-013).",
+    "duration": {
+      "$type": "duration",
+      "fast": { "$value": "120ms" },
+      "base": { "$value": "200ms" },
+      "slow": { "$value": "360ms" },
+      "pulse": { "$value": "2400ms" }
+    },
+    "ease": {
+      "$type": "cubicBezier",
+      "standard": { "$value": "cubic-bezier(0.4, 0, 0.2, 1)" },
+      "decelerate": { "$value": "cubic-bezier(0, 0, 0.2, 1)" },
+      "emphasized": { "$value": "cubic-bezier(0.4, 0, 0.6, 1)" }
+    }
+  },
+  "radius": {
+    "$type": "dimension",
+    "sm": { "$value": "0.375rem" },
+    "md": { "$value": "0.5rem" },
+    "lg": { "$value": "0.75rem" },
+    "xl": { "$value": "1rem" },
+    "full": { "$value": "9999px" }
+  }
+}

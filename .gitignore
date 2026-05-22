@@ -17,6 +17,10 @@ htmlcov/
 .coverage.*
 coverage.xml
 
+# Node / frontend
+node_modules/
+*.tsbuildinfo
+
 # Virtual environments
 .venv/
 venv/

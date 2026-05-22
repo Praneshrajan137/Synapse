@@ -1,0 +1,59 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://synapse.local/schema/dtcg-tokens.schema.json",
+  "title": "SYNAPSE Chromatic token file (W3C DTCG subset)",
+  "description": "Design Tokens Community Group format subset. A node is either a token (has $value) or a group (nested nodes). $value is an OKLCH literal, a {reference}, a theme object, or a scalar for non-color tokens.",
+  "type": "object",
+  "properties": {
+    "$schema": { "type": "string" },
+    "$description": { "type": "string" }
+  },
+  "additionalProperties": { "$ref": "#/definitions/node" },
+  "definitions": {
+    "node": {
+      "oneOf": [
+        { "$ref": "#/definitions/token" },
+        { "$ref": "#/definitions/group" }
+      ]
+    },
+    "token": {
+      "type": "object",
+      "required": ["$value"],
+      "properties": {
+        "$value": {
+          "oneOf": [
+            { "type": "string" },
+            { "type": "number" },
+            { "$ref": "#/definitions/themeValue" }
+          ]
+        },
+        "$type": {
+          "enum": ["color", "dimension", "duration", "cubicBezier", "shadow", "number"]
+        },
+        "$description": { "type": "string" },
+        "$extensions": { "type": "object" }
+      },
+      "additionalProperties": false
+    },
+    "themeValue": {
+      "type": "object",
+      "required": ["light", "dark"],
+      "additionalProperties": false,
+      "properties": {
+        "light": { "type": ["string", "number"] },
+        "dark": { "type": ["string", "number"] }
+      }
+    },
+    "group": {
+      "type": "object",
+      "properties": {
+        "$type": { "type": "string" },
+        "$description": { "type": "string" }
+      },
+      "patternProperties": {
+        "^[^$].*$": { "$ref": "#/definitions/node" }
+      },
+      "additionalProperties": false
+    }
+  }
+}

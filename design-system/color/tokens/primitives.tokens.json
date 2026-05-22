@@ -1,0 +1,48 @@
+{
+  "$description": "SYNAPSE Chromatic — primitive (reference) tokens. Raw OKLCH ramps with no meaning. Build-time only; not emitted as CSS variables. Semantic tokens alias these.",
+  "ref": {
+    "$type": "color",
+    "neutral": {
+      "$description": "Elevation + text ramp. Faint cool tint (H255) so the UI reads as lit, not dead grey. Keyed by approximate lightness x1000.",
+      "115": { "$value": "oklch(0.115 0.013 255)" },
+      "160": { "$value": "oklch(0.160 0.014 255)" },
+      "205": { "$value": "oklch(0.205 0.015 255)" },
+      "240": { "$value": "oklch(0.240 0.015 255)" },
+      "255": { "$value": "oklch(0.255 0.015 255)" },
+      "310": { "$value": "oklch(0.310 0.015 255)" },
+      "380": { "$value": "oklch(0.380 0.014 255)" },
+      "430": { "$value": "oklch(0.430 0.013 255)" },
+      "480": { "$value": "oklch(0.480 0.012 255)" },
+      "585": { "$value": "oklch(0.585 0.010 255)" },
+      "660": { "$value": "oklch(0.660 0.009 255)" },
+      "720": { "$value": "oklch(0.805 0.008 255)" },
+      "760": { "$value": "oklch(0.850 0.006 255)" },
+      "900": { "$value": "oklch(0.900 0.004 255)" },
+      "945": { "$value": "oklch(0.945 0.003 255)" },
+      "972": { "$value": "oklch(0.972 0.002 255)" },
+      "990": { "$value": "oklch(0.992 0.0015 255)" }
+    },
+    "tier": {
+      "$description": "Decision-tier ramp (I-8). Ordinal data on the Lightness axis: one cognition hue (H258), strictly monotone-decreasing L from Tier 1 (reflexive) to Tier 4 (deep deliberation).",
+      "1": { "$value": { "light": "oklch(0.72 0.085 258)", "dark": "oklch(0.84 0.075 258)" } },
+      "2": { "$value": { "light": "oklch(0.62 0.115 258)", "dark": "oklch(0.71 0.105 258)" } },
+      "3": { "$value": { "light": "oklch(0.52 0.140 258)", "dark": "oklch(0.58 0.135 258)" } },
+      "4": { "$value": { "light": "oklch(0.42 0.160 258)", "dark": "oklch(0.46 0.160 258)" } }
+    },
+    "confidence": {
+      "$description": "Confidence diverging scale (I-5). Continuous in OKLab; hue rises monotonically red->amber->green->teal. Stops anchored at the gate thresholds 0.00 / 0.70 / 0.80 / 1.00.",
+      "low": { "$value": { "light": "oklch(0.53 0.205 27)", "dark": "oklch(0.64 0.190 27)" } },
+      "caution": { "$value": { "light": "oklch(0.68 0.155 76)", "dark": "oklch(0.82 0.150 80)" } },
+      "gain": { "$value": { "light": "oklch(0.58 0.160 150)", "dark": "oklch(0.80 0.165 148)" } },
+      "high": { "$value": { "light": "oklch(0.60 0.110 182)", "dark": "oklch(0.84 0.115 184)" } }
+    },
+    "state": {
+      "$description": "Semantic state hues. Hue intentionally overlaps the disruption/pricing/freshness agents (risk is red, value is gold, fresh is green); separation from agent colors is carried by lightness + chroma (INV-CLR-014).",
+      "success": { "$value": { "light": "oklch(0.52 0.150 150)", "dark": "oklch(0.78 0.165 150)" } },
+      "warning": { "$value": { "light": "oklch(0.62 0.145 72)", "dark": "oklch(0.83 0.150 74)" } },
+      "danger": { "$value": { "light": "oklch(0.52 0.215 26)", "dark": "oklch(0.63 0.205 26)" } },
+      "info": { "$value": { "light": "oklch(0.52 0.150 248)", "dark": "oklch(0.75 0.130 248)" } },
+      "neutral": { "$value": { "light": "oklch(0.50 0.012 255)", "dark": "oklch(0.72 0.010 255)" } }
+    }
+  }
+}

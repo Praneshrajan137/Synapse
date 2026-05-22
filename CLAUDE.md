@@ -50,6 +50,15 @@
 - Allowed licenses: MIT, Apache-2.0, BSD-2-Clause, BSD-3-Clause, PSF, ISC, MPL-2.0
 - Pin all dependency versions with upper bounds in pyproject.toml
 
+### Chromatic System Rules (ADR-025)
+- Frontend colour comes ONLY from chromatic tokens — NEVER a raw hex/`rgb()`/`hsl()` literal in `frontend/src/**`. The `no-raw-hex` hook blocks it (INV-CLR-009)
+- Colour tokens are authored in OKLCH in `design-system/color/tokens/*.tokens.json` (W3C DTCG format). After ANY token edit run `npm run build` in `design-system/color/` and commit the regenerated `dist/`
+- `dist/` artifacts are deterministic and committed — CI fails if a rebuild changes them (INV-CLR-010)
+- Orthogonal Encoding Principle: agent identity → Hue, decision tier → Lightness, confidence → the diverging OKLab scale. NEVER cross these axes
+- The 8 agent→hue assignments are FROZEN (INV-CLR-012) — changing one needs a version bump + an ADR supersede note
+- Every `INV-CLR` invariant in `design-system/color/color-system.spec.yml` MUST have a test — `npm run spec:coverage` enforces it
+- Validate colour against BOTH WCAG 2.1 AA and APCA; APCA targets are tiered by emphasis (primary 75 / secondary 60 / tertiary 45)
+
 ## Accumulated Error Patterns
 - PostgreSQL REVOKE from superuser/owner is a no-op — use non-superuser app role
 - Kafka CONTROLLER listener is KRaft-mode only — omit when using ZooKeeper
@@ -97,6 +106,16 @@
 - E-S6-22: Mumbai data generation MUST use start_date in monsoon window (June 1) not January 1, otherwise monsoon_intensity is all zeros and E-S6-09 tests fail
 - E-S6-23: `make deploy-oracle` requires ORACLE_IP env var; VM must be provisioned manually via OCI Console first
 - E-S6-24: Demo script (`scripts/demo/run_demo.sh`) must poll Kafka consumer group lag via Python confluent-kafka (not kafka-consumer-groups.sh) for cross-platform compatibility
+
+### Chromatic System Error Patterns
+- E-CLR-01: Gamut-map with `culori.clampChroma` (preserves L+H exactly), NOT `toGamut` — `toGamut`'s RGB round-trip drifts hue several degrees
+- E-CLR-02: Round chroma DOWN after gamut mapping — rounding to nearest can re-inflate a boundary colour back out of sRGB gamut (INV-CLR-008)
+- E-CLR-03: The colour spec is named `color-system.spec.yml` (`.yml`, NOT `spec.yaml`) so the agent `spec-validate` hook does not validate it against the agent schema; the `color-spec-validate` hook handles it
+- E-CLR-04: APCA has tiered Lc targets by text emphasis (75/60/45) — it is not a single threshold; button-label text is the secondary (60) tier
+- E-CLR-05: Agent hues intentionally overlap semantic-state hues (disruption≈danger red, pricing≈warning gold) — separation is by disjoint UI role, not hue distance
+- E-CLR-06: Agent palette lightness MUST be staggered, not held equal — equal-lightness categorical colours collapse under CVD simulation (INV-CLR-005)
+- E-CLR-07: After editing any token JSON, rerun `npm run build` and commit `dist/` — CI's determinism gate fails on a stale `dist/`
+- E-CLR-08: The frontend imports chromatic artifacts via the `@chromatic` Vite alias; `vite.config.js` `server.fs.allow` must include the repo root
 
 ## Sprint Status
 - **Sprint 1**: Infrastructure foundation (Docker, Neo4j, Kafka, Redis, PostgreSQL, shared packages, proto schemas, SDD framework, CI pipeline)

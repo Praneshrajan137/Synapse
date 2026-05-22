@@ -158,3 +158,24 @@ jobs:
       - name: Compliance gate
         run: make verify-v4-compliance
 
+  chromatic-color-gates:
+    name: Chromatic System — colour gates (ADR-025)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - name: Install chromatic core dependencies
+        run: cd design-system/color && npm ci --no-audit --no-fund
+      - name: Dependency licence audit (I-1)
+        run: node design-system/color/scripts/license-audit.mjs
+      - name: Build tokens + SDD/TDD/BDD suite (7 layers, 14 INV-CLR)
+        run: cd design-system/color && npm run verify
+      - name: Build determinism — dist matches a fresh build (INV-CLR-010)
+        run: git diff --exit-code design-system/color/dist/
+      - name: No raw colour literals in components (INV-CLR-009)
+        run: node design-system/color/scripts/lint-hex.mjs frontend/src
+

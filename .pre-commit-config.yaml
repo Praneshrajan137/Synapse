@@ -153,3 +153,17 @@ print('OK KV-cache stable prefix preserved')
 "
         language: python
         files: '(orchestrator/llm/context_builder\.py|orchestrator/llm/ollama_client\.py|orchestrator/consensus/protocol\.py)$'
+
+      - id: no-raw-hex
+        name: no-raw-hex
+        entry: python scripts/lint_chromatic_hex.py
+        language: python
+        files: 'frontend/src/.*\.(jsx?|tsx?)$'
+
+      - id: color-spec-validate
+        name: color-spec-validate
+        entry: python -c "import yaml,json,jsonschema; jsonschema.validate(yaml.safe_load(open('design-system/color/color-system.spec.yml')), json.load(open('design-system/color/schema/color-spec.schema.json'))); print('OK color-system.spec.yml')"
+        language: python
+        files: '(color-system\.spec\.yml|color-spec\.schema\.json)$'
+        pass_filenames: false
+        additional_dependencies: [pyyaml, jsonschema]

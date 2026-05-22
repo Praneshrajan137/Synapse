@@ -1,0 +1,29 @@
+{
+  "name": "@synapse/color",
+  "version": "1.0.0",
+  "private": true,
+  "description": "SYNAPSE Chromatic System — perceptual OKLCH design tokens, portable core",
+  "type": "module",
+  "license": "Apache-2.0",
+  "exports": {
+    "./tokens.css": "./dist/tokens.css",
+    "./tokens.ts": "./dist/tokens.ts",
+    "./tokens.json": "./dist/tokens.json",
+    "./tailwind-preset": "./dist/tailwind-preset.cjs"
+  },
+  "scripts": {
+    "build": "node build/build.mjs",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "spec:coverage": "node scripts/check-spec-coverage.mjs",
+    "spec:generate": "node scripts/generate-tests.mjs",
+    "contrast:report": "node scripts/contrast-report.mjs",
+    "verify": "npm run build && npm run spec:coverage && npm run test"
+  },
+  "dependencies": {
+    "culori": "^4.0.1"
+  },
+  "devDependencies": {
+    "vitest": "^3.0.5"
+  }
+}

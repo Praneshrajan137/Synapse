@@ -1,0 +1,13 @@
+# Dependencies — restored via `npm ci`.
+node_modules/
+
+# Coverage output.
+coverage/
+
+# The root .gitignore ignores every `dist/` (Python build convention). The
+# chromatic token artifacts are deterministic and MUST be committed — the CI
+# determinism gate diffs them (INV-CLR-010) — so re-include dist/ here.
+!dist/
+
+# ...except the contrast report, which is a regenerated review artifact.
+dist/contrast-report.html

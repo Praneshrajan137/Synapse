@@ -11,6 +11,20 @@
     <meta name="theme-color" content="#020617" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <title>SYNAPSE Console</title>
+    <script>
+      // No-flash theme: apply the saved theme before first paint.
+      // Default is dark — operators run in low-ambient control rooms.
+      (function () {
+        try {
+          var t = localStorage.getItem("synapse-theme");
+          if (t === "light" || t === "dark") {
+            document.documentElement.setAttribute("data-theme", t);
+          }
+        } catch (e) {
+          /* localStorage unavailable — keep the dark default */
+        }
+      })();
+    </script>
   </head>
   <body class="bg-canvas text-ink">
     <div id="root"></div>
