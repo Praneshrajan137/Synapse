@@ -20,6 +20,7 @@ jobs:
       - name: Install dependencies
         run: |
           pip install -r packages/requirements.txt -r packages/requirements-dev.txt
+          pip install -r orchestrator/requirements.txt
           pip install jsonschema pyyaml
       - name: Ruff lint
         run: ruff check packages/synapse_common/ agents/ orchestrator/ --output-format=github
