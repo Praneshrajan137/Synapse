@@ -9,7 +9,7 @@ the fast-path (Tier 1-2) or full consensus (Tier 3-4) is used.
 from __future__ import annotations
 
 import asyncio
-from typing import Any
+from typing import Any, cast
 
 import structlog
 from synapse_common.models import DecisionTier
@@ -114,7 +114,7 @@ class TierRouter:
 
     def get_model_for_tier(self, tier: DecisionTier) -> str | None:
         """Return Ollama model name.  ``None`` for Tier 1 (no LLM)."""
-        return TIER_CRITERIA[tier]["model"]
+        return cast("str | None", TIER_CRITERIA[tier]["model"])
 
     async def maybe_prewarm(
         self,

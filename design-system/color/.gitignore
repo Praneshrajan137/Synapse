@@ -11,3 +11,7 @@ coverage/
 
 # ...except the contrast report, which is a regenerated review artifact.
 dist/contrast-report.html
+
+# The root .gitignore also ignores every `build/` (Python build convention),
+# but build/ here holds the token-build engine source — re-include it.
+!build/

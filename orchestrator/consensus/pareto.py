@@ -72,7 +72,7 @@ def _build_utility_matrix(proposals: list[AgentProposal]) -> np.ndarray:
     return matrix
 
 
-class _WeightOptProblem(Problem):
+class _WeightOptProblem(Problem):  # type: ignore[misc]  # pymoo ships no type stubs
     """Optimise the 8-D weight vector that blends proposal utilities."""
 
     def __init__(self, utility_matrix: np.ndarray) -> None:
