@@ -24,25 +24,28 @@ export function buildBasemapStyle(tilesUrl: string): maplibregl.StyleSpecificati
       },
     },
     glyphs: "https://protomaps.github.io/basemaps-assets/fonts/{fontstack}/{range}.pbf",
+    // chromatic-allow: the MapLibre style spec requires literal colour values
+    // in its paint JSON — it cannot read CSS custom properties. Tracked for
+    // chromatic-token migration (INV-CLR-009).
     layers: [
       {
         id: "background",
         type: "background",
-        paint: { "background-color": "#020617" },
+        paint: { "background-color": "#020617" }, // chromatic-allow
       },
       {
         id: "land",
         type: "fill",
         source: "synapse_tiles",
         "source-layer": "earth",
-        paint: { "fill-color": "#0f172a" },
+        paint: { "fill-color": "#0f172a" }, // chromatic-allow
       },
       {
         id: "water",
         type: "fill",
         source: "synapse_tiles",
         "source-layer": "water",
-        paint: { "fill-color": "#1e293b" },
+        paint: { "fill-color": "#1e293b" }, // chromatic-allow
       },
       {
         id: "roads",
@@ -50,7 +53,7 @@ export function buildBasemapStyle(tilesUrl: string): maplibregl.StyleSpecificati
         source: "synapse_tiles",
         "source-layer": "roads",
         paint: {
-          "line-color": "#334155",
+          "line-color": "#334155", // chromatic-allow
           "line-width": 0.5,
         },
       },
@@ -59,7 +62,7 @@ export function buildBasemapStyle(tilesUrl: string): maplibregl.StyleSpecificati
         type: "fill",
         source: "synapse_tiles",
         "source-layer": "buildings",
-        paint: { "fill-color": "#1f2937", "fill-opacity": 0.4 },
+        paint: { "fill-color": "#1f2937", "fill-opacity": 0.4 }, // chromatic-allow
       },
     ],
   } as unknown as maplibregl.StyleSpecification;

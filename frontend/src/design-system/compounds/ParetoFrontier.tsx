@@ -26,6 +26,20 @@ interface ParetoFrontierProps {
 
 const MARGIN = { top: 16, right: 16, bottom: 32, left: 40 };
 
+// chromatic-allow: visx paints these straight onto <svg> stroke/fill, which the
+// --syn-* channel tokens can't reach without a colour-function wrapper.
+// Tracked for chromatic-token migration (INV-CLR-009).
+const AXIS = {
+  line: "rgb(100 116 139)", // chromatic-allow
+  label: "rgb(148 163 184)", // chromatic-allow
+} as const;
+const DOT = {
+  selected: "rgb(56 189 248)", // chromatic-allow
+  dominated: "rgb(100 116 139)", // chromatic-allow
+  normal: "rgb(129 140 248)", // chromatic-allow
+  ring: "rgb(248 250 252)", // chromatic-allow
+} as const;
+
 /**
  * 2D Pareto frontier scatter (visx). The selected point pulses; non-dominated
  * points are bright; dominated points dim. Weight vector is shown as a
@@ -73,19 +87,19 @@ export function ParetoFrontier({
           <AxisBottom
             top={innerHeight}
             scale={xScale}
-            stroke="rgb(100 116 139)"
-            tickStroke="rgb(100 116 139)"
-            tickLabelProps={{ fill: "rgb(148 163 184)", fontSize: 10 }}
+            stroke={AXIS.line}
+            tickStroke={AXIS.line}
+            tickLabelProps={{ fill: AXIS.label, fontSize: 10 }}
             label={xLabel}
-            labelProps={{ fill: "rgb(148 163 184)", fontSize: 10 }}
+            labelProps={{ fill: AXIS.label, fontSize: 10 }}
           />
           <AxisLeft
             scale={yScale}
-            stroke="rgb(100 116 139)"
-            tickStroke="rgb(100 116 139)"
-            tickLabelProps={{ fill: "rgb(148 163 184)", fontSize: 10 }}
+            stroke={AXIS.line}
+            tickStroke={AXIS.line}
+            tickLabelProps={{ fill: AXIS.label, fontSize: 10 }}
             label={yLabel}
-            labelProps={{ fill: "rgb(148 163 184)", fontSize: 10 }}
+            labelProps={{ fill: AXIS.label, fontSize: 10 }}
           />
           {points.map((p) => {
             const isSelected = p.id === selectedId;
@@ -96,14 +110,8 @@ export function ParetoFrontier({
                   cx={xScale(p.x)}
                   cy={yScale(p.y)}
                   r={isSelected ? 7 : 4}
-                  fill={
-                    isSelected
-                      ? "rgb(56 189 248)"
-                      : isDominated
-                        ? "rgb(100 116 139)"
-                        : "rgb(129 140 248)"
-                  }
-                  stroke={isSelected ? "rgb(248 250 252)" : "transparent"}
+                  fill={isSelected ? DOT.selected : isDominated ? DOT.dominated : DOT.normal}
+                  stroke={isSelected ? DOT.ring : "transparent"}
                   strokeWidth={isSelected ? 2 : 0}
                   onClick={onSelect ? () => onSelect(p.id) : undefined}
                   style={onSelect ? { cursor: "pointer" } : undefined}

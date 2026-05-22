@@ -35,12 +35,12 @@ class Role(str, Enum):
         return self._RANK[self.value]
 
     @classmethod
-    def coerce(cls, value: str | "Role") -> "Role":
+    def coerce(cls, value: str | Role) -> Role:
         if isinstance(value, cls):
             return value
         return cls(value)
 
-    def satisfies(self, minimum: "Role") -> bool:
+    def satisfies(self, minimum: Role) -> bool:
         return self.rank >= minimum.rank
 
 

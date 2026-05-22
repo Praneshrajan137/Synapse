@@ -7,10 +7,13 @@ interface ConfidenceGaugeProps {
   readonly label?: string;
 }
 
+// chromatic-allow: these feed raw <svg> stroke/fill attributes, which the
+// --syn-* channel tokens cannot reach without a colour-function wrapper.
+// Tracked for chromatic-token migration (INV-CLR-009).
 const BAND_HEX: Record<ReturnType<typeof confidenceBand>, string> = {
-  ok: "rgb(34 197 94)",
-  warn: "rgb(234 179 8)",
-  risk: "rgb(239 68 68)",
+  ok: "rgb(34 197 94)", // chromatic-allow
+  warn: "rgb(234 179 8)", // chromatic-allow
+  risk: "rgb(239 68 68)", // chromatic-allow
 };
 
 /**
@@ -40,7 +43,7 @@ export function ConfidenceGauge({ value, size = 100, thickness = 6, label }: Con
         cy={size / 2}
         r={r}
         fill="none"
-        stroke="rgb(51 65 85)"
+        stroke="rgb(51 65 85)" // chromatic-allow: raw <svg> track stroke (INV-CLR-009)
         strokeWidth={thickness}
       />
       <circle
