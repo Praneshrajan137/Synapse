@@ -125,7 +125,11 @@ class RS256Manager:
         keys: list[dict[str, Any]] = []
         for kid, pem in self.public_keys.items():
             pub = serialization.load_pem_public_key(pem)
-            numbers = pub.public_numbers()  # type: ignore[attr-defined]
+            # RS256Manager only ever stores RSA keypairs (see generate_keypair);
+            # narrow explicitly so `.public_numbers()` is typed (not a union).
+            if not isinstance(pub, rsa.RSAPublicKey):
+                raise TokenError(f"{kid}: JWKS export supports RSA keys only")
+            numbers = pub.public_numbers()
             n = numbers.n.to_bytes((numbers.n.bit_length() + 7) // 8, "big")
             e = numbers.e.to_bytes((numbers.e.bit_length() + 7) // 8, "big")
             keys.append(
