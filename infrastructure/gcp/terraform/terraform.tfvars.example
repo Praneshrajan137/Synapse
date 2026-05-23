@@ -1,0 +1,39 @@
+# ============================================================================
+# SYNAPSE GCP deployment — copy to terraform.tfvars and edit
+# ============================================================================
+# `terraform.tfvars` is .gitignored — never commit it.
+# ============================================================================
+
+# ── REQUIRED ─────────────────────────────────────────────────────────────────
+
+# Your GCP project ID (NOT the display name).
+# Find at https://console.cloud.google.com/ → top bar → project info → ID.
+# Looks like "synapse-demo-471203".
+project_id = "REPLACE_ME"
+
+# ── Highly recommended to set ────────────────────────────────────────────────
+
+# Where to deploy. asia-south1 (Mumbai) is closest to India.
+# Other reasonable picks: us-central1, europe-west1, asia-southeast1 (Singapore).
+region = "asia-south1"
+zone   = "asia-south1-a"
+
+# Path to the public half of your SSH key.
+# Generate with: ssh-keygen -t ed25519 -f $HOME/.ssh/gcp_synapse -N ""
+ssh_public_key_path = "~/.ssh/gcp_synapse.pub"
+
+# Lock SSH + management ports to your home IP.
+# Find yours at https://whatismyipaddress.com, then add "/32".
+# Leave as 0.0.0.0/0 only for the first 10 minutes if you're behind a changing IP.
+admin_ip_cidr = "0.0.0.0/0"
+
+# ── Optional overrides ───────────────────────────────────────────────────────
+
+# vm_name      = "synapse-demo"
+# machine_type = "e2-standard-8"   # 8 vCPU / 32 GB RAM
+# use_spot_vm  = false             # true = ~70% cheaper but preemptible
+# boot_disk_gb = 30
+# data_disk_gb = 100
+
+# backup_bucket_location = "asia-south1"
+# backup_retention_days  = 7

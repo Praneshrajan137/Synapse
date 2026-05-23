@@ -54,10 +54,26 @@ Thumbs.db
 # Secrets (NEVER commit)
 .env
 .env.cloud
+.env.gcp
 .env.local
 *.key
 *.pem
 vault-token
+
+# Terraform (GCP + Oracle)
+infrastructure/gcp/terraform/.terraform/
+infrastructure/gcp/terraform/.terraform.lock.hcl
+infrastructure/gcp/terraform/terraform.tfvars
+infrastructure/gcp/terraform/*.tfstate
+infrastructure/gcp/terraform/*.tfstate.*
+infrastructure/oracle/terraform/.terraform/
+infrastructure/oracle/terraform/terraform.tfvars
+infrastructure/oracle/terraform/*.tfstate
+infrastructure/oracle/terraform/*.tfstate.*
+
+# GCP service account keys
+*-sa-key.json
+*-tf-key.json
 
 # Mutation testing cache
 .mutmut-cache/
