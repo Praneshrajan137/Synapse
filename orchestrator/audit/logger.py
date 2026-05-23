@@ -8,6 +8,7 @@ DELETE and UPDATE are revoked at the database level.
 from __future__ import annotations
 
 from typing import TYPE_CHECKING
+from uuid import uuid4
 
 import deal
 import structlog
@@ -41,7 +42,9 @@ class AuditLogger:
     async def log_decision(self, decision: ConsensusDecision) -> UUID:
         """Insert a decision row and return the audit row UUID."""
         async with self._session_factory() as session:
+            audit_id = uuid4()
             row = AuditConsensusRow(
+                id=audit_id,
                 decision_id=decision.decision_id,
                 tier=str(decision.tier.value),
                 phase_reached=decision.phase_reached,
@@ -64,7 +67,7 @@ class AuditLogger:
             logger.info(
                 "audit_decision_logged",
                 decision_id=str(decision.decision_id),
-                audit_id=str(row.id),
+                audit_id=str(audit_id),
                 tier=str(decision.tier.value),
             )
-            return row.id  # type: ignore[return-value]
+            return audit_id

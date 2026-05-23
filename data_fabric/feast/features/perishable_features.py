@@ -3,11 +3,11 @@
 Shelf life remaining, cold-chain temperature history, FSSAI compliance
 flags, and markdown state per (sku, store) pair.
 """
+
 from datetime import timedelta
 
 from feast import FeatureView, Field, FileSource
 from feast.types import Float64, Int64
-
 from features.entities import sku, store
 
 perishable_source = FileSource(

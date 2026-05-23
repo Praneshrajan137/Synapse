@@ -6,7 +6,8 @@ Trains cold-start baseline models for each agent on Mumbai data from scratch
 variant in A/B testing against transfer-learned models.
 
 Usage:
-    python ml_pipelines/transfer/cold_start_baseline.py --agent demand_prophet --data-dir data/mumbai
+    python ml_pipelines/transfer/cold_start_baseline.py \
+        --agent demand_prophet --data-dir data/mumbai
 
 Registered as: mumbai_coldstart_{model_name} in MLflow Staging.
 
@@ -16,16 +17,13 @@ INVARIANT I-8: All model lineage tracked in MLflow.
 from __future__ import annotations
 
 import argparse
-from typing import Any
 
 import mlflow
-import numpy as np
 import structlog
 import torch
 import torch.nn as nn
 from torch.optim import AdamW
 from torch.optim.lr_scheduler import CosineAnnealingWarmRestarts
-from torch.utils.data import DataLoader
 
 from ml_pipelines.transfer.transfer import TRANSFER_CONFIGS, create_mumbai_loaders
 
@@ -62,7 +60,11 @@ def train_cold_start(
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model = model.to(device)
 
-    optimizer = AdamW(model.parameters(), lr=config["lr_unfrozen"], weight_decay=config["weight_decay"])
+    optimizer = AdamW(
+        model.parameters(),
+        lr=config["lr_unfrozen"],
+        weight_decay=config["weight_decay"],
+    )
     scheduler = CosineAnnealingWarmRestarts(optimizer, T_0=5, T_mult=2)
 
     best_metric = float("inf") if direction == "minimize" else float("-inf")
@@ -115,6 +117,7 @@ def train_cold_start(
             break
 
     import pathlib
+
     ckpt = pathlib.Path(f"/tmp/coldstart_{agent_name}.pt")
     if ckpt.exists():
         model.load_state_dict(torch.load(ckpt, weights_only=True))
@@ -137,11 +140,13 @@ def main() -> None:
 
     mlflow.set_experiment(f"mumbai_coldstart_{args.agent}")
     with mlflow.start_run(run_name=f"coldstart_{args.agent}"):
-        mlflow.log_params({
-            "agent_name": args.agent,
-            "training_type": "cold_start",
-            "city": "mumbai",
-        })
+        mlflow.log_params(
+            {
+                "agent_name": args.agent,
+                "training_type": "cold_start",
+                "city": "mumbai",
+            }
+        )
         metrics = train_cold_start(args.agent, args.data_dir)
         mlflow.log_metrics(metrics)
 
@@ -149,6 +154,7 @@ def main() -> None:
         sample = next(iter(train_loader))
         model = _build_simple_model(sample[0].shape[1], sample[1].shape[1])
         import pathlib
+
         ckpt = pathlib.Path(f"/tmp/coldstart_{args.agent}.pt")
         if ckpt.exists():
             model.load_state_dict(torch.load(ckpt, weights_only=True))

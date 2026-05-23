@@ -6,17 +6,16 @@ Covers:
   - INV-TW-002: Monte Carlo >= 1000 scenarios
   - INV-TW-003: KL divergence alert fires when > 0.1
 """
+
 from __future__ import annotations
 
-from unittest.mock import MagicMock
+from typing import TYPE_CHECKING
 
 import numpy as np
 import pytest
 
-from digital_twin.config import TwinConfig
 from digital_twin.simulation.engine import SupplyChainSimulation
 from digital_twin.simulation.monte_carlo import (
-    MIN_SCENARIOS,
     MonteCarloRunner,
     ShockParams,
 )
@@ -25,6 +24,11 @@ from digital_twin.sync.divergence_monitor import (
     DivergenceMonitor,
     compute_kl_divergence,
 )
+
+if TYPE_CHECKING:
+    from unittest.mock import MagicMock
+
+    from digital_twin.config import TwinConfig
 
 
 class TestSimPyEngine:
@@ -98,9 +102,7 @@ class TestMonteCarlo:
         """Shock params should shift KPI distributions."""
         runner = MonteCarloRunner(config=twin_config)
 
-        baseline = runner.run_scenarios(
-            n=1000, shock_params=ShockParams(), duration_hours=0.5
-        )
+        baseline = runner.run_scenarios(n=1000, shock_params=ShockParams(), duration_hours=0.5)
         shocked = runner.run_scenarios(
             n=1000,
             shock_params=ShockParams(demand_multiplier=3.0),
@@ -134,9 +136,7 @@ class TestKLDivergence:
         mock_kafka_producer: MagicMock,
     ) -> None:
         """INV-TW-003: Alert fires on synapse.twin.divergence when KL > 0.1."""
-        monitor = DivergenceMonitor(
-            config=twin_config, producer=mock_kafka_producer
-        )
+        monitor = DivergenceMonitor(config=twin_config, producer=mock_kafka_producer)
 
         p = np.array([0.9, 0.05, 0.05])
         q = np.array([0.1, 0.45, 0.45])
@@ -159,9 +159,7 @@ class TestKLDivergence:
         mock_kafka_producer: MagicMock,
     ) -> None:
         """No alert should fire when KL < threshold."""
-        monitor = DivergenceMonitor(
-            config=twin_config, producer=mock_kafka_producer
-        )
+        monitor = DivergenceMonitor(config=twin_config, producer=mock_kafka_producer)
 
         p = np.array([0.34, 0.33, 0.33])
         q = np.array([0.33, 0.34, 0.33])
@@ -181,9 +179,7 @@ class TestKLDivergence:
         mock_kafka_producer: MagicMock,
     ) -> None:
         """check_all should return KL values for all agents with state."""
-        monitor = DivergenceMonitor(
-            config=twin_config, producer=mock_kafka_producer
-        )
+        monitor = DivergenceMonitor(config=twin_config, producer=mock_kafka_producer)
 
         for agent in ("demand_prophet", "routing_navigator"):
             rng = np.random.default_rng(hash(agent) % (2**31))

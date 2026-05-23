@@ -1,6 +1,7 @@
 """
 SYNAPSE Digital Twin — Shared test fixtures.
 """
+
 from __future__ import annotations
 
 from unittest.mock import MagicMock, patch

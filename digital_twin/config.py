@@ -2,6 +2,7 @@
 SYNAPSE Digital Twin — Configuration via Pydantic BaseSettings.
 All thresholds, connection strings, and simulation params are environment-configurable.
 """
+
 from __future__ import annotations
 
 from pydantic import Field

@@ -108,6 +108,12 @@ class TestPricingMADDPG:
             assert (act > 0).all(), f"INV-PO-002 violated for {cat}"
 
     def test_soft_update(self, model: PricingMADDPG) -> None:
+        # Target nets are initialised as exact copies of the online nets, so a
+        # soft update is a mathematical no-op until the online net diverges.
+        # Perturb the online actor first to create that divergence.
+        with torch.no_grad():
+            for p in model.actors[0].parameters():
+                p.add_(torch.randn_like(p))
         pre_target = [p.clone() for p in model.target_actors[0].parameters()]
         model.soft_update(tau=0.5)
         for old, new in zip(pre_target, model.target_actors[0].parameters(), strict=True):

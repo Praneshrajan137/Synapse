@@ -55,7 +55,12 @@ class GatedResidualNetwork(nn.Module):
 
         hidden = self.fc1(x)
         if self.context_projection is not None and context is not None:
-            hidden = hidden + self.context_projection(context)
+            projected = self.context_projection(context)
+            if projected.dim() < hidden.dim():
+                # Static context enriches every timestep — broadcast it over the
+                # sequence axis: (B, H) -> (B, 1, H) against temporal (B, S, H).
+                projected = projected.unsqueeze(-2)
+            hidden = hidden + projected
         hidden = self.elu(hidden)
         hidden = self.fc2(self.dropout(hidden))
 

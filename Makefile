@@ -39,21 +39,26 @@ seed: ## Initialize Neo4j schema + seed data
 	cat infrastructure/neo4j/seed.cypher | docker exec -i synapse-neo4j cypher-shell -u neo4j -p synapse_graph_2026
 	@echo "Neo4j schema initialized and seeded."
 
-test: ## Run all unit + contract tests
-	cd packages && pytest tests/ -v --tb=short
-	@echo "All shared package tests passed."
+test: ## Run the full backend test surface (matches CI quality-gates)
+	pytest packages/ agents/ orchestrator/ digital_twin/ data_fabric/ ml_pipelines/ api/ tests/ --tb=short
+	@echo "Full backend test surface passed."
 
-test-coverage: ## Run tests with coverage report
-	cd packages && pytest tests/ -v --cov=synapse_common --cov-report=term-missing --cov-fail-under=80
+test-coverage: ## Run the full backend test surface with the coverage ratchet
+	pytest packages/ agents/ orchestrator/ digital_twin/ data_fabric/ ml_pipelines/ api/ tests/ \
+		--cov=packages/synapse_common --cov=agents --cov=orchestrator \
+		--cov=digital_twin --cov=data_fabric --cov=ml_pipelines --cov=api \
+		--cov-report=term-missing --cov-fail-under=58
 
-lint: ## Run ruff linter
-	ruff check packages/synapse_common/ agents/ orchestrator/ --fix
+lint: ## Run ruff linter (all 7 backend packages)
+	ruff check packages/synapse_common/ agents/ orchestrator/ digital_twin/ data_fabric/ ml_pipelines/ api/ --fix
 
-typecheck: ## Run mypy strict type checking
+typecheck: ## Run mypy strict (packages + orchestrator blocking; agents informational)
 	mypy --strict packages/synapse_common/
+	mypy --strict orchestrator/ --exclude orchestrator/tests
+	-mypy --strict --explicit-package-bases agents/ --exclude 'agents/.*/tests' --exclude 'agents/.*/training'
 
-format: ## Format code with ruff
-	ruff format packages/synapse_common/ agents/ orchestrator/
+format: ## Format code with ruff (all 7 backend packages)
+	ruff format packages/synapse_common/ agents/ orchestrator/ digital_twin/ data_fabric/ ml_pipelines/ api/
 
 generate-spec-tests: ## Auto-generate test stubs from all spec.yaml files
 	@for spec in $$(find agents/ orchestrator/ -name "spec.yaml"); do \

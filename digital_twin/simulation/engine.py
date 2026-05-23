@@ -4,6 +4,7 @@ SYNAPSE Digital Twin — SimPy discrete-event simulation engine.
 Models the full order lifecycle: arrival → pick/pack/dispatch → delivery → restock → spoilage.
 Each process draws from calibrated distributions and integrates with agent signals.
 """
+
 from __future__ import annotations
 
 import dataclasses
@@ -117,9 +118,7 @@ class SupplyChainSimulation:
         """Poisson-distributed order arrivals."""
         order_id = 0
         while True:
-            inter_arrival = self._rng.exponential(
-                1.0 / self._config.order_arrival_rate
-            )
+            inter_arrival = self._rng.exponential(1.0 / self._config.order_arrival_rate)
             yield env.timeout(inter_arrival)
             order_id += 1
             self._metrics.orders_created += 1

@@ -4,12 +4,13 @@ SYNAPSE Digital Twin — Neo4j supply-network graph (Aura Free tier).
 Provides topology queries, node updates, and neighbor lookups for the
 digital twin's graph representation of the supply chain.
 """
+
 from __future__ import annotations
 
 from typing import Any
 
 import structlog
-from neo4j import GraphDatabase, Driver, Session
+from neo4j import Driver, GraphDatabase, Session
 
 from digital_twin.config import TwinConfig
 
@@ -49,10 +50,7 @@ class SupplyNetworkGraph:
 
     def update_node(self, node_id: str, properties: dict[str, Any]) -> None:
         """Upsert a node's properties in the supply network."""
-        query = (
-            "MERGE (n:SupplyNode {id: $node_id}) "
-            "SET n += $properties"
-        )
+        query = "MERGE (n:SupplyNode {id: $node_id}) SET n += $properties"
         with self._session() as session:
             session.run(query, node_id=node_id, properties=properties)
         logger.info("update_node", node_id=node_id, props_count=len(properties))

@@ -4,17 +4,18 @@ SYNAPSE Digital Twin — Divergence monitor (I-12, INV-TW-003).
 Computes KL divergence between twin state and live agent states.
 Fires synapse.twin.divergence alert when threshold is exceeded.
 """
+
 from __future__ import annotations
 
-import time
 import threading
+import time
 from typing import Any
 
 import numpy as np
 import structlog
+from synapse_common.kafka_client import KafkaConfig, SynapseProducer
 
 from digital_twin.config import TwinConfig
-from synapse_common.kafka_client import KafkaConfig, SynapseProducer
 
 logger = structlog.get_logger(__name__)
 

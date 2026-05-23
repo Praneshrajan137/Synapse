@@ -28,6 +28,8 @@ from scipy import stats
 
 log = structlog.get_logger()
 
+_Conclusion = Literal["treatment_wins", "control_wins", "no_significant_difference"]
+
 
 @dataclass
 class ABTestResult:
@@ -43,7 +45,7 @@ class ABTestResult:
     p_value: float
     p_value_corrected: float
     cohens_d: float
-    conclusion: Literal["treatment_wins", "control_wins", "no_significant_difference"]
+    conclusion: _Conclusion
     practical_significance: Literal["large", "medium", "small", "negligible"]
 
 
@@ -52,7 +54,12 @@ class ABTestFramework:
 
     METRICS: dict[str, list[str]] = {
         "demand_prophet": ["crps", "mape", "calibration_coverage", "inference_latency_ms"],
-        "routing_navigator": ["mean_route_cost", "mean_delivery_time", "rider_gini", "inference_latency_ms"],
+        "routing_navigator": [
+            "mean_route_cost",
+            "mean_delivery_time",
+            "rider_gini",
+            "inference_latency_ms",
+        ],
         "inventory_sentinel": ["fill_rate", "holding_cost", "stockout_rate", "waste_rate"],
         "pricing_oracle": ["revenue_delta", "elasticity_alignment", "essential_cap_violations"],
         "disruption_shield": ["f1_score", "false_positive_rate", "detection_latency_ms"],
@@ -60,13 +67,24 @@ class ABTestFramework:
     }
 
     METRIC_LOWER_IS_BETTER: dict[str, bool] = {
-        "crps": True, "mape": True, "inference_latency_ms": True,
-        "mean_route_cost": True, "mean_delivery_time": True, "rider_gini": True,
-        "holding_cost": True, "stockout_rate": True, "waste_rate": True,
-        "essential_cap_violations": True, "false_positive_rate": True,
-        "detection_latency_ms": True, "trust_calibration": True, "lead_time_mae": True,
-        "fill_rate": False, "calibration_coverage": False,
-        "revenue_delta": False, "elasticity_alignment": False,
+        "crps": True,
+        "mape": True,
+        "inference_latency_ms": True,
+        "mean_route_cost": True,
+        "mean_delivery_time": True,
+        "rider_gini": True,
+        "holding_cost": True,
+        "stockout_rate": True,
+        "waste_rate": True,
+        "essential_cap_violations": True,
+        "false_positive_rate": True,
+        "detection_latency_ms": True,
+        "trust_calibration": True,
+        "lead_time_mae": True,
+        "fill_rate": False,
+        "calibration_coverage": False,
+        "revenue_delta": False,
+        "elasticity_alignment": False,
         "f1_score": False,
     }
 
@@ -110,12 +128,16 @@ class ABTestFramework:
             lower_is_better = self.METRIC_LOWER_IS_BETTER.get(metric_name, True)
             if p_corrected < 0.05:
                 if lower_is_better:
-                    conclusion: Literal["treatment_wins", "control_wins", "no_significant_difference"] = (
-                        "treatment_wins" if np.mean(treatment) < np.mean(control) else "control_wins"
+                    conclusion: _Conclusion = (
+                        "treatment_wins"
+                        if np.mean(treatment) < np.mean(control)
+                        else "control_wins"
                     )
                 else:
                     conclusion = (
-                        "treatment_wins" if np.mean(treatment) > np.mean(control) else "control_wins"
+                        "treatment_wins"
+                        if np.mean(treatment) > np.mean(control)
+                        else "control_wins"
                     )
             else:
                 conclusion = "no_significant_difference"
@@ -167,14 +189,16 @@ class ABTestFramework:
         with mlflow.start_run(run_name=f"ab_test_{self.agent_name}"):
             for r in results:
                 prefix = f"ab_{r.metric_name}"
-                mlflow.log_metrics({
-                    f"{prefix}_control_mean": r.control_mean,
-                    f"{prefix}_treatment_mean": r.treatment_mean,
-                    f"{prefix}_p_value": r.p_value_corrected,
-                    f"{prefix}_cohens_d": r.cohens_d,
-                    f"{prefix}_n_control": float(r.n_control),
-                    f"{prefix}_n_treatment": float(r.n_treatment),
-                })
+                mlflow.log_metrics(
+                    {
+                        f"{prefix}_control_mean": r.control_mean,
+                        f"{prefix}_treatment_mean": r.treatment_mean,
+                        f"{prefix}_p_value": r.p_value_corrected,
+                        f"{prefix}_cohens_d": r.cohens_d,
+                        f"{prefix}_n_control": float(r.n_control),
+                        f"{prefix}_n_treatment": float(r.n_treatment),
+                    }
+                )
             mlflow.log_param(
                 "conclusion_summary",
                 json.dumps({r.metric_name: r.conclusion for r in results}),

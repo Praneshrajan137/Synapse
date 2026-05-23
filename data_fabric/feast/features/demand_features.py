@@ -1,9 +1,9 @@
 """Demand signal features — consumed by Demand Prophet and Pricing Oracle."""
+
 from datetime import timedelta
 
 from feast import FeatureView, Field, FileSource
 from feast.types import Float64, Int64
-
 from features.entities import sku, store
 
 demand_source = FileSource(

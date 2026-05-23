@@ -67,7 +67,8 @@ class SemanticDecisionCache:
                 if match.score >= self.SIMILARITY_THRESHOLD:
                     cached_time = datetime.fromisoformat(match.metadata["timestamp"])
                     if datetime.now(UTC) - cached_time < timedelta(hours=self.TTL_HOURS):
-                        return json.loads(match.metadata["decision_json"])
+                        decision: dict[str, Any] = json.loads(match.metadata["decision_json"])
+                        return decision
         except Exception as exc:
             logger.warning("semantic_cache_check_failed", error=str(exc))
         return None

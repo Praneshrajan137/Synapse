@@ -45,7 +45,9 @@ def elasticity_alignment(
     """
     abs_elasticity = elasticity_estimates.abs()
 
-    if abs_elasticity.std() < 1e-8 or multipliers.std() < 1e-8:
+    if multipliers.numel() < 2 or abs_elasticity.std() < 1e-8 or multipliers.std() < 1e-8:
+        # Correlation is undefined for fewer than 2 samples; std() with the
+        # default Bessel correction would divide by n-1 = 0 and return NaN.
         return torch.tensor(0.0, device=multipliers.device)
 
     mult_centered = multipliers - multipliers.mean()
@@ -130,6 +132,19 @@ def compute_reward(
         + essential_penalty_weight * cap_viol
         + competitor_gap_weight * comp_gap
     )
+
+    if bool((cap_viol > 0.0).item()):
+        # INV-PO-001 defense-in-depth: ANY essential-cap breach must make the
+        # total reward strictly negative, independent of revenue scale, so the
+        # policy can never trade a breach for revenue. The weighted-sum term
+        # above still shapes the gradient; this inverts the revenue incentive
+        # and adds a catastrophic floor.
+        total = (
+            essential_penalty_weight * cap_viol
+            - revenue_weight * rev.clamp(min=0.0)
+            + competitor_gap_weight * comp_gap
+            - 1.0
+        )
 
     return {
         "total_reward": total,

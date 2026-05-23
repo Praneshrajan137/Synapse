@@ -114,7 +114,8 @@ class TierRouter:
 
     def get_model_for_tier(self, tier: DecisionTier) -> str | None:
         """Return Ollama model name.  ``None`` for Tier 1 (no LLM)."""
-        return TIER_CRITERIA[tier]["model"]
+        model = TIER_CRITERIA[tier]["model"]
+        return str(model) if model is not None else None
 
     async def maybe_prewarm(
         self,

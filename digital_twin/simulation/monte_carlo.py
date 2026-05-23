@@ -4,6 +4,7 @@ SYNAPSE Digital Twin — Monte Carlo scenario runner.
 INV-TW-002: Every query MUST run >= 1000 scenarios.
 Uses ProcessPoolExecutor for CPU-parallel simulation batches.
 """
+
 from __future__ import annotations
 
 import dataclasses
@@ -65,7 +66,8 @@ def _run_single_scenario(
     shock: ShockParams,
 ) -> dict[str, Any]:
     """Run one SimPy scenario in a worker process (picklable top-level function)."""
-    from digital_twin.simulation.engine import SupplyChainSimulation, TwinConfig
+    from digital_twin.config import TwinConfig
+    from digital_twin.simulation.engine import SupplyChainSimulation
 
     config = TwinConfig(
         order_arrival_rate=2.0 * shock.demand_multiplier,

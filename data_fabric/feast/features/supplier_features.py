@@ -4,11 +4,11 @@ Bayesian lead-time posteriors + fill-rate EWMA + defect rate. Feeds the
 Supplier Trust GNN encoder and the Inventory Sentinel safety-stock
 calculation.
 """
+
 from datetime import timedelta
 
 from feast import FeatureView, Field, FileSource
 from feast.types import Float64, Int64
-
 from features.entities import supplier
 
 supplier_source = FileSource(

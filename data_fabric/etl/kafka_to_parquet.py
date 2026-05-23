@@ -30,19 +30,21 @@ from typing import Any
 import pyarrow as pa
 import pyarrow.parquet as pq
 import structlog
-from confluent_kafka import Consumer, KafkaError, KafkaException, TopicPartition
+from confluent_kafka import Consumer, KafkaError, KafkaException
 
 log = structlog.get_logger()
 
 
 def _build_consumer(broker: str, group: str) -> Consumer:
-    return Consumer({
-        "bootstrap.servers": broker,
-        "group.id": group,
-        "auto.offset.reset": "earliest",
-        "enable.auto.commit": False,  # commit per batch flush only
-        "session.timeout.ms": 30000,
-    })
+    return Consumer(
+        {
+            "bootstrap.servers": broker,
+            "group.id": group,
+            "auto.offset.reset": "earliest",
+            "enable.auto.commit": False,  # commit per batch flush only
+            "session.timeout.ms": 30000,
+        }
+    )
 
 
 def _parse_message(raw: bytes) -> dict[str, Any]:

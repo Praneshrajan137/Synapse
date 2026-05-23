@@ -4,11 +4,11 @@ Double-ML causal elasticity estimates, cross-price elasticities, and
 recent markdown history per (sku, category). Enforces essential-category
 cap (I-6) upstream by exposing the `essential_flag` signal.
 """
+
 from datetime import timedelta
 
 from feast import FeatureView, Field, FileSource
 from feast.types import Float64, Int64
-
 from features.entities import category, sku
 
 elasticity_source = FileSource(

@@ -74,8 +74,8 @@ def evaluate_agent(
         "max_psi": 0.0,
     }
     try:
-        from evidently.report import Report
         from evidently.metric_preset import DataDriftPreset
+        from evidently.report import Report
 
         report = Report(metrics=[DataDriftPreset()])
         report.run(reference_data=ref_frame, current_data=cur_frame)

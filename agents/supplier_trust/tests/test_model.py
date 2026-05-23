@@ -81,7 +81,10 @@ class TestSupplierTrustGNN:
             num_layers=2,
         )
         out = model(hetero_data)
-        loss = out["supplier"].sum()
+        # Sum every node-type head so gradient flow through the whole model is
+        # exercised — a supplier-only loss leaves the sku/darkstore output
+        # heads outside the graph and they would legitimately have no grad.
+        loss = out["supplier"].sum() + out["sku"].sum() + out["darkstore"].sum()
         loss.backward()
         for param in model.parameters():
             if param.requires_grad:

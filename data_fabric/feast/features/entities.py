@@ -1,4 +1,5 @@
 """SYNAPSE Feast Entity Definitions — all entity keys for the feature store."""
+
 from feast import Entity
 
 sku = Entity(

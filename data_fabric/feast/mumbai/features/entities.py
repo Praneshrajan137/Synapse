@@ -1,4 +1,5 @@
 """Mumbai Feast Entity Definitions — mirrors Bengaluru entity schema exactly."""
+
 from feast import Entity
 
 sku = Entity(

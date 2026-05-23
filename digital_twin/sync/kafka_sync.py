@@ -4,17 +4,17 @@ SYNAPSE Digital Twin — Kafka state synchronization.
 Subscribes to ALL synapse.*.state topics and mirrors live agent states
 into the Neo4j supply-network graph in real-time.
 """
+
 from __future__ import annotations
 
-import json
 import threading
 from typing import Any
 
 import structlog
+from synapse_common.kafka_client import KafkaConfig, SynapseConsumer
 
 from digital_twin.config import TwinConfig
 from digital_twin.graph.supply_network import SupplyNetworkGraph
-from synapse_common.kafka_client import KafkaConfig, SynapseConsumer
 
 logger = structlog.get_logger(__name__)
 
@@ -68,9 +68,7 @@ class TwinKafkaSync:
             logger.warning("kafka_sync_skip_no_id", message_keys=list(message.keys()))
             return
 
-        properties = {
-            k: v for k, v in message.items() if k not in ("agent_name", "node_id")
-        }
+        properties = {k: v for k, v in message.items() if k not in ("agent_name", "node_id")}
         self._graph.update_node(node_id=str(node_id), properties=properties)
         logger.debug("kafka_sync_applied", node_id=node_id)
 
@@ -87,9 +85,7 @@ class TwinKafkaSync:
             logger.warning("kafka_sync_already_running")
             return
         self._running = True
-        self._thread = threading.Thread(
-            target=self._poll_loop, name="twin-kafka-sync", daemon=True
-        )
+        self._thread = threading.Thread(target=self._poll_loop, name="twin-kafka-sync", daemon=True)
         self._thread.start()
         logger.info("kafka_sync_started")
 

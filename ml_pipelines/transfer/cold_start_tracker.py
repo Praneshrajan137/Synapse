@@ -17,7 +17,7 @@ from __future__ import annotations
 
 import copy
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Literal
 
 import mlflow
@@ -77,26 +77,26 @@ class ColdStartTracker:
             self.phases["heuristic"].status = "skipped"
             self.phases["xgboost"].status = "skipped"
             self.phases["gnn"].status = "active"
-            self.phases["gnn"].activated_at = datetime.now(timezone.utc)
+            self.phases["gnn"].activated_at = datetime.now(UTC)
 
-    def log_phase_transition(
-        self, from_phase: str, to_phase: str, metric: float
-    ) -> None:
+    def log_phase_transition(self, from_phase: str, to_phase: str, metric: float) -> None:
         """Log phase transition to MLflow."""
         mlflow.set_experiment(f"{self.city}_cold_start_progression")
         with mlflow.start_run(run_name=f"transition_{from_phase}_to_{to_phase}"):
-            mlflow.log_params({
-                "city": self.city,
-                "from_phase": from_phase,
-                "to_phase": to_phase,
-                "transfer_learning": self.use_transfer,
-            })
+            mlflow.log_params(
+                {
+                    "city": self.city,
+                    "from_phase": from_phase,
+                    "to_phase": to_phase,
+                    "transfer_learning": self.use_transfer,
+                }
+            )
             mlflow.log_metric("transition_metric", metric)
-            mlflow.log_metric("timestamp", datetime.now(timezone.utc).timestamp())
+            mlflow.log_metric("timestamp", datetime.now(UTC).timestamp())
 
         self.phases[from_phase].status = "completed"
         self.phases[to_phase].status = "active"
-        self.phases[to_phase].activated_at = datetime.now(timezone.utc)
+        self.phases[to_phase].activated_at = datetime.now(UTC)
         self.phases[to_phase].actual_metric = metric
 
         log.info(

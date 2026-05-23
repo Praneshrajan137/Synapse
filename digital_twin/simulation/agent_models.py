@@ -4,6 +4,7 @@ SYNAPSE Digital Twin — Mesa agent-based model for rider behavior.
 RiderAgent models individual rider dynamics: shift schedules, fatigue accumulation,
 and zone preferences. RiderModel manages the rider population across the network.
 """
+
 from __future__ import annotations
 
 import dataclasses

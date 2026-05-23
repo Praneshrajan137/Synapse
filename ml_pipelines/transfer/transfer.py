@@ -69,11 +69,14 @@ TRANSFER_CONFIGS: dict[str, dict[str, Any]] = {
     "routing_navigator": {
         "model_name": "routing_navigator_pointer",
         "freeze_modules": [
-            "encoder.layers.0", "encoder.layers.1",
-            "encoder.layers.2", "encoder.layers.3",
+            "encoder.layers.0",
+            "encoder.layers.1",
+            "encoder.layers.2",
+            "encoder.layers.3",
         ],
         "unfreeze_modules": [
-            "encoder.layers.4", "encoder.layers.5",
+            "encoder.layers.4",
+            "encoder.layers.5",
             "decoder",
         ],
         "lr_unfrozen": 5e-5,
@@ -312,7 +315,9 @@ class TransferLearningPipeline:
 
             # ── Convergence Check: reached Bengaluru-equivalent? ──────
             if equiv_epoch is None:
-                gap_pct = abs(val_metric - bengaluru_metric) / max(abs(bengaluru_metric), 1e-8) * 100
+                gap_pct = (
+                    abs(val_metric - bengaluru_metric) / max(abs(bengaluru_metric), 1e-8) * 100
+                )
                 if gap_pct <= threshold_pct:
                     equiv_epoch = epoch
                     log.info(
@@ -326,9 +331,7 @@ class TransferLearningPipeline:
 
             # ── Early Stopping ────────────────────────────────────────
             improved = (
-                val_metric < best_metric
-                if direction == "minimize"
-                else val_metric > best_metric
+                val_metric < best_metric if direction == "minimize" else val_metric > best_metric
             )
             if improved:
                 best_metric = val_metric
@@ -364,9 +367,7 @@ class TransferLearningPipeline:
         if equiv_epoch is None:
             equiv_epoch = len(history)
         convergence_speedup = self.config["bengaluru_epochs"] / max(equiv_epoch, 1)
-        final_gap_pct = (
-            abs(best_metric - bengaluru_metric) / max(abs(bengaluru_metric), 1e-8) * 100
-        )
+        final_gap_pct = abs(best_metric - bengaluru_metric) / max(abs(bengaluru_metric), 1e-8) * 100
 
         metrics = {
             "convergence_epoch": float(equiv_epoch),
@@ -375,9 +376,8 @@ class TransferLearningPipeline:
             "bengaluru_final_metric": bengaluru_metric,
             "metric_gap_pct": final_gap_pct,
             "total_epochs_trained": float(len(history)),
-            "freeze_ratio": sum(
-                1 for p in model.parameters() if not p.requires_grad
-            ) / max(sum(1 for p in model.parameters()), 1),
+            "freeze_ratio": sum(1 for p in model.parameters() if not p.requires_grad)
+            / max(sum(1 for p in model.parameters()), 1),
         }
 
         mlflow.log_metrics(
@@ -487,9 +487,7 @@ class TransferLearningPipeline:
         predictions = model(features)
         return nn.functional.mse_loss(predictions, targets)
 
-    def _evaluate(
-        self, model: nn.Module, val_loader: DataLoader, device: torch.device
-    ) -> float:
+    def _evaluate(self, model: nn.Module, val_loader: DataLoader, device: torch.device) -> float:
         model.eval()
         total_loss = 0.0
         n_batches = 0
@@ -506,10 +504,7 @@ class TransferLearningPipeline:
         parts = path.split(".")
         module: Any = model
         for part in parts:
-            if part.isdigit():
-                module = list(module.children())[int(part)]
-            else:
-                module = getattr(module, part)
+            module = list(module.children())[int(part)] if part.isdigit() else getattr(module, part)
         return module
 
 

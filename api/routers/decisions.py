@@ -19,9 +19,7 @@ async def trigger_decision(payload: dict[str, Any]) -> dict[str, Any]:
     try:
         import requests
 
-        resp = requests.post(
-            f"{ORCHESTRATOR_URL}/api/v1/decisions", json=payload, timeout=30
-        )
+        resp = requests.post(f"{ORCHESTRATOR_URL}/api/v1/decisions", json=payload, timeout=30)
     except Exception as exc:  # noqa: BLE001
         raise HTTPException(status_code=503, detail=f"orchestrator unreachable: {exc}") from exc
     if resp.status_code != 200:

@@ -7,9 +7,11 @@ on:
 
 jobs:
   quality-gates:
-    name: Lint + Type Check + Unit Tests
+    name: Lint + Type Check + Full Backend Test Surface
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    # Installs the full ML/infra stack (torch, ray, mlflow, …) and runs the
+    # entire backend test surface — heavier than the old packages-only job.
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
       - name: Set up Python 3.11
@@ -17,24 +19,31 @@ jobs:
         with:
           python-version: "3.11"
           cache: "pip"
-      - name: Install dependencies
+      - name: Install backend dependencies
+        # CI must be provisioned for the WHOLE backend, not just packages/ —
+        # otherwise agent/orchestrator/twin tests cannot even be collected.
+        # See docs/quality_gates/baseline.md finding F-1.
         run: |
           pip install -r packages/requirements.txt -r packages/requirements-dev.txt
+          pip install -r agents/requirements-sprint2.txt -r agents/requirements-sprint3.txt
+          pip install -r orchestrator/requirements.txt
+          pip install -e packages/
           pip install jsonschema pyyaml
-      - name: Ruff lint
-        run: ruff check packages/synapse_common/ agents/ orchestrator/ --output-format=github
-      - name: Ruff format check
-        run: ruff format --check packages/synapse_common/ agents/ orchestrator/
-      - name: MyPy strict type check (packages — blocking)
+      - name: Ruff lint (all 7 backend packages)
+        run: ruff check packages/synapse_common/ agents/ orchestrator/ digital_twin/ data_fabric/ ml_pipelines/ api/ --output-format=github
+      - name: Ruff format check (all 7 backend packages)
+        run: ruff format --check packages/synapse_common/ agents/ orchestrator/ digital_twin/ data_fabric/ ml_pipelines/ api/
+      - name: MyPy strict — packages (blocking)
         run: mypy --strict packages/synapse_common/
-      - name: MyPy strict type check (orchestrator — blocking)
+      - name: MyPy strict — orchestrator (blocking)
         run: mypy --strict orchestrator/ --exclude orchestrator/tests
-      - name: MyPy strict type check (agents — informational, target=blocking)
-        # TODO(R5): flip continue-on-error to false once all agents are clean.
-        # Tracked in plans/now-we-have-completed-joyful-goose.md (R5).
+      - name: MyPy strict — agents (informational; ratchet target = 0)
+        # baseline.md F-3: 53 real errors. The old `mypy agents/` command aborted
+        # on a module-resolution error and emitted no signal at all; this one is
+        # honest. TODO: drive to 0, then flip continue-on-error to false.
         continue-on-error: true
-        run: mypy --strict agents/ --exclude 'agents/.*/tests' --exclude 'agents/.*/training'
-      - name: Schema validation
+        run: mypy --strict --explicit-package-bases agents/ --exclude 'agents/.*/tests' --exclude 'agents/.*/training'
+      - name: Schema validation (I-3)
         run: python scripts/validate_schemas.py
       - name: Spec validation
         run: |
@@ -47,6 +56,8 @@ jobs:
           print('OK $spec')
           "
           done
+      - name: Spec coverage — every invariant has a test (SDD, layer 1)
+        run: python scripts/check_spec_coverage.py
       - name: License audit (I-1)
         run: |
           pip install pip-licenses
@@ -68,17 +79,23 @@ jobs:
             fi
           done
           echo "Reward isolation verified"
-      - name: Unit tests
+      - name: Full backend test surface + coverage gate
+        # Runs SDD / Contract / Metamorphic / DbC / Oracle layers across the
+        # whole backend. Coverage gate is a RATCHET seeded from the measured
+        # baseline (58.9%) — raise it, never lower it. See baseline.md.
         run: |
-          cd packages && pytest tests/ -v --tb=short --cov=synapse_common --cov-report=xml --cov-fail-under=80
-      - name: Contract tests
-        run: |
-          pytest agents/*/contracts/ -m contract -v --tb=short 2>/dev/null || echo "No contract tests yet (Sprint 2)"
+          pytest packages/ agents/ orchestrator/ digital_twin/ data_fabric/ ml_pipelines/ api/ tests/ \
+            --cov=packages/synapse_common --cov=agents --cov=orchestrator \
+            --cov=digital_twin --cov=data_fabric --cov=ml_pipelines --cov=api \
+            --cov-report=xml --cov-report=term-missing \
+            --cov-fail-under=58 \
+            --tb=short
       - name: Upload coverage
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: coverage-report
-          path: packages/coverage.xml
+          path: coverage.xml
 
   sprint6-verify:
     name: Sprint 6 Multi-City Verification
@@ -147,7 +164,6 @@ jobs:
         run: |
           PYTHONPATH=. pytest ml_pipelines/ab_test/test_ab_framework.py -v --tb=short
 
-
   v4-compliance:
     name: v4.0 Definitive Edition Compliance (informational)
     runs-on: ubuntu-latest
@@ -178,4 +194,3 @@ jobs:
         run: git diff --exit-code design-system/color/dist/
       - name: No raw colour literals in components (INV-CLR-009)
         run: node design-system/color/scripts/lint-hex.mjs frontend/src
-

@@ -4,6 +4,7 @@ SYNAPSE Digital Twin — What-If scenario engine.
 INV-TW-004: What-If API must respond within 10 seconds for 1000 scenarios.
 Composes the SimPy engine and Monte Carlo runner for scenario exploration.
 """
+
 from __future__ import annotations
 
 import time

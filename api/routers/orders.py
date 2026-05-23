@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 import os
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import structlog
 from fastapi import APIRouter, HTTPException
@@ -28,7 +28,7 @@ async def create_order(req: OrderRequest) -> dict[str, str]:
         "store_id": req.store_id,
         "sku_id": req.sku_id,
         "quantity": req.quantity,
-        "timestamp": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+        "timestamp": datetime.now(UTC).isoformat().replace("+00:00", "Z"),
     }
     try:
         from confluent_kafka import Producer

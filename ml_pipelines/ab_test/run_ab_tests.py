@@ -20,15 +20,18 @@ ERROR PATTERN E-S6-08: Minimum 1000 predictions per variant.
 from __future__ import annotations
 
 import argparse
+from typing import TYPE_CHECKING
 
 import mlflow
 import numpy as np
 import structlog
 import torch
-from torch.utils.data import DataLoader
 
 from ml_pipelines.ab_test.framework import ABTestFramework
 from ml_pipelines.transfer.transfer import TRANSFER_CONFIGS, create_mumbai_loaders
+
+if TYPE_CHECKING:
+    from torch.utils.data import DataLoader
 
 log = structlog.get_logger()
 

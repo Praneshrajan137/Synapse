@@ -34,19 +34,22 @@ def convert_demand_features(city: str, *, base_dir: Path | None = None) -> Path:
     for (store_id, sku_id), group in df.groupby(["store_id", "sku_id"]):
         group = group.sort_values("date")
         qty = group["quantity"]
-        feat = pd.DataFrame({
-            "store_id": store_id,
-            "sku_id": sku_id,
-            "event_timestamp": pd.to_datetime(group["date"]).dt.tz_localize("UTC"),
-            "rolling_mean_7d": qty.rolling(7, min_periods=1).mean().values,
-            "rolling_std_7d": qty.rolling(7, min_periods=1).std().fillna(0).values,
-            "trend_slope": qty.rolling(7, min_periods=1).apply(
-                lambda x: (x.iloc[-1] - x.iloc[0]) / max(len(x), 1), raw=False
-            ).fillna(0).values,
-            "seasonality_idx": (qty / qty.expanding().mean()).fillna(1.0).values,
-            "orders_last_1h": qty.rolling(1, min_periods=1).sum().astype(np.int64).values,
-            "orders_last_24h": qty.rolling(1, min_periods=1).sum().astype(np.int64).values,
-        })
+        feat = pd.DataFrame(
+            {
+                "store_id": store_id,
+                "sku_id": sku_id,
+                "event_timestamp": pd.to_datetime(group["date"]).dt.tz_localize("UTC"),
+                "rolling_mean_7d": qty.rolling(7, min_periods=1).mean().values,
+                "rolling_std_7d": qty.rolling(7, min_periods=1).std().fillna(0).values,
+                "trend_slope": qty.rolling(7, min_periods=1)
+                .apply(lambda x: (x.iloc[-1] - x.iloc[0]) / max(len(x), 1), raw=False)
+                .fillna(0)
+                .values,
+                "seasonality_idx": (qty / qty.expanding().mean()).fillna(1.0).values,
+                "orders_last_1h": qty.rolling(1, min_periods=1).sum().astype(np.int64).values,
+                "orders_last_24h": qty.rolling(1, min_periods=1).sum().astype(np.int64).values,
+            }
+        )
         features.append(feat)
 
     result = pd.concat(features, ignore_index=True)
@@ -65,8 +68,12 @@ def convert_weather_features(city: str, *, base_dir: Path | None = None) -> Path
     df["event_timestamp"] = pd.to_datetime(df["date"]).dt.tz_localize("UTC")
 
     columns = [
-        "store_id", "event_timestamp", "temperature_c", "humidity_pct",
-        "precip_prob", "wind_speed_kmh",
+        "store_id",
+        "event_timestamp",
+        "temperature_c",
+        "humidity_pct",
+        "precip_prob",
+        "wind_speed_kmh",
     ]
     if "monsoon_intensity" not in df.columns:
         df["monsoon_intensity"] = 0.0
@@ -95,15 +102,17 @@ def convert_store_features(city: str, *, base_dir: Path | None = None) -> Path:
     records: list[dict] = []
     for _, store in stores.iterrows():
         for dt in dates:
-            records.append({
-                "store_id": store["id"],
-                "event_timestamp": dt,
-                "lat": store["lat"],
-                "lon": store["lon"],
-                "zone": store["zone"],
-                "capacity_sqft": store.get("capacity_sqft", 1500),
-                "cold_chain_enabled": int(store.get("cold_chain", True)),
-            })
+            records.append(
+                {
+                    "store_id": store["id"],
+                    "event_timestamp": dt,
+                    "lat": store["lat"],
+                    "lon": store["lon"],
+                    "zone": store["zone"],
+                    "capacity_sqft": store.get("capacity_sqft", 1500),
+                    "cold_chain_enabled": int(store.get("cold_chain", True)),
+                }
+            )
 
     result = pd.DataFrame(records)
     parquet_path = base / "store_features.parquet"

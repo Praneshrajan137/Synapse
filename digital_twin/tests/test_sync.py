@@ -3,14 +3,16 @@ SYNAPSE Digital Twin — Kafka sync layer tests.
 
 Covers Kafka subscription, message processing, and sync lifecycle.
 """
+
 from __future__ import annotations
 
-from unittest.mock import MagicMock, patch
+from typing import TYPE_CHECKING
+from unittest.mock import MagicMock
 
-import pytest
-
-from digital_twin.config import TwinConfig
 from digital_twin.sync.kafka_sync import SYNAPSE_STATE_TOPICS, TwinKafkaSync
+
+if TYPE_CHECKING:
+    from digital_twin.config import TwinConfig
 
 
 class TestTwinKafkaSync:

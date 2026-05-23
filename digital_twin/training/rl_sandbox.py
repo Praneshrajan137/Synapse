@@ -4,6 +4,7 @@ SYNAPSE Digital Twin — Gymnasium wrapper around SimPy for RL training.
 SupplyChainGymEnv provides a standard Gymnasium interface with domain
 randomization (+/-30%) on lead times, demand, and failure rates.
 """
+
 from __future__ import annotations
 
 from typing import Any
@@ -134,15 +135,15 @@ class SupplyChainGymEnv(gym.Env[np.ndarray, np.ndarray]):
         self._current_step = 0
 
         obs = self._get_obs()
-        info: dict[str, Any] = {"randomized_config": {
-            "order_arrival_rate": randomized_config.order_arrival_rate,
-            "pick_pack_mean_min": randomized_config.pick_pack_mean_min,
-        }}
+        info: dict[str, Any] = {
+            "randomized_config": {
+                "order_arrival_rate": randomized_config.order_arrival_rate,
+                "pick_pack_mean_min": randomized_config.pick_pack_mean_min,
+            }
+        }
         return obs, info
 
-    def step(
-        self, action: np.ndarray
-    ) -> tuple[np.ndarray, float, bool, bool, dict[str, Any]]:
+    def step(self, action: np.ndarray) -> tuple[np.ndarray, float, bool, bool, dict[str, Any]]:
         """Execute one step (run sim for step_duration hours)."""
         if self._sim is None:
             raise RuntimeError("Must call reset() before step()")

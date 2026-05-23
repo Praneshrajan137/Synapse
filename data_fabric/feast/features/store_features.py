@@ -1,9 +1,9 @@
 """Store operational state features — consumed by Inventory Sentinel and Routing Nav."""
+
 from datetime import timedelta
 
 from feast import FeatureView, Field, FileSource
 from feast.types import Float64, Int64
-
 from features.entities import store
 
 store_source = FileSource(

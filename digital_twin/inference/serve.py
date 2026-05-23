@@ -9,22 +9,24 @@ Endpoints:
 
 Port: 8009
 """
+
 from __future__ import annotations
 
-import json
 import time
 from contextlib import asynccontextmanager
-from typing import Any, AsyncIterator
+from typing import TYPE_CHECKING
 
 import structlog
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import Response
 from pydantic import BaseModel, Field
+from synapse_common.a2a_sdk import A2ARequest, A2AResponse, AgentCard
 
 from digital_twin.config import TwinConfig
 from digital_twin.simulation.what_if import ScenarioSpec, WhatIfEngine, WhatIfResult
-from synapse_common.a2a_sdk import A2ARequest, A2AResponse, AgentCard
-from synapse_common.models import AgentName
+
+if TYPE_CHECKING:
+    from collections.abc import AsyncIterator
 
 logger = structlog.get_logger(__name__)
 
