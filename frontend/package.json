@@ -36,7 +36,10 @@
     "spec:check": "tsx scripts/check-fe-invariants.ts",
     "audit:licenses": "tsx scripts/audit-licenses.ts",
     "size": "size-limit",
-    "lhci": "lhci autorun"
+    "lhci": "lhci autorun",
+    "mutation": "stryker run --config-file stryker.conf.json",
+    "sbom": "pnpm dlx @cyclonedx/cdxgen@^10 -o sbom.cdx.json -t javascript .",
+    "audit:supply": "pnpm audit --audit-level=high && node scripts/check-supply-chain.mjs"
   },
   "dependencies": {
     "react": "^18.3.1",
@@ -92,6 +95,9 @@
     "@biomejs/biome": "^1.9.4",
     "@playwright/test": "^1.48.0",
     "@axe-core/playwright": "^4.10.0",
+    "@stryker-mutator/core": "^8.6.0",
+    "@stryker-mutator/typescript-checker": "^8.6.0",
+    "@stryker-mutator/vitest-runner": "^8.6.0",
     "@storybook/addon-a11y": "^8.3.5",
     "@storybook/addon-essentials": "^8.3.5",
     "@storybook/addon-interactions": "^8.3.5",

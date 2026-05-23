@@ -1,0 +1,34 @@
+{
+  "$schema": "https://raw.githubusercontent.com/stryker-mutator/stryker-js/master/packages/core/schema/stryker-schema.json",
+  "_comment": "SYNAPSE Console — mutation gate per CLAUDE.md: <15% survival on rewards-adjacent (>=85% killed), <10% on guardrails (>=90% killed). Targets the load-bearing TS paths: canonical JSON (I-13), full-jitter retry (FE-INV-006/ADR-016), HTTP client (FE-INV-002, 012), WebSocket multiplex (FE-INV-008), replay determinism (FE-INV-028), confidence (FE-INV-005), auth refresh, and override-state stores. UI components are tested via Storybook a11y + visual regression, not mutation.",
+  "packageManager": "pnpm",
+  "reporters": ["clear-text", "html", "json"],
+  "testRunner": "vitest",
+  "vitest": {
+    "configFile": "vitest.config.ts"
+  },
+  "checkers": ["typescript"],
+  "tsconfigFile": "tsconfig.json",
+  "coverageAnalysis": "perTest",
+  "mutate": [
+    "src/lib/json-canonical.ts",
+    "src/lib/jitter-retry.ts",
+    "src/lib/replay.ts",
+    "src/lib/confidence.ts",
+    "src/transport/http-client.ts",
+    "src/transport/ws-multiplex.ts",
+    "src/transport/firehose.ts",
+    "src/transport/auth-refresh.ts",
+    "src/state/escalation.store.ts",
+    "src/state/firehose.store.ts"
+  ],
+  "thresholds": {
+    "high": 90,
+    "low": 85,
+    "break": 85
+  },
+  "timeoutMS": 60000,
+  "concurrency": 4,
+  "ignoreStatic": true,
+  "tempDirName": ".stryker-tmp"
+}
