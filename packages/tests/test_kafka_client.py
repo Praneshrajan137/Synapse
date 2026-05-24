@@ -47,7 +47,9 @@ class TestSynapseProducer:
         assert call_kwargs["key"] == b"k1"
         payload = json.loads(call_kwargs["value"].decode("utf-8"))
         assert payload == {"key": "value"}
-        mock_producer.flush.assert_called_once()
+        # Sprint-7 batching (WS-8 §3): produce() no longer flushes per call.
+        # Callers (e.g. outbox dispatcher, api.routers.orders) flush explicitly.
+        mock_producer.poll.assert_called_once_with(0)
 
     @patch("synapse_common.kafka_client.Producer")
     def test_produce_pydantic_model(self, mock_producer_cls: MagicMock) -> None:

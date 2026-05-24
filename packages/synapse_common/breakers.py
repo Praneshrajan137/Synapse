@@ -205,6 +205,27 @@ class AsyncBreaker:
 
         return decorator
 
+    async def call(
+        self,
+        func: Callable[..., Awaitable[T]],
+        /,
+        *args: Any,
+        **kwargs: Any,
+    ) -> T:
+        """Invoke an async ``func`` under this breaker.
+
+        Equivalent to::
+
+            async with breaker.guard():
+                return await func(*args, **kwargs)
+
+        Provided as a sugar surface for callers that prefer a one-shot
+        invocation rather than a context manager (used by the A2A SDK
+        and other call-site-heavy producers).
+        """
+        async with self.guard():
+            return await func(*args, **kwargs)
+
 
 _REGISTRY: dict[str, AsyncBreaker] = {}
 _REGISTRY_LOCK = asyncio.Lock()
