@@ -9,11 +9,13 @@ Implements the three mandatory A2A methods:
 from __future__ import annotations
 
 import json
+from datetime import UTC, datetime
 from typing import Any
 from uuid import UUID, uuid4
 
 import structlog
 from synapse_common.models import AgentName, AgentProposal, DecisionTier
+from synapse_common.schemas import validate_agent_payload
 
 from agents.disruption_shield.inference.pipeline import (
     DisruptionRequest,
@@ -65,6 +67,38 @@ class DisruptionShieldA2AHandler:
         )
         alert = self._pipeline.detect(req)
 
+        # Build a payload that matches `synapse.domain.disruption_alert`.
+        # The pipeline's DisruptionAlert is a richer internal model; the
+        # schema is the canonical wire format for downstream consumers.
+        affected_nodes = list(alert.anomalous_nodes) or ["unknown"]
+        # Pipeline alert_level is 0-3; schema is 1-10. Map linearly.
+        scaled_level = max(1, min(10, alert.alert_level * 3 + 1))
+        playbook_id = (
+            alert.playbooks[0].id
+            if alert.playbooks
+            else f"NO-PLAYBOOK-{alert.alert_id}"
+        )
+        playbook_actions = (
+            alert.playbooks[0].title if alert.playbooks else "no_playbook_matched"
+        )
+        schema_payload: dict[str, Any] = {
+            "alert_id": alert.alert_id,
+            "alert_level": scaled_level,
+            "anomaly_scores": {
+                "isolation_forest": float(alert.isolation_forest_score),
+                "lstm_autoencoder": float(alert.lstm_autoencoder_score),
+                "gnn_structural": float(alert.gnn_structural_score),
+                "ensemble_weighted": float(alert.ensemble_score),
+            },
+            "affected_nodes": affected_nodes,
+            "disruption_type": alert.severity,
+            "playbook_id": playbook_id,
+            "playbook_actions": playbook_actions,
+            "reasoning_chain": "\n".join(alert.reasoning_chain),
+            "timestamp": datetime.now(UTC).isoformat().replace("+00:00", "Z"),
+            "confidence": float(alert.confidence),
+        }
+
         proposal = AgentProposal(
             agent_name=AgentName.DISRUPTION_SHIELD,
             decision_id=UUID(decision_id) if isinstance(decision_id, str) else decision_id,
@@ -72,26 +106,24 @@ class DisruptionShieldA2AHandler:
             confidence=alert.confidence,
             justification_trace=[
                 f"Ensemble score: {alert.ensemble_score:.4f}",
-                f"Alert level: {alert.alert_level}",
-                f"Anomalous nodes: {len(alert.anomalous_nodes)}",
+                f"Alert level: {scaled_level}",
+                f"Affected nodes: {len(affected_nodes)}",
                 f"Severity: {alert.severity}",
                 "INV-DS-001: anomaly -> alert verified",
                 "INV-DS-003: reasoning chain attached",
             ],
-            payload={
-                "alert_level": alert.alert_level,
-                "ensemble_score": alert.ensemble_score,
-                "anomalous_nodes": alert.anomalous_nodes,
-                "reasoning_chain": alert.reasoning_chain,
-                "playbooks": [p.model_dump() for p in alert.playbooks],
-            },
+            payload=schema_payload,
             tier=DecisionTier.TIER_2,
         )
 
         self._fsm.transition("proposal_submitted")
         self._fsm.record_tool_call()
 
-        return json.loads(proposal.to_deterministic_json())
+        # I-3: validate every emitted payload against proto/domain/.
+        validate_agent_payload("disruption_shield", proposal.payload)
+
+        result: dict[str, Any] = json.loads(proposal.to_deterministic_json())
+        return result
 
     def debate_respond(self, params: dict[str, Any]) -> dict[str, Any]:
         round_number = params.get("round_number", 1)

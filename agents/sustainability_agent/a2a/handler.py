@@ -14,9 +14,14 @@ from uuid import UUID, uuid4
 
 import structlog
 from synapse_common.models import AgentName, AgentProposal, DecisionTier
+from synapse_common.schemas import validate_agent_payload
 
 from agents.sustainability_agent.inference.pipeline import SustainabilityPipeline
 from agents.sustainability_agent.state_machine import SustainabilityAgentStateMachine
+
+# India grid emission factor: ~0.79 kg CO2 / kWh (Central Electricity Authority,
+# Apr-2025 baseline). Used to derive energy_kwh from the compute CO2 component.
+INDIA_GRID_KG_CO2_PER_KWH = 0.79
 
 logger = structlog.get_logger(__name__)
 
@@ -60,6 +65,37 @@ class SustainabilityAgentA2AHandler:
             distance_km=distance_km,
         )
 
+        # Project the rich internal CarbonReport down to the canonical
+        # `synapse.domain.carbon_report` shape that downstream consumers
+        # contract against. The full report is still emitted on the
+        # synapse.sustainability.carbon Kafka topic for analytics.
+        timestamp_iso = (
+            report.timestamp.isoformat().replace("+00:00", "Z")
+            if hasattr(report.timestamp, "isoformat")
+            else str(report.timestamp)
+        )
+        energy_kwh = round(report.compute_co2_kg / INDIA_GRID_KG_CO2_PER_KWH, 6)
+        carbon_pareto_weight = float(
+            report.pareto_weights.get("carbon", 0.25) if report.pareto_weights else 0.25
+        )
+        survival_probability = max(0.0, 1.0 - float(report.waste_probability))
+
+        schema_payload: dict[str, Any] = {
+            "report_id": report.report_id,
+            "scope": "aggregate",
+            "co2_kg": float(report.total_co2_kg),
+            "energy_kwh": energy_kwh,
+            "timestamp": timestamp_iso,
+            "waste_prediction": {
+                "predicted_waste_kg": 0.0,
+                "survival_probability": survival_probability,
+                "recommended_action": (
+                    "markdown" if report.waste_probability > 0.5 else "monitor"
+                ),
+            },
+            "pareto_weight": carbon_pareto_weight,
+        }
+
         proposal = AgentProposal(
             agent_name=AgentName.SUSTAINABILITY_AGENT,
             decision_id=UUID(decision_id) if isinstance(decision_id, str) else decision_id,
@@ -68,18 +104,23 @@ class SustainabilityAgentA2AHandler:
             justification_trace=[
                 f"Delivery CO2: {report.delivery_co2_kg:.4f} kg",
                 f"Compute CO2: {report.compute_co2_kg:.6f} kg",
+                f"Compute energy: {energy_kwh:.6f} kWh (India grid factor)",
                 f"Waste probability: {report.waste_probability:.4f}",
                 "Carbon is first-class Pareto objective (INV-SA-001)",
                 f"Provenance chain length: {len(report.provenance_chain)}",
             ],
-            payload=json.loads(report.to_deterministic_json()),
+            payload=schema_payload,
             tier=DecisionTier.TIER_2,
         )
 
         self._fsm.transition("proposal_submitted")
         self._fsm.record_tool_call()
 
-        return json.loads(proposal.to_deterministic_json())
+        # I-3: validate every emitted payload against proto/domain/.
+        validate_agent_payload("sustainability_agent", proposal.payload)
+
+        result: dict[str, Any] = json.loads(proposal.to_deterministic_json())
+        return result
 
     def debate_respond(self, params: dict[str, Any]) -> dict[str, Any]:
         round_number = params.get("round_number", 1)
