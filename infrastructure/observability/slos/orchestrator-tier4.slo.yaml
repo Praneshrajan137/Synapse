@@ -1,0 +1,28 @@
+version: "prometheus/v1"
+service: "orchestrator"
+labels:
+  team: synapse
+  tier: tier_4
+slos:
+  - name: "orchestrator-tier4-latency"
+    objective: 95.0
+    description: Tier-4 Monte-Carlo + LLM decision must complete in <120 s p99 (I-10).
+    sli:
+      events:
+        error_query: |
+          sum(rate(synapse_consensus_duration_seconds_bucket{tier="tier_4",le="120"}[{{.window}}]))
+        total_query: |
+          sum(rate(synapse_consensus_duration_seconds_count{tier="tier_4"}[{{.window}}]))
+    alerting:
+      name: orchestrator-tier4-latency-burn
+      labels:
+        severity: ticket
+      annotations:
+        summary: Tier-4 latency budget burning
+        runbook_url: https://github.com/Praneshrajan137/synapse/blob/main/docs/runbooks/brownout_active.md
+      page_alert:
+        labels:
+          severity: page
+      ticket_alert:
+        labels:
+          severity: ticket

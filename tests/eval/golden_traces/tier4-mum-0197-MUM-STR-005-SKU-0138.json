@@ -1,0 +1,23 @@
+{
+  "agents_involved": [
+    "disruption_shield",
+    "routing_navigator",
+    "inventory_sentinel",
+    "supplier_trust"
+  ],
+  "avg_confidence": 0.355,
+  "city": "mumbai",
+  "description": "tier_4 mumbai disruption_shield,routing_navigator,inventory_sentinel,supplier_trust confidence=0.355 disruption",
+  "disruption_active": true,
+  "expected_essential": true,
+  "expected_invariants": [
+    "INV-IS-002"
+  ],
+  "expected_tier": "tier_4",
+  "payload": {
+    "sku_id": "SKU-0138",
+    "store_id": "MUM-STR-005"
+  },
+  "requires_twin_simulation": true,
+  "trace_id": "tier4-mum-0197-MUM-STR-005-SKU-0138"
+}

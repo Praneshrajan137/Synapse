@@ -14,6 +14,7 @@ from uuid import UUID, uuid4
 
 import structlog
 from synapse_common.models import AgentName, AgentProposal, DecisionTier
+from synapse_common.schemas import validate_agent_payload
 
 from agents.demand_prophet.inference.pipeline import DemandProphetPipeline
 from agents.demand_prophet.state_machine import DemandProphetStateMachine
@@ -79,6 +80,11 @@ class DemandProphetA2AHandler:
 
         self._fsm.transition("proposal_submitted")
         self._fsm.record_tool_call()
+
+        # I-3: validate every emitted payload against proto/domain/ before
+        # leaving the handler. Schema mismatch raises SchemaValidationError
+        # which surfaces as a JSON-RPC error rather than corrupting consensus.
+        validate_agent_payload("demand_prophet", proposal.payload)
 
         return json.loads(proposal.to_deterministic_json())
 

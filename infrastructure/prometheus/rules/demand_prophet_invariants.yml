@@ -1,0 +1,24 @@
+groups:
+- name: synapse-demand_prophet-invariants
+  interval: 30s
+  rules:
+  - alert: demand_prophet-inv-dp-002
+    expr: (avg_over_time(synapse_demand_prophet_coverage_p90{}[5m])) < 0.85
+    for: 10m
+    labels:
+      severity: critical
+      agent: demand_prophet
+      invariant: INV-DP-002
+    annotations:
+      summary: 90% conformal interval achieves >=85% empirical coverage
+      runbook_url: https://github.com/Praneshrajan137/synapse/blob/main/docs/runbooks/conformal_coverage_loss.md
+  - alert: demand_prophet-inv-dp-006
+    expr: (sum(rate(synapse_demand_prophet_negative_horizon_total[5m]))) > 0.0
+    for: 1m
+    labels:
+      severity: critical
+      agent: demand_prophet
+      invariant: INV-DP-006
+    annotations:
+      summary: All forecast values are non-negative
+      runbook_url: https://github.com/Praneshrajan137/synapse/blob/main/docs/runbooks/forecast_negative_values.md

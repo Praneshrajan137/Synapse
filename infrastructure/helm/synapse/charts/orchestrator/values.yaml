@@ -1,0 +1,21 @@
+replicaCount: 3
+image:
+  repository: orchestrator
+  pullPolicy: IfNotPresent
+service:
+  port: 8085
+env: {}
+resources:
+  requests: {cpu: 500m, memory: 512Mi}
+  limits: {cpu: 2, memory: 2Gi}
+podLabels: {}
+autoscaling:
+  keda:
+    enabled: true
+    minReplicas: 2
+    maxReplicas: 20
+canary:
+  flagger:
+    enabled: true
+    stepWeight: 10
+    maxWeight: 50

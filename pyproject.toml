@@ -16,6 +16,18 @@ ignore = ["ANN401"]
 [tool.ruff.lint.flake8-type-checking]
 runtime-evaluated-base-classes = ["pydantic.BaseModel"]
 
+# Math-heavy modules follow mathematical naming conventions (capital letters
+# for matrices, R for radius). N806/N803 relaxed here so code reads like
+# the equations it implements.
+[tool.ruff.lint.per-file-ignores]
+"agents/inventory_sentinel/models/l2_bandit.py" = ["N806"]
+"agents/routing_navigator/models/cvrptw.py" = ["N806", "N803"]
+"agents/routing_navigator/inference/pipeline.py" = ["N806"]
+"agents/supplier_trust/inference/pipeline.py" = ["E501"]
+# JSON-Schema registry uses ValidationError at runtime (formatter arg);
+# SchemaViolation is intentionally named to express "contract violation".
+"packages/synapse_common/schema_registry.py" = ["TC002", "N818"]
+
 [tool.ruff.format]
 quote-style = "double"
 indent-style = "space"

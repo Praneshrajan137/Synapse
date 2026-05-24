@@ -147,3 +147,12 @@ contracts:
       - "reasoning_chain is a non-empty list of strings"
       - "playbooks is a list of dicts with keys: id, title, relevance_score"
       - "timestamp is valid ISO-8601"
+
+reward:
+  weights:
+    early_detection_weight: 1.0
+    false_positive_weight: 10.0
+    missed_disruption_weight: 50.0
+    recovery_speed_weight: 1.0
+  scale: 1.0
+  notes: 'Asymmetric reward: missed_disruption dominates. Shadow mode ADR-031.'

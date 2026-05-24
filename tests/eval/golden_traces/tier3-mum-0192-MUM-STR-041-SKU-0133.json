@@ -1,0 +1,26 @@
+{
+  "agents_involved": [
+    "demand_prophet",
+    "pricing_oracle",
+    "inventory_sentinel",
+    "freshness_guardian"
+  ],
+  "avg_confidence": 0.499,
+  "city": "mumbai",
+  "description": "tier_3 mumbai demand_prophet,pricing_oracle,inventory_sentinel,freshness_guardian confidence=0.499",
+  "disruption_active": false,
+  "expected_essential": false,
+  "expected_invariants": [
+    "INV-DP-002",
+    "INV-DP-006",
+    "INV-PO-001",
+    "INV-IS-002"
+  ],
+  "expected_tier": "tier_3",
+  "payload": {
+    "sku_id": "SKU-0133",
+    "store_id": "MUM-STR-041"
+  },
+  "requires_twin_simulation": false,
+  "trace_id": "tier3-mum-0192-MUM-STR-041-SKU-0133"
+}

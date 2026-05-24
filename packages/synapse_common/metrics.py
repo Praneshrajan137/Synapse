@@ -95,3 +95,56 @@ CONSENSUS_PROPOSALS_RECEIVED = Counter(
     "Agent proposals received per consensus round",
     ["agent_name"],
 )
+
+# --- Sprint 7 distributed correctness (WS-1/WS-2) ----------------------------
+
+BROWNOUT_DECISIONS_TOTAL = Counter(
+    "synapse_brownout_decisions_total",
+    "Decisions affected by brownout shedding, by level and city (ADR-028)",
+    ["level", "city"],
+)
+
+OUTBOX_DISPATCH_TOTAL = Counter(
+    "synapse_outbox_dispatch_total",
+    "Outbox row dispatch outcomes by terminal status",
+    ["status"],
+)
+
+OUTBOX_LAG_SECONDS = Gauge(
+    "synapse_outbox_lag_seconds",
+    "Age in seconds of the oldest PENDING audit_outbox row",
+)
+
+# Sprint 9 — Audit chain (ADR-033)
+AUDIT_CHAIN_LENGTH = Gauge(
+    "synapse_audit_chain_length",
+    "Total rows in the chained audit table; monotonically increasing",
+)
+
+AUDIT_CHAIN_TAMPER_DETECTED = Counter(
+    "synapse_audit_chain_tamper_detected_total",
+    "Tamper events detected by synapse audit verify or the anchorer",
+    ["source"],
+)
+
+# Sprint 9 — Data lifecycle & archival (WS-7)
+ARCHIVE_ROWS_MOVED_TOTAL = Counter(
+    "synapse_archive_rows_moved_total",
+    "Audit rows successfully moved to the MinIO Parquet archive by the daily worker",
+    ["table"],
+)
+
+# Sprint 8 — WS-3 Spec-as-Source-of-Truth (ADR-031)
+REWARD_WEIGHT_DIVERGENCE_TOTAL = Counter(
+    "synapse_reward_weight_divergence_total",
+    "Reward-weight drift between spec.yaml-generated config and runtime kwargs "
+    "(shadow mode, ADR-031)",
+    ["agent", "key"],
+)
+
+# Sprint 8 — WS-8 Performance Hardening (ADR-032)
+TIER_BUDGET_EXCEEDED_TOTAL = Counter(
+    "synapse_tier_budget_exceeded_total",
+    "Decisions whose handler latency exceeded its tier budget (ADR-032)",
+    ["tier"],
+)

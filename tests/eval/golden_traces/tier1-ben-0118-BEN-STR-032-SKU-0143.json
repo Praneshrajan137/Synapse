@@ -1,0 +1,18 @@
+{
+  "agents_involved": [
+    "routing_navigator"
+  ],
+  "avg_confidence": 0.931,
+  "city": "bengaluru",
+  "description": "tier_1 bengaluru routing_navigator confidence=0.931",
+  "disruption_active": false,
+  "expected_essential": false,
+  "expected_invariants": [],
+  "expected_tier": "tier_1",
+  "payload": {
+    "sku_id": "SKU-0143",
+    "store_id": "BEN-STR-032"
+  },
+  "requires_twin_simulation": false,
+  "trace_id": "tier1-ben-0118-BEN-STR-032-SKU-0143"
+}

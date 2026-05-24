@@ -126,3 +126,9 @@ contracts:
       - "trust_score in [0.0, 1.0]"
       - "lead_time_posterior contains mean_days, std_days, p10_days, p90_days"
       - "new vendors have trust_score >= 0.3"
+
+reward:
+  weights: {}
+  scale: 1.0
+  notes: Sprint 8 contract-only; weights extraction deferred to Sprint 9 alongside
+    named-weight refactor.

@@ -1,0 +1,18 @@
+{
+  "agents_involved": [
+    "freshness_guardian"
+  ],
+  "avg_confidence": 0.93,
+  "city": "mumbai",
+  "description": "tier_1 mumbai freshness_guardian confidence=0.93",
+  "disruption_active": false,
+  "expected_essential": false,
+  "expected_invariants": [],
+  "expected_tier": "tier_1",
+  "payload": {
+    "sku_id": "SKU-0020",
+    "store_id": "MUM-STR-004"
+  },
+  "requires_twin_simulation": false,
+  "trace_id": "tier1-mum-0013-MUM-STR-004-SKU-0020"
+}

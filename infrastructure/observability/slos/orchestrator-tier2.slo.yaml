@@ -1,0 +1,28 @@
+version: "prometheus/v1"
+service: "orchestrator"
+labels:
+  team: synapse
+  tier: tier_2
+slos:
+  - name: "orchestrator-tier2-latency"
+    objective: 99.0
+    description: Tier-2 single-agent decision must complete in <500 ms p99 (I-10).
+    sli:
+      events:
+        error_query: |
+          sum(rate(synapse_inference_latency_seconds_bucket{tier="tier_2",le="0.5"}[{{.window}}]))
+        total_query: |
+          sum(rate(synapse_inference_latency_seconds_count{tier="tier_2"}[{{.window}}]))
+    alerting:
+      name: orchestrator-tier2-latency-burn
+      labels:
+        severity: page
+      annotations:
+        summary: Tier-2 latency budget burning
+        runbook_url: https://github.com/Praneshrajan137/synapse/blob/main/docs/runbooks/breaker_open.md
+      page_alert:
+        labels:
+          severity: page
+      ticket_alert:
+        labels:
+          severity: ticket

@@ -1,0 +1,25 @@
+# SYNAPSE Helm — Bengaluru overlay (Sprint 9 §M-prod-1).
+# Diff from values.yaml: city label + Feast Redis DB index + Neo4j db.
+
+global:
+  city: bengaluru
+
+orchestrator:
+  env:
+    SYNAPSE_CITY: bengaluru
+    SYNAPSE_FEAST_REDIS_DB: "0"
+    SYNAPSE_NEO4J_DATABASE: bengaluru
+  podLabels:
+    city: bengaluru
+
+api-gateway:
+  podLabels:
+    city: bengaluru
+
+demand-prophet:
+  env:
+    SYNAPSE_CITY: bengaluru
+    SYNAPSE_FEAST_REDIS_DB: "0"
+    SYNAPSE_MLFLOW_MODEL_PREFIX: ""
+  podLabels:
+    city: bengaluru

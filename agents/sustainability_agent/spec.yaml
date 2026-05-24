@@ -167,3 +167,11 @@ contracts:
       - "carbon Pareto weight is > 0"
       - "proposal includes utility_score, confidence, justification_trace per A2A spec"
       - "waste prediction includes survival_curve and hazard_rate"
+
+reward:
+  weights:
+    carbon_weight: 1.0
+    waste_weight: 0.5
+    accuracy_weight: 0.3
+  scale: 1.0
+  notes: Carbon dominates. Shadow mode ADR-031.

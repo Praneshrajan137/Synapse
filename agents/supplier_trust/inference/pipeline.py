@@ -1,4 +1,11 @@
-"""SYNAPSE Supplier Trust -- Inference Pipeline."""
+"""SYNAPSE Supplier Trust -- Inference Pipeline.
+
+Sprint-8 elevation (WS-8.3 + WS-8.4):
+  * Activates Neo4j-backed network-effect trust via `GraphClient` (ADR-005).
+  * DbC pre/post contracts (ADR-015 Layer 5).
+  * Egress validated against `proto/domain/supplier_score.schema.json`
+    when the consumer requests a wire-format payload (ADR-025).
+"""
 
 from __future__ import annotations
 
@@ -8,6 +15,7 @@ from typing import TYPE_CHECKING, Any
 import numpy as np
 import structlog
 import torch
+from synapse_common.dbc import post, pre
 
 from agents.supplier_trust.config import SupplierTrustConfig
 from agents.supplier_trust.models.bayesian_lead import (
@@ -16,6 +24,8 @@ from agents.supplier_trust.models.bayesian_lead import (
 )
 
 if TYPE_CHECKING:
+    from synapse_common.graph_client import GraphClient
+
     from agents.supplier_trust.models.trust_gnn import SupplierTrustGNN
 
 logger = structlog.get_logger(__name__)
@@ -40,6 +50,7 @@ class SupplierTrustPipeline:
         gnn_model: SupplierTrustGNN | None = None,
         bayesian_model: BayesianLeadTimeModel | None = None,
         config: SupplierTrustConfig | None = None,
+        graph_client: GraphClient | None = None,
     ) -> None:
         self._config = config or SupplierTrustConfig()
         self._gnn = gnn_model
@@ -50,12 +61,21 @@ class SupplierTrustPipeline:
             num_steps=self._config.svi_num_steps,
             num_samples=self._config.num_posterior_samples,
         )
+        self._graph = graph_client  # may be None — graph signal is optional
 
+    @pre(
+        lambda self, supplier_id, delivery_history, is_new_vendor=False, city="bengaluru": bool(
+            supplier_id
+        )
+    )
+    @post(lambda result: 0.0 <= result.trust_score <= 1.0)
+    @post(lambda result: 0.0 <= result.confidence <= 1.0)
     def score(
         self,
         supplier_id: str,
         delivery_history: list[dict[str, Any]],
         is_new_vendor: bool = False,
+        city: str = "bengaluru",
     ) -> TrustScoreResult:
         """Score a single supplier's trustworthiness.
 
@@ -89,7 +109,16 @@ class SupplierTrustPipeline:
 
         base_trust = on_time_rate
         decay = self._config.late_delivery_decay * consecutive_late
-        trust_score = float(np.clip(base_trust - decay, 0.0, 1.0))
+        sample_trust = float(np.clip(base_trust - decay, 0.0, 1.0))
+
+        # Network-effect trust from the Neo4j supply graph (ADR-005, WS-8.4).
+        # Blended 70/30 with the sample-based score so an isolated outage in
+        # the graph layer cannot tank an established supplier's score.
+        graph_trust = self._graph_trust(supplier_id, city)
+        trust_score = (
+            0.7 * sample_trust + 0.3 * graph_trust if graph_trust is not None else sample_trust
+        )
+        trust_score = float(np.clip(trust_score, 0.0, 1.0))
 
         confidence = self._compute_confidence(delivery_history, posterior)
 
@@ -124,6 +153,22 @@ class SupplierTrustPipeline:
             },
             is_new_vendor=True,
         )
+
+    def _graph_trust(self, supplier_id: str, city: str) -> float | None:
+        """Pull trust signal from Neo4j. Returns None if the graph is unavailable."""
+        if self._graph is None:
+            return None
+        try:
+            rows = self._graph.query(
+                "supplier_trust_score",
+                {"supplier_id": supplier_id, "city": city},
+            )
+            if not rows:
+                return None
+            return float(rows[0].get("trust_score", 0.5))
+        except Exception as exc:  # noqa: BLE001 — degrade open
+            logger.warning("graph_trust_unavailable", error=str(exc))
+            return None
 
     @staticmethod
     def _compute_on_time_rate(history: list[dict[str, Any]]) -> float:

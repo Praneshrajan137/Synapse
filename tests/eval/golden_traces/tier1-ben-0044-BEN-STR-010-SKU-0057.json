@@ -1,0 +1,18 @@
+{
+  "agents_involved": [
+    "freshness_guardian"
+  ],
+  "avg_confidence": 0.953,
+  "city": "bengaluru",
+  "description": "tier_1 bengaluru freshness_guardian confidence=0.953",
+  "disruption_active": false,
+  "expected_essential": false,
+  "expected_invariants": [],
+  "expected_tier": "tier_1",
+  "payload": {
+    "sku_id": "SKU-0057",
+    "store_id": "BEN-STR-010"
+  },
+  "requires_twin_simulation": false,
+  "trace_id": "tier1-ben-0044-BEN-STR-010-SKU-0057"
+}

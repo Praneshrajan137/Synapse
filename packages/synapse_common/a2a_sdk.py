@@ -2,6 +2,13 @@
 SYNAPSE A2A SDK — Agent-to-Agent communication via JSON-RPC 2.0 (I-9).
 A2A Protocol (Google, Linux Foundation) for inter-agent communication.
 MCP (Anthropic) for agent-to-tool communication. NEVER conflate.
+
+Sprint-7 hardening (WS-1 §4, WS-2 §1, ADR-025/026):
+  - Tier-aware timeouts (T1=2s, T2=10s, T3=30s, T4=120s).
+  - W3C traceparent injection via ``synapse_common.tracing``.
+  - Full Jitter retry on transient transport errors only (never 4xx).
+  - Per-target circuit breaker from ``synapse_common.breakers``.
+  - Shared ``httpx.AsyncClient`` bulkhead from ``synapse_common.clients``.
 """
 
 from __future__ import annotations
@@ -13,11 +20,24 @@ from uuid import uuid4
 import httpx
 import structlog
 
-from synapse_common.models import SynapseBaseModel
+from synapse_common.breakers import get_breaker
+from synapse_common.clients import get_client
+from synapse_common.models import DecisionTier, SynapseBaseModel
+from synapse_common.retry import retry_with_jitter
+from synapse_common.tracing import inject_a2a_headers
 
 logger = structlog.get_logger(__name__)
 
 JSON_KWARGS: dict[str, Any] = {"sort_keys": True, "separators": (",", ":")}
+
+
+# Tier-aware timeout budgets. Aligns with I-10 decision-tier SLAs.
+TIER_TIMEOUTS: dict[DecisionTier, float] = {
+    DecisionTier.TIER_1: 2.0,
+    DecisionTier.TIER_2: 10.0,
+    DecisionTier.TIER_3: 30.0,
+    DecisionTier.TIER_4: 120.0,
+}
 
 
 class A2ARequest(SynapseBaseModel):
@@ -53,19 +73,97 @@ class AgentCard(SynapseBaseModel):
     supported_methods: list[str]
 
 
+def _timeout_for(tier: DecisionTier | None, override: float | None) -> float:
+    if override is not None:
+        return override
+    if tier is not None:
+        return TIER_TIMEOUTS[tier]
+    return TIER_TIMEOUTS[DecisionTier.TIER_2]
+
+
 async def send_a2a_request(
     target_url: str,
     method: str,
     params: dict[str, Any],
-    timeout: float = 5.0,
+    timeout: float | None = None,
+    tier: DecisionTier | None = None,
+    max_retries: int = 2,
 ) -> A2AResponse:
-    """Send A2A JSON-RPC request to another agent."""
+    """Send an A2A JSON-RPC request with tier-aware timeout, traceparent, retry, breaker.
+
+    Args:
+        target_url: base URL of the target agent (the SDK appends ``/a2a``).
+        method: JSON-RPC method name (``proposal``, ``debate_respond``, ``execute``).
+        params: JSON-RPC params object.
+        timeout: explicit timeout override in seconds; if absent, ``tier`` drives it.
+        tier: decision tier — drives default timeout per I-10.
+        max_retries: Full-Jitter retry budget (transient transport errors only).
+    """
+    effective_timeout = _timeout_for(tier, timeout)
+    breaker_name = _breaker_name(target_url)
+    breaker = get_breaker(
+        name=breaker_name,
+        fail_max=5,
+        reset_timeout=30.0,
+        expected_exceptions=(httpx.TransportError, httpx.HTTPStatusError),
+    )
+
+    @retry_with_jitter(
+        max_retries=max_retries,
+        base_delay=0.5,
+        cap=10.0,
+        retryable_exceptions=(httpx.TransportError,),
+    )
+    async def _send() -> A2AResponse:
+        result: A2AResponse = await breaker.call(
+            _do_send, target_url, method, params, effective_timeout, tier
+        )
+        return result
+
+    response: A2AResponse = await _send()
+    return response
+
+
+async def _do_send(
+    target_url: str,
+    method: str,
+    params: dict[str, Any],
+    timeout: float,
+    tier: DecisionTier | None,
+) -> A2AResponse:
     request = A2ARequest(method=method, params=params)
-    async with httpx.AsyncClient(timeout=timeout) as client:
+    headers: dict[str, str] = {"Content-Type": "application/json"}
+    inject_a2a_headers(headers)
+    if tier is not None:
+        headers["X-Synapse-Tier"] = tier.value
+    headers["X-Synapse-Request-Id"] = request.id
+
+    client = await get_client("a2a")
+    body = json.dumps(request.model_dump(mode="json"), **JSON_KWARGS)
+    try:
         response = await client.post(
             f"{target_url}/a2a",
-            content=json.dumps(request.model_dump(mode="json"), **JSON_KWARGS),
-            headers={"Content-Type": "application/json"},
+            content=body,
+            headers=headers,
+            timeout=timeout,
         )
         response.raise_for_status()
-        return A2AResponse.model_validate(response.json())
+    except httpx.HTTPStatusError as exc:
+        if 400 <= exc.response.status_code < 500:
+            logger.error(
+                "a2a_client_error_no_retry",
+                target=target_url,
+                method=method,
+                status=exc.response.status_code,
+                request_id=request.id,
+            )
+            raise
+        raise
+    return A2AResponse.model_validate(response.json())
+
+
+def _breaker_name(target_url: str) -> str:
+    """Derive a stable breaker name from a target URL (host[:port])."""
+    netloc = target_url.split("://", 1)[-1]
+    netloc = netloc.split("/", 1)[0]
+    return f"a2a:{netloc}"

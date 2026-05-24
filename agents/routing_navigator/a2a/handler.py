@@ -8,6 +8,7 @@ from uuid import UUID, uuid4
 
 import structlog
 from synapse_common.models import AgentName, AgentProposal, DecisionTier
+from synapse_common.schemas import validate_agent_payload
 
 from agents.routing_navigator.inference.pipeline import RoutingNavigatorPipeline
 from agents.routing_navigator.state_machine import RoutingNavigatorStateMachine
@@ -70,6 +71,8 @@ class RoutingNavigatorA2AHandler:
             tier=DecisionTier.TIER_1,
         )
         self._fsm.transition("proposal_submitted")
+        # I-3: validate every emitted payload against proto/domain/.
+        validate_agent_payload("routing_navigator", proposal.payload)
         return json.loads(proposal.to_deterministic_json())
 
     def debate_respond(self, params: dict[str, Any]) -> dict[str, Any]:

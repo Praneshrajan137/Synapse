@@ -1,0 +1,27 @@
+# SYNAPSE Helm — Mumbai overlay (Sprint 9 §M-prod-1, E-S6-03/07/19).
+# Diff from values.yaml: city label + Feast Redis DB index + Neo4j db
+# + Mumbai MLflow model prefix + Mumbai OSRM port.
+
+global:
+  city: mumbai
+
+orchestrator:
+  env:
+    SYNAPSE_CITY: mumbai
+    SYNAPSE_FEAST_REDIS_DB: "1"
+    SYNAPSE_NEO4J_DATABASE: mumbai
+    SYNAPSE_OSRM_URL: "http://osrm-mumbai:5001"
+  podLabels:
+    city: mumbai
+
+api-gateway:
+  podLabels:
+    city: mumbai
+
+demand-prophet:
+  env:
+    SYNAPSE_CITY: mumbai
+    SYNAPSE_FEAST_REDIS_DB: "1"
+    SYNAPSE_MLFLOW_MODEL_PREFIX: "mumbai_"
+  podLabels:
+    city: mumbai

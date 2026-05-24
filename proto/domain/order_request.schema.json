@@ -1,0 +1,46 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "synapse.domain.order_request",
+  "title": "API-Gateway Demand Order Request",
+  "description": "Ingress payload produced by api/routers/orders.py and consumed by demand_prophet / inventory_sentinel / orchestrator via the synapse.orders.demand topic (ADR-029).",
+  "type": "object",
+  "required": ["city", "store_id", "sku_id", "quantity", "timestamp"],
+  "properties": {
+    "order_id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "Per-order UUID. Optional — emitted by API gateway for traceability, NOT by the consensus layer (which uses decision_id)."
+    },
+    "city": {
+      "type": "string",
+      "enum": ["bengaluru", "mumbai"],
+      "description": "Multi-city deployment key (E-S6-03)."
+    },
+    "store_id": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 64
+    },
+    "sku_id": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 64,
+      "description": "Identical across cities (E-S6-01)."
+    },
+    "quantity": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 1000,
+      "description": "Cap at 1000 prevents accidental enormous orders from saturating downstream agents."
+    },
+    "timestamp": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "idempotency_key": {
+      "type": "string",
+      "description": "Echoed from the Idempotency-Key header for downstream dedup."
+    }
+  },
+  "additionalProperties": false
+}

@@ -1,0 +1,116 @@
+groups:
+- name: synapse-burn-rate
+  interval: 30s
+  rules:
+  - alert: orchestrator-tier1-latency-burn-1h-5m
+    expr: ((1 - (sum(rate(synapse_inference_latency_seconds_bucket{tier="tier_1",le="0.1"}[1h]))
+      / sum(rate(synapse_inference_latency_seconds_count{tier="tier_1"}[1h])))) >
+      0.07200) and ((1 - (sum(rate(synapse_inference_latency_seconds_bucket{tier="tier_1",le="0.1"}[5m]))
+      / sum(rate(synapse_inference_latency_seconds_count{tier="tier_1"}[5m])))) >
+      0.07200)
+    for: 2m
+    labels:
+      severity: page
+      slo: orchestrator-tier1-latency
+      service: orchestrator
+    annotations:
+      summary: orchestrator-tier1-latency burning at 14.4x over 1h/5m
+      runbook_url: https://github.com/Praneshrajan137/synapse/blob/main/docs/runbooks/kv_cache_collapse.md
+  - alert: orchestrator-tier1-latency-burn-6h-1h
+    expr: ((1 - (sum(rate(synapse_inference_latency_seconds_bucket{tier="tier_1",le="0.1"}[6h]))
+      / sum(rate(synapse_inference_latency_seconds_count{tier="tier_1"}[6h])))) >
+      0.03000) and ((1 - (sum(rate(synapse_inference_latency_seconds_bucket{tier="tier_1",le="0.1"}[1h]))
+      / sum(rate(synapse_inference_latency_seconds_count{tier="tier_1"}[1h])))) >
+      0.03000)
+    for: 15m
+    labels:
+      severity: ticket
+      slo: orchestrator-tier1-latency
+      service: orchestrator
+    annotations:
+      summary: orchestrator-tier1-latency burning at 6.0x over 6h/1h
+      runbook_url: https://github.com/Praneshrajan137/synapse/blob/main/docs/runbooks/kv_cache_collapse.md
+  - alert: orchestrator-tier2-latency-burn-1h-5m
+    expr: ((1 - (sum(rate(synapse_inference_latency_seconds_bucket{tier="tier_2",le="0.5"}[1h]))
+      / sum(rate(synapse_inference_latency_seconds_count{tier="tier_2"}[1h])))) >
+      0.14400) and ((1 - (sum(rate(synapse_inference_latency_seconds_bucket{tier="tier_2",le="0.5"}[5m]))
+      / sum(rate(synapse_inference_latency_seconds_count{tier="tier_2"}[5m])))) >
+      0.14400)
+    for: 2m
+    labels:
+      severity: page
+      slo: orchestrator-tier2-latency
+      service: orchestrator
+    annotations:
+      summary: orchestrator-tier2-latency burning at 14.4x over 1h/5m
+      runbook_url: https://github.com/Praneshrajan137/synapse/blob/main/docs/runbooks/breaker_open.md
+  - alert: orchestrator-tier2-latency-burn-6h-1h
+    expr: ((1 - (sum(rate(synapse_inference_latency_seconds_bucket{tier="tier_2",le="0.5"}[6h]))
+      / sum(rate(synapse_inference_latency_seconds_count{tier="tier_2"}[6h])))) >
+      0.06000) and ((1 - (sum(rate(synapse_inference_latency_seconds_bucket{tier="tier_2",le="0.5"}[1h]))
+      / sum(rate(synapse_inference_latency_seconds_count{tier="tier_2"}[1h])))) >
+      0.06000)
+    for: 15m
+    labels:
+      severity: ticket
+      slo: orchestrator-tier2-latency
+      service: orchestrator
+    annotations:
+      summary: orchestrator-tier2-latency burning at 6.0x over 6h/1h
+      runbook_url: https://github.com/Praneshrajan137/synapse/blob/main/docs/runbooks/breaker_open.md
+  - alert: orchestrator-tier3-latency-burn-1h-5m
+    expr: ((1 - (sum(rate(synapse_consensus_duration_seconds_bucket{tier="tier_3",le="15"}[1h]))
+      / sum(rate(synapse_consensus_duration_seconds_count{tier="tier_3"}[1h])))) >
+      0.43200) and ((1 - (sum(rate(synapse_consensus_duration_seconds_bucket{tier="tier_3",le="15"}[5m]))
+      / sum(rate(synapse_consensus_duration_seconds_count{tier="tier_3"}[5m])))) >
+      0.43200)
+    for: 2m
+    labels:
+      severity: page
+      slo: orchestrator-tier3-latency
+      service: orchestrator
+    annotations:
+      summary: orchestrator-tier3-latency burning at 14.4x over 1h/5m
+      runbook_url: https://github.com/Praneshrajan137/synapse/blob/main/docs/runbooks/brownout_active.md
+  - alert: orchestrator-tier3-latency-burn-6h-1h
+    expr: ((1 - (sum(rate(synapse_consensus_duration_seconds_bucket{tier="tier_3",le="15"}[6h]))
+      / sum(rate(synapse_consensus_duration_seconds_count{tier="tier_3"}[6h])))) >
+      0.18000) and ((1 - (sum(rate(synapse_consensus_duration_seconds_bucket{tier="tier_3",le="15"}[1h]))
+      / sum(rate(synapse_consensus_duration_seconds_count{tier="tier_3"}[1h])))) >
+      0.18000)
+    for: 15m
+    labels:
+      severity: ticket
+      slo: orchestrator-tier3-latency
+      service: orchestrator
+    annotations:
+      summary: orchestrator-tier3-latency burning at 6.0x over 6h/1h
+      runbook_url: https://github.com/Praneshrajan137/synapse/blob/main/docs/runbooks/brownout_active.md
+  - alert: orchestrator-tier4-latency-burn-1h-5m
+    expr: ((1 - (sum(rate(synapse_consensus_duration_seconds_bucket{tier="tier_4",le="120"}[1h]))
+      / sum(rate(synapse_consensus_duration_seconds_count{tier="tier_4"}[1h])))) >
+      0.72000) and ((1 - (sum(rate(synapse_consensus_duration_seconds_bucket{tier="tier_4",le="120"}[5m]))
+      / sum(rate(synapse_consensus_duration_seconds_count{tier="tier_4"}[5m])))) >
+      0.72000)
+    for: 2m
+    labels:
+      severity: page
+      slo: orchestrator-tier4-latency
+      service: orchestrator
+    annotations:
+      summary: orchestrator-tier4-latency burning at 14.4x over 1h/5m
+      runbook_url: https://github.com/Praneshrajan137/synapse/blob/main/docs/runbooks/brownout_active.md
+  - alert: orchestrator-tier4-latency-burn-6h-1h
+    expr: ((1 - (sum(rate(synapse_consensus_duration_seconds_bucket{tier="tier_4",le="120"}[6h]))
+      / sum(rate(synapse_consensus_duration_seconds_count{tier="tier_4"}[6h])))) >
+      0.30000) and ((1 - (sum(rate(synapse_consensus_duration_seconds_bucket{tier="tier_4",le="120"}[1h]))
+      / sum(rate(synapse_consensus_duration_seconds_count{tier="tier_4"}[1h])))) >
+      0.30000)
+    for: 15m
+    labels:
+      severity: ticket
+      slo: orchestrator-tier4-latency
+      service: orchestrator
+    annotations:
+      summary: orchestrator-tier4-latency burning at 6.0x over 6h/1h
+      runbook_url: https://github.com/Praneshrajan137/synapse/blob/main/docs/runbooks/brownout_active.md

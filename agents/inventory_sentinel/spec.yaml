@@ -130,3 +130,9 @@ contracts:
       - "proposal includes utility_score, confidence, justification_trace"
       - "actions include safety_stock_multiplier in [1.0, 3.0]"
       - "all reorder quantities are non-negative"
+
+reward:
+  weights: {}
+  scale: 1.0
+  notes: L1/L2/L3 rewards use inline magic numbers; Sprint 8 contract-only, Sprint
+    9 promotes named weights.

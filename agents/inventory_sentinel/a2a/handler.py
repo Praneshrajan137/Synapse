@@ -8,6 +8,7 @@ from uuid import UUID, uuid4
 
 import structlog
 from synapse_common.models import AgentName, AgentProposal, DecisionTier
+from synapse_common.schemas import validate_agent_payload
 
 from agents.inventory_sentinel.inference.pipeline import InventorySentinelPipeline
 
@@ -62,4 +63,6 @@ class InventorySentinelA2AHandler:
             payload={"actions": [a.model_dump(mode="json") for a in actions]},
             tier=DecisionTier.TIER_2,
         )
+        # I-3: validate every emitted payload against proto/domain/.
+        validate_agent_payload("inventory_sentinel", proposal.payload)
         return json.loads(proposal.to_deterministic_json())

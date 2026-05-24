@@ -1,0 +1,20 @@
+{
+  "agents_involved": [
+    "pricing_oracle"
+  ],
+  "avg_confidence": 0.908,
+  "city": "bengaluru",
+  "description": "tier_1 bengaluru pricing_oracle confidence=0.908",
+  "disruption_active": false,
+  "expected_essential": false,
+  "expected_invariants": [
+    "INV-PO-001"
+  ],
+  "expected_tier": "tier_1",
+  "payload": {
+    "sku_id": "SKU-0126",
+    "store_id": "BEN-STR-008"
+  },
+  "requires_twin_simulation": false,
+  "trace_id": "tier1-ben-0116-BEN-STR-008-SKU-0126"
+}
