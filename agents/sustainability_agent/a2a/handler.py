@@ -89,9 +89,7 @@ class SustainabilityAgentA2AHandler:
             "waste_prediction": {
                 "predicted_waste_kg": 0.0,
                 "survival_probability": survival_probability,
-                "recommended_action": (
-                    "markdown" if report.waste_probability > 0.5 else "monitor"
-                ),
+                "recommended_action": ("markdown" if report.waste_probability > 0.5 else "monitor"),
             },
             "pareto_weight": carbon_pareto_weight,
         }

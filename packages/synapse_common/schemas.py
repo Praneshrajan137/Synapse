@@ -32,8 +32,7 @@ class SchemaValidationError(ValueError):
 
     def __init__(self, schema_name: str, errors: list[str]) -> None:
         super().__init__(
-            f"Payload failed schema '{schema_name}' validation:\n  - "
-            + "\n  - ".join(errors)
+            f"Payload failed schema '{schema_name}' validation:\n  - " + "\n  - ".join(errors)
         )
         self.schema_name = schema_name
         self.errors = errors
@@ -85,10 +84,7 @@ def get_schema(name: str) -> dict[str, Any]:
     """Return the raw schema dict by short-name or $id."""
     schema = _REGISTRY.get(name)
     if schema is None:
-        raise KeyError(
-            f"no schema registered for '{name}'. "
-            f"Known: {', '.join(known_schemas())}"
-        )
+        raise KeyError(f"no schema registered for '{name}'. Known: {', '.join(known_schemas())}")
     return schema
 
 
@@ -102,10 +98,7 @@ def validate_payload(name: str, payload: dict[str, Any]) -> None:
     """
     validator = _VALIDATORS.get(name)
     if validator is None:
-        raise KeyError(
-            f"no schema registered for '{name}'. "
-            f"Known: {', '.join(known_schemas())}"
-        )
+        raise KeyError(f"no schema registered for '{name}'. Known: {', '.join(known_schemas())}")
     errors = sorted(
         validator.iter_errors(payload),
         key=lambda e: e.absolute_path,

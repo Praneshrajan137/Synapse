@@ -189,9 +189,7 @@ def idempotent(
                     )
                     raise HTTPException(
                         status_code=422,
-                        detail=(
-                            "Idempotency-Key reused with a different request body."
-                        ),
+                        detail=("Idempotency-Key reused with a different request body."),
                     )
                 logger.info("idempotency_replay_served", scope=scope)
                 return json.loads(cached.response_json)  # type: ignore[no-any-return]
@@ -216,9 +214,7 @@ def idempotent(
             except Exception as exc:  # noqa: BLE001
                 # Caching failure must not break the handler. Log and move on;
                 # the worst case is a duplicate execution on retry.
-                logger.warning(
-                    "idempotency_cache_failed", scope=scope, error=str(exc)
-                )
+                logger.warning("idempotency_cache_failed", scope=scope, error=str(exc))
             return response
 
         return wrapper

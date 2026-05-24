@@ -52,9 +52,7 @@ class _FakeProducer:
         key: str | None = None,
         headers: dict[str, str] | None = None,
     ) -> None:
-        self.calls.append(
-            {"topic": topic, "value": value, "key": key, "headers": headers or {}}
-        )
+        self.calls.append({"topic": topic, "value": value, "key": key, "headers": headers or {}})
         if self._remaining_failures > 0:
             self._remaining_failures -= 1
             raise RuntimeError("fake kafka outage")

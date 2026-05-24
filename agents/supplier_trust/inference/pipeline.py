@@ -63,7 +63,11 @@ class SupplierTrustPipeline:
         )
         self._graph = graph_client  # may be None — graph signal is optional
 
-    @pre(lambda self, supplier_id, delivery_history, is_new_vendor=False, city="bengaluru": bool(supplier_id))
+    @pre(
+        lambda self, supplier_id, delivery_history, is_new_vendor=False, city="bengaluru": bool(
+            supplier_id
+        )
+    )
     @post(lambda result: 0.0 <= result.trust_score <= 1.0)
     @post(lambda result: 0.0 <= result.confidence <= 1.0)
     def score(

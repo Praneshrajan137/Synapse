@@ -35,9 +35,7 @@ def pipeline() -> InventorySentinelPipeline:
 
 
 class TestMetamorphicRelations:
-    def test_mr_is_001_quantity_monotone_in_mean(
-        self, pipeline: InventorySentinelPipeline
-    ) -> None:
+    def test_mr_is_001_quantity_monotone_in_mean(self, pipeline: InventorySentinelPipeline) -> None:
         """Higher μ → higher (or equal) reorder quantity."""
         low = pipeline.decide(
             ["SKU"],
@@ -51,9 +49,7 @@ class TestMetamorphicRelations:
         )[0]
         assert high.quantity >= low.quantity
 
-    def test_mr_is_002_rop_monotone_in_sigma(
-        self, pipeline: InventorySentinelPipeline
-    ) -> None:
+    def test_mr_is_002_rop_monotone_in_sigma(self, pipeline: InventorySentinelPipeline) -> None:
         """Higher σ → higher (or equal) reorder point."""
         steady = pipeline.decide(
             ["SKU"],
@@ -67,23 +63,17 @@ class TestMetamorphicRelations:
         )[0]
         assert volatile.reorder_point >= steady.reorder_point
 
-    def test_mr_is_003_essentials_buffer(
-        self, pipeline: InventorySentinelPipeline
-    ) -> None:
+    def test_mr_is_003_essentials_buffer(self, pipeline: InventorySentinelPipeline) -> None:
         """is_essential=1 produces ≥ baseline quantity."""
         baseline = pipeline.decide(
             ["SKU"],
             "STORE_BLR_001",
-            demand_forecast={
-                "SKU": {"mean": 30.0, "std": 5.0, "on_hand": 0, "is_essential": 0.0}
-            },
+            demand_forecast={"SKU": {"mean": 30.0, "std": 5.0, "on_hand": 0, "is_essential": 0.0}},
         )[0]
         essential = pipeline.decide(
             ["SKU"],
             "STORE_BLR_001",
-            demand_forecast={
-                "SKU": {"mean": 30.0, "std": 5.0, "on_hand": 0, "is_essential": 1.0}
-            },
+            demand_forecast={"SKU": {"mean": 30.0, "std": 5.0, "on_hand": 0, "is_essential": 1.0}},
         )[0]
         assert essential.quantity >= baseline.quantity
 

@@ -6,7 +6,6 @@ Regenerate: `python scripts/spec_cli.py generate-reward-config`.
 
 from __future__ import annotations
 
-WEIGHTS: dict[str, float] = {
-}
+WEIGHTS: dict[str, float] = {}
 
 SCALE: float = 1.0

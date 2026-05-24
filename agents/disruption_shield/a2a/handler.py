@@ -73,14 +73,8 @@ class DisruptionShieldA2AHandler:
         affected_nodes = list(alert.anomalous_nodes) or ["unknown"]
         # Pipeline alert_level is 0-3; schema is 1-10. Map linearly.
         scaled_level = max(1, min(10, alert.alert_level * 3 + 1))
-        playbook_id = (
-            alert.playbooks[0].id
-            if alert.playbooks
-            else f"NO-PLAYBOOK-{alert.alert_id}"
-        )
-        playbook_actions = (
-            alert.playbooks[0].title if alert.playbooks else "no_playbook_matched"
-        )
+        playbook_id = alert.playbooks[0].id if alert.playbooks else f"NO-PLAYBOOK-{alert.alert_id}"
+        playbook_actions = alert.playbooks[0].title if alert.playbooks else "no_playbook_matched"
         schema_payload: dict[str, Any] = {
             "alert_id": alert.alert_id,
             "alert_level": scaled_level,

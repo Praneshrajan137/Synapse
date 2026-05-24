@@ -40,33 +40,23 @@ def _clean_registry() -> Any:
 
 class TestLevelLadder:
     def test_quiet_breakers_returns_none(self) -> None:
-        c = BrownoutController(
-            "bengaluru", _FakeBreaker(0), _FakeBreaker(0)
-        )
+        c = BrownoutController("bengaluru", _FakeBreaker(0), _FakeBreaker(0))
         assert c.current_level() is BrownoutLevel.NONE
 
     def test_ollama_open_sheds_t3_t4(self) -> None:
-        c = BrownoutController(
-            "bengaluru", _FakeBreaker(2), _FakeBreaker(0)
-        )
+        c = BrownoutController("bengaluru", _FakeBreaker(2), _FakeBreaker(0))
         assert c.current_level() is BrownoutLevel.SHED_T4_T3
 
     def test_both_breakers_open_sheds_llm_only(self) -> None:
-        c = BrownoutController(
-            "bengaluru", _FakeBreaker(2), _FakeBreaker(2)
-        )
+        c = BrownoutController("bengaluru", _FakeBreaker(2), _FakeBreaker(2))
         assert c.current_level() is BrownoutLevel.SHED_LLM_ONLY
 
     def test_ollama_half_open_sheds_t4_only(self) -> None:
-        c = BrownoutController(
-            "bengaluru", _FakeBreaker(1), _FakeBreaker(0)
-        )
+        c = BrownoutController("bengaluru", _FakeBreaker(1), _FakeBreaker(0))
         assert c.current_level() is BrownoutLevel.SHED_T4
 
     def test_postgres_half_open_sheds_t4_only(self) -> None:
-        c = BrownoutController(
-            "bengaluru", _FakeBreaker(0), _FakeBreaker(1)
-        )
+        c = BrownoutController("bengaluru", _FakeBreaker(0), _FakeBreaker(1))
         assert c.current_level() is BrownoutLevel.SHED_T4
 
 
@@ -77,9 +67,7 @@ class TestManualOverride:
         assert c.current_level() is BrownoutLevel.SHED_T4_T3
 
     def test_clearing_override_uses_breaker_state(self) -> None:
-        c = BrownoutController(
-            "bengaluru", _FakeBreaker(2), _FakeBreaker(0)
-        )
+        c = BrownoutController("bengaluru", _FakeBreaker(2), _FakeBreaker(0))
         c.set_manual_override(BrownoutLevel.NONE)
         assert c.current_level() is BrownoutLevel.NONE
         c.set_manual_override(None)
@@ -88,33 +76,25 @@ class TestManualOverride:
 
 class TestShouldShed:
     def test_essential_bypasses(self) -> None:
-        c = BrownoutController(
-            "bengaluru", _FakeBreaker(2), _FakeBreaker(2)
-        )
+        c = BrownoutController("bengaluru", _FakeBreaker(2), _FakeBreaker(2))
         for t in DecisionTier:
             assert c.should_shed(t, essential=True) is False
 
     def test_shed_t4_only_t4(self) -> None:
-        c = BrownoutController(
-            "bengaluru", _FakeBreaker(1), _FakeBreaker(0)
-        )
+        c = BrownoutController("bengaluru", _FakeBreaker(1), _FakeBreaker(0))
         assert c.should_shed(DecisionTier.TIER_4, essential=False) is True
         assert c.should_shed(DecisionTier.TIER_3, essential=False) is False
         assert c.should_shed(DecisionTier.TIER_2, essential=False) is False
 
     def test_shed_t4_t3(self) -> None:
-        c = BrownoutController(
-            "bengaluru", _FakeBreaker(2), _FakeBreaker(0)
-        )
+        c = BrownoutController("bengaluru", _FakeBreaker(2), _FakeBreaker(0))
         assert c.should_shed(DecisionTier.TIER_4, essential=False) is True
         assert c.should_shed(DecisionTier.TIER_3, essential=False) is True
         assert c.should_shed(DecisionTier.TIER_2, essential=False) is False
         assert c.should_shed(DecisionTier.TIER_1, essential=False) is False
 
     def test_shed_llm_only(self) -> None:
-        c = BrownoutController(
-            "bengaluru", _FakeBreaker(2), _FakeBreaker(2)
-        )
+        c = BrownoutController("bengaluru", _FakeBreaker(2), _FakeBreaker(2))
         assert c.should_shed(DecisionTier.TIER_4, essential=False) is True
         assert c.should_shed(DecisionTier.TIER_3, essential=False) is True
         assert c.should_shed(DecisionTier.TIER_2, essential=False) is True
@@ -139,12 +119,8 @@ class TestRegistry:
 
     def test_per_city_isolation(self) -> None:
         """E-S6 invariant: Mumbai outage cannot shed Bengaluru traffic."""
-        b = BrownoutController(
-            "bengaluru", _FakeBreaker(0), _FakeBreaker(0)
-        )
-        m = BrownoutController(
-            "mumbai", _FakeBreaker(2), _FakeBreaker(2)
-        )
+        b = BrownoutController("bengaluru", _FakeBreaker(0), _FakeBreaker(0))
+        m = BrownoutController("mumbai", _FakeBreaker(2), _FakeBreaker(2))
         bo.register(b)
         bo.register(m)
         assert bo.get_controller("bengaluru").current_level() is BrownoutLevel.NONE

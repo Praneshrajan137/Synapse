@@ -93,9 +93,7 @@ class PricingOracleA2AHandler:
                     "is_essential": bool(u.is_essential),
                     "elasticity_source": elasticity_source,
                     "causal_elasticity": (
-                        float(u.elasticity_estimate)
-                        if u.elasticity_estimate is not None
-                        else None
+                        float(u.elasticity_estimate) if u.elasticity_estimate is not None else None
                     ),
                     "essential_cap_enforced": bool(u.is_essential and u.multiplier <= 1.3),
                     "timestamp": timestamp,

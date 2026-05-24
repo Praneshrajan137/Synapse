@@ -217,9 +217,7 @@ class OutboxDispatcher:
             return []
         ids = [r.id for r in rows]
         await session.execute(
-            update(AuditOutboxRow)
-            .where(AuditOutboxRow.id.in_(ids))
-            .values(status="IN_FLIGHT")
+            update(AuditOutboxRow).where(AuditOutboxRow.id.in_(ids)).values(status="IN_FLIGHT")
         )
         return rows
 
@@ -292,9 +290,7 @@ class OutboxDispatcher:
                     error=error,
                 )
                 return
-            delay = full_jitter_delay(
-                self._base_backoff, new_retries, cap=self._backoff_cap
-            )
+            delay = full_jitter_delay(self._base_backoff, new_retries, cap=self._backoff_cap)
             await session.execute(
                 text(
                     """

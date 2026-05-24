@@ -50,25 +50,19 @@ class BulkheadConfig:
 
 _DEFAULT_CONFIGS: dict[str, BulkheadConfig] = {
     # Ollama on shared GPU; concurrent requests serialize on the GPU anyway.
-    "ollama": BulkheadConfig(
-        "ollama", max_connections=8, max_keepalive=4, timeout_seconds=120.0
-    ),
+    "ollama": BulkheadConfig("ollama", max_connections=8, max_keepalive=4, timeout_seconds=120.0),
     # Pinecone — semantic cache; high QPS, small payloads.
     "pinecone": BulkheadConfig(
         "pinecone", max_connections=32, max_keepalive=16, timeout_seconds=10.0
     ),
     # A2A — agent-to-agent; tier-4 decisions can take 120s.
-    "a2a": BulkheadConfig(
-        "a2a", max_connections=64, max_keepalive=32, timeout_seconds=120.0
-    ),
+    "a2a": BulkheadConfig("a2a", max_connections=64, max_keepalive=32, timeout_seconds=120.0),
     # Orchestrator — API gateway -> orchestrator hop.
     "orchestrator": BulkheadConfig(
         "orchestrator", max_connections=32, max_keepalive=16, timeout_seconds=120.0
     ),
     # Generic / unspecified.
-    "default": BulkheadConfig(
-        "default", max_connections=16, max_keepalive=8, timeout_seconds=30.0
-    ),
+    "default": BulkheadConfig("default", max_connections=16, max_keepalive=8, timeout_seconds=30.0),
 }
 
 

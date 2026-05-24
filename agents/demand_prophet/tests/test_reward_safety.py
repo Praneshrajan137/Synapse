@@ -76,9 +76,7 @@ def test_event_bonus_cannot_exceed_unit_cap() -> None:
     actuals = torch.tensor([0.001, 0.001])  # near-zero actuals — extreme miss
     event_signals = torch.tensor([1.0, 1.0])  # event flagged
     bonus = event_bonus(predicted, event_signals, actuals)
-    assert 0.0 <= bonus.item() <= 1.0, (
-        f"event_bonus escaped [0,1] cap: {bonus.item()}"
-    )
+    assert 0.0 <= bonus.item() <= 1.0, f"event_bonus escaped [0,1] cap: {bonus.item()}"
 
 
 # --- counterfactual 4: kwarg override diverges from spec config --------------
@@ -142,12 +140,9 @@ def test_matching_kwargs_keep_divergence_at_zero() -> None:
         sample.value
         for metric in samples
         for sample in metric.samples
-        if sample.labels.get("agent") == "demand_prophet"
-        and sample.name.endswith("_total")
+        if sample.labels.get("agent") == "demand_prophet" and sample.name.endswith("_total")
     )
-    assert total == 0.0, (
-        f"Divergence counter should be 0 with matching weights, was {total}"
-    )
+    assert total == 0.0, f"Divergence counter should be 0 with matching weights, was {total}"
 
 
 # --- counterfactual 6: reward sign — better predictions yield higher reward --
@@ -158,20 +153,24 @@ def test_better_predictions_yield_higher_reward(seed: int) -> None:
     torch.manual_seed(seed)
     actuals = torch.tensor([10.0, 12.0, 8.0, 11.0, 9.0])
 
-    good = torch.tensor([
-        [9.5, 10.0, 10.5],
-        [11.5, 12.0, 12.5],
-        [7.5, 8.0, 8.5],
-        [10.5, 11.0, 11.5],
-        [8.5, 9.0, 9.5],
-    ])
-    bad = torch.tensor([
-        [1.0, 2.0, 3.0],
-        [1.0, 2.0, 3.0],
-        [1.0, 2.0, 3.0],
-        [1.0, 2.0, 3.0],
-        [1.0, 2.0, 3.0],
-    ])
+    good = torch.tensor(
+        [
+            [9.5, 10.0, 10.5],
+            [11.5, 12.0, 12.5],
+            [7.5, 8.0, 8.5],
+            [10.5, 11.0, 11.5],
+            [8.5, 9.0, 9.5],
+        ]
+    )
+    bad = torch.tensor(
+        [
+            [1.0, 2.0, 3.0],
+            [1.0, 2.0, 3.0],
+            [1.0, 2.0, 3.0],
+            [1.0, 2.0, 3.0],
+            [1.0, 2.0, 3.0],
+        ]
+    )
 
     good_reward = compute_reward(
         predictions=good,

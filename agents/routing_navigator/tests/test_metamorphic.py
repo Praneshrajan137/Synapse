@@ -47,9 +47,7 @@ def _riders(n: int, capacity: float = 30.0) -> list[dict[str, Any]]:
 
 
 class TestMetamorphicRelations:
-    def test_mr_rn_001_more_orders_no_shorter(
-        self, pipeline: RoutingNavigatorPipeline
-    ) -> None:
+    def test_mr_rn_001_more_orders_no_shorter(self, pipeline: RoutingNavigatorPipeline) -> None:
         small = pipeline.route(_orders(3), _riders(1), "STORE_BLR_001", use_student=False)
         big = pipeline.route(_orders(8), _riders(1), "STORE_BLR_001", use_student=False)
         assert sum(p.total_distance_km for p in big) >= sum(p.total_distance_km for p in small)
@@ -66,9 +64,7 @@ class TestMetamorphicRelations:
         )
         assert len(plans) >= 2
 
-    def test_mr_rn_003_routes_within_time_cap(
-        self, pipeline: RoutingNavigatorPipeline
-    ) -> None:
+    def test_mr_rn_003_routes_within_time_cap(self, pipeline: RoutingNavigatorPipeline) -> None:
         plans = pipeline.route(_orders(8), _riders(2), "STORE_BLR_001", use_student=False)
         assert all(p.total_time_min <= 480.0 for p in plans)
 

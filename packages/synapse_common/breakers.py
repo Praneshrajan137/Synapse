@@ -179,9 +179,8 @@ class AsyncBreaker:
             await self._maybe_half_open()
             if self._state is BreakerState.OPEN:
                 BREAKER_REJECTIONS_TOTAL.labels(name=self.name).inc()
-                retry_after = (
-                    self.reset_timeout
-                    - (time.monotonic() - (self._opened_at or time.monotonic()))
+                retry_after = self.reset_timeout - (
+                    time.monotonic() - (self._opened_at or time.monotonic())
                 )
                 raise BreakerOpenError(self.name, max(retry_after, 0.0))
         try:

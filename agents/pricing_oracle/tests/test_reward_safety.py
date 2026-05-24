@@ -144,7 +144,6 @@ def test_matching_weights_do_not_emit_divergence() -> None:
         sample.value
         for metric in samples
         for sample in metric.samples
-        if sample.labels.get("agent") == "pricing_oracle"
-        and sample.name.endswith("_total")
+        if sample.labels.get("agent") == "pricing_oracle" and sample.name.endswith("_total")
     )
     assert total == 0.0, f"Matching weights must keep divergence at 0, got {total}"

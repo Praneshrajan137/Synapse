@@ -86,9 +86,8 @@ def _inv_norm_cdf(p: float) -> float:
     phigh = 1 - plow
     if p < plow:
         q = (-2 * _ln(p)) ** 0.5
-        return (
-            (((((c[0] * q + c[1]) * q + c[2]) * q + c[3]) * q + c[4]) * q + c[5])
-            / ((((d_[0] * q + d_[1]) * q + d_[2]) * q + d_[3]) * q + 1)
+        return (((((c[0] * q + c[1]) * q + c[2]) * q + c[3]) * q + c[4]) * q + c[5]) / (
+            (((d_[0] * q + d_[1]) * q + d_[2]) * q + d_[3]) * q + 1
         )
     if p > phigh:
         q = (-2 * _ln(1 - p)) ** 0.5
@@ -99,7 +98,8 @@ def _inv_norm_cdf(p: float) -> float:
     q = p - 0.5
     r = q * q
     return (
-        (((((a[0] * r + a[1]) * r + a[2]) * r + a[3]) * r + a[4]) * r + a[5]) * q
+        (((((a[0] * r + a[1]) * r + a[2]) * r + a[3]) * r + a[4]) * r + a[5])
+        * q
         / (((((b[0] * r + b[1]) * r + b[2]) * r + b[3]) * r + b[4]) * r + 1)
     )
 
@@ -136,8 +136,7 @@ def reorder_point(
     """ROP = μ·L + safety_mult·σ·√L."""
     return max(
         0.0,
-        forecast_mean * lead_time_days
-        + safety_multiplier * forecast_std * (lead_time_days**0.5),
+        forecast_mean * lead_time_days + safety_multiplier * forecast_std * (lead_time_days**0.5),
     )
 
 
