@@ -114,3 +114,22 @@ OUTBOX_LAG_SECONDS = Gauge(
     "synapse_outbox_lag_seconds",
     "Age in seconds of the oldest PENDING audit_outbox row",
 )
+
+# Sprint 9 — Audit chain (ADR-033)
+AUDIT_CHAIN_LENGTH = Gauge(
+    "synapse_audit_chain_length",
+    "Total rows in the chained audit table; monotonically increasing",
+)
+
+AUDIT_CHAIN_TAMPER_DETECTED = Counter(
+    "synapse_audit_chain_tamper_detected_total",
+    "Tamper events detected by synapse audit verify or the anchorer",
+    ["source"],
+)
+
+# Sprint 9 — Data lifecycle & archival (WS-7)
+ARCHIVE_ROWS_MOVED_TOTAL = Counter(
+    "synapse_archive_rows_moved_total",
+    "Audit rows successfully moved to the MinIO Parquet archive by the daily worker",
+    ["table"],
+)

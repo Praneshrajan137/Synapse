@@ -1,17 +1,28 @@
 """
-SYNAPSE Orchestrator — Append-only PostgreSQL audit logger (I-4).
+SYNAPSE Orchestrator — Append-only PostgreSQL audit logger (I-4 + ADR-033).
 
 Every consensus decision is persisted with full provenance.
 DELETE and UPDATE are revoked at the database level.
+
+Sprint 9 (ADR-033) adds chained-hash tamper-evidence: every row carries
+``prev_hash`` and ``current_hash`` so ``synapse audit verify`` can walk
+the chain and detect tampering between any two anchor points.
 """
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, cast
+from typing import TYPE_CHECKING
 
 import deal
 import structlog
+from sqlalchemy import desc, select
+from synapse_common.metrics import AUDIT_CHAIN_LENGTH
 
+from orchestrator.audit.hash_chain import (
+    GENESIS_HASH,
+    hash_payload_for_row,
+    make_canonical_row,
+)
 from orchestrator.audit.models import AuditConsensusRow
 
 if TYPE_CHECKING:
@@ -24,11 +35,32 @@ logger = structlog.get_logger(__name__)
 
 
 class AuditLogger:
-    """Append-only audit writer backed by PostgreSQL."""
+    """Append-only audit writer backed by PostgreSQL.
+
+    Sprint 9: chained-hash population at insert time. Chain head is
+    cached in-process; recovered from the database on first call so the
+    chain survives restarts.
+    """
 
     def __init__(self, session_factory: async_sessionmaker[AsyncSession]) -> None:
         self._session_factory = session_factory
         self._insert_count: int = 0
+        self._chain_head: str | None = None
+
+    async def _load_chain_head(self, session: AsyncSession) -> str:
+        """Return the most recent ``current_hash`` (or GENESIS_HASH on empty)."""
+        if self._chain_head is not None:
+            return self._chain_head
+        stmt = (
+            select(AuditConsensusRow.current_hash)
+            .where(AuditConsensusRow.current_hash.is_not(None))
+            .order_by(desc(AuditConsensusRow.created_at), desc(AuditConsensusRow.id))
+            .limit(1)
+        )
+        result = await session.execute(stmt)
+        head = result.scalar_one_or_none()
+        self._chain_head = head or GENESIS_HASH
+        return self._chain_head
 
     @deal.pre(
         lambda self, decision: decision.decision_id is not None,
@@ -39,13 +71,24 @@ class AuditLogger:
         message="I-4: Audit row must be inserted",
     )
     async def log_decision(self, decision: ConsensusDecision) -> UUID:
-        """Insert a decision row and return the audit row UUID."""
+        """Insert a decision row + chain hash; return the audit row UUID."""
         async with self._session_factory() as session:
+            prev_hash = await self._load_chain_head(session)
+            canonical = make_canonical_row(
+                decision_id=decision.decision_id,
+                tier=str(decision.tier.value),
+                selected_action=decision.selected_action,
+                pareto_weights=decision.pareto_weights,
+                confidence=decision.confidence,
+                proposals=[p.model_dump(mode="json") for p in decision.proposals],
+                audit_trace=decision.audit_trace,
+            )
+            current_hash = hash_payload_for_row(prev_hash, canonical)
             row = AuditConsensusRow(
                 decision_id=decision.decision_id,
                 tier=str(decision.tier.value),
                 phase_reached=decision.phase_reached,
-                proposals=[p.model_dump(mode="json") for p in decision.proposals],
+                proposals=canonical["proposals"],
                 selected_action=decision.selected_action,
                 pareto_weights=decision.pareto_weights,
                 confidence=decision.confidence,
@@ -56,15 +99,20 @@ class AuditLogger:
                 context_messages=[m.model_dump(mode="json") for m in decision.context_messages],
                 audit_trace=decision.audit_trace,
                 pareto_front=decision.pareto_front,
+                prev_hash=prev_hash,
+                current_hash=current_hash,
             )
             session.add(row)
             await session.commit()
             self._insert_count += 1
+            self._chain_head = current_hash
+            AUDIT_CHAIN_LENGTH.set(float(self._insert_count))
 
             logger.info(
                 "audit_decision_logged",
                 decision_id=str(decision.decision_id),
                 audit_id=str(row.id),
                 tier=str(decision.tier.value),
+                chain_head=current_hash[:12],
             )
-            return cast("UUID", row.id)
+            return row.id  # type: ignore[return-value]

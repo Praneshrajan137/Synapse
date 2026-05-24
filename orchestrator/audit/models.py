@@ -58,6 +58,10 @@ class AuditConsensusRow(Base):
         nullable=False,
         default=lambda: datetime.now(UTC),
     )
+    # Sprint 9 §M-sec-4 (ADR-033) — tamper-evidence chained hashes.
+    # Existing rows have NULL chain values; new rows always populate.
+    prev_hash: Any = Column(String(64), nullable=True)
+    current_hash: Any = Column(String(64), nullable=True)
 
 
 class AuditOutboxRow(Base):
