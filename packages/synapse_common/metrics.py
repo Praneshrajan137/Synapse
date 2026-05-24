@@ -95,3 +95,22 @@ CONSENSUS_PROPOSALS_RECEIVED = Counter(
     "Agent proposals received per consensus round",
     ["agent_name"],
 )
+
+# --- Sprint 7 distributed correctness (WS-1/WS-2) ----------------------------
+
+BROWNOUT_DECISIONS_TOTAL = Counter(
+    "synapse_brownout_decisions_total",
+    "Decisions affected by brownout shedding, by level and city (ADR-028)",
+    ["level", "city"],
+)
+
+OUTBOX_DISPATCH_TOTAL = Counter(
+    "synapse_outbox_dispatch_total",
+    "Outbox row dispatch outcomes by terminal status",
+    ["status"],
+)
+
+OUTBOX_LAG_SECONDS = Gauge(
+    "synapse_outbox_lag_seconds",
+    "Age in seconds of the oldest PENDING audit_outbox row",
+)

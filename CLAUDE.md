@@ -39,7 +39,7 @@
 - Spec-first development: write spec.yaml → generate tests (RED) → implement → GREEN
 
 ### Kafka Rules
-- 16 topics defined in `infrastructure/kafka/topics.json` — FROZEN after Sprint 1
+- 17 topics defined in `infrastructure/kafka/topics.json`. Sprint 1 froze inter-agent topics (1-16). Sprint 7 added topic 17 `synapse.orders.demand` as the only ingress freeze exception per [ADR-029](docs/adr/ADR-029-orders-ingress-topic.md) (ingress is a different category from inter-agent communication). Future freeze exceptions require a fresh ADR
 - NEVER use direct kafka-python — use `synapse_common.kafka_client` only
 - NEVER enable `auto.create.topics` — all topics are pre-provisioned
 - All messages use deterministic serialization for KV-cache preservation (I-13)

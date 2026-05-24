@@ -1,6 +1,6 @@
 {
-  "version": "1.0.0",
-  "description": "SYNAPSE Kafka Topic Registry — FROZEN after Sprint 1",
+  "version": "1.1.0",
+  "description": "SYNAPSE Kafka Topic Registry. Sprint 1 froze inter-agent topics (1-16). Sprint 7 added topic 17 as the only freeze exception per ADR-029 (ingress is a different category from inter-agent communication).",
   "topics": [
     {"name": "synapse.demand.forecast",       "partitions": 8,  "retention_hours": 72,   "producer": "demand_prophet",      "key_consumers": ["inventory_sentinel", "pricing_oracle", "orchestrator"]},
     {"name": "synapse.demand.drift_alert",     "partitions": 1,  "retention_hours": 24,   "producer": "demand_prophet",      "key_consumers": ["ml_pipeline"]},
@@ -17,6 +17,7 @@
     {"name": "synapse.orchestrator.escalation","partitions": 1,  "retention_hours": 720,  "producer": "orchestrator",        "key_consumers": ["hitl_console"]},
     {"name": "synapse.twin.divergence",        "partitions": 1,  "retention_hours": 168,  "producer": "digital_twin",        "key_consumers": ["disruption_shield", "orchestrator"]},
     {"name": "synapse.audit.log",              "partitions": 4,  "retention_hours": -1,   "producer": "all_agents",          "key_consumers": ["postgres_sink", "compliance"]},
-    {"name": "synapse.metrics.agent",          "partitions": 8,  "retention_hours": 24,   "producer": "all_agents",          "key_consumers": ["prometheus_exporter"]}
+    {"name": "synapse.metrics.agent",          "partitions": 8,  "retention_hours": 24,   "producer": "all_agents",          "key_consumers": ["prometheus_exporter"]},
+    {"name": "synapse.orders.demand",          "partitions": 8,  "retention_hours": 24,   "producer": "api_gateway",         "key_consumers": ["demand_prophet", "inventory_sentinel", "orchestrator"], "category": "ingress", "schema": "proto/domain/order_request.schema.json", "adr": "ADR-029"}
   ]
 }
