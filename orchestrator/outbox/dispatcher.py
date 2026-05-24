@@ -241,16 +241,19 @@ class OutboxDispatcher:
         message so the full trace stays joined across the gap between
         Postgres commit and Kafka publish.
         """
+        # Producer expects ``list[tuple[str, bytes]]`` for headers (confluent-
+        # kafka's wire format); the outbox row stores them as ``dict[str, str]``
+        # for JSON-friendly persistence. Convert at the call boundary.
         stored_headers: dict[str, str] = dict(row.headers or {})
-        # mypy's asyncio.to_thread stub does not propagate the callee's
-        # kwargs — the runtime contract is to_thread(func, *args, **kwargs)
-        # so this call is correct. Targeted ignore preserves --strict.
+        wire_headers: list[tuple[str, bytes]] = [
+            (k, v.encode("utf-8")) for k, v in stored_headers.items()
+        ]
         await asyncio.to_thread(
             self._producer.produce,
             topic=row.topic,
             value=row.payload,
             key=row.partition_key,
-            headers=stored_headers,  # type: ignore[call-arg]
+            headers=wire_headers,
         )
 
     async def _mark_published(self, row: AuditOutboxRow) -> None:

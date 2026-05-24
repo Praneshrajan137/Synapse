@@ -46,8 +46,8 @@ def _archive_path(now: datetime, table: str, city: str) -> str:
 def _archive_via_boto(rows: list[dict[str, Any]], object_key: str) -> bool:
     """Best-effort upload to MinIO. Returns True on success, False on missing deps."""
     try:
-        import boto3  # type: ignore[import-untyped]
-        import pandas as pd  # type: ignore[import-untyped]
+        import boto3  # type: ignore[import-not-found, import-untyped, unused-ignore]
+        import pandas as pd  # type: ignore[import-not-found, import-untyped, unused-ignore]
     except ImportError:
         logger.info("audit_archive_dependencies_missing")
         return False
@@ -107,7 +107,7 @@ def archive_old_rows(table: str = DEFAULT_TABLE, days: int = DEFAULT_ARCHIVE_DAY
             }
             # Pre-Sprint 6 rows are city-agnostic; archive them under "shared".
             city = (
-                (payload["selected_action"] or {}).get("city")  # type: ignore[union-attr]
+                payload["selected_action"].get("city")
                 if isinstance(payload["selected_action"], dict)
                 else None
             )

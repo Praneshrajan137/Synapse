@@ -62,7 +62,15 @@ class ContextBuilder:
         self,
         context_messages: list[ContextMessage],
     ) -> list[dict[str, str]]:
-        """Return message list with a frozen system prompt prefix."""
+        """Return message list with a frozen system prompt prefix (I-13, ADR-021).
+
+        KV-cache invariant: the byte stream emitted for a given
+        ``ContextMessage`` MUST NOT change when its ``status`` flips
+        between ``ACTIVE``/``SUPERSEDED``/``REJECTED``. Embedding the
+        status into the content (Sprint 5 mistake) caused KV-cache
+        invalidation on replay. Status now lives in
+        ``build_metadata_channel`` only — never in the LLM prompt body.
+        """
         messages: list[dict[str, str]] = [
             {"role": "system", "content": SYSTEM_PROMPT},
         ]
@@ -70,9 +78,30 @@ class ContextBuilder:
             serialised = json.dumps(msg.content, **_JSON_KWARGS)
             role = "assistant" if msg.source == "orchestrator" else "user"
             messages.append(
-                {"role": role, "content": f"[{msg.source}|{msg.status}] {serialised}"},
+                {"role": role, "content": f"[{msg.source}] {serialised}"},
             )
         return messages
+
+    def build_metadata_channel(
+        self,
+        context_messages: list[ContextMessage],
+    ) -> list[dict[str, str]]:
+        """Return a parallel metadata channel keyed by message_id.
+
+        Status, rejection_reason, and supersession edges live here so
+        the orchestrator (and audit replay) can reason about message
+        lifecycle without polluting the KV-cached prompt body.
+        """
+        return [
+            {
+                "message_id": str(msg.message_id),
+                "source": msg.source,
+                "status": msg.status.value,
+                "rejection_reason": msg.rejection_reason or "",
+                "superseded_by": str(msg.superseded_by) if msg.superseded_by else "",
+            }
+            for msg in context_messages
+        ]
 
     def verify_prefix_stability(self) -> bool:
         """Return ``True`` when the system prompt is byte-identical to startup."""

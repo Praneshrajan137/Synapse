@@ -13,6 +13,10 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+# Runtime import — used by ``log_decision`` to cast the SQLAlchemy column
+# value back to a concrete UUID for the return signature.
+from uuid import UUID  # noqa: E402  (placed after structlog imports for clarity)
+
 import deal
 import structlog
 from sqlalchemy import desc, select
@@ -26,7 +30,7 @@ from orchestrator.audit.hash_chain import (
 from orchestrator.audit.models import AuditConsensusRow
 
 if TYPE_CHECKING:
-    from uuid import UUID
+    pass
 
     from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
     from synapse_common.models import ConsensusDecision
@@ -115,4 +119,6 @@ class AuditLogger:
                 tier=str(decision.tier.value),
                 chain_head=current_hash[:12],
             )
-            return row.id  # type: ignore[return-value]
+            # row.id is a SQLAlchemy Column → its runtime value is a UUID,
+            # but the descriptor type is Any. Cast to satisfy --strict.
+            return UUID(str(row.id))

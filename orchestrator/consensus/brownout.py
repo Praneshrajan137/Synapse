@@ -126,9 +126,24 @@ class BrownoutController:
 
     @staticmethod
     def _breaker_state(breaker: AsyncBreaker | None) -> int:
+        """Map BreakerState to a comparable int.
+
+        AsyncBreaker.state is a ``BreakerState`` *string* enum (CLOSED/
+        OPEN/HALF_OPEN), so a raw ``int(...)`` would attempt
+        ``int('closed')`` and raise ValueError. Translate explicitly:
+        CLOSED=0 < HALF_OPEN=1 < OPEN=2.
+        """
         if breaker is None:
             return 0
-        return int(breaker.state)
+        # Import lazily to avoid a circular module load with breakers.py.
+        from synapse_common.breakers import BreakerState
+
+        state = breaker.state
+        if state is BreakerState.OPEN:
+            return 2
+        if state is BreakerState.HALF_OPEN:
+            return 1
+        return 0
 
 
 # ----------------------------------------------------------------------------
