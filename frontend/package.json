@@ -37,7 +37,7 @@
     "audit:licenses": "tsx scripts/audit-licenses.ts",
     "size": "size-limit",
     "lhci": "lhci autorun",
-    "mutation": "stryker run --config-file stryker.conf.json",
+    "mutation": "stryker run stryker.conf.json",
     "sbom": "pnpm dlx @cyclonedx/cdxgen@^10 -o sbom.cdx.json -t javascript .",
     "audit:supply": "pnpm audit --audit-level=high && node scripts/check-supply-chain.mjs"
   },
