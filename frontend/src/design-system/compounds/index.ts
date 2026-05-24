@@ -10,3 +10,4 @@ export * from "./AgentProposalChip";
 export * from "./CalibrationCurve";
 export * from "./ReasoningTimeline";
 export * from "./LanguagePicker";
+export * from "./ProposalConstellation";
