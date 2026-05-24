@@ -10,6 +10,10 @@
 
 ## Critical Rules
 
+### Workflow Rules
+- **NEVER use `git worktree add` in this repo.** All work happens on a single working copy at the repo root, on a feature branch off `main`. To work on multiple things in parallel, use `git stash`, separate clones, or sequential branches — never worktrees. Reason: in May 2026 a worktree sprawl across `.claude/worktrees/` produced ~50K LOC of unmerged parallel rewrites that required an 8-PR consolidation effort (see `consolidate/backend-2026-05-24` branch + the `archive/*` tags) to recover from. The `.claude/worktrees/` directory is gitignored and must remain empty in any new clone.
+- All consolidation source branches are preserved as immutable tags `archive/<branch>-<sha>` even after their working trees are removed. To revive any historical branch: `git checkout -b recover/<name> archive/<name>-<sha>`.
+
 ### Architecture Rules
 - 8 specialized agents, each in `agents/<name>/` with canonical structure
 - 4 layers: Orchestration → Agent → Digital Twin → Data Fabric
