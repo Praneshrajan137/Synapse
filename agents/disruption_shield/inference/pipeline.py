@@ -18,6 +18,7 @@ import numpy as np
 import structlog
 import torch
 from pydantic import BaseModel, Field
+from synapse_common.dbc import post, pre
 
 from agents.disruption_shield.config import DisruptionShieldConfig
 from agents.disruption_shield.inference.playbook_retriever import (
@@ -25,7 +26,6 @@ from agents.disruption_shield.inference.playbook_retriever import (
 )
 from agents.disruption_shield.models.anomaly_ensemble import AnomalyEnsemble
 from agents.disruption_shield.models.reasoning import DeepSeekReasoner
-from synapse_common.dbc import post, pre
 
 if TYPE_CHECKING:
     from synapse_common.graph_client import GraphClient
@@ -80,7 +80,7 @@ class DisruptionShieldPipeline:
         ensemble: AnomalyEnsemble | None = None,
         reasoner: DeepSeekReasoner | None = None,
         retriever: PlaybookRetriever | None = None,
-        graph_client: "GraphClient | None" = None,
+        graph_client: GraphClient | None = None,
     ) -> None:
         self._config = config or DisruptionShieldConfig()
         self._graph = graph_client

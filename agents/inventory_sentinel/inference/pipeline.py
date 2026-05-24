@@ -25,6 +25,9 @@ from typing import Any
 
 import numpy as np
 import structlog
+from synapse_common.dbc import post, pre
+from synapse_common.models import InventoryAction
+from synapse_common.schema_registry import validates_schema
 
 from agents.inventory_sentinel.models.l2_bandit import LinUCB
 from agents.inventory_sentinel.models.newsvendor import (
@@ -33,9 +36,6 @@ from agents.inventory_sentinel.models.newsvendor import (
     newsvendor_quantity,
     reorder_point,
 )
-from synapse_common.dbc import post, pre
-from synapse_common.models import InventoryAction
-from synapse_common.schema_registry import validates_schema
 
 logger = structlog.get_logger(__name__)
 

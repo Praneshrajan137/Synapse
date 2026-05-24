@@ -32,14 +32,17 @@ class NewsvendorParams:
         return self.cost_under / (self.cost_under + self.cost_over)
 
 
+_DEFAULT_NEWSVENDOR_PARAMS = NewsvendorParams()
+
+
 def newsvendor_quantity(
     forecast_mean: float,
     forecast_std: float,
-    params: NewsvendorParams = NewsvendorParams(),
+    params: NewsvendorParams | None = None,
 ) -> float:
     """Closed-form Q* for a Normal demand distribution."""
-    from math import erf, sqrt
 
+    params = params if params is not None else _DEFAULT_NEWSVENDOR_PARAMS
     p = params.critical_fractile
     # Inverse normal CDF via Acklam's approximation — pure stdlib.
     z = _inv_norm_cdf(p)

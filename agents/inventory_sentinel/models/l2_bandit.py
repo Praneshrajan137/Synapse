@@ -16,11 +16,13 @@ to the model.py field constraint (1.0 ≤ multiplier ≤ 3.0).
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import numpy as np
 import structlog
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 logger = structlog.get_logger(__name__)
 
@@ -89,7 +91,7 @@ class LinUCB:
             logger.warning("linucb_parquet_skipped_no_pandas")
 
     @classmethod
-    def from_parquet(cls, path: Path, *, alpha: float = 1.0) -> "LinUCB":
+    def from_parquet(cls, path: Path, *, alpha: float = 1.0) -> LinUCB:
         import pandas as pd
 
         df = pd.read_parquet(path)

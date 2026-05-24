@@ -24,6 +24,9 @@ import time
 from typing import Any
 
 import structlog
+from synapse_common.dbc import post, pre
+from synapse_common.models import RoutePlan
+from synapse_common.schema_registry import validates_schema
 
 from agents.routing_navigator.models.cvrptw import (
     Route,
@@ -31,9 +34,6 @@ from agents.routing_navigator.models.cvrptw import (
     haversine_km,
     solve_cvrptw,
 )
-from synapse_common.dbc import post, pre
-from synapse_common.models import RoutePlan
-from synapse_common.schema_registry import validates_schema
 
 logger = structlog.get_logger(__name__)
 

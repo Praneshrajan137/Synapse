@@ -15,17 +15,18 @@ from typing import TYPE_CHECKING, Any
 import numpy as np
 import structlog
 import torch
+from synapse_common.dbc import post, pre
 
 from agents.supplier_trust.config import SupplierTrustConfig
 from agents.supplier_trust.models.bayesian_lead import (
     BayesianLeadTimeModel,
     LeadTimePosterior,
 )
-from synapse_common.dbc import post, pre
 
 if TYPE_CHECKING:
-    from agents.supplier_trust.models.trust_gnn import SupplierTrustGNN
     from synapse_common.graph_client import GraphClient
+
+    from agents.supplier_trust.models.trust_gnn import SupplierTrustGNN
 
 logger = structlog.get_logger(__name__)
 
@@ -49,7 +50,7 @@ class SupplierTrustPipeline:
         gnn_model: SupplierTrustGNN | None = None,
         bayesian_model: BayesianLeadTimeModel | None = None,
         config: SupplierTrustConfig | None = None,
-        graph_client: "GraphClient | None" = None,
+        graph_client: GraphClient | None = None,
     ) -> None:
         self._config = config or SupplierTrustConfig()
         self._gnn = gnn_model
