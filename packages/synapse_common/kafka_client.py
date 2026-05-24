@@ -153,7 +153,13 @@ class SynapseConsumer:
         raw_headers = msg.headers() or []
         headers: list[tuple[str, bytes]] = []
         for entry in raw_headers:
-            key, value = entry  # type: ignore[misc]
+            # confluent-kafka's typeshed annotates ``headers()`` as
+            # ``list[str | bytes]`` even though every runtime payload is
+            # ``(key, value)`` tuples. Guard at runtime so mypy --strict
+            # accepts both shapes.
+            if not isinstance(entry, tuple) or len(entry) != 2:
+                continue
+            key, value = entry
             if isinstance(value, bytes):
                 headers.append((str(key), value))
             elif isinstance(value, str):

@@ -13,6 +13,11 @@ The test asserts on the producer's recorded calls and the row
 ``status`` transitions, not on real Kafka delivery.
 """
 
+import pytest
+
+pytest.importorskip("sqlalchemy")
+pytest.importorskip("aiosqlite")
+
 from __future__ import annotations
 
 from typing import Any

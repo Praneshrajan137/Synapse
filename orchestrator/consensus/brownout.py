@@ -28,7 +28,7 @@ from synapse_common.metrics import BROWNOUT_DECISIONS_TOTAL
 from synapse_common.models import DecisionTier
 
 if TYPE_CHECKING:
-    from synapse_common.breakers import CircuitBreaker
+    from synapse_common.breakers import AsyncBreaker
 
 logger = structlog.get_logger(__name__)
 
@@ -57,8 +57,8 @@ class BrownoutController:
     def __init__(
         self,
         city: str,
-        ollama_breaker: CircuitBreaker | None = None,
-        postgres_breaker: CircuitBreaker | None = None,
+        ollama_breaker: AsyncBreaker | None = None,
+        postgres_breaker: AsyncBreaker | None = None,
     ) -> None:
         self.city = city
         self._ollama_breaker = ollama_breaker
@@ -125,7 +125,7 @@ class BrownoutController:
         BROWNOUT_DECISIONS_TOTAL.labels(level=level.name, city=self.city).inc()
 
     @staticmethod
-    def _breaker_state(breaker: CircuitBreaker | None) -> int:
+    def _breaker_state(breaker: AsyncBreaker | None) -> int:
         if breaker is None:
             return 0
         return int(breaker.state)

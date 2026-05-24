@@ -9,7 +9,10 @@ shed traffic from the other.
 from __future__ import annotations
 
 import pytest
-from synapse_common.breakers import BreakerState, CircuitBreaker
+from synapse_common.breakers import AsyncBreaker, BreakerState
+
+# Backward-compat alias for tests written against Wiles' CircuitBreaker name.
+CircuitBreaker = AsyncBreaker
 from synapse_common.models import DecisionTier
 
 from orchestrator.consensus.brownout import BrownoutController, BrownoutLevel

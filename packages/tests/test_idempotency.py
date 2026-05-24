@@ -5,8 +5,13 @@ from __future__ import annotations
 from typing import Any
 
 import pytest
-from fastapi import FastAPI, Request
-from fastapi.testclient import TestClient
+
+# Middleware ships against FastAPI's Request type; skip the whole module
+# when FastAPI is unavailable (lightweight CI jobs that don't need ASGI).
+pytest.importorskip("fastapi")
+
+from fastapi import FastAPI, Request  # noqa: E402
+from fastapi.testclient import TestClient  # noqa: E402
 from synapse_common.idempotency import (
     InMemoryStore,
     configure_store,

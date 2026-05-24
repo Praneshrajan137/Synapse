@@ -133,3 +133,18 @@ ARCHIVE_ROWS_MOVED_TOTAL = Counter(
     "Audit rows successfully moved to the MinIO Parquet archive by the daily worker",
     ["table"],
 )
+
+# Sprint 8 — WS-3 Spec-as-Source-of-Truth (ADR-031)
+REWARD_WEIGHT_DIVERGENCE_TOTAL = Counter(
+    "synapse_reward_weight_divergence_total",
+    "Reward-weight drift between spec.yaml-generated config and runtime kwargs "
+    "(shadow mode, ADR-031)",
+    ["agent", "key"],
+)
+
+# Sprint 8 — WS-8 Performance Hardening (ADR-032)
+TIER_BUDGET_EXCEEDED_TOTAL = Counter(
+    "synapse_tier_budget_exceeded_total",
+    "Decisions whose handler latency exceeded its tier budget (ADR-032)",
+    ["tier"],
+)

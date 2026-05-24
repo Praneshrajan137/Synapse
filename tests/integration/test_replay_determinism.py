@@ -10,9 +10,14 @@ audit database, then calls ``replay_decision`` and asserts:
 
 from __future__ import annotations
 
-from datetime import UTC, datetime
-from typing import Any
-from uuid import uuid4
+import pytest
+
+pytest.importorskip("sqlalchemy")
+pytest.importorskip("aiosqlite")
+
+from datetime import UTC, datetime  # noqa: E402
+from typing import Any  # noqa: E402
+from uuid import uuid4  # noqa: E402
 
 import pytest
 import pytest_asyncio
