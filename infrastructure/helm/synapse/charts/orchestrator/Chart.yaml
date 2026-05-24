@@ -1,0 +1,6 @@
+apiVersion: v2
+name: orchestrator
+description: SYNAPSE Orchestrator (4-tier consensus engine) — Sprint 9 §M-prod-1.
+type: application
+version: 0.9.0
+appVersion: "9.0.0"

@@ -1,20 +1,39 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
   "$id": "synapse.domain.order_request",
-  "title": "Customer Order Ingress Event",
-  "description": "Order received by api_gateway and published to synapse.orders.demand (topic #17, ADR-029). This is an INGRESS event from the outside world; it is NOT an inter-agent message.",
+  "title": "API-Gateway Demand Order Request",
+  "description": "Ingress payload produced by api/routers/orders.py and consumed by demand_prophet / inventory_sentinel / orchestrator via the synapse.orders.demand topic (ADR-029).",
   "type": "object",
-  "required": ["order_id", "city", "store_id", "sku_id", "quantity", "timestamp"],
+  "required": ["city", "store_id", "sku_id", "quantity", "timestamp"],
   "properties": {
-    "order_id": {"type": "string", "format": "uuid", "description": "Globally unique order identifier"},
-    "idempotency_key": {"type": "string", "description": "Client-provided Idempotency-Key from HTTP header; ties retried HTTP requests to the same logical order"},
-    "city": {"type": "string", "enum": ["bengaluru", "mumbai"]},
-    "store_id": {"type": "string", "minLength": 1},
-    "sku_id": {"type": "string", "minLength": 1},
-    "quantity": {"type": "integer", "exclusiveMinimum": 0, "maximum": 1000},
-    "timestamp": {"type": "string", "format": "date-time", "description": "RFC3339 UTC timestamp; api_gateway sets this on receipt"},
-    "trace_id": {"type": "string", "description": "W3C traceparent header value to correlate with downstream consumers"},
-    "customer_hash": {"type": "string", "description": "Hashed customer identifier (no PII per WS-7)"}
+    "city": {
+      "type": "string",
+      "enum": ["bengaluru", "mumbai"],
+      "description": "Multi-city deployment key (E-S6-03)."
+    },
+    "store_id": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 64
+    },
+    "sku_id": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 64,
+      "description": "Identical across cities (E-S6-01)."
+    },
+    "quantity": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "timestamp": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "idempotency_key": {
+      "type": "string",
+      "description": "Echoed from the Idempotency-Key header for downstream dedup."
+    }
   },
   "additionalProperties": false
 }

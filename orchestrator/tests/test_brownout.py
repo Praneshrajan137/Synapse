@@ -1,112 +1,151 @@
-"""Tests for the brownout policy (Sprint 7, WS-1)."""
+"""Tests for the brownout policy (Sprint 7 WS-1, ADR-028).
+
+Targets the simplified per-city BrownoutController API (no Pydantic
+signal hybrid). Uses set_manual_override to drive the ladder, and a
+small fake CircuitBreaker stub to exercise the breaker-driven path.
+"""
 
 from __future__ import annotations
+
+from typing import Any
 
 import pytest
 from synapse_common.models import DecisionTier
 
+from orchestrator.consensus import brownout as bo
 from orchestrator.consensus.brownout import (
+    BrownoutController,
     BrownoutLevel,
-    BrownoutPolicy,
-    BrownoutSignal,
-    BrownoutThresholds,
 )
 
 
-def _signal(**kwargs: object) -> BrownoutSignal:
-    return BrownoutSignal(**kwargs)  # type: ignore[arg-type]
+class _FakeBreaker:
+    """Minimal stand-in for AsyncBreaker — exposes only ``state`` as int.
+
+    BrownoutController._breaker_state casts state to int; OPEN=2, HALF=1,
+    CLOSED=0. We model the same mapping here so tests don't need the
+    real breaker FSM.
+    """
+
+    def __init__(self, state: int = 0) -> None:
+        self.state = state
 
 
-class TestEvaluate:
-    def test_quiet_signal_returns_none(self) -> None:
-        p = BrownoutPolicy()
-        assert p.evaluate(_signal()) is BrownoutLevel.NONE
+@pytest.fixture(autouse=True)
+def _clean_registry() -> Any:
+    bo.clear_registry()
+    yield
+    bo.clear_registry()
 
-    def test_open_breaker_jumps_straight_to_llm_only(self) -> None:
-        p = BrownoutPolicy()
-        assert (
-            p.evaluate(_signal(ollama_breaker_open=True))
-            is BrownoutLevel.SHED_LLM_ONLY
+
+class TestLevelLadder:
+    def test_quiet_breakers_returns_none(self) -> None:
+        c = BrownoutController(
+            "bengaluru", _FakeBreaker(0), _FakeBreaker(0)
         )
+        assert c.current_level() is BrownoutLevel.NONE
 
-    def test_high_queue_depth_jumps_to_llm_only(self) -> None:
-        p = BrownoutPolicy()
-        assert p.evaluate(_signal(ollama_queue_depth=51)) is BrownoutLevel.SHED_LLM_ONLY
+    def test_ollama_open_sheds_t3_t4(self) -> None:
+        c = BrownoutController(
+            "bengaluru", _FakeBreaker(2), _FakeBreaker(0)
+        )
+        assert c.current_level() is BrownoutLevel.SHED_T4_T3
 
-    def test_p99_burn_ladder(self) -> None:
-        p = BrownoutPolicy()
-        assert p.evaluate(_signal(tier1_p99_ms=149.9)) is BrownoutLevel.NONE
-        assert p.evaluate(_signal(tier1_p99_ms=150.0)) is BrownoutLevel.SHED_T4
-        assert p.evaluate(_signal(tier1_p99_ms=199.9)) is BrownoutLevel.SHED_T4
-        assert p.evaluate(_signal(tier1_p99_ms=200.0)) is BrownoutLevel.SHED_T4_T3
+    def test_both_breakers_open_sheds_llm_only(self) -> None:
+        c = BrownoutController(
+            "bengaluru", _FakeBreaker(2), _FakeBreaker(2)
+        )
+        assert c.current_level() is BrownoutLevel.SHED_LLM_ONLY
 
-    def test_error_rate_ladder(self) -> None:
-        p = BrownoutPolicy()
-        assert p.evaluate(_signal(error_rate=0.04)) is BrownoutLevel.NONE
-        assert p.evaluate(_signal(error_rate=0.06)) is BrownoutLevel.SHED_T4
-        assert p.evaluate(_signal(error_rate=0.11)) is BrownoutLevel.SHED_T4_T3
+    def test_ollama_half_open_sheds_t4_only(self) -> None:
+        c = BrownoutController(
+            "bengaluru", _FakeBreaker(1), _FakeBreaker(0)
+        )
+        assert c.current_level() is BrownoutLevel.SHED_T4
 
-    def test_thresholds_are_configurable(self) -> None:
-        p = BrownoutPolicy(BrownoutThresholds(tier1_p99_shed_t4_ms=80.0))
-        assert p.evaluate(_signal(tier1_p99_ms=85.0)) is BrownoutLevel.SHED_T4
+    def test_postgres_half_open_sheds_t4_only(self) -> None:
+        c = BrownoutController(
+            "bengaluru", _FakeBreaker(0), _FakeBreaker(1)
+        )
+        assert c.current_level() is BrownoutLevel.SHED_T4
 
 
-class TestApply:
-    def test_no_brownout_passes_tier_through(self) -> None:
-        p = BrownoutPolicy()
+class TestManualOverride:
+    def test_manual_override_pins_level(self) -> None:
+        c = BrownoutController("bengaluru")
+        c.set_manual_override(BrownoutLevel.SHED_T4_T3)
+        assert c.current_level() is BrownoutLevel.SHED_T4_T3
+
+    def test_clearing_override_uses_breaker_state(self) -> None:
+        c = BrownoutController(
+            "bengaluru", _FakeBreaker(2), _FakeBreaker(0)
+        )
+        c.set_manual_override(BrownoutLevel.NONE)
+        assert c.current_level() is BrownoutLevel.NONE
+        c.set_manual_override(None)
+        assert c.current_level() is BrownoutLevel.SHED_T4_T3
+
+
+class TestShouldShed:
+    def test_essential_bypasses(self) -> None:
+        c = BrownoutController(
+            "bengaluru", _FakeBreaker(2), _FakeBreaker(2)
+        )
         for t in DecisionTier:
-            assert p.apply(t) is t
+            assert c.should_shed(t, essential=True) is False
 
-    def test_shed_t4_only_collapses_t4(self) -> None:
-        p = BrownoutPolicy()
-        p.update(_signal(tier1_p99_ms=160.0))
-        assert p.current_level is BrownoutLevel.SHED_T4
-        assert p.apply(DecisionTier.TIER_4) is DecisionTier.TIER_3
-        assert p.apply(DecisionTier.TIER_3) is DecisionTier.TIER_3
-        assert p.apply(DecisionTier.TIER_2) is DecisionTier.TIER_2
-        assert p.apply(DecisionTier.TIER_1) is DecisionTier.TIER_1
+    def test_shed_t4_only_t4(self) -> None:
+        c = BrownoutController(
+            "bengaluru", _FakeBreaker(1), _FakeBreaker(0)
+        )
+        assert c.should_shed(DecisionTier.TIER_4, essential=False) is True
+        assert c.should_shed(DecisionTier.TIER_3, essential=False) is False
+        assert c.should_shed(DecisionTier.TIER_2, essential=False) is False
 
-    def test_shed_t4_t3_collapses_t3_and_t4(self) -> None:
-        p = BrownoutPolicy()
-        p.update(_signal(tier1_p99_ms=210.0))
-        assert p.current_level is BrownoutLevel.SHED_T4_T3
-        assert p.apply(DecisionTier.TIER_4) is DecisionTier.TIER_2
-        assert p.apply(DecisionTier.TIER_3) is DecisionTier.TIER_2
-        assert p.apply(DecisionTier.TIER_2) is DecisionTier.TIER_2
-        assert p.apply(DecisionTier.TIER_1) is DecisionTier.TIER_1
+    def test_shed_t4_t3(self) -> None:
+        c = BrownoutController(
+            "bengaluru", _FakeBreaker(2), _FakeBreaker(0)
+        )
+        assert c.should_shed(DecisionTier.TIER_4, essential=False) is True
+        assert c.should_shed(DecisionTier.TIER_3, essential=False) is True
+        assert c.should_shed(DecisionTier.TIER_2, essential=False) is False
+        assert c.should_shed(DecisionTier.TIER_1, essential=False) is False
 
-    def test_shed_llm_only_collapses_everything_to_t1(self) -> None:
-        p = BrownoutPolicy()
-        p.update(_signal(ollama_breaker_open=True))
-        for t in DecisionTier:
-            assert p.apply(t) is DecisionTier.TIER_1
-
-    def test_essential_bypasses_brownout(self) -> None:
-        p = BrownoutPolicy()
-        p.update(_signal(ollama_breaker_open=True))
-        assert p.apply(DecisionTier.TIER_4, essential=True) is DecisionTier.TIER_4
+    def test_shed_llm_only(self) -> None:
+        c = BrownoutController(
+            "bengaluru", _FakeBreaker(2), _FakeBreaker(2)
+        )
+        assert c.should_shed(DecisionTier.TIER_4, essential=False) is True
+        assert c.should_shed(DecisionTier.TIER_3, essential=False) is True
+        assert c.should_shed(DecisionTier.TIER_2, essential=False) is True
+        assert c.should_shed(DecisionTier.TIER_1, essential=False) is False
 
 
-class TestUpdate:
-    def test_update_persists_level(self) -> None:
-        p = BrownoutPolicy()
-        assert p.current_level is BrownoutLevel.NONE
-        p.update(_signal(tier1_p99_ms=160.0))
-        assert p.current_level is BrownoutLevel.SHED_T4
-
-    def test_update_with_quiet_signal_clears(self) -> None:
-        p = BrownoutPolicy()
-        p.update(_signal(tier1_p99_ms=210.0))
-        assert p.current_level is BrownoutLevel.SHED_T4_T3
-        p.update(_signal(tier1_p99_ms=10.0))
-        assert p.current_level is BrownoutLevel.NONE
+class TestFallbackTier:
+    def test_fallback_steps_down(self) -> None:
+        c = BrownoutController("bengaluru")
+        assert c.fallback_tier(DecisionTier.TIER_4) is DecisionTier.TIER_3
+        assert c.fallback_tier(DecisionTier.TIER_3) is DecisionTier.TIER_2
+        assert c.fallback_tier(DecisionTier.TIER_2) is DecisionTier.TIER_1
+        assert c.fallback_tier(DecisionTier.TIER_1) is DecisionTier.TIER_1
 
 
-class TestSignalValidation:
-    def test_negative_queue_depth_rejected(self) -> None:
-        with pytest.raises(Exception):  # noqa: B017, BLE001 — Pydantic ValidationError
-            BrownoutSignal(ollama_queue_depth=-1)
+class TestRegistry:
+    def test_register_and_lookup(self) -> None:
+        c = BrownoutController("bengaluru")
+        bo.register(c)
+        assert bo.get_controller("bengaluru") is c
+        assert bo.get_controller("mumbai") is None
 
-    def test_error_rate_above_one_rejected(self) -> None:
-        with pytest.raises(Exception):  # noqa: B017, BLE001
-            BrownoutSignal(error_rate=1.5)
+    def test_per_city_isolation(self) -> None:
+        """E-S6 invariant: Mumbai outage cannot shed Bengaluru traffic."""
+        b = BrownoutController(
+            "bengaluru", _FakeBreaker(0), _FakeBreaker(0)
+        )
+        m = BrownoutController(
+            "mumbai", _FakeBreaker(2), _FakeBreaker(2)
+        )
+        bo.register(b)
+        bo.register(m)
+        assert bo.get_controller("bengaluru").current_level() is BrownoutLevel.NONE
+        assert bo.get_controller("mumbai").current_level() is BrownoutLevel.SHED_LLM_ONLY

@@ -1,0 +1,40 @@
+# KEDA ScaledObject for the orchestrator (Sprint 9 §M-prod-3, ADR-034).
+#
+# Scales on per-topic Kafka consumer-group lag. Two triggers OR'd —
+# orchestrator scales up on either demand-forecast OR routing-plan lag.
+# Per-city overlays (values-mumbai.yaml) override the consumer group
+# label so Mumbai and Bengaluru scale independently.
+
+apiVersion: keda.sh/v1alpha1
+kind: ScaledObject
+metadata:
+  name: orchestrator
+  namespace: synapse
+spec:
+  scaleTargetRef:
+    name: orchestrator
+  minReplicaCount: 2
+  maxReplicaCount: 20
+  pollingInterval: 15
+  cooldownPeriod: 60
+  triggers:
+    - type: prometheus
+      metadata:
+        serverAddress: http://prometheus.synapse:9090
+        threshold: "500"
+        query: |
+          sum(synapse_kafka_consume_lag{topic="synapse.demand.forecast",
+                                       consumer_group="orchestrator"})
+    - type: prometheus
+      metadata:
+        serverAddress: http://prometheus.synapse:9090
+        threshold: "500"
+        query: |
+          sum(synapse_kafka_consume_lag{topic="synapse.routing.plan",
+                                       consumer_group="orchestrator"})
+    - type: prometheus
+      metadata:
+        serverAddress: http://prometheus.synapse:9090
+        threshold: "5"
+        query: |
+          rate(synapse_consensus_duration_seconds_count{tier="tier_1"}[1m])

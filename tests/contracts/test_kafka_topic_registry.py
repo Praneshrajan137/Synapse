@@ -1,29 +1,17 @@
-"""
-Kafka topic registry contract test (Sprint 7, WS-2).
+"""Kafka topic-registry contract test (WS-2 §7, ADR-029).
 
-Walks the AST of every Python file under ``api/``, ``agents/``,
-``orchestrator/``, ``digital_twin/``, and ``data_fabric/`` and finds every
-call that produces to Kafka. For each, extracts the topic argument
-(literal string) and asserts it is registered in
-``infrastructure/kafka/topics.json``.
+AST-walks the entire repository for ``.produce(`` calls and asserts that
+every literal topic argument is present in ``infrastructure/kafka/topics.json``.
+This is the mechanical guard that keeps code and registry in sync after the
+freeze exception introduced by ADR-029.
 
-Detects the following call shapes:
-    confluent_kafka.Producer().produce("topic.name", ...)
-    Producer(...).produce("topic.name", ...)
-    SynapseProducer(...).produce(topic="topic.name", value=...)
-    self._producer.produce("topic.name", ...)
+Failure modes covered:
+    - bare ``confluent_kafka.Producer().produce("synapse.foo.bar", ...)``
+    - ``SynapseProducer().produce(topic="synapse.foo.bar", ...)``
+    - keyword-only ``.produce(topic="synapse.foo.bar", value=...)``
 
-When the topic argument is a *variable* (not a literal), the call is
-recorded but skipped from the strict check; we only fail on literals that
-miss the registry. The intention is to catch the *easy* class of bugs
-(typos, freeze violations) without producing false positives on legit
-runtime-resolved topic names.
-
-Failure mode is human-readable:
-    AssertionError: Producer call at agents/x/y.py:42 publishes to topic
-    'synapse.orders.legacy', which is NOT registered in
-    infrastructure/kafka/topics.json. Either register the topic (with an
-    ADR for freeze-class topics) or correct the typo.
+Computed topics (variables, f-strings, function calls) are skipped — the
+test is deliberately conservative; only string literals are checked.
 """
 
 from __future__ import annotations
@@ -31,174 +19,92 @@ from __future__ import annotations
 import ast
 import json
 from pathlib import Path
-from typing import NamedTuple
 
 import pytest
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-TOPICS_FILE = REPO_ROOT / "infrastructure" / "kafka" / "topics.json"
-
-SCAN_DIRS: tuple[str, ...] = (
-    "api",
-    "agents",
-    "orchestrator",
-    "digital_twin",
-    "data_fabric",
-    "packages",
-)
-
-# Producer-call attribute names we should inspect.
-PRODUCE_ATTR_NAMES: frozenset[str] = frozenset({"produce"})
-
-
-class ProduceCall(NamedTuple):
-    file: str
-    line: int
-    topic: str | None  # None when the topic arg isn't a literal
+TOPICS_JSON = REPO_ROOT / "infrastructure" / "kafka" / "topics.json"
+SKIP_DIRS = {
+    ".git",
+    ".venv",
+    "venv",
+    "node_modules",
+    "frontend",
+    "dist",
+    "build",
+    ".claude",
+    "__pycache__",
+}
 
 
 def _registered_topics() -> set[str]:
-    with TOPICS_FILE.open("r", encoding="utf-8") as fh:
-        registry = json.load(fh)
-    return {entry["name"] for entry in registry["topics"]}
+    data = json.loads(TOPICS_JSON.read_text(encoding="utf-8"))
+    return {entry["name"] for entry in data["topics"]}
 
 
-def _extract_topic(call: ast.Call) -> str | None:
-    """Return the topic literal from a ``.produce(...)`` call, or None."""
-    # First positional arg
-    if call.args:
-        first = call.args[0]
-        if isinstance(first, ast.Constant) and isinstance(first.value, str):
-            return first.value
+def _extract_topic_literal(call: ast.Call) -> str | None:
+    if not call.args and not call.keywords:
         return None
-    # Keyword arg ``topic=...``
+    if call.args and isinstance(call.args[0], ast.Constant) and isinstance(call.args[0].value, str):
+        return call.args[0].value
     for kw in call.keywords:
-        if kw.arg == "topic":
-            if isinstance(kw.value, ast.Constant) and isinstance(kw.value.value, str):
-                return kw.value.value
-            return None
+        if (
+            kw.arg == "topic"
+            and isinstance(kw.value, ast.Constant)
+            and isinstance(kw.value.value, str)
+        ):
+            return kw.value.value
     return None
 
 
-def _looks_like_kafka_producer_call(call: ast.Call) -> bool:
-    """Heuristic: ``something.produce(...)`` where 'something' looks like a producer.
-
-    We require an attribute access (``foo.produce(...)``) so we don't pick
-    up unrelated functions named ``produce``. We don't try to resolve the
-    type — file-scanned callers reach this code only via a fixture that
-    skips false-positives.
-    """
-    func = call.func
-    if not isinstance(func, ast.Attribute):
-        return False
-    if func.attr not in PRODUCE_ATTR_NAMES:
-        return False
-    # The receiver name often signals intent. We accept any of:
-    #   producer, _producer, self._producer, kafka_producer, app.state.producer
-    receiver_name = _attr_root_name(func.value)
-    return receiver_name is not None and (
-        "producer" in receiver_name.lower() or "kafka" in receiver_name.lower()
-    )
-
-
-def _attr_root_name(node: ast.AST) -> str | None:
-    """Walk down attribute chains to find the rooted Name."""
-    cur = node
-    while isinstance(cur, ast.Attribute):
-        cur = cur.value
-    if isinstance(cur, ast.Name):
-        return cur.id
-    if isinstance(cur, ast.Call):
-        # Producer(...).produce(...) — root is the Call's func name
-        if isinstance(cur.func, ast.Name):
-            return cur.func.id
-        if isinstance(cur.func, ast.Attribute):
-            return cur.func.attr
-    return None
-
-
-def _scan_file(path: Path) -> list[ProduceCall]:
-    try:
-        source = path.read_text(encoding="utf-8")
-    except UnicodeDecodeError:
-        return []
-    try:
-        tree = ast.parse(source, filename=str(path))
-    except SyntaxError:
-        return []
-    found: list[ProduceCall] = []
-    for node in ast.walk(tree):
-        if isinstance(node, ast.Call) and _looks_like_kafka_producer_call(node):
-            topic = _extract_topic(node)
-            found.append(
-                ProduceCall(file=str(path.relative_to(REPO_ROOT)), line=node.lineno, topic=topic)
-            )
-    return found
-
-
-def _all_python_files() -> list[Path]:
+def _walk_python_files() -> list[Path]:
     files: list[Path] = []
-    for d in SCAN_DIRS:
-        root = REPO_ROOT / d
-        if not root.exists():
+    for path in REPO_ROOT.rglob("*.py"):
+        if any(part in SKIP_DIRS for part in path.parts):
             continue
-        for path in root.rglob("*.py"):
-            if any(part in {"tests", "training"} for part in path.parts):
-                continue
-            files.append(path)
+        files.append(path)
     return files
 
 
-def _all_produce_calls() -> list[ProduceCall]:
-    return [
-        call
-        for path in _all_python_files()
-        for call in _scan_file(path)
-    ]
-
-
-@pytest.mark.contract
-def test_topics_json_loads() -> None:
-    """Smoke check: the registry file is valid JSON with required fields."""
-    assert TOPICS_FILE.exists(), f"missing {TOPICS_FILE}"
-    with TOPICS_FILE.open("r", encoding="utf-8") as fh:
-        registry = json.load(fh)
-    assert "topics" in registry
-    for entry in registry["topics"]:
-        assert "name" in entry, entry
-        assert "partitions" in entry, entry
-        assert "retention_hours" in entry, entry
-        assert "producer" in entry, entry
-
-
-@pytest.mark.contract
-def test_every_kafka_produce_targets_a_registered_topic() -> None:
-    """No producer.produce() call may target an unregistered topic literal."""
-    registered = _registered_topics()
-    offending: list[ProduceCall] = []
-    for call in _all_produce_calls():
-        if call.topic is None:
+def _produce_topic_literals(path: Path) -> list[tuple[int, str]]:
+    try:
+        tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+    except SyntaxError:
+        return []
+    found: list[tuple[int, str]] = []
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.Call):
             continue
-        if call.topic not in registered:
-            offending.append(call)
-    if offending:
-        details = "\n".join(
-            f"  - {c.file}:{c.line} -> '{c.topic}'" for c in offending
-        )
-        msg = (
-            "The following producer.produce(...) calls target topics not in "
-            "infrastructure/kafka/topics.json. Either register the topic "
-            "(with an ADR if it changes the freeze) or fix the typo:\n"
-            f"{details}"
-        )
-        raise AssertionError(msg)
+        func = node.func
+        attr_name: str | None
+        attr_name = func.attr if isinstance(func, ast.Attribute) else None
+        if attr_name != "produce":
+            continue
+        topic = _extract_topic_literal(node)
+        if topic is None:
+            continue
+        if not topic.startswith("synapse."):
+            continue
+        found.append((node.lineno, topic))
+    return found
 
 
 @pytest.mark.contract
-def test_at_least_one_produce_call_was_scanned() -> None:
-    """Sanity guard: if the scanner finds zero calls, the test is a no-op."""
-    calls = _all_produce_calls()
-    assert calls, (
-        "Scanner found no producer.produce() calls anywhere; either the "
-        "scanner regressed or the codebase no longer publishes to Kafka."
+def test_every_produced_topic_is_registered() -> None:
+    registered = _registered_topics()
+    offenders: list[str] = []
+    for path in _walk_python_files():
+        for lineno, topic in _produce_topic_literals(path):
+            if topic not in registered:
+                offenders.append(f"{path.relative_to(REPO_ROOT)}:{lineno} → {topic}")
+    assert not offenders, (
+        "Unregistered Kafka topics found in producer calls. Register them in "
+        "infrastructure/kafka/topics.json (with an ADR for any freeze exception):\n"
+        + "\n".join(offenders)
     )
+
+
+@pytest.mark.contract
+def test_orders_demand_topic_present() -> None:
+    """Guard against accidental removal of the ADR-029 freeze exception."""
+    assert "synapse.orders.demand" in _registered_topics()

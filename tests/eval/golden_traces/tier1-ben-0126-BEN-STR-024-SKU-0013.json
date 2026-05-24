@@ -1,0 +1,20 @@
+{
+  "agents_involved": [
+    "inventory_sentinel"
+  ],
+  "avg_confidence": 0.911,
+  "city": "bengaluru",
+  "description": "tier_1 bengaluru inventory_sentinel confidence=0.911",
+  "disruption_active": false,
+  "expected_essential": false,
+  "expected_invariants": [
+    "INV-IS-002"
+  ],
+  "expected_tier": "tier_1",
+  "payload": {
+    "sku_id": "SKU-0013",
+    "store_id": "BEN-STR-024"
+  },
+  "requires_twin_simulation": false,
+  "trace_id": "tier1-ben-0126-BEN-STR-024-SKU-0013"
+}

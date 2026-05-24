@@ -1,0 +1,23 @@
+{
+  "agents_involved": [
+    "disruption_shield",
+    "routing_navigator",
+    "inventory_sentinel",
+    "supplier_trust"
+  ],
+  "avg_confidence": 0.311,
+  "city": "bengaluru",
+  "description": "tier_4 bengaluru disruption_shield,routing_navigator,inventory_sentinel,supplier_trust confidence=0.311 disruption",
+  "disruption_active": true,
+  "expected_essential": true,
+  "expected_invariants": [
+    "INV-IS-002"
+  ],
+  "expected_tier": "tier_4",
+  "payload": {
+    "sku_id": "SKU-0056",
+    "store_id": "BEN-STR-016"
+  },
+  "requires_twin_simulation": true,
+  "trace_id": "tier4-ben-0199-BEN-STR-016-SKU-0056"
+}

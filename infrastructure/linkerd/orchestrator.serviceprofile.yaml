@@ -1,0 +1,52 @@
+# Linkerd ServiceProfile for the orchestrator (Sprint 9 §M-prod-2, ADR-034).
+#
+# Declares per-route retry budgets + per-tier timeouts that match
+# packages/synapse_common/a2a_sdk.py TIER_TIMEOUTS (Sprint 7). Linkerd is the
+# *outer ring* of the resilience mesh; the application-layer circuit breakers
+# (synapse_common.breakers) remain the inner ring.
+
+apiVersion: linkerd.io/v1alpha2
+kind: ServiceProfile
+metadata:
+  name: orchestrator.synapse.svc.cluster.local
+  namespace: synapse
+spec:
+  routes:
+    - name: tier-1-fast-path
+      condition:
+        method: POST
+        pathRegex: /api/v1/decisions(/.*)?$
+      timeout: 2s
+      isRetryable: false  # Tier-1 must not retry — burns budget
+
+    - name: tier-2-llm
+      condition:
+        method: POST
+        pathRegex: /a2a$
+      timeout: 10s
+      isRetryable: true
+
+    - name: tier-3-consensus
+      condition:
+        method: POST
+        pathRegex: /api/v1/consensus(/.*)?$
+      timeout: 30s
+      isRetryable: true
+
+    - name: tier-4-monte-carlo
+      condition:
+        method: POST
+        pathRegex: /api/v1/disruption(/.*)?$
+      timeout: 120s
+      isRetryable: false
+
+    - name: health-probes
+      condition:
+        method: GET
+        pathRegex: /(health|ready|metrics)$
+      timeout: 2s
+
+  retryBudget:
+    retryRatio: 0.2
+    minRetriesPerSecond: 5
+    ttl: 30s

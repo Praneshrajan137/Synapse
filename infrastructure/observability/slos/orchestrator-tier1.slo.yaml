@@ -1,0 +1,36 @@
+version: "prometheus/v1"
+service: "orchestrator"
+labels:
+  team: synapse
+  tier: tier_1
+slos:
+  - name: "orchestrator-tier1-latency"
+    objective: 99.5
+    description: |
+      Tier-1 RL-only fast path must complete in <100 ms p99 (I-10).
+      Burn alerts route to #synapse-oncall and reference the
+      kv_cache_collapse runbook because Tier-1 latency regression most
+      commonly traces back to KV-cache invalidation.
+    sli:
+      events:
+        error_query: |
+          sum(rate(synapse_inference_latency_seconds_bucket{tier="tier_1",le="0.1"}[{{.window}}]))
+        total_query: |
+          sum(rate(synapse_inference_latency_seconds_count{tier="tier_1"}[{{.window}}]))
+    alerting:
+      name: orchestrator-tier1-latency-burn
+      labels:
+        severity: page
+      annotations:
+        summary: Tier-1 latency budget burning
+        runbook_url: https://github.com/Praneshrajan137/synapse/blob/main/docs/runbooks/kv_cache_collapse.md
+      page_alert:
+        labels:
+          severity: page
+        annotations:
+          runbook_url: https://github.com/Praneshrajan137/synapse/blob/main/docs/runbooks/kv_cache_collapse.md
+      ticket_alert:
+        labels:
+          severity: ticket
+        annotations:
+          runbook_url: https://github.com/Praneshrajan137/synapse/blob/main/docs/runbooks/kv_cache_collapse.md
