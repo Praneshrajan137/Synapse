@@ -72,7 +72,12 @@ def traced_ollama_call(
             logger.warning("langsmith_missing", sdk="langsmith")
             return func
 
-        wrapped = traceable(run_type=run_type, project_name=PROJECT)(func)  # type: ignore[call-overload]
+        # langsmith's @traceable overload set expects run_type as a
+        # Literal[...]; we accept str at the boundary so the call is
+        # legal at runtime but rejected by --strict. Route through Any
+        # to keep the call portable across langsmith stub versions.
+        _traceable: Any = traceable
+        wrapped = _traceable(run_type=run_type, project_name=PROJECT)(func)
 
         @functools.wraps(func)
         def inner(*args: Any, **kwargs: Any) -> Any:  # noqa: ANN401

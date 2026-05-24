@@ -13,15 +13,15 @@ The test asserts on the producer's recorded calls and the row
 ``status`` transitions, not on real Kafka delivery.
 """
 
+from __future__ import annotations
+
 import pytest
 
 pytest.importorskip("sqlalchemy")
 pytest.importorskip("aiosqlite")
 
-from __future__ import annotations
-
-from typing import Any
-from uuid import uuid4
+from typing import Any  # noqa: E402
+from uuid import uuid4  # noqa: E402
 
 import pytest
 import pytest_asyncio
