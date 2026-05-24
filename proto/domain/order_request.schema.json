@@ -6,6 +6,11 @@
   "type": "object",
   "required": ["city", "store_id", "sku_id", "quantity", "timestamp"],
   "properties": {
+    "order_id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "Per-order UUID. Optional — emitted by API gateway for traceability, NOT by the consensus layer (which uses decision_id)."
+    },
     "city": {
       "type": "string",
       "enum": ["bengaluru", "mumbai"],
@@ -24,7 +29,9 @@
     },
     "quantity": {
       "type": "integer",
-      "minimum": 1
+      "minimum": 1,
+      "maximum": 1000,
+      "description": "Cap at 1000 prevents accidental enormous orders from saturating downstream agents."
     },
     "timestamp": {
       "type": "string",
