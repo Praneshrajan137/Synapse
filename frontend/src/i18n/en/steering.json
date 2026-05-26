@@ -1,0 +1,19 @@
+{
+  "title": "Steering",
+  "subtitle": "Operator-tunable Pareto weights and HITL escalation thresholds. Changes are audit-logged to synapse.steering.config.",
+  "weights.title": "Pareto objective weights",
+  "weights.subtitle": "How the arbitrator trades off the four objectives. Absolute scale is irrelevant — the arbitrator normalises.",
+  "weights.cost": "Cost",
+  "weights.time": "Time",
+  "weights.sustainability": "Sustainability",
+  "weights.fairness": "Fairness",
+  "thresholds.title": "Confidence thresholds",
+  "thresholds.subtitle": "Minimum confidence below which a decision at that tier escalates to a human operator (I-5).",
+  "thresholds.tier_2": "Tier 2 (≤ 500 ms)",
+  "thresholds.tier_3": "Tier 3 (2 – 15 s)",
+  "thresholds.tier_4": "Tier 4 (15 – 120 s)",
+  "preview.title": "Decision preview",
+  "preview.subtitle": "How the eight agents converge under your current weights. Selection updates live.",
+  "audit.note": "Steering changes are audit-logged to synapse.steering.config (FE-INV-033).",
+  "reset": "Reset to defaults"
+}

@@ -8,6 +8,7 @@ const NAV_ITEMS = [
   { path: "/decisions", label: "Decision Theater" },
   { path: "/agents", label: "Agent Council" },
   { path: "/twin", label: "Twin Lab" },
+  { path: "/steering", label: "Steering" },
   { path: "/audit", label: "Audit Vault" },
   { path: "/demo", label: "Demo Theater" },
 ] as const;

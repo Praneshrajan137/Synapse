@@ -343,16 +343,22 @@ invariants:
     status: enforced
 
   - id: FE-INV-028
-    title: Replay is referentially transparent
+    title: Replay is referentially transparent and URL-shareable
     mirrors: I-14, FE-INV-009
     description: >
       `replayDecision(d, phase)` is a pure function — no Date.now, no
       Math.random, no I/O. Property test asserts equality across paired
-      invocations for any phase index in [1, 5].
+      invocations for any phase index in [1, 5]. The Decision Detail
+      surface stores the active phase index in the `?phase=N` search
+      parameter (Zod-validated, clamped to [1, 5], fallback to the
+      decision's terminal phase) and uses `replace: true` on every
+      scrubber tick so the browser back button stays clean.
     implementations:
       - frontend/src/lib/replay.ts
+      - frontend/src/surfaces/decision-theater/DecisionDetail.tsx
     tests:
       - frontend/src/lib/__tests__/replay.test.ts
+      - frontend/tests/e2e/decision-replay.spec.ts
     status: enforced
 
   - id: FE-INV-029
@@ -465,4 +471,26 @@ invariants:
     tests:
       - frontend/src/transport/__tests__/auth-refresh.test.ts
       - frontend/tests/e2e/login.spec.ts
+    status: enforced
+
+  - id: FE-INV-033
+    title: Operator-tunable steering, audit-logged on change
+    mirrors: I-5, FE-INV-021
+    description: >
+      The /steering surface exposes Pareto objective weights (cost / time
+      / sustainability / fairness) and per-tier HITL escalation thresholds
+      (tier_2, tier_3, tier_4). Both are persisted client-side via
+      Zustand+persist (localStorage["synapse.steering"]) and — once the
+      audit pipeline is wired — also published to the
+      `synapse.steering.config` Kafka topic via the audit-row-first
+      commit pattern (FE-INV-021). Setters clamp values into [0, 1]; a
+      non-finite input collapses to 0 so a corrupted localStorage state
+      can never poison the orchestrator.
+    implementations:
+      - frontend/src/state/steering.store.ts
+      - frontend/src/surfaces/steering/Steering.tsx
+      - frontend/src/app/router.tsx
+    tests:
+      - frontend/src/surfaces/steering/__tests__/Steering.test.tsx
+      - frontend/tests/e2e/steering.spec.ts
     status: enforced
