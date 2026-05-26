@@ -23,9 +23,15 @@ jobs:
           python-version: '3.11'
           cache: 'pip'
 
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9.12.0
+
       - uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '20.18'
+          cache: 'pnpm'
+          cache-dependency-path: frontend/pnpm-lock.yaml
 
       - name: Python dependency audit
         run: |
@@ -35,12 +41,16 @@ jobs:
             pip-audit -r "${req}" --strict || true
           done
 
-      - name: Node dependency audit
+      - name: Node dependency audit (pnpm)
         run: |
           if [ -f frontend/package.json ]; then
             cd frontend
-            npm install
-            npm audit --audit-level=critical || true
+            # SYNAPSE is pnpm-only — using npm install here resolves a different
+            # dep graph and lands on packages whose `engines` reject Node 20
+            # (e.g. mute-stream@4.0.0 requires Node ^22). Stick to pnpm so the
+            # audit graph matches what actually ships.
+            pnpm install --frozen-lockfile=false
+            pnpm audit --audit-level=critical || true
           else
             echo "No frontend/package.json — skipping Node audit"
           fi

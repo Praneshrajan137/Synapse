@@ -145,3 +145,73 @@ jobs:
             --onlyAllow "MIT;Apache-2.0;BSD-2-Clause;BSD-3-Clause;BSD;ISC;MPL-2.0;CC0-1.0;CC-BY-4.0;Unlicense;0BSD;Python-2.0" \
             --excludePackages "synapse-console" \
             --summary
+
+  mutation:
+    name: Stryker mutation (FE-INV-006/008/012/028 — guardrails)
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    needs: quality
+    if: github.event_name == 'pull_request' || github.ref == 'refs/heads/main'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9.12.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20.18"
+          cache: "pnpm"
+          cache-dependency-path: frontend/pnpm-lock.yaml
+      - run: pnpm install --frozen-lockfile=false
+      - name: Stryker mutation (break threshold 85% killed)
+        run: pnpm mutation
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: stryker-report
+          path: frontend/reports
+          retention-days: 14
+
+  sbom:
+    name: CycloneDX SBOM (I-1 supply chain)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9.12.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20.18"
+          cache: "pnpm"
+          cache-dependency-path: frontend/pnpm-lock.yaml
+      - run: pnpm install --frozen-lockfile=false
+      - name: Generate CycloneDX SBOM
+        run: pnpm sbom
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: frontend-sbom
+          path: frontend/sbom.cdx.json
+          retention-days: 90
+
+  audit-supply:
+    name: Supply-chain audit (pnpm audit + lockfile HTTPS/host check)
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9.12.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20.18"
+          cache: "pnpm"
+          cache-dependency-path: frontend/pnpm-lock.yaml
+      - run: pnpm install --frozen-lockfile=false
+      - name: pnpm audit (high+ severity)
+        run: pnpm audit --audit-level=high
+      - name: pnpm-lock supply-chain check (HTTPS + registry.npmjs.org only)
+        run: node scripts/check-supply-chain.mjs

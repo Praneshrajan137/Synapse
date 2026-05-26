@@ -35,6 +35,20 @@
   --syn-signal-danger: 239 68 68;
   --syn-accent: 129 140 248; /* indigo-400 */
 
+  /* Agent identity (FROZEN per INV-CLR-012, mirrors
+     design-system/color/tokens/agents.tokens.json — dark = bright variants
+     for dark canvas. Used by the ProposalConstellation viz and any future
+     per-agent surface. Changing any hue requires a version bump + ADR
+     supersede note. */
+  --syn-agent-demand-prophet: oklch(0.715 0.17 292);
+  --syn-agent-routing-navigator: oklch(0.64 0.16 248);
+  --syn-agent-inventory-sentinel: oklch(0.685 0.18 330);
+  --syn-agent-freshness-guardian: oklch(0.79 0.16 145);
+  --syn-agent-pricing-oracle: oklch(0.84 0.165 80);
+  --syn-agent-disruption-shield: oklch(0.66 0.175 30);
+  --syn-agent-supplier-trust: oklch(0.755 0.135 207);
+  --syn-agent-sustainability-agent: oklch(0.7 0.13 168);
+
   /* Radius */
   --syn-radius-xs: 2px;
   --syn-radius-sm: 4px;
@@ -70,6 +84,16 @@
   --syn-ink-inverse: 248 250 252;
   --syn-border: 203 213 225;
   --syn-border-strong: 148 163 184;
+
+  /* Agent identity — deep variants for light canvas (INV-CLR-012) */
+  --syn-agent-demand-prophet: oklch(0.54 0.185 292);
+  --syn-agent-routing-navigator: oklch(0.44 0.16 248);
+  --syn-agent-inventory-sentinel: oklch(0.5 0.205 330);
+  --syn-agent-freshness-guardian: oklch(0.56 0.155 145);
+  --syn-agent-pricing-oracle: oklch(0.64 0.145 80);
+  --syn-agent-disruption-shield: oklch(0.5 0.19 30);
+  --syn-agent-supplier-trust: oklch(0.6 0.115 207);
+  --syn-agent-sustainability-agent: oklch(0.46 0.115 168);
 }
 
 [data-theme="hc"] {

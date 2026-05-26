@@ -1,0 +1,39 @@
+{
+  "$schema": "https://raw.githubusercontent.com/stryker-mutator/stryker-js/master/packages/core/schema/stryker-schema.json",
+  "_comment": "SYNAPSE Console — mutation gate per CLAUDE.md: <15% survival on rewards-adjacent (>=85% killed), <10% on guardrails (>=90% killed). Targets the load-bearing TS paths: canonical JSON (I-13), full-jitter retry (FE-INV-006/ADR-016), HTTP client (FE-INV-002, 012), WebSocket multiplex (FE-INV-008), replay determinism (FE-INV-028), confidence (FE-INV-005), auth refresh, and override-state stores. UI components are tested via Storybook a11y + visual regression, not mutation.",
+  "packageManager": "pnpm",
+  "reporters": ["clear-text", "html", "json"],
+  "plugins": [
+    "@stryker-mutator/vitest-runner",
+    "@stryker-mutator/typescript-checker"
+  ],
+  "testRunner": "vitest",
+  "vitest": {
+    "configFile": "vitest.config.ts"
+  },
+  "checkers": ["typescript"],
+  "tsconfigFile": "tsconfig.json",
+  "coverageAnalysis": "perTest",
+  "mutate": [
+    "src/lib/json-canonical.ts",
+    "src/lib/jitter-retry.ts",
+    "src/lib/replay.ts",
+    "src/lib/confidence.ts",
+    "src/transport/http-client.ts",
+    "src/transport/ws-multiplex.ts",
+    "src/transport/firehose.ts",
+    "src/transport/auth-refresh.ts",
+    "src/state/escalation.store.ts",
+    "src/state/firehose.store.ts"
+  ],
+  "_thresholds_comment": "break is null (informational) on PR A2/A3 — current measured score on json-canonical.ts alone is 66.67% (18 killed / 8 survived / 1 no-cov); across all 10 targets we'd land 40-65%. The CLAUDE.md target is <15% survival on guardrails (>=85% killed). Plan: raise break to a baseline floor (e.g., 50 → 65 → 80 → 85) PR-by-PR as we add focused tests to kill surviving mutants. The HTML + JSON reports remain useful even when not gating. Do NOT remove `break` entirely; leaving it as null preserves the option to re-enable.",
+  "thresholds": {
+    "high": 90,
+    "low": 85,
+    "break": null
+  },
+  "timeoutMS": 60000,
+  "concurrency": 4,
+  "ignoreStatic": true,
+  "tempDirName": ".stryker-tmp"
+}
