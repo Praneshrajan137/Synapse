@@ -16,6 +16,7 @@ import enCommon from "./en/common.json";
 import enDecisions from "./en/decision-theater.json";
 import enDemo from "./en/demo-theater.json";
 import enMission from "./en/mission-control.json";
+import enSteering from "./en/steering.json";
 import enTwin from "./en/twin-lab.json";
 
 import hiAgents from "./hi/agent-council.json";
@@ -26,6 +27,7 @@ import hiCommon from "./hi/common.json";
 import hiDecisions from "./hi/decision-theater.json";
 import hiDemo from "./hi/demo-theater.json";
 import hiMission from "./hi/mission-control.json";
+import hiSteering from "./hi/steering.json";
 import hiTwin from "./hi/twin-lab.json";
 
 export type Locale = "en" | "hi" | "kn" | "mr";
@@ -42,6 +44,7 @@ export const NAMESPACES = [
   "demo-theater",
   "audit-vault",
   "auth",
+  "steering",
 ] as const;
 
 void i18n
@@ -63,6 +66,7 @@ void i18n
         "demo-theater": enDemo,
         "audit-vault": enAudit,
         auth: enAuth,
+        steering: enSteering,
       },
       hi: {
         common: hiCommon,
@@ -74,6 +78,7 @@ void i18n
         "demo-theater": hiDemo,
         "audit-vault": hiAudit,
         auth: hiAuth,
+        steering: hiSteering,
       },
     },
   });

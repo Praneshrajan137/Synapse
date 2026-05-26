@@ -7,6 +7,7 @@ import { DecisionTheater } from "@surfaces/decision-theater/DecisionTheater";
 import { DemoTheater } from "@surfaces/demo-theater/DemoTheater";
 import { MissionControl } from "@surfaces/mission-control/MissionControl";
 import { Cockpit } from "@surfaces/override-cockpit/Cockpit";
+import { Steering } from "@surfaces/steering/Steering";
 import { TwinLab } from "@surfaces/twin-lab/TwinLab";
 import { Navigate, createBrowserRouter } from "react-router-dom";
 import { RouteGuard } from "./RouteGuard";
@@ -87,6 +88,14 @@ export const router = createBrowserRouter([
         element: (
           <RouteGuard minRole="viewer">
             <DemoTheater />
+          </RouteGuard>
+        ),
+      },
+      {
+        path: "steering",
+        element: (
+          <RouteGuard minRole="ops">
+            <Steering />
           </RouteGuard>
         ),
       },
