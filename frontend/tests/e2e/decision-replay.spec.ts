@@ -15,8 +15,25 @@ import { expect, test } from "@playwright/test";
  *   - Non-numeric `?phase=foo` also falls back to default.
  *
  * @needs-backend tagged because it hits GET /api/v1/decisions/{id};
- * smoke environments without that endpoint should skip this suite.
+ * smoke environments without that endpoint gracefully skip each test
+ * once the surface fails to render the row (the surface itself shows
+ * "Decision unavailable" and we test.skip in that case).
  */
+test.beforeEach(async ({ page }) => {
+  // Seed an authenticated session so RouteGuard minRole="viewer" passes.
+  // Mirrors cockpit.spec.ts. The decision GET still fails without a
+  // backend; individual tests detect that and skip cleanly.
+  await page.addInitScript(() => {
+    sessionStorage.setItem(
+      "synapse.session",
+      JSON.stringify({
+        state: { role: "admin", operatorTokenRef: "e2e-operator" },
+        version: 0,
+      }),
+    );
+  });
+});
+
 test.describe("@needs-backend Decision Detail — URL-synced Replay phase", () => {
   // A real fixture would seed a known decision and use its UUID here;
   // for now we accept any non-skip exit so this spec is portable.
