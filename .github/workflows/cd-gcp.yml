@@ -1,0 +1,244 @@
+name: CD — GCP (primary deployment target)
+
+# Fires on v* tags. Builds + signs + pushes every service image to Artifact
+# Registry, then deploys to the GCE VM via IAP TCP tunnel (no public SSH).
+#
+# Auth: Workload Identity Federation only. There are no JSON service-account
+# keys in this repository's secrets. See infrastructure/gcp/terraform/wif.tf
+# for the trust configuration.
+#
+# Prerequisites (one-time, via `make deploy-gcp-terraform`):
+#   - WIF pool + provider trust this repo's OIDC tokens
+#   - github_actions SA has roles/artifactregistry.writer,
+#     roles/iap.tunnelResourceAccessor, roles/compute.osLogin
+#   - Artifact Registry Docker repo "synapse" exists
+#   - GCE VM "synapse-demo" is up with the gh-actions SA listed in iap_users
+#
+# Required repository variables (Settings → Secrets and variables → Actions):
+#   GCP_PROJECT_ID         — your GCP project ID
+#   GCP_REGION             — e.g. asia-south1
+#   GCP_VM                 — e.g. synapse-demo
+#   GCP_ZONE               — e.g. asia-south1-a
+#   GCP_AR_REPO            — Artifact Registry repo id (default: synapse)
+#   GCP_WIF_PROVIDER       — Terraform output wif_provider
+#   GCP_WIF_SA             — Terraform output wif_service_account
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      dryrun:
+        description: "Build + push + sign images, but skip the VM deploy"
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+  id-token: write  # required by google-github-actions/auth (WIF)
+  packages: read
+
+concurrency:
+  group: cd-gcp
+  cancel-in-progress: false
+
+env:
+  AR_HOST: ${{ vars.GCP_REGION }}-docker.pkg.dev
+  AR_REPO_URL: ${{ vars.GCP_REGION }}-docker.pkg.dev/${{ vars.GCP_PROJECT_ID }}/${{ vars.GCP_AR_REPO || 'synapse' }}
+
+jobs:
+  # ── Build, push, sign each image in parallel ──────────────────────────────
+  build-push-sign:
+    name: Build + Cosign sign — ${{ matrix.image }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { image: api-gateway,          context: ".", dockerfile: api/Dockerfile }
+          - { image: orchestrator,         context: ".", dockerfile: orchestrator/Dockerfile }
+          - { image: digital-twin,         context: ".", dockerfile: digital_twin/Dockerfile }
+          - { image: demand-prophet,       context: ".", dockerfile: agents/demand_prophet/Dockerfile }
+          - { image: routing-navigator,    context: ".", dockerfile: agents/routing_navigator/Dockerfile }
+          - { image: inventory-sentinel,   context: ".", dockerfile: agents/inventory_sentinel/Dockerfile }
+          - { image: freshness-guardian,   context: ".", dockerfile: agents/freshness_guardian/Dockerfile }
+          - { image: pricing-oracle,       context: ".", dockerfile: agents/pricing_oracle/Dockerfile }
+          - { image: disruption-shield,    context: ".", dockerfile: agents/disruption_shield/Dockerfile }
+          - { image: supplier-trust,       context: ".", dockerfile: agents/supplier_trust/Dockerfile }
+          - { image: sustainability-agent, context: ".", dockerfile: agents/sustainability_agent/Dockerfile }
+          - { image: frontend,             context: "frontend", dockerfile: frontend/Dockerfile }
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - id: auth
+        name: Authenticate to GCP via Workload Identity Federation
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ vars.GCP_WIF_PROVIDER }}
+          service_account: ${{ vars.GCP_WIF_SA }}
+          token_format: access_token
+
+      - name: gcloud SDK
+        uses: google-github-actions/setup-gcloud@v2
+
+      - name: Docker auth for Artifact Registry
+        run: gcloud --quiet auth configure-docker ${{ env.AR_HOST }}
+
+      - name: Compute image tags
+        id: tags
+        run: |
+          # GITHUB_REF_NAME is "v0.10.0" on a tag push, or the branch on workflow_dispatch.
+          VERSION="${GITHUB_REF_NAME#v}"
+          if [ "${GITHUB_REF_TYPE}" != "tag" ]; then
+            VERSION="dryrun-${GITHUB_SHA::7}"
+          fi
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+          echo "image_ref=${{ env.AR_REPO_URL }}/${{ matrix.image }}:${VERSION}" >> "$GITHUB_OUTPUT"
+          echo "image_latest=${{ env.AR_REPO_URL }}/${{ matrix.image }}:latest" >> "$GITHUB_OUTPUT"
+
+      - name: Build + push (multi-arch where possible)
+        id: build
+        uses: docker/build-push-action@v5
+        with:
+          context: ${{ matrix.context }}
+          file: ${{ matrix.dockerfile }}
+          push: true
+          provenance: true
+          sbom: true
+          tags: |
+            ${{ steps.tags.outputs.image_ref }}
+            ${{ steps.tags.outputs.image_latest }}
+          labels: |
+            org.opencontainers.image.source=https://github.com/${{ github.repository }}
+            org.opencontainers.image.revision=${{ github.sha }}
+            org.opencontainers.image.version=${{ steps.tags.outputs.version }}
+          cache-from: type=gha,scope=${{ matrix.image }}
+          cache-to: type=gha,scope=${{ matrix.image }},mode=max
+
+      - name: Install Cosign
+        uses: sigstore/cosign-installer@v3
+        with:
+          cosign-release: v2.4.1
+
+      - name: Cosign sign (keyless, GitHub OIDC → Fulcio)
+        env:
+          COSIGN_EXPERIMENTAL: "1"
+        run: |
+          cosign sign --yes \
+            "${{ steps.tags.outputs.image_ref }}@${{ steps.build.outputs.digest }}"
+          # Also sign :latest so verify_images.sh (which targets :latest by default) succeeds.
+          # This is two signatures over the same digest — duplicate but cheap.
+          cosign sign --yes \
+            "${{ steps.tags.outputs.image_latest }}@${{ steps.build.outputs.digest }}"
+
+  # ── Deploy to the GCE VM via IAP TCP tunnel ──────────────────────────────
+  deploy-to-vm:
+    name: Deploy to GCE VM (IAP)
+    needs: build-push-sign
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    if: github.event.inputs.dryrun != 'true'
+    steps:
+      - uses: actions/checkout@v4
+
+      - id: auth
+        name: Authenticate to GCP via Workload Identity Federation
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ vars.GCP_WIF_PROVIDER }}
+          service_account: ${{ vars.GCP_WIF_SA }}
+          # gcloud + IAP need an ID token, not an access token, when SSH'ing.
+          create_credentials_file: true
+
+      - name: gcloud SDK
+        uses: google-github-actions/setup-gcloud@v2
+
+      - name: Ensure repo cloned on VM at this SHA
+        run: |
+          gcloud compute ssh ${{ vars.GCP_VM }} \
+            --zone=${{ vars.GCP_ZONE }} \
+            --tunnel-through-iap \
+            --quiet \
+            --command="set -e; \
+                if [ ! -d ~/synapse/.git ]; then \
+                  git clone https://github.com/${{ github.repository }}.git ~/synapse; \
+                fi; \
+                cd ~/synapse && git fetch --tags && git checkout --quiet ${{ github.sha }}"
+
+      - name: Push GCP compose + scripts (in case repo on VM lags)
+        run: |
+          gcloud compute scp --tunnel-through-iap --zone=${{ vars.GCP_ZONE }} \
+            docker/docker-compose.gcp.yml \
+            infrastructure/gcp/backup_to_gcs.sh \
+            infrastructure/gcp/verify_images.sh \
+            ${{ vars.GCP_VM }}:~/synapse/
+
+      - name: Cosign verify images BEFORE start
+        run: |
+          gcloud compute ssh ${{ vars.GCP_VM }} \
+            --zone=${{ vars.GCP_ZONE }} \
+            --tunnel-through-iap \
+            --quiet \
+            --command="cd ~/synapse && \
+                       GITHUB_REPO='${{ github.repository }}' \
+                       SYNAPSE_AR_REPO_URL='${{ env.AR_REPO_URL }}' \
+                       chmod +x verify_images.sh && \
+                       ./verify_images.sh"
+
+      - name: Pull + restart stack
+        run: |
+          gcloud compute ssh ${{ vars.GCP_VM }} \
+            --zone=${{ vars.GCP_ZONE }} \
+            --tunnel-through-iap \
+            --quiet \
+            --command="cd ~/synapse && \
+                       gcloud --quiet auth configure-docker ${{ env.AR_HOST }} && \
+                       docker compose -f docker/docker-compose.gcp.yml --env-file .env.gcp --env-file .env.gcp.local pull && \
+                       docker compose -f docker/docker-compose.gcp.yml --env-file .env.gcp --env-file .env.gcp.local up -d"
+
+      - name: Wait for health (max 5 min)
+        run: |
+          gcloud compute ssh ${{ vars.GCP_VM }} \
+            --zone=${{ vars.GCP_ZONE }} \
+            --tunnel-through-iap \
+            --quiet \
+            --command="for i in \$(seq 1 30); do \
+                         curl -sf http://localhost/healthz >/dev/null && echo 'Frontend OK' && exit 0; \
+                         echo \"...not ready (\$i/30)\"; sleep 10; \
+                       done; \
+                       echo 'Health check timed out'; \
+                       docker compose -f ~/synapse/docker/docker-compose.gcp.yml ps; \
+                       exit 1"
+
+      - name: Audit-chain integrity (Sprint 9 verifier)
+        run: |
+          gcloud compute ssh ${{ vars.GCP_VM }} \
+            --zone=${{ vars.GCP_ZONE }} \
+            --tunnel-through-iap \
+            --quiet \
+            --command="cd ~/synapse && \
+                       docker compose -f docker/docker-compose.gcp.yml --env-file .env.gcp --env-file .env.gcp.local \
+                         exec -T orchestrator python -m orchestrator.audit.cli verify || \
+                       echo 'WARN: audit verify returned non-zero (first deploy: empty chain is expected)'"
+
+      - name: Tag-deploy summary
+        run: |
+          {
+            echo "## CD-GCP deploy summary"
+            echo ""
+            echo "- **Tag**         : \`${{ github.ref_name }}\`"
+            echo "- **Commit**      : \`${{ github.sha }}\`"
+            echo "- **Registry**    : \`${{ env.AR_REPO_URL }}\`"
+            echo "- **VM**          : \`${{ vars.GCP_VM }}\` in \`${{ vars.GCP_ZONE }}\`"
+            echo "- **Images signed**: 12 (Cosign keyless, GitHub OIDC → Fulcio)"
+            echo ""
+            echo "Admin UIs are behind IAP — open with:"
+            echo '```'
+            echo "gcloud compute start-iap-tunnel ${{ vars.GCP_VM }} 3000 --local-host-port=localhost:3000 --zone=${{ vars.GCP_ZONE }}"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"

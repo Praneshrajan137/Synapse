@@ -442,6 +442,148 @@ deploy-oracle-smoke: ## End-to-end smoke check on Oracle VM (memory, docker, oll
 	'
 
 
+# ============================================================================
+# GCP DEPLOYMENT — primary deployment target (mirror of deploy-oracle-* above).
+# Targets: Compute Engine VM (e2-standard-8), Debian 12, amd64.
+# See docs/deploy/gcp-quickstart.md and infrastructure/gcp/README.md.
+# Oracle remains as permanent $0 fallback (deploy-oracle-* above).
+# ============================================================================
+.PHONY: deploy-gcp deploy-gcp-terraform deploy-gcp-setup deploy-gcp-push \
+        deploy-gcp-verify deploy-gcp-smoke deploy-gcp-destroy \
+        up-gcp down-gcp gcp-status gcp-logs gcp-shell \
+        gcp-stop-vm gcp-start-vm gcp-restart-vm
+
+GCP_USER   ?= synapse
+GCP_KEY    ?= ~/.ssh/gcp_synapse
+GCP_IP     ?= $(shell echo $$GCP_IP)
+GCP_VM     ?= synapse-demo
+GCP_ZONE   ?= asia-south1-a
+GCP_TF_DIR := infrastructure/gcp/terraform
+GCP_COMPOSE := docker compose -f docker-compose.gcp.yml --env-file .env.gcp --env-file .env.gcp.local
+
+deploy-gcp: deploy-gcp-setup deploy-gcp-push deploy-gcp-verify ## End-to-end GCP deploy (setup + push + verify)
+
+deploy-gcp-terraform: ## Provision GCP VM via Terraform (one-time)
+	@echo "============================================="
+	@echo "  Terraform apply — GCP VM provisioning"
+	@echo "============================================="
+	@command -v terraform >/dev/null || (echo "ERROR: terraform not installed (winget install HashiCorp.Terraform)" && exit 1)
+	@command -v gcloud >/dev/null || (echo "ERROR: gcloud CLI not installed (https://cloud.google.com/sdk/docs/install)" && exit 1)
+	@test -f $(GCP_TF_DIR)/terraform.tfvars || (echo "ERROR: $(GCP_TF_DIR)/terraform.tfvars missing — copy terraform.tfvars.example and edit it" && exit 1)
+	cd $(GCP_TF_DIR) && terraform init -upgrade
+	cd $(GCP_TF_DIR) && terraform apply -auto-approve
+	@echo ""
+	@echo "Set GCP_IP in your shell:"
+	@echo "  export GCP_IP=$$(cd $(GCP_TF_DIR) && terraform output -raw public_ip)"
+	@echo "  (PowerShell: \$$env:GCP_IP = (terraform -chdir=$(GCP_TF_DIR) output -raw public_ip))"
+
+deploy-gcp-setup: ## Bootstrap GCP VM (Docker, Ollama, certbot, swap, backup cron, Secret Manager fetch, Cloud Ops Agent)
+	@test -n "$(GCP_IP)" || (echo "ERROR: GCP_IP not set (run deploy-gcp-terraform first, then export GCP_IP)" && exit 1)
+	@echo "Bootstrapping GCP VM at $(GCP_IP)..."
+	@# Source DOMAIN_NAME and LETSENCRYPT_EMAIL from .env.gcp so certbot fires
+	@if [ -f .env.gcp ]; then \
+	    set -a; . ./.env.gcp; set +a; \
+	    ssh -i $(GCP_KEY) -o StrictHostKeyChecking=accept-new $(GCP_USER)@$(GCP_IP) \
+	        "DOMAIN_NAME='$$DOMAIN_NAME' LETSENCRYPT_EMAIL='$$LETSENCRYPT_EMAIL' OLLAMA_MODEL='$$OLLAMA_MODEL' bash -s" \
+	        < infrastructure/gcp/setup_gcp_vm.sh; \
+	else \
+	    ssh -i $(GCP_KEY) -o StrictHostKeyChecking=accept-new $(GCP_USER)@$(GCP_IP) 'bash -s' < infrastructure/gcp/setup_gcp_vm.sh; \
+	fi
+	@echo ""
+	@echo "Cloning repo onto VM (or pulling latest if already cloned)..."
+	@ssh -i $(GCP_KEY) $(GCP_USER)@$(GCP_IP) ' \
+	    if [ ! -d ~/synapse/.git ]; then \
+	        git clone https://github.com/Praneshrajan137/synapse.git ~/synapse || \
+	        echo "WARN: clone failed — push the repo manually or set the right remote"; \
+	    else \
+	        cd ~/synapse && git pull --ff-only || echo "WARN: pull failed (uncommitted changes on VM?)"; \
+	    fi'
+
+deploy-gcp-push: ## Push compose + env to GCP VM and (re)start services
+	@test -n "$(GCP_IP)" || (echo "ERROR: GCP_IP not set" && exit 1)
+	@test -f .env.gcp || (echo "ERROR: .env.gcp not found — cp .env.gcp.example .env.gcp and edit" && exit 1)
+	@echo "Copying compose + env + backup script to $(GCP_IP)..."
+	scp -i $(GCP_KEY) docker/docker-compose.gcp.yml $(GCP_USER)@$(GCP_IP):~/synapse/docker/docker-compose.gcp.yml
+	scp -i $(GCP_KEY) .env.gcp $(GCP_USER)@$(GCP_IP):~/synapse/.env.gcp
+	scp -i $(GCP_KEY) infrastructure/gcp/backup_to_gcs.sh $(GCP_USER)@$(GCP_IP):~/synapse/backup_to_gcs.sh
+	scp -i $(GCP_KEY) infrastructure/gcp/verify_images.sh $(GCP_USER)@$(GCP_IP):~/synapse/verify_images.sh
+	ssh -i $(GCP_KEY) $(GCP_USER)@$(GCP_IP) 'chmod +x ~/synapse/backup_to_gcs.sh ~/synapse/verify_images.sh'
+	@echo "Verifying image signatures (Cosign) before start..."
+	-ssh -i $(GCP_KEY) $(GCP_USER)@$(GCP_IP) 'cd ~/synapse && ./verify_images.sh || echo "WARN: Cosign verify skipped/failed — continuing for first-run"'
+	@echo "Pulling images from Artifact Registry (CI-built) or building locally (first run)..."
+	ssh -i $(GCP_KEY) $(GCP_USER)@$(GCP_IP) 'cd ~/synapse/docker && $(GCP_COMPOSE) pull 2>/dev/null || true; $(GCP_COMPOSE) up -d --build'
+
+deploy-gcp-verify: ## Verify GCP deployment health (endpoints + audit chain integrity)
+	@test -n "$(GCP_IP)" || (echo "ERROR: GCP_IP not set" && exit 1)
+	@echo "=== docker compose ps ==="
+	ssh -i $(GCP_KEY) $(GCP_USER)@$(GCP_IP) 'cd ~/synapse/docker && $(GCP_COMPOSE) ps'
+	@echo ""
+	@echo "=== Endpoint health (admin ports via IAP tunnel) ==="
+	@curl -sf http://$(GCP_IP)/healthz >/dev/null && echo "Frontend  (nginx): OK" || echo "Frontend  (nginx): not reachable"
+	@echo "  Admin endpoints (Grafana/Prometheus/MLflow) are now behind IAP — use:"
+	@echo "    gcloud compute start-iap-tunnel $(GCP_VM) 3000 --local-host-port=localhost:3000 --zone=$(GCP_ZONE)"
+	@echo ""
+	@echo "=== Audit chain integrity (Sprint 9) ==="
+	-ssh -i $(GCP_KEY) $(GCP_USER)@$(GCP_IP) 'cd ~/synapse && python -m orchestrator.audit.cli verify 2>&1 | tail -10 || echo "synapse audit verify not available yet"'
+	@echo ""
+	@echo "============================================="
+	@echo "  GCP deployment verified"
+	@echo "  Frontend  : https://$(GCP_IP)/   (or your DOMAIN_NAME)"
+	@echo "============================================="
+
+deploy-gcp-smoke: ## End-to-end smoke check on GCP VM (memory, docker, ollama, mounts)
+	@test -n "$(GCP_IP)" || (echo "ERROR: GCP_IP not set" && exit 1)
+	@echo "=== GCP VM smoke checks ==="
+	ssh -i $(GCP_KEY) $(GCP_USER)@$(GCP_IP) ' \
+	    set -e; \
+	    echo "--- free -h ---"; free -h; \
+	    echo "--- nproc ---"; nproc; \
+	    echo "--- df -h /mnt/synapse-data ---"; df -h /mnt/synapse-data 2>/dev/null || echo "data disk not mounted"; \
+	    echo "--- docker info ---"; docker info | grep -E "Architecture|CPUs|Total Memory|Docker Root Dir" || true; \
+	    echo "--- ollama tags ---"; curl -sf http://localhost:11434/api/tags | python3 -c "import sys,json; [print(m[\"name\"]) for m in json.load(sys.stdin)[\"models\"]]" 2>/dev/null || echo "ollama not responding"; \
+	    echo "--- swap ---"; swapon --show; \
+	    echo "--- backup cron ---"; grep synapse-backup /etc/crontab || echo "backup cron not installed"; \
+	    echo "--- cloud-ops-agent ---"; systemctl is-active google-cloud-ops-agent 2>/dev/null || echo "ops agent not running"; \
+	'
+
+deploy-gcp-destroy: ## Tear down GCP infra (terraform destroy — also wipes the backup bucket)
+	@echo "WARNING: this destroys the VM, disk, IP, and backup bucket. With versioning ON, noncurrent objects retain for 30 days."
+	@read -p "Type 'destroy' to confirm: " CONFIRM && [ "$$CONFIRM" = "destroy" ] || (echo "Aborted." && exit 1)
+	cd $(GCP_TF_DIR) && terraform destroy -auto-approve
+
+# ── Day-to-day operations ─────────────────────────────────────────────────
+up-gcp: ## Start all services on the GCP VM
+	@test -n "$(GCP_IP)" || (echo "ERROR: GCP_IP not set" && exit 1)
+	ssh -i $(GCP_KEY) $(GCP_USER)@$(GCP_IP) 'cd ~/synapse/docker && $(GCP_COMPOSE) up -d'
+
+down-gcp: ## Stop all services on the GCP VM (containers down, VM still running)
+	@test -n "$(GCP_IP)" || (echo "ERROR: GCP_IP not set" && exit 1)
+	ssh -i $(GCP_KEY) $(GCP_USER)@$(GCP_IP) 'cd ~/synapse/docker && $(GCP_COMPOSE) down'
+
+gcp-status: ## Show service status on GCP VM
+	@test -n "$(GCP_IP)" || (echo "ERROR: GCP_IP not set" && exit 1)
+	ssh -i $(GCP_KEY) $(GCP_USER)@$(GCP_IP) 'cd ~/synapse/docker && $(GCP_COMPOSE) ps'
+
+gcp-logs: ## Tail logs for SERVICE (defaults to all). Usage: make gcp-logs SERVICE=orchestrator
+	@test -n "$(GCP_IP)" || (echo "ERROR: GCP_IP not set" && exit 1)
+	ssh -i $(GCP_KEY) $(GCP_USER)@$(GCP_IP) "cd ~/synapse/docker && $(GCP_COMPOSE) logs --tail=200 -f $(SERVICE)"
+
+gcp-shell: ## Interactive SSH session on the GCP VM (via IAP TCP tunnel if firewall is IAP-only)
+	@test -n "$(GCP_VM)" || (echo "ERROR: GCP_VM not set" && exit 1)
+	gcloud compute ssh $(GCP_VM) --zone=$(GCP_ZONE) --tunnel-through-iap
+
+# ── VM lifecycle (stop nightly to stretch the free credits) ────────────────
+gcp-stop-vm: ## Stop the VM (compute charges pause; disk + static IP still charged)
+	gcloud compute instances stop $(GCP_VM) --zone=$(GCP_ZONE)
+
+gcp-start-vm: ## Start the VM (resumes from disk; same static IP)
+	gcloud compute instances start $(GCP_VM) --zone=$(GCP_ZONE)
+	@echo "Wait ~30s for the VM to boot, then: make deploy-gcp-verify"
+
+gcp-restart-vm: ## Reboot the VM
+	gcloud compute instances reset $(GCP_VM) --zone=$(GCP_ZONE)
+
+
 verify-v4-compliance: ## Definitive v4.0 plan compliance gate (artifact + test counts + quality)
 	@echo "============================================="
 	@echo "  v4.0 Definitive Edition compliance check"

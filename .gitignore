@@ -54,10 +54,25 @@ Thumbs.db
 # Secrets (NEVER commit)
 .env
 .env.cloud
+.env.gcp
+.env.gcp.local
 .env.local
 *.key
 *.pem
 vault-token
+
+# Terraform (state files are sensitive; plans are regenerable)
+*.tfstate
+*.tfstate.*
+.terraform/
+.terraform.lock.hcl
+tfplan*
+crash.log
+crash.*.log
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
 
 # Mutation testing cache
 .mutmut-cache/

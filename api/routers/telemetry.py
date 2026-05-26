@@ -10,7 +10,7 @@ from __future__ import annotations
 from typing import Any
 
 import structlog
-from fastapi import APIRouter, Body, HTTPException, status
+from fastapi import APIRouter, Body, HTTPException, Response, status
 
 logger = structlog.get_logger(__name__)
 router = APIRouter()
@@ -51,8 +51,8 @@ async def telemetry(payload: dict[str, Any] = Body(default={})) -> dict[str, str
     return {"status": "accepted"}
 
 
-@router.post("/csp-report", status_code=status.HTTP_204_NO_CONTENT)
-async def csp_report(payload: dict[str, Any] = Body(default={})) -> None:
+@router.post("/csp-report", status_code=status.HTTP_204_NO_CONTENT, response_class=Response)
+async def csp_report(payload: dict[str, Any] = Body(default={})) -> Response:
     """Receives CSP violation reports referenced by frontend/nginx.conf."""
     logger.warning("csp_violation", report=payload)
-    return None
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
