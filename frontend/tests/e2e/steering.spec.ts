@@ -38,8 +38,9 @@ test("@smoke Steering renders all 7 sliders and the constellation preview", asyn
   // Constellation preview is the 8-agent figure
   await expect(page.getByRole("figure", { name: /Agent proposal constellation/i })).toBeVisible();
 
-  // Audit note is visible
-  await expect(page.getByText(/audit-logged to synapse\.steering\.config/i)).toBeVisible();
+  // Audit note is visible. Disambiguates from the page subtitle (which
+  // also mentions the topic) by anchoring on the invariant ID.
+  await expect(page.getByText(/FE-INV-033/)).toBeVisible();
 });
 
 test("@smoke Steering persists weight changes across reload (Zustand+persist)", async ({ page }) => {
