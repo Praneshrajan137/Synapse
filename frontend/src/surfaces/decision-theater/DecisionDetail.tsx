@@ -12,8 +12,9 @@ import { fmt } from "@lib/formatters";
 import { phaseName, replayDecision } from "@lib/replay";
 import * as Slider from "@radix-ui/react-slider";
 import { useQuery } from "@tanstack/react-query";
-import { useMemo, useState } from "react";
-import { Link, useParams } from "react-router-dom";
+import { useCallback, useMemo } from "react";
+import { Link, useParams, useSearchParams } from "react-router-dom";
+import { z } from "zod";
 
 export function DecisionDetail() {
   const { id } = useParams<{ id: string }>();
@@ -56,7 +57,34 @@ export function DecisionDetail() {
   });
 
   const decision = query.data?.decision;
-  const [phase, setPhase] = useState<number>(decision?.phase_reached ?? 1);
+
+  // URL-synced replay phase (FE-INV-028): `?phase=N` is the source of
+  // truth so a replay frame is shareable. The Zod parser tolerates the
+  // missing/invalid case by falling back to the decision's terminal
+  // phase, mirroring the prior useState default. Setter uses
+  // `replace: true` so the back button doesn't accumulate one entry
+  // per slider tick.
+  const [searchParams, setSearchParams] = useSearchParams();
+  const phaseParsed = useMemo(
+    () => z.coerce.number().int().min(1).max(5).safeParse(searchParams.get("phase")),
+    [searchParams],
+  );
+  const phase = phaseParsed.success ? phaseParsed.data : (decision?.phase_reached ?? 1);
+
+  const setPhase = useCallback(
+    (next: number) => {
+      const clamped = Math.max(1, Math.min(5, Math.floor(next)));
+      setSearchParams(
+        (prev) => {
+          const params = new URLSearchParams(prev);
+          params.set("phase", String(clamped));
+          return params;
+        },
+        { replace: true },
+      );
+    },
+    [setSearchParams],
+  );
 
   const slice = useMemo(
     () => (decision ? replayDecision(decision, phase) : null),

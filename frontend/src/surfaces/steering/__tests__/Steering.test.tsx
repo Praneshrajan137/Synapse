@@ -48,7 +48,7 @@ describe("Steering surface", () => {
     expect(screen.getAllByRole("button").length).toBeGreaterThanOrEqual(8);
   });
 
-  it("updates the Pareto weight when its slider changes (FE-INV-024)", () => {
+  it("updates the Pareto weight when its slider changes (FE-INV-033)", () => {
     render(<Steering />);
     const cost = screen.getByRole("slider", { name: /Cost/i }) as HTMLInputElement;
     expect(cost.value).toBe("0.35"); // default
@@ -85,12 +85,12 @@ describe("Steering surface", () => {
     expect(useSteeringStore.getState().tierThresholds).toEqual(DEFAULT_TIER_THRESHOLDS);
   });
 
-  it("shows the audit note documenting FE-INV-024", () => {
+  it("shows the audit note documenting FE-INV-033", () => {
     render(<Steering />);
     // The phrase appears in both the page subtitle and the dedicated
-    // audit note in the footer; match the footer's FE-INV-024 reference
+    // audit note in the footer; match the footer's FE-INV-033 reference
     // to disambiguate.
-    expect(screen.getByText(/FE-INV-024/)).toBeInTheDocument();
+    expect(screen.getByText(/FE-INV-033/)).toBeInTheDocument();
   });
 
   it("persists state to localStorage under the documented key", () => {

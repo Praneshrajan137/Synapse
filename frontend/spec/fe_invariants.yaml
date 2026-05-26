@@ -343,16 +343,22 @@ invariants:
     status: enforced
 
   - id: FE-INV-028
-    title: Replay is referentially transparent
+    title: Replay is referentially transparent and URL-shareable
     mirrors: I-14, FE-INV-009
     description: >
       `replayDecision(d, phase)` is a pure function — no Date.now, no
       Math.random, no I/O. Property test asserts equality across paired
-      invocations for any phase index in [1, 5].
+      invocations for any phase index in [1, 5]. The Decision Detail
+      surface stores the active phase index in the `?phase=N` search
+      parameter (Zod-validated, clamped to [1, 5], fallback to the
+      decision's terminal phase) and uses `replace: true` on every
+      scrubber tick so the browser back button stays clean.
     implementations:
       - frontend/src/lib/replay.ts
+      - frontend/src/surfaces/decision-theater/DecisionDetail.tsx
     tests:
       - frontend/src/lib/__tests__/replay.test.ts
+      - frontend/tests/e2e/decision-replay.spec.ts
     status: enforced
 
   - id: FE-INV-029
@@ -467,7 +473,7 @@ invariants:
       - frontend/tests/e2e/login.spec.ts
     status: enforced
 
-  - id: FE-INV-024
+  - id: FE-INV-033
     title: Operator-tunable steering, audit-logged on change
     mirrors: I-5, FE-INV-021
     description: >

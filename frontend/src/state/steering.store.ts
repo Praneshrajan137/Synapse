@@ -2,7 +2,7 @@ import { create } from "zustand";
 import { persist } from "zustand/middleware";
 
 /**
- * Steering — operator-tunable governance (FE-INV-024).
+ * Steering — operator-tunable governance (FE-INV-033).
  *
  * Two knobs that shape every consensus decision the orchestrator emits:
  *

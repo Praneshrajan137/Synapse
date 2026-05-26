@@ -2,7 +2,7 @@ import { expect, test } from "@playwright/test";
 
 /**
  * Steering surface — Pareto weights + tier thresholds + live preview.
- * Covers FE-INV-024 (operator-tunable governance, audit-logged on
+ * Covers FE-INV-033 (operator-tunable governance, audit-logged on
  * change).
  *
  * The auth + nav setup uses the same pattern as cockpit.spec.ts; the
@@ -28,9 +28,7 @@ test.describe("@smoke Steering", () => {
       await expect(page.getByRole("slider", { name: new RegExp(tier, "i") })).toBeVisible();
     }
     // Constellation preview is the 8-agent figure
-    await expect(
-      page.getByRole("figure", { name: /Agent proposal constellation/i }),
-    ).toBeVisible();
+    await expect(page.getByRole("figure", { name: /Agent proposal constellation/i })).toBeVisible();
 
     // Audit note is visible
     await expect(page.getByText(/audit-logged to synapse\.steering\.config/i)).toBeVisible();

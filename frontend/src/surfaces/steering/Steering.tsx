@@ -23,7 +23,7 @@ import { useTranslation } from "react-i18next";
  * preview that uses the ProposalConstellation viz to visualise *how the
  * current weights would arbitrate* a synthetic 8-agent decision. The
  * preview's "selected" agent updates as the operator moves the sliders,
- * giving immediate causal feedback (T-5 / FE-INV-024).
+ * giving immediate causal feedback (T-5 / FE-INV-033).
  *
  * Persistence: state lives in useSteeringStore (Zustand + persist →
  * localStorage["synapse.steering"]). In production the same change set

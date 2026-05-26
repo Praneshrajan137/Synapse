@@ -14,6 +14,6 @@
   "thresholds.tier_4": "टियर 4 (15 – 120 s)",
   "preview.title": "निर्णय पूर्वावलोकन",
   "preview.subtitle": "वर्तमान वज़न के तहत आठ एजेंट कैसे एकजुट होते हैं। चयन सीधे अपडेट होता है।",
-  "audit.note": "स्टीयरिंग परिवर्तन synapse.steering.config (FE-INV-024) पर ऑडिट-लॉग होते हैं।",
+  "audit.note": "स्टीयरिंग परिवर्तन synapse.steering.config (FE-INV-033) पर ऑडिट-लॉग होते हैं।",
   "reset": "डिफ़ॉल्ट पर रीसेट करें"
 }

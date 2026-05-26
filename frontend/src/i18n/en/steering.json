@@ -14,6 +14,6 @@
   "thresholds.tier_4": "Tier 4 (15 – 120 s)",
   "preview.title": "Decision preview",
   "preview.subtitle": "How the eight agents converge under your current weights. Selection updates live.",
-  "audit.note": "Steering changes are audit-logged to synapse.steering.config (FE-INV-024).",
+  "audit.note": "Steering changes are audit-logged to synapse.steering.config (FE-INV-033).",
   "reset": "Reset to defaults"
 }
