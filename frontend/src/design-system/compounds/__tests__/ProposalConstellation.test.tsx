@@ -33,9 +33,7 @@ describe("ProposalConstellation", () => {
   it("renders revealed agents with utility + confidence in aria-label", () => {
     render(
       <ProposalConstellation
-        proposals={[
-          { agent_name: "pricing_oracle", utility_score: 0.86, confidence: 0.91 },
-        ]}
+        proposals={[{ agent_name: "pricing_oracle", utility_score: 0.86, confidence: 0.91 }]}
       />,
     );
     const button = screen.getByRole("button", { name: /Pricing Oracle — utility 0.86/ });
@@ -45,9 +43,7 @@ describe("ProposalConstellation", () => {
   it('marks not-yet-arrived agents as "no proposal yet"', () => {
     render(
       <ProposalConstellation
-        proposals={[
-          { agent_name: "demand_prophet", utility_score: 0.7, confidence: 0.8 },
-        ]}
+        proposals={[{ agent_name: "demand_prophet", utility_score: 0.7, confidence: 0.8 }]}
       />,
     );
     const noProposal = screen.getAllByRole("button", { name: /no proposal yet/ });
@@ -59,9 +55,7 @@ describe("ProposalConstellation", () => {
     const onSelect = vi.fn();
     render(
       <ProposalConstellation
-        proposals={[
-          { agent_name: "routing_navigator", utility_score: 0.5, confidence: 0.7 },
-        ]}
+        proposals={[{ agent_name: "routing_navigator", utility_score: 0.5, confidence: 0.7 }]}
         onSelectAgent={onSelect}
       />,
     );
@@ -75,9 +69,7 @@ describe("ProposalConstellation", () => {
     const onSelect = vi.fn();
     render(
       <ProposalConstellation
-        proposals={[
-          { agent_name: "demand_prophet", utility_score: 0.7, confidence: 0.8 },
-        ]}
+        proposals={[{ agent_name: "demand_prophet", utility_score: 0.7, confidence: 0.8 }]}
         onSelectAgent={onSelect}
       />,
     );
@@ -110,9 +102,7 @@ describe("ProposalConstellation", () => {
   it("clamps out-of-range utility_score and confidence into [0, 1]", () => {
     render(
       <ProposalConstellation
-        proposals={[
-          { agent_name: "pricing_oracle", utility_score: 1.7, confidence: -0.5 },
-        ]}
+        proposals={[{ agent_name: "pricing_oracle", utility_score: 1.7, confidence: -0.5 }]}
       />,
     );
     const button = screen.getByRole("button", { name: /Pricing Oracle — utility/ });
@@ -125,10 +115,7 @@ describe("ProposalConstellation", () => {
     // All 8 proposals exist, but only one is "revealed" — the others should
     // render as not-yet-arrived even though we have their data.
     render(
-      <ProposalConstellation
-        proposals={eightProposals}
-        revealed={new Set(["demand_prophet"])}
-      />,
+      <ProposalConstellation proposals={eightProposals} revealed={new Set(["demand_prophet"])} />,
     );
     const revealedNode = screen.getByRole("button", { name: /Demand Prophet — utility/ });
     expect(revealedNode.getAttribute("aria-label")).toMatch(/utility/);

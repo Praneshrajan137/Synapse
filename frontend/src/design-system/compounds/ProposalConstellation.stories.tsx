@@ -1,8 +1,8 @@
 import type { Meta, StoryObj } from "@storybook/react";
 import {
   AGENT_NAMES,
-  ProposalConstellation,
   type AgentName,
+  ProposalConstellation,
   type ProposalLike,
 } from "./ProposalConstellation";
 
@@ -58,13 +58,14 @@ export const SelectedPricingOracle: Story = {
   },
 };
 
-/** Interactive: callback fires; Storybook actions panel captures it. */
+/**
+ * Interactive: nodes become clickable. Storybook's actions addon
+ * auto-captures calls to args matching `on*` and shows them in the
+ * Actions panel — no console.log needed.
+ */
 export const Interactive: Story = {
   args: {
-    onSelectAgent: (agent: AgentName) => {
-      // eslint-disable-next-line no-console
-      console.log("selected", agent);
-    },
+    onSelectAgent: (_agent: AgentName) => undefined,
   },
 };
 

@@ -157,9 +157,8 @@ export function ProposalConstellation({
   };
 
   return (
-    <div
+    <figure
       className={cn("relative aspect-square w-full max-w-xl", className)}
-      role="figure"
       aria-label="Agent proposal constellation — eight specialists in fixed radial formation"
     >
       {/* Edges to the orchestrator core */}
@@ -225,9 +224,7 @@ export function ProposalConstellation({
             key={node.agent}
             type="button"
             disabled={!interactive}
-            onClick={
-              interactive ? () => onSelectAgent?.(node.agent) : undefined
-            }
+            onClick={interactive ? () => onSelectAgent?.(node.agent) : undefined}
             className={cn(
               "absolute flex -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full",
               "border bg-surface transition-colors duration-fast ease-standard",
@@ -277,6 +274,6 @@ export function ProposalConstellation({
           </motion.button>
         );
       })}
-    </div>
+    </figure>
   );
 }
