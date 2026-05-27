@@ -338,7 +338,13 @@ def check_coverage_floor() -> CheckResult:
 # ---------------------------------------------------------------------------
 # C16: Stryker break threshold enforced
 # ---------------------------------------------------------------------------
-@register("C16", "Stryker break threshold is not null")
+# Stryker ratchet: same pattern as coverage. Verified current floor 26.
+STRYKER_BREAK_MIN = 20   # never let it drop below this
+STRYKER_BREAK_NOW = 26   # verified mutation score floor (PR #10 CI: 26.12%)
+STRYKER_TARGET = 85      # CLAUDE.md target (<15% survival)
+
+
+@register("C16", "Stryker break threshold >= verified floor")
 def check_stryker_break_enforced() -> CheckResult:
     conf = ROOT / "frontend" / "stryker.conf.json"
     if not conf.exists():
@@ -351,7 +357,26 @@ def check_stryker_break_enforced() -> CheckResult:
     brk = thresholds.get("break")
     if brk is None:
         return CheckResult("C16", "Stryker break", "FAIL", '"thresholds.break" is null')
-    return CheckResult("C16", "Stryker break", "PASS", f'"thresholds.break" = {brk}')
+    if brk < STRYKER_BREAK_MIN:
+        return CheckResult(
+            "C16",
+            "Stryker break",
+            "FAIL",
+            f'"thresholds.break"={brk} below hard floor {STRYKER_BREAK_MIN}',
+        )
+    if brk >= STRYKER_BREAK_NOW:
+        return CheckResult(
+            "C16",
+            "Stryker break",
+            "PASS",
+            f'"thresholds.break"={brk} (ratchet={STRYKER_BREAK_NOW}, target={STRYKER_TARGET})',
+        )
+    return CheckResult(
+        "C16",
+        "Stryker break",
+        "FAIL",
+        f'"thresholds.break"={brk} regressed below ratchet={STRYKER_BREAK_NOW}',
+    )
 
 
 # ---------------------------------------------------------------------------
