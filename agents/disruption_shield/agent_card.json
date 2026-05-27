@@ -38,7 +38,9 @@
   "decision_tiers": ["tier_2", "tier_3"],
   "kafka_topics": {
     "produces": ["synapse.disruption.alert", "synapse.disruption.playbook"],
-    "consumes": ["synapse.twin.divergence"]
+    "consumes": [],
+    "consumes_planned": ["synapse.twin.divergence"],
+    "topology_note": "Ingress is HTTP-A2A (POST /a2a). Kafka is publish-only here (ADR-038). 'consumes_planned' is design intent and NOT subscribed today — see scripts/audit/topic_consumer_truth.py."
   },
   "feast_features": ["supply_chain_signals", "node_operational_state"],
   "dependencies": ["feast", "kafka", "pinecone", "ollama"],

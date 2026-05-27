@@ -19,7 +19,9 @@
   "decision_tiers": ["tier_2", "tier_3"],
   "kafka_topics": {
     "produces": ["synapse.supplier.score"],
-    "consumes": ["synapse.inventory.reorder"]
+    "consumes": [],
+    "consumes_planned": ["synapse.inventory.reorder"],
+    "topology_note": "Ingress is HTTP-A2A. 'consumes_planned' is design intent (ADR-038)."
   },
   "feast_features": ["supplier_performance", "delivery_history", "lead_time_signals"],
   "dependencies": ["feast", "kafka", "neo4j", "inventory_sentinel"],

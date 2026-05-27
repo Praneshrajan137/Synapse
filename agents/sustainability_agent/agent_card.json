@@ -44,7 +44,9 @@
   "decision_tiers": ["tier_2", "tier_3"],
   "kafka_topics": {
     "produces": ["synapse.sustainability.carbon"],
-    "consumes": ["synapse.routing.plan"]
+    "consumes": [],
+    "consumes_planned": ["synapse.routing.plan"],
+    "topology_note": "Ingress is HTTP-A2A. 'consumes_planned' is design intent (ADR-038)."
   },
   "feast_features": ["route_carbon_signals", "product_shelf_life", "quality_scores"],
   "dependencies": ["feast", "kafka", "mlflow", "codecarbon"],

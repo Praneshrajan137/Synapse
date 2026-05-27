@@ -23,7 +23,9 @@
   "decision_tiers": ["tier_1", "tier_2"],
   "kafka_topics": {
     "produces": ["synapse.routing.plan"],
-    "consumes": ["synapse.demand.forecast", "synapse.orchestrator.decision"]
+    "consumes": [],
+    "consumes_planned": ["synapse.demand.forecast", "synapse.orchestrator.decision"],
+    "topology_note": "Ingress is HTTP-A2A. 'consumes_planned' is design intent (ADR-038)."
   },
   "feast_features": ["routing_context", "store_operational_state"],
   "dependencies": ["feast", "kafka", "osrm"],
