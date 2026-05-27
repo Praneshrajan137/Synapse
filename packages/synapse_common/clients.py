@@ -140,3 +140,9 @@ async def close_all() -> None:
 async def reset_registry() -> None:
     """Test helper: close + clear all clients."""
     await close_all()
+
+
+# Sprint 11 WS-2: api/main.py lifespan imports `close_clients` from this
+# module. The canonical name in this file has always been `close_all`;
+# the alias keeps both names valid without breaking either call site.
+close_clients = close_all
