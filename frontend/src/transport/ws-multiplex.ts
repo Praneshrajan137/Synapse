@@ -113,8 +113,7 @@ export function createWsMultiplex(config: WsMultiplexConfig): WsMultiplex {
       }
       const env = parsedResult.data;
       if (env.kind === "heartbeat") return;
-      const channel =
-        env.kind === "envelope" ? env.topic : env.kind === "typed" ? env.type : "*";
+      const channel = env.kind === "envelope" ? env.topic : env.kind === "typed" ? env.type : "*";
       if (env.kind === "envelope") {
         const prev = lastSeq.get(channel) ?? -1;
         if (env.seq <= prev) return; // dedupe (FE-INV-008)

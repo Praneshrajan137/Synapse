@@ -160,9 +160,7 @@ export function createSynapseApi(deps: SynapseApiDeps) {
           // WS-2: orders route is now outbox-backed (202 Accepted) and the
           // Idempotency-Key header dedupes downstream consumers.
           idempotent: Boolean(opts.idempotencyKey),
-          headers: opts.idempotencyKey
-            ? { "Idempotency-Key": opts.idempotencyKey }
-            : undefined,
+          headers: opts.idempotencyKey ? { "Idempotency-Key": opts.idempotencyKey } : undefined,
         },
       ),
 
