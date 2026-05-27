@@ -22,6 +22,7 @@ from pydantic import BaseModel, Field, field_validator
 
 from api.middleware.jwt import RequireRole
 from synapse_common.auth import OperatorContext, Role
+from synapse_common.tracing import inject_a2a_headers
 
 logger = structlog.get_logger(__name__)
 router = APIRouter()
@@ -44,9 +45,18 @@ def _dsn() -> str:
 
 @router.post("/")
 async def trigger_decision(payload: dict[str, Any]) -> dict[str, Any]:
+    # WS-2: inject W3C traceparent at the API → orchestrator boundary so the
+    # request span carries across the process hop. Sprint 7 wired this for
+    # A2A + Kafka but missed the gateway's httpx call (see CURRENT.md C3).
+    trace_headers: dict[str, str] = {}
+    inject_a2a_headers(trace_headers)
     try:
         async with httpx.AsyncClient(timeout=30.0) as client:
-            resp = await client.post(f"{ORCHESTRATOR_URL}/api/v1/decisions", json=payload)
+            resp = await client.post(
+                f"{ORCHESTRATOR_URL}/api/v1/decisions",
+                json=payload,
+                headers=trace_headers,
+            )
     except httpx.HTTPError as exc:
         raise HTTPException(status_code=503, detail=f"orchestrator unreachable: {exc}") from exc
     if resp.status_code != 200:
@@ -198,6 +208,16 @@ class OverrideBody(BaseModel):
     action: str = Field(..., pattern="^(approved|rejected|modified)$")
     reason: str = Field(..., min_length=1, max_length=4000)
     modified_action: dict[str, Any] | None = None
+    # WS-2: optional idempotency key. When present, a retry with the same
+    # (decision_id, idempotency_key) returns the existing audit row rather
+    # than inserting a duplicate. Enforced at the DB by a partial UNIQUE
+    # index (migration 0004).
+    idempotency_key: str | None = Field(
+        default=None,
+        min_length=1,
+        max_length=64,
+        description="Operator-supplied dedup key. Optional; if absent the route is non-idempotent (legacy behaviour).",
+    )
 
     @field_validator("modified_action")
     @classmethod
@@ -256,31 +276,89 @@ async def override_decision(
 
     try:
         import psycopg2
+        from psycopg2.errors import UniqueViolation
 
         conn = psycopg2.connect(_dsn())
         try:
             with conn, conn.cursor() as cur:
-                cur.execute(
-                    """
-                    INSERT INTO audit_escalations
-                        (decision_id, escalation_reason, human_action,
-                         operator_token_ref, override_action, override_reason,
-                         override_at, resolved_at, resolution_time_ms)
-                    VALUES (%s, %s, %s::jsonb, %s, %s, %s, %s, %s, %s)
-                    RETURNING id
-                    """,
-                    (
-                        str(decision_id),
-                        body.reason[:500],
-                        _json_dumps(human_action_blob),
-                        op.token_ref,
-                        body.action,
-                        body.reason,
-                        now,
-                        now,
-                        int((time.perf_counter() - started) * 1000),
-                    ),
-                )
+                # WS-2 idempotency: if the caller supplied a key, check for
+                # an existing row first. This is the cheap path; on race the
+                # UNIQUE index below guarantees correctness.
+                if body.idempotency_key is not None:
+                    cur.execute(
+                        "SELECT id, override_at FROM audit_escalations "
+                        "WHERE decision_id = %s AND idempotency_key = %s",
+                        (str(decision_id), body.idempotency_key),
+                    )
+                    existing = cur.fetchone()
+                    if existing is not None:
+                        existing_id = int(existing[0])
+                        existing_at = existing[1]
+                        logger.info(
+                            "override_idempotent_replay",
+                            decision_id=str(decision_id),
+                            audit_escalation_id=existing_id,
+                            idempotency_key=body.idempotency_key,
+                        )
+                        return OverrideResponse(
+                            audit_escalation_id=existing_id,
+                            decision_id=str(decision_id),
+                            action=body.action,
+                            operator_token_ref=op.token_ref,
+                            override_at=(
+                                existing_at.isoformat() if existing_at else now.isoformat()
+                            ),
+                            orchestrator_notified=True,
+                        )
+
+                try:
+                    cur.execute(
+                        """
+                        INSERT INTO audit_escalations
+                            (decision_id, escalation_reason, human_action,
+                             operator_token_ref, override_action, override_reason,
+                             override_at, resolved_at, resolution_time_ms,
+                             idempotency_key)
+                        VALUES (%s, %s, %s::jsonb, %s, %s, %s, %s, %s, %s, %s)
+                        RETURNING id
+                        """,
+                        (
+                            str(decision_id),
+                            body.reason[:500],
+                            _json_dumps(human_action_blob),
+                            op.token_ref,
+                            body.action,
+                            body.reason,
+                            now,
+                            now,
+                            int((time.perf_counter() - started) * 1000),
+                            body.idempotency_key,
+                        ),
+                    )
+                except UniqueViolation:
+                    # Concurrent caller won the race. Re-select and replay.
+                    conn.rollback()
+                    cur.execute(
+                        "SELECT id, override_at FROM audit_escalations "
+                        "WHERE decision_id = %s AND idempotency_key = %s",
+                        (str(decision_id), body.idempotency_key),
+                    )
+                    raced = cur.fetchone()
+                    if raced is None:
+                        raise HTTPException(
+                            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                            detail="idempotency race lost but row missing",
+                        ) from None
+                    raced_id = int(raced[0])
+                    raced_at = raced[1]
+                    return OverrideResponse(
+                        audit_escalation_id=raced_id,
+                        decision_id=str(decision_id),
+                        action=body.action,
+                        operator_token_ref=op.token_ref,
+                        override_at=raced_at.isoformat() if raced_at else now.isoformat(),
+                        orchestrator_notified=True,
+                    )
                 row = cur.fetchone()
                 if row is None:
                     raise HTTPException(
@@ -305,6 +383,10 @@ async def override_decision(
         ) from exc
 
     # Notify orchestrator (best-effort; audit is the source of truth).
+    # WS-2: inject traceparent so the orchestrator's HITL handler sees the
+    # same trace as the FE override click.
+    notify_headers: dict[str, str] = {}
+    inject_a2a_headers(notify_headers)
     orchestrator_ok = False
     try:
         async with httpx.AsyncClient(timeout=10.0) as client:
@@ -317,6 +399,7 @@ async def override_decision(
                     "reason": body.reason,
                     "modified_action": body.modified_action,
                 },
+                headers=notify_headers,
             )
             orchestrator_ok = resp.status_code in (200, 202, 204)
     except httpx.HTTPError as exc:

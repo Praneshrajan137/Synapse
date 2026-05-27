@@ -34,6 +34,7 @@ from orchestrator.llm.context_builder import ContextBuilder
 from orchestrator.llm.ollama_client import OllamaClient
 from orchestrator.llm.semantic_cache import SemanticDecisionCache
 from orchestrator.meta_rl.meta_agent import MetaRLAgent
+from orchestrator.outbox.dispatcher import OutboxDispatcher
 
 if TYPE_CHECKING:
     from collections.abc import AsyncIterator
@@ -45,11 +46,12 @@ _protocol: ConsensusProtocol | None = None
 _ws_manager: WebSocketManager | None = None
 _a2a_handler: OrchestratorA2AHandler | None = None
 _hitl: HITLEscalation | None = None
+_outbox_dispatcher: OutboxDispatcher | None = None
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
-    global _config, _protocol, _ws_manager, _a2a_handler, _hitl
+    global _config, _protocol, _ws_manager, _a2a_handler, _hitl, _outbox_dispatcher
 
     _config = OrchestratorConfig()
 
@@ -100,9 +102,23 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     )
     _a2a_handler = OrchestratorA2AHandler(consensus_protocol=_protocol)
 
+    # WS-2: start the outbox dispatcher so audit_outbox rows actually
+    # reach Kafka. The class existed since Sprint 7 but was never
+    # started — see docs/state/CURRENT.md row C2 for the audit trail.
+    if kafka_producer is not None:
+        _outbox_dispatcher = OutboxDispatcher(session_factory, kafka_producer)
+        await _outbox_dispatcher.start()
+    else:
+        logger.warning(
+            "outbox_dispatcher_skipped_kafka_unavailable",
+            reason="kafka_producer is None at startup; PENDING rows will accumulate until a restart with Kafka up",
+        )
+
     logger.info("orchestrator_started", port=_config.port)
     yield
 
+    if _outbox_dispatcher is not None:
+        await _outbox_dispatcher.stop()
     await ollama_client.close()
 
 
