@@ -13,6 +13,10 @@ from typing import Any
 
 import numpy as np
 import structlog
+from synapse_common.metrics import (
+    DEMAND_PROPHET_COVERAGE_P90,
+    DEMAND_PROPHET_NEGATIVE_HORIZON_TOTAL,
+)
 from synapse_common.models import DemandForecast
 
 logger = structlog.get_logger(__name__)
@@ -62,6 +66,18 @@ class DemandProphetPipeline:
         intervals = None
         if include_uncertainty and self._calibrator is not None:
             intervals = self._calibrator.predict_intervals(raw_predictions)
+            # WS-12: surface empirical coverage so INV-DP-002 alert fires
+            # against a real metric. `coverage_meta` is the calibrator's
+            # measured fraction-in-interval on the latest holdout slice;
+            # absent the meta key, we fall back to NaN-skip (no update).
+            coverage = (
+                getattr(self._calibrator, "last_coverage_p90", None)
+                if hasattr(self._calibrator, "last_coverage_p90")
+                else None
+            )
+            if coverage is not None and 0.0 <= float(coverage) <= 1.0:
+                city = self._city() if hasattr(self, "_city") else "unknown"
+                DEMAND_PROPHET_COVERAGE_P90.labels(city=city).set(float(coverage))
 
         forecasts = self._build_forecasts(sku_ids, store_id, raw_predictions, intervals)
 
@@ -158,12 +174,28 @@ class DemandProphetPipeline:
 
             for horizon in VALID_HORIZONS:
                 pred = predictions[horizon]
-                horizons_dict[horizon] = float(max(pred[i, 1], 0.0))
+                point = float(pred[i, 1])
+                # WS-12: record raw-negative incidence BEFORE we clamp to
+                # zero — the published payload stays safe (max with 0.0)
+                # but INV-DP-006 needs visibility into the underlying
+                # model behaviour. A single increment fires the critical
+                # alert per infrastructure/prometheus/rules/demand_prophet_invariants.yml.
+                if point < 0.0:
+                    DEMAND_PROPHET_NEGATIVE_HORIZON_TOTAL.labels(
+                        sku_id=sku_id, horizon=horizon
+                    ).inc()
+                horizons_dict[horizon] = max(point, 0.0)
 
                 if intervals is not None and horizon in intervals:
                     lb, ub = intervals[horizon]
-                    lower_90[horizon] = float(max(lb[i], 0.0))
-                    upper_90[horizon] = float(max(ub[i], 0.0))
+                    raw_lb = float(lb[i])
+                    raw_ub = float(ub[i])
+                    if raw_lb < 0.0 or raw_ub < 0.0:
+                        DEMAND_PROPHET_NEGATIVE_HORIZON_TOTAL.labels(
+                            sku_id=sku_id, horizon=horizon
+                        ).inc()
+                    lower_90[horizon] = max(raw_lb, 0.0)
+                    upper_90[horizon] = max(raw_ub, 0.0)
                 else:
                     lower_90[horizon] = float(max(pred[i, 0], 0.0))
                     upper_90[horizon] = float(max(pred[i, 2], 0.0))
