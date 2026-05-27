@@ -156,12 +156,16 @@ export function createSynapseApi(deps: SynapseApiDeps) {
       gateway.post<{ status: string; order_id: string; outbox_id: string }>(
         "/api/v1/orders",
         body,
-        {
-          // WS-2: orders route is now outbox-backed (202 Accepted) and the
-          // Idempotency-Key header dedupes downstream consumers.
-          idempotent: Boolean(opts.idempotencyKey),
-          headers: opts.idempotencyKey ? { "Idempotency-Key": opts.idempotencyKey } : undefined,
-        },
+        // WS-2: orders route is now outbox-backed (202 Accepted) and the
+        // Idempotency-Key header dedupes downstream consumers. Spread to
+        // include `headers` only when defined — exactOptionalPropertyTypes
+        // forbids assigning `undefined` to an optional property.
+        opts.idempotencyKey
+          ? {
+              idempotent: true,
+              headers: { "Idempotency-Key": opts.idempotencyKey },
+            }
+          : { idempotent: false },
       ),
 
     // Orchestrator — orchestrator/inference/serve.py
