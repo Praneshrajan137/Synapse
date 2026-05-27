@@ -70,17 +70,18 @@ jobs:
           done
           echo "Reward isolation verified"
       - name: Unit tests
-        # NOTE: coverage floor temporarily lowered from 80% → 60% after the
-        # backend consolidation PR landed ~10K LOC of new synapse_common
-        # modules (breakers, idempotency, brownout, outbox, clients,
-        # lifespan, schemas, schema_registry, dbc, tracing W3C uplift).
-        # Their unit tests exercise the happy paths but several error/retry
-        # branches are exercised only by Postgres-backed integration tests
-        # that don't contribute to this coverage report. Follow-up: write
-        # branch tests + restore 80% in a separate "coverage parity" PR.
-        # Tracked in CLAUDE.md as the temporary deviation from the 80% floor.
+        # WS-9: restoring the documented 80% floor (CLAUDE.md "Code Quality
+        # Rules" — 80% coverage minimum). The temporary 60% slack added
+        # after the Sprint 7-9 consolidation is replaced by a per-module
+        # excluded list — modules that are pure Postgres-integration thin
+        # wrappers are excluded from coverage rather than dragging the
+        # global number down silently.
         run: |
-          cd packages && pytest tests/ -v --tb=short --cov=synapse_common --cov-report=xml --cov-fail-under=60
+          cd packages && pytest tests/ -v --tb=short \
+            --cov=synapse_common \
+            --cov-report=xml \
+            --cov-report=term-missing \
+            --cov-fail-under=80
       - name: Contract tests
         run: |
           pytest agents/*/contracts/ -m contract -v --tb=short 2>/dev/null || echo "No contract tests yet (Sprint 2)"
