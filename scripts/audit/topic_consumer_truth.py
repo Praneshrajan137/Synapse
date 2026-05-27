@@ -22,6 +22,7 @@ Heuristics (deliberately strict; false positives fail CI):
     are expected to live under. Missing globs PASS until the consumer is
     expected to exist (gated by ``REQUIRED_CONSUMERS`` below).
 """
+
 from __future__ import annotations
 
 import json
@@ -99,9 +100,13 @@ def _grep_topic_subscriptions(globs: list[str], topic: str) -> bool:
                 text = path.read_text(encoding="utf-8", errors="ignore")
             except OSError:
                 continue
-            if needle_1.search(text) and ("subscribe" in text or "SynapseConsumer" in text
-                                          or "Consumer(" in text or "topics = [" in text
-                                          or "topics=[" in text):
+            if needle_1.search(text) and (
+                "subscribe" in text
+                or "SynapseConsumer" in text
+                or "Consumer(" in text
+                or "topics = [" in text
+                or "topics=[" in text
+            ):
                 return True
     return False
 
@@ -129,32 +134,41 @@ def run(as_json: bool = False) -> int:
                 real.append(consumer)
             else:
                 missing.append(consumer)
-        truths.append(TopicTruth(
-            topic=topic,
-            declared_consumers=declared,
-            real_consumers=real,
-            missing=missing,
-            extra=[],
-        ))
+        truths.append(
+            TopicTruth(
+                topic=topic,
+                declared_consumers=declared,
+                real_consumers=real,
+                missing=missing,
+                extra=[],
+            )
+        )
         if missing:
             failures += 1
 
     if as_json:
-        print(json.dumps({
-            "summary": {"topics": len(truths), "failures": failures},
-            "truths": [t.__dict__ for t in truths],
-        }, indent=2, sort_keys=True))
+        print(
+            json.dumps(
+                {
+                    "summary": {"topics": len(truths), "failures": failures},
+                    "truths": [t.__dict__ for t in truths],
+                },
+                indent=2,
+                sort_keys=True,
+            )
+        )
     else:
         for t in truths:
             sym = "[OK]" if not t.missing else "[XX]"
-            print(f"{sym} {t.topic:<40} declared={t.declared_consumers} "
-                  f"missing={t.missing}")
+            print(f"{sym} {t.topic:<40} declared={t.declared_consumers} missing={t.missing}")
         print()
         print(f"Summary: {len(truths)} topics, {failures} with missing consumers")
         if registry.get("non_registered_consumed_topics"):
             extra = registry["non_registered_consumed_topics"]["topics"]
-            print(f"Note: {len(extra)} non-registered topics ARE consumed "
-                  f"(see registry.non_registered_consumed_topics)")
+            print(
+                f"Note: {len(extra)} non-registered topics ARE consumed "
+                f"(see registry.non_registered_consumed_topics)"
+            )
 
     return 1 if failures else 0
 

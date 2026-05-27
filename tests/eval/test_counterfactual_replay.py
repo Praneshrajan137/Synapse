@@ -12,6 +12,7 @@ Three counterfactuals:
 These tests skip cleanly when the golden trace fixture is unavailable —
 the assertions matter only when there's a real corpus to mutate.
 """
+
 from __future__ import annotations
 
 import copy
@@ -61,9 +62,7 @@ def test_demand_spike_escalates_tier1() -> None:
             if isinstance(item, dict) and "quantity" in item:
                 item["quantity"] = int(item["quantity"] * 1.5)
         new_tier = _classify(mutated)
-        assert new_tier != "tier_1", (
-            f"Demand +50% on a tier_1 trace stayed at tier_1: {mutated}"
-        )
+        assert new_tier != "tier_1", f"Demand +50% on a tier_1 trace stayed at tier_1: {mutated}"
 
 
 def test_one_agent_timeout_increases_phases() -> None:

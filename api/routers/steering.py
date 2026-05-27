@@ -13,6 +13,7 @@ the FE shows an error toast and reverts.
 The route is guarded by ``Role.OPS`` — viewers see steering values but
 cannot change them.
 """
+
 from __future__ import annotations
 
 import os
@@ -30,9 +31,7 @@ from synapse_common.auth import OperatorContext, Role
 logger = structlog.get_logger(__name__)
 router = APIRouter()
 
-POSTGRES_DSN_DEFAULT = (
-    "postgresql://synapse_app:synapse_app_2026@postgres:5432/synapse_audit"
-)
+POSTGRES_DSN_DEFAULT = "postgresql://synapse_app:synapse_app_2026@postgres:5432/synapse_audit"
 
 
 def _dsn() -> str:
@@ -104,14 +103,19 @@ async def submit_steering(
             )
 
     if body.action == "set_pareto_weight" and body.target not in {
-        "cost", "time", "sustainability", "fairness",
+        "cost",
+        "time",
+        "sustainability",
+        "fairness",
     }:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail=f"unknown pareto dimension: {body.target!r}",
         )
     if body.action == "set_tier_threshold" and body.target not in {
-        "tier_2", "tier_3", "tier_4",
+        "tier_2",
+        "tier_3",
+        "tier_4",
     }:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,

@@ -269,9 +269,7 @@ class PricingOraclePipeline:
                 # break the cap. A single increment is treated as
                 # critical by infrastructure/prometheus/rules/pricing_oracle_invariants.yml.
                 if mult > ESSENTIAL_CAP:
-                    PRICING_ORACLE_ESSENTIAL_CAP_VIOLATION_TOTAL.labels(
-                        sku_id=sku_id
-                    ).inc()
+                    PRICING_ORACLE_ESSENTIAL_CAP_VIOLATION_TOTAL.labels(sku_id=sku_id).inc()
                 mult = min(mult, ESSENTIAL_CAP)
 
             mult = max(mult, 0.5)

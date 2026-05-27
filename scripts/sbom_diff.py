@@ -16,6 +16,7 @@ Usage::
     python scripts/sbom_diff.py --update   # append new deps to allowlist
                                             # (operator step, NOT in CI)
 """
+
 from __future__ import annotations
 
 import argparse
@@ -62,15 +63,17 @@ def _sbom_components() -> list[dict[str, Any]]:
                 continue
             key = f"{name}=={version}" if version else name
             if key not in seen:
-                seen[key] = {"name": name, "version": version,
-                             "source": path.name,
-                             "purl": c.get("purl"),
-                             "licenses": c.get("licenses", [])}
+                seen[key] = {
+                    "name": name,
+                    "version": version,
+                    "source": path.name,
+                    "purl": c.get("purl"),
+                    "licenses": c.get("licenses", []),
+                }
     return list(seen.values())
 
 
-def _is_allowed(component: dict[str, Any],
-                allowlist: dict[str, dict[str, Any]]) -> bool:
+def _is_allowed(component: dict[str, Any], allowlist: dict[str, dict[str, Any]]) -> bool:
     entry = allowlist.get(component["name"])
     if entry is None:
         return False
@@ -83,8 +86,9 @@ def _is_allowed(component: dict[str, Any],
 def main() -> int:
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument("--check", action="store_true")
-    p.add_argument("--update", action="store_true",
-                   help="Operator-only: append new deps to the allowlist.")
+    p.add_argument(
+        "--update", action="store_true", help="Operator-only: append new deps to the allowlist."
+    )
     args = p.parse_args()
 
     allowlist = _load_allowlist()
@@ -117,8 +121,11 @@ def main() -> int:
         print(f"  ... and {len(missing) - 20} more")
 
     if args.check and missing:
-        print("FAIL: SBOM drift — review missing deps and run with --update "
-              "from an operator workstation.", file=sys.stderr)
+        print(
+            "FAIL: SBOM drift — review missing deps and run with --update "
+            "from an operator workstation.",
+            file=sys.stderr,
+        )
         return 1
     return 0
 

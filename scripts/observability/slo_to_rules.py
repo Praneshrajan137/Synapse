@@ -19,6 +19,7 @@ Usage::
     python -m scripts.observability.slo_to_rules           # write rules
     python -m scripts.observability.slo_to_rules --check   # exit 1 on drift
 """
+
 from __future__ import annotations
 
 import argparse
@@ -41,8 +42,8 @@ OUT_FILE = ROOT / "infrastructure" / "prometheus" / "rules" / "orchestrator_burn
 #   short_burn × short_window AND long_burn × long_window above threshold.
 WINDOWS = [
     # (alert_suffix, long_window, short_window, multiplier, severity, for_clause)
-    ("1h-5m", "1h", "5m", 14.4, "page",   "2m"),
-    ("6h-1h", "6h", "1h", 6.0,  "ticket", "15m"),
+    ("1h-5m", "1h", "5m", 14.4, "page", "2m"),
+    ("6h-1h", "6h", "1h", 6.0, "ticket", "15m"),
 ]
 
 
@@ -80,28 +81,28 @@ def _alert_for_slo(slo: dict[str, Any], slo_name: str, service: str) -> list[dic
         # Mimic the existing hand-rolled file's whitespace conventions so the
         # generator output stays close to a clean diff vs. the committed file.
         expr = f"({long_expr}) and ({short_expr})"
-        alerts.append({
-            "alert": f"{slo_name}-burn-{suffix}",
-            "expr": expr,
-            "for": for_clause,
-            "labels": {
-                "severity": severity,
-                "slo": slo_name,
-                "service": service,
-            },
-            "annotations": {
-                "summary": f"{slo_name} burning at {multiplier:.1f}x over {long_w}/{short_w}",
-                "runbook_url": runbook,
-            },
-        })
+        alerts.append(
+            {
+                "alert": f"{slo_name}-burn-{suffix}",
+                "expr": expr,
+                "for": for_clause,
+                "labels": {
+                    "severity": severity,
+                    "slo": slo_name,
+                    "service": service,
+                },
+                "annotations": {
+                    "summary": f"{slo_name} burning at {multiplier:.1f}x over {long_w}/{short_w}",
+                    "runbook_url": runbook,
+                },
+            }
+        )
     return alerts
 
 
 def generate() -> str:
     out: dict[str, Any] = {
-        "groups": [
-            {"name": "synapse-burn-rate", "interval": "30s", "rules": []}
-        ]
+        "groups": [{"name": "synapse-burn-rate", "interval": "30s", "rules": []}]
     }
     rules = out["groups"][0]["rules"]
     for path in sorted(SLO_DIR.glob("*.slo.yaml")):
@@ -118,8 +119,11 @@ def generate() -> str:
 
 def main() -> int:
     p = argparse.ArgumentParser(description=__doc__)
-    p.add_argument("--check", action="store_true",
-                   help="Exit 1 if regenerating would change the committed file.")
+    p.add_argument(
+        "--check",
+        action="store_true",
+        help="Exit 1 if regenerating would change the committed file.",
+    )
     args = p.parse_args()
     content = generate()
     if args.check:
@@ -128,9 +132,11 @@ def main() -> int:
             return 1
         existing = OUT_FILE.read_text(encoding="utf-8")
         if existing.strip() != content.strip():
-            print("FAIL: generated rules differ from committed rules. "
-                  "Rerun `python -m scripts.observability.slo_to_rules` "
-                  "and commit the result.")
+            print(
+                "FAIL: generated rules differ from committed rules. "
+                "Rerun `python -m scripts.observability.slo_to_rules` "
+                "and commit the result."
+            )
             return 1
         print("OK: generated rules match committed file.")
         return 0

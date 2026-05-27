@@ -8,6 +8,7 @@ Runs in CI as a non-skippable check IF the eval harness is available; on
 environments without the harness (e.g. fresh clones without docker), the
 test skips with a clear message.
 """
+
 from __future__ import annotations
 
 import os

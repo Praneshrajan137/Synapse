@@ -16,6 +16,7 @@ Run::
     python -m scripts.observability.metric_truth          # human output
     python -m scripts.observability.metric_truth --json   # CI ingestion
 """
+
 from __future__ import annotations
 
 import argparse
@@ -89,12 +90,20 @@ def main() -> int:
             missing.append(m)
 
     if args.json:
-        print(json.dumps({
-            "summary": {"total": len(metrics), "present": len(present),
-                        "missing": len(missing)},
-            "missing": missing,
-            "present": present,
-        }, indent=2))
+        print(
+            json.dumps(
+                {
+                    "summary": {
+                        "total": len(metrics),
+                        "present": len(present),
+                        "missing": len(missing),
+                    },
+                    "missing": missing,
+                    "present": present,
+                },
+                indent=2,
+            )
+        )
     else:
         print(f"Metrics referenced by alert rules: {len(metrics)}")
         print(f"  present in source: {len(present)}")

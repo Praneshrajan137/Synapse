@@ -11,6 +11,7 @@ Verifies, against a live Postgres + Kafka:
 These tests skip when the integration stack is not running. CI runs them in
 the ``integration`` workflow against the docker-compose stack.
 """
+
 from __future__ import annotations
 
 import asyncio

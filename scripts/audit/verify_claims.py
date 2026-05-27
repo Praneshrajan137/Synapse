@@ -8,6 +8,7 @@ Run with ``make verify-claims`` or ``python -m scripts.audit.verify_claims``.
 
 The check IDs (C1..C25) match the rows in ``docs/state/CURRENT.md``.
 """
+
 from __future__ import annotations
 
 import json
@@ -32,7 +33,9 @@ class CheckResult:
 _CHECKS: list[tuple[str, str, Callable[[], CheckResult]]] = []
 
 
-def register(cid: str, title: str) -> Callable[[Callable[[], CheckResult]], Callable[[], CheckResult]]:
+def register(
+    cid: str, title: str
+) -> Callable[[Callable[[], CheckResult]], Callable[[], CheckResult]]:
     def deco(fn: Callable[[], CheckResult]) -> Callable[[], CheckResult]:
         _CHECKS.append((cid, title, fn))
         return fn
@@ -67,10 +70,15 @@ def check_outbox_dispatcher_running() -> CheckResult:
         return CheckResult("C2", "OutboxDispatcher running", "SKIP", "serve.py missing")
     text = serve.read_text(encoding="utf-8")
     if "OutboxDispatcher" in text and ".start(" in text:
-        return CheckResult("C2", "OutboxDispatcher running", "PASS",
-                           "instantiated and .start() called in serve.py")
-    return CheckResult("C2", "OutboxDispatcher running", "FAIL",
-                       "OutboxDispatcher not referenced in orchestrator/inference/serve.py")
+        return CheckResult(
+            "C2", "OutboxDispatcher running", "PASS", "instantiated and .start() called in serve.py"
+        )
+    return CheckResult(
+        "C2",
+        "OutboxDispatcher running",
+        "FAIL",
+        "OutboxDispatcher not referenced in orchestrator/inference/serve.py",
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -83,10 +91,15 @@ def check_traceparent_at_api_boundary() -> CheckResult:
         return CheckResult("C3", "Traceparent at API boundary", "SKIP", "decisions.py missing")
     text = decisions.read_text(encoding="utf-8")
     if "inject_a2a_headers" in text or "traceparent" in text.lower():
-        return CheckResult("C3", "Traceparent at API boundary", "PASS",
-                           "tracing helper referenced in decisions.py")
-    return CheckResult("C3", "Traceparent at API boundary", "FAIL",
-                       "no traceparent/inject_a2a_headers call in api/routers/decisions.py")
+        return CheckResult(
+            "C3", "Traceparent at API boundary", "PASS", "tracing helper referenced in decisions.py"
+        )
+    return CheckResult(
+        "C3",
+        "Traceparent at API boundary",
+        "FAIL",
+        "no traceparent/inject_a2a_headers call in api/routers/decisions.py",
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -100,14 +113,20 @@ def check_orders_uses_shared_producer() -> CheckResult:
     text = orders.read_text(encoding="utf-8")
     # FAIL if it constructs a confluent_kafka.Producer directly
     if re.search(r"\bProducer\s*\(", text) and "confluent_kafka" in text:
-        return CheckResult("C4", "Orders shared producer", "FAIL",
-                           "orders.py instantiates confluent_kafka.Producer directly")
+        return CheckResult(
+            "C4",
+            "Orders shared producer",
+            "FAIL",
+            "orders.py instantiates confluent_kafka.Producer directly",
+        )
     # PASS if it pulls from app.state.kafka_producer or uses outbox.enqueue
     if "app.state.kafka_producer" in text or "outbox.enqueue" in text or "enqueue_outbox" in text:
-        return CheckResult("C4", "Orders shared producer", "PASS",
-                           "uses shared producer / outbox enqueue")
-    return CheckResult("C4", "Orders shared producer", "FAIL",
-                       "no evidence of shared producer or outbox usage")
+        return CheckResult(
+            "C4", "Orders shared producer", "PASS", "uses shared producer / outbox enqueue"
+        )
+    return CheckResult(
+        "C4", "Orders shared producer", "FAIL", "no evidence of shared producer or outbox usage"
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -120,10 +139,12 @@ def check_override_idempotent() -> CheckResult:
         return CheckResult("C5", "Override idempotent", "SKIP", "decisions.py missing")
     text = decisions.read_text(encoding="utf-8")
     if "idempotency_key" in text:
-        return CheckResult("C5", "Override idempotent", "PASS",
-                           "idempotency_key referenced in decisions.py")
-    return CheckResult("C5", "Override idempotent", "FAIL",
-                       "no idempotency_key in override request model")
+        return CheckResult(
+            "C5", "Override idempotent", "PASS", "idempotency_key referenced in decisions.py"
+        )
+    return CheckResult(
+        "C5", "Override idempotent", "FAIL", "no idempotency_key in override request model"
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -144,10 +165,15 @@ def check_orders_schema_validation() -> CheckResult:
         or "get_registry()" in text
         or "validate_agent_payload(" in text
     ):
-        return CheckResult("C6", "Order schema validation", "PASS",
-                           "schema registry validation called")
-    return CheckResult("C6", "Order schema validation", "FAIL",
-                       "orders route does not validate against proto/domain/order_request.schema.json")
+        return CheckResult(
+            "C6", "Order schema validation", "PASS", "schema registry validation called"
+        )
+    return CheckResult(
+        "C6",
+        "Order schema validation",
+        "FAIL",
+        "orders route does not validate against proto/domain/order_request.schema.json",
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -194,8 +220,9 @@ def check_frontend_no_raw_fetch() -> CheckResult:
             if re.search(r"\bfetch\(", line):
                 bad.append(f"{rel}:{i}")
     if bad:
-        return CheckResult("C8", "No raw fetch in FE", "FAIL",
-                           f"raw fetch() in: {', '.join(bad[:5])}")
+        return CheckResult(
+            "C8", "No raw fetch in FE", "FAIL", f"raw fetch() in: {', '.join(bad[:5])}"
+        )
     return CheckResult("C8", "No raw fetch in FE", "PASS", "all fetches in typed client")
 
 
@@ -210,10 +237,10 @@ def check_firehose_validated() -> CheckResult:
         return CheckResult("C9", "Firehose Zod-validated", "SKIP", "ws-multiplex.ts missing")
     text = ws.read_text(encoding="utf-8")
     if schema.exists() and ("FirehoseEnvelopeSchema" in text or "firehose-schema" in text):
-        return CheckResult("C9", "Firehose Zod-validated", "PASS",
-                           "schema imported and applied")
-    return CheckResult("C9", "Firehose Zod-validated", "FAIL",
-                       "ws-multiplex emits raw JSON without schema check")
+        return CheckResult("C9", "Firehose Zod-validated", "PASS", "schema imported and applied")
+    return CheckResult(
+        "C9", "Firehose Zod-validated", "FAIL", "ws-multiplex emits raw JSON without schema check"
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -230,10 +257,12 @@ def check_steering_audited() -> CheckResult:
         store = candidates[0]
     text = store.read_text(encoding="utf-8")
     if "/api/v1/steering" in text or "submitSteering" in text:
-        return CheckResult("C11", "Steering audited", "PASS",
-                           "steering store calls backend endpoint")
-    return CheckResult("C11", "Steering audited", "FAIL",
-                       f"{store.relative_to(ROOT)} has no backend POST")
+        return CheckResult(
+            "C11", "Steering audited", "PASS", "steering store calls backend endpoint"
+        )
+    return CheckResult(
+        "C11", "Steering audited", "FAIL", f"{store.relative_to(ROOT)} has no backend POST"
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -243,16 +272,24 @@ def check_steering_audited() -> CheckResult:
 def check_gcp_terraform_on_main() -> CheckResult:
     tf_dir = ROOT / "infrastructure" / "gcp" / "terraform"
     if not tf_dir.is_dir():
-        return CheckResult("C14", "GCP terraform on main", "FAIL", "no infrastructure/gcp/terraform/")
+        return CheckResult(
+            "C14", "GCP terraform on main", "FAIL", "no infrastructure/gcp/terraform/"
+        )
     tf_files = [p for p in tf_dir.glob("*.tf") if p.is_file()]
     if not tf_files:
-        return CheckResult("C14", "GCP terraform on main", "FAIL",
-                           "no .tf files in infrastructure/gcp/terraform/")
+        return CheckResult(
+            "C14", "GCP terraform on main", "FAIL", "no .tf files in infrastructure/gcp/terraform/"
+        )
     if any(p.name == "main.tf" for p in tf_files):
-        return CheckResult("C14", "GCP terraform on main", "PASS",
-                           f"{len(tf_files)} .tf files present")
-    return CheckResult("C14", "GCP terraform on main", "PARTIAL",
-                       f"{len(tf_files)} .tf files but no main.tf root module")
+        return CheckResult(
+            "C14", "GCP terraform on main", "PASS", f"{len(tf_files)} .tf files present"
+        )
+    return CheckResult(
+        "C14",
+        "GCP terraform on main",
+        "PARTIAL",
+        f"{len(tf_files)} .tf files but no main.tf root module",
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -270,8 +307,9 @@ def check_coverage_floor() -> CheckResult:
     pct = int(m.group(1))
     if pct >= 80:
         return CheckResult("C15", "Coverage 80%", "PASS", f"--cov-fail-under={pct}")
-    return CheckResult("C15", "Coverage 80%", "FAIL",
-                       f"--cov-fail-under={pct} (CLAUDE.md requires 80)")
+    return CheckResult(
+        "C15", "Coverage 80%", "FAIL", f"--cov-fail-under={pct} (CLAUDE.md requires 80)"
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -320,23 +358,34 @@ def check_helm_full_chart() -> CheckResult:
         return CheckResult("C12", "Helm full chart", "FAIL", "Chart.yaml missing")
     text = chart.read_text(encoding="utf-8")
     required = [
-        "api-gateway", "orchestrator", "demand-prophet", "routing-navigator",
-        "inventory-sentinel", "freshness-guardian", "pricing-oracle",
-        "disruption-shield", "supplier-trust", "sustainability-agent",
+        "api-gateway",
+        "orchestrator",
+        "demand-prophet",
+        "routing-navigator",
+        "inventory-sentinel",
+        "freshness-guardian",
+        "pricing-oracle",
+        "disruption-shield",
+        "supplier-trust",
+        "sustainability-agent",
         "digital-twin",
     ]
     missing = [r for r in required if f"name: {r}" not in text]
     if missing:
-        return CheckResult("C12", "Helm full chart", "FAIL",
-                           f"missing dependencies: {missing}")
+        return CheckResult("C12", "Helm full chart", "FAIL", f"missing dependencies: {missing}")
     # Also check the subchart directories exist.
     subchart_dir = ROOT / "infrastructure" / "helm" / "synapse" / "charts"
     missing_dirs = [r for r in required if not (subchart_dir / r).is_dir()]
     if missing_dirs:
-        return CheckResult("C12", "Helm full chart", "FAIL",
-                           f"missing subchart dirs: {missing_dirs}")
-    return CheckResult("C12", "Helm full chart", "PASS",
-                       f"{len(required)} dependencies declared with subchart dirs present")
+        return CheckResult(
+            "C12", "Helm full chart", "FAIL", f"missing subchart dirs: {missing_dirs}"
+        )
+    return CheckResult(
+        "C12",
+        "Helm full chart",
+        "PASS",
+        f"{len(required)} dependencies declared with subchart dirs present",
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -349,8 +398,12 @@ def check_mesh_in_helm() -> CheckResult:
     missing = [f for f in files if not (base / f).exists()]
     if missing:
         return CheckResult("C13", "Mesh in Helm", "FAIL", f"missing: {missing}")
-    return CheckResult("C13", "Mesh in Helm", "PASS",
-                       "Linkerd/KEDA/Flagger templates live under orchestrator subchart")
+    return CheckResult(
+        "C13",
+        "Mesh in Helm",
+        "PASS",
+        "Linkerd/KEDA/Flagger templates live under orchestrator subchart",
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -377,11 +430,16 @@ def check_slo_metric_truth() -> CheckResult:
     sources = _all_source_text()
     missing = [m for m in sorted(metrics) if m not in sources]
     if missing:
-        return CheckResult("C22", "SLO metric truth", "FAIL",
-                           f"{len(missing)}/{len(metrics)} alerted metrics not emitted: "
-                           f"{missing[:3]}{'...' if len(missing) > 3 else ''}")
-    return CheckResult("C22", "SLO metric truth", "PASS",
-                       f"{len(metrics)} alerted metrics all present in source")
+        return CheckResult(
+            "C22",
+            "SLO metric truth",
+            "FAIL",
+            f"{len(missing)}/{len(metrics)} alerted metrics not emitted: "
+            f"{missing[:3]}{'...' if len(missing) > 3 else ''}",
+        )
+    return CheckResult(
+        "C22", "SLO metric truth", "PASS", f"{len(metrics)} alerted metrics all present in source"
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -395,8 +453,7 @@ def check_image_signing() -> CheckResult:
     text = cd.read_text(encoding="utf-8")
     if "cosign" in text.lower() and "sign" in text.lower():
         return CheckResult("C19", "Image signing", "PASS", "cosign step present in cd.yml")
-    return CheckResult("C19", "Image signing", "FAIL",
-                       "no cosign step in .github/workflows/cd.yml")
+    return CheckResult("C19", "Image signing", "FAIL", "no cosign step in .github/workflows/cd.yml")
 
 
 # ---------------------------------------------------------------------------
@@ -408,11 +465,15 @@ def check_sbom_diff_gate() -> CheckResult:
     if not script.exists():
         return CheckResult("C20", "SBOM diff", "FAIL", "scripts/sbom_diff.py missing")
     workflows = ROOT / ".github" / "workflows"
-    if any("sbom_diff" in p.read_text(encoding="utf-8", errors="ignore")
-           for p in workflows.glob("*.yml") if p.is_file()):
+    if any(
+        "sbom_diff" in p.read_text(encoding="utf-8", errors="ignore")
+        for p in workflows.glob("*.yml")
+        if p.is_file()
+    ):
         return CheckResult("C20", "SBOM diff", "PASS", "sbom_diff invoked from CI")
-    return CheckResult("C20", "SBOM diff", "FAIL",
-                       "scripts/sbom_diff.py exists but no CI workflow references it")
+    return CheckResult(
+        "C20", "SBOM diff", "FAIL", "scripts/sbom_diff.py exists but no CI workflow references it"
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -426,10 +487,8 @@ def check_cve_budget_in_ci() -> CheckResult:
             continue
         text = p.read_text(encoding="utf-8", errors="ignore")
         if "check_cve_budget" in text:
-            return CheckResult("C21", "CVE budget", "PASS",
-                               f"invoked from {p.name}")
-    return CheckResult("C21", "CVE budget", "FAIL",
-                       "no workflow references check_cve_budget.py")
+            return CheckResult("C21", "CVE budget", "PASS", f"invoked from {p.name}")
+    return CheckResult("C21", "CVE budget", "FAIL", "no workflow references check_cve_budget.py")
 
 
 @register("C24", "Worktree policy enforced by hook")
@@ -440,8 +499,9 @@ def check_worktree_hook() -> CheckResult:
     text = pc.read_text(encoding="utf-8")
     if "worktree" in text.lower() and "block" in text.lower():
         return CheckResult("C24", "Worktree hook", "PASS", "worktree-block hook present")
-    return CheckResult("C24", "Worktree hook", "FAIL",
-                       "no worktree-blocking hook in pre-commit-config")
+    return CheckResult(
+        "C24", "Worktree hook", "FAIL", "no worktree-blocking hook in pre-commit-config"
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -456,8 +516,13 @@ def run(as_json: bool = False) -> int:
 
     if as_json:
         payload = {
-            "summary": {"pass": pass_n, "fail": fail_n, "partial": partial_n, "skip": skip_n,
-                        "total": len(results)},
+            "summary": {
+                "pass": pass_n,
+                "fail": fail_n,
+                "partial": partial_n,
+                "skip": skip_n,
+                "total": len(results),
+            },
             "checks": [r.__dict__ for r in results],
         }
         print(json.dumps(payload, indent=2, sort_keys=True))
@@ -466,8 +531,10 @@ def run(as_json: bool = False) -> int:
             sym = {"PASS": "[OK]", "FAIL": "[XX]", "PARTIAL": "[~~]", "SKIP": "[--]"}[r.status]
             print(f"{sym} {r.cid:>4} {r.title:<48} {r.detail}")
         print()
-        print(f"Summary: PASS={pass_n} FAIL={fail_n} PARTIAL={partial_n} "
-              f"SKIP={skip_n} TOTAL={len(results)}")
+        print(
+            f"Summary: PASS={pass_n} FAIL={fail_n} PARTIAL={partial_n} "
+            f"SKIP={skip_n} TOTAL={len(results)}"
+        )
 
     return 1 if fail_n else 0
 

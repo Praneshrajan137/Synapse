@@ -2,6 +2,7 @@
 SYNAPSE Sprint 3 — Cross-Agent Integration Tests.
 Tests all Sprint 3 agents individually and their cross-agent interactions.
 """
+
 from __future__ import annotations
 
 import json
@@ -29,10 +30,14 @@ class TestFreshnessGuardianHealth:
         )
 
         pipeline = FreshnessGuardianPipeline()
-        result = pipeline.assess(FreshnessRequest(
-            store_id="BLR-DS-001", sku_id="SKU-0001",
-            days_since_receipt=3.0, initial_shelf_life_days=7,
-        ))
+        result = pipeline.assess(
+            FreshnessRequest(
+                store_id="BLR-DS-001",
+                sku_id="SKU-0001",
+                days_since_receipt=3.0,
+                initial_shelf_life_days=7,
+            )
+        )
         assert 0 <= result.quality_score <= 1
         assert 0 <= result.markdown_pct <= 100
         assert isinstance(result.fssai_compliant, bool)
@@ -50,10 +55,14 @@ class TestFreshnessGuardianHealth:
             (PROJECT_ROOT / "proto" / "domain" / "freshness_alert.schema.json").read_text()
         )
         pipeline = FreshnessGuardianPipeline()
-        result = pipeline.assess(FreshnessRequest(
-            store_id="BLR-DS-001", sku_id="SKU-0001",
-            days_since_receipt=2.0, initial_shelf_life_days=7,
-        ))
+        result = pipeline.assess(
+            FreshnessRequest(
+                store_id="BLR-DS-001",
+                sku_id="SKU-0001",
+                days_since_receipt=2.0,
+                initial_shelf_life_days=7,
+            )
+        )
         jsonschema.validate(result.model_dump(mode="json"), schema)
 
 
@@ -159,12 +168,14 @@ class TestCrossAgentA2A:
         from agents.freshness_guardian.a2a.handler import FreshnessGuardianA2AHandler
 
         handler = FreshnessGuardianA2AHandler()
-        response = handler.handle_request({
-            "jsonrpc": "2.0",
-            "method": "proposal",
-            "params": {"store_id": "BLR-DS-001", "sku_ids": ["SKU-0001"]},
-            "id": "test-1",
-        })
+        response = handler.handle_request(
+            {
+                "jsonrpc": "2.0",
+                "method": "proposal",
+                "params": {"store_id": "BLR-DS-001", "sku_ids": ["SKU-0001"]},
+                "id": "test-1",
+            }
+        )
         assert response["jsonrpc"] == "2.0"
         assert "result" in response
         assert response["id"] == "test-1"
@@ -173,12 +184,14 @@ class TestCrossAgentA2A:
         from agents.freshness_guardian.a2a.handler import FreshnessGuardianA2AHandler
 
         handler = FreshnessGuardianA2AHandler()
-        response = handler.handle_request({
-            "jsonrpc": "2.0",
-            "method": "unknown_method",
-            "params": {},
-            "id": "test-err",
-        })
+        response = handler.handle_request(
+            {
+                "jsonrpc": "2.0",
+                "method": "unknown_method",
+                "params": {},
+                "id": "test-err",
+            }
+        )
         assert "error" in response
         assert response["error"]["code"] == -32601
 
@@ -189,14 +202,17 @@ class TestCrossAgentA2A:
 class TestSchemaCompliance:
     """Verify all Sprint 3 agent outputs match their proto schemas (I-3)."""
 
-    @pytest.mark.parametrize("schema_name", [
-        "freshness_alert",
-        "pricing_update",
-        "disruption_alert",
-        "supplier_score",
-        "carbon_report",
-        "twin_state",
-    ])
+    @pytest.mark.parametrize(
+        "schema_name",
+        [
+            "freshness_alert",
+            "pricing_update",
+            "disruption_alert",
+            "supplier_score",
+            "carbon_report",
+            "twin_state",
+        ],
+    )
     def test_schema_is_valid_json_schema(self, schema_name: str) -> None:
         import jsonschema
 
@@ -214,13 +230,16 @@ class TestSchemaCompliance:
 class TestAgentCards:
     """Verify all Sprint 3 agent cards are A2A compliant."""
 
-    @pytest.mark.parametrize("agent_name", [
-        "freshness_guardian",
-        "pricing_oracle",
-        "disruption_shield",
-        "supplier_trust",
-        "sustainability_agent",
-    ])
+    @pytest.mark.parametrize(
+        "agent_name",
+        [
+            "freshness_guardian",
+            "pricing_oracle",
+            "disruption_shield",
+            "supplier_trust",
+            "sustainability_agent",
+        ],
+    )
     def test_agent_card_valid(self, agent_name: str) -> None:
         card_path = PROJECT_ROOT / "agents" / agent_name / "agent_card.json"
         assert card_path.exists(), f"Missing agent card: {card_path}"
@@ -236,16 +255,19 @@ class TestAgentCards:
 class TestRewardIsolation:
     """Verify all agents have isolated reward functions (I-2)."""
 
-    @pytest.mark.parametrize("agent_name", [
-        "demand_prophet",
-        "routing_navigator",
-        "inventory_sentinel",
-        "freshness_guardian",
-        "pricing_oracle",
-        "disruption_shield",
-        "supplier_trust",
-        "sustainability_agent",
-    ])
+    @pytest.mark.parametrize(
+        "agent_name",
+        [
+            "demand_prophet",
+            "routing_navigator",
+            "inventory_sentinel",
+            "freshness_guardian",
+            "pricing_oracle",
+            "disruption_shield",
+            "supplier_trust",
+            "sustainability_agent",
+        ],
+    )
     def test_no_cross_agent_imports_in_rewards(self, agent_name: str) -> None:
         import ast
 
@@ -267,13 +289,16 @@ class TestRewardIsolation:
 class TestSpecValidation:
     """Verify all Sprint 3 spec.yaml files validate against the schema."""
 
-    @pytest.mark.parametrize("agent_name", [
-        "freshness_guardian",
-        "pricing_oracle",
-        "disruption_shield",
-        "supplier_trust",
-        "sustainability_agent",
-    ])
+    @pytest.mark.parametrize(
+        "agent_name",
+        [
+            "freshness_guardian",
+            "pricing_oracle",
+            "disruption_shield",
+            "supplier_trust",
+            "sustainability_agent",
+        ],
+    )
     def test_spec_yaml_exists_and_has_required_fields(self, agent_name: str) -> None:
         import yaml
 
@@ -291,14 +316,17 @@ class TestSpecValidation:
 class TestDockerfiles:
     """Verify all Sprint 3 Dockerfiles exist."""
 
-    @pytest.mark.parametrize("component", [
-        "agents/freshness_guardian",
-        "agents/pricing_oracle",
-        "agents/disruption_shield",
-        "agents/supplier_trust",
-        "agents/sustainability_agent",
-        "digital_twin",
-    ])
+    @pytest.mark.parametrize(
+        "component",
+        [
+            "agents/freshness_guardian",
+            "agents/pricing_oracle",
+            "agents/disruption_shield",
+            "agents/supplier_trust",
+            "agents/sustainability_agent",
+            "digital_twin",
+        ],
+    )
     def test_dockerfile_exists(self, component: str) -> None:
         path = PROJECT_ROOT / component / "Dockerfile"
         assert path.exists(), f"Missing: {path}"
