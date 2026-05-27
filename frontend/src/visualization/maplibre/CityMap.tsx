@@ -13,8 +13,12 @@ interface CityMapProps {
   readonly height?: number | string | undefined;
 }
 
-const CITY_VIEWS: Record<string, { longitude: number; latitude: number; zoom: number }> = {
-  bengaluru: { longitude: 77.59, latitude: 12.97, zoom: 11 },
+type CityView = { longitude: number; latitude: number; zoom: number };
+
+const BENGALURU_VIEW: CityView = { longitude: 77.59, latitude: 12.97, zoom: 11 };
+
+const CITY_VIEWS: Record<string, CityView> = {
+  bengaluru: BENGALURU_VIEW,
   mumbai: { longitude: 72.87, latitude: 19.08, zoom: 11 },
 };
 
@@ -27,7 +31,10 @@ export function CityMap({ layers = [], height = 420 }: CityMapProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<MapLibreMap | null>(null);
   const city = useCityStore((s) => s.city);
-  const view = CITY_VIEWS[city] ?? CITY_VIEWS.bengaluru!;
+  // Safe lookup: BENGALURU_VIEW is the named-constant fallback so the
+  // expression cannot be undefined and we don't need a non-null assertion
+  // (lint/style/noNonNullAssertion).
+  const view: CityView = CITY_VIEWS[city] ?? BENGALURU_VIEW;
 
   useEffect(() => {
     registerPMTilesProtocol();
@@ -45,8 +52,10 @@ export function CityMap({ layers = [], height = 420 }: CityMapProps) {
       map.remove();
       mapRef.current = null;
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+    // The init effect only runs once; subsequent city changes are handled
+    // by the flyTo effect below. Listing the view here would re-create the
+    // map every time the city changes (wasteful + janks deck.gl layers).
+  }, [view.latitude, view.longitude, view.zoom]);
 
   useEffect(() => {
     const map = mapRef.current;

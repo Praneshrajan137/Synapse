@@ -29,6 +29,12 @@ verify-supply-chain: ## SBOM diff + CVE budget gate (WS-8)
 	@python scripts/sbom_diff.py --check
 	@python scripts/check_cve_budget.py
 
+fmt-oracle: ## Auto-format the Oracle Terraform module (operator step; clears pre-existing drift)
+	@cd infrastructure/oracle/terraform && terraform fmt -recursive -diff
+
+fmt-gcp: ## Auto-format the GCP Terraform module
+	@cd infrastructure/gcp/terraform && terraform fmt -recursive -diff
+
 up: doctor ## Start all Docker services (runs doctor first)
 	cp -n docker/.env.template docker/.env || true
 	$(COMPOSE) up -d

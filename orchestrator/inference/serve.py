@@ -111,7 +111,10 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     else:
         logger.warning(
             "outbox_dispatcher_skipped_kafka_unavailable",
-            reason="kafka_producer is None at startup; PENDING rows will accumulate until a restart with Kafka up",
+            reason=(
+                "kafka_producer is None at startup; PENDING rows will "
+                "accumulate until a restart with Kafka up"
+            ),
         )
 
     logger.info("orchestrator_started", port=_config.port)

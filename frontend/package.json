@@ -147,5 +147,11 @@
       "path": "dist/assets/react-vendor-*.js",
       "limit": "70 KB"
     }
-  ]
+  ],
+  "pnpm": {
+    "overrides": {
+      "_comment_tmp_GHSA_ph9p_34f9_6g65": "Force-pin the legacy `tmp@0.0.33` transitive (Stryker -> @inquirer/prompts -> external-editor -> tmp) to a patched version. GHSA-ph9p-34f9-6g65: arbitrary tmpdir write via prototype pollution in tmp <0.2.4. Patched range: >=0.2.6.",
+      "tmp": ">=0.2.6"
+    }
+  }
 }
