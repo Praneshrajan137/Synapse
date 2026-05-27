@@ -1,0 +1,87 @@
+name: Publish daily audit anchor to Rekor
+
+# WS-11 cross-cutting §3.4 — third-party tamper-evidence for the audit chain.
+#
+# Sprint 9 commits a daily anchor under infrastructure/audit_anchors/<date>.json
+# (E-S9-03). That anchor lives only in this repo — anyone with write access can
+# in principle rewrite history. This workflow signs each new anchor with
+# cosign keyless and pushes the signature to the public Sigstore Rekor
+# transparency log, so the audit chain becomes verifiable against a third
+# party with cryptographic certainty.
+#
+# Trigger: every push to main that touches infrastructure/audit_anchors/.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "infrastructure/audit_anchors/**"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write   # required for cosign keyless OIDC
+
+jobs:
+  publish:
+    name: Sign anchor → Rekor
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2  # need previous commit to diff
+
+      - name: Identify new anchor files
+        id: detect
+        run: |
+          set -euo pipefail
+          changed=$(git diff --name-only HEAD~1 HEAD -- 'infrastructure/audit_anchors/*.json' || true)
+          if [ -z "$changed" ]; then
+            echo "no new anchors"
+            echo "files=" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+          echo "files<<EOF" >> $GITHUB_OUTPUT
+          echo "$changed" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+
+      - name: Install cosign
+        if: steps.detect.outputs.files != ''
+        uses: sigstore/cosign-installer@v3
+        with:
+          cosign-release: 'v2.4.0'
+
+      - name: Sign + publish each anchor to Rekor
+        if: steps.detect.outputs.files != ''
+        env:
+          COSIGN_EXPERIMENTAL: "1"
+        run: |
+          set -euo pipefail
+          while IFS= read -r f; do
+            [ -z "$f" ] && continue
+            echo "Signing $f"
+            # Bundle signature + Rekor entry alongside the anchor itself.
+            cosign sign-blob --yes \
+              --output-signature "${f}.sig" \
+              --output-certificate "${f}.cert" \
+              "$f"
+            echo "Anchor $f signed; Rekor log entry visible at:"
+            cosign verify-blob \
+              --signature "${f}.sig" \
+              --certificate "${f}.cert" \
+              --certificate-identity-regexp "https://github.com/${{ github.repository }}/.github/workflows/.*" \
+              --certificate-oidc-issuer "https://token.actions.githubusercontent.com" \
+              "$f"
+          done <<< "${{ steps.detect.outputs.files }}"
+
+      - name: Commit signatures back
+        if: steps.detect.outputs.files != ''
+        run: |
+          git config user.name "synapse-audit-bot[bot]"
+          git config user.email "audit@synapse.example"
+          git add infrastructure/audit_anchors/*.sig infrastructure/audit_anchors/*.cert || true
+          if ! git diff --cached --quiet; then
+            git commit -m "audit: publish anchor signatures (Rekor verified)"
+            git push
+          fi
