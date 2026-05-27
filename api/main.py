@@ -27,7 +27,7 @@ from synapse_common.clients import close_clients, get_client
 from synapse_common.kafka_client import KafkaConfig, SynapseProducer
 from synapse_common.lifespan import graceful_shutdown
 
-from api.routers import agents, decisions, orders, steering
+from api.routers import agents, auth, decisions, orders, steering
 
 if TYPE_CHECKING:
     from collections.abc import AsyncIterator
@@ -120,6 +120,7 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
+app.include_router(auth.router, prefix="/api/v1/auth", tags=["auth"])
 app.include_router(orders.router, prefix="/api/v1/orders", tags=["orders"])
 app.include_router(decisions.router, prefix="/api/v1/decisions", tags=["decisions"])
 app.include_router(agents.router, prefix="/api/v1/agents", tags=["agents"])
