@@ -8,6 +8,7 @@ import {
   TierBadge,
 } from "@ds/compounds";
 import { Badge } from "@ds/primitives";
+import { useSynapseApi } from "@hooks/use-synapse-api";
 import { fmt } from "@lib/formatters";
 import { phaseName, replayDecision } from "@lib/replay";
 import * as Slider from "@radix-ui/react-slider";
@@ -18,19 +19,16 @@ import { z } from "zod";
 
 export function DecisionDetail() {
   const { id } = useParams<{ id: string }>();
-  // POC: api/v1/decisions/{id} returns a richer row; we map it into our
-  // ConsensusDecision Zod schema for replay purity.
+  const api = useSynapseApi();
+  // WS-4 §4a: the GET /api/v1/decisions/{id} call is now on the typed
+  // client (`api.getDecision`). The DecisionDetailResponseSchema validates
+  // the envelope at the wire boundary; we still reshape into the
+  // ConsensusDecision shape here for the replay function to consume.
   const query = useQuery({
     queryKey: ["decision", id],
     queryFn: async () => {
-      // Use the typed HTTP client directly through the API surface; the
-      // GET /api/v1/decisions/{id} endpoint isn't on the typed client
-      // yet (P4 will codegen via OpenAPI), so we hand-fetch with a
-      // schema validation step.
-      const resp = await fetch(`/api/v1/decisions/${id}`);
-      if (!resp.ok) throw new Error(`${resp.status} ${resp.statusText}`);
-      const raw = (await resp.json()) as Record<string, unknown>;
-      // Re-shape into ConsensusDecision shape for the replay function.
+      if (!id) throw new Error("missing decision id");
+      const raw = await api.getDecision(id);
       const candidate = {
         decision_id: raw.decision_id ?? id,
         timestamp: raw.created_at ?? new Date().toISOString(),
@@ -41,10 +39,10 @@ export function DecisionDetail() {
         confidence: raw.confidence ?? 0,
         audit_trace: raw.audit_trace ?? [],
         phase_reached: raw.phase_reached ?? 1,
-        debate_rounds: raw.debate_rounds ?? 0,
+        debate_rounds: 0,
         human_override: raw.human_override ?? null,
-        context_messages: raw.context_messages ?? [],
-        execution_confirmations: raw.execution_confirmations ?? [],
+        context_messages: [],
+        execution_confirmations: [],
         escalated_to_human: raw.escalated ?? false,
       };
       const parsed = ConsensusDecisionSchema.safeParse(candidate);

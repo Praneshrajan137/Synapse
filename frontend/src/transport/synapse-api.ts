@@ -6,6 +6,7 @@ import { type TwinState, TwinStateSchema } from "@domain/twin-state";
 import type { Tier } from "@lib/confidence";
 import { z } from "zod";
 import { createHttpClient } from "./http-client";
+import { fetchJwks, knownKids } from "./jwks";
 
 // ─── Auth schemas (mirror api/routers/auth.py) ────────────────────────────
 export const LoginResponseSchema = z
@@ -41,6 +42,56 @@ export const OverrideApiResponseSchema = z
   })
   .strict();
 export type OverrideApiResponse = z.infer<typeof OverrideApiResponseSchema>;
+
+// ─── Decision detail (mirror api/routers/decisions.py get_decision) ───────
+// Loose on the JSONB-bag fields (proposals, audit_trace, etc.) — those are
+// validated by callers when they reshape into ConsensusDecision.
+export const DecisionDetailResponseSchema = z
+  .object({
+    audit_id: z.string(),
+    decision_id: z.string(),
+    tier: z.string(),
+    phase_reached: z.number().int(),
+    confidence: z.number(),
+    escalated: z.boolean(),
+    city: z.string().nullable().optional(),
+    proposals: z.unknown(),
+    selected_action: z.unknown(),
+    pareto_weights: z.unknown(),
+    human_override: z.unknown().nullable().optional(),
+    audit_trace: z.unknown(),
+    created_at: z.string().nullable().optional(),
+    escalations: z.array(z.unknown()).optional(),
+  })
+  .passthrough();
+export type DecisionDetailResponse = z.infer<typeof DecisionDetailResponseSchema>;
+
+// ─── Topology (mirror api/routers/topology.py) ────────────────────────────
+const TopologyNodeSchema = z
+  .object({
+    id: z.string(),
+    type: z.string(),
+    lat: z.number().nullable().optional(),
+    lon: z.number().nullable().optional(),
+  })
+  .passthrough();
+const TopologyEdgeSchema = z
+  .object({
+    src: z.string(),
+    dst: z.string(),
+    type: z.string(),
+    weight: z.number().optional(),
+  })
+  .passthrough();
+export const TopologyResponseSchema = z
+  .object({
+    city: z.string(),
+    nodes: z.array(TopologyNodeSchema),
+    edges: z.array(TopologyEdgeSchema),
+    generated_at: z.string(),
+  })
+  .passthrough();
+export type TopologyResponse = z.infer<typeof TopologyResponseSchema>;
 
 // Hand-rolled typed client for the BE endpoints the FE consumes today.
 // Lives alongside (and will eventually be superseded by) the OpenAPI-codegen
@@ -93,15 +144,27 @@ export function createSynapseApi(deps: SynapseApiDeps) {
         schema: AuditListResponseSchema,
         schemaId: "AuditListResponse",
       }),
-    submitOrder: (body: {
-      city: City;
-      store_id: string;
-      sku_id: string;
-      quantity: number;
-    }) =>
-      gateway.post<{ status: string; city: City }>("/api/v1/orders", body, {
-        idempotent: false,
-      }),
+    submitOrder: (
+      body: {
+        city: City;
+        store_id: string;
+        sku_id: string;
+        quantity: number;
+      },
+      opts: { idempotencyKey?: string } = {},
+    ) =>
+      gateway.post<{ status: string; order_id: string; outbox_id: string }>(
+        "/api/v1/orders",
+        body,
+        {
+          // WS-2: orders route is now outbox-backed (202 Accepted) and the
+          // Idempotency-Key header dedupes downstream consumers.
+          idempotent: Boolean(opts.idempotencyKey),
+          headers: opts.idempotencyKey
+            ? { "Idempotency-Key": opts.idempotencyKey }
+            : undefined,
+        },
+      ),
 
     // Orchestrator — orchestrator/inference/serve.py
     submitDecision: (body: {
@@ -150,20 +213,85 @@ export function createSynapseApi(deps: SynapseApiDeps) {
       }),
     logout: () => gateway.post("/api/v1/auth/logout", undefined, { idempotent: false }),
 
-    // ─── Override (P1) ─────────────────────────────────────────────────
+    // ─── Override (P1, hardened in WS-2) ──────────────────────────────
     submitOverride: (
       decision_id: string,
       body: {
         action: "approved" | "rejected" | "modified";
         reason: string;
         modified_action?: Record<string, unknown>;
+        // WS-2: opaque key for replay-safe override. When present, the
+        // backend deduplicates against (decision_id, idempotency_key) and
+        // returns the original row. The mutation hook should generate one
+        // per intent (e.g. crypto.randomUUID()) and reuse on retry.
+        idempotency_key?: string;
       },
     ): Promise<OverrideApiResponse> =>
       gateway.post(`/api/v1/decisions/${decision_id}/override`, body, {
-        idempotent: false,
+        idempotent: Boolean(body.idempotency_key),
         schema: OverrideApiResponseSchema,
         schemaId: "OverrideApiResponse",
       }),
+
+    // ─── Decision detail (WS-4 §4a) ───────────────────────────────────
+    // Moved from a raw fetch in DecisionDetail.tsx into the typed client.
+    getDecision: (decision_id: string): Promise<DecisionDetailResponse> =>
+      gateway.get(`/api/v1/decisions/${decision_id}`, {
+        schema: DecisionDetailResponseSchema,
+        schemaId: "DecisionDetailResponse",
+      }),
+
+    // ─── Topology (WS-4 §4d) ──────────────────────────────────────────
+    // Moved from raw fetch in useTopology.ts into the typed client.
+    getTopology: (city: City): Promise<TopologyResponse> =>
+      gateway.get("/api/v1/topology", {
+        query: { city },
+        schema: TopologyResponseSchema,
+        schemaId: "TopologyResponse",
+      }),
+
+    // ─── Steering (WS-5) ──────────────────────────────────────────────
+    // Writes one operator change to the audit trail. The FE store calls
+    // this BEFORE mutating local state — on failure, the change is
+    // reverted in the UI. Idempotency_key is a UUID generated per intent;
+    // retry with the same key returns the existing row.
+    submitSteering: (body: {
+      action: "set_pareto_weight" | "set_tier_threshold" | "reset";
+      target?: string | null;
+      value?: number | null;
+      idempotency_key?: string;
+    }): Promise<{
+      steering_id: string;
+      operator_token_ref: string;
+      action: string;
+      target: string | null;
+      value: number | null;
+      created_at: string;
+    }> =>
+      gateway.post("/api/v1/steering", body, {
+        idempotent: Boolean(body.idempotency_key),
+        schema: z
+          .object({
+            steering_id: z.string(),
+            operator_token_ref: z.string(),
+            action: z.string(),
+            target: z.string().nullable(),
+            value: z.number().nullable(),
+            created_at: z.string(),
+          })
+          .passthrough(),
+        schemaId: "SteeringResponse",
+      }),
+
+    // ─── JWKS (WS-4 §4c, ADR-038-adjacent) ────────────────────────────
+    // Lightweight visibility-only JWKS fetch. Full client-side signature
+    // verification is a follow-up sprint; this primitive lets the auth
+    // refresh path detect a rotation event (kid mismatch) rather than
+    // looping on a stale 401.
+    jwks: {
+      fetch: () => fetchJwks(deps.gatewayUrl),
+      knownKids: async () => knownKids(await fetchJwks(deps.gatewayUrl)),
+    },
   };
 }
 
