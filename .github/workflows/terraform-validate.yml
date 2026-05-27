@@ -1,0 +1,77 @@
+name: Terraform Validate
+
+# Runs on every PR that touches the GCP or Oracle Terraform modules.
+# Lightweight: format-check + validate. No plan, no apply.
+# Plan/apply remain operator-driven from a workstation with the GCP/OCI
+# project secrets — CI never holds cloud credentials.
+
+on:
+  pull_request:
+    paths:
+      - "infrastructure/gcp/terraform/**"
+      - "infrastructure/oracle/terraform/**"
+      - ".github/workflows/terraform-validate.yml"
+  push:
+    branches: [main]
+    paths:
+      - "infrastructure/gcp/terraform/**"
+      - "infrastructure/oracle/terraform/**"
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    name: terraform fmt + validate
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    strategy:
+      fail-fast: false
+      matrix:
+        module:
+          - infrastructure/gcp/terraform
+          - infrastructure/oracle/terraform
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Skip if module absent (allows GCP work to land independently)
+        id: presence
+        run: |
+          if [ -d "${{ matrix.module }}" ] && ls ${{ matrix.module }}/*.tf >/dev/null 2>&1; then
+            echo "present=true" >> $GITHUB_OUTPUT
+          else
+            echo "present=false" >> $GITHUB_OUTPUT
+            echo "::notice::${{ matrix.module }} has no .tf files yet — skipping"
+          fi
+
+      - uses: hashicorp/setup-terraform@v3
+        if: steps.presence.outputs.present == 'true'
+        with:
+          terraform_version: 1.9.8
+          terraform_wrapper: false
+
+      - name: terraform fmt -check -recursive
+        if: steps.presence.outputs.present == 'true'
+        working-directory: ${{ matrix.module }}
+        run: terraform fmt -check -recursive -diff
+
+      - name: terraform init -backend=false
+        if: steps.presence.outputs.present == 'true'
+        working-directory: ${{ matrix.module }}
+        # -backend=false: we don't need remote state to validate syntax,
+        # and CI does not have permission to write to the real GCS/OCI bucket.
+        run: terraform init -backend=false -input=false
+
+      - name: terraform validate
+        if: steps.presence.outputs.present == 'true'
+        working-directory: ${{ matrix.module }}
+        run: terraform validate -no-color
+
+      - name: tflint (optional, won't block)
+        if: steps.presence.outputs.present == 'true'
+        continue-on-error: true
+        working-directory: ${{ matrix.module }}
+        run: |
+          curl -sSL https://raw.githubusercontent.com/terraform-linters/tflint/master/install_linux.sh | bash
+          tflint --init
+          tflint --no-color || true
