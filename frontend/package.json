@@ -147,5 +147,13 @@
       "path": "dist/assets/react-vendor-*.js",
       "limit": "70 KB"
     }
-  ]
+  ],
+  "pnpm": {
+    "overrides": {
+      "tmp": ">=0.2.6"
+    },
+    "overridesRationale": {
+      "tmp": "GHSA-ph9p-34f9-6g65 (arbitrary tmpdir write in tmp<0.2.4). Transitive via Stryker -> @inquirer/prompts -> external-editor. Patched range: >=0.2.6. See SECURITY.md."
+    }
+  }
 }

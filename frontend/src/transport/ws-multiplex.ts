@@ -1,4 +1,5 @@
 import { fullJitterDelay } from "@lib/jitter-retry";
+import { FirehoseEnvelopeSchema, shapeRawEnvelope } from "./firehose-schema";
 
 // Sequence-aware WebSocket multiplex client.
 // Generalizes useWebSocket.js:20-23 with:
@@ -21,13 +22,6 @@ export interface WsMultiplexConfig {
 }
 
 export type ChannelListener<T = unknown> = (payload: T, raw: unknown) => void;
-
-type AnyEnvelope = {
-  type?: string;
-  topic?: string;
-  seq?: number;
-  [k: string]: unknown;
-};
 
 export interface WsMultiplex {
   state(): WsState;
@@ -90,24 +84,43 @@ export function createWsMultiplex(config: WsMultiplexConfig): WsMultiplex {
     };
 
     socket.onmessage = (event) => {
-      let parsed: AnyEnvelope;
+      // WS-4 §4b: validate every envelope with Zod before fanning out. A
+      // malformed message (e.g. a poison payload from a misbehaving Kafka
+      // producer) used to reach surface listeners and crash them; now it
+      // is dropped at the boundary with a structured log.
+      let raw: unknown;
       try {
-        parsed = JSON.parse(typeof event.data === "string" ? event.data : "{}");
+        raw = JSON.parse(typeof event.data === "string" ? event.data : "{}");
       } catch {
         return;
       }
-      if (parsed?.type === "pong") return;
-      const channel =
-        (typeof parsed.topic === "string" && parsed.topic) ||
-        (typeof parsed.type === "string" && parsed.type) ||
-        "*";
-      if (typeof parsed.seq === "number") {
-        const prev = lastSeq.get(channel) ?? -1;
-        if (parsed.seq <= prev) return; // dedupe (FE-INV-008)
-        lastSeq.set(channel, parsed.seq);
+      const shaped = shapeRawEnvelope(raw);
+      if (shaped === null) {
+        if (typeof console !== "undefined") {
+          console.warn("[ws-multiplex] dropped unrecognised envelope", raw);
+        }
+        return;
       }
-      emit(channel, parsed, parsed);
-      emit("*", parsed, parsed);
+      const parsedResult = FirehoseEnvelopeSchema.safeParse(shaped);
+      if (!parsedResult.success) {
+        if (typeof console !== "undefined") {
+          console.warn(
+            "[ws-multiplex] dropped envelope failing schema validation",
+            parsedResult.error.issues,
+          );
+        }
+        return;
+      }
+      const env = parsedResult.data;
+      if (env.kind === "heartbeat") return;
+      const channel = env.kind === "envelope" ? env.topic : env.kind === "typed" ? env.type : "*";
+      if (env.kind === "envelope") {
+        const prev = lastSeq.get(channel) ?? -1;
+        if (env.seq <= prev) return; // dedupe (FE-INV-008)
+        lastSeq.set(channel, env.seq);
+      }
+      emit(channel, env, raw);
+      emit("*", env, raw);
     };
 
     socket.onclose = () => {

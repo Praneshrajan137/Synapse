@@ -1,0 +1,23 @@
+replicaCount: 2
+image:
+  repository: routing-navigator
+  pullPolicy: IfNotPresent
+service:
+  port: 8002
+env: {}
+resources:
+  requests: {cpu: 500m, memory: 512Mi}
+  limits: {cpu: 2, memory: 2Gi}
+podLabels: {}
+serviceAccount:
+  annotations: {}
+pdb:
+  enabled: true
+  minAvailable: 1
+autoscaling:
+  enabled: true
+  minReplicas: 2
+  maxReplicas: 6
+  targetCPUUtilizationPercentage: 70
+networkPolicy:
+  enabled: true

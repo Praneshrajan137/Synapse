@@ -1,7 +1,7 @@
 # ============================================================================
 # SYNAPSE Makefile — Development Automation
 # ============================================================================
-.PHONY: help up down test lint typecheck verify-infra seed generate-spec-tests fuzz mutate clean chaos-test load-test security-test dragonfly-eval sprint5-verify verify-services doctor
+.PHONY: help up down test lint typecheck verify-infra seed generate-spec-tests fuzz mutate clean chaos-test load-test security-test dragonfly-eval sprint5-verify verify-services doctor verify-claims verify-claims-json
 
 SHELL := /bin/bash
 COMPOSE := docker compose -f docker/docker-compose.yml --env-file docker/.env
@@ -11,6 +11,29 @@ help: ## Show this help
 
 doctor: ## Pre-flight: verify host can run the demo (Ollama, Docker, ports, seed data)
 	@python scripts/preflight/doctor.py
+
+verify-claims: ## Verify every CLAUDE.md claim against code reality (see docs/state/CURRENT.md)
+	@python -m scripts.audit.verify_claims
+
+verify-claims-json: ## Same as verify-claims but emit machine-readable JSON
+	@python -m scripts.audit.verify_claims --json
+
+verify-topology: ## Verify topics.json consumers map to real Consumer.subscribe call sites (ADR-038)
+	@python -m scripts.audit.topic_consumer_truth
+
+verify-slos: ## Regenerate burn-rate rules from SLO YAMLs and verify metric_truth (WS-7)
+	@python -m scripts.observability.slo_to_rules --check
+	@python -m scripts.observability.metric_truth
+
+verify-supply-chain: ## SBOM diff + CVE budget gate (WS-8)
+	@python scripts/sbom_diff.py --check
+	@python scripts/check_cve_budget.py
+
+fmt-oracle: ## Auto-format the Oracle Terraform module (operator step; clears pre-existing drift)
+	@cd infrastructure/oracle/terraform && terraform fmt -recursive -diff
+
+fmt-gcp: ## Auto-format the GCP Terraform module
+	@cd infrastructure/gcp/terraform && terraform fmt -recursive -diff
 
 up: doctor ## Start all Docker services (runs doctor first)
 	cp -n docker/.env.template docker/.env || true

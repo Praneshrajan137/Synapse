@@ -26,11 +26,11 @@
     "src/state/escalation.store.ts",
     "src/state/firehose.store.ts"
   ],
-  "_thresholds_comment": "break is null (informational) on PR A2/A3 — current measured score on json-canonical.ts alone is 66.67% (18 killed / 8 survived / 1 no-cov); across all 10 targets we'd land 40-65%. The CLAUDE.md target is <15% survival on guardrails (>=85% killed). Plan: raise break to a baseline floor (e.g., 50 → 65 → 80 → 85) PR-by-PR as we add focused tests to kill surviving mutants. The HTML + JSON reports remain useful even when not gating. Do NOT remove `break` entirely; leaving it as null preserves the option to re-enable.",
+  "_thresholds_comment": "WS-9: break is the VERIFIED current mutation score (26.12% from PR #10 CI baseline @9669b8e), rounded down to 26 to allow tiny variance. Was null (informational) — this is the first PR where Stryker can fail CI. Ratchet plan: 26 -> 40 (kill the LogicalOperator/EqualityOperator survivors in jitter-retry + http-client) -> 55 -> 70 -> 85 (CLAUDE.md target: <15% survival = >=85% killed). Each PR that adds tests bumps `break` upward; PRs that lower it bounce in review. Never set back to null.",
   "thresholds": {
     "high": 90,
     "low": 85,
-    "break": null
+    "break": 26
   },
   "timeoutMS": 60000,
   "concurrency": 4,

@@ -1,0 +1,77 @@
+# SYNAPSE Alertmanager configuration (WS-7).
+#
+# Single tree, two leaves:
+#   * severity=page   → PagerDuty (sev-1 on-call rotation)
+#   * severity=ticket → Slack #synapse-oncall
+#
+# Receiver URLs come from Secret Manager at runtime — never commit raw
+# webhooks here. The placeholders below are loaded by the entrypoint
+# script (infrastructure/observability/alertmanager-entrypoint.sh,
+# WS-7 follow-up) which envsubst-renders this template with the values
+# fetched via `gcloud secrets versions access`.
+
+global:
+  resolve_timeout: 5m
+  smtp_from: 'alerts@synapse.example'
+  smtp_smarthost: 'localhost:25'   # cluster-local relay; replace per env.
+
+# Inhibit slow burn when fast burn is firing for the same SLO — pager
+# already has it; the ticket would just be noise.
+inhibit_rules:
+  - source_matchers:
+      - 'severity = page'
+    target_matchers:
+      - 'severity = ticket'
+    equal: ['slo']
+
+route:
+  receiver: default
+  group_by: ['alertname', 'service', 'severity']
+  group_wait: 30s
+  group_interval: 5m
+  repeat_interval: 4h
+  routes:
+    - matchers:
+        - 'severity = page'
+      receiver: pagerduty
+      continue: false
+    - matchers:
+        - 'severity = ticket'
+      receiver: slack-oncall
+      continue: false
+
+receivers:
+  - name: default
+    # Catch-all. Pages a low-traffic channel so unrouted alerts don't disappear.
+    slack_configs:
+      - api_url: '${SLACK_ALERTS_GENERAL_URL}'
+        channel: '#synapse-alerts'
+        send_resolved: true
+        title: '{{ .CommonAnnotations.summary }}'
+        text: |
+          *Severity:* {{ .CommonLabels.severity }}
+          *Service:* {{ .CommonLabels.service }}
+          *SLO:* {{ .CommonLabels.slo }}
+          *Runbook:* {{ .CommonAnnotations.runbook_url }}
+
+  - name: pagerduty
+    pagerduty_configs:
+      - service_key: '${PAGERDUTY_SERVICE_KEY_SYNAPSE}'
+        send_resolved: true
+        description: '{{ .CommonAnnotations.summary }}'
+        details:
+          runbook_url: '{{ .CommonAnnotations.runbook_url }}'
+          slo: '{{ .CommonLabels.slo }}'
+          service: '{{ .CommonLabels.service }}'
+
+  - name: slack-oncall
+    slack_configs:
+      - api_url: '${SLACK_ONCALL_URL}'
+        channel: '#synapse-oncall'
+        send_resolved: true
+        title: '[{{ .CommonLabels.severity | toUpper }}] {{ .CommonAnnotations.summary }}'
+        text: |
+          *Service:* {{ .CommonLabels.service }}
+          *SLO:* {{ .CommonLabels.slo }}
+          *Runbook:* {{ .CommonAnnotations.runbook_url }}
+          *Active alerts:* {{ .Alerts | len }}

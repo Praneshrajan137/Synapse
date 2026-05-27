@@ -1,3 +1,4 @@
+import { useSynapseApi } from "@hooks/use-synapse-api";
 import { useCityStore } from "@state/city.store";
 import { useQuery } from "@tanstack/react-query";
 
@@ -22,15 +23,15 @@ export interface TopologyResponse {
   readonly generated_at: string;
 }
 
+// WS-4 §4d: migrated from raw fetch to the typed client. The schema
+// validation happens inside api.getTopology — drift between FE and BE
+// surfaces here as a SchemaViolationError, not a silent type coercion.
 export function useTopology() {
   const city = useCityStore((s) => s.city);
+  const api = useSynapseApi();
   return useQuery<TopologyResponse>({
     queryKey: ["topology", city],
-    queryFn: async () => {
-      const resp = await fetch(`/api/v1/topology?city=${city}`);
-      if (!resp.ok) throw new Error(`${resp.status} ${resp.statusText}`);
-      return (await resp.json()) as TopologyResponse;
-    },
+    queryFn: async () => (await api.getTopology(city)) as TopologyResponse,
     staleTime: 60_000,
   });
 }

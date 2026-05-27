@@ -1,0 +1,23 @@
+replicaCount: 1
+image:
+  repository: disruption-shield
+  pullPolicy: IfNotPresent
+service:
+  port: 8006
+env: {}
+resources:
+  requests: {cpu: 500m, memory: 1Gi}
+  limits: {cpu: 2, memory: 4Gi}
+podLabels: {}
+serviceAccount:
+  annotations: {}
+pdb:
+  enabled: false
+  minAvailable: 1
+autoscaling:
+  enabled: false
+  minReplicas: 1
+  maxReplicas: 4
+  targetCPUUtilizationPercentage: 70
+networkPolicy:
+  enabled: true

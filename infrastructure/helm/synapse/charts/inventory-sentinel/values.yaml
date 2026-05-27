@@ -1,0 +1,23 @@
+replicaCount: 2
+image:
+  repository: inventory-sentinel
+  pullPolicy: IfNotPresent
+service:
+  port: 8003
+env: {}
+resources:
+  requests: {cpu: 300m, memory: 512Mi}
+  limits: {cpu: 1.5, memory: 2Gi}
+podLabels: {}
+serviceAccount:
+  annotations: {}
+pdb:
+  enabled: true
+  minAvailable: 1
+autoscaling:
+  enabled: true
+  minReplicas: 2
+  maxReplicas: 6
+  targetCPUUtilizationPercentage: 70
+networkPolicy:
+  enabled: true

@@ -1,0 +1,23 @@
+replicaCount: 1
+image:
+  repository: sustainability-agent
+  pullPolicy: IfNotPresent
+service:
+  port: 8008
+env: {}
+resources:
+  requests: {cpu: 200m, memory: 256Mi}
+  limits: {cpu: 1, memory: 1Gi}
+podLabels: {}
+serviceAccount:
+  annotations: {}
+pdb:
+  enabled: false
+  minAvailable: 1
+autoscaling:
+  enabled: false
+  minReplicas: 1
+  maxReplicas: 4
+  targetCPUUtilizationPercentage: 70
+networkPolicy:
+  enabled: true

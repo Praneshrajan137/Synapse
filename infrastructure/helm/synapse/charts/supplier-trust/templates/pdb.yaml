@@ -1,0 +1,13 @@
+{{- if and .Values.pdb.enabled (gt (.Values.replicaCount | int) 1) }}
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: supplier-trust
+  labels:
+    app: supplier-trust
+spec:
+  minAvailable: {{ .Values.pdb.minAvailable }}
+  selector:
+    matchLabels:
+      app: supplier-trust
+{{- end }}

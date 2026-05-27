@@ -18,7 +18,9 @@
   "decision_tiers": ["tier_1", "tier_2"],
   "kafka_topics": {
     "produces": ["synapse.inventory.state", "synapse.inventory.reorder"],
-    "consumes": ["synapse.demand.forecast", "synapse.freshness.alert", "synapse.supplier.score", "synapse.orchestrator.decision"]
+    "consumes": [],
+    "consumes_planned": ["synapse.demand.forecast", "synapse.freshness.alert", "synapse.supplier.score", "synapse.orchestrator.decision"],
+    "topology_note": "Ingress is HTTP-A2A. 'consumes_planned' is design intent (ADR-038)."
   },
   "feast_features": ["sku_demand_signals", "store_operational_state", "supplier_performance", "perishable_state"],
   "dependencies": ["feast", "kafka", "demand_prophet", "flower"],

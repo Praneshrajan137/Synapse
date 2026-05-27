@@ -2,6 +2,7 @@
 SYNAPSE -- Cross-Agent Integration Tests (Layer 6).
 Tests end-to-end data flow: Demand Prophet -> Routing Navigator -> Inventory Sentinel.
 """
+
 from __future__ import annotations
 
 import pytest
@@ -44,8 +45,7 @@ class TestDemandProphetToRouting:
         forecasts = dp.predict(["SKU001", "SKU002", "SKU003"], "STORE_BLR_001")
 
         orders = [
-            {"order_id": f"ORD-{i}", "lat": 12.97, "lon": 77.59}
-            for i, f in enumerate(forecasts)
+            {"order_id": f"ORD-{i}", "lat": 12.97, "lon": 77.59} for i, f in enumerate(forecasts)
         ]
         riders = [{"rider_id": "R-1"}, {"rider_id": "R-2"}]
 
@@ -62,12 +62,14 @@ class TestA2AProposalRoundTrip:
         from agents.demand_prophet.a2a.handler import DemandProphetA2AHandler
 
         handler = DemandProphetA2AHandler()
-        response = handler.handle_request({
-            "jsonrpc": "2.0",
-            "method": "proposal",
-            "params": {"sku_ids": ["SKU001"], "store_id": "S1"},
-            "id": "test-1",
-        })
+        response = handler.handle_request(
+            {
+                "jsonrpc": "2.0",
+                "method": "proposal",
+                "params": {"sku_ids": ["SKU001"], "store_id": "S1"},
+                "id": "test-1",
+            }
+        )
         assert "result" in response
         assert response["id"] == "test-1"
 
@@ -75,28 +77,32 @@ class TestA2AProposalRoundTrip:
         from agents.routing_navigator.a2a.handler import RoutingNavigatorA2AHandler
 
         handler = RoutingNavigatorA2AHandler()
-        response = handler.handle_request({
-            "jsonrpc": "2.0",
-            "method": "proposal",
-            "params": {
-                "orders": [{"order_id": "O-1", "lat": 12.97, "lon": 77.59}],
-                "riders": [{"rider_id": "R-1"}],
-                "store_id": "S1",
-            },
-            "id": "test-2",
-        })
+        response = handler.handle_request(
+            {
+                "jsonrpc": "2.0",
+                "method": "proposal",
+                "params": {
+                    "orders": [{"order_id": "O-1", "lat": 12.97, "lon": 77.59}],
+                    "riders": [{"rider_id": "R-1"}],
+                    "store_id": "S1",
+                },
+                "id": "test-2",
+            }
+        )
         assert "result" in response
 
     def test_inventory_sentinel_a2a(self) -> None:
         from agents.inventory_sentinel.a2a.handler import InventorySentinelA2AHandler
 
         handler = InventorySentinelA2AHandler()
-        response = handler.handle_request({
-            "jsonrpc": "2.0",
-            "method": "proposal",
-            "params": {"sku_ids": ["SKU001"], "store_id": "S1"},
-            "id": "test-3",
-        })
+        response = handler.handle_request(
+            {
+                "jsonrpc": "2.0",
+                "method": "proposal",
+                "params": {"sku_ids": ["SKU001"], "store_id": "S1"},
+                "id": "test-3",
+            }
+        )
         assert "result" in response
 
 

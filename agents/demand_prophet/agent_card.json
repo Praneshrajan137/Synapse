@@ -38,7 +38,9 @@
   "decision_tiers": ["tier_1", "tier_2"],
   "kafka_topics": {
     "produces": ["synapse.demand.forecast", "synapse.demand.drift_alert"],
-    "consumes": ["synapse.orchestrator.decision"]
+    "consumes": [],
+    "consumes_planned": ["synapse.orchestrator.decision"],
+    "topology_note": "Ingress is HTTP-A2A (POST /a2a). Kafka is publish-only here (ADR-038). 'consumes_planned' is design intent for a future event-driven mode and is NOT subscribed today — see scripts/audit/topic_consumer_truth.py."
   },
   "feast_features": ["sku_demand_signals", "weather_context", "event_calendar"],
   "dependencies": ["feast", "kafka", "neo4j", "mlflow"],

@@ -1,0 +1,70 @@
+name: Eval — Live LLM judge (nightly)
+#
+# WS-9 §LLM-judge: the live LLM-judge stays off the PR critical path
+# (E-S9-12 — `SYNAPSE_LLM_JUDGE_LIVE=1` plus Ollama reachable). This
+# nightly workflow runs it against the golden trace set, reports the
+# score, and opens an issue when the live score diverges from the stub
+# CI value by more than 0.05.
+#
+# Non-blocking by design — the live judge measures something the synthetic
+# CI cannot: hallucination drift over real prompts. PRs are NOT gated on
+# this; the issue it opens is the alert.
+
+on:
+  schedule:
+    # 03:00 UTC = 08:30 IST — quiet window for the bengaluru/mumbai stack.
+    - cron: "0 3 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  llm-judge:
+    name: LLM judge against golden traces
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    services:
+      ollama:
+        image: ollama/ollama:0.3.12
+        ports:
+          - "11434:11434"
+    env:
+      SYNAPSE_LLM_JUDGE_LIVE: "1"
+      OLLAMA_URL: "http://localhost:11434"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+      - run: pip install -e packages/synapse_common -e packages/synapse_common[test]
+      - name: Pull required Ollama models
+        run: |
+          for model in qwen2:7b-instruct deepseek-r1:7b; do
+            curl -X POST http://localhost:11434/api/pull -d "{\"name\":\"$model\"}" || true
+          done
+      - name: Run live judge
+        id: judge
+        run: |
+          set -o pipefail
+          python -m tests.eval.runner --suite golden --judge live \
+            --report /tmp/judge-report.json
+          score=$(python -c "import json; print(json.load(open('/tmp/judge-report.json'))['score'])")
+          echo "score=$score" >> "$GITHUB_OUTPUT"
+      - name: Open issue on judge regression
+        if: failure()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const score = "${{ steps.judge.outputs.score }}";
+            await github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: `LLM judge nightly regression: score=${score}`,
+              body: `Live LLM judge fell below the CI stub baseline overnight. ` +
+                    `Run \`SYNAPSE_LLM_JUDGE_LIVE=1 make eval\` locally with the ` +
+                    `same model versions to reproduce. See docs/runbooks/llm_judge_drift.md.`,
+              labels: ["sev2", "eval-regression", "auto-opened"],
+            });

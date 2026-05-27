@@ -1,13 +1,14 @@
 apiVersion: v2
 name: synapse
 description: |
-  SYNAPSE multi-agent quick-commerce platform — Sprint-9 skeleton
-  (api + orchestrator + demand_prophet). Remaining 7 agents are added
-  in Sprint 10 by templating from the demand_prophet subchart. See
-  ADR-034 (Production Topology Skeleton).
+  SYNAPSE multi-agent quick-commerce platform — full chart (WS-6).
+  11/11 services templated: 8 agents + orchestrator + api-gateway + digital-twin.
+  Linkerd/KEDA/Flagger CRDs live in the orchestrator subchart's templates
+  gated on global.serviceMesh / global.autoscaling / global.canary flags.
+  See ADR-034 (Production Topology Skeleton) and ADR-038 (HTTP-A2A primary).
 type: application
-version: 0.9.0
-appVersion: "9.0.0"
+version: 0.10.0
+appVersion: "10.0.0"
 keywords:
   - synapse
   - supply-chain
@@ -20,14 +21,46 @@ sources:
 
 dependencies:
   - name: api-gateway
-    version: "0.9.0"
+    version: "0.10.0"
     repository: "file://./charts/api-gateway"
     condition: api-gateway.enabled
   - name: orchestrator
-    version: "0.9.0"
+    version: "0.10.0"
     repository: "file://./charts/orchestrator"
     condition: orchestrator.enabled
   - name: demand-prophet
-    version: "0.9.0"
+    version: "0.10.0"
     repository: "file://./charts/demand-prophet"
     condition: demand-prophet.enabled
+  - name: routing-navigator
+    version: "0.10.0"
+    repository: "file://./charts/routing-navigator"
+    condition: routing-navigator.enabled
+  - name: inventory-sentinel
+    version: "0.10.0"
+    repository: "file://./charts/inventory-sentinel"
+    condition: inventory-sentinel.enabled
+  - name: freshness-guardian
+    version: "0.10.0"
+    repository: "file://./charts/freshness-guardian"
+    condition: freshness-guardian.enabled
+  - name: pricing-oracle
+    version: "0.10.0"
+    repository: "file://./charts/pricing-oracle"
+    condition: pricing-oracle.enabled
+  - name: disruption-shield
+    version: "0.10.0"
+    repository: "file://./charts/disruption-shield"
+    condition: disruption-shield.enabled
+  - name: supplier-trust
+    version: "0.10.0"
+    repository: "file://./charts/supplier-trust"
+    condition: supplier-trust.enabled
+  - name: sustainability-agent
+    version: "0.10.0"
+    repository: "file://./charts/sustainability-agent"
+    condition: sustainability-agent.enabled
+  - name: digital-twin
+    version: "0.10.0"
+    repository: "file://./charts/digital-twin"
+    condition: digital-twin.enabled

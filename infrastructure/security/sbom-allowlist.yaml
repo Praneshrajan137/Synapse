@@ -1,0 +1,24 @@
+# WS-8 §3 — SBOM allowlist (policy artefact, not a generated SBOM).
+#
+# Every dependency that appears in `infrastructure/sbom/*.cdx.json` MUST
+# have an entry here, or `scripts/sbom_diff.py --check` fails CI.
+#
+# Procedure to add a new dependency:
+#   1. Add it to pyproject.toml / package.json with a pinned upper bound.
+#   2. Regenerate the SBOM:        python scripts/generate_sbom.py
+#   3. Append to this allowlist:   python scripts/sbom_diff.py --update
+#   4. REVIEW the diff and commit. The review step is the gate — never
+#      auto-merge a PR that touches this file without a human eyeball.
+#
+# `versions: []` means "any version is acceptable" (the dependency was
+# vetted at the named-package level; minor bumps go through the normal
+# dependency review process). Pin specific versions to require a re-vet
+# on every bump.
+
+components:
+  # Bootstrap entry — initial run of --update will populate this from the
+  # existing SBOMs. Until then `--check` will fail and surface every
+  # currently-unlisted dep; that surface IS the WS-8 deliverable.
+  __placeholder__:
+    versions: []
+    notes: "Replaced on first --update run."

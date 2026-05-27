@@ -18,10 +18,12 @@ import { persist } from "zustand/middleware";
  *      Higher threshold → more escalations to the Override Cockpit.
  *
  * Both are persisted to `localStorage["synapse.steering"]` via Zustand's
- * persist middleware so the operator's preferences survive reload. In
- * production every change is also audit-logged to the
- * `synapse.steering.config` Kafka topic (out of scope for this PR; that
- * write goes through the existing audit pipeline — see FE-INV-021).
+ * persist middleware so the operator's preferences survive reload.
+ *
+ * WS-5: every mutation also hits `POST /api/v1/steering` so the change
+ * lands in the `audit_steering` table BEFORE local state moves. On
+ * failure the optimistic update is reverted. The audit-first guarantee
+ * matches FE-INV-021 (audit row precedes orchestrator notification).
  */
 
 /** Pareto objective dimensions. Aligned with orchestrator/consensus/pareto.py. */
@@ -57,12 +59,41 @@ export const DEFAULT_TIER_THRESHOLDS: TierThresholds = {
   tier_4: 0.5,
 };
 
+/**
+ * Backend-write hook. The API client wires this in app/providers.tsx so
+ * the store stays decoupled from the network layer (testable, no fetch
+ * stubbing required for unit tests). Set to a no-op for stories and
+ * isolated unit tests.
+ */
+type SteeringAuditWriter = (change: {
+  action: "set_pareto_weight" | "set_tier_threshold" | "reset";
+  target?: string | null;
+  value?: number | null;
+  idempotency_key?: string;
+}) => Promise<unknown>;
+
+let steeringWriter: SteeringAuditWriter = async () => {
+  /* default: no-op — tests + stories use this */
+};
+
+export function setSteeringWriter(writer: SteeringAuditWriter): void {
+  steeringWriter = writer;
+}
+
+function makeIdempotencyKey(): string {
+  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+    return crypto.randomUUID();
+  }
+  return `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+}
+
 export interface SteeringState {
   readonly paretoWeights: ParetoWeights;
   readonly tierThresholds: TierThresholds;
-  setParetoWeight(key: keyof ParetoWeights, value: number): void;
-  setTierThreshold(tier: keyof TierThresholds, value: number): void;
-  reset(): void;
+  readonly lastError: string | null;
+  setParetoWeight(key: keyof ParetoWeights, value: number): Promise<void>;
+  setTierThreshold(tier: keyof TierThresholds, value: number): Promise<void>;
+  reset(): Promise<void>;
 }
 
 function clamp01(value: number): number {
@@ -74,29 +105,77 @@ function clamp01(value: number): number {
 
 export const useSteeringStore = create<SteeringState>()(
   persist(
-    (set) => ({
+    (set, get) => ({
       paretoWeights: DEFAULT_PARETO_WEIGHTS,
       tierThresholds: DEFAULT_TIER_THRESHOLDS,
-      setParetoWeight(key, value) {
-        set((s) => ({
-          paretoWeights: { ...s.paretoWeights, [key]: clamp01(value) },
-        }));
+      lastError: null,
+      async setParetoWeight(key, value) {
+        const next = clamp01(value);
+        const before = get().paretoWeights;
+        // Optimistic update.
+        set({ paretoWeights: { ...before, [key]: next }, lastError: null });
+        try {
+          await steeringWriter({
+            action: "set_pareto_weight",
+            target: key,
+            value: next,
+            idempotency_key: makeIdempotencyKey(),
+          });
+        } catch (err) {
+          // Audit insert failed — revert and surface the error.
+          set({ paretoWeights: before, lastError: errMsg(err) });
+        }
       },
-      setTierThreshold(tier, value) {
-        set((s) => ({
-          tierThresholds: { ...s.tierThresholds, [tier]: clamp01(value) },
-        }));
+      async setTierThreshold(tier, value) {
+        const next = clamp01(value);
+        const before = get().tierThresholds;
+        set({ tierThresholds: { ...before, [tier]: next }, lastError: null });
+        try {
+          await steeringWriter({
+            action: "set_tier_threshold",
+            target: tier,
+            value: next,
+            idempotency_key: makeIdempotencyKey(),
+          });
+        } catch (err) {
+          set({ tierThresholds: before, lastError: errMsg(err) });
+        }
       },
-      reset() {
+      async reset() {
+        const beforeP = get().paretoWeights;
+        const beforeT = get().tierThresholds;
         set({
           paretoWeights: DEFAULT_PARETO_WEIGHTS,
           tierThresholds: DEFAULT_TIER_THRESHOLDS,
+          lastError: null,
         });
+        try {
+          await steeringWriter({
+            action: "reset",
+            idempotency_key: makeIdempotencyKey(),
+          });
+        } catch (err) {
+          set({
+            paretoWeights: beforeP,
+            tierThresholds: beforeT,
+            lastError: errMsg(err),
+          });
+        }
       },
     }),
     {
       name: "synapse.steering",
       version: 1,
+      // Only the values persist; transient lastError stays in memory.
+      partialize: (s) => ({
+        paretoWeights: s.paretoWeights,
+        tierThresholds: s.tierThresholds,
+      }),
     },
   ),
 );
+
+function errMsg(err: unknown): string {
+  if (err instanceof Error) return err.message;
+  return String(err);
+}

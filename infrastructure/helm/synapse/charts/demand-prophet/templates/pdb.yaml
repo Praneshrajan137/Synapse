@@ -1,0 +1,13 @@
+{{- if and .Values.pdb.enabled (gt (.Values.replicaCount | int) 1) }}
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: demand-prophet
+  labels:
+    app: demand-prophet
+spec:
+  minAvailable: {{ .Values.pdb.minAvailable }}
+  selector:
+    matchLabels:
+      app: demand-prophet
+{{- end }}

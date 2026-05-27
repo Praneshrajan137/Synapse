@@ -77,6 +77,47 @@ jobs:
             ghcr.io/${{ steps.repo.outputs.slug }}/${{ matrix.component }}:${{ github.sha }}
             ghcr.io/${{ steps.repo.outputs.slug }}/${{ matrix.component }}:latest
 
+      # WS-8 §1: cosign keyless image signing. Uses the workflow's own
+      # OIDC identity (no long-lived keys) so the public signature ties
+      # the image to this exact workflow run. Admission policy in
+      # infrastructure/security/cosign-policy.yaml refuses to launch any
+      # image lacking a valid signature when global.security.enforceSigning
+      # is true on the Helm install (WS-6).
+      - name: Install cosign
+        uses: sigstore/cosign-installer@v3
+        with:
+          cosign-release: 'v2.4.0'
+      - name: Sign images (keyless via GitHub OIDC)
+        env:
+          COSIGN_EXPERIMENTAL: "1"
+        run: |
+          cosign sign --yes \
+            ghcr.io/${{ steps.repo.outputs.slug }}/${{ matrix.component }}:${{ github.sha }}
+          cosign sign --yes \
+            ghcr.io/${{ steps.repo.outputs.slug }}/${{ matrix.component }}:latest
+
+  sbom-and-cve-gates:
+    # WS-8 §3 + §4: SBOM-drift gate + CVE-budget gate. Runs on every push
+    # to main and every PR — fails CI if a dependency arrives without an
+    # allowlist entry or pushes the CVE total over the budget.
+    name: SBOM + CVE budget gates
+    runs-on: ubuntu-latest
+    needs: build-images
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install scanners
+        run: pip install cyclonedx-bom==4.5.0 packaging>=23
+      - name: Generate fresh SBOM
+        run: python scripts/generate_sbom.py
+      - name: SBOM diff gate
+        run: python scripts/sbom_diff.py --check
+      - name: CVE budget gate
+        run: python scripts/check_cve_budget.py
+
   promote-models:
     name: MLflow Staging -> Production (canary)
     runs-on: ubuntu-latest

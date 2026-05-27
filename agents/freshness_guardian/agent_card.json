@@ -38,7 +38,9 @@
   "decision_tiers": ["tier_1", "tier_2"],
   "kafka_topics": {
     "produces": ["synapse.freshness.alert"],
-    "consumes": ["synapse.inventory.state"]
+    "consumes": [],
+    "consumes_planned": ["synapse.inventory.state"],
+    "topology_note": "Ingress is HTTP-A2A. 'consumes_planned' is design intent (ADR-038)."
   },
   "feast_features": ["perishable_state", "store_operational_state"],
   "dependencies": ["feast", "kafka"],

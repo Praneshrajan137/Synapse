@@ -1,0 +1,61 @@
+# WS-8 §2 — Cosign admission policy (Kyverno).
+#
+# Refuses to launch any pod whose container images are not signed by the
+# SYNAPSE CD workflow's OIDC identity. The signature was generated via
+# cosign keyless during the .github/workflows/cd.yml build-images job;
+# the Rekor transparency log entry is its persistent proof.
+#
+# Wired into Helm via global.security.enforceSigning = true (values.yaml).
+# When the flag is false the policy is skipped entirely so a local
+# `kind create cluster && helm install` developer flow stays one command.
+#
+# Verification identity:
+#   issuer:  https://token.actions.githubusercontent.com
+#   subject: https://github.com/Praneshrajan137/synapse/.github/workflows/cd.yml@refs/heads/main
+#
+# Bypass mechanism for unsigned local images: namespace label
+#   synapse.io/skip-image-verify: "true"
+# (intended only for kind / dev clusters; production should never set this).
+
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: synapse-require-signed-images
+  annotations:
+    policies.kyverno.io/title: Require signed SYNAPSE images
+    policies.kyverno.io/category: Supply chain
+    policies.kyverno.io/severity: high
+spec:
+  validationFailureAction: Enforce
+  webhookTimeoutSeconds: 30
+  failurePolicy: Fail
+  rules:
+    - name: require-cosign-signature
+      match:
+        any:
+          - resources:
+              kinds:
+                - Pod
+              namespaces:
+                - synapse
+                - synapse-staging
+                - synapse-prod
+      exclude:
+        any:
+          - resources:
+              namespaceSelector:
+                matchLabels:
+                  synapse.io/skip-image-verify: "true"
+      verifyImages:
+        - imageReferences:
+            - "ghcr.io/praneshrajan137/synapse/*"
+          attestors:
+            - entries:
+                - keyless:
+                    subject: "https://github.com/Praneshrajan137/synapse/.github/workflows/cd.yml@refs/heads/main"
+                    issuer: "https://token.actions.githubusercontent.com"
+                    rekor:
+                      url: "https://rekor.sigstore.dev"
+          mutateDigest: true
+          verifyDigest: true
+          required: true

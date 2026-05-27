@@ -94,3 +94,13 @@ dump.rdb
 
 # Claude Code local worktrees
 .claude/
+
+# Terraform local cache (the .tf source files ARE tracked; only the
+# generated provider cache and lock-derived state are ignored).
+infrastructure/gcp/terraform/.terraform/
+infrastructure/oracle/terraform/.terraform/
+**/.terraform/
+*.tfstate
+*.tfstate.backup
+tfplan
+

@@ -148,3 +148,40 @@ TIER_BUDGET_EXCEEDED_TOTAL = Counter(
     "Decisions whose handler latency exceeded its tier budget (ADR-032)",
     ["tier"],
 )
+
+# Sprint 11 / WS-12 — close the metric_truth gap (CURRENT.md C22).
+# These three metrics existed only in alert rules under
+# infrastructure/prometheus/rules/{demand_prophet,pricing_oracle}_invariants.yml
+# — the alerts fired against them but no source module emitted them.
+# scripts/observability/metric_truth.py flagged the drift; the agent
+# pipelines (demand_prophet.inference.pipeline._build_forecasts,
+# pricing_oracle.inference.pipeline._build_updates) now update them on
+# every inference call.
+
+# INV-DP-002: conformal 90% interval must achieve >=85% empirical coverage.
+DEMAND_PROPHET_COVERAGE_P90 = Gauge(
+    "synapse_demand_prophet_coverage_p90",
+    "Empirical coverage of the 90% conformal interval (INV-DP-002, target >=0.85)",
+    ["city"],
+)
+
+# INV-DP-006: no forecast horizon may be negative. The pipeline clamps
+# negatives to 0.0 at build time AND increments this counter — the
+# published payload is always safe; the counter records the pre-clamp
+# incidence so the critical alert can fire even when output is safe.
+DEMAND_PROPHET_NEGATIVE_HORIZON_TOTAL = Counter(
+    "synapse_demand_prophet_negative_horizon_total",
+    "Forecast horizon values that arrived negative from the model (INV-DP-006). "
+    "Clamped to 0.0 at the output boundary; this counter records the pre-clamp "
+    "incidence so the alert fires even though the published payload is safe.",
+    ["sku_id", "horizon"],
+)
+
+# INV-PO-001: essential category items must never price above 1.3x base.
+PRICING_ORACLE_ESSENTIAL_CAP_VIOLATION_TOTAL = Counter(
+    "synapse_pricing_oracle_essential_cap_violation_total",
+    "Essential-category items whose raw multiplier exceeded the 1.3x cap "
+    "before clamping (INV-PO-001). Output is always safe (cap applied); "
+    "this counter records the underlying pricing-model pressure.",
+    ["sku_id"],
+)

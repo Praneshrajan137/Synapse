@@ -1,0 +1,23 @@
+replicaCount: 2
+image:
+  repository: freshness-guardian
+  pullPolicy: IfNotPresent
+service:
+  port: 8004
+env: {}
+resources:
+  requests: {cpu: 200m, memory: 256Mi}
+  limits: {cpu: 1, memory: 1Gi}
+podLabels: {}
+serviceAccount:
+  annotations: {}
+pdb:
+  enabled: true
+  minAvailable: 1
+autoscaling:
+  enabled: true
+  minReplicas: 2
+  maxReplicas: 6
+  targetCPUUtilizationPercentage: 70
+networkPolicy:
+  enabled: true

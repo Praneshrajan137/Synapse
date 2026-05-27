@@ -38,7 +38,9 @@
   "decision_tiers": ["tier_2", "tier_3"],
   "kafka_topics": {
     "produces": ["synapse.pricing.update"],
-    "consumes": ["synapse.demand.forecast", "synapse.freshness.alert"]
+    "consumes": [],
+    "consumes_planned": ["synapse.demand.forecast", "synapse.freshness.alert"],
+    "topology_note": "Ingress is HTTP-A2A. 'consumes_planned' is design intent (ADR-038)."
   },
   "feast_features": ["sku_price_history", "competitor_prices", "demand_elasticity"],
   "dependencies": ["feast", "kafka", "neo4j", "mlflow"],

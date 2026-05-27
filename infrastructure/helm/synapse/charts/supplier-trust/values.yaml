@@ -1,0 +1,23 @@
+replicaCount: 1
+image:
+  repository: supplier-trust
+  pullPolicy: IfNotPresent
+service:
+  port: 8007
+env: {}
+resources:
+  requests: {cpu: 300m, memory: 512Mi}
+  limits: {cpu: 1.5, memory: 2Gi}
+podLabels: {}
+serviceAccount:
+  annotations: {}
+pdb:
+  enabled: false
+  minAvailable: 1
+autoscaling:
+  enabled: false
+  minReplicas: 1
+  maxReplicas: 4
+  targetCPUUtilizationPercentage: 70
+networkPolicy:
+  enabled: true

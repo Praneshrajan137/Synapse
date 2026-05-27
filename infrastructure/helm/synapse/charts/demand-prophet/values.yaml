@@ -9,3 +9,15 @@ resources:
   requests: {cpu: 500m, memory: 1Gi}
   limits: {cpu: 2, memory: 4Gi}
 podLabels: {}
+serviceAccount:
+  annotations: {}
+pdb:
+  enabled: true
+  minAvailable: 1
+autoscaling:
+  enabled: true
+  minReplicas: 2
+  maxReplicas: 6
+  targetCPUUtilizationPercentage: 70
+networkPolicy:
+  enabled: true
