@@ -1,10 +1,10 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: demand-prophet
+  name: digital-twin
   labels:
-    app: demand-prophet
-    synapse.agent: demand-prophet
+    app: digital-twin
+    synapse.agent: digital-twin
     synapse.city: {{ .Values.global.city | quote }}
     {{- range $k, $v := .Values.podLabels }}
     {{ $k }}: {{ $v | quote }}
@@ -13,12 +13,12 @@ spec:
   replicas: {{ .Values.replicaCount }}
   selector:
     matchLabels:
-      app: demand-prophet
+      app: digital-twin
   template:
     metadata:
       labels:
-        app: demand-prophet
-        synapse.agent: demand-prophet
+        app: digital-twin
+        synapse.agent: digital-twin
         synapse.city: {{ .Values.global.city | quote }}
         {{- range $k, $v := .Values.podLabels }}
         {{ $k }}: {{ $v | quote }}
@@ -33,7 +33,7 @@ spec:
         prometheus.io/path: "/metrics"
         {{- end }}
     spec:
-      serviceAccountName: demand-prophet
+      serviceAccountName: digital-twin
       securityContext:
         runAsNonRoot: true
         runAsUser: 65532
@@ -41,7 +41,7 @@ spec:
         seccompProfile:
           type: RuntimeDefault
       containers:
-        - name: demand-prophet
+        - name: digital-twin
           image: "{{ .Values.global.imageRegistry }}/{{ .Values.image.repository }}:{{ .Values.global.imageTag }}"
           imagePullPolicy: {{ .Values.image.pullPolicy }}
           ports:
@@ -85,12 +85,12 @@ spec:
 apiVersion: v1
 kind: Service
 metadata:
-  name: demand-prophet
+  name: digital-twin
   labels:
-    app: demand-prophet
+    app: digital-twin
 spec:
   selector:
-    app: demand-prophet
+    app: digital-twin
   ports:
     - name: http
       port: {{ .Values.service.port }}

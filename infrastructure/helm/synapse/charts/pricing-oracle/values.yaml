@@ -1,13 +1,13 @@
 replicaCount: 2
 image:
-  repository: demand-prophet
+  repository: pricing-oracle
   pullPolicy: IfNotPresent
 service:
-  port: 8001
+  port: 8005
 env: {}
 resources:
-  requests: {cpu: 500m, memory: 1Gi}
-  limits: {cpu: 2, memory: 4Gi}
+  requests: {cpu: 300m, memory: 512Mi}
+  limits: {cpu: 1.5, memory: 2Gi}
 podLabels: {}
 serviceAccount:
   annotations: {}

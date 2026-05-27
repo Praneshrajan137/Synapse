@@ -1,10 +1,16 @@
-# SYNAPSE Helm values — defaults (Sprint 9 §M-prod-1, ADR-034).
+# SYNAPSE Helm values — defaults (WS-6 — full chart).
 #
 # Per-city overrides live in:
 #   - values-bengaluru.yaml
 #   - values-mumbai.yaml
-# Multi-city deployment runs two Helm releases with different value files,
-# sharing the same Postgres + Kafka.
+# Multi-city runs two Helm releases with different value files, sharing
+# Postgres + Kafka.
+#
+# Service-mesh / autoscaler / canary integration is OFF by default for a
+# vanilla `helm install` to succeed on a plain kind cluster; toggle the
+# global.serviceMesh.linkerd / global.autoscaling.keda / global.canary.flagger
+# flags below when running on a real cluster that has those operators
+# installed.
 
 global:
   city: bengaluru
@@ -13,60 +19,71 @@ global:
   imagePullPolicy: IfNotPresent
   serviceMesh:
     linkerd:
-      enabled: true
+      enabled: false
+  autoscaling:
+    keda:
+      enabled: false
+  canary:
+    flagger:
+      enabled: false
   observability:
     prometheus:
       scrape: true
       port: 9090
+  security:
+    enforceSigning: false   # toggled true after WS-8 cosign verification policy
 
 api-gateway:
   enabled: true
   replicaCount: 2
-  image:
-    repository: api-gateway
-  service:
-    port: 8000
+  image: {repository: api-gateway, pullPolicy: IfNotPresent}
+  service: {port: 8000}
   env:
     SYNAPSE_API_POSTGRES_DSN: "postgresql+asyncpg://synapse_app@postgres:5432/synapse_audit"
     KAFKA_BOOTSTRAP: "kafka:9092"
   resources:
     requests: {cpu: 200m, memory: 256Mi}
-    limits: {cpu: 1, memory: 1Gi}
+    limits:   {cpu: 1,    memory: 1Gi}
+  podLabels: {}
+  serviceAccount: {annotations: {}}
+  pdb: {enabled: true, minAvailable: 1}
+  autoscaling: {enabled: true, minReplicas: 2, maxReplicas: 6, targetCPUUtilizationPercentage: 70}
+  networkPolicy: {enabled: true}
 
 orchestrator:
   enabled: true
   replicaCount: 3
-  image:
-    repository: orchestrator
-  service:
-    port: 8085
+  image: {repository: orchestrator, pullPolicy: IfNotPresent}
+  service: {port: 8085}
   env:
     SYNAPSE_ORCHESTRATOR_POSTGRES_DSN: "postgresql+asyncpg://synapse_app@postgres:5432/synapse_audit"
     SYNAPSE_ORCHESTRATOR_OLLAMA_URL: "http://ollama:11434"
     KAFKA_BOOTSTRAP: "kafka:9092"
   resources:
     requests: {cpu: 500m, memory: 512Mi}
-    limits: {cpu: 2, memory: 2Gi}
-  autoscaling:
-    keda:
-      enabled: true
-      minReplicas: 2
-      maxReplicas: 20
-  canary:
-    flagger:
-      enabled: true
-      stepWeight: 10
-      maxWeight: 50
+    limits:   {cpu: 2,    memory: 2Gi}
+  podLabels: {}
+  serviceAccount: {annotations: {}}
+  pdb: {enabled: true, minAvailable: 2}
+  autoscaling: {enabled: true, minReplicas: 3, maxReplicas: 20, targetCPUUtilizationPercentage: 60}
+  networkPolicy: {enabled: true}
+  keda:
+    minReplicaCount: 2
+    maxReplicaCount: 20
+    pollingInterval: 15
+    cooldownPeriod: 60
+  flagger:
+    stepWeight: 10
+    maxWeight: 50
+  linkerd:
+    retryBudget: 0.2
 
-demand-prophet:
-  enabled: true
-  replicaCount: 2
-  image:
-    repository: demand-prophet
-  service:
-    port: 8001
-  env:
-    KAFKA_BOOTSTRAP: "kafka:9092"
-  resources:
-    requests: {cpu: 500m, memory: 1Gi}
-    limits: {cpu: 2, memory: 4Gi}
+demand-prophet:    {enabled: true,  replicaCount: 2, service: {port: 8001}}
+routing-navigator: {enabled: true,  replicaCount: 2, service: {port: 8002}}
+inventory-sentinel:{enabled: true,  replicaCount: 2, service: {port: 8003}}
+freshness-guardian:{enabled: true,  replicaCount: 2, service: {port: 8004}}
+pricing-oracle:    {enabled: true,  replicaCount: 2, service: {port: 8005}}
+disruption-shield: {enabled: true,  replicaCount: 1, service: {port: 8006}}
+supplier-trust:    {enabled: true,  replicaCount: 1, service: {port: 8007}}
+sustainability-agent: {enabled: true, replicaCount: 1, service: {port: 8008}}
+digital-twin:      {enabled: true,  replicaCount: 1, service: {port: 8009}}

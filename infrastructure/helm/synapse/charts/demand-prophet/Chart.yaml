@@ -1,6 +1,6 @@
 apiVersion: v2
 name: demand-prophet
-description: SYNAPSE Demand Prophet agent (Sprint 9 representative agent subchart).
+description: SYNAPSE Demand Prophet subchart (WS-6 — canonical agent template).
 type: application
-version: 0.9.0
-appVersion: "9.0.0"
+version: 0.10.0
+appVersion: "10.0.0"

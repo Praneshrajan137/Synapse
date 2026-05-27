@@ -1,0 +1,39 @@
+{{- if .Values.global.autoscaling.keda.enabled }}
+# KEDA ScaledObject for the orchestrator (WS-6: moved into chart, ADR-034).
+# Scales on per-topic Kafka consumer-group lag PLUS Tier-1 request rate.
+# Per-city overlays (values-mumbai.yaml) override the consumer_group label
+# so Mumbai and Bengaluru scale independently.
+apiVersion: keda.sh/v1alpha1
+kind: ScaledObject
+metadata:
+  name: orchestrator
+  namespace: {{ .Release.Namespace }}
+spec:
+  scaleTargetRef:
+    name: orchestrator
+  minReplicaCount: {{ .Values.keda.minReplicaCount | default 2 }}
+  maxReplicaCount: {{ .Values.keda.maxReplicaCount | default 20 }}
+  pollingInterval: {{ .Values.keda.pollingInterval | default 15 }}
+  cooldownPeriod:  {{ .Values.keda.cooldownPeriod  | default 60 }}
+  triggers:
+    - type: prometheus
+      metadata:
+        serverAddress: http://prometheus.{{ .Release.Namespace }}:9090
+        threshold: "500"
+        query: |
+          sum(synapse_kafka_consume_lag{topic="synapse.demand.forecast",
+                                       consumer_group="orchestrator-{{ .Values.global.city }}"})
+    - type: prometheus
+      metadata:
+        serverAddress: http://prometheus.{{ .Release.Namespace }}:9090
+        threshold: "500"
+        query: |
+          sum(synapse_kafka_consume_lag{topic="synapse.routing.plan",
+                                       consumer_group="orchestrator-{{ .Values.global.city }}"})
+    - type: prometheus
+      metadata:
+        serverAddress: http://prometheus.{{ .Release.Namespace }}:9090
+        threshold: "5"
+        query: |
+          rate(synapse_consensus_duration_seconds_count{tier="tier_1"}[1m])
+{{- end }}

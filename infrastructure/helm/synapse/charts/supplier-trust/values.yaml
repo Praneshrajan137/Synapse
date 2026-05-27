@@ -1,23 +1,23 @@
-replicaCount: 2
+replicaCount: 1
 image:
-  repository: demand-prophet
+  repository: supplier-trust
   pullPolicy: IfNotPresent
 service:
-  port: 8001
+  port: 8007
 env: {}
 resources:
-  requests: {cpu: 500m, memory: 1Gi}
-  limits: {cpu: 2, memory: 4Gi}
+  requests: {cpu: 300m, memory: 512Mi}
+  limits: {cpu: 1.5, memory: 2Gi}
 podLabels: {}
 serviceAccount:
   annotations: {}
 pdb:
-  enabled: true
+  enabled: false
   minAvailable: 1
 autoscaling:
-  enabled: true
-  minReplicas: 2
-  maxReplicas: 6
+  enabled: false
+  minReplicas: 1
+  maxReplicas: 4
   targetCPUUtilizationPercentage: 70
 networkPolicy:
   enabled: true

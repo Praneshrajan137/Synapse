@@ -1,0 +1,44 @@
+{{- if .Values.networkPolicy.enabled }}
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: demand-prophet
+  labels:
+    app: demand-prophet
+spec:
+  podSelector:
+    matchLabels:
+      app: demand-prophet
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    - from:
+        # Orchestrator + API gateway are the only legitimate A2A callers.
+        - podSelector:
+            matchLabels:
+              app: orchestrator
+        - podSelector:
+            matchLabels:
+              app: api-gateway
+        # Prometheus scrape.
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: monitoring
+      ports:
+        - protocol: TCP
+          port: {{ .Values.service.port }}
+  egress:
+    # Kafka, Postgres, Redis, Ollama, MLflow on same namespace.
+    - to:
+        - podSelector: {}
+      ports:
+        - protocol: TCP
+        - protocol: UDP
+    # DNS.
+    - to:
+        - namespaceSelector: {}
+      ports:
+        - protocol: UDP
+          port: 53
+{{- end }}

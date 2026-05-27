@@ -1,9 +1,9 @@
-replicaCount: 2
+replicaCount: 1
 image:
-  repository: demand-prophet
+  repository: digital-twin
   pullPolicy: IfNotPresent
 service:
-  port: 8001
+  port: 8009
 env: {}
 resources:
   requests: {cpu: 500m, memory: 1Gi}
@@ -12,12 +12,12 @@ podLabels: {}
 serviceAccount:
   annotations: {}
 pdb:
-  enabled: true
+  enabled: false
   minAvailable: 1
 autoscaling:
-  enabled: true
-  minReplicas: 2
-  maxReplicas: 6
+  enabled: false
+  minReplicas: 1
+  maxReplicas: 4
   targetCPUUtilizationPercentage: 70
 networkPolicy:
   enabled: true

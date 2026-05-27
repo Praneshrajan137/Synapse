@@ -1,0 +1,50 @@
+{{- if .Values.global.canary.flagger.enabled }}
+# Flagger Canary for the orchestrator (WS-6: moved into chart, ADR-034).
+# Promotion gate runs:
+#   1. Built-in success-rate + latency checks against the Linkerd dataplane.
+#   2. A custom webhook that calls `synapse eval run --suite golden` and
+#      asserts overall tier-routing accuracy >= 80% (Sprint 9 floor).
+#   3. KV-cache hit-rate >= 70% (Sprint 9 floor).
+apiVersion: flagger.app/v1beta1
+kind: Canary
+metadata:
+  name: orchestrator
+  namespace: {{ .Release.Namespace }}
+spec:
+  targetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: orchestrator
+  progressDeadlineSeconds: 600
+  service:
+    port: {{ .Values.service.port }}
+    portDiscovery: true
+  analysis:
+    interval: 1m
+    threshold: 5
+    maxWeight:  {{ .Values.flagger.maxWeight  | default 50 }}
+    stepWeight: {{ .Values.flagger.stepWeight | default 10 }}
+    metrics:
+      - name: request-success-rate
+        thresholdRange:
+          min: 99.0
+        interval: 1m
+      - name: request-duration
+        thresholdRange:
+          max: 100  # Tier-1 p99 budget, ms
+        interval: 1m
+    webhooks:
+      - name: golden-trace-eval
+        type: rollout
+        url: http://flagger-eval-webhook.{{ .Release.Namespace }}:8080/eval
+        timeout: 120s
+        metadata:
+          suite: golden
+          tier_floor: "0.80"
+      - name: kv-cache-hit-rate
+        type: rollout
+        url: http://flagger-eval-webhook.{{ .Release.Namespace }}:8080/kv-cache
+        timeout: 60s
+        metadata:
+          floor: "0.70"
+{{- end }}

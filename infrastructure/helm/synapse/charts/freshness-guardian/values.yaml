@@ -1,13 +1,13 @@
 replicaCount: 2
 image:
-  repository: demand-prophet
+  repository: freshness-guardian
   pullPolicy: IfNotPresent
 service:
-  port: 8001
+  port: 8004
 env: {}
 resources:
-  requests: {cpu: 500m, memory: 1Gi}
-  limits: {cpu: 2, memory: 4Gi}
+  requests: {cpu: 200m, memory: 256Mi}
+  limits: {cpu: 1, memory: 1Gi}
 podLabels: {}
 serviceAccount:
   annotations: {}

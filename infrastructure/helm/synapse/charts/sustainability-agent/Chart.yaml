@@ -1,0 +1,6 @@
+apiVersion: v2
+name: sustainability-agent
+description: SYNAPSE sustainability-agent subchart (WS-6 — full chart completion).
+type: application
+version: 0.10.0
+appVersion: "9.0.0"
