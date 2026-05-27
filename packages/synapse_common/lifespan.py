@@ -137,6 +137,73 @@ async def _run_closer(closer: Closer) -> None:
         await result
 
 
+# ───────────────────────────────────────────────────────────────────────────
+# Sprint 11 WS-2: `graceful_shutdown` async context-manager
+#
+# api/main.py and (planned) other services use the ergonomic pattern:
+#
+#     async with graceful_shutdown("api-gateway") as ls:
+#         ls.on_shutdown("kafka", producer.close)
+#         ls.on_shutdown("postgres", engine.dispose)
+#         yield
+#
+# This wraps ShutdownCoordinator so callers don't need to manage signal-
+# handler installation / shutdown() invocation manually. `.on_shutdown`
+# is an alias for `.register` matching the lifecycle vocabulary used by
+# FastAPI lifespans elsewhere in this codebase.
+# ───────────────────────────────────────────────────────────────────────────
+from contextlib import asynccontextmanager
+from collections.abc import AsyncIterator
+
+
+class _LifespanHandle:
+    """Caller-facing facade returned by ``graceful_shutdown``."""
+
+    def __init__(self, coordinator: "ShutdownCoordinator", service_name: str) -> None:
+        self._coordinator = coordinator
+        self.service_name = service_name
+
+    @property
+    def ready(self) -> bool:
+        return self._coordinator.ready
+
+    @property
+    def shutting_down(self) -> bool:
+        return self._coordinator.shutting_down
+
+    def on_shutdown(self, name: str, closer: Closer) -> None:
+        """Register a closer to be invoked at shutdown (reverse order)."""
+        self._coordinator.register(name, closer)
+
+
+@asynccontextmanager
+async def graceful_shutdown(
+    service_name: str,
+    *,
+    grace_seconds: float = DEFAULT_GRACE_SECONDS,
+) -> AsyncIterator[_LifespanHandle]:
+    """Async-context-manager wrapper around :class:`ShutdownCoordinator`.
+
+    Installs signal handlers on entry; runs registered closers on exit
+    (reverse registration order). Idempotent on shutdown.
+    """
+    coordinator = ShutdownCoordinator(grace_seconds=grace_seconds)
+    try:
+        coordinator.install_signal_handlers()
+    except RuntimeError:
+        # No running loop yet (rare during tests); install will be retried
+        # implicitly when shutdown() is invoked at process exit.
+        logger.debug("graceful_shutdown_signal_install_deferred", service=service_name)
+    logger.info("graceful_shutdown_entered", service=service_name,
+                grace_seconds=grace_seconds)
+    handle = _LifespanHandle(coordinator, service_name)
+    try:
+        yield handle
+    finally:
+        await coordinator.shutdown()
+        logger.info("graceful_shutdown_exited", service=service_name)
+
+
 def deep_health_check(
     *checks: Callable[[], Awaitable[bool]],
 ) -> Callable[[], Awaitable[dict[str, Any]]]:
