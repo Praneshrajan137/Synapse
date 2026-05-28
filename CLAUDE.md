@@ -142,6 +142,8 @@
 - E-S12-05: `.env.gcp.version` is workflow-written on every deploy and is the LAST `--env-file` arg passed to `docker compose`, so it shadows anything a human edited in `.env.gcp.local`. Do not commit `.env.gcp.version` (it's transient, regenerated per run)
 - E-S12-06: `VITE_BUILD_SHA` / `SYNAPSE_BUILD_SHA` are baked at IMAGE BUILD TIME via Docker build-args, not at compose-up time. A `dev` / `unknown` value in the chip or `/version` means the image was not produced by the CD pipeline (local dev or manual `docker build`)
 - E-S12-07: `BuildSHAChip` styles via chromatic tokens only — no raw hex (INV-CLR-009). It uses `bg-surface-raised`, `text-ink-muted`, `bg-signal-warning/15`, `text-signal-success`. The `no-raw-hex` pre-commit hook would catch any regression
+- E-S12-08: Cosign keyless signing in CI REQUIRES `permissions: id-token: write` on the workflow (or job). Without it, the cosign-installer cannot mint a GitHub OIDC token, falls back to the device-flow URL, and times out after 5 minutes in non-interactive CI with `error obtaining token: expired_token`. `cd-gcp.yml` had it; `cd.yml` did not (fixed in Sprint 12 follow-up)
+- E-S12-09: When ADR-036's nightly auto-stop schedule is active, a CD run inside the stopped window hits IAP error `4003: failed to connect to backend` because port 22 is unreachable on a STOPPED instance. `cd-gcp.yml` now has an "Ensure VM is running" step that idempotently calls `gcloud compute instances start` and waits up to 90s for SSH to become reachable
 
 ### Chromatic System Error Patterns
 - E-CLR-01: Gamut-map with `culori.clampChroma` (preserves L+H exactly), NOT `toGamut` — `toGamut`'s RGB round-trip drifts hue several degrees

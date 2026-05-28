@@ -173,9 +173,14 @@ export function DecisionDetail() {
                 {slice.proposalsVisible.map((p, i) => {
                   const agentName =
                     typeof p.agent_name === "string" ? p.agent_name : `proposal-${i}`;
+                  // Stable identity: agent_name + utility_score is unique within a
+                  // phase slice; falling back to agentName alone is also stable
+                  // because two proposals with the same agent_name would be a
+                  // domain bug, not a key collision.
+                  const stableKey = `${agentName}:${p.utility_score ?? "u"}:${p.confidence ?? "c"}`;
                   return (
                     <AgentProposalChip
-                      key={`${agentName}-${i}`}
+                      key={stableKey}
                       agentName={agentName}
                       utilityScore={
                         typeof p.utility_score === "number" ? p.utility_score : undefined
@@ -213,8 +218,10 @@ export function DecisionDetail() {
               Audit trace (cumulative through phase)
             </summary>
             <ol className="mt-2 list-decimal space-y-1 pl-5">
-              {slice.auditTraceSoFar.map((line, i) => (
-                <li key={i} className="break-words font-mono text-2xs">
+              {slice.auditTraceSoFar.map((line) => (
+                // The trace is an append-only ledger; each line is unique by
+                // content (timestamp + decision-id + action are all present).
+                <li key={line} className="break-words font-mono text-2xs">
                   {line}
                 </li>
               ))}

@@ -67,7 +67,9 @@ describe("replayDecision", () => {
     const d = fixture();
     const lengths = [1, 2, 3, 4, 5].map((p) => replayDecision(d, p).auditTraceSoFar.length);
     for (let i = 1; i < lengths.length; i++) {
-      expect(lengths[i]).toBeGreaterThanOrEqual(lengths[i - 1]!);
+      const curr = lengths[i] as number;
+      const prev = lengths[i - 1] as number;
+      expect(curr).toBeGreaterThanOrEqual(prev);
     }
   });
 

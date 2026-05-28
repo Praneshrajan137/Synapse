@@ -22,7 +22,10 @@ const PHASE_NAMES = ["proposal", "debate", "arbitration", "execution", "learning
 export type PhaseName = (typeof PHASE_NAMES)[number];
 
 export function phaseName(index: 1 | 2 | 3 | 4 | 5): PhaseName {
-  return PHASE_NAMES[index - 1]!;
+  // `index - 1` is bounded to [0, 4] by the literal-type parameter, so the
+  // lookup is always defined. The intermediate `as` avoids a Biome-flagged
+  // non-null assertion while preserving the precise PhaseName return type.
+  return PHASE_NAMES[index - 1] as PhaseName;
 }
 
 export function replayDecision(decision: ConsensusDecision, phaseIndex: number): ReplaySlice {

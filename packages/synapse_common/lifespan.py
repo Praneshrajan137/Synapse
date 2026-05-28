@@ -41,7 +41,8 @@ import inspect
 import os
 import signal
 import time
-from collections.abc import Awaitable, Callable
+from collections.abc import AsyncIterator, Awaitable, Callable
+from contextlib import asynccontextmanager
 from typing import Any
 
 import structlog
@@ -152,14 +153,12 @@ async def _run_closer(closer: Closer) -> None:
 # is an alias for `.register` matching the lifecycle vocabulary used by
 # FastAPI lifespans elsewhere in this codebase.
 # ───────────────────────────────────────────────────────────────────────────
-from contextlib import asynccontextmanager
-from collections.abc import AsyncIterator
 
 
 class _LifespanHandle:
     """Caller-facing facade returned by ``graceful_shutdown``."""
 
-    def __init__(self, coordinator: "ShutdownCoordinator", service_name: str) -> None:
+    def __init__(self, coordinator: ShutdownCoordinator, service_name: str) -> None:
         self._coordinator = coordinator
         self.service_name = service_name
 

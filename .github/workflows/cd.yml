@@ -18,6 +18,11 @@ on:
 permissions:
   contents: read
   packages: write
+  # Required by cosign keyless signing — without `id-token: write` the
+  # cosign-installer cannot mint a GitHub OIDC token, and cosign falls back
+  # to the device-flow URL, which always expires in 5 minutes inside a
+  # non-interactive CI runner. See Sprint 12 (ADR-039) error pattern E-S12-08.
+  id-token: write
 
 jobs:
   build-images:

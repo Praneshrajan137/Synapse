@@ -194,6 +194,34 @@ jobs:
       - name: gcloud SDK
         uses: google-github-actions/setup-gcloud@v2
 
+      - name: Ensure VM is running (handle nightly auto-stop)
+        run: |
+          # Sprint 10's ADR-036 sets a nightly auto-stop schedule on the GCE
+          # VM to keep cost at near-zero. When CD fires during the stopped
+          # window, IAP returns error 4003 ("failed to connect to backend")
+          # because port 22 is unreachable on a stopped instance. Start it
+          # idempotently — if already RUNNING, `start` is a no-op + 0 exit.
+          # Then wait up to 90s for SSH to become reachable. E-S12-09.
+          STATUS="$(gcloud compute instances describe ${{ vars.GCP_VM }} \
+            --zone=${{ vars.GCP_ZONE }} --format='value(status)')"
+          echo "Instance status before start: ${STATUS}"
+          if [ "${STATUS}" != "RUNNING" ]; then
+            echo "Starting ${{ vars.GCP_VM }}…"
+            gcloud compute instances start ${{ vars.GCP_VM }} \
+              --zone=${{ vars.GCP_ZONE }} --quiet
+            # Boot + sshd + IAP backend can take ~30-60s on first start.
+            for i in $(seq 1 18); do
+              if gcloud compute ssh ${{ vars.GCP_VM }} \
+                  --zone=${{ vars.GCP_ZONE }} --tunnel-through-iap --quiet \
+                  --command='echo ssh-ready' 2>/dev/null; then
+                echo "SSH reachable after ${i} attempts"
+                break
+              fi
+              echo "...waiting for SSH (attempt ${i}/18)"
+              sleep 5
+            done
+          fi
+
       - name: Ensure repo cloned on VM at this SHA
         run: |
           gcloud compute ssh ${{ vars.GCP_VM }} \
