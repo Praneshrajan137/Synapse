@@ -30,7 +30,7 @@ export function BuildSHAChip() {
 
   const title = isPipelineBuild
     ? `Deployed: ${BUILD_SHA}\nBuilt:    ${BUILD_TIME}\nClick to copy`
-    : `Local build (no SHA from CD pipeline). Pipeline-built images report a real SHA.`;
+    : "Local build (no SHA from CD pipeline). Pipeline-built images report a real SHA.";
 
   return (
     <button

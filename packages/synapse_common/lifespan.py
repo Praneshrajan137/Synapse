@@ -193,8 +193,7 @@ async def graceful_shutdown(
         # No running loop yet (rare during tests); install will be retried
         # implicitly when shutdown() is invoked at process exit.
         logger.debug("graceful_shutdown_signal_install_deferred", service=service_name)
-    logger.info("graceful_shutdown_entered", service=service_name,
-                grace_seconds=grace_seconds)
+    logger.info("graceful_shutdown_entered", service=service_name, grace_seconds=grace_seconds)
     handle = _LifespanHandle(coordinator, service_name)
     try:
         yield handle
