@@ -144,6 +144,19 @@ async def ready() -> dict[str, str]:
     }
 
 
+@app.get("/version")
+async def version() -> dict[str, str]:
+    # ADR-039: deployed-version truth. The values are baked in at image-build
+    # time by cd-gcp.yml's build-args. `unknown`/`dev` means the image was not
+    # built by the official pipeline (local dev, manual build, etc.).
+    return {
+        "service": "api-gateway",
+        "version": app.version,
+        "git_sha": os.environ.get("SYNAPSE_BUILD_SHA", "dev"),
+        "build_time": os.environ.get("SYNAPSE_BUILD_TIME", "unknown"),
+    }
+
+
 try:
     from prometheus_fastapi_instrumentator import Instrumentator
 

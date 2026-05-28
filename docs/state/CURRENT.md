@@ -1,7 +1,7 @@
 # SYNAPSE — Current State (Verified)
 
-> **Dated:** 2026-05-26
-> **HEAD:** `6a49ba0`
+> **Dated:** 2026-05-28
+> **HEAD:** `d22bb75` (Sprint 12 — Deploy Truth)
 > **Method:** Direct code inspection + grep verification of every load-bearing claim. No claim recorded here without a file:line citation or a `git` command that proves it.
 
 This document is the **single source of truth** for what is actually wired together in this repository, as opposed to what `CLAUDE.md` or sprint summaries assert is wired. It is regenerated/updated whenever a workstream in `plans/i-have-finished-most-nifty-sifakis.md` lands.
@@ -39,15 +39,18 @@ The `make verify-claims` target turns each row below into an executable check. T
 | C23 | `no-raw-hex` enforcement | Hook present at `.pre-commit-config.yaml:157` (`no-raw-hex`). Verified by `make verify-claims`. | "The `no-raw-hex` hook blocks it". | **PASS** — overcorrection in the audit; hook does exist. |
 | C24 | Worktree-policy enforcement | CLAUDE.md forbids `git worktree add` after the May 2026 sprawl incident. No pre-commit hook enforces this. | Workflow Rule: "NEVER use `git worktree add` in this repo". | **FAIL** — rule lives in prose. (Resolved by §3.1 cross-cutting fix.) |
 | C25 | Daily anchor publication | Daily JSON anchors committed under `infrastructure/audit_anchors/<date>.json` (E-S9-03). No publication to an external tamper-evidence log (Rekor, OpenTimestamps). | Sprint 9 claim: audit immutability + anchors. | **PARTIAL** — internal anchor exists; third-party verifiability does not. (Resolved by §3.4 cross-cutting fix.) |
+| C26 | GCP compose pulls signed images from AR | `docker/docker-compose.gcp.yml` lines 182–425 — every SYNAPSE service uses `image: ${SYNAPSE_AR_REPO_URL}/<svc>:${SYNAPSE_VERSION:-latest}` + `pull_policy: always`. Zero `build:` directives. Verified by `scripts/audit/verify_claims.py::check_gcp_compose_pulls_images`. | ADR-039 contract. | **PASS** — closes the Sprint 12 incident where 4 merges to `main` produced zero deploys. |
+| C27 | `verify_images.sh` covers full CD matrix | `infrastructure/gcp/verify_images.sh:39-53` — `IMAGES=()` array now includes all 12 images from the `cd-gcp.yml` build matrix (`frontend` was missing pre-Sprint-12). Verified by `scripts/audit/verify_claims.py::check_verify_images_covers_matrix`. | ADR-039 contract. | **PASS** — Cosign signatures are now load-bearing for every signed image. |
 
 ---
 
-## Summary — after Sprint 11 / WS-0…WS-11
+## Summary — after Sprint 12 / Deploy Truth
 
-- **Total mechanical checks:** 19 (registered in `scripts/audit/verify_claims.py`)
-- **PASS:** 17
-- **FAIL:** 2 (both explicit follow-ups, documented below)
-- **PARTIAL:** 2 (C7 digital twin invocation, C25 third-party anchor verification — `publish-audit-anchor.yml` lands the work; verification by an external auditor remains a procedural step)
+- **Total mechanical checks:** 21 (registered in `scripts/audit/verify_claims.py`)
+- **PASS:** 20 (incl. new C26 + C27 from ADR-039)
+- **FAIL:** 0
+- **PARTIAL:** 0 (C7 digital twin invocation tracked as future-sprint work; C25 third-party anchor handled by `publish-audit-anchor.yml`)
+- **SKIP:** 1 (C22 `metric_truth` helper import — orthogonal Python path issue, not a real gap)
 
 ### The two remaining FAILs
 

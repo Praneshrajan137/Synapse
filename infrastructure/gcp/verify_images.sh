@@ -35,7 +35,9 @@ if [ -z "$AR_REPO_URL" ]; then
 fi
 
 # Images we expect cd-gcp.yml to push + sign. Keep in lockstep with the matrix
-# in .github/workflows/cd-gcp.yml.
+# in .github/workflows/cd-gcp.yml — verify_claims.py check C26 enforces this.
+# The `frontend` image was missing pre-ADR-039; its omission was the silent
+# gap that let an old chromatic-less UI keep starting on the VM.
 IMAGES=(
     api-gateway
     orchestrator
@@ -48,6 +50,7 @@ IMAGES=(
     disruption-shield
     supplier-trust
     sustainability-agent
+    frontend
 )
 
 OIDC_ISSUER="https://token.actions.githubusercontent.com"

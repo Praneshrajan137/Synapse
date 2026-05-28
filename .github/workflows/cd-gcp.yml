@@ -1,7 +1,17 @@
 name: CD — GCP (primary deployment target)
 
-# Fires on v* tags. Builds + signs + pushes every service image to Artifact
-# Registry, then deploys to the GCE VM via IAP TCP tunnel (no public SSH).
+# Fires on:
+#   - push to main         → auto-deploy (tagged `main-<sha7>`, also `:main` + `:latest`)
+#   - push of a `v*` tag   → explicit release (tagged with the version, also `:latest`)
+#   - workflow_dispatch    → manual re-deploy of current main with optional dryrun
+#
+# Builds + signs + pushes every service image to Artifact Registry, then
+# deploys to the GCE VM via IAP TCP tunnel (no public SSH).
+#
+# ADR-039 — pull-from-AR contract. The compose file at
+# `docker/docker-compose.gcp.yml` references images by `image:` (never `build:`),
+# and `verify_claims.py` (C26) fails CI on regression. This trigger fires on
+# every merge to main so the VM is never more than one workflow run behind HEAD.
 #
 # Auth: Workload Identity Federation only. There are no JSON service-account
 # keys in this repository's secrets. See infrastructure/gcp/terraform/wif.tf
@@ -25,6 +35,8 @@ name: CD — GCP (primary deployment target)
 
 on:
   push:
+    branches:
+      - main
     tags:
       - "v*"
   workflow_dispatch:
@@ -92,14 +104,28 @@ jobs:
       - name: Compute image tags
         id: tags
         run: |
-          # GITHUB_REF_NAME is "v0.10.0" on a tag push, or the branch on workflow_dispatch.
-          VERSION="${GITHUB_REF_NAME#v}"
-          if [ "${GITHUB_REF_TYPE}" != "tag" ]; then
-            VERSION="dryrun-${GITHUB_SHA::7}"
+          # Tagging strategy:
+          #   push tag v0.10.0   → VERSION=0.10.0,    extra=:latest
+          #   push branch main   → VERSION=main-abc1234, extras=:main, :latest
+          #   workflow_dispatch  → VERSION=dryrun-abc1234, extras=:latest
+          SHA7="${GITHUB_SHA::7}"
+          EXTRA_TAGS=""
+          if [ "${GITHUB_REF_TYPE}" = "tag" ]; then
+            VERSION="${GITHUB_REF_NAME#v}"
+          elif [ "${GITHUB_REF_NAME}" = "main" ]; then
+            VERSION="main-${SHA7}"
+            EXTRA_TAGS="${{ env.AR_REPO_URL }}/${{ matrix.image }}:main"
+          else
+            VERSION="dryrun-${SHA7}"
           fi
-          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
-          echo "image_ref=${{ env.AR_REPO_URL }}/${{ matrix.image }}:${VERSION}" >> "$GITHUB_OUTPUT"
-          echo "image_latest=${{ env.AR_REPO_URL }}/${{ matrix.image }}:latest" >> "$GITHUB_OUTPUT"
+          BUILD_TIME="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          {
+            echo "version=${VERSION}"
+            echo "build_time=${BUILD_TIME}"
+            echo "image_ref=${{ env.AR_REPO_URL }}/${{ matrix.image }}:${VERSION}"
+            echo "image_latest=${{ env.AR_REPO_URL }}/${{ matrix.image }}:latest"
+            echo "extra_tags=${EXTRA_TAGS}"
+          } >> "$GITHUB_OUTPUT"
 
       - name: Build + push (multi-arch where possible)
         id: build
@@ -110,13 +136,23 @@ jobs:
           push: true
           provenance: true
           sbom: true
+          # Build-args propagate the deployed SHA into every image so the
+          # frontend chip + GET /version can show what is actually running.
+          # ADR-039 — visible build SHA.
+          build-args: |
+            VITE_BUILD_SHA=${{ github.sha }}
+            VITE_BUILD_TIME=${{ steps.tags.outputs.build_time }}
+            SYNAPSE_BUILD_SHA=${{ github.sha }}
+            SYNAPSE_BUILD_TIME=${{ steps.tags.outputs.build_time }}
           tags: |
             ${{ steps.tags.outputs.image_ref }}
             ${{ steps.tags.outputs.image_latest }}
+            ${{ steps.tags.outputs.extra_tags }}
           labels: |
             org.opencontainers.image.source=https://github.com/${{ github.repository }}
             org.opencontainers.image.revision=${{ github.sha }}
             org.opencontainers.image.version=${{ steps.tags.outputs.version }}
+            org.opencontainers.image.created=${{ steps.tags.outputs.build_time }}
           cache-from: type=gha,scope=${{ matrix.image }}
           cache-to: type=gha,scope=${{ matrix.image }},mode=max
 
@@ -170,12 +206,39 @@ jobs:
                 fi; \
                 cd ~/synapse && git fetch --tags && git checkout --quiet ${{ github.sha }}"
 
+      - name: Compute deploy version
+        id: dv
+        run: |
+          # Same rules as build-push-sign; recomputed here because the deploy
+          # job runs in its own ubuntu runner with no inherited outputs.
+          SHA7="${GITHUB_SHA::7}"
+          if [ "${GITHUB_REF_TYPE}" = "tag" ]; then
+            VERSION="${GITHUB_REF_NAME#v}"
+          elif [ "${GITHUB_REF_NAME}" = "main" ]; then
+            VERSION="main-${SHA7}"
+          else
+            VERSION="dryrun-${SHA7}"
+          fi
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+          echo "::notice title=Deploying::version=${VERSION} sha=${GITHUB_SHA}"
+
       - name: Push GCP compose + scripts (in case repo on VM lags)
         run: |
+          # Write the runtime .env.gcp.version pointing the compose file at the
+          # exact images this workflow just pushed. ADR-039: the VM never
+          # builds; SYNAPSE_VERSION + SYNAPSE_AR_REPO_URL fully determine what
+          # gets pulled.
+          cat > /tmp/.env.gcp.version <<EOF
+          # Auto-generated by .github/workflows/cd-gcp.yml — DO NOT EDIT BY HAND
+          SYNAPSE_AR_REPO_URL=${{ env.AR_REPO_URL }}
+          SYNAPSE_VERSION=${{ steps.dv.outputs.version }}
+          SYNAPSE_BUILD_SHA=${{ github.sha }}
+          EOF
           gcloud compute scp --tunnel-through-iap --zone=${{ vars.GCP_ZONE }} \
             docker/docker-compose.gcp.yml \
             infrastructure/gcp/backup_to_gcs.sh \
             infrastructure/gcp/verify_images.sh \
+            /tmp/.env.gcp.version \
             ${{ vars.GCP_VM }}:~/synapse/
 
       - name: Cosign verify images BEFORE start
@@ -192,14 +255,30 @@ jobs:
 
       - name: Pull + restart stack
         run: |
+          # --env-file order matters: later files override earlier ones. The
+          # workflow-written .env.gcp.version pins SYNAPSE_VERSION last so it
+          # cannot be silently overridden by a stale .env.gcp.local on the VM.
+          # `--force-recreate --pull always` ensures: (1) every signed digest is
+          # re-pulled from Artifact Registry, (2) running containers cycle even
+          # if the tag string `:main` resolves to a new digest, (3) no stale
+          # local layer can shadow the freshly pushed image. ADR-039.
           gcloud compute ssh ${{ vars.GCP_VM }} \
             --zone=${{ vars.GCP_ZONE }} \
             --tunnel-through-iap \
             --quiet \
-            --command="cd ~/synapse && \
+            --command="set -e; cd ~/synapse && \
                        gcloud --quiet auth configure-docker ${{ env.AR_HOST }} && \
-                       docker compose -f docker/docker-compose.gcp.yml --env-file .env.gcp --env-file .env.gcp.local pull && \
-                       docker compose -f docker/docker-compose.gcp.yml --env-file .env.gcp --env-file .env.gcp.local up -d"
+                       echo '== Deploying:' && cat .env.gcp.version && \
+                       docker compose -f docker/docker-compose.gcp.yml \
+                         --env-file .env.gcp --env-file .env.gcp.local --env-file .env.gcp.version \
+                         pull && \
+                       docker compose -f docker/docker-compose.gcp.yml \
+                         --env-file .env.gcp --env-file .env.gcp.local --env-file .env.gcp.version \
+                         up -d --pull always --force-recreate --remove-orphans && \
+                       echo '== Running digests:' && \
+                       docker compose -f docker/docker-compose.gcp.yml --env-file .env.gcp.version \
+                         images --quiet | xargs -r -n1 docker inspect --format \
+                         '{{.RepoTags}} -> {{.Id}}'"
 
       - name: Wait for health (max 5 min)
         run: |
@@ -231,14 +310,20 @@ jobs:
           {
             echo "## CD-GCP deploy summary"
             echo ""
-            echo "- **Tag**         : \`${{ github.ref_name }}\`"
-            echo "- **Commit**      : \`${{ github.sha }}\`"
-            echo "- **Registry**    : \`${{ env.AR_REPO_URL }}\`"
-            echo "- **VM**          : \`${{ vars.GCP_VM }}\` in \`${{ vars.GCP_ZONE }}\`"
+            echo "- **Trigger**      : \`${{ github.event_name }}\` on \`${{ github.ref_name }}\`"
+            echo "- **Version tag**  : \`${{ steps.dv.outputs.version }}\`"
+            echo "- **Commit**       : \`${{ github.sha }}\`"
+            echo "- **Registry**     : \`${{ env.AR_REPO_URL }}\`"
+            echo "- **VM**           : \`${{ vars.GCP_VM }}\` in \`${{ vars.GCP_ZONE }}\`"
             echo "- **Images signed**: 12 (Cosign keyless, GitHub OIDC → Fulcio)"
             echo ""
-            echo "Admin UIs are behind IAP — open with:"
+            echo "Verify the deploy from anywhere:"
+            echo '```bash'
+            echo "curl https://<host>/version    # should return git_sha=${{ github.sha }}"
             echo '```'
+            echo ""
+            echo "Admin UIs are behind IAP — open with:"
+            echo '```bash'
             echo "gcloud compute start-iap-tunnel ${{ vars.GCP_VM }} 3000 --local-host-port=localhost:3000 --zone=${{ vars.GCP_ZONE }}"
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"

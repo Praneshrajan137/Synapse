@@ -1,4 +1,4 @@
-import { CitySwitcher, LanguagePicker, OperatorIdentity } from "@ds/compounds";
+import { BuildSHAChip, CitySwitcher, LanguagePicker, OperatorIdentity } from "@ds/compounds";
 import { cn } from "@lib/cn";
 import { NavLink, Outlet } from "react-router-dom";
 
@@ -53,6 +53,7 @@ export function Shell() {
           <CitySwitcher />
           <LanguagePicker />
           <OperatorIdentity />
+          <BuildSHAChip />
         </div>
       </header>
       <main className="flex-1 overflow-auto bg-canvas p-6">

@@ -54,6 +54,12 @@
 - Allowed licenses: MIT, Apache-2.0, BSD-2-Clause, BSD-3-Clause, PSF, ISC, MPL-2.0
 - Pin all dependency versions with upper bounds in pyproject.toml
 
+### GCP Deploy Rules (ADR-039)
+- NEVER add a `build:` directive to a SYNAPSE-owned service in `docker/docker-compose.gcp.yml` — the GCP path is pull-from-Artifact-Registry only. `verify_claims.py` C26 fails CI on regression. Local dev uses `docker-compose.yml`, which keeps `build:` for fast iteration
+- The `cd-gcp.yml` build matrix and `infrastructure/gcp/verify_images.sh`'s `IMAGES=()` array MUST stay in lockstep — `verify_claims.py` C27 enforces this. Add to both in the same PR when a new service is introduced
+- Compose service `api` maps to AR image `api-gateway`; this alias is documented inline in the compose file. The other 11 SYNAPSE services use matching names
+- The deployed SHA is visible in TWO places — `GET /version` on the API gateway and the `BuildSHAChip` in the frontend Shell. When a user reports "old UI", check the chip first; if it shows HEAD's SHA, the issue is browser cache (Ctrl+Shift+R), not deploy
+
 ### Chromatic System Rules (ADR-025)
 - Frontend colour comes ONLY from chromatic tokens — NEVER a raw hex/`rgb()`/`hsl()` literal in `frontend/src/**`. The `no-raw-hex` hook blocks it (INV-CLR-009)
 - Colour tokens are authored in OKLCH in `design-system/color/tokens/*.tokens.json` (W3C DTCG format). After ANY token edit run `npm run build` in `design-system/color/` and commit the regenerated `dist/`
@@ -128,6 +134,15 @@
 - E-S9-14: The new `audit_outbox` migration (Sprint 7) and `audit_chain` migration (Sprint 9) are mirrored at `infrastructure/postgres/` because Docker init reads from there; the canonical lives under `orchestrator/audit/migrations/`.
 - E-S9-15: `scripts/check_cve_budget.py --update-registry` is an operator step, NOT part of normal CI — it intentionally writes back to `infrastructure/security/cve-budget.json`.
 
+### Sprint 12 Error Patterns
+- E-S12-01: `docker compose pull` is a silent no-op for services using `build:` — that is exactly how 4 PRs on `main` produced zero GCP deploys. C26 now fails CI before this can re-happen. (`docs/adr/ADR-039-gcp-deploy-pull-from-artifact-registry.md`)
+- E-S12-02: `docker compose up -d` against a `:latest` tag that has moved digest does NOT re-pull and does NOT recreate the container. Use `--pull always --force-recreate` on the deploy step (now in `cd-gcp.yml`)
+- E-S12-03: `cd-gcp.yml` previously fired only on `v*` tags; now it fires on push to `main` as well. Tag pushes remain valid for explicit releases. Both paths sign images with Cosign keyless via GitHub OIDC
+- E-S12-04: The deploy job recomputes `VERSION` independently of the build-push-sign matrix (separate runners, no inherited outputs). Both use the same logic: tag→strip-v, main→`main-<sha7>`, dispatch→`dryrun-<sha7>`
+- E-S12-05: `.env.gcp.version` is workflow-written on every deploy and is the LAST `--env-file` arg passed to `docker compose`, so it shadows anything a human edited in `.env.gcp.local`. Do not commit `.env.gcp.version` (it's transient, regenerated per run)
+- E-S12-06: `VITE_BUILD_SHA` / `SYNAPSE_BUILD_SHA` are baked at IMAGE BUILD TIME via Docker build-args, not at compose-up time. A `dev` / `unknown` value in the chip or `/version` means the image was not produced by the CD pipeline (local dev or manual `docker build`)
+- E-S12-07: `BuildSHAChip` styles via chromatic tokens only — no raw hex (INV-CLR-009). It uses `bg-surface-raised`, `text-ink-muted`, `bg-signal-warning/15`, `text-signal-success`. The `no-raw-hex` pre-commit hook would catch any regression
+
 ### Chromatic System Error Patterns
 - E-CLR-01: Gamut-map with `culori.clampChroma` (preserves L+H exactly), NOT `toGamut` — `toGamut`'s RGB round-trip drifts hue several degrees
 - E-CLR-02: Round chroma DOWN after gamut mapping — rounding to nearest can re-inflate a boundary colour back out of sRGB gamut (INV-CLR-008)
@@ -163,3 +178,4 @@
   - **WS-10**: Hypothesis property fuzz on consensus invariants; counterfactual replay; chaos-day runbook.
   - **WS-11**: README, CLAUDE.md sprint status, ADR index, `make verify-claims` count posted to PR.
   - **WS-12**: emit the three alerted-but-not-emitted metrics flagged by WS-7; closes C22.
+- **Sprint 12 — Deploy Truth** (`plans/on-past-five-days-parsed-wilkinson.md` — landed): the GCP CD pipeline now mechanically reaches the VM on every merge to `main`. ADR-039 captures the contract: `docker-compose.gcp.yml` references **`image:` only** (no `build:`), with `pull_policy: always`; `cd-gcp.yml` fires on push-to-main (tags `:main-<sha7>`/`:main`/`:latest`) **and** on `v*` tags (explicit release). `verify_images.sh` now covers all 12 signed images (frontend was the missing one). The API gateway exposes `GET /version` and the frontend Shell carries a `BuildSHAChip` so the deployed SHA is visible without leaving the page. Two new mechanical checks — C26 (`gcp_compose_pulls_images`) and C27 (`verify_images_covers_matrix`) — prevent the trap from re-arming. Closed the incident where 4 PRs on `main` produced zero GCP deploys.

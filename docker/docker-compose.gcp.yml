@@ -179,11 +179,14 @@ services:
         limits: { cpus: "0.5", memory: 512M }
 
   # ── Agents (Sprint 2) ────────────────────────────────────────────────────
+  # NOTE (ADR-039): all SYNAPSE services pull pre-built, cosign-signed images
+  # from Artifact Registry. The CD workflow (.github/workflows/cd-gcp.yml)
+  # builds + signs + pushes on every merge to main and on `v*` tag pushes.
+  # NEVER reintroduce a `build:` directive here — `scripts/audit/verify_claims.py`
+  # check C26 will fail CI if anyone does.
   demand-prophet:
-    build:
-      context: ..
-      dockerfile: agents/demand_prophet/Dockerfile
-      target: serve
+    image: ${SYNAPSE_AR_REPO_URL}/demand-prophet:${SYNAPSE_VERSION:-latest}
+    pull_policy: always
     container_name: synapse-demand-prophet
     environment: *common-env
     <<: *extra-hosts
@@ -197,10 +200,8 @@ services:
         limits: { cpus: "1.0", memory: 1.5G }
 
   routing-navigator:
-    build:
-      context: ..
-      dockerfile: agents/routing_navigator/Dockerfile
-      target: serve
+    image: ${SYNAPSE_AR_REPO_URL}/routing-navigator:${SYNAPSE_VERSION:-latest}
+    pull_policy: always
     container_name: synapse-routing-navigator
     environment: *common-env
     <<: *extra-hosts
@@ -215,10 +216,8 @@ services:
         limits: { cpus: "1.0", memory: 1.5G }
 
   inventory-sentinel:
-    build:
-      context: ..
-      dockerfile: agents/inventory_sentinel/Dockerfile
-      target: serve
+    image: ${SYNAPSE_AR_REPO_URL}/inventory-sentinel:${SYNAPSE_VERSION:-latest}
+    pull_policy: always
     container_name: synapse-inventory-sentinel
     environment: *common-env
     <<: *extra-hosts
@@ -235,10 +234,8 @@ services:
 
   # ── Agents (Sprint 3) ────────────────────────────────────────────────────
   freshness-guardian:
-    build:
-      context: ..
-      dockerfile: agents/freshness_guardian/Dockerfile
-      target: serve
+    image: ${SYNAPSE_AR_REPO_URL}/freshness-guardian:${SYNAPSE_VERSION:-latest}
+    pull_policy: always
     container_name: synapse-freshness-guardian
     environment: *common-env
     <<: *extra-hosts
@@ -251,10 +248,8 @@ services:
         limits: { cpus: "0.5", memory: 1G }
 
   pricing-oracle:
-    build:
-      context: ..
-      dockerfile: agents/pricing_oracle/Dockerfile
-      target: serve
+    image: ${SYNAPSE_AR_REPO_URL}/pricing-oracle:${SYNAPSE_VERSION:-latest}
+    pull_policy: always
     container_name: synapse-pricing-oracle
     environment: *common-env
     <<: *extra-hosts
@@ -269,10 +264,8 @@ services:
         limits: { cpus: "1.0", memory: 1.5G }
 
   disruption-shield:
-    build:
-      context: ..
-      dockerfile: agents/disruption_shield/Dockerfile
-      target: serve
+    image: ${SYNAPSE_AR_REPO_URL}/disruption-shield:${SYNAPSE_VERSION:-latest}
+    pull_policy: always
     container_name: synapse-disruption-shield
     environment: *common-env
     <<: *extra-hosts
@@ -285,10 +278,8 @@ services:
         limits: { cpus: "1.0", memory: 1.5G }
 
   supplier-trust:
-    build:
-      context: ..
-      dockerfile: agents/supplier_trust/Dockerfile
-      target: serve
+    image: ${SYNAPSE_AR_REPO_URL}/supplier-trust:${SYNAPSE_VERSION:-latest}
+    pull_policy: always
     container_name: synapse-supplier-trust
     environment: *common-env
     <<: *extra-hosts
@@ -301,10 +292,8 @@ services:
         limits: { cpus: "0.5", memory: 1G }
 
   sustainability-agent:
-    build:
-      context: ..
-      dockerfile: agents/sustainability_agent/Dockerfile
-      target: serve
+    image: ${SYNAPSE_AR_REPO_URL}/sustainability-agent:${SYNAPSE_VERSION:-latest}
+    pull_policy: always
     container_name: synapse-sustainability-agent
     environment: *common-env
     <<: *extra-hosts
@@ -318,10 +307,8 @@ services:
 
   # ── Digital Twin ─────────────────────────────────────────────────────────
   digital-twin:
-    build:
-      context: ..
-      dockerfile: digital_twin/Dockerfile
-      target: runtime
+    image: ${SYNAPSE_AR_REPO_URL}/digital-twin:${SYNAPSE_VERSION:-latest}
+    pull_policy: always
     container_name: synapse-digital-twin
     environment:
       <<: *common-env
@@ -339,9 +326,8 @@ services:
 
   # ── Orchestrator ─────────────────────────────────────────────────────────
   orchestrator:
-    build:
-      context: ..
-      dockerfile: orchestrator/Dockerfile
+    image: ${SYNAPSE_AR_REPO_URL}/orchestrator:${SYNAPSE_VERSION:-latest}
+    pull_policy: always
     container_name: synapse-orchestrator
     environment:
       <<: *common-env
@@ -375,10 +361,12 @@ services:
         limits: { cpus: "1.0", memory: 1.5G }
 
   # ── API Gateway (public-facing auth, /api/v1/*, /ws/* — sits in front of orchestrator) ─
+  # NB: the image name in Artifact Registry is `api-gateway` (matches the
+  # `cd-gcp.yml` build matrix); the local service name stays `api` so the
+  # rest of the compose graph (depends_on, healthcheck URLs) is undisturbed.
   api:
-    build:
-      context: ..
-      dockerfile: api/Dockerfile
+    image: ${SYNAPSE_AR_REPO_URL}/api-gateway:${SYNAPSE_VERSION:-latest}
+    pull_policy: always
     container_name: synapse-api
     environment:
       <<: *common-env
@@ -411,12 +399,12 @@ services:
         limits: { cpus: "1.0", memory: 1G }
 
   # ── Frontend ─────────────────────────────────────────────────────────────
+  # The `VITE_BUILD_SHA` build-arg is set by cd-gcp.yml at IMAGE BUILD TIME (in
+  # CI), not at compose-up time. Runtime users see it in the footer chip and
+  # via `GET /version` on the API gateway. See ADR-039.
   frontend:
-    build:
-      context: ../frontend
-      dockerfile: Dockerfile
-      args:
-        VITE_BUILD_SHA: ${BUILD_SHA:-gcp}
+    image: ${SYNAPSE_AR_REPO_URL}/frontend:${SYNAPSE_VERSION:-latest}
+    pull_policy: always
     container_name: synapse-frontend
     depends_on:
       - orchestrator

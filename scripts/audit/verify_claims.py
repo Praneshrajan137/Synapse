@@ -553,6 +553,155 @@ def check_worktree_hook() -> CheckResult:
 
 
 # ---------------------------------------------------------------------------
+# C26: docker-compose.gcp.yml pulls signed images from Artifact Registry
+# ---------------------------------------------------------------------------
+# ADR-039. Every SYNAPSE-owned service in cd-gcp.yml's build matrix MUST be
+# referenced by `image:` (not `build:`) in the GCP compose, with the AR URL
+# pattern. Regression here is the exact trap that left an old purple UI live
+# while 4 PRs landed on main — the compose silently bypassed the CD pipeline.
+_SYNAPSE_SERVICE_IMAGE_NAMES = (
+    "api-gateway",
+    "orchestrator",
+    "digital-twin",
+    "demand-prophet",
+    "routing-navigator",
+    "inventory-sentinel",
+    "freshness-guardian",
+    "pricing-oracle",
+    "disruption-shield",
+    "supplier-trust",
+    "sustainability-agent",
+    "frontend",
+)
+
+
+def _load_gcp_compose() -> dict | None:
+    compose = ROOT / "docker" / "docker-compose.gcp.yml"
+    if not compose.exists():
+        return None
+    try:
+        import yaml  # type: ignore[import-untyped]
+    except ImportError:
+        return None
+    try:
+        return yaml.safe_load(compose.read_text(encoding="utf-8")) or {}
+    except yaml.YAMLError:
+        return None
+
+
+@register("C26", "GCP compose pulls signed images from Artifact Registry")
+def check_gcp_compose_pulls_images() -> CheckResult:
+    data = _load_gcp_compose()
+    if data is None:
+        return CheckResult(
+            "C26", "GCP compose pulls AR images", "SKIP", "compose unparseable or PyYAML missing"
+        )
+    services = data.get("services") or {}
+
+    # Collect every image: reference and flag any build: directive on a
+    # SYNAPSE-owned service. The matching key is the AR image name (with
+    # one alias: compose service `api` → image `api-gateway`).
+    service_to_image = {
+        "api": "api-gateway",
+        "frontend": "frontend",
+        "orchestrator": "orchestrator",
+        "digital-twin": "digital-twin",
+        "demand-prophet": "demand-prophet",
+        "routing-navigator": "routing-navigator",
+        "inventory-sentinel": "inventory-sentinel",
+        "freshness-guardian": "freshness-guardian",
+        "pricing-oracle": "pricing-oracle",
+        "disruption-shield": "disruption-shield",
+        "supplier-trust": "supplier-trust",
+        "sustainability-agent": "sustainability-agent",
+    }
+    expected_image = re.compile(
+        r"^\$\{SYNAPSE_AR_REPO_URL[^}]*\}/(?P<name>[A-Za-z0-9-]+):\$\{SYNAPSE_VERSION"
+    )
+
+    problems: list[str] = []
+    for svc_name, ar_image in service_to_image.items():
+        svc = services.get(svc_name)
+        if not isinstance(svc, dict):
+            problems.append(f"{svc_name}: missing from compose")
+            continue
+        if "build" in svc:
+            problems.append(f"{svc_name}: has `build:` (must be `image:` only)")
+        image = svc.get("image", "")
+        m = expected_image.match(str(image))
+        if not m:
+            problems.append(f"{svc_name}: image '{image}' does not match AR pattern")
+            continue
+        if m.group("name") != ar_image:
+            problems.append(
+                f"{svc_name}: image name '{m.group('name')}' != expected '{ar_image}'"
+            )
+
+    if problems:
+        return CheckResult(
+            "C26",
+            "GCP compose pulls AR images",
+            "FAIL",
+            f"{len(problems)} issue(s): {problems[0]}"
+            + (f" (+{len(problems) - 1} more)" if len(problems) > 1 else ""),
+        )
+    return CheckResult(
+        "C26",
+        "GCP compose pulls AR images",
+        "PASS",
+        f"{len(service_to_image)} services pull from Artifact Registry",
+    )
+
+
+# ---------------------------------------------------------------------------
+# C27: verify_images.sh covers every image in the cd-gcp.yml build matrix
+# ---------------------------------------------------------------------------
+# ADR-039. The Cosign-verify gate on the VM must check every image the CD
+# workflow signed; otherwise a tampered image can be served while the gate
+# reports "all verified." Pre-fix, `frontend` was missing from this list.
+@register("C27", "verify_images.sh covers the full CD matrix")
+def check_verify_images_covers_matrix() -> CheckResult:
+    cd = ROOT / ".github" / "workflows" / "cd-gcp.yml"
+    vs = ROOT / "infrastructure" / "gcp" / "verify_images.sh"
+    if not cd.exists() or not vs.exists():
+        return CheckResult("C27", "verify_images coverage", "SKIP", "files missing")
+
+    cd_text = cd.read_text(encoding="utf-8")
+    matrix_images = set(re.findall(r"image:\s*([A-Za-z0-9-]+)\s*,", cd_text))
+    if not matrix_images:
+        return CheckResult(
+            "C27", "verify_images coverage", "FAIL", "no matrix entries parsed from cd-gcp.yml"
+        )
+
+    vs_text = vs.read_text(encoding="utf-8")
+    m = re.search(r"IMAGES=\(([^)]+)\)", vs_text, re.DOTALL)
+    if not m:
+        return CheckResult(
+            "C27", "verify_images coverage", "FAIL", "IMAGES=(...) array not found"
+        )
+    listed = {
+        line.strip().strip("\"'")
+        for line in m.group(1).splitlines()
+        if line.strip() and not line.strip().startswith("#")
+    }
+
+    missing = sorted(matrix_images - listed)
+    if missing:
+        return CheckResult(
+            "C27",
+            "verify_images coverage",
+            "FAIL",
+            f"images signed by CD but not verified: {missing}",
+        )
+    return CheckResult(
+        "C27",
+        "verify_images coverage",
+        "PASS",
+        f"all {len(matrix_images)} signed images are verified at boot",
+    )
+
+
+# ---------------------------------------------------------------------------
 # Main entry
 # ---------------------------------------------------------------------------
 def run(as_json: bool = False) -> int:

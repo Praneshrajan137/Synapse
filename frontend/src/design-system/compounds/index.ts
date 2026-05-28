@@ -11,3 +11,4 @@ export * from "./CalibrationCurve";
 export * from "./ReasoningTimeline";
 export * from "./LanguagePicker";
 export * from "./ProposalConstellation";
+export * from "./BuildSHAChip";
