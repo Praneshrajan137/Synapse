@@ -27,6 +27,9 @@ runtime-evaluated-base-classes = ["pydantic.BaseModel"]
 # JSON-Schema registry uses ValidationError at runtime (formatter arg);
 # SchemaViolation is intentionally named to express "contract violation".
 "packages/synapse_common/schema_registry.py" = ["TC002", "N818"]
+# InvariantViolation mirrors SchemaViolation — intentionally named for the
+# spec-postcondition contract concept, not a generic *Error (ADR-040).
+"packages/synapse_common/invariants.py" = ["N818"]
 
 [tool.ruff.format]
 quote-style = "double"

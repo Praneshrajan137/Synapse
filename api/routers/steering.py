@@ -31,11 +31,15 @@ from synapse_common.auth import OperatorContext, Role
 logger = structlog.get_logger(__name__)
 router = APIRouter()
 
-POSTGRES_DSN_DEFAULT = "postgresql://synapse_app:synapse_app_2026@postgres:5432/synapse_audit"
-
-
 def _dsn() -> str:
-    return os.environ.get("POSTGRES_DSN", POSTGRES_DSN_DEFAULT)
+    """Resolve the audit DSN. Fail-fast — never embed a credential (Plan v2 §Phase 5)."""
+    dsn = os.environ.get("POSTGRES_DSN")
+    if not dsn:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="POSTGRES_DSN not configured",
+        )
+    return dsn
 
 
 SteeringAction = Literal["set_pareto_weight", "set_tier_threshold", "reset"]

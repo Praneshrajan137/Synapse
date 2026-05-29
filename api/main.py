@@ -76,9 +76,22 @@ def _install_profiler(app: FastAPI) -> None:
 
 
 def _postgres_dsn() -> str:
-    return os.environ.get(
-        "SYNAPSE_API_POSTGRES_DSN",
-        "postgresql+asyncpg://synapse_app:synapse_app_2026@postgres:5432/synapse_audit",
+    """Resolve the async audit DSN. Fail-fast — never embed a credential.
+
+    Plan v2 / Phase 5: removes the hardcoded ``synapse_app:<password>@…``
+    default. Prefers ``SYNAPSE_API_POSTGRES_DSN``; falls back to the sync
+    ``POSTGRES_DSN`` (rewritten to asyncpg) that the GCP compose already sets so
+    the deploy path keeps working without a baked-in secret. Unset → startup
+    fails loudly rather than silently using a known password.
+    """
+    dsn = os.environ.get("SYNAPSE_API_POSTGRES_DSN")
+    if dsn:
+        return dsn
+    sync_dsn = os.environ.get("POSTGRES_DSN")
+    if sync_dsn:
+        return sync_dsn.replace("postgresql://", "postgresql+asyncpg://", 1)
+    raise RuntimeError(
+        "SYNAPSE_API_POSTGRES_DSN (or POSTGRES_DSN) must be set — no embedded credential default"
     )
 
 

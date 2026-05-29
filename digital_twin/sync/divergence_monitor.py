@@ -15,6 +15,7 @@ import structlog
 
 from digital_twin.config import TwinConfig
 from synapse_common.kafka_client import KafkaConfig, SynapseProducer
+from synapse_common.metrics import DIGITAL_TWIN_KL_DIVERGENCE
 
 logger = structlog.get_logger(__name__)
 
@@ -110,6 +111,11 @@ class DivergenceMonitor:
 
         kl = compute_kl_divergence(twin, live)
         self._last_divergence[agent_name] = kl
+
+        # I-12: emit the live fidelity metric on every comparison so the twin's
+        # KL divergence is observable in Prometheus (previously this metric never
+        # existed and the invariant was structurally unverifiable in production).
+        DIGITAL_TWIN_KL_DIVERGENCE.labels(agent_name=agent_name).set(kl)
 
         if kl > self._threshold:
             self._fire_alert(agent_name, kl)

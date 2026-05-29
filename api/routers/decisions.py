@@ -20,7 +20,7 @@ import structlog
 from fastapi import APIRouter, Depends, HTTPException, Path, status
 from pydantic import BaseModel, Field, field_validator
 
-from api.middleware.jwt import RequireRole
+from api.middleware.jwt import CurrentOperator, RequireRole
 from synapse_common.auth import OperatorContext, Role
 from synapse_common.tracing import inject_a2a_headers
 
@@ -28,13 +28,23 @@ logger = structlog.get_logger(__name__)
 router = APIRouter()
 
 ORCHESTRATOR_URL = os.environ.get("SYNAPSE_ORCHESTRATOR_URL", "http://orchestrator:8085")
-POSTGRES_DSN_DEFAULT = (
-    "postgresql://synapse_app:synapse_app_2026@postgres:5432/synapse_audit"
-)
 
 
 def _dsn() -> str:
-    return os.environ.get("POSTGRES_DSN", POSTGRES_DSN_DEFAULT)
+    """Resolve the audit Postgres DSN. Fail-fast — never embed a credential.
+
+    Plan v2 / Phase 5: the previous hardcoded ``synapse_app:<password>@…``
+    default put a password in source. The DSN MUST come from the environment
+    (Secret Manager / SOPS in prod, ``.env`` in dev). An unset DSN is a
+    misconfiguration, not a thing to paper over with a baked-in secret.
+    """
+    dsn = os.environ.get("POSTGRES_DSN")
+    if not dsn:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="POSTGRES_DSN not configured",
+        )
+    return dsn
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -44,7 +54,11 @@ def _dsn() -> str:
 
 
 @router.post("/")
-async def trigger_decision(payload: dict[str, Any]) -> dict[str, Any]:
+async def trigger_decision(
+    payload: dict[str, Any],
+    op: Annotated[OperatorContext, Depends(RequireRole(Role.OPS))],
+) -> dict[str, Any]:
+    # Plan v2 / Phase 5: triggering a decision is a privileged action — OPS role.
     # WS-2: inject W3C traceparent at the API → orchestrator boundary so the
     # request span carries across the process hop. Sprint 7 wired this for
     # A2A + Kafka but missed the gateway's httpx call (see CURRENT.md C3).
@@ -66,6 +80,7 @@ async def trigger_decision(payload: dict[str, Any]) -> dict[str, Any]:
 
 @router.get("/recent")
 async def recent_decisions(
+    op: Annotated[OperatorContext, Depends(CurrentOperator)],
     limit: int = 20,
     tier: str | None = None,
     city: str | None = None,
@@ -132,7 +147,10 @@ async def recent_decisions(
 
 
 @router.get("/{decision_id}")
-async def get_decision(decision_id: UUID) -> dict[str, Any]:
+async def get_decision(
+    decision_id: UUID,
+    op: Annotated[OperatorContext, Depends(CurrentOperator)],
+) -> dict[str, Any]:
     """P3: single audit row with full append-only context."""
     try:
         import psycopg2

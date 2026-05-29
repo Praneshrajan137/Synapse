@@ -25,6 +25,12 @@ jobs:
           # Sprint 13 §Phase 1.3: install agent deps so agents/*/tests/ can be collected
           # alongside packages/ and orchestrator/ in one gated pytest run.
           for req in agents/*/requirements.txt; do pip install -r "$req"; done
+          # Plan v2 §Phase 4: deps for the newly-gated trees (digital_twin needs
+          # simpy; api tests use the FastAPI TestClient + async SQLAlchemy stack;
+          # orchestrator SSE handlers need sse-starlette). simpy lives in the
+          # sprint-3 bundle which the agents/*/ glob above does NOT match.
+          pip install simpy sse-starlette
+          pip install -r agents/requirements-sprint3.txt
       - name: Ruff lint
         run: ruff check packages/synapse_common/ agents/ orchestrator/ --output-format=github
       - name: Ruff format check
@@ -72,18 +78,24 @@ jobs:
             fi
           done
           echo "Reward isolation verified"
-      - name: Unit tests (all three trees, branch coverage on)
-        # Sprint 13 §Phase 1.3 + 2: single pytest run across packages/tests,
-        # agents/, orchestrator/ with branch coverage enabled. The global
-        # --cov-fail-under was removed — the mechanical gate is now per-package
-        # via scripts/coverage_per_package.py (Phase 2) against
-        # infrastructure/quality/coverage-floors.yaml. Floors set at the verified
-        # measured floor − 0.5 so this gate is green on day one but cannot regress.
-        # Floors ratchet UPWARD only (operator step: scripts/coverage_ratchet.py).
-        # The 84% destination is the per-package target written next to each floor.
+      - name: Substance gap gate (Plan v2 ADR-040 — no synthetic shortcuts)
+        # Blocks any agent inference pipeline that reintroduces the
+        # guard-then-ignore / hardcoded-confidence / random-model-input
+        # anti-patterns. Pure stdlib (AST) — no ML deps required.
+        run: python -m scripts.audit.substance_truth --check
+      - name: Unit tests (all gated trees, branch coverage on)
+        # Sprint 13 §Phase 1.3 + 2 / Plan v2 §Phase 4: single pytest run across
+        # packages/tests, agents/, orchestrator/, digital_twin/, api/ with branch
+        # coverage enabled. The global --cov-fail-under was removed — the
+        # mechanical gate is per-package via scripts/coverage_per_package.py
+        # against infrastructure/quality/coverage-floors.yaml. Floors ratchet
+        # UPWARD only (operator step: scripts/coverage_ratchet.py).
+        # data_fabric/ + ml_pipelines/ (heavy feast/ortools/pymoo deps) remain a
+        # documented follow-up ratchet; ml_pipelines/ab_test runs in sprint6-verify.
         run: |
-          pytest packages/tests agents orchestrator -v --tb=short \
+          pytest packages/tests agents orchestrator digital_twin api -v --tb=short \
             --cov=packages/synapse_common --cov=agents --cov=orchestrator \
+            --cov=digital_twin --cov=api \
             --cov-branch \
             --cov-report=xml:coverage.xml \
             --cov-report=term-missing \
