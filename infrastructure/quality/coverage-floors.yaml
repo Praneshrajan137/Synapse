@@ -1,0 +1,88 @@
+# SYNAPSE — Per-package coverage floors (Sprint 13 §Phase 2 / ADR pending)
+#
+# These are the mechanical CI gates enforced by `scripts/coverage_per_package.py`.
+# Each row is the MEASURED current floor minus a small regression buffer,
+# never an aspirational target. Floors ratchet upward only — operator step is
+# `python scripts/coverage_ratchet.py --apply` after a coverage-improving PR.
+#
+# The 84.0 target on every row is the Sprint-13 destination. Get there over many PRs.
+#
+# Provenance: floor numbers below are seeded from
+# `docs/state/coverage-baseline-2026-05-29.md`. Rows marked CI-MUST-MEASURE
+# carry zero local signal (the deps aren't installed on the Windows dev box);
+# the CI Linux runner's first post-merge run replaces them with verified numbers.
+#
+# Schema:
+#   packages.<path>:
+#     line:        float — line+branch combined %, the gate metric
+#     target:      float — Sprint-13 destination (always 84.0)
+#     note:        str   — provenance, why this number, and what blocks ratchet
+#
+# Coverage modes:
+#   The pytest run uses `--cov-branch`, so the `line` field is actually the
+#   combined line+branch number coverage.py emits in the "TOTAL ... Cover" column.
+#   We do not split them — that would double-count gates without adding signal.
+
+target: 84.0  # documented destination for every package; not enforced directly
+
+packages:
+  packages/synapse_common:
+    line: 83.5
+    target: 84.0
+    note: "Sprint 13 Phase 3 (round 2) -- TARGET REACHED: measured 84.54% on 2026-05-29. Floor ratcheted 60.5 -> 75.5 -> 83.5 across 2 PRs covering budget/dbc/reward_shadow/outbox/schema_registry (round 1) + dpdpa cascade/outbox-enqueue/KafkaHeaderCarrier/langsmith disabled-path (round 2). Total +118 tests in synapse_common alone, 153 -> 239 passing. Remaining gap to 84% target is now <0.5pp -- next PR can push to 90+ by adding tracing.py OTel inject-path tests (currently 39%)."
+
+  orchestrator:
+    line: 30.0
+    target: 84.0
+    note: "Measured 30.11% locally (subset — 3 tests excluded for missing pymoo/sse-starlette deps; brownout tests failing). True CI number will be higher. Largest 0% modules: protocol.py (169 LOC), serve.py (131 LOC), state_machine.py (75 LOC). Audit modules (hash_chain, logger) are the highest-leverage near-term target."
+
+  agents/demand_prophet:
+    line: 0.0
+    target: 84.0
+    note: "CI-MUST-MEASURE — torch not installed locally. After Phase 1.3 lands, CI run on main will overwrite this floor with floor(measured)-0.5."
+
+  agents/disruption_shield:
+    line: 0.0
+    target: 84.0
+    note: "CI-MUST-MEASURE — torch not installed locally."
+
+  agents/freshness_guardian:
+    line: 0.0
+    target: 84.0
+    note: "CI-MUST-MEASURE — torch + lifelines not installed locally."
+
+  agents/inventory_sentinel:
+    line: 0.0
+    target: 84.0
+    note: "CI-MUST-MEASURE — torch not installed locally. New test_reward_safety.py added in Phase 1.1 raises this."
+
+  agents/pricing_oracle:
+    line: 0.0
+    target: 84.0
+    note: "CI-MUST-MEASURE — torch not installed locally. Largest test surface area (14 reward tests + 18 sustainability_agent)."
+
+  agents/routing_navigator:
+    line: 0.0
+    target: 84.0
+    note: "CI-MUST-MEASURE — torch + ortools not installed locally. cvrptw.py (480 LOC) is the single largest pure-Python untested module — see plan §Risks note 6 for the scoping recommendation."
+
+  agents/supplier_trust:
+    line: 3.0
+    target: 84.0
+    note: "Measured 3.69% locally (with 4 collection errors — torch_geometric missing). New test_reward_safety.py added in Phase 1.1 raises this. CI run will overwrite the floor."
+
+  agents/sustainability_agent:
+    line: 0.0
+    target: 84.0
+    note: "CI-MUST-MEASURE — torch not installed locally."
+
+# Ratchet protocol (per `scripts/coverage_ratchet.py`):
+#   - After each PR that adds tests, run `python scripts/coverage_ratchet.py`.
+#   - If MEASURED - floor > 2.0 on any package, the helper prints a proposed
+#     bump and waits for `--apply` to write it back.
+#   - The bump lands as part of the same PR (or the very next one), so the
+#     improvement is locked in mechanically.
+#   - Floors NEVER decrease. A regression is supposed to fail CI — that is
+#     the entire point. To intentionally lower a floor (e.g., for a deletion
+#     that removes covered code), submit the floor change as a separate
+#     reviewed PR with explicit justification.

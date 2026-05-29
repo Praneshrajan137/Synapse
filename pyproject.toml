@@ -174,8 +174,25 @@ addopts = "--strict-markers -v --tb=short"
 
 [tool.coverage.run]
 source = ["packages/synapse_common", "agents", "orchestrator"]
-omit = ["*/tests/*", "*/training/*"]
+branch = true
+# Sprint 13 §Phase 1.2: narrowed from `*/training/*` to specific training-loop modules.
+# Reason: the broad `*/training/*` omit silently excluded `rewards.py`, `reward_config.py`,
+# and `conformal.py` — the very files mutation-tested at <15% survival. We keep training
+# LOOPS (PyTorch fit loops, MLflow logging, GPU paths) excluded since they cannot be
+# unit-tested cheaply; pure-function modules become covered.
+omit = [
+    "*/tests/*",
+    "*/training/loop.py",
+    "*/training/train_*.py",
+    "*/training/datasets/*",
+    "*/training/dataloader.py",
+    "*/training/lightning_module.py",
+]
 
 [tool.coverage.report]
-fail_under = 80
+# Sprint 13 §Phase 2: the global fail_under is now informational only.
+# The mechanical gate is `scripts/coverage_per_package.py` against
+# `infrastructure/quality/coverage-floors.yaml` — per-package floors that
+# ratchet up, never down. The 84 here is the destination target on every package.
+fail_under = 0
 show_missing = true

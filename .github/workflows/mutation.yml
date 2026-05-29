@@ -4,12 +4,26 @@ on:
   schedule:
     - cron: '0 2 * * 0'  # Sunday 2AM UTC
   workflow_dispatch:
+  # Sprint 13 §Phase 4.2 (C30): PR-trigger on changes to the highest-leverage
+  # mutation targets. The full-matrix Sunday cron still runs `mutation` job.
+  # The `mutation-fast` job below only mutates the files touched in the PR,
+  # keeping wall-clock under ~10 min while making regressions on rewards /
+  # guardrails / audit fail CI before merge to main.
+  pull_request:
+    paths:
+      - 'agents/*/training/rewards.py'
+      - 'orchestrator/guardrails/rules.py'
+      - 'orchestrator/audit/logger.py'
+      - 'orchestrator/audit/hash_chain.py'
 
 env:
   PYTHONPATH: "."
 
 jobs:
   mutation:
+    # Full-matrix run — scheduled + manual dispatch only. NOT on pull_request
+    # (see mutation-fast below for the PR-blocking subset).
+    if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     timeout-minutes: 90
 
@@ -86,3 +100,100 @@ jobs:
           name: mutation-results
           path: .mutmut-cache-*
           retention-days: 30
+
+  mutation-fast:
+    # Sprint 13 §Phase 4.2 (C30): runs ONLY the changed-target mutmut sweep on
+    # pull_request. Parallel to frontend Stryker (C16, frontend.yml). The
+    # CLAUDE.md thresholds (<15% rewards, <10% guardrails/audit) are enforced
+    # by scripts/check_mutation_threshold.py — a regression on a PR fails CI
+    # before merge to main. Designed to complete in ~5-10 min on the PR diff
+    # (each target ~200 LOC; mutmut runs ~3 min per file).
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      pull-requests: write
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # need history to diff vs base ref
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install project dependencies
+        run: |
+          pip install -r packages/requirements.txt -r packages/requirements-dev.txt
+          pip install -r orchestrator/requirements.txt
+          for req in agents/*/requirements.txt; do pip install -r "$req"; done
+
+      - name: Detect changed mutation targets
+        id: targets
+        run: |
+          set -e
+          BASE_REF="${{ github.event.pull_request.base.sha }}"
+          changed=$(git diff --name-only "${BASE_REF}" HEAD || true)
+          echo "Changed files:"
+          echo "${changed}"
+          # Intersect changed files with the gated mutation target set
+          targets=""
+          for f in ${changed}; do
+            case "${f}" in
+              agents/*/training/rewards.py|orchestrator/guardrails/rules.py|orchestrator/audit/logger.py|orchestrator/audit/hash_chain.py)
+                targets="${targets} ${f}"
+                ;;
+            esac
+          done
+          targets=$(echo "${targets}" | xargs)
+          echo "targets=${targets}" >> "${GITHUB_OUTPUT}"
+          if [ -z "${targets}" ]; then
+            echo "No gated mutation targets changed -- nothing to do."
+          fi
+
+      - name: Run mutmut on changed targets
+        if: steps.targets.outputs.targets != ''
+        run: |
+          set -e
+          for target in ${{ steps.targets.outputs.targets }}; do
+            echo "=== Mutating ${target} ==="
+            # Pick the matching test file by convention.
+            case "${target}" in
+              agents/*/training/rewards.py)
+                agent_dir=$(dirname $(dirname "${target}"))
+                test_path="${agent_dir}/tests/test_reward.py"
+                threshold=15
+                label="rewards/$(basename ${agent_dir})"
+                ;;
+              orchestrator/guardrails/rules.py)
+                test_path="orchestrator/tests/test_guardrails.py"
+                threshold=10
+                label="guardrails/rules"
+                ;;
+              orchestrator/audit/logger.py)
+                test_path="orchestrator/tests/test_audit_logger.py"
+                threshold=10
+                label="audit/logger"
+                ;;
+              orchestrator/audit/hash_chain.py)
+                test_path="orchestrator/tests/test_hash_chain.py"
+                threshold=10
+                label="audit/hash_chain"
+                ;;
+            esac
+            if [ ! -f "${test_path}" ]; then
+              echo "WARN: no matching test file at ${test_path} -- failing mutation for safety"
+              exit 1
+            fi
+            rm -rf .mutmut-cache
+            mutmut run \
+              --paths-to-mutate="${target}" \
+              --tests-dir="$(dirname ${test_path})" \
+              --runner="python -m pytest ${test_path} -x -q"
+            mutmut results
+            python scripts/check_mutation_threshold.py \
+              --threshold "${threshold}" --label "${label}"
+          done

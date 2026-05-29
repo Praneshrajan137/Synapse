@@ -305,33 +305,37 @@ COVERAGE_TARGET = 80
 
 @register("C15", "Backend coverage gate >= verified floor")
 def check_coverage_floor() -> CheckResult:
+    """Sprint 13 §Phase 2 supersedes the single --cov-fail-under gate with a
+    per-package floor enforced by `scripts/coverage_per_package.py` against
+    `infrastructure/quality/coverage-floors.yaml`. C15 now passes iff the
+    per-package script is invoked in ci.yml and the floors YAML exists.
+    Per-package floor enforcement detail belongs to C28."""
     ci = ROOT / ".github" / "workflows" / "ci.yml"
+    floors = ROOT / "infrastructure" / "quality" / "coverage-floors.yaml"
     if not ci.exists():
         return CheckResult("C15", "Coverage gate", "SKIP", "ci.yml missing")
     text = ci.read_text(encoding="utf-8")
-    m = re.search(r"--cov-fail-under[= ](\d+)", text)
-    if not m:
-        return CheckResult("C15", "Coverage gate", "FAIL", "no --cov-fail-under in ci.yml")
-    pct = int(m.group(1))
-    if pct < COVERAGE_FLOOR_MIN:
-        return CheckResult(
-            "C15",
-            "Coverage gate",
-            "FAIL",
-            f"--cov-fail-under={pct} below hard floor {COVERAGE_FLOOR_MIN}",
-        )
-    if pct >= COVERAGE_FLOOR_NOW:
+    if "coverage_per_package.py" in text and floors.is_file():
         return CheckResult(
             "C15",
             "Coverage gate",
             "PASS",
-            f"--cov-fail-under={pct} (ratchet={COVERAGE_FLOOR_NOW}, target={COVERAGE_TARGET})",
+            "per-package script wired in ci.yml; floors YAML present (see C28)",
+        )
+    # Backwards-compat path — accept the old --cov-fail-under gate if present.
+    m = re.search(r"--cov-fail-under[= ](\d+)", text)
+    if m and int(m.group(1)) >= COVERAGE_FLOOR_MIN:
+        return CheckResult(
+            "C15",
+            "Coverage gate",
+            "PASS",
+            f"legacy --cov-fail-under={m.group(1)} still meets hard floor {COVERAGE_FLOOR_MIN}",
         )
     return CheckResult(
         "C15",
         "Coverage gate",
         "FAIL",
-        f"--cov-fail-under={pct} regressed below ratchet={COVERAGE_FLOOR_NOW}",
+        "no per-package gate AND no --cov-fail-under in ci.yml",
     )
 
 
@@ -698,6 +702,174 @@ def check_verify_images_covers_matrix() -> CheckResult:
         "verify_images coverage",
         "PASS",
         f"all {len(matrix_images)} signed images are verified at boot",
+    )
+
+
+# ---------------------------------------------------------------------------
+# C28: per-package coverage floors enforced
+# ---------------------------------------------------------------------------
+# Sprint 13 §Phase 2 / Phase 6. Supersedes C15's single-gate model. PASS iff:
+#   - `scripts/coverage_per_package.py` exists and is wired into ci.yml,
+#   - `infrastructure/quality/coverage-floors.yaml` exists with all 10 packages
+#     (synapse_common, orchestrator, 8 agents), and
+#   - every floor is non-negative.
+# The 84% destination on each row is documented intent — verify_claims does NOT
+# fail until measured drops below floor; that is the job of CI's actual
+# per-package gate step.
+@register("C28", "Per-package coverage floors enforced")
+def check_per_package_coverage() -> CheckResult:
+    script = ROOT / "scripts" / "coverage_per_package.py"
+    floors = ROOT / "infrastructure" / "quality" / "coverage-floors.yaml"
+    ci = ROOT / ".github" / "workflows" / "ci.yml"
+    if not script.is_file():
+        return CheckResult("C28", "Per-package coverage", "FAIL", "scripts/coverage_per_package.py missing")
+    if not floors.is_file():
+        return CheckResult("C28", "Per-package coverage", "FAIL", "coverage-floors.yaml missing")
+    if not ci.is_file() or "coverage_per_package.py" not in ci.read_text(encoding="utf-8"):
+        return CheckResult("C28", "Per-package coverage", "FAIL", "ci.yml does not invoke the script")
+    try:
+        import yaml as _yaml  # local import; PyYAML is a dev dep
+    except ImportError:
+        return CheckResult("C28", "Per-package coverage", "SKIP", "PyYAML not installed")
+    doc = _yaml.safe_load(floors.read_text(encoding="utf-8")) or {}
+    pkgs = doc.get("packages", {})
+    expected_count = 10  # synapse_common + orchestrator + 8 agents
+    if len(pkgs) < expected_count:
+        return CheckResult(
+            "C28", "Per-package coverage", "FAIL",
+            f"floors YAML has {len(pkgs)} packages, expected >={expected_count}",
+        )
+    bad = [p for p, cfg in pkgs.items() if float(cfg.get("line", -1)) < 0]
+    if bad:
+        return CheckResult(
+            "C28", "Per-package coverage", "FAIL",
+            f"negative line floor in: {bad}",
+        )
+    return CheckResult(
+        "C28", "Per-package coverage", "PASS",
+        f"{len(pkgs)} packages gated; script wired into ci.yml",
+    )
+
+
+# ---------------------------------------------------------------------------
+# C29: branch coverage enabled in pyproject.toml
+# ---------------------------------------------------------------------------
+# Sprint 13 §Phase 1.2 — `branch = true` under [tool.coverage.run]. Without this
+# every per-package gate would be line-only and miss conditional branches.
+@register("C29", "Branch coverage enabled in pyproject")
+def check_branch_coverage() -> CheckResult:
+    pp = ROOT / "pyproject.toml"
+    if not pp.is_file():
+        return CheckResult("C29", "Branch coverage", "FAIL", "pyproject.toml missing")
+    text = pp.read_text(encoding="utf-8")
+    # Find the [tool.coverage.run] section explicitly, then look for
+    # `branch = true` on its own line before the next [...] section header.
+    section = re.search(
+        r"\[tool\.coverage\.run\]\n((?:(?!^\[)[\s\S])*)",
+        text, re.MULTILINE,
+    )
+    if section and re.search(r"^\s*branch\s*=\s*true\b", section.group(1), re.IGNORECASE | re.MULTILINE):
+        return CheckResult("C29", "Branch coverage", "PASS", "branch = true in [tool.coverage.run]")
+    return CheckResult(
+        "C29", "Branch coverage", "FAIL",
+        "branch = true not set under [tool.coverage.run] in pyproject.toml",
+    )
+
+
+# ---------------------------------------------------------------------------
+# C30: Python mutmut PR-gated on changed reward/audit/guardrail files
+# ---------------------------------------------------------------------------
+# Sprint 13 §Phase 4.2. Parallel to C16 (frontend Stryker). PASS iff
+# `.github/workflows/mutation.yml` (or any workflow) runs mutmut on
+# `pull_request` for the high-leverage Python targets. Until that PR-trigger
+# is wired, C30 is honestly FAIL — the existing Sunday cron does not block
+# regressions on merge to main.
+@register("C30", "Python mutmut PR-gated on changed targets")
+def check_python_mutmut_pr_gated() -> CheckResult:
+    workflows = ROOT / ".github" / "workflows"
+    if not workflows.is_dir():
+        return CheckResult("C30", "mutmut PR gate", "SKIP", "workflows dir missing")
+    for wf in workflows.glob("*.yml"):
+        text = wf.read_text(encoding="utf-8")
+        if "mutmut" not in text:
+            continue
+        # Does any job in this workflow trigger on pull_request AND mention
+        # one of the gated mutation targets?
+        has_pr = re.search(r"pull_request\s*:", text)
+        targets_re = r"agents/.*?/training/rewards\.py|guardrails/rules\.py|audit/(hash_chain|logger)\.py"
+        has_target = re.search(targets_re, text)
+        if has_pr and has_target:
+            return CheckResult(
+                "C30", "mutmut PR gate", "PASS",
+                f"PR-trigger + Python mutation target found in {wf.name}",
+            )
+    return CheckResult(
+        "C30", "mutmut PR gate", "FAIL",
+        "no workflow runs mutmut on pull_request for rewards/audit/guardrail targets "
+        "(Sprint 13 Phase 4.2 follow-up — current setup is Sunday cron only)",
+    )
+
+
+# ---------------------------------------------------------------------------
+# C31: spec-coverage script wired to CI as a blocking step
+# ---------------------------------------------------------------------------
+# Sprint 13 §Phase 5.3. PASS iff `scripts/check_spec_coverage.py` is invoked
+# from ci.yml with `--threshold N`. Initial N = 12 (just below measured 13.8%
+# assertion-matched aggregate). Ratchet plan: 12 -> 25 -> 50 -> 75 -> 100.
+@register("C31", "Spec-coverage script in CI with threshold")
+def check_spec_coverage_in_ci() -> CheckResult:
+    script = ROOT / "scripts" / "check_spec_coverage.py"
+    ci = ROOT / ".github" / "workflows" / "ci.yml"
+    if not script.is_file():
+        return CheckResult("C31", "Spec coverage", "FAIL", "check_spec_coverage.py missing")
+    if not ci.is_file():
+        return CheckResult("C31", "Spec coverage", "SKIP", "ci.yml missing")
+    text = ci.read_text(encoding="utf-8")
+    m = re.search(r"check_spec_coverage\.py.*?--threshold\s+(\d+)", text, re.DOTALL)
+    if not m:
+        return CheckResult(
+            "C31", "Spec coverage", "FAIL",
+            "check_spec_coverage.py not invoked with --threshold in ci.yml",
+        )
+    threshold = int(m.group(1))
+    if threshold < 10:
+        return CheckResult(
+            "C31", "Spec coverage", "FAIL",
+            f"--threshold {threshold} below hard floor 10",
+        )
+    return CheckResult(
+        "C31", "Spec coverage", "PASS",
+        f"--threshold {threshold} (ratchet target: 50 -> 100)",
+    )
+
+
+# ---------------------------------------------------------------------------
+# C32: training/* coverage omit narrowed (rewards.py is covered)
+# ---------------------------------------------------------------------------
+# Sprint 13 §Phase 1.2. The previous broad `*/training/*` omit hid the very
+# files mutation-tested at <15% survival. PASS iff the omit pattern does NOT
+# contain the bare `*/training/*` wildcard.
+@register("C32", "Training/* omit narrowed in pyproject")
+def check_training_omit_narrowed() -> CheckResult:
+    pp = ROOT / "pyproject.toml"
+    if not pp.is_file():
+        return CheckResult("C32", "Training omit", "FAIL", "pyproject.toml missing")
+    text = pp.read_text(encoding="utf-8")
+    # The broad omit pattern, if present, is a regression.
+    if re.search(r'"\*/training/\*"', text):
+        return CheckResult(
+            "C32", "Training omit", "FAIL",
+            "broad `*/training/*` omit pattern present — re-hides rewards.py from coverage",
+        )
+    # Affirmative check: at least the narrow patterns are present (loop, train_*).
+    if re.search(r'"\*/training/loop\.py"', text):
+        return CheckResult(
+            "C32", "Training omit", "PASS",
+            "narrow training-loop omit pattern present; rewards.py is measurable",
+        )
+    return CheckResult(
+        "C32", "Training omit", "PARTIAL",
+        "broad pattern absent but narrow loop pattern not present either",
     )
 
 

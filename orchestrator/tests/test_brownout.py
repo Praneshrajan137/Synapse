@@ -10,6 +10,7 @@ from __future__ import annotations
 from typing import Any
 
 import pytest
+from synapse_common.breakers import BreakerState
 from synapse_common.models import DecisionTier
 
 from orchestrator.consensus import brownout as bo
@@ -18,17 +19,30 @@ from orchestrator.consensus.brownout import (
     BrownoutLevel,
 )
 
+# Sprint 13 fix: the production `_breaker_state()` compares `breaker.state` to
+# the BreakerState string enum (not raw integers). The previous _FakeBreaker
+# passed plain ints, which always resolved to "CLOSED" (state == 0) regardless
+# of intent. We now expose the same BreakerState enum the real AsyncBreaker
+# does, keyed by the same severity ordering: CLOSED=0 < HALF_OPEN=1 < OPEN=2.
+_STATE_BY_LEVEL: dict[int, BreakerState] = {
+    0: BreakerState.CLOSED,
+    1: BreakerState.HALF_OPEN,
+    2: BreakerState.OPEN,
+}
+
 
 class _FakeBreaker:
-    """Minimal stand-in for AsyncBreaker — exposes only ``state`` as int.
+    """Minimal stand-in for AsyncBreaker — exposes ``state: BreakerState``.
 
-    BrownoutController._breaker_state casts state to int; OPEN=2, HALF=1,
-    CLOSED=0. We model the same mapping here so tests don't need the
-    real breaker FSM.
+    Accepts the legacy integer levels (0/1/2) for backward compatibility with
+    existing test cases and translates to the proper enum.
     """
 
-    def __init__(self, state: int = 0) -> None:
-        self.state = state
+    def __init__(self, state: int | BreakerState = 0) -> None:
+        if isinstance(state, BreakerState):
+            self.state = state
+        else:
+            self.state = _STATE_BY_LEVEL[state]
 
 
 @pytest.fixture(autouse=True)

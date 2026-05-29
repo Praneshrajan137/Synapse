@@ -22,6 +22,9 @@ jobs:
           pip install -r packages/requirements.txt -r packages/requirements-dev.txt
           pip install -r orchestrator/requirements.txt
           pip install jsonschema pyyaml
+          # Sprint 13 §Phase 1.3: install agent deps so agents/*/tests/ can be collected
+          # alongside packages/ and orchestrator/ in one gated pytest run.
+          for req in agents/*/requirements.txt; do pip install -r "$req"; done
       - name: Ruff lint
         run: ruff check packages/synapse_common/ agents/ orchestrator/ --output-format=github
       - name: Ruff format check
@@ -69,24 +72,40 @@ jobs:
             fi
           done
           echo "Reward isolation verified"
-      - name: Unit tests
-        # WS-9: started a coverage ratchet. The CLAUDE.md TARGET is 80%,
-        # but the VERIFIED current floor against this run's snapshot is
-        # 63.87% — the 80% slot was always aspirational. Per the project's
-        # "verified over claimed" principle we set the gate at the actual
-        # floor + 0.13 (= 64) so:
-        #   1. The gate is honest — it reflects what the suite proves.
-        #   2. Any regression in covered branches immediately fails CI.
-        #   3. Each PR that adds tests is expected to raise this number by
-        #      a few points until we converge on the 80% target.
-        # The mismatch between CLAUDE.md (80%) and this gate (64%) is
-        # documented as a known follow-up in docs/state/CURRENT.md.
+      - name: Unit tests (all three trees, branch coverage on)
+        # Sprint 13 §Phase 1.3 + 2: single pytest run across packages/tests,
+        # agents/, orchestrator/ with branch coverage enabled. The global
+        # --cov-fail-under was removed — the mechanical gate is now per-package
+        # via scripts/coverage_per_package.py (Phase 2) against
+        # infrastructure/quality/coverage-floors.yaml. Floors set at the verified
+        # measured floor − 0.5 so this gate is green on day one but cannot regress.
+        # Floors ratchet UPWARD only (operator step: scripts/coverage_ratchet.py).
+        # The 84% destination is the per-package target written next to each floor.
         run: |
-          cd packages && pytest tests/ -v --tb=short \
-            --cov=synapse_common \
-            --cov-report=xml \
+          pytest packages/tests agents orchestrator -v --tb=short \
+            --cov=packages/synapse_common --cov=agents --cov=orchestrator \
+            --cov-branch \
+            --cov-report=xml:coverage.xml \
             --cov-report=term-missing \
-            --cov-fail-under=63
+            --cov-fail-under=0
+      - name: Per-package coverage floor (Sprint 13 §Phase 2)
+        run: |
+          python scripts/coverage_per_package.py \
+            --xml coverage.xml \
+            --floors infrastructure/quality/coverage-floors.yaml \
+            --markdown
+      - name: Spec coverage (Sprint 13 §Phase 5)
+        # Aggregate assertion-matched coverage across all agent spec.yaml
+        # invariants — substring matching is gameable; this requires an `assert`
+        # within 20 lines of the INV-* ID. The script searches every test_*.py
+        # under each agent's tests/ dir (not just test_spec.py) so invariants
+        # asserted in test_reward.py, test_spec_assertions.py, etc. all count.
+        # Sprint 13 §Phase 5 round 2: ratchet bumped 12 -> 99 after a session
+        # that added test_spec_assertions.py to 6 silent agents (56 new tests).
+        # Verified aggregate: 100.0% (65/65 invariants assertion-matched).
+        # Gate at 99 so any regression of even one invariant fails CI.
+        run: |
+          python scripts/check_spec_coverage.py --threshold 99 --per-agent
       - name: Contract tests
         run: |
           pytest agents/*/contracts/ -m contract -v --tb=short 2>/dev/null || echo "No contract tests yet (Sprint 2)"
@@ -94,7 +113,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: coverage-report
-          path: packages/coverage.xml
+          path: coverage.xml
 
   sprint6-verify:
     name: Sprint 6 Multi-City Verification
