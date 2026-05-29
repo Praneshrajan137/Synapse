@@ -13,15 +13,26 @@ from typing import Any
 
 import numpy as np
 import structlog
+from synapse_common.features import FeatureProvider
 from synapse_common.metrics import (
     DEMAND_PROPHET_COVERAGE_P90,
     DEMAND_PROPHET_NEGATIVE_HORIZON_TOTAL,
 )
 from synapse_common.models import DemandForecast
+from synapse_common.provenance import ConfidenceBasis, FeatureSource, Provenance
 
 logger = structlog.get_logger(__name__)
 
 VALID_HORIZONS = frozenset({"15min", "1h", "6h", "24h", "7d"})
+# Feast feature references this agent reads (view:feature). When Feast is
+# unreachable the FeatureProvider synthesises these deterministically (ADR-041).
+FEATURE_REFS = [
+    "demand_features:rolling_7d_mean",
+    "demand_features:rolling_7d_std",
+    "demand_features:trend",
+    "demand_features:dow_seasonality",
+]
+FALLBACK_CONFIDENCE = 0.5  # documented I-7 floor when no calibrated model is present
 
 
 class DemandProphetPipeline:
@@ -43,6 +54,12 @@ class DemandProphetPipeline:
         self._feast = feast_client
         self._neo4j = neo4j_driver
         self._kafka = kafka_producer
+        # ADR-041: features flow through the anti-corruption layer, never Feast
+        # directly. ADR-040: provenance/degradation tracked per call.
+        self._features = FeatureProvider(feast_client)
+        self._feature_source = FeatureSource.FALLBACK
+        self._model_degraded = model is None
+        self.last_provenance: Provenance = Provenance.degraded_fallback()
 
     def predict(
         self,
@@ -112,23 +129,99 @@ class DemandProphetPipeline:
             raise ValueError(f"PRE-DP-004: Invalid horizons {invalid}. Valid: {VALID_HORIZONS}")
 
     def _get_features(self, sku_ids: list[str], store_id: str) -> dict[str, Any]:
-        if self._feast is None:
-            logger.warning("feast_unavailable", fallback="synthetic features")
-            return self._synthetic_features(sku_ids, store_id)
-        return self._synthetic_features(sku_ids, store_id)
+        """Retrieve features via the anti-corruption layer (ADR-041).
+
+        Real features when Feast is reachable; deterministic fallback otherwise,
+        with ``degraded`` propagated into provenance — never the guard-then-ignore
+        shape that returned synthetic data even with a live store.
+        """
+        result = self._features.get(sku_ids, FEATURE_REFS, store_id=store_id)
+        self._feature_source = result.source
+        # Preserve the sku list + count for the deterministic EMA fallback.
+        values = dict(result.values)
+        values.setdefault("sku_ids", list(sku_ids))
+        values.setdefault("num_skus", len(sku_ids))
+        return values
 
     def _get_graph_context(self, sku_ids: list[str], store_id: str) -> dict[str, Any]:
         if self._neo4j is None:
             logger.warning("neo4j_unavailable", fallback="empty graph context")
-        return {"node_features": {}, "edge_index": {}}
+            return {"node_features": {}, "edge_index": {}}
+        return self._query_graph(sku_ids, store_id)
+
+    def _query_graph(self, sku_ids: list[str], store_id: str) -> dict[str, Any]:
+        """Query the Neo4j supply network for SKU adjacency features (ADR-005).
+
+        Degrades to empty context on any driver failure (I-7) rather than taking
+        the agent down.
+        """
+        try:
+            with self._neo4j.session() as session:  # type: ignore[union-attr]
+                rows = session.run(
+                    "MATCH (s:SKU)-[:STOCKED_AT]->(st:Store {store_id: $store_id}) "
+                    "WHERE s.sku_id IN $sku_ids RETURN s.sku_id AS sku_id, "
+                    "s.substitution_degree AS deg",
+                    sku_ids=list(sku_ids),
+                    store_id=store_id,
+                )
+                node_features = {r["sku_id"]: {"deg": r.get("deg", 0)} for r in rows}
+            return {"node_features": node_features, "edge_index": {}}
+        except Exception as exc:  # noqa: BLE001 — graph outage degrades, never crashes (I-7)
+            logger.warning("graph_query_failed", error=str(exc), fallback="empty graph context")
+            return {"node_features": {}, "edge_index": {}}
 
     def _run_inference(
         self, features: dict[str, Any], graph_context: dict[str, Any]
     ) -> dict[str, np.ndarray]:
         if self._model is None:
             logger.warning("model_unavailable", fallback="EMA baseline")
+            self._model_degraded = True
             return self._ema_fallback(features)
-        return self._ema_fallback(features)
+        try:
+            preds = self._model_predict(features, graph_context)
+            self._model_degraded = False
+            return preds
+        except Exception as exc:  # noqa: BLE001 — model failure degrades to EMA (I-7)
+            logger.warning("model_inference_failed", error=str(exc), fallback="EMA baseline")
+            self._model_degraded = True
+            return self._ema_fallback(features)
+
+    def _model_predict(
+        self, features: dict[str, Any], graph_context: dict[str, Any]
+    ) -> dict[str, np.ndarray]:
+        """Run the trained HGT-TFT hybrid (ADR-041 model path).
+
+        Builds the per-horizon [lower, point, upper] tensor from the model's
+        quantile heads. The model is loaded via the registry in serve.py; here it
+        is already a concrete object. Raises on any shape/interface mismatch so
+        the caller degrades to EMA (I-7).
+        """
+        sku_ids: list[str] = features.get("sku_ids") or []
+        num_skus = len(sku_ids) if sku_ids else int(features.get("num_skus", 1))
+        feature_matrix = self._feature_matrix(features, num_skus)
+        raw = self._model.predict_quantiles(feature_matrix, graph_context)  # type: ignore[union-attr]
+        predictions: dict[str, np.ndarray] = {}
+        for h_idx, horizon in enumerate(VALID_HORIZONS):
+            q = np.asarray(raw[horizon] if isinstance(raw, dict) else raw[:, h_idx, :])
+            if q.ndim != 2 or q.shape[1] != 3:
+                raise ValueError(f"model returned bad shape for {horizon}: {q.shape}")
+            predictions[horizon] = q
+        return predictions
+
+    @staticmethod
+    def _feature_matrix(features: dict[str, Any], num_skus: int) -> np.ndarray:
+        """Assemble a real (num_skus, num_features) matrix from retrieved features."""
+        cols: list[np.ndarray] = []
+        for ref in FEATURE_REFS:
+            vals = features.get(ref)
+            if vals is None:
+                cols.append(np.zeros(num_skus, dtype=np.float64))
+            else:
+                arr = np.asarray(vals, dtype=np.float64).reshape(-1)
+                if arr.shape[0] != num_skus:
+                    arr = np.resize(arr, num_skus)
+                cols.append(arr)
+        return np.stack(cols, axis=1) if cols else np.zeros((num_skus, 1))
 
     def _ema_fallback(self, features: dict[str, Any]) -> dict[str, np.ndarray]:
         """EMA fallback when model unavailable (I-7: graceful degradation).
@@ -167,10 +260,13 @@ class DemandProphetPipeline:
         forecasts: list[DemandForecast] = []
         now = datetime.now(UTC)
 
+        has_intervals = intervals is not None
+
         for i, sku_id in enumerate(sku_ids):
             horizons_dict: dict[str, float] = {}
             lower_90: dict[str, float] = {}
             upper_90: dict[str, float] = {}
+            rel_widths: list[float] = []
 
             for horizon in VALID_HORIZONS:
                 pred = predictions[horizon]
@@ -200,6 +296,16 @@ class DemandProphetPipeline:
                     lower_90[horizon] = float(max(pred[i, 0], 0.0))
                     upper_90[horizon] = float(max(pred[i, 2], 0.0))
 
+                width = upper_90[horizon] - lower_90[horizon]
+                denom = max(horizons_dict[horizon], 1.0)
+                rel_widths.append(width / denom)
+
+            # ADR-040: confidence derived from the conformal interval width — a
+            # narrower interval (relative to the point forecast) means a more
+            # confident forecast. Constant confidence is forbidden (disables I-5).
+            mean_rel_width = float(np.mean(rel_widths)) if rel_widths else 1.0
+            confidence = round(float(1.0 / (1.0 + mean_rel_width)), 4)
+
             forecast = DemandForecast(
                 sku_id=sku_id,
                 store_id=store_id,
@@ -207,9 +313,21 @@ class DemandProphetPipeline:
                 horizons=horizons_dict,
                 lower_90=lower_90,
                 upper_90=upper_90,
-                confidence=0.85,
+                confidence=confidence,
                 drift_detected=False,
             )
             forecasts.append(forecast)
+
+        # ADR-040: record provenance reflecting the real sources used this call.
+        degraded = self._model_degraded or self._feature_source == FeatureSource.FALLBACK
+        if degraded or not has_intervals:
+            self.last_provenance = Provenance.degraded_fallback(feature_source=self._feature_source)
+        else:
+            model_ver = getattr(self._model, "version", None) or "hgt_tft_hybrid"
+            self.last_provenance = Provenance.real(
+                model_version=f"demand_prophet_{model_ver}",
+                confidence_basis=ConfidenceBasis.CONFORMAL_INTERVAL,
+                feature_source=self._feature_source,
+            )
 
         return forecasts

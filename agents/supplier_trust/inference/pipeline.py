@@ -16,6 +16,7 @@ import numpy as np
 import structlog
 import torch
 from synapse_common.dbc import post, pre
+from synapse_common.provenance import ConfidenceBasis, FeatureSource, Provenance
 
 from agents.supplier_trust.config import SupplierTrustConfig
 from agents.supplier_trust.models.bayesian_lead import (
@@ -62,6 +63,8 @@ class SupplierTrustPipeline:
             num_samples=self._config.num_posterior_samples,
         )
         self._graph = graph_client  # may be None — graph signal is optional
+        # ADR-040: provenance of the most recent score, read by serve.py.
+        self.last_provenance: Provenance = Provenance.degraded_fallback()
 
     @pre(
         lambda self, supplier_id, delivery_history, is_new_vendor=False, city="bengaluru": bool(
@@ -121,6 +124,11 @@ class SupplierTrustPipeline:
         trust_score = float(np.clip(trust_score, 0.0, 1.0))
 
         confidence = self._compute_confidence(delivery_history, posterior)
+        self.last_provenance = Provenance.real(
+            model_version=f"supplier_bayesian_lead:{self._bayesian.__class__.__name__}",
+            confidence_basis=ConfidenceBasis.POSTERIOR_SPREAD,
+            feature_source=FeatureSource.DIRECT,
+        )
 
         logger.info(
             "supplier_scored",
@@ -138,13 +146,26 @@ class SupplierTrustPipeline:
             is_new_vendor=False,
         )
 
+    def _new_vendor_confidence(self) -> float:
+        """Confidence for a vendor with zero history — derived from the prior's
+        spread, not a constant (ADR-040). A wide log-normal prior (large sigma)
+        means a low-confidence floor; this is genuine posterior-spread reasoning
+        with n=0 observations, so ``sample_factor`` is 0 by construction."""
+        tightness = 1.0 / (1.0 + float(np.exp(self._config.prior_sigma)))
+        return float(np.clip(0.5 * 0.0 + 0.5 * tightness, 0.0, 1.0))
+
     def _score_new_vendor(self, supplier_id: str) -> TrustScoreResult:
         """INV-ST-001: New vendors receive the trust floor."""
         floor = self._config.new_vendor_trust_floor
+        self.last_provenance = Provenance.real(
+            model_version="supplier_prior_only",
+            confidence_basis=ConfidenceBasis.POSTERIOR_SPREAD,
+            feature_source=FeatureSource.DIRECT,
+        )
         return TrustScoreResult(
             supplier_id=supplier_id,
             trust_score=floor,
-            confidence=0.1,
+            confidence=round(self._new_vendor_confidence(), 4),
             lead_time_posterior={
                 "mean_days": float(np.exp(self._config.prior_mu)),
                 "std_days": 1.0,

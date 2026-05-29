@@ -185,3 +185,14 @@ PRICING_ORACLE_ESSENTIAL_CAP_VIOLATION_TOTAL = Counter(
     "this counter records the underlying pricing-model pressure.",
     ["sku_id"],
 )
+
+# Plan v2 / Phase 3 — I-12 twin fidelity. The KL divergence between the digital
+# twin's expected agent-state distribution and the live state observed on the
+# synapse.*.state Kafka topics. Emitted by DivergenceMonitor.check_divergence on
+# every comparison; a value > 0.1 fires synapse.twin.divergence (INV-TW-003).
+# Before this wiring the metric did not exist and I-12 was unverifiable in prod.
+DIGITAL_TWIN_KL_DIVERGENCE = Gauge(
+    "synapse_digital_twin_kl_divergence",
+    "KL(twin || live) per agent (I-12, INV-TW-003). Re-sync triggers above 0.1.",
+    ["agent_name"],
+)

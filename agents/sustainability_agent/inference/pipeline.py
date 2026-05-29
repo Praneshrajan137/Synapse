@@ -7,6 +7,7 @@ All within Tier 2 SLA (<500ms) (I-10).
 
 from __future__ import annotations
 
+import math
 import time
 from datetime import UTC, datetime
 from typing import Any
@@ -14,11 +15,24 @@ from uuid import uuid4
 
 import structlog
 from synapse_common.models import SynapseBaseModel
+from synapse_common.provenance import ConfidenceBasis, FeatureSource, Provenance
 
 from agents.sustainability_agent.models.carbon import CarbonTracker
 from agents.sustainability_agent.models.waste import WastePredictionModel
 
 logger = structlog.get_logger(__name__)
+
+
+def _waste_confidence(waste_prob: float) -> float:
+    """Confidence derived from the waste model's predictive (binary) entropy.
+
+    A waste probability near 0 or 1 is a confident call (low entropy); one near
+    0.5 is maximally uncertain. ``confidence = 1 - H(p)`` ties the served
+    confidence to genuine model uncertainty (ADR-040) — never a constant.
+    """
+    p = min(max(float(waste_prob), 1e-6), 1.0 - 1e-6)
+    entropy = -(p * math.log2(p) + (1.0 - p) * math.log2(1.0 - p))  # in [0, 1]
+    return float(max(1.0 - entropy, 0.05))
 
 
 class ProvenanceEntry(SynapseBaseModel):
@@ -64,6 +78,10 @@ class SustainabilityPipeline:
         self._waste = waste_model or WastePredictionModel()
         self._kafka = kafka_producer
         self._carbon_pareto_weight = carbon_pareto_weight
+        # ADR-040: provenance of the most recent report, read by serve.py when
+        # wrapping the report into an AgentProposal. Carbon + waste are genuine
+        # local models fed in-request, so the path is non-degraded by default.
+        self.last_provenance: Provenance = Provenance.degraded_fallback()
 
     def report(
         self,
@@ -106,6 +124,16 @@ class SustainabilityPipeline:
             ),
         ]
 
+        # ADR-040: confidence derived from the waste model's predictive entropy,
+        # not a constant. The carbon component is deterministic; the uncertainty
+        # that matters is the waste survival prediction.
+        confidence = round(_waste_confidence(waste_prob), 4)
+        self.last_provenance = Provenance.real(
+            model_version=f"sustainability_waste_survival:{self._waste.__class__.__name__}",
+            confidence_basis=ConfidenceBasis.SURVIVAL_CI_WIDTH,
+            feature_source=FeatureSource.DIRECT,
+        )
+
         report = CarbonReport(
             report_id=str(uuid4()),
             timestamp=now,
@@ -118,7 +146,7 @@ class SustainabilityPipeline:
             hazard_rate=round(hazard_rate, 4),
             pareto_weights={"carbon": self._carbon_pareto_weight},
             provenance_chain=provenance,
-            confidence=0.85,
+            confidence=confidence,
         )
 
         elapsed_ms = (time.monotonic() - start_time) * 1000

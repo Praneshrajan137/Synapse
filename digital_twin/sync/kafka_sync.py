@@ -8,13 +8,17 @@ from __future__ import annotations
 
 import json
 import threading
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
+import numpy as np
 import structlog
 
 from digital_twin.config import TwinConfig
 from digital_twin.graph.supply_network import SupplyNetworkGraph
 from synapse_common.kafka_client import KafkaConfig, SynapseConsumer
+
+if TYPE_CHECKING:
+    from digital_twin.sync.divergence_monitor import DivergenceMonitor
 
 logger = structlog.get_logger(__name__)
 
@@ -42,10 +46,15 @@ class TwinKafkaSync:
         config: TwinConfig | None = None,
         graph: SupplyNetworkGraph | None = None,
         topics: list[str] | None = None,
+        divergence_monitor: DivergenceMonitor | None = None,
     ) -> None:
         self._config = config or TwinConfig()
         self._graph = graph or SupplyNetworkGraph(self._config)
         self._topics = topics or SYNAPSE_STATE_TOPICS
+        # Plan v2 / Phase 3: the previously-missing I-12 edge. When a monitor is
+        # supplied, every state message also updates the live distribution and
+        # triggers a KL-divergence check, emitting synapse_digital_twin_kl_divergence.
+        self._divergence_monitor = divergence_monitor
         self._running = False
         self._thread: threading.Thread | None = None
 
@@ -73,6 +82,30 @@ class TwinKafkaSync:
         }
         self._graph.update_node(node_id=str(node_id), properties=properties)
         logger.debug("kafka_sync_applied", node_id=node_id)
+
+        self._update_divergence(str(node_id), message)
+
+    def _update_divergence(self, agent_name: str, message: dict[str, Any]) -> None:
+        """Feed the live agent-state distribution into the divergence monitor (I-12).
+
+        A state message may carry an explicit ``state_distribution`` (list of
+        floats) — the agent's reported state histogram. When present we update
+        the monitor's live state and run a KL check, which emits the metric and
+        fires the re-sync alert above threshold. No-op when no monitor is wired
+        or the message carries no distribution (keeps non-distribution state
+        updates cheap).
+        """
+        if self._divergence_monitor is None:
+            return
+        dist = message.get("state_distribution")
+        if dist is None:
+            return
+        try:
+            live = np.asarray(dist, dtype=np.float64)
+            self._divergence_monitor.update_live_state(agent_name, live)
+            self._divergence_monitor.check_divergence(agent_name)
+        except Exception as exc:  # noqa: BLE001 — monitoring must never break sync (I-7)
+            logger.warning("divergence_update_failed", agent=agent_name, error=str(exc))
 
     def _poll_loop(self) -> None:
         """Continuous polling loop running in a background thread."""

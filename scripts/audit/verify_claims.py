@@ -874,6 +874,133 @@ def check_training_omit_narrowed() -> CheckResult:
 
 
 # ---------------------------------------------------------------------------
+# C33: substance gap — agent pipelines must not ignore real dependencies
+# ---------------------------------------------------------------------------
+# Plan v2 (Substance Mandate), Phase 0/4. `scripts/audit/substance_truth.py`
+# AST-flags the synthetic-shortcut anti-patterns in agents/*/inference/pipeline.py
+# (guard-then-ignore dependency, hardcoded confidence, random model input).
+# Ratchet idiom (mirrors C15/C16): PASS while violations <= baseline; FAIL on
+# any INCREASE. Phase 2 drives the baseline down toward zero, one agent per PR;
+# Phase 4 wires `substance_truth.py --check` as a hard blocking CI gate at zero.
+SUBSTANCE_VIOLATIONS_BASELINE = 0  # ratcheted to zero — all 8 pipelines rewired (Phase 2)
+SUBSTANCE_VIOLATIONS_TARGET = 0
+
+
+@register("C33", "Agent pipelines free of synthetic shortcuts (ratchet)")
+def check_substance_gap() -> CheckResult:
+    try:
+        from scripts.audit.substance_truth import collect
+    except ImportError as exc:
+        return CheckResult("C33", "Substance gap", "SKIP", f"substance_truth import failed: {exc}")
+    reports = collect()
+    total = sum(len(r.violations) for r in reports)
+    clean = sum(1 for r in reports if not r.violations)
+    if total > SUBSTANCE_VIOLATIONS_BASELINE:
+        return CheckResult(
+            "C33",
+            "Substance gap",
+            "FAIL",
+            f"{total} synthetic-shortcut violations > baseline {SUBSTANCE_VIOLATIONS_BASELINE} "
+            f"- a new placeholder path was introduced",
+        )
+    detail = (
+        f"{total} violation(s) <= baseline {SUBSTANCE_VIOLATIONS_BASELINE}; "
+        f"{clean}/{len(reports)} agents clean (target {SUBSTANCE_VIOLATIONS_TARGET})"
+    )
+    # Below baseline but not yet zero is honest progress, not a regression.
+    if total > SUBSTANCE_VIOLATIONS_TARGET:
+        return CheckResult("C33", "Substance gap", "PARTIAL", detail)
+    return CheckResult("C33", "Substance gap", "PASS", detail + " - all pipelines real")
+
+
+# ---------------------------------------------------------------------------
+# C34: I-12 twin divergence edge wired (TwinKafkaSync -> DivergenceMonitor)
+# ---------------------------------------------------------------------------
+# Plan v2 / Phase 3. Before this, update_live_state had no production caller and
+# synapse_digital_twin_kl_divergence never emitted. PASS iff the monitor emits
+# the metric AND the kafka sync feeds live state into the monitor.
+@register("C34", "I-12 twin divergence edge wired")
+def check_i12_wired() -> CheckResult:
+    mon = ROOT / "digital_twin" / "sync" / "divergence_monitor.py"
+    sync = ROOT / "digital_twin" / "sync" / "kafka_sync.py"
+    if not mon.exists() or not sync.exists():
+        return CheckResult("C34", "I-12 wired", "SKIP", "twin sync files missing")
+    mon_t = mon.read_text(encoding="utf-8")
+    sync_t = sync.read_text(encoding="utf-8")
+    emits = "DIGITAL_TWIN_KL_DIVERGENCE" in mon_t and ".set(" in mon_t
+    feeds = "update_live_state" in sync_t and "divergence_monitor" in sync_t
+    if emits and feeds:
+        return CheckResult(
+            "C34", "I-12 wired", "PASS",
+            "monitor emits synapse_digital_twin_kl_divergence; kafka_sync feeds live state",
+        )
+    missing = []
+    if not emits:
+        missing.append("monitor does not emit the KL metric")
+    if not feeds:
+        missing.append("kafka_sync does not call update_live_state")
+    return CheckResult("C34", "I-12 wired", "FAIL", "; ".join(missing))
+
+
+# ---------------------------------------------------------------------------
+# C35: API gateway auth enforced + no hardcoded DB credential
+# ---------------------------------------------------------------------------
+# Plan v2 / Phase 5. Read + trigger endpoints require a bearer token; the
+# embedded synapse_app password default is gone (fail-fast DSN).
+@register("C35", "API auth enforced + no embedded secret")
+def check_api_auth() -> CheckResult:
+    dec = ROOT / "api" / "routers" / "decisions.py"
+    main = ROOT / "api" / "main.py"
+    if not dec.exists():
+        return CheckResult("C35", "API auth", "SKIP", "decisions.py missing")
+    dec_t = dec.read_text(encoding="utf-8")
+    # All three decisions handlers must carry an auth dependency.
+    auth_on_reads = (
+        dec_t.count("Depends(CurrentOperator)") >= 2
+        and "Depends(RequireRole(Role.OPS))" in dec_t
+    )
+    # No embedded DB credential anywhere under api/ (decisions, main, steering, …).
+    api_dir = ROOT / "api"
+    leaks = _grep(r"synapse_app_2026", api_dir, glob="*.py")
+    no_secret = not leaks
+    if auth_on_reads and no_secret:
+        return CheckResult(
+            "C35", "API auth", "PASS",
+            "read+trigger endpoints gated by JWT; no embedded DB credential",
+        )
+    problems = []
+    if not auth_on_reads:
+        problems.append("a decisions endpoint lacks an auth dependency")
+    if not no_secret:
+        problems.append("hardcoded synapse_app_2026 credential still present")
+    return CheckResult("C35", "API auth", "FAIL", "; ".join(problems))
+
+
+# ---------------------------------------------------------------------------
+# C36: honesty contract present (ADR-040 / ADR-041)
+# ---------------------------------------------------------------------------
+@register("C36", "Honesty contract modules + ADRs present")
+def check_honesty_contract() -> CheckResult:
+    pkg = ROOT / "packages" / "synapse_common"
+    modules = ["features.py", "model_registry.py", "provenance.py", "invariants.py"]
+    missing_mods = [m for m in modules if not (pkg / m).is_file()]
+    adrs = [
+        ROOT / "docs" / "adr" / "ADR-040-honest-output-provenance-and-degradation.md",
+        ROOT / "docs" / "adr" / "ADR-041-feature-model-anti-corruption-layer.md",
+    ]
+    missing_adrs = [a.name for a in adrs if not a.is_file()]
+    if missing_mods or missing_adrs:
+        return CheckResult(
+            "C36", "Honesty contract", "FAIL",
+            f"missing modules={missing_mods} adrs={missing_adrs}",
+        )
+    return CheckResult(
+        "C36", "Honesty contract", "PASS",
+        "FeatureProvider/ModelRegistry/Provenance/RuntimeValidator + ADR-040/041 present",
+    )
+
+
+# ---------------------------------------------------------------------------
 # Main entry
 # ---------------------------------------------------------------------------
 def run(as_json: bool = False) -> int:

@@ -76,6 +76,20 @@ packages:
     target: 84.0
     note: "CI-MUST-MEASURE — torch not installed locally."
 
+  # Plan v2 §Phase 4 — close the CI enforcement holes. These two trees are now
+  # in the gated pytest run (digital_twin needs simpy; api uses the FastAPI
+  # TestClient). Floors seeded at 0.0 CI-MUST-MEASURE; the first post-merge CI
+  # run on Linux overwrites them with floor(measured)-0.5 via coverage_ratchet.
+  digital_twin:
+    line: 0.0
+    target: 84.0
+    note: "CI-MUST-MEASURE — simpy not installed on the Windows dev box. test_i12_divergence_wiring.py + test_sync.py (9 tests) verified locally with PYTHONPATH; test_simulation.py needs simpy (CI-only)."
+
+  api:
+    line: 0.0
+    target: 84.0
+    note: "CI-MUST-MEASURE — added api/tests/ (7 auth/secret tests, Phase 5) where there were zero. Verified locally via FastAPI TestClient. Floor binds on first CI run."
+
 # Ratchet protocol (per `scripts/coverage_ratchet.py`):
 #   - After each PR that adds tests, run `python scripts/coverage_ratchet.py`.
 #   - If MEASURED - floor > 2.0 on any package, the helper prints a proposed

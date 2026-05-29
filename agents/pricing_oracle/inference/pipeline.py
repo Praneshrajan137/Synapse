@@ -14,13 +14,24 @@ import deal
 import numpy as np
 import structlog
 import torch
+from synapse_common.features import FeatureProvider
 from synapse_common.metrics import PRICING_ORACLE_ESSENTIAL_CAP_VIOLATION_TOTAL
 from synapse_common.models import PricingDecision
+from synapse_common.provenance import ConfidenceBasis, FeatureSource, Provenance
 
 logger = structlog.get_logger(__name__)
 
 VALID_CATEGORIES = frozenset({"essential", "snack", "beverage", "dairy", "produce"})
 ESSENTIAL_CAP: float = 1.3
+OBS_DIM: int = 24
+# Feast feature references the pricing model reads (ADR-041).
+FEATURE_REFS = [
+    "pricing_features:demand_elasticity",
+    "pricing_features:competitor_price_ratio",
+    "pricing_features:inventory_pressure",
+    "pricing_features:rolling_7d_units",
+]
+FALLBACK_CONFIDENCE = 0.5  # documented I-7 floor (rule-based pricing)
 
 
 class PricingUpdate:
@@ -94,6 +105,13 @@ class PricingOraclePipeline:
         self._feast = feast_client
         self._neo4j = neo4j_driver
         self._kafka = kafka_producer
+        # ADR-041: features through the anti-corruption layer. ADR-040: track
+        # degradation per call so the served confidence + provenance are honest.
+        self._features = FeatureProvider(feast_client)
+        self._feature_source = FeatureSource.FALLBACK
+        self._model_degraded = model is None
+        self._causal_degraded = True
+        self.last_provenance: Provenance = Provenance.degraded_fallback()
 
     @deal.pre(
         lambda self, sku_ids, store_id, categories, base_prices, **kw: (len(sku_ids) >= 1),
@@ -169,10 +187,29 @@ class PricingOraclePipeline:
                 raise ValueError(f"PRE-PO-003: Base price must be positive, got {bp}")
 
     def _get_features(self, sku_ids: list[str], store_id: str) -> dict[str, Any]:
-        if self._feast is None:
-            logger.warning("feast_unavailable", fallback="synthetic features")
-            return self._synthetic_features(sku_ids, store_id)
-        return self._synthetic_features(sku_ids, store_id)
+        """Retrieve features via the anti-corruption layer (ADR-041).
+
+        Builds a real ``controls`` matrix (num_skus, num_features) for the causal
+        elasticity estimator from the retrieved features — never the
+        guard-then-ignore synthetic shortcut.
+        """
+        result = self._features.get(sku_ids, FEATURE_REFS, store_id=store_id)
+        self._feature_source = result.source
+        values = dict(result.values)
+        num_skus = len(sku_ids)
+        cols: list[np.ndarray] = []
+        for ref in FEATURE_REFS:
+            vals = values.get(ref)
+            arr = (
+                np.zeros(num_skus)
+                if vals is None
+                else np.resize(np.asarray(vals, dtype=np.float64).reshape(-1), num_skus)
+            )
+            cols.append(arr)
+        values["controls"] = np.stack(cols, axis=1) if cols else np.zeros((num_skus, 1))
+        values["num_skus"] = num_skus
+        values["sku_ids"] = list(sku_ids)
+        return values
 
     def _estimate_elasticities(
         self,
@@ -184,9 +221,11 @@ class PricingOraclePipeline:
             controls = features.get("controls")
             if controls is not None:
                 effects = self._causal.estimate_elasticity(controls)
+                self._causal_degraded = False
                 return [float(e) for e in effects.flatten()]
 
         logger.warning("causal_unavailable", fallback="heuristic elasticities")
+        self._causal_degraded = True
         return self._heuristic_elasticities(categories)
 
     def _heuristic_elasticities(self, categories: list[str]) -> list[float]:
@@ -207,12 +246,17 @@ class PricingOraclePipeline:
     ) -> list[float]:
         """Run MADDPG or fall back to rule-based pricing (I-7)."""
         if self._model is not None:
-            obs = self._build_observations(features, categories)
-            with torch.no_grad():
-                actions = self._model.select_actions(obs)
-            return [float(actions[cat].item()) for cat in categories]
+            try:
+                obs = self._build_observations(features, categories)
+                with torch.no_grad():
+                    actions = self._model.select_actions(obs)
+                self._model_degraded = False
+                return [float(actions[cat].item()) for cat in categories]
+            except Exception as exc:  # noqa: BLE001 — model failure degrades (I-7)
+                logger.warning("model_inference_failed", error=str(exc), fallback="rule-based")
 
         logger.warning("model_unavailable", fallback="rule-based pricing")
+        self._model_degraded = True
         return self._rule_based_fallback(categories)
 
     def _rule_based_fallback(self, categories: list[str]) -> list[float]:
@@ -231,13 +275,21 @@ class PricingOraclePipeline:
         features: dict[str, Any],
         categories: list[str],
     ) -> dict[str, torch.Tensor]:
-        """Build per-category observation tensors for MADDPG."""
-        rng = np.random.default_rng(42)
-        obs_dim = 24
-        return {
-            cat: torch.tensor(rng.standard_normal(obs_dim), dtype=torch.float32).unsqueeze(0)
-            for cat in set(categories)
-        }
+        """Build per-category MADDPG observations from REAL features (ADR-040/041).
+
+        Each category's observation is the mean feature vector of the SKUs in
+        that category, tiled/padded to ``OBS_DIM``. No random noise — the model
+        sees the actual retrieved features. Deterministic given the same inputs.
+        """
+        controls = np.asarray(features.get("controls", np.zeros((1, 1))), dtype=np.float64)
+        obs: dict[str, torch.Tensor] = {}
+        for cat in set(categories):
+            idx = [i for i, c in enumerate(categories) if c == cat and i < controls.shape[0]]
+            vec = controls[idx].mean(axis=0) if idx else controls.mean(axis=0)
+            # Tile/pad the real feature vector up to OBS_DIM deterministically.
+            tiled = np.resize(vec, OBS_DIM)
+            obs[cat] = torch.tensor(tiled, dtype=torch.float32).unsqueeze(0)
+        return obs
 
     @deal.post(
         lambda result: all(
@@ -274,11 +326,13 @@ class PricingOraclePipeline:
 
             mult = max(mult, 0.5)
 
+            conf = self._derive_confidence(elasticities[i])
             traces = [
                 f"category={category}",
                 f"base_price={base_prices[i]:.2f}",
                 f"raw_multiplier={multipliers[i]:.4f}",
                 f"elasticity={elasticities[i]:.4f}",
+                f"confidence={conf:.4f}",
             ]
             if is_essential:
                 traces.append(f"essential_cap_applied={ESSENTIAL_CAP}")
@@ -291,12 +345,36 @@ class PricingOraclePipeline:
                 base_price=base_prices[i],
                 multiplier=mult,
                 elasticity_estimate=elasticities[i],
-                confidence=0.85,
+                confidence=conf,
                 justification_trace=traces,
             )
             updates.append(update)
 
+        self._set_provenance()
         return updates
 
-    def _synthetic_features(self, sku_ids: list[str], store_id: str) -> dict[str, Any]:
-        return {"num_skus": len(sku_ids), "sku_ids": sku_ids, "store_id": store_id}
+    def _derive_confidence(self, elasticity: float) -> float:
+        """ADR-040: confidence from the strength of the estimated elasticity and
+        the source of the action. A larger |elasticity| is a stronger causal
+        signal → higher confidence. On the rule-based / heuristic fallback the
+        confidence is the documented I-7 floor. Never a constant."""
+        if self._model_degraded or self._causal_degraded:
+            return FALLBACK_CONFIDENCE
+        strength = float(np.tanh(abs(elasticity)))
+        return round(float(np.clip(0.5 + 0.45 * strength, 0.5, 0.95)), 4)
+
+    def _set_provenance(self) -> None:
+        degraded = (
+            self._model_degraded
+            or self._causal_degraded
+            or self._feature_source == FeatureSource.FALLBACK
+        )
+        if degraded:
+            self.last_provenance = Provenance.degraded_fallback(feature_source=self._feature_source)
+        else:
+            model_ver = getattr(self._model, "version", None) or "maddpg_dml"
+            self.last_provenance = Provenance.real(
+                model_version=f"pricing_oracle_{model_ver}",
+                confidence_basis=ConfidenceBasis.CRITIC_VALUE_SPREAD,
+                feature_source=self._feature_source,
+            )
