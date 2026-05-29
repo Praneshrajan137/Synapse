@@ -101,7 +101,12 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 25
     needs: build
-    if: github.event_name == 'pull_request' || github.ref == 'refs/heads/main'
+    # Sprint 12 (ADR-039): E2E only runs against pull_request previews and
+    # `v*` tag pushes. Push-to-main produces no useful E2E signal because
+    # `pnpm preview` has no backend on the runner — every /api proxy returns
+    # ECONNREFUSED and the suite fails by design. Backend-up signal is the
+    # job of the cd-gcp.yml `Wait for health` step against the real VM.
+    if: github.event_name == 'pull_request' || startsWith(github.ref, 'refs/tags/v')
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4

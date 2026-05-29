@@ -223,16 +223,32 @@ jobs:
           fi
 
       - name: Ensure repo cloned on VM at this SHA
+        env:
+          GH_TOKEN_FOR_CLONE: ${{ secrets.GITHUB_TOKEN }}
         run: |
+          # The repo is private — unauthenticated `git clone https://github.com/…`
+          # returns "fatal: could not read Username for 'https://github.com':
+          # No such device or address" in a non-interactive shell. Use the
+          # workflow's GITHUB_TOKEN, which has read access to its own repo.
+          # The token URL is built locally and passed via SSH command — it is
+          # never written to the VM's git config, so it does not persist past
+          # this step. Subsequent `git fetch` uses the credentials cached in
+          # the existing remote (or re-uses the same authenticated URL when
+          # cloning fresh). E-S12-10.
+          CLONE_URL="https://x-access-token:${GH_TOKEN_FOR_CLONE}@github.com/${{ github.repository }}.git"
           gcloud compute ssh ${{ vars.GCP_VM }} \
             --zone=${{ vars.GCP_ZONE }} \
             --tunnel-through-iap \
             --quiet \
             --command="set -e; \
                 if [ ! -d ~/synapse/.git ]; then \
-                  git clone https://github.com/${{ github.repository }}.git ~/synapse; \
+                  git clone ${CLONE_URL} ~/synapse; \
                 fi; \
-                cd ~/synapse && git fetch --tags && git checkout --quiet ${{ github.sha }}"
+                cd ~/synapse && \
+                git remote set-url origin ${CLONE_URL} && \
+                git fetch --tags --quiet && \
+                git checkout --quiet ${{ github.sha }} && \
+                git remote set-url origin https://github.com/${{ github.repository }}.git"
 
       - name: Compute deploy version
         id: dv
