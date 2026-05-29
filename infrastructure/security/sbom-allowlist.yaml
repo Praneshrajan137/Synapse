@@ -70,6 +70,10 @@ components:
     notes: auto-added
     versions:
     - 0.6.1.3
+  python-jose:
+    notes: auto-added
+    versions:
+    - unknown
   redis:
     notes: auto-added
     versions:

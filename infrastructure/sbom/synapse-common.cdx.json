@@ -9,23 +9,9 @@
       "version": "unknown"
     },
     {
-      "bom-ref": "pkg:pypi/deal@unknown",
-      "name": "deal",
-      "purl": "pkg:pypi/deal@unknown",
-      "type": "library",
-      "version": "unknown"
-    },
-    {
       "bom-ref": "pkg:pypi/httpx@unknown",
       "name": "httpx",
       "purl": "pkg:pypi/httpx@unknown",
-      "type": "library",
-      "version": "unknown"
-    },
-    {
-      "bom-ref": "pkg:pypi/jsonschema@unknown",
-      "name": "jsonschema",
-      "purl": "pkg:pypi/jsonschema@unknown",
       "type": "library",
       "version": "unknown"
     },
@@ -44,9 +30,9 @@
       "version": "unknown"
     },
     {
-      "bom-ref": "pkg:pypi/redis@unknown",
-      "name": "redis",
-      "purl": "pkg:pypi/redis@unknown",
+      "bom-ref": "pkg:pypi/python-jose@unknown",
+      "name": "python-jose",
+      "purl": "pkg:pypi/python-jose@unknown",
       "type": "library",
       "version": "unknown"
     },

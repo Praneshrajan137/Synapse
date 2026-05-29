@@ -115,7 +115,10 @@ jobs:
         with:
           python-version: "3.11"
       - name: Install scanners
-        run: pip install cyclonedx-bom==4.5.0 packaging>=23
+        # `pyyaml` is REQUIRED by scripts/sbom_diff.py to read the
+        # allowlist YAML; without it the script silently treats every
+        # dep as un-allowlisted ("Allowlisted: 0"). E-S12-15.
+        run: pip install cyclonedx-bom==4.5.0 'packaging>=23' pyyaml
       - name: Generate fresh SBOM
         run: python scripts/generate_sbom.py
       - name: SBOM diff gate

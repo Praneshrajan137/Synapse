@@ -287,13 +287,20 @@ jobs:
 
       - name: Cosign verify images BEFORE start
         run: |
+          # IMPORTANT: env-var assignments before `chmod` only apply to chmod,
+          # NOT to the chained `./verify_images.sh` after `&&`. Use `export`
+          # so both vars are present in the subshell's environment for the
+          # verifier. The metadata fallback (curl …/instance/attributes)
+          # only works when this VM was created with the AR-repo attribute
+          # set; relying on it caused the prior `not set and metadata lookup
+          # failed` error. E-S12-13.
           gcloud compute ssh ${{ vars.GCP_VM }} \
             --zone=${{ vars.GCP_ZONE }} \
             --tunnel-through-iap \
             --quiet \
-            --command="cd ~/synapse && \
-                       GITHUB_REPO='${{ github.repository }}' \
-                       SYNAPSE_AR_REPO_URL='${{ env.AR_REPO_URL }}' \
+            --command="set -e; cd ~/synapse && \
+                       export GITHUB_REPO='${{ github.repository }}' && \
+                       export SYNAPSE_AR_REPO_URL='${{ env.AR_REPO_URL }}' && \
                        chmod +x verify_images.sh && \
                        ./verify_images.sh"
 
