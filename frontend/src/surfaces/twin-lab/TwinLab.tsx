@@ -1,8 +1,11 @@
 import type { TwinState } from "@domain/twin-state";
+import { DivergenceTrace } from "@ds/compounds";
 import { Badge } from "@ds/primitives";
+import { useFirehose } from "@hooks/use-firehose";
 import { useSynapseApi } from "@hooks/use-synapse-api";
+import { useFirehoseStore } from "@state/firehose.store";
 import { useMutation } from "@tanstack/react-query";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { toast } from "sonner";
 import { DivergenceMeter } from "./DivergenceMeter";
 import { ScenarioBuilder, type ScenarioRequest } from "./ScenarioBuilder";
@@ -17,6 +20,16 @@ export function TwinLab() {
   const api = useSynapseApi();
   const topology = useTopology();
   const [result, setResult] = useState<TwinState | null>(null);
+
+  // Subscribe to the live twin channel so the divergence trace shows drift
+  // over time, not just the latest scenario's snapshot (I-12).
+  useFirehose({ topics: ["twin"] });
+  const twinHistory = useFirehoseStore((s) => s.twin.items);
+  const divergenceSeries = useMemo(() => {
+    const s = twinHistory.map((t) => t.kl_divergence);
+    if (result) s.push(result.kl_divergence);
+    return s;
+  }, [twinHistory, result]);
 
   const sim = useMutation({
     mutationFn: (req: ScenarioRequest) => api.simulate(req),
@@ -48,7 +61,12 @@ export function TwinLab() {
         )}
       </header>
 
-      <DivergenceMeter value={klValue} />
+      <div className="grid gap-4 lg:grid-cols-[1fr_minmax(0,2fr)]">
+        <DivergenceMeter value={klValue} />
+        {divergenceSeries.length > 0 && (
+          <DivergenceTrace series={divergenceSeries} className="syn-card p-3" />
+        )}
+      </div>
 
       <div className="grid gap-4 lg:grid-cols-[1fr_320px]">
         <SupplyNetwork3D nodes={topology.data?.nodes ?? []} edges={topology.data?.edges ?? []} />

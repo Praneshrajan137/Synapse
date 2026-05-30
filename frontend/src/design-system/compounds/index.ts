@@ -16,3 +16,5 @@ export * from "./Pulse";
 export * from "./CouncilStrip";
 export * from "./ParetoParallel";
 export * from "./ThresholdCountdown";
+export * from "./DivergenceTrace";
+export * from "./OutcomeBand";
