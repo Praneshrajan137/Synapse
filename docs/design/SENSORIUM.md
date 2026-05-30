@@ -518,12 +518,17 @@ per INV-CLR-012 — flagged, not assumed.
 
 ## 11. Roadmap (phased, invariant-respecting)
 
-- **Phase 0 — Foundation & seam fix.** Unify on the canonical token layer; build the
-  `--field-rest` rationing primitive and the VSUP confidence helper on top of
-  `confidenceColor()`; add the degraded-state component contract (§7). Pure craft/correctness;
-  no new ADR.
-- **Phase 1 — The Cortex.** The Pulse + rationed Living Map + desaturated Council strip.
-  Quiet-by-default lands first because it reframes everything downstream.
+- **Phase 0 — Foundation & seam fix. ✅ SHIPPED.** `lib/chromatics.ts` brings the
+  gate-anchored OKLCH confidence scale (mirrors the canonical `dist` `confidenceColor()`,
+  INV-CLR-007) + the VSUP suppression model + `rationedAgentColor()` (the rationing
+  primitive); `lib/agent-identity.ts` becomes the single frozen-identity source
+  (ProposalConstellation deduped onto it). Pure, deterministic, 17 tests. No new ADR.
+- **Phase 1 — The Cortex. ◐ IN PROGRESS.** Shipped: the **Pulse** (firehose-as-weather,
+  quiet-by-default, VSUP confidence) and the **rationed Council strip** with the honest
+  degraded-state contract (§7), wired into Mission Control via `CortexBanner` from the live
+  firehose + agents query (18 tests; full suite 111/111, `vite build` green). Remaining: the
+  rationed Living Map (grayscale-at-rest deck.gl layers) and lifting the legacy KPI band into
+  the ambient field.
 - **Phase 2 — The Tribunal.** 8-D Pareto parallel coordinates, live conflict-graph
   constellation, time-travel scrub. The comprehension crown jewel.
 - **Phase 3 — The Threshold.** Countdown-spine, inherited context, calibration mirror.
