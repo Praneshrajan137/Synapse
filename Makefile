@@ -1,7 +1,7 @@
 # ============================================================================
 # SYNAPSE Makefile — Development Automation
 # ============================================================================
-.PHONY: help up down test lint typecheck verify-infra seed generate-spec-tests fuzz mutate clean chaos-test load-test security-test dragonfly-eval sprint5-verify verify-services doctor verify-claims verify-claims-json
+.PHONY: help up down test lint typecheck verify-infra seed generate-spec-tests fuzz mutate clean chaos-test load-test security-test dragonfly-eval sprint5-verify verify-services doctor verify-claims verify-claims-json verify-intelligence
 
 SHELL := /bin/bash
 COMPOSE := docker compose -f docker/docker-compose.yml --env-file docker/.env
@@ -20,6 +20,13 @@ verify-claims-json: ## Same as verify-claims but emit machine-readable JSON
 
 verify-topology: ## Verify topics.json consumers map to real Consumer.subscribe call sites (ADR-038)
 	@python -m scripts.audit.topic_consumer_truth
+
+verify-intelligence: ## Substance-completion gates (ADR-042): training/checkpoint/serving/calibration/confidence-basis truth
+	@python -m scripts.audit.training_truth --check
+	@python -m scripts.audit.checkpoint_truth --check
+	@python -m scripts.audit.serving_truth --check
+	@python -m scripts.audit.calibration_truth --check
+	@python -m scripts.audit.confidence_basis_truth --check
 
 verify-slos: ## Regenerate burn-rate rules from SLO YAMLs and verify metric_truth (WS-7)
 	@python -m scripts.observability.slo_to_rules --check

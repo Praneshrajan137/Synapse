@@ -1001,6 +1001,86 @@ def check_honesty_contract() -> CheckResult:
 
 
 # ---------------------------------------------------------------------------
+# C37-C41: substance completion (ADR-042) — the intelligence is real, not just
+# the enforcement boundary. Each mirrors the C33 ratchet idiom: import the gate's
+# collect/run, PASS while violations <= baseline, FAIL on regression.
+# ---------------------------------------------------------------------------
+@register("C37", "Models actually train (real gradient steps, ratchet)")
+def check_training_truth() -> CheckResult:
+    try:
+        from scripts.audit.training_truth import BASELINE, collect
+    except ImportError as exc:
+        return CheckResult("C37", "Training truth", "SKIP", f"training_truth import failed: {exc}")
+    reports = collect()
+    total = sum(len(r.violations) for r in reports)
+    real = sum(1 for r in reports if r.has_real_step)
+    detail = f"{real}/{len(reports)} real gradient loops; {total} violation(s) (baseline {BASELINE})"
+    if total > BASELINE:
+        return CheckResult("C37", "Training truth", "FAIL", detail + " — regression")
+    return CheckResult("C37", "Training truth", "PASS", detail)
+
+
+@register("C38", "Training produces loadable, content-hashed checkpoints")
+def check_checkpoint_truth() -> CheckResult:
+    try:
+        from scripts.audit.checkpoint_truth import CHECKPOINT_AGENTS, collect
+    except ImportError as exc:
+        return CheckResult("C38", "Checkpoint truth", "SKIP", f"checkpoint_truth import failed: {exc}")
+    report, any_artifact = collect()
+    failures = [r for r in report.results if r.status in {"missing_file", "sha_mismatch", "no_checkpoint"}]
+    if not any_artifact and not CHECKPOINT_AGENTS:
+        return CheckResult("C38", "Checkpoint truth", "SKIP", "no training artifacts (run the smoke job)")
+    if failures:
+        return CheckResult("C38", "Checkpoint truth", "FAIL", f"{len(failures)} bad checkpoint(s)")
+    return CheckResult("C38", "Checkpoint truth", "PASS", f"{len(report.results)} checkpoint(s) verified")
+
+
+@register("C39", "Serving loads models via ModelRegistry (ratchet)")
+def check_serving_truth() -> CheckResult:
+    try:
+        from scripts.audit.serving_truth import BASELINE_UNWIRED, collect
+    except ImportError as exc:
+        return CheckResult("C39", "Serving truth", "SKIP", f"serving_truth import failed: {exc}")
+    reports = collect()
+    wired = sum(1 for r in reports if r.wired)
+    unwired = sum(1 for r in reports if r.exists and not r.wired)
+    regressions = sum(len(r.violations) for r in reports)
+    detail = f"{wired}/{len(reports)} agents load a real model (baseline unwired {BASELINE_UNWIRED})"
+    if unwired > BASELINE_UNWIRED or regressions > 0:
+        return CheckResult("C39", "Serving truth", "FAIL", detail + " — regression")
+    return CheckResult("C39", "Serving truth", "PASS", detail)
+
+
+@register("C40", "Prediction intervals achieve nominal coverage")
+def check_calibration_truth() -> CheckResult:
+    try:
+        from scripts.audit.calibration_truth import collect
+    except ImportError as exc:
+        return CheckResult("C40", "Calibration truth", "SKIP", f"calibration_truth import failed: {exc}")
+    report, any_artifact = collect()
+    failures = [r for r in report.results if r.status in {"below_floor", "no_metric"}]
+    if not any_artifact:
+        return CheckResult("C40", "Calibration truth", "SKIP", "no training artifacts (run the smoke job)")
+    if failures:
+        return CheckResult("C40", "Calibration truth", "FAIL", f"{len(failures)} under-covered model(s)")
+    return CheckResult("C40", "Calibration truth", "PASS", f"{len(report.results)} model(s) calibrated")
+
+
+@register("C41", "Declared confidence_basis matches computed basis (ratchet)")
+def check_confidence_basis_truth() -> CheckResult:
+    try:
+        from scripts.audit.confidence_basis_truth import BASELINE, collect
+    except ImportError as exc:
+        return CheckResult("C41", "Confidence basis", "SKIP", f"confidence_basis_truth import failed: {exc}")
+    reports = collect()
+    total = sum(len(r.violations) for r in reports)
+    detail = f"{total} stamp/computation mismatch(es) (baseline {BASELINE})"
+    if total > BASELINE:
+        return CheckResult("C41", "Confidence basis", "FAIL", detail + " — regression")
+    return CheckResult("C41", "Confidence basis", "PASS", detail)
+
+
+# ---------------------------------------------------------------------------
 # Main entry
 # ---------------------------------------------------------------------------
 def run(as_json: bool = False) -> int:
