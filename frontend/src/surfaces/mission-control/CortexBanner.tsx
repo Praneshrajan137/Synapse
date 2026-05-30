@@ -1,13 +1,16 @@
 import type { AgentMetrics } from "@domain/agent-health";
 import { type CouncilAgentState, CouncilStrip, Pulse, mapAgentHealth } from "@ds/compounds";
+import { useSonification } from "@hooks/use-sonification";
 import { useSynapseApi } from "@hooks/use-synapse-api";
 import { AGENT_NAMES, type AgentName } from "@lib/agent-identity";
 import { confidenceZone } from "@lib/chromatics";
 import type { Tier } from "@lib/confidence";
+import { sonificationSupported } from "@lib/sonification";
 import { useFirehoseStore } from "@state/firehose.store";
 import { useThemeStore } from "@state/theme.store";
 import { useQuery } from "@tanstack/react-query";
-import { useMemo } from "react";
+import { Volume2, VolumeX } from "lucide-react";
+import { useMemo, useState } from "react";
 
 /**
  * CortexBanner — the ambient hero of Mission Control (SENSORIUM "Quiet Cortex").
@@ -101,6 +104,12 @@ export function CortexBanner() {
 
   const activeCount = signal.activeAgents.size;
 
+  // Opt-in ambient sonification (§5.4) — OFF by default; toggling is the user
+  // gesture Web Audio requires. Hidden entirely where audio is unsupported.
+  const [soundOn, setSoundOn] = useState(false);
+  useSonification({ rate: signal.rate, confidence: signal.confidence ?? 0 }, soundOn);
+  const canSonify = sonificationSupported();
+
   return (
     <section
       className="syn-card-raised grid items-center gap-5 p-5 lg:grid-cols-[240px_minmax(0,1fr)]"
@@ -116,13 +125,31 @@ export function CortexBanner() {
       </div>
 
       <div className="space-y-3">
-        <div className="space-y-1">
-          <p className="text-sm text-ink">{read}</p>
-          <p className="text-2xs uppercase tracking-wider text-ink-subtle">
-            {activeCount > 0
-              ? `${activeCount} of ${AGENT_NAMES.length} agents active`
-              : "Council quiet"}
-          </p>
+        <div className="flex items-start justify-between gap-3">
+          <div className="space-y-1">
+            <p className="text-sm text-ink">{read}</p>
+            <p className="text-2xs uppercase tracking-wider text-ink-subtle">
+              {activeCount > 0
+                ? `${activeCount} of ${AGENT_NAMES.length} agents active`
+                : "Council quiet"}
+            </p>
+          </div>
+          {canSonify && (
+            <button
+              type="button"
+              onClick={() => setSoundOn((s) => !s)}
+              aria-pressed={soundOn}
+              aria-label={soundOn ? "Mute ambient pulse" : "Sonify ambient pulse"}
+              title={soundOn ? "Mute ambient pulse" : "Sonify ambient pulse (opt-in)"}
+              className="shrink-0 rounded-md border border-border p-1.5 text-ink-muted transition-colors duration-fast hover:bg-surface hover:text-ink focus-visible:shadow-focus"
+            >
+              {soundOn ? (
+                <Volume2 size={14} aria-hidden="true" />
+              ) : (
+                <VolumeX size={14} aria-hidden="true" />
+              )}
+            </button>
+          )}
         </div>
         <CouncilStrip states={states} />
       </div>
