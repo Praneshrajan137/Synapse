@@ -1,6 +1,7 @@
 import { BuildSHAChip, CitySwitcher, LanguagePicker, OperatorIdentity } from "@ds/compounds";
 import { cn } from "@lib/cn";
 import { NavLink, Outlet } from "react-router-dom";
+import { CommandPalette } from "./CommandPalette";
 
 const NAV_ITEMS = [
   { path: "/", label: "Mission Control", end: true },
@@ -59,6 +60,7 @@ export function Shell() {
       <main className="flex-1 overflow-auto bg-canvas p-6">
         <Outlet />
       </main>
+      <CommandPalette />
     </div>
   );
 }
