@@ -15,3 +15,4 @@ export * from "./BuildSHAChip";
 export * from "./Pulse";
 export * from "./CouncilStrip";
 export * from "./ParetoParallel";
+export * from "./ThresholdCountdown";
