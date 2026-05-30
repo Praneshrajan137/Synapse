@@ -1,6 +1,18 @@
+import {
+  AGENT_COLOR_VAR,
+  AGENT_INITIALS,
+  AGENT_LABEL,
+  AGENT_NAMES,
+  type AgentName,
+} from "@lib/agent-identity";
 import { cn } from "@lib/cn";
 import { motion, useReducedMotion } from "framer-motion";
 import { useMemo } from "react";
+
+// Re-export the frozen registry so existing importers
+// (`@ds/compounds/ProposalConstellation`) keep working unchanged. The single
+// source of truth now lives in `@lib/agent-identity` (INV-CLR-012).
+export { AGENT_NAMES, type AgentName };
 
 /**
  * ProposalConstellation — the eight agents in a fixed radial formation.
@@ -24,55 +36,6 @@ import { useMemo } from "react";
  *      carries tier+confidence+reasoning), FE-INV-007 (visual signal
  *      reflects confidence band).
  */
-
-/** Frozen 8-agent registry — must match `agents/*` directory and CLAUDE.md. */
-export const AGENT_NAMES = [
-  "demand_prophet",
-  "routing_navigator",
-  "inventory_sentinel",
-  "freshness_guardian",
-  "pricing_oracle",
-  "disruption_shield",
-  "supplier_trust",
-  "sustainability_agent",
-] as const;
-
-export type AgentName = (typeof AGENT_NAMES)[number];
-
-const AGENT_LABEL: Record<AgentName, string> = {
-  demand_prophet: "Demand Prophet",
-  routing_navigator: "Routing Navigator",
-  inventory_sentinel: "Inventory Sentinel",
-  freshness_guardian: "Freshness Guardian",
-  pricing_oracle: "Pricing Oracle",
-  disruption_shield: "Disruption Shield",
-  supplier_trust: "Supplier Trust",
-  sustainability_agent: "Sustainability Agent",
-};
-
-/** Per-agent CSS variable resolved at render time — never a raw colour. */
-const AGENT_COLOR_VAR: Record<AgentName, string> = {
-  demand_prophet: "var(--syn-agent-demand-prophet)",
-  routing_navigator: "var(--syn-agent-routing-navigator)",
-  inventory_sentinel: "var(--syn-agent-inventory-sentinel)",
-  freshness_guardian: "var(--syn-agent-freshness-guardian)",
-  pricing_oracle: "var(--syn-agent-pricing-oracle)",
-  disruption_shield: "var(--syn-agent-disruption-shield)",
-  supplier_trust: "var(--syn-agent-supplier-trust)",
-  sustainability_agent: "var(--syn-agent-sustainability-agent)",
-};
-
-/** Two-letter agent monogram for the node (icon-free, locale-stable). */
-const AGENT_INITIALS: Record<AgentName, string> = {
-  demand_prophet: "DP",
-  routing_navigator: "RN",
-  inventory_sentinel: "IS",
-  freshness_guardian: "FG",
-  pricing_oracle: "PO",
-  disruption_shield: "DS",
-  supplier_trust: "ST",
-  sustainability_agent: "SA",
-};
 
 /** Spring tuning — base; per-agent stiffness is offset to stagger reveals. */
 const SPRING_BASE = { type: "spring" as const, stiffness: 180, damping: 22 };
