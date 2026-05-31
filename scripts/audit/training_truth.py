@@ -74,6 +74,7 @@ class AgentReport:
     file: str
     exists: bool
     has_real_step: bool = False
+    analytical: bool = False
     violations: list[Violation] = field(default_factory=list)
 
 
@@ -111,6 +112,22 @@ def _returns_pipeline_validated(tree: ast.AST) -> list[int]:
     return lines
 
 
+def _is_analytical(tree: ast.AST) -> bool:
+    """True if the module builds a TrainResult.analytical(...) — a closed-form agent.
+
+    Such an agent (newsvendor, CVRPTW) has no gradient loop by design and proves
+    substance via calibration (C40), so it is NOT a hollow loop (ADR-042).
+    """
+    for node in ast.walk(tree):
+        if (
+            isinstance(node, ast.Call)
+            and isinstance(node.func, ast.Attribute)
+            and node.func.attr == "analytical"
+        ):
+            return True
+    return False
+
+
 def scan_agent(agent_dir: Path) -> AgentReport:
     agent = agent_dir.name
     train_py = agent_dir / "training" / "train.py"
@@ -127,6 +144,7 @@ def scan_agent(agent_dir: Path) -> AgentReport:
         return report
 
     report.has_real_step = _has_real_step(tree)
+    report.analytical = _is_analytical(tree)
     constructs_opt = _constructs_optimizer(tree)
 
     # pipeline_validated is flagged everywhere, always.
@@ -138,8 +156,8 @@ def scan_agent(agent_dir: Path) -> AgentReport:
             )
         )
 
-    # hollow_loop: builds an optimizer but never steps it.
-    if constructs_opt and not report.has_real_step:
+    # hollow_loop: builds an optimizer but never steps it (analytical agents are exempt).
+    if constructs_opt and not report.has_real_step and not report.analytical:
         report.violations.append(
             Violation(
                 agent, rel, 0, "hollow_loop",
@@ -197,8 +215,16 @@ def run(*, as_json: bool = False, check: bool = False) -> int:
         print(json.dumps(payload, indent=2, sort_keys=True))
     else:
         for r in reports:
-            mark = "[XX]" if r.violations else ("[OK]" if r.has_real_step else "[--]")
-            state = "real-loop" if r.has_real_step else ("hollow" if r.exists else "no-train.py")
+            real_or_analytical = r.has_real_step or r.analytical
+            mark = "[XX]" if r.violations else ("[OK]" if real_or_analytical else "[--]")
+            if r.analytical:
+                state = "analytical"
+            elif r.has_real_step:
+                state = "real-loop"
+            elif r.exists:
+                state = "hollow"
+            else:
+                state = "no-train.py"
             print(f"{mark} {r.agent:<22} {state:<12} {r.file}")
             for v in r.violations:
                 print(f"        {v.file}:{v.line}  {v.kind:<20} {v.detail}")

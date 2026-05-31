@@ -45,7 +45,7 @@ CALIBRATION_TARGETS: dict[str, tuple[str, float]] = {
 
 # Agents that MUST have produced a calibration metric when a smoke run was
 # expected (CI sets SYNAPSE_SMOKE_RUN=1 after smoke_train). Grows one per PR.
-SMOKE_REQUIRED: frozenset[str] = frozenset({"demand_prophet"})
+SMOKE_REQUIRED: frozenset[str] = frozenset({"demand_prophet", "inventory_sentinel"})
 _SMOKE_EXPECTED = bool(os.environ.get("SYNAPSE_SMOKE_RUN"))
 
 

@@ -38,8 +38,9 @@ ARTIFACTS_DIR = ROOT / "artifacts" / "training"
 logger = structlog.get_logger(__name__)
 
 # Agents whose training.train exposes a smoke path returning a TrainResult.
-# Grows one per PR. Phase 1: demand_prophet's loop is real and smoke-runnable.
-READY_AGENTS: list[str] = ["demand_prophet"]
+# Grows one per PR. demand_prophet = real gradient loop; inventory_sentinel =
+# analytical (closed-form newsvendor; substance proven by conformal coverage).
+READY_AGENTS: list[str] = ["demand_prophet", "inventory_sentinel"]
 
 
 def smoke_train_agent(agent: str) -> bool:
