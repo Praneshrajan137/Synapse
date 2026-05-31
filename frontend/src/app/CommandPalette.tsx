@@ -191,6 +191,9 @@ export function CommandPalette() {
             aria-activedescendant={filtered[active] ? `cmd-${filtered[active].id}` : undefined}
             className="w-full border-b border-border bg-transparent px-4 py-3 text-sm text-ink outline-none placeholder:text-ink-subtle"
           />
+          {/* biome-ignore lint/a11y/useFocusableInteractive: ARIA combobox keeps focus on the input via aria-activedescendant; the listbox is not separately focusable. */}
+          {/* biome-ignore lint/a11y/noNoninteractiveElementToInteractiveRole: ul[role=listbox] + li[role=option] is the canonical ARIA listbox pattern. */}
+          {/* biome-ignore lint/a11y/useSemanticElements: no native element provides combobox-popup listbox semantics. */}
           <ul
             id="command-palette-list"
             role="listbox"
@@ -203,6 +206,9 @@ export function CommandPalette() {
               </li>
             ) : (
               filtered.map((cmd, i) => (
+                // biome-ignore lint/a11y/noNoninteractiveElementToInteractiveRole: li[role=option] is the canonical ARIA listbox option.
+                // biome-ignore lint/a11y/useFocusableInteractive: option focus is virtual (aria-activedescendant), not in the tab order.
+                // biome-ignore lint/a11y/useSemanticElements: no native element provides option semantics inside a combobox popup.
                 <li key={cmd.id} id={`cmd-${cmd.id}`} role="option" aria-selected={i === active}>
                   <button
                     type="button"
