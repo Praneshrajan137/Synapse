@@ -194,11 +194,10 @@ export function CommandPalette() {
           {/* Canonical ARIA combobox-popup: focus stays on the input and moves
               virtually via aria-activedescendant, so the listbox/options carry
               tabIndex={-1} rather than being in the tab order. A div (not ul/li)
-              hosts the listbox role so no non-interactive-element rule applies;
-              useSemanticElements has no native popup-listbox equivalent. */}
-          {/* biome-ignore lint/a11y/useSemanticElements: combobox-popup listbox has no native HTML equivalent. */}
+              hosts the listbox role so no non-interactive-element rule applies. */}
           <div
             id="command-palette-list"
+            // biome-ignore lint/a11y/useSemanticElements: a combobox-popup listbox has no native HTML equivalent.
             role="listbox"
             aria-label="Commands"
             tabIndex={-1}
@@ -208,10 +207,10 @@ export function CommandPalette() {
               <p className="px-4 py-6 text-center text-xs text-ink-muted">No matching commands.</p>
             ) : (
               filtered.map((cmd, i) => (
-                // biome-ignore lint/a11y/useSemanticElements: listbox option has no native HTML equivalent inside a custom popup.
                 <div
                   key={cmd.id}
                   id={`cmd-${cmd.id}`}
+                  // biome-ignore lint/a11y/useSemanticElements: a listbox option has no native HTML equivalent in a custom popup.
                   role="option"
                   aria-selected={i === active}
                   tabIndex={-1}
