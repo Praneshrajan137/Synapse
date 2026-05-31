@@ -57,10 +57,10 @@ EXPECTED_BASIS: dict[str, str | None] = {
     "inventory_sentinel": None,
 }
 
-# Phase 4 fixed pricing_oracle's stamp (CRITIC_VALUE_SPREAD -> ELASTICITY_STRENGTH,
-# matching its tanh(|elasticity|) computation). Only routing_navigator remains
-# (emits no confidence yet — closed when its OPTIMALITY_GAP confidence lands).
-BASELINE = 1
+# Phase 4 closed both known mismatches: pricing_oracle now stamps ELASTICITY_STRENGTH
+# (matching its tanh(|elasticity|) computation) and routing_navigator emits a real
+# OPTIMALITY_GAP confidence. All adjudicated agents agree stamp == computation.
+BASELINE = 0
 
 
 @dataclass
