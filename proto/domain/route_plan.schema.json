@@ -12,7 +12,8 @@
     "total_distance_km": {"type": "number", "minimum": 0},
     "total_time_min": {"type": "number", "minimum": 0},
     "fuel_estimate_liters": {"type": "number", "minimum": 0},
-    "freshness_violations": {"type": "integer", "minimum": 0}
+    "freshness_violations": {"type": "integer", "minimum": 0},
+    "confidence": {"type": "number", "minimum": 0, "maximum": 1}
   },
   "additionalProperties": false
 }
