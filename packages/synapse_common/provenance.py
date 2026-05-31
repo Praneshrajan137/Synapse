@@ -49,6 +49,8 @@ class ConfidenceBasis(StrEnum):
     POSTERIOR_SPREAD = "posterior_spread"
     DECODER_ENTROPY = "decoder_entropy"
     CRITIC_VALUE_SPREAD = "critic_value_spread"
+    ELASTICITY_STRENGTH = "elasticity_strength"  # |tanh(elasticity)| — causal signal strength
+    OPTIMALITY_GAP = "optimality_gap"  # solver gap to the exact optimum (lower gap → higher conf)
     RESIDUAL_VARIANCE = "residual_variance"
     SURVIVAL_CI_WIDTH = "survival_ci_width"
     FALLBACK_FLOOR = "fallback_floor"  # degraded path: confidence is the I-7 floor

@@ -57,8 +57,10 @@ EXPECTED_BASIS: dict[str, str | None] = {
     "inventory_sentinel": None,
 }
 
-# Measured violations today: pricing (mismatch) + routing (missing) = 2.
-BASELINE = 2
+# Phase 4 fixed pricing_oracle's stamp (CRITIC_VALUE_SPREAD -> ELASTICITY_STRENGTH,
+# matching its tanh(|elasticity|) computation). Only routing_navigator remains
+# (emits no confidence yet — closed when its OPTIMALITY_GAP confidence lands).
+BASELINE = 1
 
 
 @dataclass
