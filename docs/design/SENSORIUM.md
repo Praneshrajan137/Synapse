@@ -529,15 +529,24 @@ per INV-CLR-012 — flagged, not assumed.
   firehose + agents query (18 tests; full suite 111/111, `vite build` green). Remaining: the
   rationed Living Map (grayscale-at-rest deck.gl layers) and lifting the legacy KPI band into
   the ambient field.
-- **Phase 2 — The Tribunal.** 8-D Pareto parallel coordinates, live conflict-graph
-  constellation, time-travel scrub. The comprehension crown jewel.
-- **Phase 3 — The Threshold.** Countdown-spine, inherited context, calibration mirror.
-- **Phase 4 — The Projection & The Will.** Divergence trace, Monte-Carlo HOPs, steering
-  live-preview.
-- **Phase 5 — Signature interactions.** Command palette, optimistic/rollback polish,
-  lens-pivot focus preservation.
-- **Phase 6 — Stretch.** Ambient sonification (opt-in); GPU-shader supply graph if scale
-  demands.
+- **Phase 2 — The Tribunal. ✅ SHIPPED.** `ParetoParallel` renders the genuine 8-D
+  arbitration front as parallel coordinates (axes tinted by owning-agent hue, client-side
+  knee via `lib/pareto.ts`, objective-weight bars); wired into DecisionDetail. The existing
+  URL-synced phase scrubber already delivers time-travel. (13 tests.)
+- **Phase 3 — The Threshold. ✅ SHIPPED.** `ThresholdCountdown` (the 300 s HITL window as
+  a draining spine with honest fallback) + `CalibrationMirror` (session overtrust/undertrust
+  signal). Wired into EscalationCard + Cockpit. (14 tests.)
+- **Phase 4 — The Projection. ✅ SHIPPED.** `DivergenceTrace` (twin KL drift, 0.1 threshold,
+  live `twin` firehose) + `OutcomeBand` (quantile-dotplot uncertainty). 'The Will' ships as
+  the audited steering live-preview. (14 tests.)
+- **Phase 5 — Signature interactions. ✅ SHIPPED.** ⌘K `CommandPalette` (fuzzy, keyboard-first)
+  + `focus.store` lens-pivot substrate; optimistic/rollback already on steering + override.
+  (16 tests.)
+- **Phase 6 — Stretch. ✅ SHIPPED.** (a) Opt-in ambient sonification of the Pulse (Web Audio,
+  off by default). (b) GPU supply graph swapped to Sigma.js/graphology + Louvain zones (all
+  MIT; replaced three.js, −~1.7 MB). Honest note: a true GPU-force-compute lib (Cosmograph)
+  is CC-BY-NC and disallowed, so Sigma (GPU-render + CPU layout) is the license-safe choice.
+  (11 tests.)
 
 Each phase ships behind the existing test rigor (vitest + axe + Storybook + Playwright +
 Stryker), preserves every `INV-CLR` and `FE-INV`, and adds spec coverage for any new invariant
