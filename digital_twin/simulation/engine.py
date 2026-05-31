@@ -107,6 +107,36 @@ class SupplyChainSimulation:
         # Bounded to avoid degenerate distributions under aggressive shocks.
         self._failure_rate_multiplier = max(1.0, float(failure_rate_multiplier))
         self._spoilage_rate_multiplier = max(0.0, float(spoilage_rate_multiplier))
+        # Persistent stepping state (E-DT fix: previously run() re-initialised
+        # everything on every call, so the Gym wrapper's state never persisted
+        # across steps). start()/advance() keep one env alive.
+        self._env: simpy.Environment | None = None
+        self._sim_time_min = 0.0
+        # Policy levers an RL agent controls. Neutral defaults reproduce the
+        # historical behaviour exactly, so run()-based tests are unchanged.
+        self._dispatch_speed = 1.0       # >1 = faster pick/pack → lower latency
+        self._restock_threshold = 50.0   # safety-stock level that triggers restock
+        self._order_qty_mult = 1.0       # scales the restock amount
+
+    def set_policy(
+        self,
+        *,
+        dispatch_speed: float | None = None,
+        restock_threshold: float | None = None,
+        order_qty_mult: float | None = None,
+    ) -> None:
+        """Update the supply-policy levers an RL agent controls.
+
+        The running SimPy processes read these on each iteration, so a policy
+        change mid-episode takes effect on subsequent dispatches/restocks — this
+        is what makes the Gym env's action genuinely affect the reward.
+        """
+        if dispatch_speed is not None:
+            self._dispatch_speed = max(0.1, float(dispatch_speed))
+        if restock_threshold is not None:
+            self._restock_threshold = max(0.0, float(restock_threshold))
+        if order_qty_mult is not None:
+            self._order_qty_mult = max(0.1, float(order_qty_mult))
 
     def _init_env(self) -> simpy.Environment:
         if self._seed is not None:
@@ -126,13 +156,16 @@ class SupplyChainSimulation:
             env.process(self._pick_pack_dispatch(env, order_id))
 
     def _pick_pack_dispatch(self, env: simpy.Environment, order_id: int) -> Any:
-        """Pick, pack, and dispatch — Normal(mean, std) minutes."""
+        """Pick, pack, and dispatch — Normal(mean, std) minutes.
+
+        The mean is divided by ``_dispatch_speed``: a higher-priority dispatch
+        policy (the agent's action[2]) packs faster → lower delivery latency →
+        higher reward. With the neutral default 1.0 the mean is unchanged.
+        """
+        mean = self._config.pick_pack_mean_min / self._dispatch_speed
         duration = max(
             1.0,
-            self._rng.normal(
-                self._config.pick_pack_mean_min,
-                self._config.pick_pack_std_min,
-            ),
+            self._rng.normal(mean, self._config.pick_pack_std_min),
         )
         self._metrics.total_pick_pack_time_min += duration
         yield env.timeout(duration)
@@ -168,13 +201,19 @@ class SupplyChainSimulation:
         logger.debug("delivery_done", order_id=order_id, travel_min=round(travel_time, 2))
 
     def _restock(self, env: simpy.Environment) -> Any:
-        """Inventory Sentinel-triggered restock when stock falls below safety level."""
-        safety_stock = 50.0
-        restock_amount = 200.0
+        """Inventory Sentinel-triggered restock when stock falls below safety level.
+
+        ``safety_stock`` and ``restock_amount`` come from the policy levers
+        (action[1]/action[0]): a higher threshold restocks earlier (fewer
+        stockouts, more holding/spoilage). Neutral defaults (50, 200) reproduce
+        the historical behaviour.
+        """
         check_interval = 5.0
 
         while True:
             yield env.timeout(check_interval)
+            safety_stock = self._restock_threshold
+            restock_amount = 200.0 * self._order_qty_mult
             for sku, level in list(self._inventory.items()):
                 if level < safety_stock:
                     lead_time = self._rng.uniform(30.0, 120.0)
@@ -202,29 +241,45 @@ class SupplyChainSimulation:
                     self._freshness[sku] = 1.0
                     logger.debug("spoilage", sku=sku)
 
-    def run(self, duration_hours: float | None = None) -> SimulationMetrics:
-        """Run the simulation for the given duration.
+    def start(self) -> SupplyChainSimulation:
+        """Create one persistent SimPy env + processes and reset accumulators.
 
-        Returns:
-            SimulationMetrics with aggregated KPIs.
+        Unlike the old run()-per-call shape, the env survives across advance()
+        calls so the Gym wrapper's state (inventory, metrics) persists between
+        steps. Returns self for chaining.
         """
-        duration = duration_hours or self._config.simpy_default_duration_hours
-        duration_min = duration * 60.0
-
         self._metrics = SimulationMetrics()
         self._inventory = {f"sku_{i}": 100.0 for i in range(10)}
         self._freshness = {f"sku_{i}": 1.0 for i in range(10)}
-
         env = self._init_env()
         env.process(self._order_arrival(env))
         env.process(self._restock(env))
         env.process(self._spoilage(env))
+        self._env = env
+        self._sim_time_min = 0.0
+        return self
 
-        env.run(until=duration_min)
+    def advance(self, duration_hours: float) -> SimulationMetrics:
+        """Step the persistent env forward by ``duration_hours`` (no reset)."""
+        if self._env is None:
+            self.start()
+        assert self._env is not None
+        self._sim_time_min += duration_hours * 60.0
+        self._env.run(until=self._sim_time_min)
+        return self._metrics
 
+    def run(self, duration_hours: float | None = None) -> SimulationMetrics:
+        """One-shot run for the given duration (start + single advance).
+
+        Behaviour is identical to the historical implementation under the neutral
+        default policy — existing determinism/monotonicity tests are unaffected.
+        """
+        duration = duration_hours or self._config.simpy_default_duration_hours
+        self.start()
+        metrics = self.advance(duration)
         logger.info(
             "simulation_complete",
             duration_hours=duration,
-            **self._metrics.to_dict(),
+            **metrics.to_dict(),
         )
-        return self._metrics
+        return metrics

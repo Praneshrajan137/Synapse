@@ -131,6 +131,9 @@ class SupplyChainGymEnv(gym.Env[np.ndarray, np.ndarray]):
             config=randomized_config,
             seed=seed,
         )
+        # Start the persistent env so step() advances the SAME simulation rather
+        # than re-running from scratch each time (the E-DT state-persistence fix).
+        self._sim.start()
         self._current_step = 0
 
         obs = self._get_obs()
@@ -147,7 +150,16 @@ class SupplyChainGymEnv(gym.Env[np.ndarray, np.ndarray]):
         if self._sim is None:
             raise RuntimeError("Must call reset() before step()")
 
-        self._sim.run(duration_hours=self._step_duration)
+        # Map the 3-d action onto the simulation's supply-policy levers so the
+        # policy actually affects the dynamics (the action was previously ignored).
+        a = np.clip(np.asarray(action, dtype=np.float64), -1.0, 1.0)
+        self._sim.set_policy(
+            order_qty_mult=float(1.0 + 0.5 * a[0]),      # [0.5, 1.5]
+            restock_threshold=float(50.0 + 40.0 * a[1]),  # [10, 90]
+            dispatch_speed=float(1.0 + 0.5 * a[2]),       # [0.5, 1.5] (higher = faster)
+        )
+        # Advance the SAME persistent env (state carries over between steps).
+        self._sim.advance(self._step_duration)
         self._current_step += 1
 
         obs = self._get_obs()
