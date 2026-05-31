@@ -191,43 +191,50 @@ export function CommandPalette() {
             aria-activedescendant={filtered[active] ? `cmd-${filtered[active].id}` : undefined}
             className="w-full border-b border-border bg-transparent px-4 py-3 text-sm text-ink outline-none placeholder:text-ink-subtle"
           />
-          {/* biome-ignore lint/a11y/useFocusableInteractive: ARIA combobox keeps focus on the input via aria-activedescendant; the listbox is not separately focusable. */}
-          {/* biome-ignore lint/a11y/noNoninteractiveElementToInteractiveRole: ul[role=listbox] + li[role=option] is the canonical ARIA listbox pattern. */}
-          {/* biome-ignore lint/a11y/useSemanticElements: no native element provides combobox-popup listbox semantics. */}
-          <ul
+          {/* Canonical ARIA combobox-popup: focus stays on the input and moves
+              virtually via aria-activedescendant, so the listbox/options carry
+              tabIndex={-1} rather than being in the tab order. A div (not ul/li)
+              hosts the listbox role so no non-interactive-element rule applies;
+              useSemanticElements has no native popup-listbox equivalent. */}
+          {/* biome-ignore lint/a11y/useSemanticElements: combobox-popup listbox has no native HTML equivalent. */}
+          <div
             id="command-palette-list"
             role="listbox"
             aria-label="Commands"
+            tabIndex={-1}
             className="max-h-[320px] overflow-auto py-1"
           >
             {filtered.length === 0 ? (
-              <li className="px-4 py-6 text-center text-xs text-ink-muted">
-                No matching commands.
-              </li>
+              <p className="px-4 py-6 text-center text-xs text-ink-muted">No matching commands.</p>
             ) : (
               filtered.map((cmd, i) => (
-                // biome-ignore lint/a11y/noNoninteractiveElementToInteractiveRole: li[role=option] is the canonical ARIA listbox option.
-                // biome-ignore lint/a11y/useFocusableInteractive: option focus is virtual (aria-activedescendant), not in the tab order.
-                // biome-ignore lint/a11y/useSemanticElements: no native element provides option semantics inside a combobox popup.
-                <li key={cmd.id} id={`cmd-${cmd.id}`} role="option" aria-selected={i === active}>
-                  <button
-                    type="button"
-                    tabIndex={-1}
-                    onMouseEnter={() => setActive(i)}
-                    onClick={() => cmd.run()}
-                    className={`flex w-full items-center justify-between gap-3 px-4 py-2 text-left text-sm transition-colors duration-fast ${
-                      i === active ? "bg-surface-raised text-ink" : "text-ink-muted"
-                    }`}
-                  >
-                    <span>{cmd.title}</span>
-                    <span className="text-2xs uppercase tracking-wide text-ink-subtle">
-                      {cmd.group}
-                    </span>
-                  </button>
-                </li>
+                // biome-ignore lint/a11y/useSemanticElements: listbox option has no native HTML equivalent inside a custom popup.
+                <div
+                  key={cmd.id}
+                  id={`cmd-${cmd.id}`}
+                  role="option"
+                  aria-selected={i === active}
+                  tabIndex={-1}
+                  onMouseEnter={() => setActive(i)}
+                  onClick={() => cmd.run()}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" || e.key === " ") {
+                      e.preventDefault();
+                      cmd.run();
+                    }
+                  }}
+                  className={`flex w-full cursor-pointer items-center justify-between gap-3 px-4 py-2 text-left text-sm transition-colors duration-fast ${
+                    i === active ? "bg-surface-raised text-ink" : "text-ink-muted"
+                  }`}
+                >
+                  <span>{cmd.title}</span>
+                  <span className="text-2xs uppercase tracking-wide text-ink-subtle">
+                    {cmd.group}
+                  </span>
+                </div>
               ))
             )}
-          </ul>
+          </div>
           <footer className="flex items-center gap-3 border-t border-border px-4 py-2 text-2xs text-ink-subtle">
             <span>↑↓ navigate</span>
             <span>⏎ run</span>
