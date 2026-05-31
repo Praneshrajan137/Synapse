@@ -66,13 +66,22 @@ The `make verify-claims` target turns each row below into an executable check. T
 - **PARTIAL:** 0
 - **SKIP:** 2 locally — **C38/C40** are the runtime checkpoint/calibration gates; they SKIP without training artifacts on the dev box and are enforced in the CI `training-smoke` job (`SYNAPSE_SMOKE_RUN=1`). This is the two-tier honesty boundary (ADR-042): the AST gates run everywhere, the runtime gates run where the ML stack and a smoke checkpoint exist.
 
-### Substance Completion ratchets still climbing (one agent / PR each)
+### Substance Completion — landed this effort
 
-- **C37/C38/C39**: the remaining 7 agents move from `model=None` serving + no-`train.py` to a real loop + registry-load, lowering each baseline by one.
-- **C40**: per-agent calibration floors (supplier posterior coverage, freshness D-cal, inventory PI coverage) bind as each lands.
-- **C41**: **DONE** — `routing_navigator` now emits an `OPTIMALITY_GAP` confidence and `pricing_oracle` stamps `ELASTICITY_STRENGTH`; baseline ratcheted 2 → 0 (all 8 pipelines agree stamp == computation).
-- **API-gateway rate limiting**: **DONE** — `synapse_common/ratelimit.py` (dependency-free token bucket) + `api/middleware/ratelimit.py` (per-IP, 429 + Retry-After, liveness-exempt), wired in `api/main.py`. 11 tests.
-- **Adjacent (folded into the plan, ML-stack-gated, still climbing):** Feast materialization (real features), the digital-twin Gym env action-blind fix + RL training + Tier-4 orchestrator wiring (C7), binding the 9 placeholder `0.0` coverage floors on the first full-stack CI run, and the C37/C38/C39 ratchet for the remaining 7 agents.
+- **C37 (training-truth)**: `demand_prophet` = real CRPS gradient loop; `inventory_sentinel` = analytical (closed-form newsvendor, `TrainResult.analytical`). 0 violations, baseline 0. The gate now distinguishes real-loop / analytical / hollow.
+- **C39 (serving-truth)**: `demand_prophet` resolves a checkpoint via `ModelRegistry` + `serving_model.py` adapter (degrades honestly). 1/8 wired, baseline-unwired 7.
+- **C40 (calibration-truth)**: `demand_prophet` conformal coverage proven (the calibrator's ~80%→nominal CQR bug fixed); `inventory_sentinel` newsvendor PI coverage = 0.913 on real residuals. Enforced in CI via `SYNAPSE_SMOKE_RUN`.
+- **C41 (confidence-basis-truth)**: **DONE → 0** — `pricing_oracle` stamps `ELASTICITY_STRENGTH`, `routing_navigator` emits a real `OPTIMALITY_GAP` confidence. All 8 pipelines agree stamp == computation.
+- **Feast materialization**: `scripts/build_feature_store.py` builds the missing demand-signals parquet in the exact FeatureView schema (1.125M rows verified) → `feast materialize` → `FeatureSource.FEAST`.
+- **Digital-twin Gym env**: action-blind / stateless-across-steps bug fixed; `set_policy` levers + persistent `start()/advance()`; `test_env_response.py` proves good-action-beats-bad (the non-vacuous-env guard).
+- **API rate limiting**: dependency-free token bucket (`synapse_common/ratelimit.py`) + per-IP middleware (429 + Retry-After, liveness-exempt). 11 tests.
+
+### Still climbing (ML-stack / CI-operator gated, one agent / PR each)
+
+- **C37/C38/C39** for the remaining 6 agents (supplier_trust, freshness_guardian, disruption_shield, sustainability_agent, pricing_oracle, routing_navigator) — real fit/train + registry-load, lowering each baseline by one.
+- **C40** floors for supplier (posterior coverage), freshness (D-cal), etc. as each lands.
+- **Tier-4 orchestrator → digital-twin invocation (C7)** and **pricing MADDPG trained against the fixed env**.
+- **Binding the 9 placeholder `0.0` coverage floors** on the first full-stack CI run; **genuine multi-epoch production checkpoints** (operator/Colab).
 
 ### Sprint 13 measurements (final, locked into gates)
 
