@@ -70,8 +70,9 @@ The `make verify-claims` target turns each row below into an executable check. T
 
 - **C37/C38/C39**: the remaining 7 agents move from `model=None` serving + no-`train.py` to a real loop + registry-load, lowering each baseline by one.
 - **C40**: per-agent calibration floors (supplier posterior coverage, freshness D-cal, inventory PI coverage) bind as each lands.
-- **C41**: `routing_navigator` emits an `OPTIMALITY_GAP` confidence → baseline 1 → 0.
-- **Adjacent (folded into the plan, ML-stack-gated):** Feast materialization (real features), the digital-twin Gym env action-blind fix + RL training + Tier-4 orchestrator wiring (C7), binding the 9 placeholder `0.0` coverage floors on the first full-stack CI run, and API-gateway rate limiting.
+- **C41**: **DONE** — `routing_navigator` now emits an `OPTIMALITY_GAP` confidence and `pricing_oracle` stamps `ELASTICITY_STRENGTH`; baseline ratcheted 2 → 0 (all 8 pipelines agree stamp == computation).
+- **API-gateway rate limiting**: **DONE** — `synapse_common/ratelimit.py` (dependency-free token bucket) + `api/middleware/ratelimit.py` (per-IP, 429 + Retry-After, liveness-exempt), wired in `api/main.py`. 11 tests.
+- **Adjacent (folded into the plan, ML-stack-gated, still climbing):** Feast materialization (real features), the digital-twin Gym env action-blind fix + RL training + Tier-4 orchestrator wiring (C7), binding the 9 placeholder `0.0` coverage floors on the first full-stack CI run, and the C37/C38/C39 ratchet for the remaining 7 agents.
 
 ### Sprint 13 measurements (final, locked into gates)
 
