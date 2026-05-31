@@ -35,12 +35,12 @@ ROOT = Path(__file__).resolve().parents[2]
 AGENTS_DIR = ROOT / "agents"
 
 # Agents whose serve.py is asserted to load a model via ModelRegistry. Grows one
-# per PR. Phase 0: empty (0/8 wired).
-WIRED_AGENTS: frozenset[str] = frozenset()
+# per PR. Phase 1: demand_prophet resolves a checkpoint via ModelRegistry.
+WIRED_AGENTS: frozenset[str] = frozenset({"demand_prophet"})
 
-# Count of serve.py files NOT wired through ModelRegistry today. 8 agents, none
-# wired. Lower as each lands; CI fails on any increase.
-BASELINE_UNWIRED = 8
+# Count of serve.py files NOT yet wired through ModelRegistry. Phase 1 wired
+# demand_prophet (1/8), leaving 7. Lower as each lands; CI fails on any increase.
+BASELINE_UNWIRED = 7
 
 
 @dataclass
@@ -76,13 +76,20 @@ def _references_registry(tree: ast.AST) -> bool:
 
 
 def _calls_load(tree: ast.AST) -> bool:
-    """True if the module calls ``<something>.load(...)`` - the registry resolve."""
+    """True if the module resolves a model — either ``<registry>.load(...)`` directly
+    or a ``load_*model*`` / ``load_serving_model(...)`` loader helper. Combined with the
+    ModelRegistry reference (the conjunction in ``wired``), this reliably distinguishes
+    a real serving-load path from the old bare ``Pipeline()``."""
     for node in ast.walk(tree):
-        if (
-            isinstance(node, ast.Call)
-            and isinstance(node.func, ast.Attribute)
-            and node.func.attr == "load"
-        ):
+        if not isinstance(node, ast.Call):
+            continue
+        func = node.func
+        if isinstance(func, ast.Attribute) and func.attr == "load":
+            return True
+        name = func.attr if isinstance(func, ast.Attribute) else (
+            func.id if isinstance(func, ast.Name) else ""
+        )
+        if name.startswith("load_") and ("model" in name or "serving" in name):
             return True
     return False
 

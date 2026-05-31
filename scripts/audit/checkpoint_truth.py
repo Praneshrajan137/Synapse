@@ -23,6 +23,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import sys
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -30,8 +31,14 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 ARTIFACTS_DIR = ROOT / "artifacts" / "training"
 
-# Agents asserted to produce a checkpoint. Grows one per PR. Phase 0: empty.
-CHECKPOINT_AGENTS: frozenset[str] = frozenset()
+# Agents asserted to produce a checkpoint. Grows one per PR. Phase 1: demand_prophet.
+CHECKPOINT_AGENTS: frozenset[str] = frozenset({"demand_prophet"})
+
+# A committed agent missing its artifact is a hard failure ONLY when a smoke run
+# was expected — i.e. the CI training-smoke job sets SYNAPSE_SMOKE_RUN=1 after
+# invoking smoke_train.py. Locally (no env, no artifacts) the gate SKIPs rather
+# than fabricating a pass or a spurious failure.
+_SMOKE_EXPECTED = bool(os.environ.get("SYNAPSE_SMOKE_RUN"))
 
 
 @dataclass
@@ -91,8 +98,9 @@ def collect() -> tuple[Report, bool]:
 def run(*, as_json: bool = False, check: bool = False) -> int:
     report, any_artifact = collect()
     failures = [r for r in report.results if r.status in {"missing_file", "sha_mismatch", "no_checkpoint"}]
-    # A committed agent missing its artifact is a failure only when some artifacts exist.
-    if any_artifact:
+    # A committed agent missing its artifact is a failure when a smoke run was
+    # expected (CI), or when some artifacts already exist (a partial run).
+    if any_artifact or _SMOKE_EXPECTED:
         failures += [
             r for r in report.results
             if r.status == "no_artifact" and r.agent in CHECKPOINT_AGENTS

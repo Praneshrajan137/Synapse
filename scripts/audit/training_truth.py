@@ -44,13 +44,14 @@ ROOT = Path(__file__).resolve().parents[2]
 AGENTS_DIR = ROOT / "agents"
 
 # Agents whose train.py is asserted to contain a real gradient loop. Grows one
-# per PR as Phase 1/5 land. Phase 0: empty (nothing is real yet).
-REAL_LOOP_AGENTS: frozenset[str] = frozenset()
+# per PR as Phase 1/5 land. Phase 1: demand_prophet's loop is real.
+REAL_LOOP_AGENTS: frozenset[str] = frozenset({"demand_prophet"})
 
-# Measured violation count today: demand_prophet's train.py trips both the
-# 'pipeline_validated' sentinel and the hollow-optimizer rule. Lower as loops are
-# fixed; CI fails on any increase. Phase 1 drives this to 0.
-BASELINE = 2
+# Violation count ceiling. Phase 1 drove demand_prophet's two violations
+# (pipeline_validated sentinel + hollow optimizer) to zero by giving it a real
+# CRPS loop. CI fails on any increase; the remaining 7 agents have no train.py
+# yet (not a violation — they ratchet in one PR each).
+BASELINE = 0
 
 _PIPELINE_VALIDATED = "pipeline_validated"
 _OPTIMIZER_NAMES = {"Adam", "AdamW", "SGD", "RMSprop", "Adagrad", "Adadelta", "NAdam"}

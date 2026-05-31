@@ -13,10 +13,12 @@ import structlog
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import Response
 from pydantic import BaseModel, Field
+from synapse_common.model_registry import ModelRegistry
 from synapse_common.models import DemandForecast
 
 from agents.demand_prophet.config import DemandProphetConfig
 from agents.demand_prophet.inference.pipeline import DemandProphetPipeline
+from agents.demand_prophet.inference.serving_model import load_serving_model
 
 if TYPE_CHECKING:
     from collections.abc import AsyncIterator
@@ -27,12 +29,67 @@ _pipeline: DemandProphetPipeline | None = None
 _config: DemandProphetConfig | None = None
 
 
+def _build_model_registry(config: DemandProphetConfig) -> ModelRegistry:
+    """Construct the MLflow-backed registry. Never raises — degrades (I-7, ADR-041).
+
+    A reachable MLflow tracking server yields an ``MlflowClient``; otherwise the
+    registry is constructed with ``mlflow_client=None`` and every ``load`` returns
+    a degraded handle, so serving falls back to the honest EMA path.
+    """
+    # Bound the HTTP timeout so an unreachable tracking server fails fast and
+    # serving degrades within seconds instead of blocking startup (the MlflowClient
+    # otherwise retries with a long default). Honest I-7 degradation needs to be
+    # *prompt*, not just eventual.
+    import os  # noqa: PLC0415
+
+    os.environ.setdefault("MLFLOW_HTTP_REQUEST_TIMEOUT", "3")
+    os.environ.setdefault("MLFLOW_HTTP_REQUEST_MAX_RETRIES", "1")
+    try:
+        from mlflow.tracking import MlflowClient  # noqa: PLC0415
+
+        client = MlflowClient(tracking_uri=config.mlflow_tracking_uri)
+        return ModelRegistry(client, tracking_uri=config.mlflow_tracking_uri)
+    except Exception as exc:  # noqa: BLE001 — MLflow absent/unreachable degrades (I-7)
+        logger.warning("mlflow_unavailable", error=str(exc), fallback="degraded serving")
+        return ModelRegistry(None)
+
+
+def _build_pipeline(config: DemandProphetConfig) -> DemandProphetPipeline:
+    """Load the trained model + conformal calibrator and wire the real pipeline.
+
+    This is the C39 serving-truth path: serving now resolves a real checkpoint via
+    ModelRegistry instead of always constructing ``model=None``. Any failure along
+    the way degrades to the honest fallback rather than taking the agent down (I-7).
+    """
+    registry = _build_model_registry(config)
+    model = load_serving_model(registry, city=getattr(config, "city", "bengaluru"))
+    calibrator = None
+    if model is not None:
+        try:
+            from agents.demand_prophet.training.conformal import (  # noqa: PLC0415
+                ConformalCalibrator,
+            )
+
+            calibrator = ConformalCalibrator(
+                alpha=config.conformal_alpha,
+                coverage_target=config.conformal_coverage_target,
+            )
+        except Exception as exc:  # noqa: BLE001 — calibrator optional; serve point+raw band
+            logger.warning("calibrator_init_failed", error=str(exc))
+            calibrator = None
+    return DemandProphetPipeline(model=model, conformal_calibrator=calibrator)
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     global _pipeline, _config
     _config = DemandProphetConfig()
-    _pipeline = DemandProphetPipeline()
-    logger.info("server_started", port=_config.port)
+    _pipeline = _build_pipeline(_config)
+    logger.info(
+        "server_started",
+        port=_config.port,
+        model_loaded=_pipeline._model is not None,
+    )
     yield
 
 

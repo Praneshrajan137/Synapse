@@ -25,6 +25,7 @@ Run::
 from __future__ import annotations
 
 import json
+import os
 import sys
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -41,6 +42,11 @@ CALIBRATION_TARGETS: dict[str, tuple[str, float]] = {
     "freshness_guardian": ("d_cal", 0.80),
     "inventory_sentinel": ("pi_coverage", 0.85),
 }
+
+# Agents that MUST have produced a calibration metric when a smoke run was
+# expected (CI sets SYNAPSE_SMOKE_RUN=1 after smoke_train). Grows one per PR.
+SMOKE_REQUIRED: frozenset[str] = frozenset({"demand_prophet"})
+_SMOKE_EXPECTED = bool(os.environ.get("SYNAPSE_SMOKE_RUN"))
 
 
 @dataclass
@@ -71,6 +77,10 @@ def collect() -> tuple[Report, bool]:
     for agent, (metric_key, floor) in sorted(CALIBRATION_TARGETS.items()):
         data = artifacts.get(agent)
         if data is None:
+            if _SMOKE_EXPECTED and agent in SMOKE_REQUIRED:
+                report.results.append(
+                    Result(agent, "no_metric", "smoke run expected a calibration artifact, none found")
+                )
             continue  # no artifact for this agent yet -> skip silently
         metrics = data.get("metrics", {})
         if metric_key not in metrics:
