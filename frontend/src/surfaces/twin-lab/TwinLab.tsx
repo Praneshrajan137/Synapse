@@ -5,24 +5,30 @@ import { useFirehose } from "@hooks/use-firehose";
 import { useSynapseApi } from "@hooks/use-synapse-api";
 import { useFirehoseStore } from "@state/firehose.store";
 import { useMutation } from "@tanstack/react-query";
-import { useMemo, useState } from "react";
+import { Suspense, lazy, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { DivergenceMeter } from "./DivergenceMeter";
 import { ScenarioBuilder, type ScenarioRequest } from "./ScenarioBuilder";
-import { SupplyNetwork3D } from "./SupplyNetwork3D";
 import { useTopology } from "./useTopology";
 
+// Phase 6b: lazy-load the WebGL (Sigma) supply graph so it stays out of the
+// entry bundle (FE-INV-014 / FE-INV-025).
+const SupplyNetworkGraph = lazy(() =>
+  import("./SupplyNetworkGraph").then((m) => ({ default: m.SupplyNetworkGraph })),
+);
+
 /**
- * Twin Lab — P3 elevation. Live KL divergence, 3D supply network, and
- * what-if scenario runner against the digital twin's /simulate endpoint.
+ * Twin Lab — P3 elevation (SENSORIUM "The Projection"). Live KL divergence +
+ * its drift trace, the WebGL supply network, and what-if scenarios against the
+ * digital twin's /simulate endpoint.
  */
 export function TwinLab() {
   const api = useSynapseApi();
   const topology = useTopology();
   const [result, setResult] = useState<TwinState | null>(null);
 
-  // Subscribe to the live twin channel so the divergence trace shows drift
-  // over time, not just the latest scenario's snapshot (I-12).
+  // Subscribe to the live twin channel so the divergence trace shows drift over
+  // time, not just the latest scenario's snapshot (I-12).
   useFirehose({ topics: ["twin"] });
   const twinHistory = useFirehoseStore((s) => s.twin.items);
   const divergenceSeries = useMemo(() => {
@@ -50,8 +56,8 @@ export function TwinLab() {
         <div className="space-y-0.5">
           <h1 className="text-2xl font-semibold text-ink">Twin Lab</h1>
           <p className="text-sm text-ink-muted">
-            Run what-if scenarios against the digital twin (I-12). KL divergence vs live
-            distribution is tracked per run.
+            Run what-if scenarios against the digital twin (I-12). KL divergence vs the live
+            distribution is tracked per run and over time.
           </p>
         </div>
         {result?.sync_status && (
@@ -69,7 +75,18 @@ export function TwinLab() {
       </div>
 
       <div className="grid gap-4 lg:grid-cols-[1fr_320px]">
-        <SupplyNetwork3D nodes={topology.data?.nodes ?? []} edges={topology.data?.edges ?? []} />
+        <Suspense
+          fallback={
+            <div className="syn-card flex h-[420px] items-center justify-center text-sm text-ink-muted">
+              Loading supply network…
+            </div>
+          }
+        >
+          <SupplyNetworkGraph
+            nodes={topology.data?.nodes ?? []}
+            edges={topology.data?.edges ?? []}
+          />
+        </Suspense>
         <ScenarioBuilder pending={sim.isPending} onRun={(req) => sim.mutate(req)} />
       </div>
 
