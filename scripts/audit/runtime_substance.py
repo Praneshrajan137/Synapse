@@ -431,6 +431,61 @@ def _probe_disruption_shield() -> RuntimeProbe:
 
 
 # --------------------------------------------------------------------------- #
+# freshness_guardian (survival paradigm) — lifelines-free serving (numpy Weibull).
+# --------------------------------------------------------------------------- #
+@register_probe("freshness_guardian")
+def _probe_freshness_guardian() -> RuntimeProbe:
+    """Boot the numpy-reconstructed Weibull-AFT through serving; SKIP if no fit.
+
+    Serving is lifelines-free (the AFT fit is the CI-only step), so this probe runs
+    anywhere the fitted-params checkpoint exists. Asserts non-degraded
+    SURVIVAL_CI_WIDTH output with confidence that varies with storage conditions.
+    """
+    ckpt = CHECKPOINT_DIR / "freshness_weibull_aft.pt"
+    if not ckpt.is_file():
+        return RuntimeProbe("skip", "no freshness_weibull_aft.pt params (run the smoke job)")
+
+    from synapse_common.model_registry import ModelRegistry  # noqa: PLC0415
+    from synapse_common.provenance import ConfidenceBasis  # noqa: PLC0415
+
+    from agents.freshness_guardian.inference.pipeline import (  # noqa: PLC0415
+        FreshnessGuardianPipeline,
+        FreshnessRequest,
+    )
+    from agents.freshness_guardian.inference.serving_model import (  # noqa: PLC0415
+        build_freshness_model,
+        load_serving_model,
+    )
+
+    registry = ModelRegistry(None, checkpoint_dir=ckpt.parent, model_builder=build_freshness_model)
+    model = load_serving_model(registry)
+    if model is None or not getattr(model, "is_real", False):
+        return RuntimeProbe("fail", "params present but registry resolved a degraded model")
+
+    pipe = FreshnessGuardianPipeline(serving_model=model)
+    confs: list[float] = []
+    for temp_dev in (0.0, 12.0):  # benign vs. heavily temperature-abused storage
+        req = FreshnessRequest(
+            store_id="store_x", sku_id="sku_a", days_since_receipt=1.0,
+            initial_shelf_life_days=7.0, temperature_deviation_hours=temp_dev,
+        )
+        alert = pipe.assess(req)
+        prov = pipe.last_provenance
+        if prov.degraded:
+            return RuntimeProbe("fail", "fitted survival model served degraded provenance")
+        if prov.confidence_basis != ConfidenceBasis.SURVIVAL_CI_WIDTH:
+            return RuntimeProbe("fail", f"basis {prov.confidence_basis} is not SURVIVAL_CI_WIDTH")
+        confs.append(round(alert.confidence, 4))
+    if len(set(confs)) == 1:
+        return RuntimeProbe("fail", f"confidence constant across conditions ({confs}) — not real")
+    return RuntimeProbe(
+        "ok",
+        f"freshness_guardian served real: degraded=False, basis=SURVIVAL_CI_WIDTH, "
+        f"confidences={confs}",
+    )
+
+
+# --------------------------------------------------------------------------- #
 # Aggregation across all registered probes.
 # --------------------------------------------------------------------------- #
 def evaluate(agents: list[str] | None = None) -> RuntimeProbe:

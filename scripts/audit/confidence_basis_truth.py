@@ -51,9 +51,9 @@ EXPECTED_BASIS: dict[str, str | None] = {
     "pricing_oracle": "ELASTICITY_STRENGTH",     # tanh(|elasticity|) - NOT critic spread
     "routing_navigator": "OPTIMALITY_GAP",       # solver optimality-gap percentile
     "disruption_shield": "ANOMALY_SCORE_MARGIN",  # |score − threshold| decisiveness (Phase 7)
+    "freshness_guardian": "SURVIVAL_CI_WIDTH",     # 1/(1+rel CI width) of the Weibull life (Phase 7)
     # Adjudicated in their Phase 7 ratchet PRs:
     "sustainability_agent": None,
-    "freshness_guardian": None,
     "inventory_sentinel": None,
 }
 

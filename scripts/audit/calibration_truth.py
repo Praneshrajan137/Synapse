@@ -54,6 +54,7 @@ SMOKE_REQUIRED: frozenset[str] = frozenset(
         "routing_navigator",
         "supplier_trust",
         "disruption_shield",
+        "freshness_guardian",
     }
 )
 _SMOKE_EXPECTED = bool(os.environ.get("SYNAPSE_SMOKE_RUN"))

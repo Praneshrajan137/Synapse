@@ -45,13 +45,14 @@ WIRED_AGENTS: frozenset[str] = frozenset(
         "supplier_trust",
         "pricing_oracle",
         "disruption_shield",
+        "freshness_guardian",
     }
 )
 
 # Count of serve.py files NOT yet wired through ModelRegistry. Phases 1-4 wired the
 # four paradigm exemplars (4/8); Phase 7 ratchets the rest — disruption_shield (5/8),
-# leaving 3. Lower as each lands; CI fails on any increase.
-BASELINE_UNWIRED = 3
+# freshness_guardian (6/8), leaving 2. Lower as each lands; CI fails on any increase.
+BASELINE_UNWIRED = 2
 
 
 @dataclass
