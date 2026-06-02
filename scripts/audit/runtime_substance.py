@@ -386,6 +386,51 @@ def _probe_pricing_oracle() -> RuntimeProbe:
 
 
 # --------------------------------------------------------------------------- #
+# disruption_shield (anomaly paradigm) — torch-free (sklearn IsolationForest).
+# --------------------------------------------------------------------------- #
+@register_probe("disruption_shield")
+def _probe_disruption_shield() -> RuntimeProbe:
+    """Boot the fitted IsolationForest through the $0 serving source.
+
+    Scope (ADR-043): the full ``detect()`` path also invokes an Ollama reasoner +
+    Pinecone retriever (un-stubbable external services), so this probe proves the
+    *loaded detector's* runtime substance — the production confidence source — via
+    the serving model: a real fitted model, with a decisive normal point scoring
+    higher confidence than a borderline one (non-constant ANOMALY_SCORE_MARGIN).
+    Torch-free → runs anywhere the sklearn checkpoint exists.
+    """
+    ckpt = CHECKPOINT_DIR / "disruption_iforest.pt"
+    if not ckpt.is_file():
+        return RuntimeProbe("skip", "no disruption_iforest.pt detector (run the smoke job)")
+
+    from synapse_common.model_registry import ModelRegistry  # noqa: PLC0415
+
+    from agents.disruption_shield.inference.serving_model import (  # noqa: PLC0415
+        build_disruption_model,
+        load_serving_model,
+    )
+
+    registry = ModelRegistry(None, checkpoint_dir=ckpt.parent, model_builder=build_disruption_model)
+    model = load_serving_model(registry)
+    if model is None or not getattr(model, "is_real", False):
+        return RuntimeProbe("fail", "detector present but registry resolved a degraded model")
+
+    import numpy as np  # noqa: PLC0415
+
+    c_normal = model.confidence(np.zeros((1, 12)))
+    c_border = model.confidence(np.full((1, 12), 2.0))
+    if c_normal == c_border:
+        return RuntimeProbe("fail", f"confidence constant across inputs ({c_normal}) — not real")
+    if c_normal == 0.5 and c_border == 0.5:
+        return RuntimeProbe("fail", "confidence collapsed to the margin floor")
+    return RuntimeProbe(
+        "ok",
+        f"disruption_shield served real: detector loaded, basis=ANOMALY_SCORE_MARGIN, "
+        f"confidence varies (normal={c_normal}, borderline={c_border})",
+    )
+
+
+# --------------------------------------------------------------------------- #
 # Aggregation across all registered probes.
 # --------------------------------------------------------------------------- #
 def evaluate(agents: list[str] | None = None) -> RuntimeProbe:

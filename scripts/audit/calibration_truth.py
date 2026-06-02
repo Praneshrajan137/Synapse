@@ -42,12 +42,19 @@ CALIBRATION_TARGETS: dict[str, tuple[str, float]] = {
     "freshness_guardian": ("d_cal", 0.80),
     "inventory_sentinel": ("pi_coverage", 0.85),
     "routing_navigator": ("og_coverage", 0.80),   # 80%-nominal optimality-gap PI
+    "disruption_shield": ("detection_auc", 0.75),  # anomaly separability (ROC-AUC)
 }
 
 # Agents that MUST have produced a calibration metric when a smoke run was
 # expected (CI sets SYNAPSE_SMOKE_RUN=1 after smoke_train). Grows one per PR.
 SMOKE_REQUIRED: frozenset[str] = frozenset(
-    {"demand_prophet", "inventory_sentinel", "routing_navigator", "supplier_trust"}
+    {
+        "demand_prophet",
+        "inventory_sentinel",
+        "routing_navigator",
+        "supplier_trust",
+        "disruption_shield",
+    }
 )
 _SMOKE_EXPECTED = bool(os.environ.get("SYNAPSE_SMOKE_RUN"))
 

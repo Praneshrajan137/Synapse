@@ -54,6 +54,7 @@ READY_AGENTS: list[str] = [
     "routing_navigator",
     "supplier_trust",
     "pricing_oracle",
+    "disruption_shield",
 ]
 
 

@@ -54,6 +54,15 @@ invariants:
     assertion: "0.0 <= output.ensemble_score <= 1.0"
     severity: critical
 
+  - id: "INV-DS-008"
+    description: >
+      Runtime reality (ADR-043): when the fitted IsolationForest detector is loaded, its
+      served confidence is the real anomaly-score margin (ANOMALY_SCORE_MARGIN) — a decisive
+      normal/anomalous input scores higher confidence than a borderline one — never the
+      config-constant fallback.
+    assertion: "serving_model.is_real and confidence(decisive) > confidence(borderline) and basis == ANOMALY_SCORE_MARGIN"
+    severity: critical
+
 preconditions:
   - id: "PRE-DS-001"
     description: "Supply chain graph node IDs are non-empty"
