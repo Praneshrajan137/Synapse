@@ -317,6 +317,75 @@ def _probe_supplier_trust() -> RuntimeProbe:
 
 
 # --------------------------------------------------------------------------- #
+# pricing_oracle (RL paradigm) — torch-gated (the trained actor needs torch).
+# --------------------------------------------------------------------------- #
+@register_probe("pricing_oracle")
+def _probe_pricing_oracle() -> RuntimeProbe:
+    """Boot the trained MADDPG actor + elasticity model through serving.
+
+    Torch-gated (the actor is a torch module): SKIP without torch / checkpoint —
+    the proof runs in the CI smoke job. Asserts non-degraded ELASTICITY_STRENGTH
+    output, the essential cap held, and confidence varying across categories.
+    """
+    try:
+        import torch  # noqa: F401, PLC0415
+    except ImportError:
+        return RuntimeProbe("skip", "torch absent - runtime proof runs in the CI smoke job")
+    ckpt = CHECKPOINT_DIR / "pricing_maddpg.pt"
+    if not ckpt.is_file():
+        return RuntimeProbe("skip", "no pricing_maddpg.pt actor (run the smoke job)")
+
+    from synapse_common.model_registry import ModelRegistry  # noqa: PLC0415
+    from synapse_common.provenance import ConfidenceBasis, FeatureSource  # noqa: PLC0415
+
+    from agents.pricing_oracle.inference.pipeline import PricingOraclePipeline  # noqa: PLC0415
+    from agents.pricing_oracle.inference.serving_model import (  # noqa: PLC0415
+        build_pricing_model,
+        load_serving_model,
+    )
+
+    stub_feast = StubFeatureStore(
+        {
+            "pricing_features:demand_elasticity": lambda i: -0.5 - 0.3 * i,
+            "pricing_features:competitor_price_ratio": lambda i: 0.9 + 0.1 * i,
+            "pricing_features:inventory_pressure": lambda i: 0.2 + 0.2 * i,
+            "pricing_features:rolling_7d_units": lambda i: 50.0 + 10.0 * i,
+        }
+    )
+    registry = ModelRegistry(None, checkpoint_dir=ckpt.parent, model_builder=build_pricing_model)
+    model = load_serving_model(registry)
+    if model is None or not getattr(model, "is_real", False):
+        return RuntimeProbe("fail", "actor present but registry resolved a degraded model")
+
+    pipe = PricingOraclePipeline(
+        model=model, causal_estimator=model.elasticity, feast_client=stub_feast
+    )
+    updates = pipe.price(
+        ["s1", "s2", "s3"], "store_x", ["snack", "essential", "beverage"], [10.0, 20.0, 5.0]
+    )
+    prov = pipe.last_provenance
+    if prov.degraded:
+        return RuntimeProbe("fail", "trained actor served degraded provenance")
+    if prov.confidence_basis != ConfidenceBasis.ELASTICITY_STRENGTH:
+        return RuntimeProbe("fail", f"basis {prov.confidence_basis} is not ELASTICITY_STRENGTH")
+    if prov.feature_source != FeatureSource.FEAST:
+        return RuntimeProbe("fail", f"expected FEAST features, got {prov.feature_source}")
+    essential = next((u for u in updates if u.category == "essential"), None)
+    if essential is not None and essential.multiplier > 1.3 + 1e-9:
+        return RuntimeProbe(
+            "fail", f"essential cap violated: {essential.multiplier} > 1.3 (INV-PO-001)"
+        )
+    confs = [round(u.confidence, 4) for u in updates]
+    if len(set(confs)) == 1:
+        return RuntimeProbe("fail", f"confidence constant across categories ({confs}) — not real")
+    return RuntimeProbe(
+        "ok",
+        f"pricing_oracle served real: degraded=False, basis=ELASTICITY_STRENGTH, "
+        f"essential_cap_held=True, confidences={confs}",
+    )
+
+
+# --------------------------------------------------------------------------- #
 # Aggregation across all registered probes.
 # --------------------------------------------------------------------------- #
 def evaluate(agents: list[str] | None = None) -> RuntimeProbe:

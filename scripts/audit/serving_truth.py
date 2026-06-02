@@ -39,13 +39,13 @@ AGENTS_DIR = ROOT / "agents"
 # (analytical/solver — the $0 registry source resolves its optimality-gap
 # calibration checkpoint).
 WIRED_AGENTS: frozenset[str] = frozenset(
-    {"demand_prophet", "routing_navigator", "supplier_trust"}
+    {"demand_prophet", "routing_navigator", "supplier_trust", "pricing_oracle"}
 )
 
-# Count of serve.py files NOT yet wired through ModelRegistry. Phase 1 wired
-# demand_prophet (1/8); Phase 2 routing_navigator (2/8); Phase 3 supplier_trust
-# (3/8), leaving 5. Lower as each lands; CI fails on any increase.
-BASELINE_UNWIRED = 5
+# Count of serve.py files NOT yet wired through ModelRegistry. Phase 1 demand_prophet
+# (1/8); Phase 2 routing_navigator (2/8); Phase 3 supplier_trust (3/8); Phase 4
+# pricing_oracle (4/8), leaving 4. Lower as each lands; CI fails on any increase.
+BASELINE_UNWIRED = 4
 
 
 @dataclass

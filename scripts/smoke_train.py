@@ -53,6 +53,7 @@ READY_AGENTS: list[str] = [
     "inventory_sentinel",
     "routing_navigator",
     "supplier_trust",
+    "pricing_oracle",
 ]
 
 

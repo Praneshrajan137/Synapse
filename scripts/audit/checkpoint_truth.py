@@ -31,8 +31,9 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 ARTIFACTS_DIR = ROOT / "artifacts" / "training"
 
-# Agents asserted to produce a checkpoint. Grows one per PR. Phase 1: demand_prophet.
-CHECKPOINT_AGENTS: frozenset[str] = frozenset({"demand_prophet"})
+# Agents asserted to produce a checkpoint. Grows one per PR. Phase 1: demand_prophet;
+# Phase 4: pricing_oracle (the trained MADDPG actor state_dict).
+CHECKPOINT_AGENTS: frozenset[str] = frozenset({"demand_prophet", "pricing_oracle"})
 
 # A committed agent missing its artifact is a hard failure ONLY when a smoke run
 # was expected — i.e. the CI training-smoke job sets SYNAPSE_SMOKE_RUN=1 after
