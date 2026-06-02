@@ -48,6 +48,12 @@ jobs:
           # compatible starlette LAST so api/tests collect. (`!=` keeps pip from
           # also yanking fastapi.)
           pip install "starlette>=0.37.2,<0.38.0"
+          # api/ handlers lazily `import psycopg2` inside their DB try-blocks.
+          # Without the driver the import raises before the POSTGRES_DSN
+          # fail-fast, so api/tests/test_decisions_auth.py sees "No module named
+          # 'psycopg2'" instead of the expected "POSTGRES_DSN not configured".
+          # psycopg2-binary is the dev/test variant (E-S5-09).
+          pip install psycopg2-binary
       - name: Ruff lint
         run: ruff check packages/synapse_common/ agents/ orchestrator/ --output-format=github
       - name: Ruff format check
