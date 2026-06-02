@@ -11,34 +11,42 @@ flagship slice:
   2. the registry was MLflow-only, so a trained checkpoint was never loadable at $0
      → every request silently took the honest-but-hollow fallback.
 
-This gate is the RUNTIME counterpart: it boots the demand_prophet checkpoint
-through the *production* serving path (``ModelRegistry`` → ``load_serving_model``
-→ ``DemandProphetPipeline``) against real per-SKU features and asserts the output
-is genuinely real — ``degraded=False``, ``confidence_basis=CONFORMAL_INTERVAL``,
-and confidence NOT collapsed to the fallback floor. A regression to either defect
-turns this RED.
+This gate is the RUNTIME counterpart: it boots each *wired* agent's checkpoint
+through its **production** serving path (``ModelRegistry`` → ``load_serving_model``
+→ ``<Agent>Pipeline``) against real per-entity features and asserts the output is
+genuinely real — ``degraded=False``, the agent's declared ``confidence_basis``, and
+confidence NOT collapsed to the fallback floor. A regression to either defect
+turns the affected agent's probe RED.
 
-Like ``checkpoint_truth`` / ``calibration_truth`` it **SKIPs** (never fabricates a
-pass) when torch is absent or no serving checkpoint exists — the runtime proof
-lives in the CI ``training-smoke`` job, which produces the artifact first.
+**Per-agent probe registry (ADR-043 ratchet).** Each agent contributes one probe
+via :func:`register_probe`. :func:`evaluate` runs all registered probes and
+aggregates (any FAIL → FAIL; else any OK → OK; else SKIP). New agents append a
+probe in their reality PR; the methodology scales without touching this scaffold.
+
+Like ``checkpoint_truth`` / ``calibration_truth`` each probe **SKIPs** (never
+fabricates a pass) when torch is absent or no serving checkpoint exists — the
+runtime proof lives in the CI ``training-smoke`` job, which produces the artifact
+first.
 
 Run::
 
-    python -m scripts.audit.runtime_substance            # human line
-    python -m scripts.audit.runtime_substance --json      # machine JSON
-    python -m scripts.audit.runtime_substance --check      # exit 1 on a real failure
+    python -m scripts.audit.runtime_substance                 # human lines (all probes)
+    python -m scripts.audit.runtime_substance --json          # machine JSON (aggregate)
+    python -m scripts.audit.runtime_substance --check         # exit 1 on any real failure
+    python -m scripts.audit.runtime_substance --agent pricing_oracle   # one probe
 """
 
 from __future__ import annotations
 
 import json
 import sys
+from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
 ROOT = Path(__file__).resolve().parents[2]
-SERVING_CKPT = ROOT / "artifacts" / "checkpoints" / "demand_prophet_hgt_tft.pt"
+CHECKPOINT_DIR = ROOT / "artifacts" / "checkpoints"
 
 
 @dataclass
@@ -47,41 +55,79 @@ class RuntimeProbe:
     detail: str
 
 
-class _StubFeast:
-    """In-process Feast stand-in returning DISTINCT per-SKU features.
+# --------------------------------------------------------------------------- #
+# Per-agent probe registry. Each probe boots one agent's real serving path and
+# returns a RuntimeProbe. evaluate() aggregates across all registered probes.
+# --------------------------------------------------------------------------- #
+ProbeFn = Callable[[], RuntimeProbe]
+PROBES: dict[str, ProbeFn] = {}
 
-    The gate's job is to exercise the real serving code path end-to-end, not to
-    prove a Feast deployment is up (that is WS-C's integration assertion). Distinct
-    features make ``feature_source=FEAST`` and feed the model varying input.
+
+def register_probe(agent: str) -> Callable[[ProbeFn], ProbeFn]:
+    """Register ``fn`` as the runtime-substance probe for ``agent``."""
+
+    def _decorator(fn: ProbeFn) -> ProbeFn:
+        PROBES[agent] = fn
+        return fn
+
+    return _decorator
+
+
+class StubFeatureStore:
+    """Generic in-process Feast stand-in returning DISTINCT per-entity features.
+
+    Parameterised by a ``feature_template`` (``{feature_ref: fn(i) -> value}``) so
+    each agent's probe exercises its own ``FEATURE_REFS``. The gate's job is to
+    drive the real serving code path end-to-end, not to prove a Feast deployment is
+    up (that is the integration assertion). Distinct features make
+    ``feature_source=FEAST`` and feed the model varying input.
     """
 
+    def __init__(
+        self,
+        feature_template: dict[str, Callable[[int], float]],
+        *,
+        entity_key: str = "sku_id",
+    ) -> None:
+        self._template = feature_template
+        self._entity_key = entity_key
+
     class _Online:
-        def __init__(self, skus: list[str]) -> None:
-            self._skus = skus
+        def __init__(
+            self,
+            entities: list[str],
+            template: dict[str, Callable[[int], float]],
+            entity_key: str,
+        ) -> None:
+            self._entities = entities
+            self._template = template
+            self._entity_key = entity_key
 
-        def to_dict(self) -> dict[str, list]:
-            n = len(self._skus)
-            # Vary each feature per-SKU so the real path is genuinely exercised.
-            return {
-                "sku_id": self._skus,
-                "sku_demand_signals:rolling_mean_7d": [8.0 + 3.0 * i for i in range(n)],
-                "sku_demand_signals:rolling_std_7d": [1.0 + 0.5 * i for i in range(n)],
-                "sku_demand_signals:trend_slope": [0.05 * (i + 1) for i in range(n)],
-                "sku_demand_signals:seasonality_idx": [0.2 + 0.1 * i for i in range(n)],
-            }
+        def to_dict(self) -> dict[str, list[Any]]:
+            n = len(self._entities)
+            out: dict[str, list[Any]] = {self._entity_key: list(self._entities)}
+            for ref, fn in self._template.items():
+                out[ref] = [fn(i) for i in range(n)]
+            return out
 
-    def get_online_features(self, features: object, entity_rows: list[dict]) -> Any:
-        return self._Online([r["sku_id"] for r in entity_rows])
+    def get_online_features(self, features: object, entity_rows: list[dict[str, Any]]) -> Any:
+        entities = [r[self._entity_key] for r in entity_rows]
+        return self._Online(entities, self._template, self._entity_key)
 
 
-def evaluate() -> RuntimeProbe:
-    """Probe the real serving path; SKIP when its prerequisites are absent."""
+# --------------------------------------------------------------------------- #
+# demand_prophet (forecasting paradigm) — the reference probe.
+# --------------------------------------------------------------------------- #
+@register_probe("demand_prophet")
+def _probe_demand_prophet() -> RuntimeProbe:
+    """Probe the real demand_prophet serving path; SKIP when prerequisites absent."""
     try:
         import torch  # noqa: F401, PLC0415 — runtime ML stack required for a real load
     except ImportError:
         return RuntimeProbe("skip", "torch absent - runtime proof runs in the CI smoke job")
-    if not SERVING_CKPT.is_file():
-        return RuntimeProbe("skip", f"no serving checkpoint at {SERVING_CKPT.name} (run smoke job)")
+    ckpt = CHECKPOINT_DIR / "demand_prophet_hgt_tft.pt"
+    if not ckpt.is_file():
+        return RuntimeProbe("skip", f"no serving checkpoint at {ckpt.name} (run smoke job)")
 
     from synapse_common.model_registry import ModelRegistry  # noqa: PLC0415
     from synapse_common.provenance import ConfidenceBasis, FeatureSource  # noqa: PLC0415
@@ -95,8 +141,18 @@ def evaluate() -> RuntimeProbe:
         load_serving_model,
     )
 
+    # Distinct per-SKU features so the real path is genuinely exercised.
+    stub_feast = StubFeatureStore(
+        {
+            "sku_demand_signals:rolling_mean_7d": lambda i: 8.0 + 3.0 * i,
+            "sku_demand_signals:rolling_std_7d": lambda i: 1.0 + 0.5 * i,
+            "sku_demand_signals:trend_slope": lambda i: 0.05 * (i + 1),
+            "sku_demand_signals:seasonality_idx": lambda i: 0.2 + 0.1 * i,
+        }
+    )
+
     registry = ModelRegistry(
-        None, checkpoint_dir=SERVING_CKPT.parent, model_builder=build_demand_prophet_model
+        None, checkpoint_dir=ckpt.parent, model_builder=build_demand_prophet_model
     )
     model = load_serving_model(registry)
     if model is None:
@@ -106,7 +162,7 @@ def evaluate() -> RuntimeProbe:
         return RuntimeProbe("fail", "model loaded but the fitted calibrator was not restored")
 
     pipe = DemandProphetPipeline(
-        model=model, conformal_calibrator=calibrator, feast_client=_StubFeast()
+        model=model, conformal_calibrator=calibrator, feast_client=stub_feast
     )
     forecasts = pipe.predict(["sku_a", "sku_b", "sku_c"], "store_x", horizons={"1h", "24h"})
     prov = pipe.last_provenance
@@ -124,22 +180,84 @@ def evaluate() -> RuntimeProbe:
     cov = getattr(calibrator, "last_coverage_p90", None)
     return RuntimeProbe(
         "ok",
-        f"real checkpoint served: degraded=False, basis=CONFORMAL_INTERVAL, "
+        f"demand_prophet served real: degraded=False, basis=CONFORMAL_INTERVAL, "
         f"coverage_p90={cov}, confidences={confs}",
     )
 
 
-def run(*, as_json: bool = False, check: bool = False) -> int:
-    probe = evaluate()
+# --------------------------------------------------------------------------- #
+# Aggregation across all registered probes.
+# --------------------------------------------------------------------------- #
+def evaluate(agents: list[str] | None = None) -> RuntimeProbe:
+    """Run the registered probes and aggregate into a single RuntimeProbe.
+
+    Aggregation rule: any FAIL → FAIL (the gate must go RED on a real regression);
+    else any OK → OK (at least one agent is proven real at runtime); else SKIP (no
+    prerequisites available — the CI smoke job is where this turns real).
+    """
+    names = agents if agents is not None else sorted(PROBES)
+    results: dict[str, RuntimeProbe] = {}
+    for name in names:
+        probe = PROBES.get(name)
+        if probe is None:
+            results[name] = RuntimeProbe("skip", f"no probe registered for {name}")
+            continue
+        results[name] = probe()
+
+    fails = [f"{n}: {r.detail}" for n, r in results.items() if r.status == "fail"]
+    if fails:
+        return RuntimeProbe("fail", "; ".join(fails))
+
+    oks = [n for n, r in results.items() if r.status == "ok"]
+    skips = [n for n, r in results.items() if r.status == "skip"]
+    if oks:
+        detail = f"{len(oks)}/{len(results)} agent(s) served real output: {', '.join(oks)}"
+        if skips:
+            detail += f" (skipped: {', '.join(skips)})"
+        return RuntimeProbe("ok", detail)
+    return RuntimeProbe("skip", f"all {len(results)} probe(s) skipped: {', '.join(skips)}")
+
+
+def evaluate_each(agents: list[str] | None = None) -> dict[str, RuntimeProbe]:
+    """Per-agent probe results (for human/JSON reporting and tests)."""
+    names = agents if agents is not None else sorted(PROBES)
+    return {n: (PROBES[n]() if n in PROBES else RuntimeProbe("skip", "no probe")) for n in names}
+
+
+def run(*, as_json: bool = False, check: bool = False, agents: list[str] | None = None) -> int:
+    per_agent = evaluate_each(agents)
+    agg = evaluate(agents)
     if as_json:
-        print(json.dumps({"status": probe.status, "detail": probe.detail}, sort_keys=True))
+        per = {n: {"status": r.status, "detail": r.detail} for n, r in per_agent.items()}
+        print(
+            json.dumps(
+                {"status": agg.status, "detail": agg.detail, "per_agent": per},
+                sort_keys=True,
+            )
+        )
     else:
-        sym = {"ok": "[OK]", "fail": "[XX]", "skip": "[--]"}[probe.status]
-        print(f"{sym} runtime-substance  {probe.detail}")
+        sym = {"ok": "[OK]", "fail": "[XX]", "skip": "[--]"}
+        for name, r in per_agent.items():
+            print(f"{sym[r.status]} runtime-substance  {name:18s} {r.detail}")
+        print(f"{sym[agg.status]} runtime-substance  {'AGGREGATE':18s} {agg.detail}")
     if check:
-        return 1 if probe.status == "fail" else 0
+        return 1 if agg.status == "fail" else 0
     return 0
 
 
+def _parse_agents(argv: list[str]) -> list[str] | None:
+    if "--agent" in argv:
+        idx = argv.index("--agent")
+        if idx + 1 < len(argv):
+            return [argv[idx + 1]]
+    return None
+
+
 if __name__ == "__main__":
-    sys.exit(run(as_json="--json" in sys.argv, check="--check" in sys.argv))
+    sys.exit(
+        run(
+            as_json="--json" in sys.argv,
+            check="--check" in sys.argv,
+            agents=_parse_agents(sys.argv),
+        )
+    )
