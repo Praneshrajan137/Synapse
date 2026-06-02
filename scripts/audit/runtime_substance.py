@@ -186,6 +186,77 @@ def _probe_demand_prophet() -> RuntimeProbe:
 
 
 # --------------------------------------------------------------------------- #
+# routing_navigator (analytical / solver paradigm) — torch-free probe.
+# --------------------------------------------------------------------------- #
+@register_probe("routing_navigator")
+def _probe_routing_navigator() -> RuntimeProbe:
+    """Boot the calibrated CVRPTW solver through serving; SKIP if no checkpoint.
+
+    Analytical + torch-free: this probe runs (and PASSES) anywhere the calibration
+    checkpoint exists, so the solver paradigm's runtime substance is provable
+    without the ML stack.
+    """
+    ckpt = CHECKPOINT_DIR / "routing_cvrptw.pt"
+    if not ckpt.is_file():
+        return RuntimeProbe("skip", "no routing_cvrptw.pt calibration (run the smoke job)")
+
+    from synapse_common.model_registry import ModelRegistry  # noqa: PLC0415
+    from synapse_common.provenance import ConfidenceBasis, FeatureSource  # noqa: PLC0415
+
+    from agents.routing_navigator.inference.pipeline import (  # noqa: PLC0415
+        RoutingNavigatorPipeline,
+    )
+    from agents.routing_navigator.inference.serving_model import (  # noqa: PLC0415
+        build_routing_model,
+        load_serving_model,
+    )
+
+    registry = ModelRegistry(None, checkpoint_dir=ckpt.parent, model_builder=build_routing_model)
+    model = load_serving_model(registry)
+    if model is None or not getattr(model, "is_real", False):
+        return RuntimeProbe("fail", "calibration present but registry resolved a degraded model")
+
+    pipe = RoutingNavigatorPipeline(solver_model=model)
+    # Two structurally different instances (a tight near-collinear cluster vs. a
+    # larger scattered set) → different optimality gaps → different calibrated
+    # confidence, proving the signal is non-constant on real inputs.
+    instances = [
+        [
+            {"order_id": f"o{i}", "lat": 12.97 + 0.004 * i, "lon": 77.59 + 0.004 * i,
+             "weight_kg": 2.0, "due_min": 300.0}
+            for i in range(1, 4)
+        ],
+        [
+            {"order_id": f"o{i}", "lat": 12.97 + 0.05 * ((i % 3) - 1),
+             "lon": 77.59 + 0.05 * ((i % 2) - 0.5), "weight_kg": 2.0, "due_min": 300.0}
+            for i in range(1, 8)
+        ],
+    ]
+    confs: list[float] = []
+    for orders in instances:
+        riders = [{"rider_id": "r1", "capacity_kg": 30.0}]
+        plans = pipe.route(orders, riders, "store_x", use_student=False)
+        if not plans:
+            return RuntimeProbe("fail", "Tier-2 solver returned no plans on a valid instance")
+        confs.append(round(plans[0].confidence, 4))
+        prov = pipe.last_provenance
+        if prov.degraded:
+            return RuntimeProbe("fail", "calibrated solver served degraded provenance")
+        if prov.confidence_basis != ConfidenceBasis.OPTIMALITY_GAP:
+            return RuntimeProbe("fail", f"basis {prov.confidence_basis} is not OPTIMALITY_GAP")
+        if prov.feature_source != FeatureSource.DIRECT:
+            return RuntimeProbe("fail", f"expected DIRECT source, got {prov.feature_source}")
+
+    if all(c == 0.5 for c in confs):
+        return RuntimeProbe("fail", "confidence collapsed to the greedy floor (not calibrated)")
+    return RuntimeProbe(
+        "ok",
+        f"routing_navigator served real: degraded=False, basis=OPTIMALITY_GAP, "
+        f"calibrated_confidences={confs}",
+    )
+
+
+# --------------------------------------------------------------------------- #
 # Aggregation across all registered probes.
 # --------------------------------------------------------------------------- #
 def evaluate(agents: list[str] | None = None) -> RuntimeProbe:

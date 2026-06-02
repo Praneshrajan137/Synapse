@@ -35,12 +35,15 @@ ROOT = Path(__file__).resolve().parents[2]
 AGENTS_DIR = ROOT / "agents"
 
 # Agents whose serve.py is asserted to load a model via ModelRegistry. Grows one
-# per PR. Phase 1: demand_prophet resolves a checkpoint via ModelRegistry.
-WIRED_AGENTS: frozenset[str] = frozenset({"demand_prophet"})
+# per PR. Phase 1: demand_prophet (forecasting). Phase 2: routing_navigator
+# (analytical/solver — the $0 registry source resolves its optimality-gap
+# calibration checkpoint).
+WIRED_AGENTS: frozenset[str] = frozenset({"demand_prophet", "routing_navigator"})
 
 # Count of serve.py files NOT yet wired through ModelRegistry. Phase 1 wired
-# demand_prophet (1/8), leaving 7. Lower as each lands; CI fails on any increase.
-BASELINE_UNWIRED = 7
+# demand_prophet (1/8); Phase 2 wired routing_navigator (2/8), leaving 6. Lower as
+# each lands; CI fails on any increase.
+BASELINE_UNWIRED = 6
 
 
 @dataclass
