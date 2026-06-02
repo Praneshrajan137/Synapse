@@ -20,7 +20,7 @@ The `make verify-claims` target turns each row below into an executable check. T
 | C4 | Orders route producer | `api/routers/orders.py:34-42` instantiates a new `confluent_kafka.Producer` per request. `api/main.py:89-108` wires a shared `app.state.kafka_producer` via lifespan. | Architecture rule: "NEVER use direct kafka-python — use `synapse_common.kafka_client` only". | **FAIL** — orders route bypasses the shared producer and the outbox. (Resolved by WS-2.) |
 | C5 | Override idempotency | `OverrideBody` Pydantic model takes no `idempotency_key`. No unique index on `(decision_id, idempotency_key)`. | Sprint 7 claim: "idempotency". | **FAIL** — replay/retry inserts duplicate audit rows. (Resolved by WS-2.) |
 | C6 | Order body schema validation | `api/routers/orders.py` does not call `validate_agent_payload(...)`. | Invariant I-3: "ALL agent outputs MUST validate against `proto/domain/*.schema.json`". | **FAIL** — ingress is exempted in code, not in docs. (Resolved by WS-2.) |
-| C7 | Digital twin live | `digital_twin/` has 20+ files including `monte_carlo.py`, `what_if.py`, `divergence_monitor.py`, `kafka_sync.py`, and an `@asynccontextmanager` lifespan at `digital_twin/inference/serve.py:44`. Orchestrator has no call site for any of them. | Invariant I-10 + Tier 4 = Monte Carlo via digital twin. | **PARTIAL** — module is real and runs standalone; orchestrator never invokes it. (Not in critical path; tracked for a future sprint.) |
+| C7 | Digital twin live + orchestrator-invoked | `orchestrator/consensus/protocol.py` calls `_phase_twin_verify` at Tier 4 (A2A `monte_carlo` against `TWIN_ENDPOINT`) and `_record_input_provenance` on every decision (captures which agents served real models vs. fallbacks into the append-only audit, I-14). Both are defined + called; static-gated by `verify_claims.py::check_orchestrator_twin_wired`; behavioural proof in `orchestrator/tests/test_twin_verification.py` (CI, pymoo). | Invariant I-10 + Tier 4 = Monte Carlo via digital twin. | **PASS** — the twin is no longer dead code; the orchestrator invokes it at the top tier and the audit trail reflects input substance. |
 | C8 | Frontend typed contract | `frontend/src/lib/synapse-api.ts` wraps most endpoints. `frontend/src/pages/DecisionDetail.tsx:~30` uses raw `fetch()` for `GET /decisions/{id}` with inline Zod. | Strict typed client. | **FAIL** — one off-client call site. (Resolved by WS-4.) |
 | C9 | Frontend firehose schema | `frontend/src/lib/ws-multiplex.ts:92-110` emits raw JSON to listeners. No Zod schema for `{topic, seq, ts, payload}` envelope. | Strict typing on real-time channels. | **FAIL** — poison messages reach app code unchecked. (Resolved by WS-4.) |
 | C10 | Frontend JWKS rotation | `api/routers/auth.py:179-182` exposes `/.well-known/jwks.json`. Frontend never fetches it. | Key rotation supported. | **FAIL** — clients trust access token blindly. (Resolved by WS-4.) |
@@ -62,11 +62,29 @@ The `make verify-claims` target turns each row below into an executable check. T
 
 ## Summary — after Paradigm-Complete Substance (ADR-043) on Plan v2 / Sprint 13
 
-- **Total mechanical checks:** 37 (registered in `scripts/audit/verify_claims.py`)
-- **PASS:** 36 locally — incl. C37 (3/8 real loops), C39 (4/8 wired), C42 (routing's torch-free runtime probe)
+- **Total mechanical checks:** 38 (registered in `scripts/audit/verify_claims.py`)
+- **PASS:** 37 locally — incl. C7 (orchestrator↔twin + input provenance), C37 (6/8 real-loop/analytical fits), **C39 (8/8 wired — every agent loads a model via ModelRegistry)**, C42 (3/8 torch-free runtime probes PASS locally)
 - **FAIL:** 0
 - **PARTIAL:** 0
-- **SKIP:** 1 locally — **C43** (published-checkpoint) SKIPs until an operator runs the free-GPU publish runbook and sets `DP_HF_REPO`. The torch-gated runtime probes (demand_prophet/pricing) + C38/C40 run in the CI `training-smoke` job (`SYNAPSE_SMOKE_RUN=1`). This is the two-tier honesty boundary (ADR-042/043): the AST gates (C33/C37/C39/C41) prove *shape* everywhere; the runtime gates (C38/C40/C42) prove *behaviour* where the ML stack + a checkpoint exist; C43 proves a *published* model exists.
+- **SKIP:** 1 locally — **C43** (published-checkpoint) SKIPs until an operator runs the free-GPU publish runbook and sets `DP_HF_REPO`. The 5 torch/lib-gated runtime probes (demand_prophet, pricing, supplier, freshness, sustainability) + C38/C40 run in the CI `training-smoke` job (`SYNAPSE_SMOKE_RUN=1`); the 3 torch-free probes (routing, disruption, inventory) PASS everywhere. This is the two-tier honesty boundary (ADR-042/043): AST gates (C33/C37/C39/C41) prove *shape* everywhere; runtime gates (C38/C40/C42) prove *behaviour* where the stack + checkpoint exist; C43 proves a *published* model exists.
+
+### Fleet-complete substance — all 8 agents real, serving 8/8
+
+Phase 7 ratcheted the four homogeneous-remainder agents onto the Agent Reality Pattern, so
+**every agent now loads a model via ModelRegistry and stamps an honest, basis-adjudicated,
+non-constant confidence**:
+
+| Agent | Paradigm | Confidence basis | Runtime probe |
+| --- | --- | --- | --- |
+| disruption_shield | anomaly (sklearn IsolationForest) | ANOMALY_SCORE_MARGIN | **torch-free, PASSES locally** |
+| freshness_guardian | survival (Weibull-AFT, numpy-reconstructed) | SURVIVAL_CI_WIDTH | lifelines-fit CI; serving lifelines-free |
+| sustainability_agent | predictive (KM waste curve) | PREDICTIVE_ENTROPY (was mislabelled SURVIVAL_CI_WIDTH) | KM-fit CI; serving lifelines-free |
+| inventory_sentinel | analytical (newsvendor + conformal) | RESIDUAL_VARIANCE | **torch-free, PASSES locally** |
+
+Two runtime dishonesties the static gates were blind to were found + fixed: freshness's
+hardcoded `0.85` (a variable-assigned constant) and sustainability stamping `Provenance.real`
+on the *unfitted* fallback. `serving_truth` 7→0 unwired; `confidence_basis_truth` all 8
+adjudicated (0 violations).
 
 ### Paradigm-complete substance (this effort) — all four ML archetypes proven real at runtime
 

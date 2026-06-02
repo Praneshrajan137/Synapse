@@ -1101,6 +1101,53 @@ def check_runtime_substance() -> CheckResult:
     return CheckResult("C42", "Runtime substance", status, probe.detail)
 
 
+@register("C7", "Orchestrator invokes the digital twin + records input provenance")
+def check_orchestrator_twin_wired() -> CheckResult:
+    """Tier-4 → digital-twin Monte-Carlo verify + per-decision input provenance (ADR-043).
+
+    Static AST proof on ``orchestrator/consensus/protocol.py`` (torch/pymoo-free):
+    the twin endpoint is defined, ``_phase_twin_verify`` + ``_record_input_provenance``
+    are both *defined and called*, and the twin call is gated on the top tier. The
+    behavioural proof is ``orchestrator/tests/test_twin_verification.py`` (CI, pymoo).
+    Closes the C7 'twin is dead code' gap with a regression-failing gate.
+    """
+    import ast as _ast
+
+    proto = ROOT / "orchestrator" / "consensus" / "protocol.py"
+    if not proto.is_file():
+        return CheckResult("C7", "Orchestrator twin", "FAIL", "protocol.py missing")
+    try:
+        tree = _ast.parse(proto.read_text(encoding="utf-8"))
+    except (OSError, SyntaxError) as exc:
+        return CheckResult("C7", "Orchestrator twin", "FAIL", f"parse error: {exc}")
+
+    _fn_types = (_ast.FunctionDef, _ast.AsyncFunctionDef)
+    defs = {n.name for n in _ast.walk(tree) if isinstance(n, _fn_types)}
+    called = {
+        n.func.attr
+        for n in _ast.walk(tree)
+        if isinstance(n, _ast.Call) and isinstance(n.func, _ast.Attribute)
+    }
+    has_endpoint = any(
+        isinstance(n, _ast.Assign)
+        and any(isinstance(t, _ast.Name) and t.id == "TWIN_ENDPOINT" for t in n.targets)
+        for n in _ast.walk(tree)
+    )
+    required_defs = {"_phase_twin_verify", "_record_input_provenance"}
+    missing_defs = required_defs - defs
+    missing_calls = required_defs - called
+    if missing_defs or missing_calls or not has_endpoint:
+        return CheckResult(
+            "C7", "Orchestrator twin", "FAIL",
+            f"missing defs={sorted(missing_defs)} calls={sorted(missing_calls)} "
+            f"endpoint={has_endpoint}",
+        )
+    return CheckResult(
+        "C7", "Orchestrator twin", "PASS",
+        "Tier-4 twin verify + input-provenance recording wired (defined + called)",
+    )
+
+
 @register("C43", "A real, published production checkpoint serves at $0")
 def check_published_checkpoint() -> CheckResult:
     """Authenticity counterpart to C42 (ADR-043, Phase 1).
