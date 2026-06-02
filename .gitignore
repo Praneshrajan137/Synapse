@@ -94,6 +94,21 @@ dump.rdb
 # Local scratch (plan extraction, ephemeral notes)
 .tmp/
 
+# Training artifacts (ADR-042): smoke/full-train write TrainResult JSON +
+# checkpoints here. CI-produced and consumed by checkpoint/calibration truth
+# gates; never committed (production checkpoints live in the MLflow registry).
+artifacts/
+mlruns/
+*.pt
+*.ckpt
+*.pth
+
+# Generated Feast offline parquet (reproducible from data/<city>/demand_history.csv
+# via scripts/build_feature_store.py; built in CI/operator before `feast materialize`).
+data_fabric/feast/data/demand_signals.parquet
+data_fabric/feast/*/data/demand_signals.parquet
+data_fabric/feast/data/registry.db
+
 # Claude Code local worktrees
 .claude/
 

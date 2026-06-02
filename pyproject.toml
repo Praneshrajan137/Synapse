@@ -30,6 +30,9 @@ runtime-evaluated-base-classes = ["pydantic.BaseModel"]
 # InvariantViolation mirrors SchemaViolation — intentionally named for the
 # spec-postcondition contract concept, not a generic *Error (ADR-040).
 "packages/synapse_common/invariants.py" = ["N818"]
+# TrainingContractViolation mirrors InvariantViolation — the training-truth
+# contract concept (ADR-042), deliberately a *Violation not a generic *Error.
+"packages/synapse_common/training_contract.py" = ["N818"]
 # Spec-assertion + reward-safety test bodies use UPPER_CASE for the spec
 # constants under test (THRESHOLD, BUDGET_MS, FORBIDDEN_KEYS) so the test reads
 # like the invariant it checks; nested `if`s mirror the spec's guard structure;

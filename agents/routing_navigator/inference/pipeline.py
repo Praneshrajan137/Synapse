@@ -26,6 +26,7 @@ from typing import Any
 import structlog
 from synapse_common.dbc import post, pre
 from synapse_common.models import RoutePlan
+from synapse_common.provenance import ConfidenceBasis, FeatureSource, Provenance
 from synapse_common.schema_registry import validates_schema
 
 from agents.routing_navigator.models.cvrptw import (
@@ -58,6 +59,36 @@ class RoutingNavigatorPipeline:
         self._expert = expert_model
         self._student = student_model
         self._osrm = osrm_client
+        # ADR-042 C41: confidence is derived from the solver optimality gap; the
+        # greedy Tier-1 path stamps the I-7 fallback floor. Never a constant.
+        self.last_provenance: Provenance = Provenance.degraded_fallback()
+
+    @staticmethod
+    def _nn_lower_bound(all_stops: list[Stop], route: Route) -> float:
+        """Nearest-neighbour lower bound on a route's distance (km).
+
+        Each visited stop contributes at least the haversine distance to its
+        closest neighbour; the achieved tour cannot beat this sum. A valid,
+        cheap optimality-gap reference (no exact LP bound needed).
+        """
+        lb = 0.0
+        n = len(all_stops)
+        for idx in route.stops:
+            s = all_stops[idx]
+            dmin = min(haversine_km(s, all_stops[j]) for j in range(n) if j != idx)
+            lb += dmin
+        return lb
+
+    def _route_confidence(self, all_stops: list[Stop], route: Route) -> float:
+        """Confidence in (0.5, 0.99) from the optimality gap LB/achieved ratio.
+
+        A solution near its lower bound (small gap) is more trustworthy; a loose
+        one less so. Monotone in solution quality, never constant (ADR-042 C41).
+        """
+        achieved = max(route.distance_km, 1e-6)
+        lb = self._nn_lower_bound(all_stops, route)
+        ratio = min(lb / achieved, 1.0)
+        return round(float(min(max(0.5 + 0.49 * ratio, 0.5), 0.99)), 4)
 
     @pre(lambda self, orders, riders, store_id, use_student=True: 1 <= len(orders) <= 200)
     @pre(lambda self, orders, riders, store_id, use_student=True: len(riders) >= 1)
@@ -125,6 +156,9 @@ class RoutingNavigatorPipeline:
             freshness_violations = sum(
                 1 for idx in r.stops if all_stops[idx].due_min < r.duration_min
             )
+            # Tier-1 greedy is the I-7 fallback → floor confidence; Tier-2 solver
+            # confidence tracks the optimality gap (ADR-042 C41).
+            conf = 0.5 if use_student else self._route_confidence(all_stops, r)
             plans.append(
                 RoutePlan(
                     rider_id=rider.get("rider_id", f"RIDER-{i}"),
@@ -134,7 +168,20 @@ class RoutingNavigatorPipeline:
                     total_time_min=round(min(r.duration_min, HARD_TIME_CAP_MIN), 2),
                     fuel_estimate_liters=round(r.distance_km * FUEL_LITERS_PER_KM, 3),
                     freshness_violations=freshness_violations,
+                    confidence=conf,
                 )
+            )
+
+        # ADR-042 C41: stamp how the confidence was derived. The exact CVRPTW
+        # solver path is a real (non-degraded) decision with an OPTIMALITY_GAP
+        # basis; the greedy Tier-1 fallback is honestly degraded.
+        if use_student or not plans:
+            self.last_provenance = Provenance.degraded_fallback(feature_source=FeatureSource.DIRECT)
+        else:
+            self.last_provenance = Provenance.real(
+                model_version="routing_cvrptw_clarke_wright_2opt",
+                confidence_basis=ConfidenceBasis.OPTIMALITY_GAP,
+                feature_source=FeatureSource.DIRECT,
             )
 
         elapsed_ms = (time.monotonic() - start) * 1000.0

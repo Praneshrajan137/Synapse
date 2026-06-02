@@ -141,6 +141,10 @@ class RoutePlan(SynapseBaseModel):
     total_time_min: float = Field(ge=0.0)
     fuel_estimate_liters: float = Field(ge=0.0)
     freshness_violations: int = Field(ge=0)
+    # Derived from the CVRPTW optimality gap (achieved cost vs nearest-neighbour
+    # lower bound); the I-7 fallback floor on the greedy Tier-1 path. ADR-042 C41:
+    # never a constant. Defaults to 1.0 only for non-serving fixtures.
+    confidence: float = Field(default=1.0, ge=0.0, le=1.0)
 
 
 class InventoryAction(SynapseBaseModel):

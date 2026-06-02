@@ -83,6 +83,17 @@ jobs:
         # guard-then-ignore / hardcoded-confidence / random-model-input
         # anti-patterns. Pure stdlib (AST) — no ML deps required.
         run: python -m scripts.audit.substance_truth --check
+      - name: Intelligence gates — static (ADR-042 C37/C39/C41, AST-only)
+        # Pure stdlib AST gates: no model ever returns the pipeline_validated
+        # sentinel / builds an un-stepped optimizer (C37); serve.py wiring does
+        # not regress below baseline (C39); a real-path confidence_basis stamp
+        # always matches the computed basis (C41). The runtime gates C38/C40
+        # (checkpoint + calibration) need trained artifacts and run in the
+        # separate training-smoke job below.
+        run: |
+          python -m scripts.audit.training_truth --check
+          python -m scripts.audit.serving_truth --check
+          python -m scripts.audit.confidence_basis_truth --check
       - name: Unit tests (all gated trees, branch coverage on)
         # Sprint 13 §Phase 1.3 + 2 / Plan v2 §Phase 4: single pytest run across
         # packages/tests, agents/, orchestrator/, digital_twin/, api/ with branch
@@ -225,4 +236,66 @@ jobs:
         run: git diff --exit-code design-system/color/dist/
       - name: No raw colour literals in components (INV-CLR-009)
         run: node design-system/color/scripts/lint-hex.mjs frontend/src
+
+  training-smoke:
+    name: Training Smoke (ADR-042 C38/C40 + floor measurement)
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    needs: quality-gates
+    # Full on push to long-lived branches; the static C37/C39/C41 gates already
+    # run on every PR in quality-gates. This heavy job proves the loop actually
+    # learns (C37 runtime), checkpoints (C38), and calibrates (C40), and measures
+    # the per-package coverage floors under the full ML dep stack (E-S13-01).
+    if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop' || startsWith(github.ref, 'refs/heads/sprint-')
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+      - name: Install ML dep stack (CPU wheels, pinned, license-clean)
+        run: |
+          pip install -r packages/requirements.txt -r packages/requirements-dev.txt
+          pip install jsonschema pyyaml
+          for req in agents/*/requirements.txt; do pip install -r "$req"; done
+          pip install -r agents/requirements-sprint3.txt
+          # CPU-only torch + the RL/survival/solver stack. All MIT/BSD/Apache.
+          pip install --index-url https://download.pytorch.org/whl/cpu "torch>=2.2,<2.4"
+          pip install "gymnasium>=0.29,<1.1" "simpy>=4.1,<5" "lifelines>=0.27,<0.31" \
+                      "ortools>=9.8,<9.11" "pymoo>=0.6,<0.7"
+      - name: Smoke-train READY_AGENTS (produces artifacts/training/*.json)
+        env:
+          SYNAPSE_SMOKE_RUN: "1"
+        run: python scripts/smoke_train.py
+      - name: Checkpoint-truth gate (C38)
+        env:
+          SYNAPSE_SMOKE_RUN: "1"
+        run: python -m scripts.audit.checkpoint_truth --check
+      - name: Calibration-truth gate (C40)
+        env:
+          SYNAPSE_SMOKE_RUN: "1"
+        run: python -m scripts.audit.calibration_truth --check
+      - name: Measure per-package coverage under full ML stack (binds the 0.0 floors)
+        # Informational: surfaces the REAL per-package coverage for orchestrator +
+        # the 8 agents + digital_twin (torch/ortools/pymoo importable here, unlike
+        # quality-gates). The operator then runs scripts/coverage_ratchet.py --apply
+        # in a follow-up PR to lock the measured floors. Never auto-commits.
+        continue-on-error: true
+        run: |
+          pytest packages/tests agents orchestrator digital_twin api --tb=short -q \
+            --cov=packages/synapse_common --cov=agents --cov=orchestrator \
+            --cov=digital_twin --cov=api --cov-branch \
+            --cov-report=xml:coverage-full.xml --cov-fail-under=0
+          python scripts/coverage_per_package.py \
+            --xml coverage-full.xml \
+            --floors infrastructure/quality/coverage-floors.yaml \
+            --markdown || true
+      - name: Upload full-stack coverage (for floor binding)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-full
+          path: coverage-full.xml
+          if-no-files-found: ignore
 

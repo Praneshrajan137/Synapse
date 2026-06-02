@@ -37,6 +37,12 @@ class ConformalCalibrator:
         self.coverage_target = coverage_target
         self._calibrated = False
         self._quantile_adjustments: dict[str, tuple[float, float]] = {}
+        # Empirical 90% coverage measured on the most recent calibration set,
+        # aggregated across horizons. The serving pipeline reads this to drive the
+        # INV-DP-002 coverage metric (DEMAND_PROPHET_COVERAGE_P90). ``None`` until
+        # fit() runs — the pipeline then skips the metric update (NaN-safe).
+        self.last_coverage_p90: float | None = None
+        self.last_coverage_per_horizon: dict[str, float] = {}
 
     def fit(
         self,
@@ -58,19 +64,31 @@ class ConformalCalibrator:
             lower_raw = preds[:, 0]
             upper_raw = preds[:, 2]
 
-            scores_lower = lower_raw - actual
-            scores_upper = actual - upper_raw
+            # Conformalized Quantile Regression (Romano, Patterson & Candès, 2019).
+            # A SINGLE symmetric conformity score E_i = max(q_lo - y, y - q_hi)
+            # measures how far each actual falls outside the base interval (negative
+            # when comfortably inside). The recalibration radius is the finite-sample
+            # corrected (1-alpha)(1 + 1/n) empirical quantile of {E_i}. Widening both
+            # ends by this single Q gives the marginal coverage guarantee
+            # P(y in [q_lo - Q, q_hi + Q]) >= 1 - alpha.
+            #
+            # The previous implementation took two separate one-sided 0.9-quantiles of
+            # the SIGNED exceedances and applied both — which systematically
+            # under-covered (~0.80 for a nominal 0.90 interval). CQR fixes that.
+            scores = np.maximum(lower_raw - actual, actual - upper_raw)
 
             n = len(actual)
-            q_level = min(np.ceil((1 - self.alpha) * (n + 1)) / n, 1.0)
+            # Quantile level with the +1 finite-sample correction, clamped to 1.0.
+            q_level = min((np.ceil((1 - self.alpha) * (n + 1))) / n, 1.0)
+            q = float(np.quantile(scores, q_level, method="higher"))
 
-            adjustment_lower = float(np.quantile(scores_lower, q_level))
-            adjustment_upper = float(np.quantile(scores_upper, q_level))
+            # Store as a symmetric (lower, upper) pair so predict_intervals — which
+            # widens by adj_lower on the low side and adj_upper on the high side —
+            # is unchanged.
+            self._quantile_adjustments[horizon] = (q, q)
 
-            self._quantile_adjustments[horizon] = (adjustment_lower, adjustment_upper)
-
-            calibrated_lower = lower_raw - adjustment_lower
-            calibrated_upper = upper_raw + adjustment_upper
+            calibrated_lower = np.maximum(lower_raw - q, 0.0)
+            calibrated_upper = upper_raw + q
             coverage = float(np.mean((actual >= calibrated_lower) & (actual <= calibrated_upper)))
             coverages[horizon] = coverage
 
@@ -79,12 +97,16 @@ class ConformalCalibrator:
                 horizon=horizon,
                 coverage=f"{coverage:.3f}",
                 target=self.coverage_target,
-                adjustment_lower=f"{adjustment_lower:.4f}",
-                adjustment_upper=f"{adjustment_upper:.4f}",
+                conformity_q=f"{q:.4f}",
                 passed=coverage >= self.coverage_target,
             )
 
         self._calibrated = True
+        self.last_coverage_per_horizon = dict(coverages)
+        # Aggregate empirical coverage across horizons → the single p90 number the
+        # serving pipeline surfaces (INV-DP-002). Mean is the honest summary: a
+        # single under-covered horizon drags it toward the floor.
+        self.last_coverage_p90 = float(np.mean(list(coverages.values()))) if coverages else None
         return coverages
 
     def predict_intervals(

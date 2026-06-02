@@ -375,6 +375,11 @@ class PricingOraclePipeline:
             model_ver = getattr(self._model, "version", None) or "maddpg_dml"
             self.last_provenance = Provenance.real(
                 model_version=f"pricing_oracle_{model_ver}",
-                confidence_basis=ConfidenceBasis.CRITIC_VALUE_SPREAD,
+                # The confidence is derived from |tanh(elasticity)| (see
+                # _derive_confidence), i.e. the strength of the causal price signal —
+                # NOT a spread over critic Q-values (the MADDPG critic is not queried
+                # for uncertainty here). Stamp the basis that matches the computation
+                # so the audit trail (I-4) and C41 stay honest (ADR-042).
+                confidence_basis=ConfidenceBasis.ELASTICITY_STRENGTH,
                 feature_source=self._feature_source,
             )
