@@ -303,13 +303,16 @@ invariants:
     title: Heavy viz libs are async-only chunks
     mirrors: ADR-012, FE-INV-014
     description: >
-      @deck.gl/*, three, maplibre, react-force-graph-3d, and visx never
-      appear in the entry bundle. Mission Control loads them via a lazy
-      Suspense boundary; Twin Lab does the same for SupplyNetwork3D.
+      @deck.gl/*, maplibre, sigma/graphology, and visx never appear in the
+      entry bundle. Mission Control loads the map via a lazy Suspense
+      boundary; Twin Lab does the same for the WebGL supply graph
+      (SupplyNetworkGraph, Sigma.js — replaced the three.js force graph in the
+      SENSORIUM Phase 6b GPU-graph swap, which removed three / d3-force-3d /
+      react-force-graph-3d).
     implementations:
       - frontend/vite.config.ts
       - frontend/src/surfaces/mission-control/LivingMap.tsx
-      - frontend/src/surfaces/twin-lab/SupplyNetwork3D.tsx
+      - frontend/src/surfaces/twin-lab/SupplyNetworkGraph.tsx
     tests:
       - .github/workflows/frontend.yml
     status: enforced
