@@ -45,6 +45,15 @@ invariants:
     assertion: "output.to_deterministic_json() == output.to_deterministic_json()"
     severity: critical
 
+  - id: "INV-ST-007"
+    description: >
+      Runtime reality (ADR-043): when the SVI-fitted lead-time prior is loaded, scoring
+      an established supplier uses the torch-free conjugate posterior — provenance.degraded
+      is False with a POSTERIOR_SPREAD confidence basis, and confidence is derived from the
+      posterior tightness (varies with sample size and spread), never a constant.
+    assertion: "not provenance.degraded and provenance.confidence_basis == POSTERIOR_SPREAD and confidence varies with posterior spread"
+    severity: critical
+
 preconditions:
   - id: "PRE-ST-001"
     description: "Supplier ID is non-empty string"

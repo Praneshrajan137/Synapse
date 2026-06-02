@@ -257,6 +257,66 @@ def _probe_routing_navigator() -> RuntimeProbe:
 
 
 # --------------------------------------------------------------------------- #
+# supplier_trust (Bayesian paradigm) — torch-free serving probe.
+# --------------------------------------------------------------------------- #
+@register_probe("supplier_trust")
+def _probe_supplier_trust() -> RuntimeProbe:
+    """Boot the conjugate posterior through serving; SKIP if no fitted prior.
+
+    Torch-free: the serving path is a closed-form conjugate update over the
+    SVI-fitted prior (the SVI fit itself is the CI-only step). Runs + PASSES
+    anywhere the prior checkpoint exists.
+    """
+    ckpt = CHECKPOINT_DIR / "supplier_bayesian.pt"
+    if not ckpt.is_file():
+        return RuntimeProbe("skip", "no supplier_bayesian.pt prior (run the smoke job)")
+
+    from synapse_common.model_registry import ModelRegistry  # noqa: PLC0415
+    from synapse_common.provenance import ConfidenceBasis, FeatureSource  # noqa: PLC0415
+
+    from agents.supplier_trust.inference.pipeline import SupplierTrustPipeline  # noqa: PLC0415
+    from agents.supplier_trust.inference.serving_model import (  # noqa: PLC0415
+        build_supplier_model,
+        load_serving_model,
+    )
+
+    registry = ModelRegistry(None, checkpoint_dir=ckpt.parent, model_builder=build_supplier_model)
+    model = load_serving_model(registry)
+    if model is None or not getattr(model, "is_real", False):
+        return RuntimeProbe("fail", "prior present but registry resolved a degraded model")
+
+    pipe = SupplierTrustPipeline(serving_model=model)
+    # A supplier with many on-time deliveries (low spread) should score higher
+    # confidence than one with few, erratic deliveries → confidence varies.
+    confs: list[float] = []
+    histories = [
+        [{"lead_time_days": 2.0 + 0.05 * i, "on_time": True} for i in range(40)],
+        [
+            {"lead_time_days": 2.0 + (3.0 if i % 2 else -1.0), "on_time": i % 2 == 0}
+            for i in range(6)
+        ],
+    ]
+    for hist in histories:
+        res = pipe.score("sup_x", hist)
+        prov = pipe.last_provenance
+        if prov.degraded:
+            return RuntimeProbe("fail", "fitted prior served degraded provenance")
+        if prov.confidence_basis != ConfidenceBasis.POSTERIOR_SPREAD:
+            return RuntimeProbe("fail", f"basis {prov.confidence_basis} is not POSTERIOR_SPREAD")
+        if prov.feature_source != FeatureSource.DIRECT:
+            return RuntimeProbe("fail", f"expected DIRECT source, got {prov.feature_source}")
+        confs.append(round(res.confidence, 4))
+
+    if len(set(confs)) == 1:
+        return RuntimeProbe("fail", f"confidence is constant across inputs ({confs}) — not real")
+    return RuntimeProbe(
+        "ok",
+        f"supplier_trust served real: degraded=False, basis=POSTERIOR_SPREAD, "
+        f"confidences={confs}",
+    )
+
+
+# --------------------------------------------------------------------------- #
 # Aggregation across all registered probes.
 # --------------------------------------------------------------------------- #
 def evaluate(agents: list[str] | None = None) -> RuntimeProbe:

@@ -16,27 +16,12 @@ from pyro.infer.autoguide import AutoNormal
 from pyro.optim import Adam
 from torch import Tensor
 
+# LeadTimePosterior moved to the torch-free posterior module (ADR-043 decoupling)
+# so the serving path + pipeline can import the summary without pulling in pyro.
+# Re-exported here to preserve every existing import site.
+from agents.supplier_trust.models.posterior import LeadTimePosterior
+
 logger = structlog.get_logger(__name__)
-
-
-class LeadTimePosterior:
-    """Immutable container for lead-time posterior summary."""
-
-    __slots__ = ("mean_days", "std_days", "p10_days", "p90_days")
-
-    def __init__(self, mean_days: float, std_days: float, p10_days: float, p90_days: float) -> None:
-        self.mean_days = mean_days
-        self.std_days = std_days
-        self.p10_days = p10_days
-        self.p90_days = p90_days
-
-    def to_dict(self) -> dict[str, float]:
-        return {
-            "mean_days": self.mean_days,
-            "std_days": self.std_days,
-            "p10_days": self.p10_days,
-            "p90_days": self.p90_days,
-        }
 
 
 class BayesianLeadTimeModel:
@@ -141,3 +126,6 @@ class BayesianLeadTimeModel:
         """Convenience: fit + posterior in one call."""
         self.fit(observed_days)
         return self.posterior()
+
+
+__all__ = ["BayesianLeadTimeModel", "LeadTimePosterior"]

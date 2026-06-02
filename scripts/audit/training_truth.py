@@ -45,7 +45,7 @@ AGENTS_DIR = ROOT / "agents"
 
 # Agents whose train.py is asserted to contain a real gradient loop. Grows one
 # per PR as Phase 1/5 land. Phase 1: demand_prophet's loop is real.
-REAL_LOOP_AGENTS: frozenset[str] = frozenset({"demand_prophet"})
+REAL_LOOP_AGENTS: frozenset[str] = frozenset({"demand_prophet", "supplier_trust"})
 
 # Violation count ceiling. Phase 1 drove demand_prophet's two violations
 # (pipeline_validated sentinel + hollow optimizer) to zero by giving it a real

@@ -48,7 +48,12 @@ logger = structlog.get_logger(__name__)
 # analytical (closed-form newsvendor; substance proven by conformal coverage);
 # routing_navigator = analytical (CVRPTW solver; substance proven by optimality-
 # gap coverage).
-READY_AGENTS: list[str] = ["demand_prophet", "inventory_sentinel", "routing_navigator"]
+READY_AGENTS: list[str] = [
+    "demand_prophet",
+    "inventory_sentinel",
+    "routing_navigator",
+    "supplier_trust",
+]
 
 
 def smoke_train_agent(agent: str) -> bool:
