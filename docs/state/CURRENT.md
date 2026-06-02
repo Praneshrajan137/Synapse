@@ -55,16 +55,65 @@ The `make verify-claims` target turns each row below into an executable check. T
 | C39 | Serving loads models via ModelRegistry | `scripts/audit/serving_truth.py` AST-checks each `serve.py` constructs `ModelRegistry().load(...)`. `demand_prophet/inference/serve.py` now resolves a checkpoint through the registry + `serving_model.py` adapter and degrades honestly when MLflow is unreachable (fast-fail timeout). 6 torch-free wiring tests. Ratchet baseline 8 → 7 unwired; `WIRED_AGENTS={demand_prophet}`. Verified by `verify_claims.py::check_serving_truth`. | ADR-042. Before: every `serve.py` built `model=None` → 100% fallback. | **PASS** — 1/8 agents load a real model; the registry is no longer dead code. |
 | C40 | Prediction intervals achieve nominal coverage | `scripts/audit/calibration_truth.py` asserts held-out coverage ≥ the agent's floor from the smoke `TrainResult`. The `ConformalCalibrator` was fixed from a ~80%-under-covering two-sided split to correct **CQR** (single symmetric conformity quantile → guaranteed ≥1−α). `test_conformal_coverage.py` proves held-out coverage ≥ 0.85 on a deliberately-miscalibrated base model (4 tests, numpy). Enforced in CI; SKIP locally. Verified by `verify_claims.py::check_calibration_truth`. | ADR-042. The deepest substance check — uncertainty must be real, not decorative. | **PASS (math, locally) / enforced in CI** — a genuine under-coverage bug was found and fixed. |
 | C41 | Declared confidence_basis matches computed basis | `scripts/audit/confidence_basis_truth.py` AST-extracts the `confidence_basis` stamped on each `Provenance.real(...)` and compares to the maintained ground-truth table. `pricing_oracle` fixed: it stamped `CRITIC_VALUE_SPREAD` but computes `tanh(|elasticity|)` → now stamps the honest new `ELASTICITY_STRENGTH`. Ratchet baseline 2 → 1 (only `routing_navigator`, which emits no confidence yet, remains). Verified by `verify_claims.py::check_confidence_basis_truth`. | ADR-042. `substance_truth` catches a *constant* confidence but not a *mislabelled* one. | **PASS** — the pricing stamp/computation lie is closed; routing's `OPTIMALITY_GAP` confidence lands in its ratchet PR. |
+| C42 | Real checkpoint serves non-degraded calibrated output at runtime | `scripts/audit/runtime_substance.py` boots the trained `demand_prophet` checkpoint through the production serving path (`ModelRegistry` $0 checkpoint source → `load_serving_model` → `DemandProphetPipeline`) against real per-SKU features and asserts the output is genuinely real: `degraded=False`, `feature_source=FEAST`, `confidence_basis=CONFORMAL_INTERVAL`, confidence not collapsed to the floor. SKIP torch-free / artifact-absent; enforced in the CI `training-smoke` job after the smoke train. Verified by `verify_claims.py::check_runtime_substance`. | ADR-043. C33's AST gate is blind to *runtime* substance — it can't see that the model never loads, or that a "derived" confidence is a disguised constant. This is its runtime counterpart, and it would have caught the two real defects found this effort (the unfit-calibrator 500 and the MLflow-only registry that could never load a $0 checkpoint). | **SKIP locally / enforced in CI** — RED on a `model=None` slice, GREEN on the real fixture. |
 
 ---
 
 ## Summary — after Substance Completion (ADR-042) on Plan v2 / Sprint 13
 
-- **Total mechanical checks:** 35 (registered in `scripts/audit/verify_claims.py`)
-- **PASS:** 33 (incl. new C37, C39, C41 from Substance Completion)
+- **Total mechanical checks:** 36 (registered in `scripts/audit/verify_claims.py`)
+- **PASS:** 33 (incl. C37, C39, C41 from Substance Completion)
 - **FAIL:** 0
 - **PARTIAL:** 0
-- **SKIP:** 2 locally — **C38/C40** are the runtime checkpoint/calibration gates; they SKIP without training artifacts on the dev box and are enforced in the CI `training-smoke` job (`SYNAPSE_SMOKE_RUN=1`). This is the two-tier honesty boundary (ADR-042): the AST gates run everywhere, the runtime gates run where the ML stack and a smoke checkpoint exist.
+- **SKIP:** 3 locally — **C38/C40/C42** are the runtime checkpoint/calibration/serving gates; they SKIP without torch + training artifacts on the dev box and are enforced in the CI `training-smoke` job (`SYNAPSE_SMOKE_RUN=1`). This is the two-tier honesty boundary (ADR-042/043): the AST gates (C33/C37/C39/C41) run everywhere and prove *shape*; the runtime gates (C38/C40/C42) run where the ML stack and a smoke checkpoint exist and prove *behaviour*.
+
+### Flagship Reality Slice (ADR-043) — landed this effort
+
+The honesty layer told the truth about degradation; this work makes the flagship
+agent *stop* degrading and proves it at runtime. Two real defects — invisible to
+the static gates because every test ran `model=None` — were found by reading the
+serving path and are now fixed + gated:
+
+- **Latent 500 on the real path.** `serve.py` constructed a `ConformalCalibrator`
+  but never `.fit()` it; the fitted CQR adjustments from training were discarded.
+  The instant a real model loaded, `predict_intervals` raised `RuntimeError` →
+  unhandled 500. Fix: the fitted calibrator is persisted in a deterministic
+  serving sidecar and travels with the checkpoint; `pipeline.predict` guards the
+  interval call so an unfit calibrator degrades honestly instead of crashing.
+- **Registry unreachable at $0.** `ModelRegistry` was MLflow-only, so on the
+  free-tier VM (no MLflow server) a trained checkpoint was never loadable. Fix:
+  a $0 checkpoint source (local dir / HF Hub) resolves `{name}.pt` + sidecar,
+  builds the model via an agent-injected builder, keeps the exact `load()`
+  contract, and degrades identically when absent (I-7).
+- **Disguised-constant confidence.** On the EMA fallback every SKU's relative
+  interval width was exactly `0.4` → `confidence = 1/1.4 ≈ 0.714`, a constant that
+  sat *above* the 0.7 HITL threshold and silently suppressed I-5 escalation on
+  degraded output. Fix: degraded confidence is now the explicit `FALLBACK_CONFIDENCE`
+  floor (below the threshold → I-5 fires); derived confidence is reserved for the
+  real path. **C42** (`runtime_substance.py`) is the new runtime gate that proves
+  all three, and `substance_truth.py` now documents its static-only scope boundary.
+- **Feast ref mismatch (4th defect, WS-C).** The pipeline asked Feast for
+  `demand_features:rolling_7d_mean` while the registered FeatureView is
+  `sku_demand_signals` with field `rolling_mean_7d` — so real Feast would reject the
+  request and degrade to FALLBACK *forever*. `FEATURE_REFS` are now pinned to the real
+  view and guarded by `packages/tests/test_feast_ref_consistency.py` (imports the
+  actual FeatureView definition — runs wherever feast is installed, verified passing
+  locally). Materialize steps captured in `docs/runbooks/feast-materialize.md`.
+- **Tier-4 → digital-twin invocation (C7, WS-E).** The orchestrator's full path now
+  verifies a Tier-4 action against the twin's Monte-Carlo what-if via A2A
+  (`_phase_twin_verify` → `http://digital-twin:8009` `monte_carlo`), records the
+  verdict + predicted KPI means into the append-only audit trail (I-14), and degrades
+  honestly when the twin is unreachable (I-7). The twin gained the matching
+  `monte_carlo` A2A handler (`MonteCarloRunner.run_scenarios` → `MonteCarloOutput`),
+  and its agent card now advertises only methods it actually serves. The orchestrator
+  also records per-decision **input provenance** — which agents served a real model vs.
+  an honest fallback — so the audit chain reflects substance. 4 new orchestrator tests
+  (pymoo-gated in CI; verified locally with a pymoo stub).
+- **42 new torch-free tests** (registry checkpoint source, calibrator state
+  round-trip, the latent-500 regression, the honest-floor escalation, the
+  disguised-constant detector, Feast ref consistency) + 4 orchestrator twin tests —
+  all green; the existing contract tests still pass unchanged (363 passed / 10 skipped
+  across packages + the demand_prophet torch-free suite).
 
 ### Substance Completion — landed this effort
 

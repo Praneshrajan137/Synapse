@@ -24,13 +24,16 @@ from synapse_common.provenance import ConfidenceBasis, FeatureSource, Provenance
 logger = structlog.get_logger(__name__)
 
 VALID_HORIZONS = frozenset({"15min", "1h", "6h", "24h", "7d"})
-# Feast feature references this agent reads (view:feature). When Feast is
+# Feast feature references this agent reads (view:feature). These MUST match the
+# registered FeatureView `sku_demand_signals` in data_fabric/feast/features/
+# demand_features.py — a mismatched ref makes real Feast reject the request and the
+# FeatureProvider degrade to FALLBACK forever (ADR-043 seam). When Feast is
 # unreachable the FeatureProvider synthesises these deterministically (ADR-041).
 FEATURE_REFS = [
-    "demand_features:rolling_7d_mean",
-    "demand_features:rolling_7d_std",
-    "demand_features:trend",
-    "demand_features:dow_seasonality",
+    "sku_demand_signals:rolling_mean_7d",
+    "sku_demand_signals:rolling_std_7d",
+    "sku_demand_signals:trend_slope",
+    "sku_demand_signals:seasonality_idx",
 ]
 FALLBACK_CONFIDENCE = 0.5  # documented I-7 floor when no calibrated model is present
 
@@ -82,7 +85,17 @@ class DemandProphetPipeline:
 
         intervals = None
         if include_uncertainty and self._calibrator is not None:
-            intervals = self._calibrator.predict_intervals(raw_predictions)
+            try:
+                intervals = self._calibrator.predict_intervals(raw_predictions)
+            except Exception as exc:  # noqa: BLE001 — an unfit/failed calibrator degrades (I-7)
+                # Without this guard a real model paired with an unfit calibrator
+                # raises RuntimeError on the FIRST real-path request → unhandled 500.
+                # Honest degradation: serve point + raw bands, stamp degraded.
+                logger.warning(
+                    "calibrator_unavailable", error=str(exc), fallback="raw model bands"
+                )
+                intervals = None
+        if intervals is not None:
             # WS-12: surface empirical coverage so INV-DP-002 alert fires
             # against a real metric. `coverage_meta` is the calibrator's
             # measured fraction-in-interval on the latest holdout slice;
@@ -261,6 +274,18 @@ class DemandProphetPipeline:
         now = datetime.now(UTC)
 
         has_intervals = intervals is not None
+        # ADR-040/043: a forecast is degraded when the model is unavailable, the
+        # features came from the fallback, or no calibrated interval was produced.
+        # Compute it ONCE up front so confidence is honest per-path: on the real
+        # path it is derived from the conformal width (varies per SKU); on the
+        # degraded path it is the explicit FALLBACK_CONFIDENCE floor — NOT an
+        # arithmetic identity (~0.71) that sat above the 0.7 HITL threshold and
+        # silently suppressed I-5 escalation on degraded output.
+        degraded = (
+            self._model_degraded
+            or self._feature_source == FeatureSource.FALLBACK
+            or not has_intervals
+        )
 
         for i, sku_id in enumerate(sku_ids):
             horizons_dict: dict[str, float] = {}
@@ -303,8 +328,13 @@ class DemandProphetPipeline:
             # ADR-040: confidence derived from the conformal interval width — a
             # narrower interval (relative to the point forecast) means a more
             # confident forecast. Constant confidence is forbidden (disables I-5).
-            mean_rel_width = float(np.mean(rel_widths)) if rel_widths else 1.0
-            confidence = round(float(1.0 / (1.0 + mean_rel_width)), 4)
+            # On the degraded path the width is a fixed EMA artifact, so deriving
+            # from it yields a disguised constant; emit the honest floor instead.
+            if degraded:
+                confidence = FALLBACK_CONFIDENCE
+            else:
+                mean_rel_width = float(np.mean(rel_widths)) if rel_widths else 1.0
+                confidence = round(float(1.0 / (1.0 + mean_rel_width)), 4)
 
             forecast = DemandForecast(
                 sku_id=sku_id,
@@ -318,9 +348,9 @@ class DemandProphetPipeline:
             )
             forecasts.append(forecast)
 
-        # ADR-040: record provenance reflecting the real sources used this call.
-        degraded = self._model_degraded or self._feature_source == FeatureSource.FALLBACK
-        if degraded or not has_intervals:
+        # ADR-040: record provenance reflecting the real sources used this call,
+        # using the same `degraded` flag that drove the confidence basis above.
+        if degraded:
             self.last_provenance = Provenance.degraded_fallback(feature_source=self._feature_source)
         else:
             model_ver = getattr(self._model, "version", None) or "hgt_tft_hybrid"

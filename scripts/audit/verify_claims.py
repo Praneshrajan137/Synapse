@@ -1083,6 +1083,24 @@ def check_confidence_basis_truth() -> CheckResult:
     return CheckResult("C41", "Confidence basis", "PASS", detail)
 
 
+@register("C42", "Real checkpoint serves non-degraded calibrated output at runtime")
+def check_runtime_substance() -> CheckResult:
+    """The RUNTIME counterpart to C33's static AST gate (ADR-043).
+
+    Boots the demand_prophet checkpoint through the production serving path and
+    asserts the output is genuinely real (degraded=False, conformal-interval
+    confidence). SKIPs torch-free / artifact-absent — enforced in the CI
+    training-smoke job after the smoke train produces the checkpoint.
+    """
+    try:
+        from scripts.audit.runtime_substance import evaluate
+    except ImportError as exc:
+        return CheckResult("C42", "Runtime substance", "SKIP", f"runtime_substance import failed: {exc}")
+    probe = evaluate()
+    status = {"ok": "PASS", "fail": "FAIL", "skip": "SKIP"}[probe.status]
+    return CheckResult("C42", "Runtime substance", status, probe.detail)
+
+
 # ---------------------------------------------------------------------------
 # Main entry
 # ---------------------------------------------------------------------------

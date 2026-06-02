@@ -23,6 +23,7 @@ Usage:
 from __future__ import annotations
 
 import argparse
+import json
 import time
 from pathlib import Path
 
@@ -48,6 +49,10 @@ logger = structlog.get_logger(__name__)
 
 ROOT = Path(__file__).resolve().parents[3]
 CHECKPOINT_DIR = ROOT / "artifacts" / "checkpoints"
+# The serving-resolved model name (matches the ModelRegistry base_name + the
+# MLflow registered model). The checkpoint + sidecar are written under it so the
+# $0 serving source resolves them (ADR-043).
+SERVING_NAME = "demand_prophet_hgt_tft"
 
 try:
     import mlflow
@@ -113,13 +118,18 @@ def _batch_loss(
     return torch.stack(losses).mean()
 
 
-def _evaluate_coverage(
+def _fit_calibrator(
     model: DemandProphetHybrid,
     window: WindowedData,
     quantile_levels: list[float],
     device: torch.device,
-) -> float:
-    """Fit the conformal calibrator on a holdout slice; return aggregate coverage."""
+) -> ConformalCalibrator:
+    """Fit the conformal calibrator on a holdout slice; return the *fitted* object.
+
+    Returning the calibrator (not just its coverage number) is the ADR-043 fix:
+    the fitted CQR adjustments are persisted in the serving sidecar so the serving
+    path restores a calibrated model instead of rebuilding an unfit one.
+    """
     model.eval()
     idx = np.arange(len(window))
     with torch.no_grad():
@@ -132,7 +142,25 @@ def _evaluate_coverage(
     actuals = {h: window.targets[idx, h_idx] for h_idx, h in enumerate(HORIZONS)}
     calib = ConformalCalibrator(alpha=0.1, coverage_target=0.85)
     calib.fit(predictions, actuals)
-    return float(calib.last_coverage_p90 or 0.0)
+    return calib
+
+
+def _serving_arch(config: DemandProphetConfig) -> dict[str, int]:
+    """The exact ``DemandProphetHybrid`` kwargs the checkpoint was trained with.
+
+    Persisted in the sidecar so the serving builder reconstructs the identical
+    architecture (smoke arch ≠ full arch) before ``load_state_dict``.
+    """
+    return {
+        "hgt_hidden_dim": config.hgt_hidden_dim,
+        "hgt_num_heads": config.hgt_num_heads,
+        "hgt_num_layers": config.hgt_num_layers,
+        "tft_hidden_size": config.tft_hidden_size,
+        "tft_num_heads": config.tft_attention_heads,
+        "tft_num_static": config.tft_num_static,
+        "tft_num_time_known": config.tft_num_time_known,
+        "tft_num_time_observed": config.tft_num_time_observed,
+    }
 
 
 def train(config: DemandProphetConfig | None = None, *, smoke: bool = False) -> TrainResult:
@@ -215,11 +243,32 @@ def train(config: DemandProphetConfig | None = None, *, smoke: bool = False) -> 
             mlflow.log_metric("crps_loss", ep_loss, step=epoch)
 
     end_loss = epoch_losses[-1] if epoch_losses else float("nan")
-    coverage_p90 = _evaluate_coverage(model, cal_window, quantile_levels, device)
+    calibrator = _fit_calibrator(model, cal_window, quantile_levels, device)
+    coverage_p90 = float(calibrator.last_coverage_p90 or 0.0)
 
     CHECKPOINT_DIR.mkdir(parents=True, exist_ok=True)
-    ckpt_path = CHECKPOINT_DIR / ("demand_prophet_smoke.pt" if smoke else "demand_prophet.pt")
+    # ADR-043: write the checkpoint under the *serving-resolved* name so the
+    # ModelRegistry $0 checkpoint source finds it by `resolve_name(...)`. A full
+    # train overwrites the smoke artifact for production serving; both are content
+    # -addressed by the sha recorded in the TrainResult (C38 hashes the path, not
+    # the filename, so this rename is gate-safe).
+    ckpt_path = CHECKPOINT_DIR / f"{SERVING_NAME}.pt"
     sha = save_checkpoint(model, ckpt_path)
+
+    # ADR-043 serving sidecar: the architecture dims + the FITTED calibrator state
+    # travel with the weights so serving reconstructs the exact model and a
+    # calibrated interval, never an unfit calibrator (the latent-500 fix).
+    sidecar = {
+        "version": f"{'smoke' if smoke else 'full'}_{sha}",
+        "smoke": smoke,
+        "arch": _serving_arch(config),
+        "calibrator": calibrator.to_state(),
+    }
+    sidecar_path = CHECKPOINT_DIR / f"{SERVING_NAME}.serving.json"
+    sidecar_path.write_text(
+        json.dumps(sidecar, sort_keys=True, separators=(",", ":")), encoding="utf-8"
+    )
+    logger.info("serving_sidecar_written", path=str(sidecar_path), coverage_p90=coverage_p90)
 
     if HAS_MLFLOW and not smoke and mlflow.active_run():
         try:

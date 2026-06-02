@@ -66,6 +66,13 @@ AGENT_ENDPOINTS: dict[str, str] = {
     "sustainability_agent": "http://sustainability-agent:8008",
 }
 
+# C7 (ADR-043): Tier-4 decisions are verified against the digital twin's Monte-Carlo
+# what-if before execution. The twin exposes A2A `monte_carlo` at this endpoint
+# (digital_twin/inference/serve.py); its response conforms to MonteCarloOutput
+# (orchestrator/contracts/twin_simulation_contract.py).
+TWIN_ENDPOINT = "http://digital-twin:8009"
+TWIN_SCENARIOS = 1000
+
 
 class ConsensusProtocol:
     """Five-phase multi-agent consensus engine."""
@@ -216,6 +223,16 @@ class ConsensusProtocol:
             debate_rounds=debate_rounds,
         )
 
+        # ADR-043/C7: record whether the decision rested on any degraded agent input
+        # (a real model vs. an honest fallback), so the audit trail reflects substance.
+        self._record_input_provenance(proposals)
+
+        # C7: at the top tier the selected action is verified against the digital
+        # twin's Monte-Carlo what-if before execution — the twin is no longer dead
+        # code at Tier 4. Degrades honestly if the twin is unreachable (I-7).
+        if tier == DecisionTier.TIER_4:
+            decision = await self._phase_twin_verify(decision)
+
         passed, violations = self._guardrails.validate_decision(decision)
         if not passed:
             HITL_ESCALATIONS_TOTAL.labels(reason="guardrail_violation").inc()
@@ -337,6 +354,69 @@ class ConsensusProtocol:
             )
         )
         return result
+
+    # ── C7: Tier-4 digital-twin verification ────────────────────────────
+
+    async def _phase_twin_verify(self, decision: ConsensusDecision) -> ConsensusDecision:
+        """Verify the selected action against the digital twin's Monte-Carlo what-if.
+
+        Records the twin's predicted KPI distribution into the append-only context
+        and audit trace (I-14) so an operator sees the simulated outcome of the
+        decision before it executes. An unreachable twin degrades to an honest
+        ``twin_unavailable`` note and never blocks the decision (I-7).
+        """
+        note: dict[str, Any]
+        try:
+            resp = await send_a2a_request(
+                target_url=TWIN_ENDPOINT,
+                method="monte_carlo",
+                params={
+                    "consensus_action": decision.selected_action,
+                    "n_scenarios": TWIN_SCENARIOS,
+                },
+                timeout=self._config.execution_timeout_seconds,
+            )
+            if resp.error:
+                raise RuntimeError(resp.error)
+            mc = resp.result or {}
+            note = {
+                "type": "twin_verification",
+                "verdict": "twin_verified",
+                "n_scenarios": mc.get("n_scenarios"),
+                "kpi_means": mc.get("kpi_means", {}),
+            }
+        except Exception as exc:  # noqa: BLE001 — an unreachable twin degrades (I-7)
+            logger.warning("twin_verification_unavailable", error=str(exc))
+            note = {"type": "twin_verification", "verdict": "twin_unavailable", "error": str(exc)}
+
+        self._append_context(ContextMessage(source="digital_twin", content=note))
+        return decision.model_copy(
+            update={"audit_trace": [*decision.audit_trace, f"twin={note['verdict']}"]},
+        )
+
+    def _record_input_provenance(self, proposals: list[AgentProposal]) -> None:
+        """Append an honest summary of which proposals rested on a degraded input.
+
+        Reads each proposal's ``payload['provenance']`` (ADR-040) and records the
+        degraded agents into the append-only context, so the audit chain captures
+        whether the decision was built on real models or fallbacks (I-3/I-4 substance).
+        """
+        degraded: list[str] = []
+        for p in proposals:
+            payload = p.payload if isinstance(p.payload, dict) else {}
+            prov = payload.get("provenance", {})
+            if isinstance(prov, dict) and prov.get("degraded") is True:
+                degraded.append(str(p.agent_name))
+        self._append_context(
+            ContextMessage(
+                source="orchestrator",
+                content={
+                    "type": "input_provenance",
+                    "degraded_agents": degraded,
+                    "all_real": not degraded,
+                },
+            )
+        )
 
     # ── Phase 4: Execution dispatch ─────────────────────────────────────
 
