@@ -154,6 +154,14 @@
     },
     "overridesRationale": {
       "tmp": "GHSA-ph9p-34f9-6g65 (arbitrary tmpdir write in tmp<0.2.4). Transitive via Stryker -> @inquirer/prompts -> external-editor. Patched range: >=0.2.6. See SECURITY.md."
+    },
+    "auditConfig": {
+      "ignoreGhsas": [
+        "GHSA-5xrq-8626-4rwp"
+      ]
+    },
+    "auditConfigRationale": {
+      "GHSA-5xrq-8626-4rwp": "vitest <4.1.0 — the Vitest UI dev server can serve arbitrary files when listening. Dev-only (devDependency @vitest/ui), reachable ONLY via the local `test:ui` script; never run in CI or production (CI runs `vitest run` headless). The patched range is vitest>=4.1.0, a major upgrade from our 2.x line that would break the current runner/config; tracked for a deliberate vitest 4 migration. Ignored at audit per the same dev-only-advisory policy as the `tmp` override above."
     }
   }
 }
