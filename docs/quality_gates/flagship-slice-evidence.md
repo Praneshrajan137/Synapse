@@ -55,13 +55,27 @@ python -m scripts.audit.substance_truth --check   # → 0 violations, 8/8 clean
   serving path, yields `degraded=False`, `feature_source=FEAST`,
   `confidence_basis=CONFORMAL_INTERVAL`, non-floor confidence. RED on a `model=None` slice.
 
-## Operator step (free-GPU, $0 — not in CI)
+## Operator step (free-GPU, $0 — gated by C43)
 
 Full train on the 1.1M-row Bengaluru series and publish the checkpoint + sidecar to HF Hub
 under `demand_prophet_hgt_tft`, then set `DP_HF_REPO` on the serving container so
-`ModelRegistry` resolves it. Record the final CRPS + held-out coverage + checkpoint sha
-here. *(Runbook + Colab notebook are the WS-C/WS-D deliverables; the local + CI proofs above
-already exercise the entire code path with the smoke checkpoint.)*
+`ModelRegistry` resolves it.
+
+- **Notebook:** [`notebooks/train_demand_prophet.ipynb`](../../notebooks/train_demand_prophet.ipynb)
+  — runs the production `train()` unchanged, fits the calibrator, refuses to publish a
+  smoke / under-covered artifact, uploads to HF Hub, and prints the registry entry.
+- **Runbook:** [`docs/runbooks/train-and-publish-checkpoint.md`](../runbooks/train-and-publish-checkpoint.md)
+  — the seven steps + verification.
+- **Gate (C43):** `scripts/audit/published_checkpoint_truth.py` fetches the published
+  sidecar and asserts non-smoke + `coverage_p90 >= 0.85` + recorded-sha == published-sha.
+  SKIPs when `DP_HF_REPO` is unset or the registry is a placeholder (CI stays green without
+  the secret); flips to PASS once an operator publishes and records the result in
+  `infrastructure/ml/published_checkpoints.json`.
+
+**Recorded production checkpoint:** _pending the first operator run_ (CRPS / coverage / sha
+go in the runbook table + `published_checkpoints.json`). The local + CI proofs above already
+exercise the entire code path with the smoke checkpoint; C43 is what makes the *published*
+model a live, regression-guarded proof.
 
 ## Honest status
 

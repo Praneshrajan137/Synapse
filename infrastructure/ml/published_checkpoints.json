@@ -1,0 +1,3 @@
+{
+  "__placeholder__": "No production checkpoint has been published yet. After running docs/runbooks/train-and-publish-checkpoint.md (free-GPU full train -> HF Hub), replace this object with one entry per published model, keyed by the serving name, e.g.: { \"demand_prophet_hgt_tft\": { \"repo\": \"Praneshrajan15/synapse-demand-prophet\", \"sha\": \"<checkpoint_sha7>\", \"coverage_p90\": 0.9x, \"final_crps\": 0.x, \"trained_at\": \"2026-06-..\", \"rows\": 1125000 } }. The C43 gate (scripts/audit/published_checkpoint_truth.py) then verifies the published sidecar matches this record."
+}

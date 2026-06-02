@@ -1101,6 +1101,27 @@ def check_runtime_substance() -> CheckResult:
     return CheckResult("C42", "Runtime substance", status, probe.detail)
 
 
+@register("C43", "A real, published production checkpoint serves at $0")
+def check_published_checkpoint() -> CheckResult:
+    """Authenticity counterpart to C42 (ADR-043, Phase 1).
+
+    C42 proves the serving *code path* is real on the CI smoke checkpoint. C43
+    proves an operator actually published a genuine, non-smoke, adequately
+    calibrated checkpoint to the $0 serving source (HF Hub) and recorded it.
+    SKIPs when DP_HF_REPO is unset or the registry is still a placeholder — never
+    fabricates a pass; FAILs only on a smoke/under-covered/drifted published model.
+    """
+    try:
+        from scripts.audit.published_checkpoint_truth import evaluate as _eval_pub
+    except ImportError as exc:
+        return CheckResult(
+            "C43", "Published checkpoint", "SKIP", f"published_checkpoint_truth import failed: {exc}"
+        )
+    probe = _eval_pub()
+    status = {"ok": "PASS", "fail": "FAIL", "skip": "SKIP"}[probe.status]
+    return CheckResult("C43", "Published checkpoint", status, probe.detail)
+
+
 # ---------------------------------------------------------------------------
 # Main entry
 # ---------------------------------------------------------------------------
