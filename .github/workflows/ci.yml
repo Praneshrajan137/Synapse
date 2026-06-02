@@ -42,6 +42,12 @@ jobs:
           # makes mypy crash on import. Force the compatible version LAST so it
           # cannot be downgraded before the MyPy steps run.
           pip install --upgrade "pathspec>=0.12.1"
+          # fastapi 0.111.0 passes `on_startup` to starlette's Router (removed in
+          # starlette 0.38). `sse-starlette` above pulls a newer starlette that
+          # re-breaks api/ imports despite the orchestrator pin. Force the
+          # compatible starlette LAST so api/tests collect. (`!=` keeps pip from
+          # also yanking fastapi.)
+          pip install "starlette>=0.37.2,<0.38.0"
       - name: Ruff lint
         run: ruff check packages/synapse_common/ agents/ orchestrator/ --output-format=github
       - name: Ruff format check
