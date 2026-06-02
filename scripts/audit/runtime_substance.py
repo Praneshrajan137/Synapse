@@ -486,6 +486,59 @@ def _probe_freshness_guardian() -> RuntimeProbe:
 
 
 # --------------------------------------------------------------------------- #
+# sustainability_agent (predictive paradigm) — lifelines-free serving (numpy KM).
+# --------------------------------------------------------------------------- #
+@register_probe("sustainability_agent")
+def _probe_sustainability_agent() -> RuntimeProbe:
+    """Boot the numpy-reconstructed KM waste curve through serving; SKIP if no fit.
+
+    Serving is lifelines-free (the KM fit is the CI-only step). Asserts a real,
+    non-degraded report with a PREDICTIVE_ENTROPY confidence basis (the legacy code
+    stamped real even on the unfitted fallback) and confidence that varies with the
+    horizon.
+    """
+    ckpt = CHECKPOINT_DIR / "sustainability_waste_km.pt"
+    if not ckpt.is_file():
+        return RuntimeProbe("skip", "no sustainability_waste_km.pt curve (run the smoke job)")
+
+    from synapse_common.model_registry import ModelRegistry  # noqa: PLC0415
+    from synapse_common.provenance import ConfidenceBasis  # noqa: PLC0415
+
+    from agents.sustainability_agent.inference.pipeline import (  # noqa: PLC0415
+        SustainabilityPipeline,
+    )
+    from agents.sustainability_agent.inference.serving_model import (  # noqa: PLC0415
+        build_sustainability_model,
+        load_serving_model,
+    )
+
+    registry = ModelRegistry(
+        None, checkpoint_dir=ckpt.parent, model_builder=build_sustainability_model
+    )
+    model = load_serving_model(registry)
+    if model is None or not getattr(model, "is_real", False):
+        return RuntimeProbe("fail", "curve present but registry resolved a degraded model")
+
+    pipe = SustainabilityPipeline(serving_model=model)
+    confs: list[float] = []
+    for days in (2, 10):
+        rep = pipe.report(fuel_liters=5.0, distance_km=20.0, days_ahead=days)
+        prov = pipe.last_provenance
+        if prov.degraded:
+            return RuntimeProbe("fail", "fitted waste model served degraded provenance")
+        if prov.confidence_basis != ConfidenceBasis.PREDICTIVE_ENTROPY:
+            return RuntimeProbe("fail", f"basis {prov.confidence_basis} is not PREDICTIVE_ENTROPY")
+        confs.append(round(rep.confidence, 4))
+    if len(set(confs)) == 1:
+        return RuntimeProbe("fail", f"confidence constant across horizons ({confs}) — not real")
+    return RuntimeProbe(
+        "ok",
+        f"sustainability_agent served real: degraded=False, basis=PREDICTIVE_ENTROPY, "
+        f"confidences={confs}",
+    )
+
+
+# --------------------------------------------------------------------------- #
 # Aggregation across all registered probes.
 # --------------------------------------------------------------------------- #
 def evaluate(agents: list[str] | None = None) -> RuntimeProbe:

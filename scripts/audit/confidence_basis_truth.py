@@ -52,8 +52,8 @@ EXPECTED_BASIS: dict[str, str | None] = {
     "routing_navigator": "OPTIMALITY_GAP",       # solver optimality-gap percentile
     "disruption_shield": "ANOMALY_SCORE_MARGIN",  # |score − threshold| decisiveness (Phase 7)
     "freshness_guardian": "SURVIVAL_CI_WIDTH",     # 1/(1+rel CI width) of the Weibull life (Phase 7)
-    # Adjudicated in their Phase 7 ratchet PRs:
-    "sustainability_agent": None,
+    "sustainability_agent": "PREDICTIVE_ENTROPY",  # 1 − H(waste_prob) (Phase 7; was mislabelled)
+    # inventory_sentinel emits no Provenance.real confidence (analytical newsvendor):
     "inventory_sentinel": None,
 }
 

@@ -6,16 +6,23 @@ Port: 8008
 
 from __future__ import annotations
 
+import os
 from contextlib import asynccontextmanager
+from pathlib import Path
 from typing import TYPE_CHECKING
 
 import structlog
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import Response
 from pydantic import BaseModel, Field
+from synapse_common.model_registry import ModelRegistry
 
 from agents.sustainability_agent.config import SustainabilityAgentConfig
 from agents.sustainability_agent.inference.pipeline import CarbonReport, SustainabilityPipeline
+from agents.sustainability_agent.inference.serving_model import (
+    build_sustainability_model,
+    load_serving_model,
+)
 
 if TYPE_CHECKING:
     from collections.abc import AsyncIterator
@@ -25,15 +32,26 @@ logger = structlog.get_logger(__name__)
 _pipeline: SustainabilityPipeline | None = None
 _config: SustainabilityAgentConfig | None = None
 
+ROOT = Path(__file__).resolve().parents[3]
+SERVING_CHECKPOINT_DIR = ROOT / "artifacts" / "checkpoints"
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     global _pipeline, _config
     _config = SustainabilityAgentConfig()
+    registry = ModelRegistry(
+        None,
+        checkpoint_dir=SERVING_CHECKPOINT_DIR,
+        hf_repo=os.environ.get("SA_HF_REPO") or None,
+        model_builder=build_sustainability_model,
+    )
+    serving_model = load_serving_model(registry)
     _pipeline = SustainabilityPipeline(
         carbon_pareto_weight=_config.carbon_pareto_weight,
+        serving_model=serving_model,
     )
-    logger.info("server_started", port=_config.port)
+    logger.info("server_started", port=_config.port, model_loaded=serving_model is not None)
     yield
 
 

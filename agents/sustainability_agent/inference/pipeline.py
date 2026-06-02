@@ -10,7 +10,7 @@ from __future__ import annotations
 import math
 import time
 from datetime import UTC, datetime
-from typing import Any
+from typing import TYPE_CHECKING, Any
 from uuid import uuid4
 
 import structlog
@@ -20,7 +20,12 @@ from synapse_common.provenance import ConfidenceBasis, FeatureSource, Provenance
 from agents.sustainability_agent.models.carbon import CarbonTracker
 from agents.sustainability_agent.models.waste import WastePredictionModel
 
+if TYPE_CHECKING:
+    from agents.sustainability_agent.inference.serving_model import WasteServingModel
+
 logger = structlog.get_logger(__name__)
+
+FALLBACK_CONFIDENCE = 0.5  # documented I-7 floor when no fitted waste model is present
 
 
 def _waste_confidence(waste_prob: float) -> float:
@@ -73,9 +78,16 @@ class SustainabilityPipeline:
         waste_model: WastePredictionModel | None = None,
         kafka_producer: Any = None,
         carbon_pareto_weight: float = 0.25,
+        serving_model: WasteServingModel | None = None,
     ) -> None:
         self._carbon = carbon_tracker or CarbonTracker()
         self._waste = waste_model or WastePredictionModel()
+        # ADR-043: the fitted KM waste-survival curve resolved by serve.py via
+        # ModelRegistry. When present (real), waste prediction comes from the fitted
+        # curve and confidence is the real predictive entropy; otherwise the report
+        # is honestly degraded (the legacy code stamped Provenance.real even on the
+        # unfitted numpy fallback — the dishonesty this fixes).
+        self._serving_model = serving_model
         self._kafka = kafka_producer
         self._carbon_pareto_weight = carbon_pareto_weight
         # ADR-040: provenance of the most recent report, read by serve.py when
@@ -99,7 +111,15 @@ class SustainabilityPipeline:
         compute_co2 = self._carbon.track_compute()
         total_co2 = delivery_co2 + compute_co2
 
-        waste_result = self._waste.predict_waste_probability(days_ahead)
+        # Use the fitted KM curve when loaded (real), else the unfitted fallback.
+        if self._serving_model is not None and getattr(self._serving_model, "is_real", False):
+            waste_source: Any = self._serving_model
+            waste_is_real = True
+        else:
+            waste_source = self._waste
+            waste_is_real = bool(getattr(self._waste, "_is_fitted", False))
+
+        waste_result = waste_source.predict_waste_probability(days_ahead)
         waste_prob = float(waste_result["waste_probability"])
         survival_curve = waste_result["survival_curve"]
         hazard_rate = float(waste_result["hazard_rate"])
@@ -124,15 +144,20 @@ class SustainabilityPipeline:
             ),
         ]
 
-        # ADR-040: confidence derived from the waste model's predictive entropy,
-        # not a constant. The carbon component is deterministic; the uncertainty
-        # that matters is the waste survival prediction.
-        confidence = round(_waste_confidence(waste_prob), 4)
-        self.last_provenance = Provenance.real(
-            model_version=f"sustainability_waste_survival:{self._waste.__class__.__name__}",
-            confidence_basis=ConfidenceBasis.SURVIVAL_CI_WIDTH,
-            feature_source=FeatureSource.DIRECT,
-        )
+        # ADR-040/043: on the real path (a fitted KM curve) confidence is the waste
+        # model's predictive entropy; on the unfitted fallback it is the honest I-7
+        # floor with a degraded stamp (the legacy code claimed real unconditionally).
+        if waste_is_real:
+            confidence = round(_waste_confidence(waste_prob), 4)
+            version = getattr(waste_source, "version", waste_source.__class__.__name__)
+            self.last_provenance = Provenance.real(
+                model_version=f"sustainability_waste_km:{version}",
+                confidence_basis=ConfidenceBasis.PREDICTIVE_ENTROPY,
+                feature_source=FeatureSource.DIRECT,
+            )
+        else:
+            confidence = FALLBACK_CONFIDENCE
+            self.last_provenance = Provenance.degraded_fallback(feature_source=FeatureSource.DIRECT)
 
         report = CarbonReport(
             report_id=str(uuid4()),

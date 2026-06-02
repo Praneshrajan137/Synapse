@@ -56,6 +56,7 @@ READY_AGENTS: list[str] = [
     "pricing_oracle",
     "disruption_shield",
     "freshness_guardian",
+    "sustainability_agent",
 ]
 
 
