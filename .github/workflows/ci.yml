@@ -287,14 +287,16 @@ jobs:
         run: python -m scripts.audit.runtime_substance --check
       - name: Measure per-package coverage under full ML stack (binds the 0.0 floors)
         # Informational: surfaces the REAL per-package coverage for orchestrator +
-        # the 8 agents + digital_twin (torch/ortools/pymoo importable here, unlike
-        # quality-gates). The operator then runs scripts/coverage_ratchet.py --apply
-        # in a follow-up PR to lock the measured floors. Never auto-commits.
+        # the 8 agents + digital_twin + data_fabric + ml_pipelines (torch/ortools/
+        # pymoo importable here, unlike quality-gates). The operator then runs
+        # scripts/coverage_ratchet.py --apply in a follow-up PR to lock the measured
+        # floors. Never auto-commits. data_fabric/ml_pipelines are measured here
+        # (informational) before being promoted into the gating step as tests land.
         continue-on-error: true
         run: |
-          pytest packages/tests agents orchestrator digital_twin api --tb=short -q \
+          pytest packages/tests agents orchestrator digital_twin api ml_pipelines --tb=short -q \
             --cov=packages/synapse_common --cov=agents --cov=orchestrator \
-            --cov=digital_twin --cov=api --cov-branch \
+            --cov=digital_twin --cov=api --cov=data_fabric --cov=ml_pipelines --cov-branch \
             --cov-report=xml:coverage-full.xml --cov-fail-under=0
           python scripts/coverage_per_package.py \
             --xml coverage-full.xml \
