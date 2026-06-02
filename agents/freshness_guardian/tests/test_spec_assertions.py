@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import ast
-import json
 from pathlib import Path
 
 
@@ -42,9 +41,11 @@ def test_inv_fg_003_temperature_breach_blocks_fssai() -> None:
 
 def test_inv_fg_004_markdown_monotonic_in_freshness() -> None:
     """INV-FG-004 — d2 < d1 implies markdown_pct(d2) >= markdown_pct(d1)."""
+
     def markdown_pct(days_to_expiry: int) -> float:
         # Monotone-decreasing in days remaining: more decay → bigger markdown
         return max(0.0, min(0.5, (5 - days_to_expiry) * 0.1))
+
     d1, d2 = 3, 1
     if d2 < d1:
         assert markdown_pct(d2) >= markdown_pct(d1)

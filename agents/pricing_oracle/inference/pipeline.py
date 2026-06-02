@@ -114,16 +114,16 @@ class PricingOraclePipeline:
         self.last_provenance: Provenance = Provenance.degraded_fallback()
 
     @deal.pre(
-        lambda self, sku_ids, store_id, categories, base_prices, **kw: (len(sku_ids) >= 1),
+        lambda self, sku_ids, store_id, categories, base_prices, **kw: len(sku_ids) >= 1,
         message="PRE-PO-004: At least one SKU required",
     )
     @deal.pre(
-        lambda self, sku_ids, store_id, categories, base_prices, **kw: (len(sku_ids) <= 200),
+        lambda self, sku_ids, store_id, categories, base_prices, **kw: len(sku_ids) <= 200,
         message="PRE-PO-004: Maximum 200 SKUs per batch",
     )
     @deal.pre(
-        lambda self, sku_ids, store_id, categories, base_prices, **kw: (
-            all(bp > 0.0 for bp in base_prices)
+        lambda self, sku_ids, store_id, categories, base_prices, **kw: all(
+            bp > 0.0 for bp in base_prices
         ),
         message="PRE-PO-003: All base prices must be strictly positive",
     )

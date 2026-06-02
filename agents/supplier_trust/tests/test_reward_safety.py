@@ -22,7 +22,6 @@ from agents.supplier_trust.training.rewards import (
     compute_trust_bias,
 )
 
-
 # --- counterfactual 1: trust_bias cannot be exchanged for accuracy -----------
 
 

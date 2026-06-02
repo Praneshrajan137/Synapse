@@ -30,6 +30,19 @@ runtime-evaluated-base-classes = ["pydantic.BaseModel"]
 # InvariantViolation mirrors SchemaViolation — intentionally named for the
 # spec-postcondition contract concept, not a generic *Error (ADR-040).
 "packages/synapse_common/invariants.py" = ["N818"]
+# Spec-assertion + reward-safety test bodies use UPPER_CASE for the spec
+# constants under test (THRESHOLD, BUDGET_MS, FORBIDDEN_KEYS) so the test reads
+# like the invariant it checks; nested `if`s mirror the spec's guard structure;
+# one explanatory comment exceeds the line limit. Test-readability conventions,
+# not production code.
+"agents/*/tests/test_spec_assertions.py" = ["N806", "SIM102"]
+"agents/*/tests/test_reward_safety.py" = ["E501"]
+"agents/*/tests/test_spec.py" = ["N806", "SIM102"]
+# Role and BreakerState are intentionally `(str, Enum)` (not StrEnum) — the
+# `Role.X` repr is relied on in auth/breaker logging + serialisation; switching
+# the base would change `str()` output. UP042 is a style preference here.
+"packages/synapse_common/auth/jwt_manager.py" = ["UP042"]
+"packages/synapse_common/breakers.py" = ["UP042"]
 
 [tool.ruff.format]
 quote-style = "double"

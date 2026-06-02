@@ -21,7 +21,6 @@ from agents.inventory_sentinel.training.rewards import (
     compute_l3_operational_reward,
 )
 
-
 # --- counterfactual 1: a stockout cannot be hidden by higher fill_rate -------
 
 
