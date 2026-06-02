@@ -15,7 +15,7 @@ import forceAtlas2 from "graphology-layout-forceatlas2";
  * Deterministic by construction (seed positions hashed from node id) so renders
  * are reproducible (FE-INV-009).
  *
- * Colours are literal rgb() strings because WebGL cannot resolve CSS custom
+ * Colours are literal colour strings because WebGL cannot resolve CSS custom
  * properties; they mirror the chromatic tokens (tracked for migration like the
  * deck.gl palette).
  */
