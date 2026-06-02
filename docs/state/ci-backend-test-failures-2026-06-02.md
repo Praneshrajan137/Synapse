@@ -23,7 +23,7 @@
 | 2 | Torch model bugs (shape / soft-update / gradient) | 4 | High — ML correctness |
 | 3 | Train-smoke missing data fixture | 4 | Low — CI data/fixture or skip-guard |
 | 4 | Pricing reward returns NaN | 1 | High — reward math |
-| 5 | `api/tests` needs `psycopg2` | 1 | Low — CI dependency |
+| 5 | `api/tests` needs `psycopg2` | 1 | ✅ FIXED — `psycopg2-binary` added to ci.yml (e14f140) |
 | | **Total** | **17** | |
 
 ## 1. Reward-safety divergence counter (`assert 0 >= 1.0`) — 6 failures
@@ -90,7 +90,7 @@ always-on unit run, OR the job needs a `make seed` step / the tests need a
 essential-cap penalty path produces NaN. Real reward-math bug (relates to I-6,
 the essential-SKU price cap). High-value to fix but needs the reward author.
 
-## 5. `api/tests` needs psycopg2 — 1 failure
+## 5. `api/tests` needs psycopg2 — 1 failure ✅ RESOLVED (PR #13, commit e14f140)
 
 - `api/tests/test_decisions_auth.py::test_recent_authorized_then_dsn_fail_fast`
   — `assert 'POSTGRES_DSN' in "audit unavailable: No module named 'psycopg2'"`
