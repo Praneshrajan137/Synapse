@@ -31,6 +31,11 @@ jobs:
           # sprint-3 bundle which the agents/*/ glob above does NOT match.
           pip install simpy sse-starlette
           pip install -r agents/requirements-sprint3.txt
+          # mypy imports `pathspec.patterns.gitignore` (pathspec>=0.10.0). One of
+          # the requirement sets above transitively pins an older pathspec, which
+          # makes mypy crash on import. Force the compatible version LAST so it
+          # cannot be downgraded before the MyPy steps run.
+          pip install --upgrade "pathspec>=0.12.1"
       - name: Ruff lint
         run: ruff check packages/synapse_common/ agents/ orchestrator/ --output-format=github
       - name: Ruff format check
