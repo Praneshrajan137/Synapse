@@ -2,15 +2,22 @@
 
 from __future__ import annotations
 
+import os
 from contextlib import asynccontextmanager
+from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 import structlog
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel, Field
+from synapse_common.model_registry import ModelRegistry
 from synapse_common.models import InventoryAction
 
 from agents.inventory_sentinel.inference.pipeline import InventorySentinelPipeline
+from agents.inventory_sentinel.inference.serving_model import (
+    build_inventory_model,
+    load_serving_model,
+)
 
 if TYPE_CHECKING:
     from collections.abc import AsyncIterator
@@ -18,12 +25,22 @@ if TYPE_CHECKING:
 logger = structlog.get_logger(__name__)
 _pipeline: InventorySentinelPipeline | None = None
 
+ROOT = Path(__file__).resolve().parents[3]
+SERVING_CHECKPOINT_DIR = ROOT / "artifacts" / "checkpoints"
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     global _pipeline
-    _pipeline = InventorySentinelPipeline()
-    logger.info("inventory_sentinel_started", port=8003)
+    registry = ModelRegistry(
+        None,
+        checkpoint_dir=SERVING_CHECKPOINT_DIR,
+        hf_repo=os.environ.get("IS_HF_REPO") or None,
+        model_builder=build_inventory_model,
+    )
+    serving_model = load_serving_model(registry)
+    _pipeline = InventorySentinelPipeline(serving_model=serving_model)
+    logger.info("inventory_sentinel_started", port=8003, model_loaded=serving_model is not None)
     yield
 
 

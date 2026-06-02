@@ -47,14 +47,14 @@ WIRED_AGENTS: frozenset[str] = frozenset(
         "disruption_shield",
         "freshness_guardian",
         "sustainability_agent",
+        "inventory_sentinel",
     }
 )
 
-# Count of serve.py files NOT yet wired through ModelRegistry. Phases 1-4 wired the
-# four paradigm exemplars (4/8); Phase 7 ratchets the rest — disruption_shield (5/8),
-# freshness_guardian (6/8), sustainability_agent (7/8), leaving 1 (inventory_sentinel,
-# the analytical newsvendor). Lower as each lands; CI fails on any increase.
-BASELINE_UNWIRED = 1
+# Count of serve.py files NOT yet wired through ModelRegistry. ALL 8 agents now load
+# a model via ModelRegistry (the four paradigm exemplars + the four ratchet agents).
+# The registry is the live serving path fleet-wide; CI fails if any agent regresses.
+BASELINE_UNWIRED = 0
 
 
 @dataclass

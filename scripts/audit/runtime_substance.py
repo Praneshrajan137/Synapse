@@ -539,6 +539,58 @@ def _probe_sustainability_agent() -> RuntimeProbe:
 
 
 # --------------------------------------------------------------------------- #
+# inventory_sentinel (analytical newsvendor) — torch-free, runs locally.
+# --------------------------------------------------------------------------- #
+@register_probe("inventory_sentinel")
+def _probe_inventory_sentinel() -> RuntimeProbe:
+    """Boot the conformal calibration through the newsvendor serving path.
+
+    Torch-free: asserts a non-degraded RESIDUAL_VARIANCE decision (calibrated
+    conformal bounds restored from the checkpoint) with confidence that varies with
+    forecast volatility.
+    """
+    ckpt = CHECKPOINT_DIR / "inventory_newsvendor.pt"
+    if not ckpt.is_file():
+        return RuntimeProbe("skip", "no inventory_newsvendor.pt calibration (run the smoke job)")
+
+    from synapse_common.model_registry import ModelRegistry  # noqa: PLC0415
+    from synapse_common.provenance import ConfidenceBasis  # noqa: PLC0415
+
+    from agents.inventory_sentinel.inference.pipeline import (  # noqa: PLC0415
+        InventorySentinelPipeline,
+    )
+    from agents.inventory_sentinel.inference.serving_model import (  # noqa: PLC0415
+        build_inventory_model,
+        load_serving_model,
+    )
+
+    registry = ModelRegistry(None, checkpoint_dir=ckpt.parent, model_builder=build_inventory_model)
+    model = load_serving_model(registry)
+    if model is None or not getattr(model, "is_real", False):
+        return RuntimeProbe("fail", "calibration present but registry resolved a degraded model")
+
+    pipe = InventorySentinelPipeline(serving_model=model)
+    fc = {
+        "low_vol": {"mean": 50.0, "std": 2.0, "on_hand": 5.0},     # tight → high confidence
+        "high_vol": {"mean": 50.0, "std": 40.0, "on_hand": 5.0},   # noisy → low confidence
+    }
+    actions = pipe.decide(["low_vol", "high_vol"], "store_x", demand_forecast=fc)
+    prov = pipe.last_provenance
+    if prov.degraded:
+        return RuntimeProbe("fail", "calibrated newsvendor served degraded provenance")
+    if prov.confidence_basis != ConfidenceBasis.RESIDUAL_VARIANCE:
+        return RuntimeProbe("fail", f"basis {prov.confidence_basis} is not RESIDUAL_VARIANCE")
+    confs = [round(a.confidence, 4) for a in actions]
+    if len(set(confs)) == 1:
+        return RuntimeProbe("fail", f"confidence constant across volatility ({confs}) — not real")
+    return RuntimeProbe(
+        "ok",
+        f"inventory_sentinel served real: degraded=False, basis=RESIDUAL_VARIANCE, "
+        f"confidences={confs}",
+    )
+
+
+# --------------------------------------------------------------------------- #
 # Aggregation across all registered probes.
 # --------------------------------------------------------------------------- #
 def evaluate(agents: list[str] | None = None) -> RuntimeProbe:

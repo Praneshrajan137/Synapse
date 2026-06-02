@@ -53,8 +53,7 @@ EXPECTED_BASIS: dict[str, str | None] = {
     "disruption_shield": "ANOMALY_SCORE_MARGIN",  # |score − threshold| decisiveness (Phase 7)
     "freshness_guardian": "SURVIVAL_CI_WIDTH",     # 1/(1+rel CI width) of the Weibull life (Phase 7)
     "sustainability_agent": "PREDICTIVE_ENTROPY",  # 1 − H(waste_prob) (Phase 7; was mislabelled)
-    # inventory_sentinel emits no Provenance.real confidence (analytical newsvendor):
-    "inventory_sentinel": None,
+    "inventory_sentinel": "RESIDUAL_VARIANCE",     # 1 − forecast volatility, conformal-calibrated
 }
 
 # Phase 4 closed both known mismatches: pricing_oracle now stamps ELASTICITY_STRENGTH
