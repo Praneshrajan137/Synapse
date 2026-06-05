@@ -18,6 +18,7 @@ if TYPE_CHECKING:
 
 from agents.demand_prophet.training.dataset import (
     HORIZONS,
+    build_supervised,
     build_windows,
     load_demand_frame,
 )
@@ -85,6 +86,15 @@ def test_build_windows_is_deterministic(tmp_path: Path) -> None:
     csv = _synthetic_csv(tmp_path, n_skus=3, n_days=60)
     w1 = build_windows(load_demand_frame(csv), seq_len=20)
     w2 = build_windows(load_demand_frame(csv), seq_len=20)
+    assert np.array_equal(w1.temporal, w2.temporal)
+    assert np.array_equal(w1.targets, w2.targets)
+
+
+def test_smoke_supervised_uses_deterministic_fallback_when_default_csv_missing() -> None:
+    w1 = build_supervised(city="ci_smoke_missing", smoke=True, num_channels=9, num_static=8)
+    w2 = build_supervised(city="ci_smoke_missing", smoke=True, num_channels=9, num_static=8)
+    assert len(w1) > 0
+    assert w1.temporal.shape[1:] == (9, 20)
     assert np.array_equal(w1.temporal, w2.temporal)
     assert np.array_equal(w1.targets, w2.targets)
 

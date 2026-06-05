@@ -8,7 +8,10 @@ R = w1*time_saved + w2*fuel_saved + w3*freshness + w4*Gini(rider_earnings)
 from __future__ import annotations
 
 import torch
+from synapse_common.reward_shadow import resolve_weights
 from torch import Tensor
+
+from agents.routing_navigator.training import reward_config
 
 
 def gini_coefficient(earnings: Tensor) -> Tensor:
@@ -54,10 +57,10 @@ def compute_reward(
     rider_earnings: Tensor,
     freshness_violations: int,
     total_routes: int,
-    w_time: float = 0.4,
-    w_fuel: float = 0.2,
-    w_freshness: float = 0.25,
-    w_fairness: float = 0.15,
+    w_time: float | None = None,
+    w_fuel: float | None = None,
+    w_freshness: float | None = None,
+    w_fairness: float | None = None,
 ) -> dict[str, Tensor]:
     """Compute full Routing Navigator reward (I-2: agent-scoped only)."""
     time_saved = compute_time_saved(route_times, baseline_times)
@@ -65,9 +68,20 @@ def compute_reward(
     freshness = compute_freshness(freshness_violations, total_routes)
     gini = gini_coefficient(rider_earnings)
     fairness = 1.0 - gini
+    weights = resolve_weights(
+        "routing_navigator",
+        reward_config.WEIGHTS,
+        w_time=w_time,
+        w_fuel=w_fuel,
+        w_freshness=w_freshness,
+        w_fairness=w_fairness,
+    )
 
     total = (
-        w_time * time_saved + w_fuel * fuel_saved + w_freshness * freshness + w_fairness * fairness
+        weights["w_time"] * time_saved
+        + weights["w_fuel"] * fuel_saved
+        + weights["w_freshness"] * freshness
+        + weights["w_fairness"] * fairness
     )
 
     return {

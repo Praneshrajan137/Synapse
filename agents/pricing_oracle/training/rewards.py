@@ -14,11 +14,15 @@ from __future__ import annotations
 
 import structlog
 import torch
+from synapse_common.reward_shadow import resolve_weights
 from torch import Tensor
+
+from agents.pricing_oracle.training import reward_config
 
 logger = structlog.get_logger(__name__)
 
 ESSENTIAL_CAP: float = 1.3
+_EPSILON: float = 1e-8
 
 
 def revenue_component(
@@ -27,11 +31,14 @@ def revenue_component(
     demand_quantities: Tensor,
 ) -> Tensor:
     """
-    Revenue component: total revenue from priced items.
-    Normalized by batch size for stable gradients.
+    Revenue component: multiplier-weighted revenue relative to baseline revenue.
+    This keeps the reward dimensionless so safety penalties share the same scale.
     """
-    revenue = (multipliers * base_prices * demand_quantities).sum(dim=-1)
-    return revenue.mean()
+    baseline_revenue = base_prices * demand_quantities
+    priced_revenue = multipliers * baseline_revenue
+    denominator = baseline_revenue.sum(dim=-1).clamp_min(_EPSILON)
+    normalized_revenue = priced_revenue.sum(dim=-1) / denominator
+    return normalized_revenue.mean()
 
 
 def elasticity_alignment(
@@ -44,15 +51,17 @@ def elasticity_alignment(
     Alignment = -correlation(multiplier, |elasticity|).
     """
     abs_elasticity = elasticity_estimates.abs()
+    multiplier_std = multipliers.std(correction=0)
+    elasticity_std = abs_elasticity.std(correction=0)
 
-    if abs_elasticity.std() < 1e-8 or multipliers.std() < 1e-8:
+    if multiplier_std < _EPSILON or elasticity_std < _EPSILON:
         return torch.tensor(0.0, device=multipliers.device)
 
     mult_centered = multipliers - multipliers.mean()
     elast_centered = abs_elasticity - abs_elasticity.mean()
 
     correlation = (mult_centered * elast_centered).mean() / (
-        multipliers.std() * abs_elasticity.std() + 1e-8
+        multiplier_std * elasticity_std + _EPSILON
     )
 
     return -correlation
@@ -65,11 +74,16 @@ def essential_cap_violation(
 ) -> Tensor:
     """
     Penalty for essential items exceeding the 1.3x cap.
-    Returns the total violation magnitude (0 if all within cap).
+    Returns catastrophic violation units (0 if all within cap).
     This should NEVER fire if the hard clamp works, but exists as defense-in-depth.
     """
-    violations = torch.clamp(multipliers - cap, min=0.0) * is_essential.float()
-    total_violation = violations.sum()
+    excess = torch.clamp(multipliers - cap, min=0.0)
+    violation_units = torch.where(
+        excess > 0.0,
+        torch.ones_like(excess) + (excess / cap),
+        torch.zeros_like(excess),
+    )
+    total_violation = (violation_units * is_essential.float()).sum()
 
     if total_violation > 0:
         logger.error(
@@ -100,10 +114,10 @@ def compute_reward(
     elasticity_estimates: Tensor,
     is_essential: Tensor,
     competitor_multipliers: Tensor | None = None,
-    revenue_weight: float = 1.0,
-    elasticity_weight: float = 0.5,
-    essential_penalty_weight: float = -5.0,
-    competitor_gap_weight: float = -2.0,
+    revenue_weight: float | None = None,
+    elasticity_weight: float | None = None,
+    essential_penalty_weight: float | None = None,
+    competitor_gap_weight: float | None = None,
 ) -> dict[str, Tensor]:
     """
     Compute the full Pricing Oracle reward.
@@ -119,16 +133,24 @@ def compute_reward(
     rev = revenue_component(multipliers, base_prices, demand_quantities)
     elast = elasticity_alignment(multipliers, elasticity_estimates)
     cap_viol = essential_cap_violation(multipliers, is_essential)
+    weights = resolve_weights(
+        "pricing_oracle",
+        reward_config.WEIGHTS,
+        revenue_weight=revenue_weight,
+        elasticity_weight=elasticity_weight,
+        essential_penalty_weight=essential_penalty_weight,
+        competitor_gap_weight=competitor_gap_weight,
+    )
 
     comp_gap = torch.tensor(0.0, device=multipliers.device)
     if competitor_multipliers is not None:
         comp_gap = competitor_gap(multipliers, competitor_multipliers)
 
     total = (
-        revenue_weight * rev
-        + elasticity_weight * elast
-        + essential_penalty_weight * cap_viol
-        + competitor_gap_weight * comp_gap
+        weights["revenue_weight"] * rev
+        + weights["elasticity_weight"] * elast
+        + weights["essential_penalty_weight"] * cap_viol
+        + weights["competitor_gap_weight"] * comp_gap
     )
 
     return {

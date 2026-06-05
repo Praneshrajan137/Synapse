@@ -99,7 +99,7 @@ def _batch_loss(
     """CRPS loss summed over horizons for one batch (real forward + grad path)."""
     batch = to_torch_batch(window, idx)
     n = batch["num_skus"]
-    graph = build_graph(n)
+    graph = build_graph(n).to(device)
     static = [t.to(device) for t in batch["static_inputs"]]
     temporal = [t.to(device) for t in batch["temporal_inputs"]]
     targets = batch["targets"].to(device)  # (B, H)
@@ -124,7 +124,7 @@ def _evaluate_coverage(
     idx = np.arange(len(window))
     with torch.no_grad():
         batch = to_torch_batch(window, idx)
-        graph = build_graph(batch["num_skus"])
+        graph = build_graph(batch["num_skus"]).to(device)
         static = [t.to(device) for t in batch["static_inputs"]]
         temporal = [t.to(device) for t in batch["temporal_inputs"]]
         outputs = model(graph, static, temporal)
@@ -151,7 +151,12 @@ def train(config: DemandProphetConfig | None = None, *, smoke: bool = False) -> 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     logger.info("training_start", device=str(device), smoke=smoke)
 
-    window = build_supervised(city="bengaluru", smoke=smoke)
+    window = build_supervised(
+        city="bengaluru",
+        smoke=smoke,
+        num_static=config.tft_num_static,
+        num_channels=config.tft_num_time_known + config.tft_num_time_observed,
+    )
     n = len(window)
     rng = np.random.default_rng(seed)
     perm = rng.permutation(n)

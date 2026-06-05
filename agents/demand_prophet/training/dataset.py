@@ -62,6 +62,11 @@ class WindowedData:
 def load_demand_frame(csv_path: Path | str) -> pd.DataFrame:
     """Load + daily-aggregate the raw demand history to per (sku, date) rows."""
     df = pd.read_csv(csv_path)
+    return _daily_from_raw_frame(df)
+
+
+def _daily_from_raw_frame(df: pd.DataFrame) -> pd.DataFrame:
+    """Daily aggregate a raw demand frame to the supervised-builder contract."""
     df["date"] = pd.to_datetime(df["date"])
     daily = (
         df.groupby(["sku_id", "date"], as_index=False)
@@ -76,6 +81,49 @@ def load_demand_frame(csv_path: Path | str) -> pd.DataFrame:
         .reset_index(drop=True)
     )
     return daily
+
+
+def build_smoke_demand_frame(
+    *,
+    city: str = "bengaluru",
+    n_skus: int = 12,
+    n_days: int = 72,
+    seed: int = 42,
+) -> pd.DataFrame:
+    """Deterministic tiny demand history for CI smoke training only."""
+    rng = np.random.default_rng(seed)
+    rows: list[dict[str, object]] = []
+    dates = pd.date_range("2025-01-01", periods=n_days, freq="D")
+    store_prefix = "BLR" if city == "bengaluru" else city[:3].upper()
+
+    for sku_idx in range(n_skus):
+        base = 18.0 + 1.5 * sku_idx
+        for day_idx, date in enumerate(dates):
+            is_festival = day_idx % 18 == 0
+            seasonal = 3.0 * np.sin((day_idx + sku_idx) / 6.0)
+            trend = 0.06 * day_idx
+            festival_lift = 5.0 if is_festival else 0.0
+            quantity = max(0.0, base + seasonal + trend + festival_lift + rng.normal(0.0, 0.15))
+            for hour, share in ((8, 0.45), (18, 0.55)):
+                rows.append(
+                    {
+                        "date": date.strftime("%Y-%m-%d"),
+                        "store_id": f"{store_prefix}-SMOKE",
+                        "sku_id": f"SKU-{sku_idx:04d}",
+                        "quantity": quantity * share,
+                        "hour": hour,
+                        "day_of_week": date.dayofweek,
+                        "is_weekend": date.dayofweek >= 5,
+                        "is_festival": is_festival,
+                        "festival_name": "smoke" if is_festival else "",
+                        "temperature_c": 27.0 + 2.0 * np.sin(day_idx / 11.0),
+                        "humidity_pct": 55.0,
+                        "precip_mm": 0.0,
+                        "monsoon_active": False,
+                    }
+                )
+
+    return _daily_from_raw_frame(pd.DataFrame(rows))
 
 
 def _rolling(arr: np.ndarray, window: int, fn: str) -> np.ndarray:
@@ -191,9 +239,22 @@ def build_supervised(
     **window_kwargs: Any,
 ) -> WindowedData:
     """End-to-end: load the city's demand history → windowed supervised data."""
+    default_csv_path = csv_path is None
     if csv_path is None:
         csv_path = ROOT / "data" / city / "demand_history.csv"
-    daily = load_demand_frame(csv_path)
+    path = Path(csv_path)
+    if path.is_file():
+        daily = load_demand_frame(path)
+    elif smoke and default_csv_path:
+        logger.warning(
+            "smoke_demand_history_missing",
+            city=city,
+            fallback="deterministic_smoke_fixture",
+            path=str(path),
+        )
+        daily = build_smoke_demand_frame(city=city)
+    else:
+        daily = load_demand_frame(path)
     if smoke:
         window_kwargs.setdefault("max_skus", 12)
         window_kwargs.setdefault("seq_len", 20)
@@ -255,6 +316,7 @@ __all__ = [
     "HORIZONS",
     "WindowedData",
     "build_graph",
+    "build_smoke_demand_frame",
     "build_supervised",
     "build_windows",
     "load_demand_frame",

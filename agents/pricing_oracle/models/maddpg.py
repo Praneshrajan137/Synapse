@@ -194,20 +194,21 @@ class PricingMADDPG(nn.Module):
 
     def soft_update(self, tau: float = 0.01) -> None:
         """Polyak averaging for target networks."""
-        for i in range(self.num_agents):
-            for param, target_param in zip(
-                self.actors[i].parameters(),
-                self.target_actors[i].parameters(),
-                strict=True,
-            ):
-                target_param.data.copy_(tau * param.data + (1.0 - tau) * target_param.data)
+        with torch.no_grad():
+            for i in range(self.num_agents):
+                for param, target_param in zip(
+                    self.actors[i].parameters(),
+                    self.target_actors[i].parameters(),
+                    strict=True,
+                ):
+                    target_param.copy_(tau * param + (1.0 - tau) * target_param)
 
-            for param, target_param in zip(
-                self.critics[i].parameters(),
-                self.target_critics[i].parameters(),
-                strict=True,
-            ):
-                target_param.data.copy_(tau * param.data + (1.0 - tau) * target_param.data)
+                for param, target_param in zip(
+                    self.critics[i].parameters(),
+                    self.target_critics[i].parameters(),
+                    strict=True,
+                ):
+                    target_param.copy_(tau * param + (1.0 - tau) * target_param)
 
     def get_model_summary(self) -> dict[str, int]:
         """Return parameter counts for logging and MLflow."""

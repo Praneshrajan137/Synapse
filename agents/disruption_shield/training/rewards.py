@@ -10,7 +10,10 @@ from __future__ import annotations
 
 import structlog
 import torch
+from synapse_common.reward_shadow import resolve_weights
 from torch import Tensor
+
+from agents.disruption_shield.training import reward_config
 
 logger = structlog.get_logger(__name__)
 
@@ -78,10 +81,10 @@ def compute_reward(
     hours_before_impact: Tensor,
     time_to_recovery_hours: Tensor,
     playbook_applied: Tensor,
-    early_detection_weight: float = 1.0,
-    false_positive_weight: float = 10.0,
-    missed_disruption_weight: float = 50.0,
-    recovery_speed_weight: float = 1.0,
+    early_detection_weight: float | None = None,
+    false_positive_weight: float | None = None,
+    missed_disruption_weight: float | None = None,
+    recovery_speed_weight: float | None = None,
 ) -> dict[str, Tensor]:
     """Compute full Disruption Shield reward.
 
@@ -92,12 +95,20 @@ def compute_reward(
     fp = false_positive_penalty(predicted_alert, actual_disruption)
     missed = missed_disruption_penalty(predicted_alert, actual_disruption)
     recovery = recovery_speed_reward(time_to_recovery_hours, playbook_applied)
+    weights = resolve_weights(
+        "disruption_shield",
+        reward_config.WEIGHTS,
+        early_detection_weight=early_detection_weight,
+        false_positive_weight=false_positive_weight,
+        missed_disruption_weight=missed_disruption_weight,
+        recovery_speed_weight=recovery_speed_weight,
+    )
 
     total = (
-        early_detection_weight * early
-        - false_positive_weight * fp
-        - missed_disruption_weight * missed
-        + recovery_speed_weight * recovery
+        weights["early_detection_weight"] * early
+        - weights["false_positive_weight"] * fp
+        - weights["missed_disruption_weight"] * missed
+        + weights["recovery_speed_weight"] * recovery
     )
 
     return {

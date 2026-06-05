@@ -10,7 +10,10 @@ from __future__ import annotations
 
 import structlog
 import torch
+from synapse_common.reward_shadow import resolve_weights
 from torch import Tensor
+
+from agents.freshness_guardian.training import reward_config
 
 logger = structlog.get_logger(__name__)
 
@@ -73,10 +76,10 @@ def compute_reward(
     was_sold: Tensor,
     temperature_deviation_hours: Tensor,
     fssai_logged: Tensor,
-    accuracy_weight: float = 1.0,
-    timing_weight: float = 0.4,
-    fssai_weight: float = 2.0,
-    unnecessary_weight: float = 0.3,
+    accuracy_weight: float | None = None,
+    timing_weight: float | None = None,
+    fssai_weight: float | None = None,
+    unnecessary_weight: float | None = None,
 ) -> dict[str, Tensor]:
     """Compute full Freshness Guardian reward.
 
@@ -87,12 +90,20 @@ def compute_reward(
     timing = markdown_timing_reward(markdown_applied, days_to_expiry, was_sold)
     fssai = fssai_violation_penalty(temperature_deviation_hours, fssai_logged)
     unnecessary = unnecessary_markdown_penalty(markdown_applied, days_to_expiry, predicted_quality)
+    weights = resolve_weights(
+        "freshness_guardian",
+        reward_config.WEIGHTS,
+        accuracy_weight=accuracy_weight,
+        timing_weight=timing_weight,
+        fssai_weight=fssai_weight,
+        unnecessary_weight=unnecessary_weight,
+    )
 
     total = (
-        accuracy_weight * accuracy
-        + timing_weight * timing
-        - fssai_weight * fssai
-        - unnecessary_weight * unnecessary
+        weights["accuracy_weight"] * accuracy
+        + weights["timing_weight"] * timing
+        - weights["fssai_weight"] * fssai
+        - weights["unnecessary_weight"] * unnecessary
     )
 
     return {

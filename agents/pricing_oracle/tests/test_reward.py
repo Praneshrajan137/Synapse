@@ -73,6 +73,13 @@ class TestElasticityAlignment:
         result = elasticity_alignment(mult, elast)
         assert result.item() == 0.0
 
+    def test_single_sample_returns_finite_zero(self) -> None:
+        mult = torch.tensor([1.5])
+        elast = torch.tensor([-1.0])
+        result = elasticity_alignment(mult, elast)
+        assert torch.isfinite(result)
+        assert result.item() == 0.0
+
 
 class TestEssentialCapViolation:
     def test_no_violation_within_cap(self) -> None:
