@@ -71,7 +71,28 @@ class TestSupplierTrustGNN:
         emb = model.get_supplier_embeddings(hetero_data)
         assert emb.shape == (5, 16)
 
-    def test_gradient_flow(self, hetero_data: HeteroData) -> None:
+    def test_supplier_loss_reaches_supplier_path(self, hetero_data: HeteroData) -> None:
+        model = SupplierTrustGNN(
+            supplier_in_dim=16,
+            sku_in_dim=12,
+            store_in_dim=10,
+            hidden_dim=32,
+            out_dim=16,
+        )
+        out = model(hetero_data)
+        loss = out["supplier"].sum()
+        loss.backward()
+        assert model.head.weight.grad is not None
+        assert model.projections["supplier"].weight.grad is not None
+        assert model.projections["sku"].weight.grad is not None
+        assert model.projections["darkstore"].weight.grad is not None
+        relation_grads = [
+            param.grad for name, param in model.named_parameters() if "orders_from" in name
+        ]
+        assert relation_grads
+        assert all(grad is not None for grad in relation_grads)
+
+    def test_all_output_gradient_flow(self, hetero_data: HeteroData) -> None:
         model = SupplierTrustGNN(
             supplier_in_dim=16,
             sku_in_dim=12,
@@ -81,11 +102,11 @@ class TestSupplierTrustGNN:
             num_layers=2,
         )
         out = model(hetero_data)
-        loss = out["supplier"].sum()
+        loss = sum(emb.sum() for emb in out.values())
         loss.backward()
-        for param in model.parameters():
+        for name, param in model.named_parameters():
             if param.requires_grad:
-                assert param.grad is not None
+                assert param.grad is not None, f"{name} did not receive gradient"
 
 
 class TestBayesianLeadTimeModel:

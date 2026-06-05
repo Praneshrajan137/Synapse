@@ -9,6 +9,9 @@ Reward: R = -carbon_per_delivery - 0.5*waste_rate + 0.3*prediction_accuracy
 from __future__ import annotations
 
 import structlog
+from synapse_common.reward_shadow import resolve_weights
+
+from agents.sustainability_agent.training import reward_config
 
 logger = structlog.get_logger(__name__)
 
@@ -60,9 +63,9 @@ def compute_reward(
     predicted_co2_kg: float,
     actual_co2_kg: float,
     baseline_co2_kg: float = 1.0,
-    carbon_weight: float = 1.0,
-    waste_weight: float = 0.5,
-    accuracy_weight: float = 0.3,
+    carbon_weight: float | None = None,
+    waste_weight: float | None = None,
+    accuracy_weight: float | None = None,
 ) -> dict[str, float]:
     """
     Compute the full Sustainability Agent reward.
@@ -75,8 +78,19 @@ def compute_reward(
     c_penalty = carbon_penalty(co2_kg, baseline_co2_kg)
     w_penalty = waste_rate_penalty(items_wasted, items_total)
     a_bonus = prediction_accuracy_bonus(predicted_co2_kg, actual_co2_kg)
+    weights = resolve_weights(
+        "sustainability_agent",
+        reward_config.WEIGHTS,
+        carbon_weight=carbon_weight,
+        waste_weight=waste_weight,
+        accuracy_weight=accuracy_weight,
+    )
 
-    total = -carbon_weight * c_penalty - waste_weight * w_penalty + accuracy_weight * a_bonus
+    total = (
+        -weights["carbon_weight"] * c_penalty
+        - weights["waste_weight"] * w_penalty
+        + weights["accuracy_weight"] * a_bonus
+    )
 
     logger.info(
         "reward_computed",

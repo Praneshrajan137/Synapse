@@ -55,7 +55,10 @@ class GatedResidualNetwork(nn.Module):
 
         hidden = self.fc1(x)
         if self.context_projection is not None and context is not None:
-            hidden = hidden + self.context_projection(context)
+            projected_context = self.context_projection(context)
+            while projected_context.dim() < hidden.dim():
+                projected_context = projected_context.unsqueeze(1)
+            hidden = hidden + projected_context
         hidden = self.elu(hidden)
         hidden = self.fc2(self.dropout(hidden))
 
@@ -96,7 +99,11 @@ class VariableSelectionNetwork(nn.Module):
         )
 
     def forward(self, inputs: list[Tensor], context: Tensor | None = None) -> tuple[Tensor, Tensor]:
-        processed = [grn(inp) for grn, inp in zip(self.variable_grns, inputs, strict=False)]
+        if len(inputs) != self.num_inputs:
+            raise ValueError(
+                f"VariableSelectionNetwork expected {self.num_inputs} inputs, got {len(inputs)}"
+            )
+        processed = [grn(inp) for grn, inp in zip(self.variable_grns, inputs, strict=True)]
         stacked = torch.stack(processed, dim=-2)
         flattened = stacked.reshape(*stacked.shape[:-2], -1)
 

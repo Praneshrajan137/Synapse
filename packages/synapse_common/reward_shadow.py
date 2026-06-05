@@ -16,16 +16,20 @@ overrides. See ADR-031 for the phased plan.
 from __future__ import annotations
 
 import math
-from typing import Any
+from typing import TYPE_CHECKING, Any, TypeAlias
 
 import structlog
 
 from synapse_common.metrics import REWARD_WEIGHT_DIVERGENCE_TOTAL
 
+if TYPE_CHECKING:
+    from collections.abc import Mapping
+
 logger = structlog.get_logger(__name__)
 
 
 _TOLERANCE = 1e-9
+WeightValue: TypeAlias = float | int | None
 
 
 def assert_shadow_match(agent: str, runtime: dict[str, float], spec: dict[str, float]) -> None:
@@ -98,3 +102,30 @@ def shadow_check(
         if isinstance(value, (int, float))
     }
     assert_shadow_match(agent, runtime, {k: float(v) for k, v in spec_weights.items()})
+
+
+def resolve_weights(
+    agent: str,
+    spec_weights: Mapping[str, float],
+    **runtime_kwargs: WeightValue,
+) -> dict[str, float]:
+    """Resolve optional runtime reward kwargs against spec-generated defaults.
+
+    ``None`` means "use the spec value" and therefore does not emit divergence.
+    Any explicit numeric override still wins at runtime but is compared against
+    the spec value, preserving ADR-031 shadow-mode observability.
+    """
+    spec = {key: float(value) for key, value in spec_weights.items()}
+    resolved: dict[str, float] = {}
+
+    for key, value in runtime_kwargs.items():
+        if value is None:
+            if key not in spec:
+                assert_shadow_match(agent, {key: math.nan}, spec)
+                raise KeyError(f"{agent} reward spec has no weight named {key!r}")
+            resolved[key] = spec[key]
+            continue
+        resolved[key] = float(value)
+
+    assert_shadow_match(agent, resolved, spec)
+    return resolved

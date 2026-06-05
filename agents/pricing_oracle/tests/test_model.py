@@ -108,9 +108,21 @@ class TestPricingMADDPG:
             assert (act > 0).all(), f"INV-PO-002 violated for {cat}"
 
     def test_soft_update(self, model: PricingMADDPG) -> None:
+        with torch.no_grad():
+            for param in model.actors[0].parameters():
+                param.add_(0.25)
+
+        source = [p.clone() for p in model.actors[0].parameters()]
         pre_target = [p.clone() for p in model.target_actors[0].parameters()]
         model.soft_update(tau=0.5)
-        for old, new in zip(pre_target, model.target_actors[0].parameters(), strict=True):
+        for src, old, new in zip(
+            source,
+            pre_target,
+            model.target_actors[0].parameters(),
+            strict=True,
+        ):
+            expected = 0.5 * src + 0.5 * old
+            assert torch.allclose(new, expected), "Target network must follow Polyak averaging"
             assert not torch.equal(old, new), "Target network should have changed after soft update"
 
     def test_model_summary(self, model: PricingMADDPG) -> None:

@@ -19,14 +19,12 @@ import time
 from typing import Any
 
 import pytest
-
 from synapse_common import budget, dbc, outbox, reward_shadow
 from synapse_common.metrics import (
     REWARD_WEIGHT_DIVERGENCE_TOTAL,
     TIER_BUDGET_EXCEEDED_TOTAL,
 )
 from synapse_common.models import DecisionTier
-
 
 # -----------------------------------------------------------------------------
 # helpers
@@ -176,8 +174,16 @@ class TestTierBudgetBrownoutFallback:
 class TestDbcReExports:
     def test_all_symbols_exposed(self) -> None:
         for name in (
-            "pre", "post", "inv", "raises", "ensure", "has", "chain",
-            "PreContractError", "PostContractError", "InvContractError",
+            "pre",
+            "post",
+            "inv",
+            "raises",
+            "ensure",
+            "has",
+            "chain",
+            "PreContractError",
+            "PostContractError",
+            "InvContractError",
         ):
             assert hasattr(dbc, name), f"dbc.{name} missing — __all__ list inconsistent"
 
@@ -203,6 +209,7 @@ class TestDbcReExports:
 
     def test_pre_post_chain(self) -> None:
         """Chain pre + post for one function — both must fire."""
+
         @dbc.pre(lambda x: x > 0)
         @dbc.post(lambda result: result > 0)
         def double(x: int) -> int:
@@ -233,42 +240,32 @@ class TestRewardShadowMatch:
     def test_value_mismatch_increments_counter(self) -> None:
         agent = "test_agent_mismatch"
         before = self._label_value(agent, "w1")
-        reward_shadow.assert_shadow_match(
-            agent, runtime={"w1": 0.6}, spec={"w1": 0.5}
-        )
+        reward_shadow.assert_shadow_match(agent, runtime={"w1": 0.6}, spec={"w1": 0.5})
         assert self._label_value(agent, "w1") == before + 1
 
     def test_missing_in_runtime_increments_counter(self) -> None:
         agent = "test_agent_missing_runtime"
         before = self._label_value(agent, "w_missing")
-        reward_shadow.assert_shadow_match(
-            agent, runtime={}, spec={"w_missing": 1.0}
-        )
+        reward_shadow.assert_shadow_match(agent, runtime={}, spec={"w_missing": 1.0})
         assert self._label_value(agent, "w_missing") == before + 1
 
     def test_missing_in_spec_increments_counter(self) -> None:
         agent = "test_agent_missing_spec"
         before = self._label_value(agent, "w_extra")
-        reward_shadow.assert_shadow_match(
-            agent, runtime={"w_extra": 0.4}, spec={}
-        )
+        reward_shadow.assert_shadow_match(agent, runtime={"w_extra": 0.4}, spec={})
         assert self._label_value(agent, "w_extra") == before + 1
 
     def test_non_finite_runtime_increments_counter(self) -> None:
         agent = "test_agent_nonfinite"
         before = self._label_value(agent, "w1")
-        reward_shadow.assert_shadow_match(
-            agent, runtime={"w1": math.inf}, spec={"w1": 0.5}
-        )
+        reward_shadow.assert_shadow_match(agent, runtime={"w1": math.inf}, spec={"w1": 0.5})
         assert self._label_value(agent, "w1") == before + 1
 
     def test_tolerance_window(self) -> None:
         """A diff below 1e-9 must NOT trigger divergence (floating-point safety)."""
         agent = "test_agent_tolerance"
         before = self._label_value(agent, "w1")
-        reward_shadow.assert_shadow_match(
-            agent, runtime={"w1": 0.5 + 1e-12}, spec={"w1": 0.5}
-        )
+        reward_shadow.assert_shadow_match(agent, runtime={"w1": 0.5 + 1e-12}, spec={"w1": 0.5})
         assert self._label_value(agent, "w1") == before, (
             "Counter incremented on a sub-tolerance difference"
         )
@@ -302,6 +299,22 @@ class TestRewardShadowConvenienceWrapper:
         after = _counter_value(REWARD_WEIGHT_DIVERGENCE_TOTAL, agent=agent, key="w1")
         assert after == before
 
+    def test_resolve_weights_uses_spec_default_for_none(self) -> None:
+        agent = "test_agent_resolve_default"
+        before = _counter_value(REWARD_WEIGHT_DIVERGENCE_TOTAL, agent=agent, key="w1")
+        resolved = reward_shadow.resolve_weights(agent, {"w1": 1.0}, w1=None)
+        after = _counter_value(REWARD_WEIGHT_DIVERGENCE_TOTAL, agent=agent, key="w1")
+        assert resolved == {"w1": 1.0}
+        assert after == before
+
+    def test_resolve_weights_observes_numeric_override(self) -> None:
+        agent = "test_agent_resolve_override"
+        before = _counter_value(REWARD_WEIGHT_DIVERGENCE_TOTAL, agent=agent, key="w1")
+        resolved = reward_shadow.resolve_weights(agent, {"w1": 1.0}, w1=2.0)
+        after = _counter_value(REWARD_WEIGHT_DIVERGENCE_TOTAL, agent=agent, key="w1")
+        assert resolved == {"w1": 2.0}
+        assert after == before + 1
+
 
 # =============================================================================
 # outbox.py — canonical_payload (the pure-function portion)
@@ -326,6 +339,7 @@ class TestCanonicalPayload:
     def test_non_json_native_coerced_via_default_str(self) -> None:
         """A UUID-like object is coerced to its str via default=str."""
         from uuid import UUID
+
         uid = UUID("11111111-1111-1111-1111-111111111111")
         result = outbox.canonical_payload({"id": uid})
         assert result == {"id": "11111111-1111-1111-1111-111111111111"}
