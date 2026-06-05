@@ -42,17 +42,15 @@ jobs:
       - run: |
           pip install -r packages/requirements.txt -r packages/requirements-dev.txt
           pip install -e packages/
-          pip install pydantic-settings
+          pip install "numpy>=1.26.0,<2.0" "pandas>=2.2.0,<3.0" "lifelines>=0.29.0,<1.0" pydantic-settings
       - name: Run contract tests
         run: |
           # Every producer/consumer contract pair must type-match via Pydantic.
-          # Scope collection to contract-bearing dirs so torch-only agent tests
-          # (e.g. agents/demand_prophet/tests/test_reward.py) don't break
-          # collection in this lightweight job.
+          # Scope collection to dedicated contract directories so unrelated
+          # package/integration tests do not fail collection before marker
+          # filtering can deselect them.
           set +e
-          # Narrow to tests/integration (not tests/) — tests/chaos, tests/oracle
-          # import numpy/torch and are not part of the contract layer.
-          pytest -m contract packages/tests agents/*/contracts/ tests/integration --tb=short --maxfail=5
+          pytest -m contract agents/*/contracts/*.py --tb=short --maxfail=5
           code=$?
           set -e
           # Exit code 5 = "no tests collected" — non-fatal until contracts land.

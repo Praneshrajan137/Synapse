@@ -42,6 +42,26 @@ OLLAMA_PREFILL_TOKENS = Histogram(
     buckets=[100, 500, 1000, 2000, 5000, 10000, 20000, 50000],
 )
 
+LLM_JUDGE_LATENCY_SECONDS = Histogram(
+    "synapse_llm_judge_latency_seconds",
+    "Live LLM-as-judge response latency by model",
+    ["model"],
+    buckets=[1.0, 2.5, 5.0, 10.0, 30.0, 60.0, 120.0, 300.0],
+)
+
+EVAL_TRACE_LATENCY = Histogram(
+    "synapse_eval_trace_latency_seconds",
+    "Golden-trace eval classifier latency by tier and city",
+    ["tier", "city"],
+    buckets=[0.001, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1.0],
+)
+
+EVAL_TRACE_OUTCOME_TOTAL = Counter(
+    "synapse_eval_trace_outcome_total",
+    "Golden-trace eval outcomes by tier, city, and result",
+    ["tier", "city", "outcome"],
+)
+
 KAFKA_PRODUCE_TOTAL = Counter(
     "synapse_kafka_produce_total",
     "Total Kafka messages produced",
