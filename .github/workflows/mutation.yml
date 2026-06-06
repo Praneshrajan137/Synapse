@@ -65,7 +65,7 @@ jobs:
                 --runner="${RUNNER}"
               mutmut_status=$?
               set -e
-              if [ "${mutmut_status}" -ne 0 ] && [ "${mutmut_status}" -ne 2 ]; then
+              if [ $((mutmut_status & 1)) -ne 0 ]; then
                 exit "${mutmut_status}"
               fi
               mutmut results
@@ -88,7 +88,7 @@ jobs:
               --runner="python -m pytest orchestrator/tests/ -x -q -k guardrail"
             mutmut_status=$?
             set -e
-            if [ "${mutmut_status}" -ne 0 ] && [ "${mutmut_status}" -ne 2 ]; then
+            if [ $((mutmut_status & 1)) -ne 0 ]; then
               exit "${mutmut_status}"
             fi
             mutmut results
@@ -108,7 +108,7 @@ jobs:
               --runner="python -m pytest orchestrator/tests/ -x -q -k audit"
             mutmut_status=$?
             set -e
-            if [ "${mutmut_status}" -ne 0 ] && [ "${mutmut_status}" -ne 2 ]; then
+            if [ $((mutmut_status & 1)) -ne 0 ]; then
               exit "${mutmut_status}"
             fi
             mutmut results
@@ -130,11 +130,14 @@ jobs:
     # pull_request. Parallel to frontend Stryker (C16, frontend.yml). The
     # CLAUDE.md thresholds (<15% rewards, <10% guardrails/audit) are enforced
     # by scripts/check_mutation_threshold.py — a regression on a PR fails CI
-    # before merge to main. Designed to complete in ~5-10 min on the PR diff
-    # (each target ~200 LOC; mutmut runs ~3 min per file).
+    # before merge to main. The PR gate mutates only lines changed by the PR
+    # via mutmut's patch-file mode; the scheduled/manual `mutation` job above
+    # remains the whole-file sweep for full reward/audit/guardrail debt.
+    # Sprint-9 reward-default work can legitimately touch six reward targets,
+    # so the timeout covers the full changed-target sweep.
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 45
     permissions:
       contents: read
       pull-requests: write
@@ -224,18 +227,37 @@ jobs:
               echo "WARN: no matching test file at ${test_path} -- failing mutation for safety"
               exit 1
             fi
+            cache_label=$(echo "${label}" | tr '/' '-')
+            patch_file=".mutmut-${cache_label}.patch"
+            git diff --unified=0 "${{ github.event.pull_request.base.sha }}" HEAD -- "${target}" > "${patch_file}"
+            if [ ! -s "${patch_file}" ]; then
+              echo "WARN: no patch hunks for ${target} -- failing mutation for safety"
+              exit 1
+            fi
             rm -rf .mutmut-cache
             set +e
             mutmut run \
               --paths-to-mutate="${target}" \
+              --use-patch-file="${patch_file}" \
               --tests-dir="$(dirname ${test_path})" \
               --runner="${runner}"
             mutmut_status=$?
             set -e
-            if [ "${mutmut_status}" -ne 0 ] && [ "${mutmut_status}" -ne 2 ]; then
+            if [ $((mutmut_status & 1)) -ne 0 ]; then
               exit "${mutmut_status}"
             fi
             mutmut results
             python scripts/check_mutation_threshold.py \
               --threshold "${threshold}" --label "${label}"
+            mv .mutmut-cache ".mutmut-cache-${cache_label}"
           done
+
+      - name: Upload mutation-fast results
+        if: always() && steps.targets.outputs.targets != ''
+        uses: actions/upload-artifact@v4
+        with:
+          name: mutation-fast-results
+          path: |
+            .mutmut-cache
+            .mutmut-cache-*
+          retention-days: 30
