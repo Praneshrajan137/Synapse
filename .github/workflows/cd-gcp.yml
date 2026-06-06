@@ -299,6 +299,7 @@ jobs:
             --tunnel-through-iap \
             --quiet \
             --command="set -e; cd ~/synapse && \
+                       gcloud --quiet auth configure-docker ${{ env.AR_HOST }} && \
                        export GITHUB_REPO='${{ github.repository }}' && \
                        export SYNAPSE_AR_REPO_URL='${{ env.AR_REPO_URL }}' && \
                        chmod +x verify_images.sh && \
