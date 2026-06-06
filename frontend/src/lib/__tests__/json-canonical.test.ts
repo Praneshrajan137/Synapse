@@ -79,12 +79,8 @@ describe("canonicalJson", () => {
   it("error message contains the offending value (kills L31 StringLiteral '``' mutation)", () => {
     // Survivor: the template string in the RangeError is replaced with empty
     // backticks. Asserting the message contains the value-name kills it.
-    expect(() => canonicalJson({ x: Number.POSITIVE_INFINITY })).toThrow(
-      /non-finite number/,
-    );
-    expect(() => canonicalJson({ x: Number.NEGATIVE_INFINITY })).toThrow(
-      /non-finite number/,
-    );
+    expect(() => canonicalJson({ x: Number.POSITIVE_INFINITY })).toThrow(/non-finite number/);
+    expect(() => canonicalJson({ x: Number.NEGATIVE_INFINITY })).toThrow(/non-finite number/);
   });
 
   it("unsupported types throw TypeError with type name in the message", () => {
@@ -104,8 +100,6 @@ describe("canonicalJson", () => {
   it("nested arrays of nulls remain literal nulls", () => {
     // Nested null at every level — kills any mutant that conflates null with
     // undefined or with empty object.
-    expect(canonicalJson([null, [null, null], { a: null }])).toBe(
-      '[null,[null,null],{"a":null}]',
-    );
+    expect(canonicalJson([null, [null, null], { a: null }])).toBe('[null,[null,null],{"a":null}]');
   });
 });

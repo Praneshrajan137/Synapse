@@ -103,11 +103,22 @@ export default {
           "0%": { opacity: "0", transform: "translateY(4px)" },
           "100%": { opacity: "1", transform: "translateY(0)" },
         },
+        // The Cortex Pulse: a calm systolic breath. Drives the ambient ring;
+        // duration is bound to the live decision cadence at runtime, falling
+        // back to --syn-motion-breath. Honoured only when motion is allowed.
+        "breathe": {
+          "0%, 100%": { transform: "scale(1)", opacity: "0.85" },
+          "50%": { transform: "scale(1.05)", opacity: "1" },
+        },
       },
       animation: {
         "pulse-confidence": "pulse-confidence 1.8s ease-in-out infinite",
         "shimmer": "shimmer 1.4s linear infinite",
         "fade-in": "fade-in var(--syn-motion-fast) var(--syn-ease-standard)",
+        "breathe": "breathe var(--syn-motion-breath) ease-in-out infinite",
+      },
+      backgroundImage: {
+        "gradient-confidence": "var(--gradient-confidence)",
       },
     },
   },

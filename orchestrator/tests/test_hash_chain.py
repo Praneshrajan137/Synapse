@@ -26,7 +26,6 @@ from orchestrator.audit.hash_chain import (
     make_canonical_row,
 )
 
-
 # -----------------------------------------------------------------------------
 # Constants used as inputs across multiple tests so a single test can pin them
 # -----------------------------------------------------------------------------
@@ -48,8 +47,13 @@ _AUDIT_TRACE = ["tier_1_routed"]
 class TestMakeCanonicalRow:
     def test_decision_id_serialized_as_string(self) -> None:
         row = make_canonical_row(
-            _DECISION_ID, _TIER, _SELECTED_ACTION, _PARETO_WEIGHTS,
-            _CONFIDENCE, _PROPOSALS, _AUDIT_TRACE,
+            _DECISION_ID,
+            _TIER,
+            _SELECTED_ACTION,
+            _PARETO_WEIGHTS,
+            _CONFIDENCE,
+            _PROPOSALS,
+            _AUDIT_TRACE,
         )
         assert row["decision_id"] == str(_DECISION_ID)
         assert isinstance(row["decision_id"], str)
@@ -58,19 +62,36 @@ class TestMakeCanonicalRow:
         """Per spec: confidence is rounded to 6 dp to keep the digest stable
         across float-format drift."""
         row = make_canonical_row(
-            _DECISION_ID, _TIER, _SELECTED_ACTION, _PARETO_WEIGHTS,
-            _CONFIDENCE, _PROPOSALS, _AUDIT_TRACE,
+            _DECISION_ID,
+            _TIER,
+            _SELECTED_ACTION,
+            _PARETO_WEIGHTS,
+            _CONFIDENCE,
+            _PROPOSALS,
+            _AUDIT_TRACE,
         )
         assert row["confidence"] == round(_CONFIDENCE, 6)
         assert row["confidence"] == 0.987654
 
     def test_all_required_keys_present(self) -> None:
         row = make_canonical_row(
-            _DECISION_ID, _TIER, _SELECTED_ACTION, _PARETO_WEIGHTS,
-            _CONFIDENCE, _PROPOSALS, _AUDIT_TRACE,
+            _DECISION_ID,
+            _TIER,
+            _SELECTED_ACTION,
+            _PARETO_WEIGHTS,
+            _CONFIDENCE,
+            _PROPOSALS,
+            _AUDIT_TRACE,
         )
-        expected = {"decision_id", "tier", "selected_action", "pareto_weights",
-                    "confidence", "proposals", "audit_trace"}
+        expected = {
+            "decision_id",
+            "tier",
+            "selected_action",
+            "pareto_weights",
+            "confidence",
+            "proposals",
+            "audit_trace",
+        }
         assert set(row.keys()) == expected, (
             f"Canonical row schema drifted: {row.keys()} vs {expected}; "
             f"E-S9-02 requires a migration when fields change"
@@ -80,8 +101,13 @@ class TestMakeCanonicalRow:
         """Round-tripping the row through json.dumps + json.loads must yield
         the same dict — i.e. no non-JSON-native types leak through."""
         row = make_canonical_row(
-            _DECISION_ID, _TIER, _SELECTED_ACTION, _PARETO_WEIGHTS,
-            _CONFIDENCE, _PROPOSALS, _AUDIT_TRACE,
+            _DECISION_ID,
+            _TIER,
+            _SELECTED_ACTION,
+            _PARETO_WEIGHTS,
+            _CONFIDENCE,
+            _PROPOSALS,
+            _AUDIT_TRACE,
         )
         roundtrip = json.loads(json.dumps(row, sort_keys=True, separators=(",", ":")))
         assert roundtrip == row
@@ -217,6 +243,7 @@ def test_no_collisions_across_distinct_inputs(seed: int) -> None:
     a small parametrised sweep. Not a cryptographic proof — a regression
     sentinel against an accidental constant-return mutant."""
     import random
+
     rng = random.Random(seed)
     seen: set[str] = set()
     for i in range(20):

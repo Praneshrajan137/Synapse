@@ -12,6 +12,7 @@ from collections import deque
 from typing import Any
 
 import numpy as np
+import numpy.typing as npt
 import structlog
 
 logger = structlog.get_logger(__name__)
@@ -46,7 +47,7 @@ class MetaRLAgent:
         self.weights = np.ones(n_objectives, dtype=np.float64)
         self.lr = lr
         self.outcome_history: deque[dict[str, float]] = deque(maxlen=history_size)
-        self.weight_history: deque[np.ndarray] = deque(maxlen=history_size)
+        self.weight_history: deque[npt.NDArray[np.float64]] = deque(maxlen=history_size)
 
     def get_weights(self, system_state: dict[str, Any]) -> dict[str, float]:
         """Return the current weight vector adjusted for system state."""
@@ -86,6 +87,6 @@ class MetaRLAgent:
             history_len=len(self.outcome_history),
         )
 
-    def get_raw_weights(self) -> np.ndarray:
+    def get_raw_weights(self) -> npt.NDArray[np.float64]:
         """Return raw weight array (for serialisation / checkpoint)."""
         return self.weights.copy()

@@ -45,10 +45,12 @@ export function KPIBand() {
         key: "confidence",
         label: "Avg confidence",
         value: confidenceAvg !== null ? `${(confidenceAvg * 100).toFixed(0)}%` : "—",
+        // Quiet by default (P3): healthy = neutral; colour only when the gate
+        // is at risk. The Pulse above already carries the live confidence temp.
         tone:
           confidenceAvg !== null
             ? confidenceAvg >= 0.9
-              ? ("ok" as const)
+              ? ("neutral" as const)
               : confidenceAvg >= 0.7
                 ? ("warn" as const)
                 : ("risk" as const)
@@ -58,13 +60,13 @@ export function KPIBand() {
         key: "escalations",
         label: "Escalations",
         value: fmt.compact(escalations),
-        tone: escalations === 0 ? ("ok" as const) : ("warn" as const),
+        tone: escalations === 0 ? ("neutral" as const) : ("warn" as const),
       },
       {
         key: "disruptions",
         label: "Active disruptions",
         value: fmt.compact(activeDisruptions),
-        tone: activeDisruptions === 0 ? ("ok" as const) : ("risk" as const),
+        tone: activeDisruptions === 0 ? ("neutral" as const) : ("risk" as const),
       },
       {
         key: "routes",

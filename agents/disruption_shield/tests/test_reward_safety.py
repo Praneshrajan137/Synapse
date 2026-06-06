@@ -89,6 +89,24 @@ def test_matching_kwargs_no_divergence() -> None:
     assert total == 0.0
 
 
+def test_none_defaults_use_configured_reward_formula() -> None:
+    result = compute_reward(
+        predicted_alert=torch.tensor([1.0, 1.0, 0.0, 0.0]),
+        actual_disruption=torch.tensor([1.0, 0.0, 1.0, 0.0]),
+        hours_before_impact=torch.tensor([36.0, 0.0, 0.0, 0.0]),
+        time_to_recovery_hours=torch.tensor([12.0, 48.0, 48.0, 36.0]),
+        playbook_applied=torch.tensor([1.0, 0.0, 0.0, 1.0]),
+    )
+    expected = (
+        reward_config.WEIGHTS["early_detection_weight"] * result["early_detection"]
+        - reward_config.WEIGHTS["false_positive_weight"] * result["false_positive"]
+        - reward_config.WEIGHTS["missed_disruption_weight"] * result["missed_disruption"]
+        + reward_config.WEIGHTS["recovery_speed_weight"] * result["recovery_speed"]
+    )
+
+    assert torch.isclose(result["total_reward"], expected).item()
+
+
 @pytest.mark.parametrize("seed", [0, 1])
 def test_no_alert_when_no_disruption_yields_zero_penalty(seed: int) -> None:
     torch.manual_seed(seed)

@@ -10,7 +10,10 @@ from __future__ import annotations
 
 import structlog
 import torch
+from synapse_common.reward_shadow import resolve_weights
 from torch import Tensor
+
+from agents.demand_prophet.training import reward_config
 
 logger = structlog.get_logger(__name__)
 
@@ -76,9 +79,9 @@ def compute_reward(
     lower_bound: Tensor,
     upper_bound: Tensor,
     event_signals: Tensor | None = None,
-    crps_weight: float = 1.0,
-    calibration_weight: float = 0.5,
-    event_weight: float = 0.1,
+    crps_weight: float | None = None,
+    calibration_weight: float | None = None,
+    event_weight: float | None = None,
 ) -> dict[str, Tensor]:
     """
     Compute the full Demand Prophet reward.
@@ -88,13 +91,24 @@ def compute_reward(
     """
     crps = crps_loss(predictions, actuals)
     cal_gap = calibration_gap(lower_bound, upper_bound, actuals)
+    weights = resolve_weights(
+        "demand_prophet",
+        reward_config.WEIGHTS,
+        crps_weight=crps_weight,
+        calibration_weight=calibration_weight,
+        event_weight=event_weight,
+    )
 
     evt_bonus = torch.tensor(0.0, device=predictions.device)
     if event_signals is not None:
         median_pred = predictions[:, 1]
         evt_bonus = event_bonus(median_pred, event_signals, actuals)
 
-    total = -crps_weight * crps - calibration_weight * cal_gap + event_weight * evt_bonus
+    total = (
+        -weights["crps_weight"] * crps
+        - weights["calibration_weight"] * cal_gap
+        + weights["event_weight"] * evt_bonus
+    )
 
     return {
         "total_reward": total,

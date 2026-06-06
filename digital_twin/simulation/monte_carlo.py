@@ -12,6 +12,7 @@ from concurrent.futures import ProcessPoolExecutor, as_completed
 from typing import Any
 
 import numpy as np
+import numpy.typing as npt
 import structlog
 
 from digital_twin.config import TwinConfig
@@ -150,7 +151,7 @@ class MonteCarloRunner:
             "spoilage_rate",
             "restocks_triggered",
         ]
-        arrays: dict[str, np.ndarray] = {
+        arrays: dict[str, npt.NDArray[np.float64]] = {
             k: np.array([r[k] for r in results], dtype=np.float64) for k in kpi_keys
         }
 

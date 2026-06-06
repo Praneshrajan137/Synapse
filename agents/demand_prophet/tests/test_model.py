@@ -85,6 +85,25 @@ class TestTFT:
         for h, tensor in outputs.items():
             assert tensor.shape == (batch_size, 3), f"Horizon {h}: expected (4, 3)"
 
+    def test_temporal_input_count_must_match_contract(self) -> None:
+        tft = TemporalFusionTransformer(
+            num_static=4,
+            num_time_known=6,
+            num_time_observed=3,
+            hidden_size=32,
+            num_heads=2,
+            graph_embed_dim=64,
+        )
+        batch_size = 4
+        seq_len = 30
+
+        static = [torch.randn(batch_size, 1) for _ in range(4)]
+        temporal = [torch.randn(batch_size, seq_len, 1) for _ in range(10)]
+        graph_emb = torch.randn(batch_size, 64)
+
+        with pytest.raises(ValueError, match="expected 9 inputs"):
+            tft(static, temporal, graph_emb)
+
 
 class TestHybrid:
     """Tests for the full HGT-TFT hybrid model."""

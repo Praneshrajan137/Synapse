@@ -43,6 +43,12 @@ jobs:
           pip install -r packages/requirements.txt -r packages/requirements-dev.txt
           pip install -e packages/
           pip install pydantic-settings
+          # packages/tests now includes training-truth + feature-store contract
+          # tests (merged from main, ADR-042) that import numpy / pandas at module
+          # level. Without these the lightweight contracts job dies at COLLECTION
+          # (pytest exit 2), which the exit-5 guard below does not absorb. Install
+          # the two libs so collection succeeds and `-m contract` selection works.
+          pip install numpy pandas
       - name: Run contract tests
         run: |
           # Every producer/consumer contract pair must type-match via Pydantic.

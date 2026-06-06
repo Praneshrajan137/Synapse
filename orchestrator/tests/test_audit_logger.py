@@ -25,13 +25,10 @@ from __future__ import annotations
 
 from contextlib import asynccontextmanager
 from typing import Any
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import MagicMock
 from uuid import UUID, uuid4
 
 import pytest
-
-from orchestrator.audit.hash_chain import GENESIS_HASH
-from orchestrator.audit.logger import AuditLogger
 from synapse_common.models import (
     AgentName,
     AgentProposal,
@@ -39,6 +36,8 @@ from synapse_common.models import (
     DecisionTier,
 )
 
+from orchestrator.audit.hash_chain import GENESIS_HASH
+from orchestrator.audit.logger import AuditLogger
 
 # -----------------------------------------------------------------------------
 # Fixtures: a mocked async_sessionmaker that hands out a captured session.
@@ -70,7 +69,7 @@ class _SessionRecorder:
     async def commit(self) -> None:
         self.commit_called = True
 
-    async def __aenter__(self) -> "_SessionRecorder":
+    async def __aenter__(self) -> _SessionRecorder:
         return self
 
     async def __aexit__(self, *_: Any) -> None:

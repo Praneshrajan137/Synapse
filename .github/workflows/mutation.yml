@@ -51,11 +51,23 @@ jobs:
             TEST_FILE="agents/${agent}/tests/test_reward.py"
             if [ -f "${REWARD_FILE}" ] && [ -f "${TEST_FILE}" ]; then
               echo "=== Mutating ${agent} rewards ==="
+              SAFETY_FILE="agents/${agent}/tests/test_reward_safety.py"
+              RUNNER="python -m pytest ${TEST_FILE}"
+              if [ -f "${SAFETY_FILE}" ]; then
+                RUNNER="${RUNNER} ${SAFETY_FILE}"
+              fi
+              RUNNER="${RUNNER} -x -q"
               rm -rf .mutmut-cache
+              set +e
               mutmut run \
                 --paths-to-mutate="${REWARD_FILE}" \
                 --tests-dir="agents/${agent}/tests/" \
-                --runner="python -m pytest ${TEST_FILE} -x -q"
+                --runner="${RUNNER}"
+              mutmut_status=$?
+              set -e
+              if [ $((mutmut_status & 1)) -ne 0 ]; then
+                exit "${mutmut_status}"
+              fi
               mutmut results
               python scripts/check_mutation_threshold.py \
                 --threshold 15 --label "rewards/${agent}"
@@ -69,10 +81,16 @@ jobs:
         run: |
           if [ -f "orchestrator/guardrails/rules.py" ]; then
             rm -rf .mutmut-cache
+            set +e
             mutmut run \
               --paths-to-mutate="orchestrator/guardrails/rules.py" \
               --tests-dir="orchestrator/tests/" \
               --runner="python -m pytest orchestrator/tests/ -x -q -k guardrail"
+            mutmut_status=$?
+            set -e
+            if [ $((mutmut_status & 1)) -ne 0 ]; then
+              exit "${mutmut_status}"
+            fi
             mutmut results
             python scripts/check_mutation_threshold.py \
               --threshold 10 --label "guardrails"
@@ -83,10 +101,16 @@ jobs:
         run: |
           if [ -f "orchestrator/audit/logger.py" ]; then
             rm -rf .mutmut-cache
+            set +e
             mutmut run \
               --paths-to-mutate="orchestrator/audit/logger.py" \
               --tests-dir="orchestrator/tests/" \
               --runner="python -m pytest orchestrator/tests/ -x -q -k audit"
+            mutmut_status=$?
+            set -e
+            if [ $((mutmut_status & 1)) -ne 0 ]; then
+              exit "${mutmut_status}"
+            fi
             mutmut results
             python scripts/check_mutation_threshold.py \
               --threshold 10 --label "audit"
@@ -99,6 +123,7 @@ jobs:
         with:
           name: mutation-results
           path: .mutmut-cache-*
+          include-hidden-files: true
           retention-days: 30
 
   mutation-fast:
@@ -106,11 +131,14 @@ jobs:
     # pull_request. Parallel to frontend Stryker (C16, frontend.yml). The
     # CLAUDE.md thresholds (<15% rewards, <10% guardrails/audit) are enforced
     # by scripts/check_mutation_threshold.py — a regression on a PR fails CI
-    # before merge to main. Designed to complete in ~5-10 min on the PR diff
-    # (each target ~200 LOC; mutmut runs ~3 min per file).
+    # before merge to main. The PR gate mutates only lines changed by the PR
+    # via mutmut's patch-file mode; the scheduled/manual `mutation` job above
+    # remains the whole-file sweep for full reward/audit/guardrail debt.
+    # Sprint-9 reward-default work can legitimately touch six reward targets,
+    # so the timeout covers the full changed-target sweep.
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 45
     permissions:
       contents: read
       pull-requests: write
@@ -128,6 +156,9 @@ jobs:
       - name: Install project dependencies
         run: |
           pip install -r packages/requirements.txt -r packages/requirements-dev.txt
+          # mutmut launches pytest in subprocesses; install the shared package
+          # exactly as ci.yml does so synapse_common imports survive collection.
+          pip install -e packages/
           pip install -r orchestrator/requirements.txt
           for req in agents/*/requirements.txt; do pip install -r "$req"; done
 
@@ -165,21 +196,30 @@ jobs:
               agents/*/training/rewards.py)
                 agent_dir=$(dirname $(dirname "${target}"))
                 test_path="${agent_dir}/tests/test_reward.py"
+                safety_path="${agent_dir}/tests/test_reward_safety.py"
+                runner="python -m pytest ${test_path}"
+                if [ -f "${safety_path}" ]; then
+                  runner="${runner} ${safety_path}"
+                fi
+                runner="${runner} -x -q"
                 threshold=15
                 label="rewards/$(basename ${agent_dir})"
                 ;;
               orchestrator/guardrails/rules.py)
                 test_path="orchestrator/tests/test_guardrails.py"
+                runner="python -m pytest ${test_path} -x -q"
                 threshold=10
                 label="guardrails/rules"
                 ;;
               orchestrator/audit/logger.py)
                 test_path="orchestrator/tests/test_audit_logger.py"
+                runner="python -m pytest ${test_path} -x -q"
                 threshold=10
                 label="audit/logger"
                 ;;
               orchestrator/audit/hash_chain.py)
                 test_path="orchestrator/tests/test_hash_chain.py"
+                runner="python -m pytest ${test_path} -x -q"
                 threshold=10
                 label="audit/hash_chain"
                 ;;
@@ -188,12 +228,38 @@ jobs:
               echo "WARN: no matching test file at ${test_path} -- failing mutation for safety"
               exit 1
             fi
+            cache_label=$(echo "${label}" | tr '/' '-')
+            patch_file=".mutmut-${cache_label}.patch"
+            git diff --unified=0 "${{ github.event.pull_request.base.sha }}" HEAD -- "${target}" > "${patch_file}"
+            if [ ! -s "${patch_file}" ]; then
+              echo "WARN: no patch hunks for ${target} -- failing mutation for safety"
+              exit 1
+            fi
             rm -rf .mutmut-cache
+            set +e
             mutmut run \
               --paths-to-mutate="${target}" \
+              --use-patch-file="${patch_file}" \
               --tests-dir="$(dirname ${test_path})" \
-              --runner="python -m pytest ${test_path} -x -q"
+              --runner="${runner}"
+            mutmut_status=$?
+            set -e
+            if [ $((mutmut_status & 1)) -ne 0 ]; then
+              exit "${mutmut_status}"
+            fi
             mutmut results
             python scripts/check_mutation_threshold.py \
               --threshold "${threshold}" --label "${label}"
+            mv .mutmut-cache ".mutmut-cache-${cache_label}"
           done
+
+      - name: Upload mutation-fast results
+        if: always() && steps.targets.outputs.targets != ''
+        uses: actions/upload-artifact@v4
+        with:
+          name: mutation-fast-results
+          path: |
+            .mutmut-cache
+            .mutmut-cache-*
+          include-hidden-files: true
+          retention-days: 30

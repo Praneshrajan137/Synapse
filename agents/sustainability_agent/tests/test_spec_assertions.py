@@ -16,7 +16,9 @@ def _valid_sustainability_report() -> dict:
         "confidence": 0.88,
         "pareto_weights": {"carbon": 0.4, "cost": 0.6},
         "provenance_chain": [
-            {"source": "twin"}, {"source": "feast"}, {"source": "neo4j"},
+            {"source": "twin"},
+            {"source": "feast"},
+            {"source": "neo4j"},
         ],
     }
 
