@@ -1084,6 +1084,54 @@ def check_confidence_basis_truth() -> CheckResult:
 
 
 # ---------------------------------------------------------------------------
+# C42: API decisions feed reads the SAME table the orchestrator writes
+# ---------------------------------------------------------------------------
+@register("C42", "Decisions read-path table == orchestrator write-path table")
+def check_audit_read_write_table_match() -> CheckResult:
+    """The live 503 (`column "phase_reached" does not exist`) was caused by the
+    API reading the dead ``audit_decisions`` table while the orchestrator writes
+    ``audit_consensus``. This gate fails if they ever diverge again.
+    """
+    decisions = ROOT / "api" / "routers" / "decisions.py"
+    models = ROOT / "orchestrator" / "audit" / "models.py"
+    if not decisions.exists() or not models.exists():
+        return CheckResult("C42", "Read/write table match", "SKIP", "source file missing")
+
+    dtext = decisions.read_text(encoding="utf-8")
+    mtext = models.read_text(encoding="utf-8")
+
+    # The orchestrator write target: __tablename__ of the consensus ORM row.
+    m = re.search(r'AuditConsensusRow.*?__tablename__\s*=\s*"([^"]+)"', mtext, re.DOTALL)
+    write_table = m.group(1) if m else None
+    if write_table is None:
+        return CheckResult("C42", "Read/write table match", "FAIL", "could not resolve AuditConsensusRow.__tablename__")
+
+    read_tables = set(re.findall(r"FROM\s+(audit_\w+)", dtext))
+    decision_reads = {t for t in read_tables if t in {"audit_decisions", "audit_consensus"}}
+
+    if "audit_decisions" in decision_reads:
+        return CheckResult(
+            "C42",
+            "Read/write table match",
+            "FAIL",
+            f"api/routers/decisions.py still reads dead 'audit_decisions'; orchestrator writes '{write_table}'",
+        )
+    if decision_reads == {write_table}:
+        return CheckResult(
+            "C42",
+            "Read/write table match",
+            "PASS",
+            f"decisions.py reads '{write_table}' == AuditConsensusRow.__tablename__",
+        )
+    return CheckResult(
+        "C42",
+        "Read/write table match",
+        "FAIL",
+        f"decisions.py decision reads {sorted(decision_reads)} != write table '{write_table}'",
+    )
+
+
+# ---------------------------------------------------------------------------
 # Main entry
 # ---------------------------------------------------------------------------
 def run(as_json: bool = False) -> int:

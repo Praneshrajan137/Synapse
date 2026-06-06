@@ -117,9 +117,13 @@ async def recent_decisions(
                     params.append(escalated)
                 params.append(limit)
                 cur.execute(
+                    # Read from audit_consensus — the table the orchestrator
+                    # actually writes (AuditConsensusRow). The legacy
+                    # audit_decisions table has no writer and lacks
+                    # phase_reached; reading it 503'd the live feed.
                     "SELECT id AS audit_id, decision_id, tier, phase_reached, "
                     "       confidence, escalated, city, created_at "
-                    "FROM audit_decisions "
+                    "FROM audit_consensus "
                     f"WHERE {' AND '.join(where)} "
                     "ORDER BY created_at DESC LIMIT %s",
                     tuple(params),
@@ -159,11 +163,14 @@ async def get_decision(
         try:
             with conn.cursor() as cur:
                 cur.execute(
+                    # audit_consensus names the JSONB column `proposals`
+                    # (the legacy table used a different name); see
+                    # AuditConsensusRow.
                     "SELECT id AS audit_id, decision_id, tier, phase_reached, "
                     "       confidence, escalated, city, "
-                    "       agent_proposals, selected_action, pareto_weights, "
+                    "       proposals, selected_action, pareto_weights, "
                     "       human_override, audit_trace, created_at "
-                    "FROM audit_decisions WHERE decision_id = %s",
+                    "FROM audit_consensus WHERE decision_id = %s",
                     (str(decision_id),),
                 )
                 row = cur.fetchone()
