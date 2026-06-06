@@ -51,11 +51,23 @@ jobs:
             TEST_FILE="agents/${agent}/tests/test_reward.py"
             if [ -f "${REWARD_FILE}" ] && [ -f "${TEST_FILE}" ]; then
               echo "=== Mutating ${agent} rewards ==="
+              SAFETY_FILE="agents/${agent}/tests/test_reward_safety.py"
+              RUNNER="python -m pytest ${TEST_FILE}"
+              if [ -f "${SAFETY_FILE}" ]; then
+                RUNNER="${RUNNER} ${SAFETY_FILE}"
+              fi
+              RUNNER="${RUNNER} -x -q"
               rm -rf .mutmut-cache
+              set +e
               mutmut run \
                 --paths-to-mutate="${REWARD_FILE}" \
                 --tests-dir="agents/${agent}/tests/" \
-                --runner="python -m pytest ${TEST_FILE} -x -q"
+                --runner="${RUNNER}"
+              mutmut_status=$?
+              set -e
+              if [ "${mutmut_status}" -ne 0 ] && [ "${mutmut_status}" -ne 2 ]; then
+                exit "${mutmut_status}"
+              fi
               mutmut results
               python scripts/check_mutation_threshold.py \
                 --threshold 15 --label "rewards/${agent}"
@@ -69,10 +81,16 @@ jobs:
         run: |
           if [ -f "orchestrator/guardrails/rules.py" ]; then
             rm -rf .mutmut-cache
+            set +e
             mutmut run \
               --paths-to-mutate="orchestrator/guardrails/rules.py" \
               --tests-dir="orchestrator/tests/" \
               --runner="python -m pytest orchestrator/tests/ -x -q -k guardrail"
+            mutmut_status=$?
+            set -e
+            if [ "${mutmut_status}" -ne 0 ] && [ "${mutmut_status}" -ne 2 ]; then
+              exit "${mutmut_status}"
+            fi
             mutmut results
             python scripts/check_mutation_threshold.py \
               --threshold 10 --label "guardrails"
@@ -83,10 +101,16 @@ jobs:
         run: |
           if [ -f "orchestrator/audit/logger.py" ]; then
             rm -rf .mutmut-cache
+            set +e
             mutmut run \
               --paths-to-mutate="orchestrator/audit/logger.py" \
               --tests-dir="orchestrator/tests/" \
               --runner="python -m pytest orchestrator/tests/ -x -q -k audit"
+            mutmut_status=$?
+            set -e
+            if [ "${mutmut_status}" -ne 0 ] && [ "${mutmut_status}" -ne 2 ]; then
+              exit "${mutmut_status}"
+            fi
             mutmut results
             python scripts/check_mutation_threshold.py \
               --threshold 10 --label "audit"
@@ -168,21 +192,30 @@ jobs:
               agents/*/training/rewards.py)
                 agent_dir=$(dirname $(dirname "${target}"))
                 test_path="${agent_dir}/tests/test_reward.py"
+                safety_path="${agent_dir}/tests/test_reward_safety.py"
+                runner="python -m pytest ${test_path}"
+                if [ -f "${safety_path}" ]; then
+                  runner="${runner} ${safety_path}"
+                fi
+                runner="${runner} -x -q"
                 threshold=15
                 label="rewards/$(basename ${agent_dir})"
                 ;;
               orchestrator/guardrails/rules.py)
                 test_path="orchestrator/tests/test_guardrails.py"
+                runner="python -m pytest ${test_path} -x -q"
                 threshold=10
                 label="guardrails/rules"
                 ;;
               orchestrator/audit/logger.py)
                 test_path="orchestrator/tests/test_audit_logger.py"
+                runner="python -m pytest ${test_path} -x -q"
                 threshold=10
                 label="audit/logger"
                 ;;
               orchestrator/audit/hash_chain.py)
                 test_path="orchestrator/tests/test_hash_chain.py"
+                runner="python -m pytest ${test_path} -x -q"
                 threshold=10
                 label="audit/hash_chain"
                 ;;
@@ -192,10 +225,16 @@ jobs:
               exit 1
             fi
             rm -rf .mutmut-cache
+            set +e
             mutmut run \
               --paths-to-mutate="${target}" \
               --tests-dir="$(dirname ${test_path})" \
-              --runner="python -m pytest ${test_path} -x -q"
+              --runner="${runner}"
+            mutmut_status=$?
+            set -e
+            if [ "${mutmut_status}" -ne 0 ] && [ "${mutmut_status}" -ne 2 ]; then
+              exit "${mutmut_status}"
+            fi
             mutmut results
             python scripts/check_mutation_threshold.py \
               --threshold "${threshold}" --label "${label}"
