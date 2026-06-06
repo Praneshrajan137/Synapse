@@ -123,6 +123,7 @@ jobs:
         with:
           name: mutation-results
           path: .mutmut-cache-*
+          include-hidden-files: true
           retention-days: 30
 
   mutation-fast:
@@ -260,4 +261,5 @@ jobs:
           path: |
             .mutmut-cache
             .mutmut-cache-*
+          include-hidden-files: true
           retention-days: 30
