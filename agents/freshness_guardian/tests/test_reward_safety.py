@@ -74,6 +74,26 @@ def test_matching_kwargs_no_divergence() -> None:
     assert total == 0.0
 
 
+def test_none_defaults_use_configured_reward_formula() -> None:
+    result = compute_reward(
+        predicted_quality=torch.tensor([0.9, 0.6, 0.8]),
+        actual_quality=torch.tensor([0.8, 0.5, 0.7]),
+        markdown_applied=torch.tensor([0.0, 1.0, 1.0]),
+        days_to_expiry=torch.tensor([9.0, 2.0, 0.0]),
+        was_sold=torch.tensor([1.0, 1.0, 0.0]),
+        temperature_deviation_hours=torch.tensor([0.0, 5.0, 6.0]),
+        fssai_logged=torch.tensor([1.0, 0.0, 1.0]),
+    )
+    expected = (
+        reward_config.WEIGHTS["accuracy_weight"] * result["freshness_accuracy"]
+        + reward_config.WEIGHTS["timing_weight"] * result["markdown_timing"]
+        - reward_config.WEIGHTS["fssai_weight"] * result["fssai_violation"]
+        - reward_config.WEIGHTS["unnecessary_weight"] * result["unnecessary_markdown"]
+    )
+
+    assert torch.isclose(result["total_reward"], expected).item()
+
+
 def test_unnecessary_weight_is_a_penalty_not_a_bonus() -> None:
     """unnecessary_weight enters the reward with a minus sign — it cannot be
     weaponised into a bonus by inverting its sign in spec.yaml without

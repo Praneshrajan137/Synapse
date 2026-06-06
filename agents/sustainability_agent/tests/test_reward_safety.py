@@ -90,3 +90,21 @@ def test_matching_kwargs_no_divergence() -> None:
         if s.labels.get("agent") == "sustainability_agent" and s.name.endswith("_total")
     )
     assert total == 0.0
+
+
+def test_none_defaults_use_configured_reward_formula() -> None:
+    result = compute_reward(
+        co2_kg=4.0,
+        items_wasted=5,
+        items_total=50,
+        predicted_co2_kg=3.8,
+        actual_co2_kg=4.0,
+        baseline_co2_kg=2.0,
+    )
+    expected = (
+        -reward_config.WEIGHTS["carbon_weight"] * result["carbon_penalty"]
+        - reward_config.WEIGHTS["waste_weight"] * result["waste_rate"]
+        + reward_config.WEIGHTS["accuracy_weight"] * result["prediction_accuracy"]
+    )
+
+    assert abs(result["total_reward"] - expected) < 1e-9

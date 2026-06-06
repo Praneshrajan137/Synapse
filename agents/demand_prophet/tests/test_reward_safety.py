@@ -145,6 +145,34 @@ def test_matching_kwargs_keep_divergence_at_zero() -> None:
     assert total == 0.0, f"Divergence counter should be 0 with matching weights, was {total}"
 
 
+def test_none_defaults_use_configured_reward_formula() -> None:
+    """None-sentinel defaults must resolve to reward_config.WEIGHTS in the total."""
+    actuals = torch.tensor([10.0, 12.0, 8.0])
+    predictions = torch.tensor(
+        [
+            [8.0, 10.0, 12.0],
+            [10.0, 12.0, 14.0],
+            [6.0, 8.0, 10.0],
+        ]
+    )
+    event_signals = torch.tensor([1.0, 0.0, 1.0])
+
+    result = compute_reward(
+        predictions=predictions,
+        actuals=actuals,
+        lower_bound=predictions[:, 0],
+        upper_bound=predictions[:, 2],
+        event_signals=event_signals,
+    )
+    expected = (
+        -reward_config.WEIGHTS["crps_weight"] * result["crps_loss"]
+        - reward_config.WEIGHTS["calibration_weight"] * result["calibration_gap"]
+        + reward_config.WEIGHTS["event_weight"] * result["event_bonus"]
+    )
+
+    assert torch.isclose(result["total_reward"], expected).item()
+
+
 # --- counterfactual 6: reward sign — better predictions yield higher reward --
 
 
