@@ -34,6 +34,29 @@ if [ -z "$AR_REPO_URL" ]; then
     exit 2
 fi
 
+# Self-provision cosign if absent. The VM is meant to get it from
+# setup_gcp_vm.sh, but if that never ran (or the VM was rebuilt) the binary is
+# missing and EVERY image "fails" verification — a false negative that silently
+# blocked all CD deploys (the live stack was stuck on a 7h-old manual build).
+# Installing here (idempotent) makes the supply-chain gate self-healing.
+COSIGN_VERSION="v2.4.1"
+if ! command -v cosign >/dev/null 2>&1; then
+    echo "cosign not found on VM — installing ${COSIGN_VERSION} (idempotent)…"
+    COSIGN_ARCH="$(uname -m)"
+    case "$COSIGN_ARCH" in
+        x86_64) COSIGN_ARCH="amd64" ;;
+        aarch64|arm64) COSIGN_ARCH="arm64" ;;
+    esac
+    if sudo curl -fsSL -o /usr/local/bin/cosign \
+        "https://github.com/sigstore/cosign/releases/download/${COSIGN_VERSION}/cosign-linux-${COSIGN_ARCH}" \
+        && sudo chmod +x /usr/local/bin/cosign; then
+        echo "  installed: $(cosign version 2>/dev/null | head -1 || echo cosign)"
+    else
+        echo "ERROR: cosign install failed — cannot verify supply chain." >&2
+        exit 3
+    fi
+fi
+
 # Images we expect cd-gcp.yml to push + sign. Keep in lockstep with the matrix
 # in .github/workflows/cd-gcp.yml — verify_claims.py check C26 enforces this.
 # The `frontend` image was missing pre-ADR-039; its omission was the silent
@@ -65,13 +88,16 @@ failures=0
 for img in "${IMAGES[@]}"; do
     image_ref="${AR_REPO_URL}/${img}:latest"
     printf '  %-22s ' "$img"
-    if cosign verify \
+    # Capture cosign output so a failure is diagnosable from the CD log alone
+    # (the previous `>/dev/null 2>&1` hid `command not found` for weeks).
+    if verify_out="$(cosign verify \
         --certificate-identity-regexp "$IDENTITY_REGEXP" \
         --certificate-oidc-issuer "$OIDC_ISSUER" \
-        "$image_ref" >/dev/null 2>&1; then
+        "$image_ref" 2>&1)"; then
         echo "OK"
     else
         echo "FAIL"
+        echo "$verify_out" | tail -3 | sed 's/^/      /'
         failures=$((failures + 1))
     fi
 done
