@@ -107,8 +107,14 @@ class TestRuleCatalogueStructure:
 
     def test_essential_categories_exact_membership(self) -> None:
         expected = {
-            "rice", "dal", "milk", "bread", "eggs",
-            "cooking_oil", "vegetables", "fruits",
+            "rice",
+            "dal",
+            "milk",
+            "bread",
+            "eggs",
+            "cooking_oil",
+            "vegetables",
+            "fruits",
         }
         assert set(ESSENTIAL_CATEGORIES) == expected
 
@@ -126,8 +132,11 @@ class TestRuleCatalogueStructure:
 
     def test_hard_guardrail_keys_complete(self) -> None:
         assert set(HARD_GUARDRAILS.keys()) == {
-            "essential_price_cap", "rider_shift_limit",
-            "service_level_minimum", "privacy_boundary", "confidence_floor",
+            "essential_price_cap",
+            "rider_shift_limit",
+            "service_level_minimum",
+            "privacy_boundary",
+            "confidence_floor",
         }
 
 
@@ -235,14 +244,18 @@ class TestEarlyExitContract:
 
 class TestMultiViolationComposite:
     def test_two_routing_actions_one_violates(self, engine: GuardrailEngine) -> None:
-        d = _decision(routing_actions=[
-            {"rider_shift_hours": 8}, {"rider_shift_hours": 12},
-        ])
+        d = _decision(
+            routing_actions=[
+                {"rider_shift_hours": 8},
+                {"rider_shift_hours": 12},
+            ]
+        )
         passed, _ = engine.validate_decision(d)
         assert passed is False
 
     def test_clip_only_passes_with_violation_recorded(
-        self, engine: GuardrailEngine,
+        self,
+        engine: GuardrailEngine,
     ) -> None:
         """When the only violation is a CLIP, `passed` is True but the
         violations list is non-empty. Pin the dual return."""

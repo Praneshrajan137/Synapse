@@ -83,3 +83,23 @@ def test_matching_kwargs_no_divergence() -> None:
         if s.labels.get("agent") == "routing_navigator" and s.name.endswith("_total")
     )
     assert total == 0.0
+
+
+def test_none_defaults_use_configured_reward_formula() -> None:
+    result = compute_reward(
+        route_times=torch.tensor([20.0, 25.0, 30.0]),
+        baseline_times=torch.tensor([30.0, 30.0, 30.0]),
+        route_fuel=torch.tensor([1.0, 1.5, 2.0]),
+        baseline_fuel=torch.tensor([2.0, 2.0, 2.0]),
+        rider_earnings=torch.tensor([100.0, 110.0, 90.0]),
+        freshness_violations=1,
+        total_routes=10,
+    )
+    expected = (
+        reward_config.WEIGHTS["w_time"] * result["time_saved"]
+        + reward_config.WEIGHTS["w_fuel"] * result["fuel_saved"]
+        + reward_config.WEIGHTS["w_freshness"] * result["freshness_score"]
+        + reward_config.WEIGHTS["w_fairness"] * result["fairness_score"]
+    )
+
+    assert torch.isclose(result["total_reward"], expected).item()

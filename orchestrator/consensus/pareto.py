@@ -10,6 +10,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any
 
 import numpy as np
+import numpy.typing as npt
 import structlog
 from pymoo.algorithms.moo.nsga2 import NSGA2
 from pymoo.core.problem import Problem
@@ -17,6 +18,10 @@ from pymoo.optimize import minimize
 
 if TYPE_CHECKING:
     from synapse_common.models import AgentProposal
+
+# Float matrices/vectors throughout the NSGA-II arbitration. Parametrised so
+# `mypy --strict` is satisfied (bare `np.ndarray` is a missing-type-args error).
+FloatArray = npt.NDArray[np.float64]
 
 logger = structlog.get_logger(__name__)
 
@@ -54,7 +59,7 @@ _AGENT_TO_OBJECTIVE: dict[str, str] = {
 }
 
 
-def _build_utility_matrix(proposals: list[AgentProposal]) -> np.ndarray:
+def _build_utility_matrix(proposals: list[AgentProposal]) -> FloatArray:
     """Build an (N x 8) utility matrix from agent proposals.
 
     Each row is one proposal evaluated against all 8 objectives.  The diagonal
@@ -75,7 +80,7 @@ def _build_utility_matrix(proposals: list[AgentProposal]) -> np.ndarray:
 class _WeightOptProblem(Problem):  # type: ignore[misc]  # pymoo ships no type stubs
     """Optimise the 8-D weight vector that blends proposal utilities."""
 
-    def __init__(self, utility_matrix: np.ndarray) -> None:
+    def __init__(self, utility_matrix: FloatArray) -> None:
         super().__init__(
             n_var=8,
             n_obj=8,
@@ -87,7 +92,7 @@ class _WeightOptProblem(Problem):  # type: ignore[misc]  # pymoo ships no type s
 
     def _evaluate(
         self,
-        X: np.ndarray,  # noqa: N803
+        X: FloatArray,  # noqa: N803
         out: dict[str, Any],
         *args: Any,
         **kwargs: Any,
@@ -115,8 +120,8 @@ def run_pareto_arbitration(
     algorithm = NSGA2(pop_size=pop_size)
     result = minimize(problem, algorithm, ("n_gen", n_gen), seed=42, verbose=False)
 
-    pareto_front: np.ndarray = result.F
-    pareto_solutions: np.ndarray = result.X
+    pareto_front: FloatArray = result.F
+    pareto_solutions: FloatArray = result.X
 
     # Knee-point selection: weighted distance to ideal
     ideal = pareto_front.min(axis=0)

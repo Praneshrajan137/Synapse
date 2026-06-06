@@ -20,6 +20,12 @@ jobs:
       - name: Install dependencies
         run: |
           pip install -r packages/requirements.txt -r packages/requirements-dev.txt
+          # Install synapse_common as an editable package so `import
+          # synapse_common.*` resolves in the unit-test step (orchestrator/tests
+          # conftest imports it). pytest's pythonpath=["."] does not expose
+          # packages/synapse_common, and the contracts job already relies on this
+          # editable install — mirror it here.
+          pip install -e packages/
           pip install -r orchestrator/requirements.txt
           pip install jsonschema pyyaml
           # Sprint 13 §Phase 1.3: install agent deps so agents/*/tests/ can be collected
@@ -31,6 +37,23 @@ jobs:
           # sprint-3 bundle which the agents/*/ glob above does NOT match.
           pip install simpy sse-starlette
           pip install -r agents/requirements-sprint3.txt
+          # mypy imports `pathspec.patterns.gitignore` (pathspec>=0.10.0). One of
+          # the requirement sets above transitively pins an older pathspec, which
+          # makes mypy crash on import. Force the compatible version LAST so it
+          # cannot be downgraded before the MyPy steps run.
+          pip install --upgrade "pathspec>=0.12.1"
+          # fastapi 0.111.0 passes `on_startup` to starlette's Router (removed in
+          # starlette 0.38). `sse-starlette` above pulls a newer starlette that
+          # re-breaks api/ imports despite the orchestrator pin. Force the
+          # compatible starlette LAST so api/tests collect. (`!=` keeps pip from
+          # also yanking fastapi.)
+          pip install "starlette>=0.37.2,<0.38.0"
+          # api/ handlers lazily `import psycopg2` inside their DB try-blocks.
+          # Without the driver the import raises before the POSTGRES_DSN
+          # fail-fast, so api/tests/test_decisions_auth.py sees "No module named
+          # 'psycopg2'" instead of the expected "POSTGRES_DSN not configured".
+          # psycopg2-binary is the dev/test variant (E-S5-09).
+          pip install psycopg2-binary
       - name: Ruff lint
         run: ruff check packages/synapse_common/ agents/ orchestrator/ --output-format=github
       - name: Ruff format check

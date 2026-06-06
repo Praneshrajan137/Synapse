@@ -12,15 +12,37 @@ from agents.disruption_shield.inference.pipeline import (
     DisruptionRequest,
     DisruptionShieldPipeline,
 )
+from agents.disruption_shield.inference.playbook_retriever import PlaybookMatch
 from agents.disruption_shield.models.anomaly_ensemble import AnomalyEnsemble
 from agents.disruption_shield.models.reasoning import DeepSeekReasoner
 
 
+class StaticPlaybookRetriever:
+    def retrieve(self, query: str, top_k: int | None = None) -> list[PlaybookMatch]:
+        del query
+        limit = top_k or 1
+        return [
+            PlaybookMatch(
+                id="PB-TEST-001",
+                title="Hermetic disruption recovery",
+                relevance_score=0.75,
+                content="Use deterministic test playbook.",
+                metadata={"test": True},
+            )
+        ][:limit]
+
+
+def _pipeline() -> DisruptionShieldPipeline:
+    return DisruptionShieldPipeline(
+        ensemble=AnomalyEnsemble(),
+        reasoner=DeepSeekReasoner(ollama_base_url="http://localhost:11434"),
+        retriever=StaticPlaybookRetriever(),
+    )
+
+
 @pytest.fixture
 def pipeline() -> DisruptionShieldPipeline:
-    ensemble = AnomalyEnsemble()
-    reasoner = DeepSeekReasoner(ollama_base_url="http://localhost:11434")
-    return DisruptionShieldPipeline(ensemble=ensemble, reasoner=reasoner, retriever=None)
+    return _pipeline()
 
 
 @pytest.mark.metamorphic
@@ -40,11 +62,7 @@ class TestMetamorphicRelations:
         )
 
         scaled_features = base_features * 2.0
-        pipeline_2 = DisruptionShieldPipeline(
-            ensemble=AnomalyEnsemble(),
-            reasoner=DeepSeekReasoner(ollama_base_url="http://localhost:11434"),
-            retriever=None,
-        )
+        pipeline_2 = _pipeline()
         result_2x = pipeline_2.detect(
             DisruptionRequest(
                 node_ids=[f"NODE-{i}" for i in range(5)],
@@ -90,11 +108,7 @@ class TestMetamorphicRelations:
             )
         )
 
-        pipeline_2 = DisruptionShieldPipeline(
-            ensemble=AnomalyEnsemble(),
-            reasoner=DeepSeekReasoner(ollama_base_url="http://localhost:11434"),
-            retriever=None,
-        )
+        pipeline_2 = _pipeline()
         result_large = pipeline_2.detect(
             DisruptionRequest(
                 node_ids=[f"NODE-{i}" for i in range(5)],

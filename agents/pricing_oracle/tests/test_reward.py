@@ -52,6 +52,13 @@ class TestRevenueComponent:
         rev = revenue_component(mult, base, demand)
         assert rev > 0
 
+    def test_dimensionless_baseline_weighted_revenue(self) -> None:
+        mult = torch.tensor([[1.5, 1.0], [0.5, 1.0]])
+        base = torch.tensor([[100.0, 100.0], [50.0, 150.0]])
+        demand = torch.tensor([[2.0, 2.0], [4.0, 4.0]])
+        rev = revenue_component(mult, base, demand)
+        assert torch.isclose(rev, torch.tensor(1.0625), atol=1e-6).item()
+
     def test_zero_demand_zero_revenue(self) -> None:
         mult = torch.tensor([1.5, 1.2])
         base = torch.tensor([100.0, 50.0])
@@ -73,6 +80,18 @@ class TestElasticityAlignment:
         result = elasticity_alignment(mult, elast)
         assert result.item() == 0.0
 
+    def test_population_correlation_penalizes_matching_elasticity_order(self) -> None:
+        mult = torch.tensor([1.0, 2.0, 3.0])
+        elast = torch.tensor([-1.0, -2.0, -3.0])
+        result = elasticity_alignment(mult, elast)
+        assert torch.isclose(result, torch.tensor(-1.0), atol=1e-6).item()
+
+    def test_population_correlation_rewards_inverse_elasticity_order(self) -> None:
+        mult = torch.tensor([1.0, 2.0, 3.0])
+        elast = torch.tensor([-3.0, -2.0, -1.0])
+        result = elasticity_alignment(mult, elast)
+        assert torch.isclose(result, torch.tensor(1.0), atol=1e-6).item()
+
     def test_single_sample_returns_finite_zero(self) -> None:
         mult = torch.tensor([1.5])
         elast = torch.tensor([-1.0])
@@ -93,6 +112,12 @@ class TestEssentialCapViolation:
         is_essential = torch.tensor([1.0, 1.0])
         violation = essential_cap_violation(mult, is_essential)
         assert violation.item() > 0.0
+
+    def test_cap_violation_uses_catastrophic_units(self) -> None:
+        mult = torch.tensor([1.3, 1.56, 2.6, 0.9])
+        is_essential = torch.tensor([1.0, 1.0, 0.0, 1.0])
+        violation = essential_cap_violation(mult, is_essential)
+        assert torch.isclose(violation, torch.tensor(1.2), atol=1e-6).item()
 
     def test_non_essential_not_penalized(self) -> None:
         mult = torch.tensor([2.0, 2.5])
@@ -134,6 +159,12 @@ class TestCompetitorGap:
         comp = torch.tensor([1.0, 1.0])
         gap = competitor_gap(mult, comp)
         assert gap.item() > 0.0
+
+    def test_gap_is_one_sided_mean_excess(self) -> None:
+        mult = torch.tensor([1.5, 1.0, 0.7])
+        comp = torch.tensor([1.0, 1.2, 0.5])
+        gap = competitor_gap(mult, comp)
+        assert torch.isclose(gap, torch.tensor(0.7 / 3.0), atol=1e-6).item()
 
 
 class TestComputeReward:
@@ -177,3 +208,39 @@ class TestComputeReward:
         )
 
         assert result["competitor_gap"].item() == 0.0
+
+    def test_default_weights_use_exact_dimensionless_components(self) -> None:
+        mult = torch.tensor([1.0, 2.0, 3.0])
+        base = torch.tensor([10.0, 10.0, 10.0])
+        demand = torch.tensor([1.0, 1.0, 1.0])
+        elast = torch.tensor([-3.0, -2.0, -1.0])
+        is_essential = torch.tensor([0.0, 0.0, 0.0])
+        comp = torch.tensor([0.5, 2.5, 2.0])
+
+        result = compute_reward(
+            multipliers=mult,
+            base_prices=base,
+            demand_quantities=demand,
+            elasticity_estimates=elast,
+            is_essential=is_essential,
+            competitor_multipliers=comp,
+        )
+
+        assert torch.isclose(result["revenue"], torch.tensor(2.0), atol=1e-6).item()
+        assert torch.isclose(result["elasticity_alignment"], torch.tensor(1.0), atol=1e-6).item()
+        assert torch.isclose(result["competitor_gap"], torch.tensor(0.5), atol=1e-6).item()
+        assert torch.isclose(result["total_reward"], torch.tensor(1.5), atol=1e-6).item()
+
+    def test_essential_cap_penalty_dominates_normalized_revenue(self) -> None:
+        result = compute_reward(
+            multipliers=torch.tensor([1.31, 1.0]),
+            base_prices=torch.tensor([100.0, 100.0]),
+            demand_quantities=torch.tensor([1.0, 1.0]),
+            elasticity_estimates=torch.tensor([-1.0, -1.0]),
+            is_essential=torch.tensor([1.0, 0.0]),
+        )
+
+        assert torch.isclose(
+            result["essential_cap_violation"], torch.tensor(1.0076923), atol=1e-6
+        ).item()
+        assert torch.isclose(result["total_reward"], torch.tensor(-3.8834615), atol=1e-6).item()

@@ -1,5 +1,6 @@
 import { ConnectionPill } from "@ds/compounds";
 import { useFirehose } from "@hooks/use-firehose";
+import { CortexBanner } from "./CortexBanner";
 import { DecisionFirehoseTail } from "./DecisionFirehoseTail";
 import { DisruptionBanner } from "./DisruptionBanner";
 import { KPIBand } from "./KPIBand";
@@ -32,6 +33,8 @@ export function MissionControl() {
       </header>
 
       <DisruptionBanner />
+
+      <CortexBanner />
 
       <KPIBand />
 

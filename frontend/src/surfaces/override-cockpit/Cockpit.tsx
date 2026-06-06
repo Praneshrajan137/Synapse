@@ -5,6 +5,7 @@ import { useWs } from "@hooks/use-ws";
 import { useEscalationStore } from "@state/escalation.store";
 import { useEffect, useMemo, useState } from "react";
 import { AuditPreview } from "./AuditPreview";
+import { CalibrationMirror } from "./CalibrationMirror";
 import { EscalationCard } from "./EscalationCard";
 import { EscalationQueue } from "./EscalationQueue";
 import { useCockpitShortcuts } from "./useCockpitShortcuts";
@@ -139,8 +140,9 @@ export function Cockpit() {
               pending={override.isPending}
               onCommit={(payload) => override.mutate({ decision_id: activeEntry.id, ...payload })}
             />
-            <div className="hidden lg:block">
+            <div className="hidden space-y-4 lg:block">
               <AuditPreview message={activeEntry.message} />
+              <CalibrationMirror entries={entries} />
             </div>
           </>
         ) : (

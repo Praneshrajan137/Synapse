@@ -23,10 +23,28 @@
   --syn-tier-3: 251 191 36; /* amber-400   :: 2-15s  */
   --syn-tier-4: 251 113 133; /* rose-400    :: 15-120s */
 
-  /* Confidence ramp (I-5) */
+  /* Confidence ramp (I-5) — legacy 3-stop sRGB bands, kept for existing
+     consumers (ConfidenceChip/Gauge). New surfaces use the continuous
+     gate-anchored OKLCH scale below via lib/chromatics.ts. */
   --syn-confidence-ok: 34 197 94; /* green-500  :: >=0.9 */
   --syn-confidence-warn: 234 179 8; /* yellow-500 :: 0.7-0.9 */
   --syn-confidence-risk: 239 68 68; /* red-500    :: <0.7 */
+
+  /* Gate-anchored confidence diverging scale (INV-CLR-007), mirrors
+     design-system/color/dist confidenceColor() dark stops. Stops sit
+     EXACTLY at the I-5 gates 0.00 / 0.70 / 0.80 / 1.00. */
+  --gradient-confidence: linear-gradient(
+    90deg,
+    oklch(0.64 0.19 27) 0%,
+    oklch(0.82 0.15 80) 70%,
+    oklch(0.8 0.165 148) 80%,
+    oklch(0.84 0.115 184) 100%
+  );
+
+  /* Neutral mix target — colour drains toward this near-monochrome grey at
+     rest, so agent hues are rationed and fire only on activity (PR-CLR-002;
+     "quiet by default"). Consumed by lib/chromatics.ts::rationedAgentColor. */
+  --syn-neutral-mix: oklch(0.55 0.012 255);
 
   /* Semantic signals */
   --syn-signal-info: 56 189 248;
@@ -69,6 +87,7 @@
   --syn-motion-fast: 120ms;
   --syn-motion-medium: 240ms;
   --syn-motion-slow: 480ms;
+  --syn-motion-breath: 2400ms; /* the Cortex Pulse — the only always-on motion */
   --syn-ease-standard: cubic-bezier(0.2, 0, 0, 1);
   --syn-ease-emphasized: cubic-bezier(0.3, 0, 0.8, 0.15);
 }
@@ -94,6 +113,16 @@
   --syn-agent-disruption-shield: oklch(0.5 0.19 30);
   --syn-agent-supplier-trust: oklch(0.6 0.115 207);
   --syn-agent-sustainability-agent: oklch(0.46 0.115 168);
+
+  /* Light-theme confidence scale + neutral mix (deeper stops for light canvas). */
+  --gradient-confidence: linear-gradient(
+    90deg,
+    oklch(0.53 0.205 27) 0%,
+    oklch(0.68 0.1428 76) 70%,
+    oklch(0.58 0.1597 150) 80%,
+    oklch(0.6 0.1074 182) 100%
+  );
+  --syn-neutral-mix: oklch(0.62 0.012 255);
 }
 
 [data-theme="hc"] {
@@ -105,6 +134,10 @@
   --syn-ink-muted: 229 231 235;
   --syn-border-strong: 255 255 255;
   --syn-focus-ring: 0 0 0 3px rgba(255, 255, 255, 1);
+  /* High-contrast: neutral mix is a plain grey so rationed agent dots stay
+     legible against pure black; the diverging hue is decorative here and the
+     numeric/textual signal carries meaning (INV-CLR-011). */
+  --syn-neutral-mix: oklch(0.6 0 0);
 }
 
 /* prefers-reduced-motion (FE-P6) */
@@ -117,5 +150,6 @@
     --syn-motion-fast: 0ms;
     --syn-motion-medium: 0ms;
     --syn-motion-slow: 0ms;
+    --syn-motion-breath: 0ms;
   }
 }

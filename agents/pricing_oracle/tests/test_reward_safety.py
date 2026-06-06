@@ -147,3 +147,29 @@ def test_matching_weights_do_not_emit_divergence() -> None:
         if sample.labels.get("agent") == "pricing_oracle" and sample.name.endswith("_total")
     )
     assert total == 0.0, f"Matching weights must keep divergence at 0, got {total}"
+
+
+def test_none_defaults_use_configured_reward_formula() -> None:
+    multipliers = torch.tensor([1.1, 1.2, 1.0])
+    base_prices = torch.tensor([100.0, 50.0, 25.0])
+    demand_quantities = torch.tensor([10.0, 8.0, 4.0])
+    elasticity = torch.tensor([-1.5, -0.7, -1.0])
+    is_essential = torch.tensor([0.0, 0.0, 0.0])
+    competitor_multipliers = torch.tensor([1.0, 1.1, 1.0])
+
+    result = compute_reward(
+        multipliers=multipliers,
+        base_prices=base_prices,
+        demand_quantities=demand_quantities,
+        elasticity_estimates=elasticity,
+        is_essential=is_essential,
+        competitor_multipliers=competitor_multipliers,
+    )
+    expected = (
+        reward_config.WEIGHTS["revenue_weight"] * result["revenue"]
+        + reward_config.WEIGHTS["elasticity_weight"] * result["elasticity_alignment"]
+        + reward_config.WEIGHTS["essential_penalty_weight"] * result["essential_cap_violation"]
+        + reward_config.WEIGHTS["competitor_gap_weight"] * result["competitor_gap"]
+    )
+
+    assert torch.isclose(result["total_reward"], expected).item()

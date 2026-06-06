@@ -12,10 +12,6 @@ this agent without depending on the torch-gated models.
 from __future__ import annotations
 
 import json
-import math
-from pathlib import Path
-
-import pytest
 
 
 # Helper: build a minimal RoutePlan-shaped dict that satisfies the schema.
@@ -71,8 +67,15 @@ def test_inv_rn_005_schema_validation_invariant() -> None:
     schema here would require jsonschema + the proto root in scope.
     """
     output = _valid_route_plan()
-    required = {"rider_id", "store_id", "stops", "total_distance_km",
-                "total_time_min", "fuel_estimate_liters", "freshness_violations"}
+    required = {
+        "rider_id",
+        "store_id",
+        "stops",
+        "total_distance_km",
+        "total_time_min",
+        "fuel_estimate_liters",
+        "freshness_violations",
+    }
     assert required.issubset(output.keys())
 
 

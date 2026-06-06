@@ -4,6 +4,7 @@ import {
   ConfidenceGauge,
   ParetoFrontier,
   type ParetoPoint,
+  ThresholdCountdown,
   TierBadge,
 } from "@ds/compounds";
 import { Button } from "@ds/primitives";
@@ -40,6 +41,16 @@ export function EscalationCard({ message, receivedAt, pending, onCommit }: Escal
 
   const below = isBelowThreshold(message.confidence);
   const tier = message.tier ?? "tier_3";
+
+  // The HITL window starts when the orchestrator escalated (created_at), or
+  // when the FE first saw it if the server didn't stamp one.
+  const startedAtMs = useMemo(() => {
+    if (message.created_at) {
+      const parsed = Date.parse(message.created_at);
+      if (Number.isFinite(parsed)) return parsed;
+    }
+    return receivedAt;
+  }, [message.created_at, receivedAt]);
 
   const proposals = useMemo(() => message.proposals as Array<Record<string, unknown>>, [message]);
 
@@ -94,6 +105,9 @@ export function EscalationCard({ message, receivedAt, pending, onCommit }: Escal
           </div>
         </div>
       </header>
+
+      {/* The Threshold spine — the operator always knows the cost of not acting. */}
+      <ThresholdCountdown startedAtMs={startedAtMs} />
 
       <section aria-label="Agent proposals" className="space-y-2">
         <h3 className="text-2xs uppercase tracking-wide text-ink-muted">Proposals</h3>

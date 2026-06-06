@@ -3,6 +3,7 @@ import {
   AgentProposalChip,
   ConfidenceChip,
   ParetoFrontier,
+  ParetoParallel,
   type ParetoPoint,
   ReasoningTimeline,
   TierBadge,
@@ -41,6 +42,11 @@ export function DecisionDetail() {
         phase_reached: raw.phase_reached ?? 1,
         debate_rounds: 0,
         human_override: raw.human_override ?? null,
+        // The 8-D arbitration front, when the audit row carries it (Tier 3–4).
+        // Fast-path decisions and older rows have none — ParetoParallel then
+        // renders an honest empty state.
+        pareto_front:
+          (raw as { pareto_front?: Array<Record<string, unknown>> | null }).pareto_front ?? null,
         context_messages: [],
         execution_confirmations: [],
         escalated_to_human: raw.escalated ?? false,
@@ -88,6 +94,20 @@ export function DecisionDetail() {
     () => (decision ? replayDecision(decision, phase) : null),
     [decision, phase],
   );
+
+  // The genuine 8-D arbitration front (numeric-coerced from the open proto
+  // shape). Empty when the audit row carries none (fast-path / older rows).
+  const paretoFront = useMemo(() => {
+    const raw = decision?.pareto_front;
+    if (!raw) return [];
+    return raw.map((r) => {
+      const out: Record<string, number> = {};
+      for (const [k, v] of Object.entries(r)) {
+        if (typeof v === "number") out[k] = v;
+      }
+      return out;
+    });
+  }, [decision]);
 
   const paretoPoints: ParetoPoint[] = useMemo(() => {
     if (!slice) return [];
@@ -201,9 +221,18 @@ export function DecisionDetail() {
             )}
           </div>
 
+          <div className="syn-card-raised space-y-2 p-4">
+            <h2 className="text-sm font-semibold text-ink">Consensus front — 8 objectives</h2>
+            <p className="text-2xs text-ink-muted">
+              The non-dominated arbitration front. Each axis is one objective in its agent's colour;
+              the chosen knee-point solution is bold.
+            </p>
+            <ParetoParallel front={paretoFront} weights={decision.pareto_weights} />
+          </div>
+
           {paretoPoints.length > 1 && (
             <div className="syn-card-raised space-y-2 p-4">
-              <h2 className="text-sm font-semibold text-ink">Pareto frontier</h2>
+              <h2 className="text-sm font-semibold text-ink">Proposal utility × confidence</h2>
               <ParetoFrontier
                 points={paretoPoints}
                 weights={decision.pareto_weights}

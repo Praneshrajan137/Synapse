@@ -70,11 +70,27 @@ def _source_roots(root: ET.Element) -> list[str]:
     return [(s.text or "").replace("\\", "/").rstrip("/") for s in root.iter("source")]
 
 
+def _candidate_exists(candidate: str) -> bool:
+    """Return whether a Cobertura source/filename candidate maps to a real file.
+
+    coverage.py may emit several <source> roots for one XML. A class filename is
+    relative to exactly one of those roots, but Cobertura does not annotate which
+    one. Blindly joining every source to every class makes every package appear
+    to contain every file. The repo still exists when this gate runs, so file
+    existence is the least lossy way to select plausible candidates.
+    """
+    path = Path(candidate)
+    if path.is_absolute():
+        return path.is_file()
+    return path.is_file() or (ROOT / path).is_file()
+
+
 def _classes_under(root: ET.Element, prefix: str) -> list[ET.Element]:
     """Return every <class> whose full path (source-root + filename) contains
     *prefix*. Cobertura emits one <source> root per ``--cov=`` argument; the
-    <class filename> is relative to one of those roots. We try every source as
-    the candidate root for each class to be tolerant.
+    <class filename> is relative to exactly one of those roots. We try source
+    roots that produce a real file, then fall back to raw candidates for
+    synthetic XML tests or unusual reporters.
 
     Match is by **suffix containment**: the normalised `prefix` must appear as
     a path segment in `<source>/filename`. This way `packages/synapse_common`
@@ -86,10 +102,12 @@ def _classes_under(root: ET.Element, prefix: str) -> list[ET.Element]:
     out: list[ET.Element] = []
     for cls in root.iter("class"):
         fn = (cls.get("filename") or "").replace("\\", "/")
-        # Try every source root; if any produces a path containing the prefix
-        # as a directory segment, count this class.
-        candidates = [f"{src}/{fn}" if src else fn for src in sources]
-        for full in candidates:
+        candidates = [fn, *[f"{src}/{fn}" if src else fn for src in sources]]
+        existing_candidates = [
+            candidate for candidate in candidates if _candidate_exists(candidate)
+        ]
+        paths_to_match = existing_candidates or candidates
+        for full in paths_to_match:
             full_norm = full.replace("\\", "/")
             # Match as path segment: must be bordered by `/` on at least one side
             # to avoid e.g. `agents/demand_prophet_x` matching `agents/demand_prophet`.
@@ -183,8 +201,7 @@ def _print_text(results: list[PackageResult], *, threshold_target: float) -> Non
     failing = sum(1 for r in results if r.status == "FAIL")
     unmeasured = sum(1 for r in results if r.status == "UNMEASURED")
     print(
-        f"\n  Summary: PASS={passing} FAIL={failing} UNMEASURED={unmeasured} "
-        f"TOTAL={len(results)}"
+        f"\n  Summary: PASS={passing} FAIL={failing} UNMEASURED={unmeasured} TOTAL={len(results)}"
     )
 
 
@@ -203,13 +220,16 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--xml", required=True, type=Path, help="Path to coverage.xml")
     parser.add_argument(
-        "--floors", required=True, type=Path,
+        "--floors",
+        required=True,
+        type=Path,
         help="Path to infrastructure/quality/coverage-floors.yaml",
     )
     parser.add_argument("--json", action="store_true", help="Emit JSON to stdout")
     parser.add_argument("--markdown", action="store_true", help="Emit Markdown table to stdout")
     parser.add_argument(
-        "--allow-unmeasured", action="store_true",
+        "--allow-unmeasured",
+        action="store_true",
         help="UNMEASURED packages do not fail the gate (default: do not fail)",
     )
     args = parser.parse_args()
@@ -222,15 +242,14 @@ def main() -> int:
         return 2
 
     results = evaluate(args.xml, args.floors)
-    target_pct = float(
-        yaml.safe_load(args.floors.read_text(encoding="utf-8")).get("target", 84.0)
-    )
+    target_pct = float(yaml.safe_load(args.floors.read_text(encoding="utf-8")).get("target", 84.0))
 
     if args.json:
         print(
             json.dumps(
                 {"target": target_pct, "packages": [asdict(r) for r in results]},
-                indent=2, sort_keys=True,
+                indent=2,
+                sort_keys=True,
             )
         )
     elif args.markdown:

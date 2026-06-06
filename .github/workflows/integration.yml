@@ -42,6 +42,9 @@ jobs:
       - run: |
           pip install -r packages/requirements.txt -r packages/requirements-dev.txt
           pip install -e packages/
+          # packages/tests includes training-truth / feature-store contract
+          # tests that import these at collection time; install them here so
+          # `-m contract` selection can run instead of failing collection.
           pip install "numpy>=1.26.0,<2.0" "pandas>=2.2.0,<3.0" "lifelines>=0.29.0,<1.0" pydantic-settings
       - name: Run contract tests
         run: |
