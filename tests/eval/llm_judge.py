@@ -30,6 +30,7 @@ logger = structlog.get_logger(__name__)
 PROMPT_PATH = Path(__file__).resolve().parent / "judge_prompt.md"
 LIVE_ENV = "SYNAPSE_LLM_JUDGE_LIVE"
 OLLAMA_URL_ENV = "SYNAPSE_OLLAMA_URL"
+LEGACY_OLLAMA_URL_ENV = "OLLAMA_URL"
 DEFAULT_OLLAMA_URL = "http://localhost:11434"
 JUDGE_SEED = 0xCAFEBABE
 
@@ -84,7 +85,11 @@ class LLMJudge:
     def _live(self, judge_input: JudgeInput) -> dict[str, Any]:
         import httpx  # imported lazily so the stub path stays dependency-free
 
-        ollama_url = os.environ.get(OLLAMA_URL_ENV, DEFAULT_OLLAMA_URL)
+        ollama_url = (
+            os.environ.get(OLLAMA_URL_ENV)
+            or os.environ.get(LEGACY_OLLAMA_URL_ENV)
+            or DEFAULT_OLLAMA_URL
+        )
         endpoint = f"{ollama_url.rstrip('/')}/api/chat"
         user_blob = json.dumps(
             {

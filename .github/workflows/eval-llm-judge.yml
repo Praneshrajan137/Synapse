@@ -3,8 +3,8 @@ name: Eval — Live LLM judge (nightly)
 # WS-9 §LLM-judge: the live LLM-judge stays off the PR critical path
 # (E-S9-12 — `SYNAPSE_LLM_JUDGE_LIVE=1` plus Ollama reachable). This
 # nightly workflow runs it against the golden trace set, reports the
-# score, and opens an issue when the live score diverges from the stub
-# CI value by more than 0.05.
+# score, and opens an issue when any judged trace falls below the prompt's
+# regression floor.
 #
 # Non-blocking by design — the live judge measures something the synthetic
 # CI cannot: hallucination drift over real prompts. PRs are NOT gated on
@@ -32,29 +32,35 @@ jobs:
           - "11434:11434"
     env:
       SYNAPSE_LLM_JUDGE_LIVE: "1"
-      OLLAMA_URL: "http://localhost:11434"
+      SYNAPSE_OLLAMA_URL: "http://localhost:11434"
+      SYNAPSE_LLM_JUDGE_MODEL: "qwen2:7b-instruct"
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
           cache: "pip"
-      - run: pip install -e packages/synapse_common -e packages/synapse_common[test]
+      - run: pip install -e packages/
       - name: Pull required Ollama models
         run: |
-          for model in qwen2:7b-instruct deepseek-r1:7b; do
-            curl -X POST http://localhost:11434/api/pull -d "{\"name\":\"$model\"}" || true
+          until curl -fsS "$SYNAPSE_OLLAMA_URL/api/tags" >/dev/null; do
+            sleep 2
           done
+          curl -fsS -X POST "$SYNAPSE_OLLAMA_URL/api/pull" \
+            -d "{\"name\":\"$SYNAPSE_LLM_JUDGE_MODEL\"}"
       - name: Run live judge
         id: judge
         run: |
           set -o pipefail
           python -m tests.eval.runner --suite golden --judge live \
+            --model "$SYNAPSE_LLM_JUDGE_MODEL" \
             --report /tmp/judge-report.json
-          score=$(python -c "import json; print(json.load(open('/tmp/judge-report.json'))['score'])")
+          score=$(python -c "import json; print(json.load(open('/tmp/judge-report.json'))['summary']['mean_overall'])")
+          regression=$(python -c "import json; print(str(json.load(open('/tmp/judge-report.json'))['summary']['regression']).lower())")
           echo "score=$score" >> "$GITHUB_OUTPUT"
+          echo "regression=$regression" >> "$GITHUB_OUTPUT"
       - name: Open issue on judge regression
-        if: failure()
+        if: steps.judge.outputs.regression == 'true'
         uses: actions/github-script@v7
         with:
           script: |

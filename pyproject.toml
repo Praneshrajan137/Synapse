@@ -186,6 +186,8 @@ markers = [
     "oracle: digital twin oracle tests",
     "mutation: mutation testing targets",
     "dbc: design-by-contract tests (Layer 5)",
+    "eval: golden-trace evaluation tests",
+    "evaluation: evaluation floor gates",
     "integration: tests requiring live infra (Feast/Neo4j/MLflow/Kafka)",
 ]
 asyncio_mode = "strict"
