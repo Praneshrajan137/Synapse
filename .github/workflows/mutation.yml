@@ -128,6 +128,9 @@ jobs:
       - name: Install project dependencies
         run: |
           pip install -r packages/requirements.txt -r packages/requirements-dev.txt
+          # mutmut launches pytest in subprocesses; install the shared package
+          # exactly as ci.yml does so synapse_common imports survive collection.
+          pip install -e packages/
           pip install -r orchestrator/requirements.txt
           for req in agents/*/requirements.txt; do pip install -r "$req"; done
 
