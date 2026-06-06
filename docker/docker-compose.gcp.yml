@@ -116,6 +116,13 @@ services:
       - ../infrastructure/postgres/04_p3_city.sql:/docker-entrypoint-initdb.d/04_p3_city.sql:ro
       - ../infrastructure/postgres/03_sprint7_outbox.sql:/docker-entrypoint-initdb.d/05_sprint7_outbox.sql:ro
       - ../infrastructure/postgres/04_sprint9_audit_chain.sql:/docker-entrypoint-initdb.d/06_sprint9_audit_chain.sql:ro
+      # Phase A (WS-A): steering table (was silently dropped from the mounts —
+      # left /api/v1/steering broken) + city column on audit_consensus (lets the
+      # decisions feed read the real write-target table). Both fully idempotent.
+      # The "Apply forward DB migrations" CD step also runs these against the
+      # already-initialised live volume (initdb.d only fires on an empty datadir).
+      - ../infrastructure/postgres/06_ws5_steering.sql:/docker-entrypoint-initdb.d/07_ws5_steering.sql:ro
+      - ../infrastructure/postgres/07_wsA_consensus_city.sql:/docker-entrypoint-initdb.d/08_wsA_consensus_city.sql:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-synapse} -d ${POSTGRES_DB:-synapse_audit}"]
       interval: 10s

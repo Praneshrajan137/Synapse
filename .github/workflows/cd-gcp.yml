@@ -331,6 +331,24 @@ jobs:
                          images --quiet | xargs -r -n1 docker inspect --format \
                          '{{.RepoTags}} -> {{.Id}}'"
 
+      - name: Apply forward DB migrations (existing volume)
+        run: |
+          # docker-entrypoint-initdb.d only runs on an EMPTY data dir, so an
+          # already-provisioned postgres_data volume never picks up new SQL.
+          # Apply the idempotent forward migrations explicitly on every deploy.
+          # Both files are pure ADD COLUMN/CREATE ... IF NOT EXISTS, so
+          # re-running them is a no-op once applied; ON_ERROR_STOP=1 fails the
+          # deploy loudly if one is ever not idempotent. -U/-d use the public
+          # (non-secret) defaults from docker-compose.gcp.yml (synapse /
+          # synapse_audit); the password lives in the container env, not here.
+          gcloud compute ssh ${{ vars.GCP_VM }} \
+            --zone=${{ vars.GCP_ZONE }} \
+            --tunnel-through-iap \
+            --quiet \
+            --command="cd ~/synapse && \
+                       docker compose -f docker/docker-compose.gcp.yml --env-file .env.gcp --env-file .env.gcp.local exec -T postgres psql -U synapse -d synapse_audit -v ON_ERROR_STOP=1 -f /docker-entrypoint-initdb.d/07_ws5_steering.sql && \
+                       docker compose -f docker/docker-compose.gcp.yml --env-file .env.gcp --env-file .env.gcp.local exec -T postgres psql -U synapse -d synapse_audit -v ON_ERROR_STOP=1 -f /docker-entrypoint-initdb.d/08_wsA_consensus_city.sql"
+
       - name: Wait for health (max 5 min)
         run: |
           gcloud compute ssh ${{ vars.GCP_VM }} \
