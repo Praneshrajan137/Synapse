@@ -285,6 +285,23 @@ jobs:
             /tmp/.env.gcp.version \
             ${{ vars.GCP_VM }}:~/synapse/
 
+      - name: Ensure runtime env files exist
+        run: |
+          # docker compose is invoked with `--env-file .env.gcp --env-file
+          # .env.gcp.local` (operator secret overlays). These are NOT created by
+          # the workflow and were never provisioned for the `runner` user, so
+          # compose aborted with "couldn't find env file". Every var in
+          # docker-compose.gcp.yml already has a `:-default` EXCEPT
+          # SYNAPSE_AR_REPO_URL, which .env.gcp.version supplies — so empty
+          # overlay files are safe and the stack comes up on documented
+          # defaults. Touch them idempotently; a Phase-B step replaces these
+          # with Secret Manager-sourced values for real hardening.
+          gcloud compute ssh ${{ vars.GCP_VM }} \
+            --zone=${{ vars.GCP_ZONE }} \
+            --tunnel-through-iap \
+            --quiet \
+            --command="cd ~/synapse && touch .env.gcp .env.gcp.local && echo 'env overlays present:' && ls -la .env.gcp .env.gcp.local"
+
       - name: Cosign verify images BEFORE start
         run: |
           # IMPORTANT: env-var assignments before `chmod` only apply to chmod,
@@ -331,6 +348,21 @@ jobs:
                        docker compose -f docker/docker-compose.gcp.yml --env-file .env.gcp.version \
                          images --quiet | xargs -r -n1 docker inspect --format \
                          '{{.RepoTags}} -> {{.Id}}'"
+
+      - name: Reclaim disk (prune superseded images)
+        run: |
+          # These images bundle a ~5GB CUDA/torch layer; without pruning, every
+          # deploy's superseded version accumulates and eventually fills the
+          # containerd snapshot store on the boot disk ("no space left on
+          # device" mid-pull). `image prune -af` removes only images NOT used by
+          # a running container, so the freshly-deployed stack is untouched.
+          # Runs after `up` so the new stack's images are in-use (kept) and the
+          # previous version becomes reclaimable.
+          gcloud compute ssh ${{ vars.GCP_VM }} \
+            --zone=${{ vars.GCP_ZONE }} \
+            --tunnel-through-iap \
+            --quiet \
+            --command="docker image prune -af >/dev/null 2>&1 || true; docker builder prune -af >/dev/null 2>&1 || true; df -h /var/lib/containerd /mnt/synapse-data 2>/dev/null | tail -3 || true"
 
       - name: Apply forward DB migrations (existing volume)
         run: |
