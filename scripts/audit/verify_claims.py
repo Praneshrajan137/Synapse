@@ -1132,6 +1132,44 @@ def check_audit_read_write_table_match() -> CheckResult:
 
 
 # ---------------------------------------------------------------------------
+# C43: every agent serves the A2A endpoint the orchestrator calls
+# ---------------------------------------------------------------------------
+@register("C43", "All 8 agents expose POST /a2a for consensus")
+def check_agents_serve_a2a() -> CheckResult:
+    """The orchestrator's consensus POSTs JSON-RPC to each agent's ``/a2a``
+    (``a2a_sdk.send_a2a_request`` appends ``/a2a``). 5 of 8 agents never mounted
+    it, so proposals 404'd and decisions degraded to confidence=0.0 live. This
+    gate fails if any agent's serve.py loses the route.
+    """
+    agents_dir = ROOT / "agents"
+    if not agents_dir.is_dir():
+        return CheckResult("C43", "Agents serve /a2a", "SKIP", "agents/ missing")
+    expected = [
+        "demand_prophet", "routing_navigator", "inventory_sentinel",
+        "freshness_guardian", "pricing_oracle", "disruption_shield",
+        "supplier_trust", "sustainability_agent",
+    ]
+    missing: list[str] = []
+    for name in expected:
+        serve = agents_dir / name / "inference" / "serve.py"
+        if not serve.exists():
+            missing.append(f"{name} (no serve.py)")
+            continue
+        text = serve.read_text(encoding="utf-8")
+        if '"/a2a"' not in text:
+            missing.append(name)
+    if missing:
+        return CheckResult(
+            "C43", "Agents serve /a2a", "FAIL",
+            f"{len(missing)} agent(s) missing POST /a2a: {', '.join(missing)}",
+        )
+    return CheckResult(
+        "C43", "Agents serve /a2a", "PASS",
+        f"all {len(expected)} agents mount POST /a2a (orchestrator consensus reachable)",
+    )
+
+
+# ---------------------------------------------------------------------------
 # Main entry
 # ---------------------------------------------------------------------------
 def run(as_json: bool = False) -> int:

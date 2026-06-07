@@ -48,6 +48,15 @@ async def reorder(req: ReorderRequest) -> ReorderResponse:
     return ReorderResponse(actions=actions, count=len(actions))
 
 
+@app.post("/a2a")
+async def handle_a2a(request: dict[str, object]) -> dict[str, object]:
+    """A2A JSON-RPC handler for Orchestrator consensus (mirrors freshness_guardian)."""
+    from agents.inventory_sentinel.a2a.handler import InventorySentinelA2AHandler
+
+    handler = InventorySentinelA2AHandler(_pipeline)
+    return handler.handle_request(request)  # type: ignore[arg-type]
+
+
 @app.get("/health")
 async def health() -> dict[str, Any]:
     return {"status": "healthy", "agent": "inventory_sentinel"}
