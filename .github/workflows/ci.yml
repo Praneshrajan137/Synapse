@@ -2,6 +2,10 @@ name: SYNAPSE CI
 on:
   push:
     branches: [main, develop, "sprint-*"]
+    paths-ignore:
+      - "**.md"
+      - "docs/**"
+      - "plans/**"
   pull_request:
     branches: [main]
 

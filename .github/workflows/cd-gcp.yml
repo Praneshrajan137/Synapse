@@ -39,6 +39,11 @@ on:
       - main
     tags:
       - "v*"
+    # Docs-only changes must not rebuild 12 images + cycle the live VM.
+    paths-ignore:
+      - "**.md"
+      - "docs/**"
+      - "plans/**"
   workflow_dispatch:
     inputs:
       dryrun:
