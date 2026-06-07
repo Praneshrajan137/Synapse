@@ -377,6 +377,21 @@ jobs:
                        docker compose -f docker/docker-compose.gcp.yml --env-file .env.gcp --env-file .env.gcp.local exec -T postgres psql -U synapse -d synapse_audit -v ON_ERROR_STOP=1 -f /docker-entrypoint-initdb.d/07_ws5_steering.sql && \
                        docker compose -f docker/docker-compose.gcp.yml --env-file .env.gcp --env-file .env.gcp.local exec -T postgres psql -U synapse -d synapse_audit -v ON_ERROR_STOP=1 -f /docker-entrypoint-initdb.d/08_wsA_consensus_city.sql"
 
+      - name: Provision Kafka topics (auto.create is disabled — pre-provision)
+        run: |
+          # The 17 inter-agent topics (infrastructure/kafka/topics.json) must be
+          # pre-created (auto.create.topics is off). Without this, any produce
+          # fails `UNKNOWN_TOPIC` and tier-4/outbox/firehose paths error. The
+          # provisioner is idempotent (--if-not-exists). jq is required by the
+          # script; install it if the runner image lacks it.
+          gcloud compute ssh ${{ vars.GCP_VM }} \
+            --zone=${{ vars.GCP_ZONE }} \
+            --tunnel-through-iap \
+            --quiet \
+            --command="cd ~/synapse && \
+                       (command -v jq >/dev/null 2>&1 || sudo apt-get install -y jq >/dev/null 2>&1) && \
+                       bash scripts/create_kafka_topics.sh"
+
       - name: Wait for health (max 5 min)
         run: |
           gcloud compute ssh ${{ vars.GCP_VM }} \
