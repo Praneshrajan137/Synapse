@@ -66,6 +66,11 @@ AGENT_ENDPOINTS: dict[str, str] = {
     "sustainability_agent": "http://sustainability-agent:8008",
 }
 
+# Digital-twin what-if engine (I-10 / I-12). Tier-4 decisions consult it for a
+# Monte-Carlo simulation before arbitration (C7). It speaks the same A2A
+# JSON-RPC dialect (method "simulate"); invocation degrades honestly (I-7).
+TWIN_ENDPOINT: str = "http://digital-twin:8009"
+
 
 class ConsensusProtocol:
     """Five-phase multi-agent consensus engine."""
@@ -195,6 +200,11 @@ class ConsensusProtocol:
     ) -> ConsensusDecision:
         proposals = await self._phase_collect(request)
 
+        # C7: Tier-4 (or any twin-flagged request) consults the digital twin's
+        # Monte-Carlo what-if engine and records the outcome before arbitration.
+        if tier == DecisionTier.TIER_4 or request.get("requires_twin_simulation"):
+            await self._phase_twin_simulate(request)
+
         debate_rounds = 0
         conflict = self._detect_conflicts(proposals)
         if conflict.has_conflict:
@@ -280,6 +290,52 @@ class ConsensusProtocol:
             raise RuntimeError(f"{agent_name}: {response.error}")
         return AgentProposal.model_validate(response.result)
 
+    # ── Phase 1b: Digital-twin Monte-Carlo what-if (Tier 4, C7) ─────────
+
+    async def _phase_twin_simulate(self, request: dict[str, Any]) -> None:
+        """Invoke the digital-twin what-if engine and record its result (I-10).
+
+        This is the production caller the twin never had (CURRENT.md C7). A
+        disruption tilts the scenario toward higher failure/lead-time stress.
+        Degrades honestly (I-7): if the twin is unreachable the decision still
+        proceeds — the simulation is advisory context, not load-bearing.
+        """
+        disruption = bool(request.get("disruption_active"))
+        params = {
+            "name": f"decision:{request.get('order_id', 'adhoc')}",
+            "description": "Tier-4 pre-arbitration what-if",
+            "demand_multiplier": 1.0,
+            "lead_time_multiplier": 1.5 if disruption else 1.0,
+            "failure_rate_multiplier": 2.0 if disruption else 1.0,
+            "spoilage_rate_multiplier": 1.0,
+            "n_scenarios": 1000,
+            "duration_hours": 4.0,
+        }
+        try:
+            response = await send_a2a_request(
+                target_url=TWIN_ENDPOINT,
+                method="simulate",
+                params=params,
+                tier=DecisionTier.TIER_4,
+            )
+            if response.error:
+                raise RuntimeError(str(response.error))
+            self._append_context(
+                ContextMessage(
+                    source="digital_twin",
+                    content={"type": "twin_simulation", "result": response.result},
+                )
+            )
+        except Exception as exc:  # noqa: BLE001 — twin is advisory (I-7)
+            logger.warning("twin_simulate_unavailable", error=str(exc))
+            self._append_context(
+                ContextMessage(
+                    source="digital_twin",
+                    content={"type": "twin_simulation", "degraded": True},
+                    status=MessageStatus.ERROR,
+                )
+            )
+
     # ── Phase 2: LLM-mediated debate ────────────────────────────────────
 
     async def _phase_debate(
@@ -299,11 +355,27 @@ class ConsensusProtocol:
             if model:
                 messages = self._ctx_builder.build_ollama_messages(self._context_messages)
                 mask = self._tier_router.get_tool_mask(tier)
-                llm_response = await self._ollama.chat(
-                    model=model,
-                    messages=messages,
-                    prefill=mask.get("prefill"),
-                )
+                try:
+                    llm_response = await self._ollama.chat(
+                        model=model,
+                        messages=messages,
+                        prefill=mask.get("prefill"),
+                    )
+                except Exception as exc:  # noqa: BLE001 — LLM is best-effort (I-7)
+                    # If Ollama is unreachable/slow, DEGRADE the debate rather than
+                    # 504 the whole decision: record the failure and proceed to
+                    # arbitration with the proposals already collected. The LLM
+                    # only mediates debate; it is not load-bearing for a decision.
+                    logger.warning("debate_llm_unavailable", round=round_num, error=str(exc))
+                    self._append_context(
+                        ContextMessage(
+                            source="orchestrator",
+                            content={"type": "debate_round", "round": round_num,
+                                     "llm_analysis": "", "degraded": True},
+                            status=MessageStatus.ERROR,
+                        )
+                    )
+                    break
                 self._append_context(
                     ContextMessage(
                         source="orchestrator",
