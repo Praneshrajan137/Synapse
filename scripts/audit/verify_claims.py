@@ -1170,6 +1170,33 @@ def check_agents_serve_a2a() -> CheckResult:
 
 
 # ---------------------------------------------------------------------------
+# C7: Tier-4 orchestrator invokes the digital twin (was dead-code)
+# ---------------------------------------------------------------------------
+@register("C7", "Orchestrator invokes digital twin on Tier-4")
+def check_orchestrator_invokes_twin() -> CheckResult:
+    """CURRENT.md C7 was PARTIAL: the twin ran standalone with no orchestrator
+    caller. The consensus protocol now calls the twin's A2A ``simulate`` on
+    Tier-4 (``_phase_twin_simulate``). This gate fails if that caller is removed.
+    """
+    proto = ROOT / "orchestrator" / "consensus" / "protocol.py"
+    if not proto.exists():
+        return CheckResult("C7", "Orchestrator invokes twin", "SKIP", "protocol.py missing")
+    text = proto.read_text(encoding="utf-8")
+    has_endpoint = "TWIN_ENDPOINT" in text
+    has_caller = "_phase_twin_simulate" in text and "_phase_twin_simulate(request)" in text
+    has_method = 'method="simulate"' in text
+    if has_endpoint and has_caller and has_method:
+        return CheckResult(
+            "C7", "Orchestrator invokes twin", "PASS",
+            "Tier-4 path calls digital-twin A2A simulate (_phase_twin_simulate)",
+        )
+    return CheckResult(
+        "C7", "Orchestrator invokes twin", "FAIL",
+        f"twin invocation incomplete (endpoint={has_endpoint} caller={has_caller} method={has_method})",
+    )
+
+
+# ---------------------------------------------------------------------------
 # Main entry
 # ---------------------------------------------------------------------------
 def run(as_json: bool = False) -> int:
