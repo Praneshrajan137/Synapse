@@ -6,6 +6,7 @@ on:
       - "**.md"
       - "docs/**"
       - "plans/**"
+      - "notebooks/**"
   pull_request:
     branches: [main]
 
