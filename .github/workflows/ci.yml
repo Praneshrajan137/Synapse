@@ -280,6 +280,10 @@ jobs:
       - name: Install ML dep stack (CPU wheels, pinned, license-clean)
         run: |
           pip install -r packages/requirements.txt -r packages/requirements-dev.txt
+          # Install the shared package itself (not just its deps) so agent train
+          # modules can `import synapse_common` — the smoke-train previously
+          # failed with "No module named 'synapse_common'". Mirrors quality-gates.
+          pip install -e packages/
           pip install jsonschema pyyaml
           for req in agents/*/requirements.txt; do pip install -r "$req"; done
           pip install -r agents/requirements-sprint3.txt
