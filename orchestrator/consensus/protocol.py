@@ -312,11 +312,15 @@ class ConsensusProtocol:
             "duration_hours": 4.0,
         }
         try:
+            # Bounded wait: the twin's Monte-Carlo (>=1000 scenarios) blows past
+            # its 10s SLA on a small CPU VM, so we cap the synchronous wait and
+            # degrade rather than stall the whole Tier-4 decision past the
+            # gateway timeout. The twin is advisory context, not load-bearing.
             response = await send_a2a_request(
                 target_url=TWIN_ENDPOINT,
                 method="simulate",
                 params=params,
-                tier=DecisionTier.TIER_4,
+                timeout=8.0,
             )
             if response.error:
                 raise RuntimeError(str(response.error))
