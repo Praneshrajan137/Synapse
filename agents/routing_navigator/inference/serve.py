@@ -59,6 +59,15 @@ async def route(request: RouteRequest) -> RouteResponse:
         raise HTTPException(status_code=400, detail=str(e)) from e
 
 
+@app.post("/a2a")
+async def handle_a2a(request: dict[str, object]) -> dict[str, object]:
+    """A2A JSON-RPC handler for Orchestrator consensus (mirrors freshness_guardian)."""
+    from agents.routing_navigator.a2a.handler import RoutingNavigatorA2AHandler
+
+    handler = RoutingNavigatorA2AHandler(_pipeline)
+    return handler.handle_request(request)  # type: ignore[arg-type]
+
+
 @app.get("/health")
 async def health() -> dict[str, Any]:
     return {

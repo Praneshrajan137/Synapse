@@ -73,6 +73,15 @@ async def score(req: ScoreRequest) -> ScoreResponse:
     )
 
 
+@app.post("/a2a")
+async def handle_a2a(request: dict[str, object]) -> dict[str, object]:
+    """A2A JSON-RPC handler for Orchestrator consensus (mirrors freshness_guardian)."""
+    from agents.supplier_trust.a2a.handler import SupplierTrustA2AHandler
+
+    handler = SupplierTrustA2AHandler(_pipeline)
+    return handler.handle_request(request)  # type: ignore[arg-type]
+
+
 @app.get("/health")
 async def health() -> dict[str, Any]:
     return {"status": "healthy", "agent": "supplier_trust"}

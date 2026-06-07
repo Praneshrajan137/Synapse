@@ -155,6 +155,20 @@ async def predict(request: PredictRequest) -> PredictResponse:
         raise HTTPException(status_code=400, detail=str(e)) from e
 
 
+@app.post("/a2a")
+async def handle_a2a(request: dict[str, object]) -> dict[str, object]:
+    """A2A JSON-RPC handler for Orchestrator consensus (mirrors freshness_guardian).
+
+    Without this route the orchestrator's `proposal` calls 404'd, so no proposals
+    were collected and every decision degraded to confidence=0.0. Builds on the
+    same _pipeline the server loaded (degrades honestly if no model is loaded).
+    """
+    from agents.demand_prophet.a2a.handler import DemandProphetA2AHandler
+
+    handler = DemandProphetA2AHandler(_pipeline)
+    return handler.handle_request(request)  # type: ignore[arg-type]
+
+
 @app.get("/health", response_model=HealthResponse)
 async def health() -> HealthResponse:
     return HealthResponse(

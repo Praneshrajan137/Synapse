@@ -91,6 +91,26 @@ The `make verify-claims` target turns each row below into an executable check. T
 - **Outbox / steering schema rot — OPEN (next WS-A chunk).** Discovered while fixing C42: the `audit_outbox` ORM (`orchestrator/audit/models.py::AuditOutboxRow` — `audit_id/partition_key/headers/retries/next_attempt_at/published_at/updated_at`, status ENUM `outbox_status`) has **diverged from the SQL** (`0002_outbox.sql` / `03_sprint7_outbox.sql` create `message_key/attempts/trace_id/sent_at`, status TEXT). `0004_orders_outbox_idempotency.sql` then `ALTER ... audit_id DROP NOT NULL` on a table with no `audit_id` — it errors, which is why `05_ws2`/`06_ws5` were quietly dropped from the GCP compose mounts (leaving `/api/v1/steering` with no `audit_steering` table). The dispatcher (`orchestrator/outbox/dispatcher.py`) uses the ORM, so the deployed outbox subsystem is schema-broken end-to-end. **Fix needs a real Postgres to test:** rewrite `0002_outbox.sql` to the ORM-true schema (incl. `CREATE TYPE outbox_status`), make the chain internally consistent, then a single re-runnable migrator applies the whole ordered set on every deploy. Tracked as the immediate next WS-A item.
 - **Dev stack ≠ prod (A3) — OPEN.** `docker-compose.yml` has no api-gateway service (nginx routes `/api/`→orchestrator) and mounts only `01..04` of the Postgres init — so auth/orders/steering/firehose + outbox/audit-chain tables are absent locally. This is why prod-only bugs like C42 escape local testing.
 
+### Live system map — end-to-end probe of the deployed VM (2026-06-07)
+
+Drove real traffic through https://34-180-49-108.nip.io to establish the honest "every atom" truth (not doc claims):
+
+| Layer | State | Evidence |
+| --- | --- | --- |
+| Frontend SPA | ✅ works | `/` 200, assets load |
+| nginx TLS edge | ✅ works | `/healthz` 200, HTTPS, HTTP→HTTPS redirect |
+| API gateway + JWT auth | ✅ works | login issues RS256 JWT; VIEWER/OPS roles enforced |
+| Decisions feed | ✅ works | `GET /decisions/recent` → 200 with seeded rows (city column live) |
+| Orchestrator + Postgres/Neo4j/Redis | ✅ healthy | all infra containers healthy; orchestrator 0 restarts |
+| Decision pipeline (tier 1/2) | ✅ works (degraded) | `POST /decisions/` → 200, tier_2, phase_reached=4, audit row written, appears in feed |
+| **Kafka topics** | ✅ **fixed live** | broker had **0 topics** (auto-create off) → `UNKNOWN_TOPIC` on tier-4/outbox. Provisioned all 17 via `scripts/create_kafka_topics.sh`; CD now does this every deploy. |
+| **Agent A2A consensus** | 🛠 **FIXED in code — awaiting deploy** | Root cause: 5 of 8 agents (demand_prophet, routing_navigator, inventory_sentinel, supplier_trust, sustainability_agent) never mounted `POST /a2a`, so the orchestrator's `proposal` calls 404'd → no proposals → `confidence=0.0`. Wired the existing `*A2AHandler.handle_request` into each agent's `serve.py` (matching the 3 agents that already worked). New gate **C43** asserts all 8 expose `/a2a`. Live effect (non-zero confidence + real consensus) lands on the next deploy. |
+| Tier 3 (LLM debate) | ⚠️ 504 timeout — OPEN | disruption path invokes the LLM (Ollama) which isn't running/served on the VM → exceeds the 30s gateway timeout. Needs Ollama provisioned or the tier-3 path made fast-degrading. |
+| Tier 4 (digital-twin) | ⚠️ OPEN (C7) | `requires_twin_simulation` path; Kafka topic now fixed, but the orchestrator→twin invocation is still not wired (C7) — and consensus is degraded anyway (A2A 404). |
+| Confidence (I-5) | ⚠️ floored at 0.0 | a *consequence* of the A2A-404 + untrained-models gaps, not a separate bug — honest degradation (I-7). Real confidence returns once agents respond and Phase-C models load. |
+
+**Bottom line:** infra + frontend + API + auth + the audited fast-tier decision pipeline are genuinely working live. The *intelligence depth* (agents participating in consensus via A2A, trained models, LLM tier-3, twin tier-4) is the remaining work — Phase C/D. No GitHub Actions minutes were available to redeploy the A2A/agent fixes on 2026-06-07; they are staged for the next deploy.
+
 ### Still climbing (ML-stack / CI-operator gated, one agent / PR each)
 
 - **C37/C38/C39** for the remaining 6 agents (supplier_trust, freshness_guardian, disruption_shield, sustainability_agent, pricing_oracle, routing_navigator) — real fit/train + registry-load, lowering each baseline by one.

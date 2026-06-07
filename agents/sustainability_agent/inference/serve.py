@@ -81,6 +81,15 @@ async def report(request: ReportRequest) -> CarbonReport:
         raise HTTPException(status_code=400, detail=str(e)) from e
 
 
+@app.post("/a2a")
+async def handle_a2a(request: dict[str, object]) -> dict[str, object]:
+    """A2A JSON-RPC handler for Orchestrator consensus (mirrors freshness_guardian)."""
+    from agents.sustainability_agent.a2a.handler import SustainabilityAgentA2AHandler
+
+    handler = SustainabilityAgentA2AHandler(_pipeline)
+    return handler.handle_request(request)  # type: ignore[arg-type]
+
+
 @app.get("/health", response_model=HealthResponse)
 async def health() -> HealthResponse:
     return HealthResponse(
