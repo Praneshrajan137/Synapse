@@ -290,14 +290,17 @@ jobs:
       - name: Smoke-train READY_AGENTS (produces artifacts/training/*.json)
         env:
           SYNAPSE_SMOKE_RUN: "1"
+          PYTHONPATH: .
         run: python scripts/smoke_train.py
       - name: Checkpoint-truth gate (C38)
         env:
           SYNAPSE_SMOKE_RUN: "1"
+          PYTHONPATH: .
         run: python -m scripts.audit.checkpoint_truth --check
       - name: Calibration-truth gate (C40)
         env:
           SYNAPSE_SMOKE_RUN: "1"
+          PYTHONPATH: .
         run: python -m scripts.audit.calibration_truth --check
       - name: Measure per-package coverage under full ML stack (binds the 0.0 floors)
         # Informational: surfaces the REAL per-package coverage for orchestrator +

@@ -83,6 +83,10 @@ components:
     notes: auto-added
     versions:
     - 2.0.31
+  starlette:
+    notes: transitive via fastapi (orchestrator SBOM) — vetted, BSD-3-Clause
+    versions:
+    - unknown
   structlog:
     notes: auto-added
     versions:
