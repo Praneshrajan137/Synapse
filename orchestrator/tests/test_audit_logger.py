@@ -66,8 +66,16 @@ class _SessionRecorder:
         if not hasattr(row, "id") or row.id is None:
             row.id = uuid4()
 
+    async def flush(self) -> None:
+        # log_decision now enqueues an outbox row in the same transaction
+        # (synapse_common.outbox.enqueue calls session.flush()).
+        return None
+
     async def commit(self) -> None:
         self.commit_called = True
+
+    async def rollback(self) -> None:
+        return None
 
     async def __aenter__(self) -> _SessionRecorder:
         return self

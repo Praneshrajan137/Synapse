@@ -107,6 +107,29 @@ class AuditLogger:
                 current_hash=current_hash,
             )
             session.add(row)
+            # Publish the decision to the real-time firehose in the SAME
+            # transaction (the outbox pattern): the dispatcher drains PENDING
+            # rows → synapse.orchestrator.decision → api firehose WS → cockpit /
+            # Living Map. Without this enqueue the rich real-time UI renders
+            # empty even though decisions are being made. One commit covers both
+            # the audit row and the outbox row (atomic; ties Kafka delivery to
+            # audit-row existence — ADR-026).
+            from synapse_common.outbox import enqueue as _outbox_enqueue
+
+            await _outbox_enqueue(
+                session,
+                decision_id=decision.decision_id,
+                audit_id=row.id,
+                topic="synapse.orchestrator.decision",
+                payload={
+                    "decision_id": str(decision.decision_id),
+                    "tier": str(decision.tier.value),
+                    "confidence": decision.confidence,
+                    "phase_reached": decision.phase_reached,
+                    "escalated": decision.escalated_to_human,
+                    "selected_action": decision.selected_action,
+                },
+            )
             await session.commit()
             self._insert_count += 1
             self._chain_head = current_hash
