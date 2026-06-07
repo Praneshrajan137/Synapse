@@ -1197,6 +1197,32 @@ def check_orchestrator_invokes_twin() -> CheckResult:
 
 
 # ---------------------------------------------------------------------------
+# C44: no dead Python modules (orphaned code can't silently accumulate)
+# ---------------------------------------------------------------------------
+@register("C44", "No dead Python modules (module-liveness)")
+def check_no_dead_modules() -> CheckResult:
+    """Owner concern: "most of the code is there but not used". The
+    module-liveness analyzer builds an import graph from the live
+    docker-compose entrypoints and flags modules that are neither reachable,
+    referenced by make/CI, nor tests. Baseline ratcheted to 0 after the sweep
+    (3 routers wired, 6 orphans removed). A new orphan fails CI.
+    """
+    try:
+        from scripts.audit.module_liveness import DEAD_BASELINE, classify
+    except ImportError as exc:
+        return CheckResult("C44", "No dead modules", "SKIP", f"module_liveness import failed: {exc}")
+    dead = classify()["DEAD"]
+    n = len(dead)
+    if n > DEAD_BASELINE:
+        names = ", ".join(rel for rel, _ in dead[:5])
+        return CheckResult(
+            "C44", "No dead modules", "FAIL",
+            f"{n} dead module(s) > baseline {DEAD_BASELINE}: {names}{'…' if n > 5 else ''}",
+        )
+    return CheckResult("C44", "No dead modules", "PASS", f"{n} dead module(s) (baseline {DEAD_BASELINE})")
+
+
+# ---------------------------------------------------------------------------
 # Main entry
 # ---------------------------------------------------------------------------
 def run(as_json: bool = False) -> int:

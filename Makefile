@@ -358,6 +358,20 @@ ab-test: ## Run A/B tests comparing transfer vs cold-start models
 	python ml_pipelines/ab_test/run_ab_tests.py --city mumbai
 	@echo "A/B test results logged to MLflow"
 
+# ── Offline data / ML-ops jobs (on-demand) ──────────────────────────────────
+# The data_fabric batch jobs. NOT run on the live decision VM (the APScheduler
+# is intentionally not started there — see data_fabric/README.md). Invoke
+# manually or from a dedicated ops box / CI cron.
+.PHONY: jobs-drift jobs-recal jobs-feast-compact jobs-scheduler
+jobs-drift: ## PSI drift detection (data_fabric.jobs.drift_psi)
+	python -m data_fabric.jobs.drift_psi
+jobs-recal: ## Recalibrate Mumbai conformal intervals (data_fabric.jobs.conformal_recal)
+	python -m data_fabric.jobs.conformal_recal
+jobs-feast-compact: ## Compact the Feast offline parquet store (data_fabric.jobs.feast_compact)
+	python -m data_fabric.jobs.feast_compact
+jobs-scheduler: ## Run the APScheduler batch orchestrator on-demand (data_fabric.scheduler.scheduler)
+	python -m data_fabric.scheduler.scheduler
+
 demo: ## Run the full 5-minute demo
 	bash scripts/demo/run_demo.sh bengaluru 1.0
 

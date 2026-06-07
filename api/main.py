@@ -28,7 +28,16 @@ from synapse_common.kafka_client import KafkaConfig, SynapseProducer
 from synapse_common.lifespan import graceful_shutdown
 
 from api.middleware.ratelimit import RateLimitMiddleware
-from api.routers import agents, auth, decisions, orders, steering
+from api.routers import (
+    agents,
+    auth,
+    decisions,
+    firehose,
+    orders,
+    steering,
+    telemetry,
+    topology,
+)
 
 if TYPE_CHECKING:
     from collections.abc import AsyncIterator
@@ -139,6 +148,14 @@ app.include_router(orders.router, prefix="/api/v1/orders", tags=["orders"])
 app.include_router(decisions.router, prefix="/api/v1/decisions", tags=["decisions"])
 app.include_router(agents.router, prefix="/api/v1/agents", tags=["agents"])
 app.include_router(steering.router, prefix="/api/v1/steering", tags=["steering"])
+# Previously-unmounted routers (the module-liveness audit found these defined but
+# never included → the frontend's real-time firehose, twin topology graph, and
+# browser telemetry/CSP beacons all 404'd/403'd). firehose.router defines
+# `/firehose` → mount under `/ws` (nginx proxies `/ws/`); topology + telemetry
+# define `/api/v1`-relative paths the frontend calls.
+app.include_router(firehose.router, prefix="/ws", tags=["firehose"])
+app.include_router(topology.router, prefix="/api/v1", tags=["topology"])
+app.include_router(telemetry.router, prefix="/api/v1", tags=["telemetry"])
 
 # Application-layer rate limiting (token bucket per client IP). nginx limits at
 # the edge; this protects the gateway when reached directly. Health/metrics exempt.
