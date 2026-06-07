@@ -33,6 +33,12 @@ from pathlib import Path
 import structlog
 
 ROOT = Path(__file__).resolve().parents[1]
+# Ensure the repo root is importable when invoked as `python scripts/smoke_train.py`
+# (sys.path[0] is then scripts/, not the root) so `import agents.*` resolves
+# without relying on the caller exporting PYTHONPATH. CI sets PYTHONPATH=. too.
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
 ARTIFACTS_DIR = ROOT / "artifacts" / "training"
 
 logger = structlog.get_logger(__name__)
