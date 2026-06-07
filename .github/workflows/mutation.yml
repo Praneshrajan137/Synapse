@@ -38,6 +38,13 @@ jobs:
       - name: Install project dependencies
         run: |
           pip install -r packages/requirements.txt -r packages/requirements-dev.txt
+          # Install the shared package (synapse_common) and CPU torch: the reward
+          # mutation target (agents/*/training/rewards.py) and its test import
+          # both `torch` and `synapse_common`, so without these the gate fails at
+          # COLLECTION ("No module named 'synapse_common'") rather than measuring
+          # mutation survival.
+          pip install -e packages/
+          pip install --index-url https://download.pytorch.org/whl/cpu "torch>=2.2,<2.4"
           pip install -r orchestrator/requirements.txt
           if [ -f agents/requirements-sprint2.txt ]; then pip install -r agents/requirements-sprint2.txt; fi
           if [ -f agents/requirements-sprint3.txt ]; then pip install -r agents/requirements-sprint3.txt; fi
