@@ -53,7 +53,13 @@ def test_inv_po_010_runtime_reality_non_degraded_capped() -> None:
                     "pricing_features:demand_elasticity": [-0.4, -1.6],
                     "pricing_features:competitor_price_ratio": [0.9, 1.1],
                     "pricing_features:inventory_pressure": [0.2, 0.6],
-                    "pricing_features:rolling_7d_units": [50.0, 80.0],
+                    # Normalized scale: the smoke LinearElasticityModel's weights
+                    # assume normalized features. Raw counts (e.g. 50/80) × the
+                    # 0.1 weight dominate the linear sum, pushing elasticity past
+                    # the -0.01 clip for BOTH SKUs → identical confidence. Normal-
+                    # ized values keep elasticities distinct + negative so the
+                    # "confidence varies" invariant (INV-PO-010) is exercised.
+                    "pricing_features:rolling_7d_units": [0.5, 0.8],
                 }
 
         def get_online_features(self, features: object, entity_rows: list) -> object:
