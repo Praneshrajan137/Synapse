@@ -6,18 +6,25 @@ Port: 8004
 
 from __future__ import annotations
 
+import os
 from contextlib import asynccontextmanager
+from pathlib import Path
 from typing import TYPE_CHECKING
 
 import structlog
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import Response
+from synapse_common.model_registry import ModelRegistry
 
 from agents.freshness_guardian.config import FreshnessGuardianConfig
 from agents.freshness_guardian.inference.pipeline import (
     FreshnessAlert,
     FreshnessGuardianPipeline,
     FreshnessRequest,
+)
+from agents.freshness_guardian.inference.serving_model import (
+    build_freshness_model,
+    load_serving_model,
 )
 
 if TYPE_CHECKING:
@@ -28,13 +35,23 @@ logger = structlog.get_logger(__name__)
 _pipeline: FreshnessGuardianPipeline | None = None
 _config: FreshnessGuardianConfig | None = None
 
+ROOT = Path(__file__).resolve().parents[3]
+SERVING_CHECKPOINT_DIR = ROOT / "artifacts" / "checkpoints"
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     global _pipeline, _config
     _config = FreshnessGuardianConfig()
-    _pipeline = FreshnessGuardianPipeline()
-    logger.info("server_started", port=_config.port)
+    registry = ModelRegistry(
+        None,
+        checkpoint_dir=SERVING_CHECKPOINT_DIR,
+        hf_repo=os.environ.get("FG_HF_REPO") or None,
+        model_builder=build_freshness_model,
+    )
+    serving_model = load_serving_model(registry)
+    _pipeline = FreshnessGuardianPipeline(serving_model=serving_model)
+    logger.info("server_started", port=_config.port, model_loaded=serving_model is not None)
     yield
 
 

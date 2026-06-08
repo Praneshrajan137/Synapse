@@ -6,17 +6,24 @@ Port: 8005
 
 from __future__ import annotations
 
+import os
 from contextlib import asynccontextmanager
+from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 import structlog
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import Response
 from pydantic import BaseModel, Field
+from synapse_common.model_registry import ModelRegistry
 
 from agents.pricing_oracle.a2a.handler import PricingOracleA2AHandler
 from agents.pricing_oracle.config import PricingOracleConfig
 from agents.pricing_oracle.inference.pipeline import PricingOraclePipeline
+from agents.pricing_oracle.inference.serving_model import (
+    build_pricing_model,
+    load_serving_model,
+)
 
 if TYPE_CHECKING:
     from collections.abc import AsyncIterator
@@ -27,14 +34,37 @@ _pipeline: PricingOraclePipeline | None = None
 _config: PricingOracleConfig | None = None
 _a2a_handler: PricingOracleA2AHandler | None = None
 
+ROOT = Path(__file__).resolve().parents[3]
+# Where train.py writes the trained actor (pricing_maddpg.pt + .serving.json).
+SERVING_CHECKPOINT_DIR = ROOT / "artifacts" / "checkpoints"
+
+
+def _build_pipeline() -> PricingOraclePipeline:
+    """Resolve the trained MADDPG actor + elasticity model and wire them (C39).
+
+    The $0 ModelRegistry source resolves the actor checkpoint; an injected builder
+    reconstructs the actor (torch) + the torch-free LinearElasticityModel. Both are
+    passed to the pipeline so a fully-loaded serve is non-degraded on the action AND
+    the elasticity. With no checkpoint, both are None → honest rule-based fallback (I-7).
+    """
+    registry = ModelRegistry(
+        None,
+        checkpoint_dir=SERVING_CHECKPOINT_DIR,
+        hf_repo=os.environ.get("PO_HF_REPO") or None,
+        model_builder=build_pricing_model,
+    )
+    serving_model = load_serving_model(registry)
+    causal = serving_model.elasticity if serving_model is not None else None
+    return PricingOraclePipeline(model=serving_model, causal_estimator=causal)
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     global _pipeline, _config, _a2a_handler
     _config = PricingOracleConfig()
-    _pipeline = PricingOraclePipeline()
+    _pipeline = _build_pipeline()
     _a2a_handler = PricingOracleA2AHandler(pipeline=_pipeline)
-    logger.info("server_started", port=_config.port)
+    logger.info("server_started", port=_config.port, model_loaded=_pipeline._model is not None)
     yield
 
 

@@ -174,6 +174,12 @@ class PricingMADDPG(nn.Module):
         actions: dict[str, Tensor] = {}
 
         for idx, category in enumerate(CATEGORIES):
+            # Serve only the categories actually requested (each keeps its fixed
+            # agent index). The pipeline builds observations for the SKUs' subset
+            # of categories, not always all five — skipping absent ones avoids a
+            # KeyError and lets the actor serve any subset (training passes all 5).
+            if category not in observations:
+                continue
             obs = observations[category]
 
             with torch.no_grad():

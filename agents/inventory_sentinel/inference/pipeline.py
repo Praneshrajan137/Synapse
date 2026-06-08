@@ -21,12 +21,13 @@ DbC contracts (ADR-015 Layer 5):
 
 from __future__ import annotations
 
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import numpy as np
 import structlog
 from synapse_common.dbc import post, pre
 from synapse_common.models import InventoryAction
+from synapse_common.provenance import ConfidenceBasis, FeatureSource, Provenance
 from synapse_common.schema_registry import validates_schema
 
 from agents.inventory_sentinel.models.l2_bandit import LinUCB
@@ -36,6 +37,9 @@ from agents.inventory_sentinel.models.newsvendor import (
     newsvendor_quantity,
     reorder_point,
 )
+
+if TYPE_CHECKING:
+    from agents.inventory_sentinel.inference.serving_model import InventoryServingModel
 
 logger = structlog.get_logger(__name__)
 
@@ -86,13 +90,22 @@ class InventorySentinelPipeline:
         newsvendor_params: NewsvendorParams | None = None,
         calibration_residuals: np.ndarray | None = None,
         l3_model: Any = None,
+        serving_model: InventoryServingModel | None = None,
     ) -> None:
         self._bandit = bandit or LinUCB(d=DEFAULT_CONTEXT_DIM)
         self._params = newsvendor_params or NewsvendorParams()
-        self._calibration = (
-            calibration_residuals if calibration_residuals is not None else np.array([])
-        )
+        # ADR-043: when the fitted conformal calibration is resolved by serve.py via
+        # ModelRegistry, the reorder interval is calibrated (real) and provenance is
+        # non-degraded; otherwise the bounds default to empty (degraded, honest I-7).
+        self._serving_model = serving_model
+        if serving_model is not None and getattr(serving_model, "is_real", False):
+            self._calibration = serving_model.residuals
+        else:
+            self._calibration = (
+                calibration_residuals if calibration_residuals is not None else np.array([])
+            )
         self._l3 = l3_model
+        self.last_provenance: Provenance = Provenance.degraded_fallback()
 
     @pre(lambda self, sku_ids, store_id, demand_forecast=None: 1 <= len(sku_ids) <= 1000)
     @post(lambda result: all(1.0 <= a.safety_stock_multiplier <= 3.0 for a in result))
@@ -174,6 +187,18 @@ class InventorySentinelPipeline:
                 lo=lo,
                 hi=hi,
             )
+
+        # ADR-040/043: a calibrated conformal interval (≥10 residuals) is a real,
+        # non-degraded decision basis; an empty calibration is the honest fallback.
+        if self._calibration.size >= 10:
+            version = getattr(self._serving_model, "version", "newsvendor_conformal")
+            self.last_provenance = Provenance.real(
+                model_version=f"inventory_newsvendor:{version}",
+                confidence_basis=ConfidenceBasis.RESIDUAL_VARIANCE,
+                feature_source=FeatureSource.DIRECT,
+            )
+        else:
+            self.last_provenance = Provenance.degraded_fallback(feature_source=FeatureSource.DIRECT)
 
         return out
 

@@ -19,6 +19,7 @@ import structlog
 import torch
 from pydantic import BaseModel, Field
 from synapse_common.dbc import post, pre
+from synapse_common.provenance import ConfidenceBasis, FeatureSource, Provenance
 
 from agents.disruption_shield.config import DisruptionShieldConfig
 from agents.disruption_shield.inference.playbook_retriever import (
@@ -29,6 +30,8 @@ from agents.disruption_shield.models.reasoning import DeepSeekReasoner
 
 if TYPE_CHECKING:
     from synapse_common.graph_client import GraphClient
+
+    from agents.disruption_shield.inference.serving_model import DisruptionServingModel
 
 logger = structlog.get_logger(__name__)
 
@@ -81,9 +84,15 @@ class DisruptionShieldPipeline:
         reasoner: DeepSeekReasoner | None = None,
         retriever: PlaybookRetriever | None = None,
         graph_client: GraphClient | None = None,
+        serving_model: DisruptionServingModel | None = None,
     ) -> None:
         self._config = config or DisruptionShieldConfig()
         self._graph = graph_client
+        # ADR-043: the fitted IsolationForest resolved by serve.py via ModelRegistry.
+        # When present, confidence is the real anomaly-score margin and provenance is
+        # non-degraded; otherwise the config floor + a degraded stamp (honest, I-7).
+        self._serving_model = serving_model
+        self.last_provenance: Provenance = Provenance.degraded_fallback()
 
         self.ensemble = ensemble or AnomalyEnsemble(
             if_weight=self._config.if_weight,
@@ -171,9 +180,21 @@ class DisruptionShieldPipeline:
             for p in playbook_matches
         ]
 
-        confidence = self._config.confidence_full
-        if graph_data is None or temporal_tensor is None:
-            confidence = self._config.confidence_degraded
+        # ADR-040/043: confidence from the fitted detector's anomaly-score margin
+        # (varies per request) when a real model is loaded; else the honest config
+        # floor with a degraded provenance stamp.
+        if self._serving_model is not None and getattr(self._serving_model, "is_real", False):
+            confidence = self._serving_model.confidence(tabular, request.anomaly_threshold)
+            self.last_provenance = Provenance.real(
+                model_version=f"disruption_iforest:{self._serving_model.version}",
+                confidence_basis=ConfidenceBasis.ANOMALY_SCORE_MARGIN,
+                feature_source=FeatureSource.DIRECT,
+            )
+        else:
+            confidence = self._config.confidence_full
+            if graph_data is None or temporal_tensor is None:
+                confidence = self._config.confidence_degraded
+            self.last_provenance = Provenance.degraded_fallback(feature_source=FeatureSource.DIRECT)
 
         return DisruptionAlert(
             alert_level=alert_level,

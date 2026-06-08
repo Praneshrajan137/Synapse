@@ -41,12 +41,29 @@ if str(ROOT) not in sys.path:
 
 ARTIFACTS_DIR = ROOT / "artifacts" / "training"
 
+# Run robustly whether invoked as `python scripts/smoke_train.py` (script dir on
+# sys.path[0], repo root absent) or `python -m scripts.smoke_train`. Without this
+# the `import agents.*` resolution fails with "No module named 'agents'".
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
 logger = structlog.get_logger(__name__)
 
 # Agents whose training.train exposes a smoke path returning a TrainResult.
 # Grows one per PR. demand_prophet = real gradient loop; inventory_sentinel =
-# analytical (closed-form newsvendor; substance proven by conformal coverage).
-READY_AGENTS: list[str] = ["demand_prophet", "inventory_sentinel"]
+# analytical (closed-form newsvendor; substance proven by conformal coverage);
+# routing_navigator = analytical (CVRPTW solver; substance proven by optimality-
+# gap coverage).
+READY_AGENTS: list[str] = [
+    "demand_prophet",
+    "inventory_sentinel",
+    "routing_navigator",
+    "supplier_trust",
+    "pricing_oracle",
+    "disruption_shield",
+    "freshness_guardian",
+    "sustainability_agent",
+]
 
 
 def smoke_train_agent(agent: str) -> bool:

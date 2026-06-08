@@ -29,12 +29,20 @@ VALID_HORIZONS: tuple[str, ...] = ("15min", "1h", "6h", "24h", "7d")
 
 
 class DemandProphetServingModel:
-    """Wrap a trained HGT-TFT module behind ``predict_quantiles`` (ADR-041)."""
+    """Wrap a trained HGT-TFT module behind ``predict_quantiles`` (ADR-041).
 
-    def __init__(self, torch_model: Any, *, version: str, num_static: int = 8) -> None:
+    Carries the fitted :class:`ConformalCalibrator` restored from the checkpoint
+    sidecar (ADR-043) so the interval guarantee travels with the weights — serving
+    no longer rebuilds an *unfit* calibrator whose first call raises.
+    """
+
+    def __init__(
+        self, torch_model: Any, *, version: str, num_static: int = 8, calibrator: Any = None
+    ) -> None:
         self._model = torch_model
         self.version = version
         self._num_static = num_static
+        self.calibrator = calibrator
         import contextlib  # noqa: PLC0415
 
         with contextlib.suppress(AttributeError, RuntimeError):
@@ -90,21 +98,76 @@ class DemandProphetServingModel:
         return result
 
 
+def build_demand_prophet_model(artifact: Any, meta: dict[str, Any] | None = None) -> Any:
+    """Model-builder injected into :class:`ModelRegistry` for the $0 checkpoint path.
+
+    ``artifact`` is the object returned by ``load_checkpoint`` — a torch
+    ``state_dict`` (or a dict wrapping one). ``meta`` is the serving sidecar; its
+    ``arch`` block carries the exact architecture dims the checkpoint was trained
+    with, so ``load_state_dict`` matches (smoke arch ≠ full arch). Returns the
+    eval-mode torch module, or raises (the registry catches → degrades, I-7).
+    """
+    from agents.demand_prophet.models.hybrid import DemandProphetHybrid  # noqa: PLC0415
+
+    meta = meta or {}
+    arch = dict(meta.get("arch") or {})
+    state = artifact
+    if isinstance(artifact, dict) and "state_dict" in artifact:
+        state = artifact["state_dict"]
+    model = DemandProphetHybrid(**arch) if arch else DemandProphetHybrid()
+    model.load_state_dict(state)
+    model.eval()
+    return model
+
+
 def load_serving_model(
     registry: Any,
     *,
     city: str = "bengaluru",
     base_name: str = "demand_prophet_hgt_tft",
 ) -> DemandProphetServingModel | None:
-    """Resolve + wrap the trained model from the registry; None if degraded (I-7)."""
+    """Resolve + wrap the trained model from the registry; None if degraded (I-7).
+
+    Also restores the fitted conformal calibrator from the checkpoint sidecar
+    (``loaded.meta['calibrator']``) and attaches it to the serving model, so the
+    serving path gets a *calibrated* model in one resolution (ADR-043).
+    """
     if registry is None:
         return None
     loaded = registry.load(base_name, city=city)
     if not getattr(loaded, "is_real", False) or loaded.model is None:
         logger.warning("serving_model_degraded", name=base_name, city=city)
         return None
-    logger.info("serving_model_loaded", name=loaded.name, version=loaded.version)
-    return DemandProphetServingModel(loaded.model, version=loaded.version)
+    calibrator = _restore_calibrator(getattr(loaded, "meta", None))
+    logger.info(
+        "serving_model_loaded",
+        name=loaded.name,
+        version=loaded.version,
+        calibrated=calibrator is not None,
+    )
+    return DemandProphetServingModel(loaded.model, version=loaded.version, calibrator=calibrator)
 
 
-__all__ = ["DemandProphetServingModel", "load_serving_model"]
+def _restore_calibrator(meta: dict[str, Any] | None) -> Any:
+    """Rebuild a fitted ConformalCalibrator from the sidecar state; None if absent."""
+    if not meta:
+        return None
+    state = meta.get("calibrator")
+    if not state:
+        return None
+    try:
+        from agents.demand_prophet.training.conformal import (  # noqa: PLC0415
+            ConformalCalibrator,
+        )
+
+        return ConformalCalibrator.from_state(state)
+    except Exception as exc:  # noqa: BLE001 — a bad sidecar degrades to raw bands (I-7)
+        logger.warning("calibrator_restore_failed", error=str(exc))
+        return None
+
+
+__all__ = [
+    "DemandProphetServingModel",
+    "build_demand_prophet_model",
+    "load_serving_model",
+]

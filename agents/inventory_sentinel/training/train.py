@@ -17,6 +17,7 @@ Run::
 from __future__ import annotations
 
 import argparse
+import json
 import sys
 from pathlib import Path
 
@@ -73,15 +74,32 @@ def train(config: object | None = None, *, smoke: bool = False) -> TrainResult:
     mid = len(res) // 2
     cal, test = res[:mid], res[mid:]
     lower, upper = conformal_bounds(np.array([0.0]), cal, alpha=ALPHA)
-    q = (upper - lower) / 2.0
+    q = float((upper - lower) / 2.0)
     coverage = float(np.mean(np.abs(test) <= q))
+
+    # ADR-043: persist the calibration residuals so serving restores *calibrated*
+    # conformal bounds (real) instead of the empty default (degraded).
+    from synapse_common.training_contract import save_checkpoint  # noqa: PLC0415
+
+    ckpt_dir = ROOT / "artifacts" / "checkpoints"
+    ckpt_dir.mkdir(parents=True, exist_ok=True)
+    calibration = {"residuals": [round(float(r), 6) for r in cal.tolist()], "half_width": q}
+    sha = save_checkpoint(calibration, ckpt_dir / "inventory_newsvendor.pt")
+    (ckpt_dir / "inventory_newsvendor.serving.json").write_text(
+        json.dumps(
+            {"version": f"{'smoke' if smoke else 'full'}_{sha}", "smoke": smoke},
+            sort_keys=True,
+            separators=(",", ":"),
+        ),
+        encoding="utf-8",
+    )
 
     result = TrainResult.analytical(
         "inventory_sentinel",
-        metrics={"pi_coverage": coverage, "half_width": float(q), "n_residuals": float(len(res))},
+        metrics={"pi_coverage": coverage, "half_width": q, "n_residuals": float(len(res))},
         seed=seed,
     )
-    logger.info("inventory_calibration_complete", **result.to_dict()["metrics"])
+    logger.info("inventory_calibration_complete", sha=sha, **result.to_dict()["metrics"])
     return result
 
 

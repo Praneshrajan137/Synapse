@@ -55,10 +55,16 @@ class RoutingNavigatorPipeline:
         expert_model: Any = None,
         student_model: Any = None,
         osrm_client: Any = None,
+        solver_model: Any = None,
     ) -> None:
         self._expert = expert_model
         self._student = student_model
         self._osrm = osrm_client
+        # ADR-043: the trained optimality-gap calibration (RoutingServingModel),
+        # resolved via ModelRegistry in serve.py. When present, the Tier-2 solver
+        # confidence is the route's *calibrated* optimality percentile; when absent
+        # the pipeline falls back to the raw LB/achieved ratio (still real, I-7).
+        self._solver_model = solver_model
         # ADR-042 C41: confidence is derived from the solver optimality gap; the
         # greedy Tier-1 path stamps the I-7 fallback floor. Never a constant.
         self.last_provenance: Provenance = Provenance.degraded_fallback()
@@ -84,9 +90,14 @@ class RoutingNavigatorPipeline:
 
         A solution near its lower bound (small gap) is more trustworthy; a loose
         one less so. Monotone in solution quality, never constant (ADR-042 C41).
+        When a trained calibration is loaded (ADR-043), confidence is the route's
+        *calibrated* optimality percentile in the solver's training distribution;
+        otherwise it is the raw LB/achieved ratio.
         """
         achieved = max(route.distance_km, 1e-6)
         lb = self._nn_lower_bound(all_stops, route)
+        if self._solver_model is not None and getattr(self._solver_model, "is_real", False):
+            return float(self._solver_model.calibrated_confidence(lb, achieved))
         ratio = min(lb / achieved, 1.0)
         return round(float(min(max(0.5 + 0.49 * ratio, 0.5), 0.99)), 4)
 
@@ -178,8 +189,14 @@ class RoutingNavigatorPipeline:
         if use_student or not plans:
             self.last_provenance = Provenance.degraded_fallback(feature_source=FeatureSource.DIRECT)
         else:
+            calibrated = getattr(self._solver_model, "version", None)
+            model_version = (
+                f"routing_cvrptw_clarke_wright_2opt:{calibrated}"
+                if calibrated
+                else "routing_cvrptw_clarke_wright_2opt"
+            )
             self.last_provenance = Provenance.real(
-                model_version="routing_cvrptw_clarke_wright_2opt",
+                model_version=model_version,
                 confidence_basis=ConfidenceBasis.OPTIMALITY_GAP,
                 feature_source=FeatureSource.DIRECT,
             )

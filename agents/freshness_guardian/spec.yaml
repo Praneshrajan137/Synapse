@@ -58,6 +58,16 @@ invariants:
     assertion: "feast_down implies fallback_to_redis and output.confidence < 0.7"
     severity: high
 
+  - id: "INV-FG-009"
+    description: >
+      Runtime reality (ADR-043): when the fitted Weibull-AFT params are loaded, shelf-life
+      assessment uses the numpy survival reconstruction — provenance.degraded is False with a
+      SURVIVAL_CI_WIDTH confidence basis, and confidence varies with storage conditions
+      (a temperature-abused item yields a different CI-width confidence than a benign one),
+      never the hardcoded 0.85 constant the legacy path used.
+    assertion: "not provenance.degraded and provenance.confidence_basis == SURVIVAL_CI_WIDTH and confidence(abused) != confidence(benign)"
+    severity: critical
+
 preconditions:
   - id: "PRE-FG-001"
     description: "Store ID is a non-empty string"

@@ -49,12 +49,11 @@ EXPECTED_BASIS: dict[str, str | None] = {
     "demand_prophet": "CONFORMAL_INTERVAL",     # 1/(1+rel_width) over conformal PIs [ok]
     "supplier_trust": "POSTERIOR_SPREAD",        # 1/(1+posterior.std) [ok]
     "pricing_oracle": "ELASTICITY_STRENGTH",     # tanh(|elasticity|) - NOT critic spread
-    "routing_navigator": "OPTIMALITY_GAP",       # currently emits no confidence at all
-    # Adjudicated in their Phase 5 ratchet PRs:
-    "sustainability_agent": None,
-    "freshness_guardian": None,
-    "disruption_shield": None,
-    "inventory_sentinel": None,
+    "routing_navigator": "OPTIMALITY_GAP",       # solver optimality-gap percentile
+    "disruption_shield": "ANOMALY_SCORE_MARGIN",  # |score − threshold| decisiveness (Phase 7)
+    "freshness_guardian": "SURVIVAL_CI_WIDTH",     # 1/(1+rel CI width) of the Weibull life (Phase 7)
+    "sustainability_agent": "PREDICTIVE_ENTROPY",  # 1 − H(waste_prob) (Phase 7; was mislabelled)
+    "inventory_sentinel": "RESIDUAL_VARIANCE",     # 1 − forecast volatility, conformal-calibrated
 }
 
 # Phase 4 closed both known mismatches: pricing_oracle now stamps ELASTICITY_STRENGTH
