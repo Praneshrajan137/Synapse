@@ -122,8 +122,10 @@ def test_calibrator_state_round_trips() -> None:
     assert restored.last_coverage_p90 == c.last_coverage_p90
 
     # Identical adjustments → identical intervals on the same input.
-    preds = {h: np.stack([np.full(50, 9.0), np.full(50, 12.0), np.full(50, 15.0)], axis=1)
-             for h in HORIZONS}
+    preds = {
+        h: np.stack([np.full(50, 9.0), np.full(50, 12.0), np.full(50, 15.0)], axis=1)
+        for h in HORIZONS
+    }
     a, b = c.predict_intervals(preds), restored.predict_intervals(preds)
     for h in HORIZONS:
         assert np.allclose(a[h][0], b[h][0]) and np.allclose(a[h][1], b[h][1])
@@ -137,8 +139,13 @@ def test_to_state_refuses_unfit_calibrator() -> None:
 def test_load_serving_model_attaches_fitted_calibrator() -> None:
     state = _fitted_calibrator().to_state()
     loaded = LoadedModel(
-        model=_FixedModel(), name="demand_prophet_hgt_tft", version="9",
-        sha="abc", stage="Production", degraded=False, meta={"calibrator": state},
+        model=_FixedModel(),
+        name="demand_prophet_hgt_tft",
+        version="9",
+        sha="abc",
+        stage="Production",
+        degraded=False,
+        meta={"calibrator": state},
     )
     model = load_serving_model(_FakeRegistry(loaded))
     assert model is not None
@@ -148,8 +155,12 @@ def test_load_serving_model_attaches_fitted_calibrator() -> None:
 
 def test_load_serving_model_without_sidecar_has_no_calibrator() -> None:
     loaded = LoadedModel(
-        model=_FixedModel(), name="demand_prophet_hgt_tft", version="9",
-        sha="abc", stage="Production", degraded=False,
+        model=_FixedModel(),
+        name="demand_prophet_hgt_tft",
+        version="9",
+        sha="abc",
+        stage="Production",
+        degraded=False,
     )
     model = load_serving_model(_FakeRegistry(loaded))
     assert model is not None

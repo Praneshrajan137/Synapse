@@ -333,8 +333,12 @@ class ConsensusProtocol:
                     self._append_context(
                         ContextMessage(
                             source="orchestrator",
-                            content={"type": "debate_round", "round": round_num,
-                                     "llm_analysis": "", "degraded": True},
+                            content={
+                                "type": "debate_round",
+                                "round": round_num,
+                                "llm_analysis": "",
+                                "degraded": True,
+                            },
                             status=MessageStatus.ERROR,
                         )
                     )

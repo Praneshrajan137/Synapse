@@ -69,8 +69,11 @@ def train(config: object | None = None, *, smoke: bool = False) -> TrainResult:
     ckpt_path = CHECKPOINT_DIR / f"{SERVING_NAME}.pt"
     sha = save_checkpoint(curve, ckpt_path)
     (CHECKPOINT_DIR / f"{SERVING_NAME}.serving.json").write_text(
-        json.dumps({"version": f"{'smoke' if smoke else 'full'}_{sha}", "smoke": smoke},
-                   sort_keys=True, separators=(",", ":")),
+        json.dumps(
+            {"version": f"{'smoke' if smoke else 'full'}_{sha}", "smoke": smoke},
+            sort_keys=True,
+            separators=(",", ":"),
+        ),
         encoding="utf-8",
     )
 
@@ -79,8 +82,11 @@ def train(config: object | None = None, *, smoke: bool = False) -> TrainResult:
         metrics={"survival_calibration": survival_calibration, "n": float(n)},
         seed=seed,
     )
-    logger.info("sustainability_training_complete", sha=sha,
-                survival_calibration=round(survival_calibration, 4))
+    logger.info(
+        "sustainability_training_complete",
+        sha=sha,
+        survival_calibration=round(survival_calibration, 4),
+    )
     return result
 
 

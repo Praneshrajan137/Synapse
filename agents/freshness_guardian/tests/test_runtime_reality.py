@@ -41,8 +41,11 @@ def _model() -> FreshnessServingModel:
 
 def _req(temp_dev: float) -> FreshnessRequest:
     return FreshnessRequest(
-        store_id="s", sku_id="k", days_since_receipt=1.0,
-        initial_shelf_life_days=7.0, temperature_deviation_hours=temp_dev,
+        store_id="s",
+        sku_id="k",
+        days_since_receipt=1.0,
+        initial_shelf_life_days=7.0,
+        temperature_deviation_hours=temp_dev,
     )
 
 
@@ -55,8 +58,11 @@ def test_builder_produces_a_real_model() -> None:
 def test_serving_predict_is_numpy_weibull() -> None:
     m = _model()
     pred = m.predict(
-        temperature_deviation_hours=0.0, humidity_deviation_pct=0.0,
-        initial_shelf_life_days=7.0, is_cold_chain=False, days_since_receipt=1.0,
+        temperature_deviation_hours=0.0,
+        humidity_deviation_pct=0.0,
+        initial_shelf_life_days=7.0,
+        is_cold_chain=False,
+        days_since_receipt=1.0,
     )
     assert pred.days_to_expiry > 0.0
     assert 0.0 <= pred.quality_score <= 1.0

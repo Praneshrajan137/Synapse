@@ -67,13 +67,15 @@ def test_twin_verify_records_monte_carlo_verdict(monkeypatch: pytest.MonkeyPatch
         )
 
     monkeypatch.setattr(protocol_mod, "send_a2a_request", fake_a2a)
-    decision = proto._build_decision(proposals=[], tier=DecisionTier.TIER_4,
-                                     phase_reached=4, pareto_weights={})
+    decision = proto._build_decision(
+        proposals=[], tier=DecisionTier.TIER_4, phase_reached=4, pareto_weights={}
+    )
     out = asyncio.run(proto._phase_twin_verify(decision))
 
     assert any("twin=twin_verified" in t for t in out.audit_trace)
-    twin_notes = [m for m in proto._context_messages
-                  if m.content.get("type") == "twin_verification"]
+    twin_notes = [
+        m for m in proto._context_messages if m.content.get("type") == "twin_verification"
+    ]
     assert twin_notes and twin_notes[-1].content["kpi_means"] == {"orders_created": 100.0}
 
 
@@ -84,8 +86,9 @@ def test_twin_verify_degrades_when_twin_unreachable(monkeypatch: pytest.MonkeyPa
         raise ConnectionError("twin down")
 
     monkeypatch.setattr(protocol_mod, "send_a2a_request", boom)
-    decision = proto._build_decision(proposals=[], tier=DecisionTier.TIER_4,
-                                     phase_reached=4, pareto_weights={})
+    decision = proto._build_decision(
+        proposals=[], tier=DecisionTier.TIER_4, phase_reached=4, pareto_weights={}
+    )
     # Must NOT raise — an unreachable twin degrades honestly (I-7).
     out = asyncio.run(proto._phase_twin_verify(decision))
     assert any("twin=twin_unavailable" in t for t in out.audit_trace)

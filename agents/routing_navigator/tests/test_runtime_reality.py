@@ -27,8 +27,13 @@ def _calibration() -> dict:
 
 def _orders(spread: float, n: int) -> list[dict]:
     return [
-        {"order_id": f"o{i}", "lat": 12.97 + spread * i, "lon": 77.59 + spread * i,
-         "weight_kg": 2.0, "due_min": 300.0}
+        {
+            "order_id": f"o{i}",
+            "lat": 12.97 + spread * i,
+            "lon": 77.59 + spread * i,
+            "weight_kg": 2.0,
+            "due_min": 300.0,
+        }
         for i in range(1, n + 1)
     ]
 
@@ -44,8 +49,8 @@ def test_calibrated_confidence_is_monotone_in_quality() -> None:
     # A near-optimal route (ratio close to 1) must score strictly higher than a
     # loose one (small ratio) — the calibrated percentile is monotone, not constant.
     model = build_routing_model(_calibration(), {})
-    good = model.calibrated_confidence(lb=9.0, achieved=10.0)   # ratio 0.90
-    poor = model.calibrated_confidence(lb=3.0, achieved=10.0)   # ratio 0.30
+    good = model.calibrated_confidence(lb=9.0, achieved=10.0)  # ratio 0.90
+    poor = model.calibrated_confidence(lb=3.0, achieved=10.0)  # ratio 0.30
     assert 0.5 <= poor < good <= 0.99
 
 
@@ -53,8 +58,9 @@ def test_inv_rn_010_runtime_reality_non_degraded_calibrated() -> None:
     """INV-RN-010 — calibrated Tier-2 solver serves real, non-floor confidence."""
     model = build_routing_model(_calibration(), {"version": "full_abc123"})
     pipe = RoutingNavigatorPipeline(solver_model=model)
-    plans = pipe.route(_orders(0.01, 5), [{"rider_id": "r1", "capacity_kg": 30.0}],
-                       "store_x", use_student=False)
+    plans = pipe.route(
+        _orders(0.01, 5), [{"rider_id": "r1", "capacity_kg": 30.0}], "store_x", use_student=False
+    )
     prov = pipe.last_provenance
     # INV-RN-010: real provenance + OPTIMALITY_GAP basis + non-floor confidence.
     assert plans, "Tier-2 solver returned no plans on a valid instance"
@@ -68,7 +74,8 @@ def test_greedy_tier1_is_honestly_degraded() -> None:
     # The Tier-1 student path is the I-7 fallback: floor confidence + degraded.
     model = build_routing_model(_calibration(), {})
     pipe = RoutingNavigatorPipeline(solver_model=model)
-    plans = pipe.route(_orders(0.01, 5), [{"rider_id": "r1", "capacity_kg": 30.0}],
-                       "store_x", use_student=True)
+    plans = pipe.route(
+        _orders(0.01, 5), [{"rider_id": "r1", "capacity_kg": 30.0}], "store_x", use_student=True
+    )
     assert pipe.last_provenance.degraded
     assert all(p.confidence == 0.5 for p in plans)

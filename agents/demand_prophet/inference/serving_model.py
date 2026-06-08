@@ -140,7 +140,9 @@ def load_serving_model(
         return None
     calibrator = _restore_calibrator(getattr(loaded, "meta", None))
     logger.info(
-        "serving_model_loaded", name=loaded.name, version=loaded.version,
+        "serving_model_loaded",
+        name=loaded.name,
+        version=loaded.version,
         calibrated=calibrator is not None,
     )
     return DemandProphetServingModel(loaded.model, version=loaded.version, calibrator=calibrator)

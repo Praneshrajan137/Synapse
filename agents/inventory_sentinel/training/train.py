@@ -86,8 +86,11 @@ def train(config: object | None = None, *, smoke: bool = False) -> TrainResult:
     calibration = {"residuals": [round(float(r), 6) for r in cal.tolist()], "half_width": q}
     sha = save_checkpoint(calibration, ckpt_dir / "inventory_newsvendor.pt")
     (ckpt_dir / "inventory_newsvendor.serving.json").write_text(
-        json.dumps({"version": f"{'smoke' if smoke else 'full'}_{sha}", "smoke": smoke},
-                   sort_keys=True, separators=(",", ":")),
+        json.dumps(
+            {"version": f"{'smoke' if smoke else 'full'}_{sha}", "smoke": smoke},
+            sort_keys=True,
+            separators=(",", ":"),
+        ),
         encoding="utf-8",
     )
 

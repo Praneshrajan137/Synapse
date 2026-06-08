@@ -74,9 +74,7 @@ class SupplierServingModel:
     def predict(self, observed: Any) -> LeadTimePosterior:
         """Pipeline-facing alias mirroring BayesianLeadTimeModel.predict (no SVI)."""
         arr = (
-            observed.detach().cpu().numpy()
-            if hasattr(observed, "detach")
-            else np.asarray(observed)
+            observed.detach().cpu().numpy() if hasattr(observed, "detach") else np.asarray(observed)
         )
         return self.posterior(arr)
 

@@ -24,9 +24,7 @@ logger = structlog.get_logger(__name__)
 class DisruptionServingModel:
     """Wrap a fitted IsolationForest behind an anomaly-margin confidence (ADR-043)."""
 
-    def __init__(
-        self, iforest: Any, *, score_lo: float, score_hi: float, version: str
-    ) -> None:
+    def __init__(self, iforest: Any, *, score_lo: float, score_hi: float, version: str) -> None:
         self._if = iforest
         self._lo = float(score_lo)
         self._hi = float(score_hi)

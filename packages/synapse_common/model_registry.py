@@ -131,8 +131,12 @@ class ModelRegistry:
                 if model is not None:
                     logger.info("model_loaded", name=name, version=version, stage=stage)
                     return LoadedModel(
-                        model=model, name=name, version=version, sha=sha,
-                        stage=stage, degraded=False,
+                        model=model,
+                        name=name,
+                        version=version,
+                        sha=sha,
+                        stage=stage,
+                        degraded=False,
                     )
                 logger.warning("model_uri_returned_none", name=name, stage=stage)
             except Exception as exc:  # noqa: BLE001 — any registry failure degrades (I-7)
@@ -170,11 +174,18 @@ class ModelRegistry:
                 return None
             version = str(meta.get("version") or "checkpoint")
             sha = hashlib.sha256(ckpt_path.read_bytes()).hexdigest()[:16]
-            logger.info("model_loaded_from_checkpoint", name=name, version=version,
-                        path=str(ckpt_path))
+            logger.info(
+                "model_loaded_from_checkpoint", name=name, version=version, path=str(ckpt_path)
+            )
             return LoadedModel(
-                model=model, name=name, version=version, sha=sha, stage=stage,
-                degraded=False, local_path=str(ckpt_path), meta=meta,
+                model=model,
+                name=name,
+                version=version,
+                sha=sha,
+                stage=stage,
+                degraded=False,
+                local_path=str(ckpt_path),
+                meta=meta,
             )
         except Exception as exc:  # noqa: BLE001 — a corrupt/missing artifact degrades (I-7)
             logger.warning("checkpoint_load_failed", name=name, error=str(exc))

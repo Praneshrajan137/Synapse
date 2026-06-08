@@ -35,9 +35,7 @@ CHECKPOINT_DIR = ROOT / "artifacts" / "checkpoints"
 SERVING_NAME = "supplier_bayesian"
 
 
-def _generate_panel(
-    rng: np.random.Generator, n_suppliers: int, n_obs: int
-) -> list[np.ndarray]:
+def _generate_panel(rng: np.random.Generator, n_suppliers: int, n_obs: int) -> list[np.ndarray]:
     """Seeded per-supplier lead-time panels (days), log-normally distributed.
 
     Each supplier has its own true log-mean (between-supplier spread) and shares a

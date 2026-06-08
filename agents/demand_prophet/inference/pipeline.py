@@ -91,9 +91,7 @@ class DemandProphetPipeline:
                 # Without this guard a real model paired with an unfit calibrator
                 # raises RuntimeError on the FIRST real-path request → unhandled 500.
                 # Honest degradation: serve point + raw bands, stamp degraded.
-                logger.warning(
-                    "calibrator_unavailable", error=str(exc), fallback="raw model bands"
-                )
+                logger.warning("calibrator_unavailable", error=str(exc), fallback="raw model bands")
                 intervals = None
         if intervals is not None:
             # WS-12: surface empirical coverage so INV-DP-002 alert fires

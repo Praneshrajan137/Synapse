@@ -32,9 +32,7 @@ class WasteServingModel:
     def is_real(self) -> bool:
         return self._t.size >= 2 and self._s.size == self._t.size
 
-    def predict_waste_probability(
-        self, days_ahead: int, covariates: Any = None
-    ) -> dict[str, Any]:
+    def predict_waste_probability(self, days_ahead: int, covariates: Any = None) -> dict[str, Any]:
         """Interpolate the persisted survival curve at ``days_ahead`` (numpy)."""
         surv_at_t = float(np.interp(days_ahead, self._t, self._s, left=1.0, right=self._s[-1]))
         waste_probability = float(np.clip(1.0 - surv_at_t, 0.0, 1.0))

@@ -85,8 +85,11 @@ def train(config: object | None = None, *, smoke: bool = False) -> TrainResult:
     ckpt_path = CHECKPOINT_DIR / f"{SERVING_NAME}.pt"
     sha = save_checkpoint(params, ckpt_path)
     (CHECKPOINT_DIR / f"{SERVING_NAME}.serving.json").write_text(
-        json.dumps({"version": f"{'smoke' if smoke else 'full'}_{sha}", "smoke": smoke},
-                   sort_keys=True, separators=(",", ":")),
+        json.dumps(
+            {"version": f"{'smoke' if smoke else 'full'}_{sha}", "smoke": smoke},
+            sort_keys=True,
+            separators=(",", ":"),
+        ),
         encoding="utf-8",
     )
 

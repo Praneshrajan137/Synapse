@@ -38,7 +38,7 @@ def test_builder_produces_a_real_detector() -> None:
 def test_inv_ds_008_confidence_is_real_anomaly_margin() -> None:
     """INV-DS-008 — confidence varies with the anomaly-score margin, not constant."""
     model = _fitted_model()
-    decisive = model.confidence(np.zeros((1, 12)))      # clearly normal
+    decisive = model.confidence(np.zeros((1, 12)))  # clearly normal
     borderline = model.confidence(np.full((1, 12), 2.5))  # near the boundary
     # INV-DS-008: a decisive call is more confident than a borderline one; non-constant.
     assert decisive > borderline
