@@ -33,6 +33,15 @@ Phase 0: this is informational (flags today's gaps). Phase 4 wires ``--check``
 as a blocking CI gate; by then Phase 2 has driven the count to zero, so any
 regression to a synthetic shortcut fails CI. Reported via ``verify_claims.py``
 (C33).
+
+SCOPE BOUNDARY (ADR-043). This is a STATIC gate: it AST-walks the source and
+flags dishonest *shapes* (a constant-confidence literal, a guard-then-ignore
+fallback, RNG into a model). It is blind to *runtime* substance — it cannot tell
+whether a real model actually loads and executes, nor whether a "derived"
+confidence is secretly a constant produced by arithmetic on a fixed fallback
+band. Those are caught by the runtime counterpart, ``runtime_substance.py``
+(``verify_claims.py`` C42), which boots the real checkpoint through the serving
+path. The two gates are complementary: static shape here, runtime behaviour there.
 """
 
 from __future__ import annotations

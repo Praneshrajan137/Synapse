@@ -66,10 +66,14 @@ AGENT_ENDPOINTS: dict[str, str] = {
     "sustainability_agent": "http://sustainability-agent:8008",
 }
 
-# Digital-twin what-if engine (I-10 / I-12). Tier-4 decisions consult it for a
-# Monte-Carlo simulation before arbitration (C7). It speaks the same A2A
-# JSON-RPC dialect (method "simulate"); invocation degrades honestly (I-7).
-TWIN_ENDPOINT: str = "http://digital-twin:8009"
+# C7 (ADR-043): Tier-4 decisions are verified against the digital twin's
+# Monte-Carlo what-if before execution (orchestrator→twin is no longer dead
+# code). The twin exposes A2A `monte_carlo` (digital_twin/inference/serve.py);
+# its response conforms to MonteCarloOutput
+# (orchestrator/contracts/twin_simulation_contract.py). Bounded + degrades
+# honestly (I-7) so a slow/absent twin never stalls or 504s the decision.
+TWIN_ENDPOINT = "http://digital-twin:8009"
+TWIN_SCENARIOS = 1000
 
 
 class ConsensusProtocol:
@@ -200,11 +204,6 @@ class ConsensusProtocol:
     ) -> ConsensusDecision:
         proposals = await self._phase_collect(request)
 
-        # C7: Tier-4 (or any twin-flagged request) consults the digital twin's
-        # Monte-Carlo what-if engine and records the outcome before arbitration.
-        if tier == DecisionTier.TIER_4 or request.get("requires_twin_simulation"):
-            await self._phase_twin_simulate(request)
-
         debate_rounds = 0
         conflict = self._detect_conflicts(proposals)
         if conflict.has_conflict:
@@ -225,6 +224,16 @@ class ConsensusProtocol:
             pareto_front=pareto_result["pareto_front"],
             debate_rounds=debate_rounds,
         )
+
+        # ADR-043/C7: record whether the decision rested on any degraded agent input
+        # (a real model vs. an honest fallback), so the audit trail reflects substance.
+        self._record_input_provenance(proposals)
+
+        # C7: at the top tier the selected action is verified against the digital
+        # twin's Monte-Carlo what-if before execution — the twin is no longer dead
+        # code at Tier 4. Degrades honestly if the twin is unreachable (I-7).
+        if tier == DecisionTier.TIER_4:
+            decision = await self._phase_twin_verify(decision)
 
         passed, violations = self._guardrails.validate_decision(decision)
         if not passed:
@@ -289,56 +298,6 @@ class ConsensusProtocol:
         if response.error:
             raise RuntimeError(f"{agent_name}: {response.error}")
         return AgentProposal.model_validate(response.result)
-
-    # ── Phase 1b: Digital-twin Monte-Carlo what-if (Tier 4, C7) ─────────
-
-    async def _phase_twin_simulate(self, request: dict[str, Any]) -> None:
-        """Invoke the digital-twin what-if engine and record its result (I-10).
-
-        This is the production caller the twin never had (CURRENT.md C7). A
-        disruption tilts the scenario toward higher failure/lead-time stress.
-        Degrades honestly (I-7): if the twin is unreachable the decision still
-        proceeds — the simulation is advisory context, not load-bearing.
-        """
-        disruption = bool(request.get("disruption_active"))
-        params = {
-            "name": f"decision:{request.get('order_id', 'adhoc')}",
-            "description": "Tier-4 pre-arbitration what-if",
-            "demand_multiplier": 1.0,
-            "lead_time_multiplier": 1.5 if disruption else 1.0,
-            "failure_rate_multiplier": 2.0 if disruption else 1.0,
-            "spoilage_rate_multiplier": 1.0,
-            "n_scenarios": 1000,
-            "duration_hours": 4.0,
-        }
-        try:
-            # Bounded wait: the twin's Monte-Carlo (>=1000 scenarios) blows past
-            # its 10s SLA on a small CPU VM, so we cap the synchronous wait and
-            # degrade rather than stall the whole Tier-4 decision past the
-            # gateway timeout. The twin is advisory context, not load-bearing.
-            response = await send_a2a_request(
-                target_url=TWIN_ENDPOINT,
-                method="simulate",
-                params=params,
-                timeout=8.0,
-            )
-            if response.error:
-                raise RuntimeError(str(response.error))
-            self._append_context(
-                ContextMessage(
-                    source="digital_twin",
-                    content={"type": "twin_simulation", "result": response.result},
-                )
-            )
-        except Exception as exc:  # noqa: BLE001 — twin is advisory (I-7)
-            logger.warning("twin_simulate_unavailable", error=str(exc))
-            self._append_context(
-                ContextMessage(
-                    source="digital_twin",
-                    content={"type": "twin_simulation", "degraded": True},
-                    status=MessageStatus.ERROR,
-                )
-            )
 
     # ── Phase 2: LLM-mediated debate ────────────────────────────────────
 
@@ -413,6 +372,72 @@ class ConsensusProtocol:
             )
         )
         return result
+
+    # ── C7: Tier-4 digital-twin verification ────────────────────────────
+
+    async def _phase_twin_verify(self, decision: ConsensusDecision) -> ConsensusDecision:
+        """Verify the selected action against the digital twin's Monte-Carlo what-if.
+
+        Records the twin's predicted KPI distribution into the append-only context
+        and audit trace (I-14) so an operator sees the simulated outcome of the
+        decision before it executes. An unreachable twin degrades to an honest
+        ``twin_unavailable`` note and never blocks the decision (I-7).
+        """
+        note: dict[str, Any]
+        try:
+            resp = await send_a2a_request(
+                target_url=TWIN_ENDPOINT,
+                method="monte_carlo",
+                params={
+                    "consensus_action": decision.selected_action,
+                    "n_scenarios": TWIN_SCENARIOS,
+                },
+                # Bounded at 8s: 1000-scenario Monte-Carlo exceeds the twin's 10s
+                # SLA on the small CPU VM; cap the wait so a slow twin degrades to
+                # an honest note instead of stalling Tier-4 past the gateway timeout.
+                timeout=8.0,
+            )
+            if resp.error:
+                raise RuntimeError(resp.error)
+            mc = resp.result or {}
+            note = {
+                "type": "twin_verification",
+                "verdict": "twin_verified",
+                "n_scenarios": mc.get("n_scenarios"),
+                "kpi_means": mc.get("kpi_means", {}),
+            }
+        except Exception as exc:  # noqa: BLE001 — an unreachable twin degrades (I-7)
+            logger.warning("twin_verification_unavailable", error=str(exc))
+            note = {"type": "twin_verification", "verdict": "twin_unavailable", "error": str(exc)}
+
+        self._append_context(ContextMessage(source="digital_twin", content=note))
+        return decision.model_copy(
+            update={"audit_trace": [*decision.audit_trace, f"twin={note['verdict']}"]},
+        )
+
+    def _record_input_provenance(self, proposals: list[AgentProposal]) -> None:
+        """Append an honest summary of which proposals rested on a degraded input.
+
+        Reads each proposal's ``payload['provenance']`` (ADR-040) and records the
+        degraded agents into the append-only context, so the audit chain captures
+        whether the decision was built on real models or fallbacks (I-3/I-4 substance).
+        """
+        degraded: list[str] = []
+        for p in proposals:
+            payload = p.payload if isinstance(p.payload, dict) else {}
+            prov = payload.get("provenance", {})
+            if isinstance(prov, dict) and prov.get("degraded") is True:
+                degraded.append(str(p.agent_name))
+        self._append_context(
+            ContextMessage(
+                source="orchestrator",
+                content={
+                    "type": "input_provenance",
+                    "degraded_agents": degraded,
+                    "all_real": not degraded,
+                },
+            )
+        )
 
     # ── Phase 4: Execution dispatch ─────────────────────────────────────
 

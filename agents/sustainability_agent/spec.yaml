@@ -61,6 +61,16 @@ invariants:
     assertion: "output.to_deterministic_json() == output.to_deterministic_json()"
     severity: critical
 
+  - id: "INV-SA-010"
+    description: >
+      Runtime reality (ADR-043): provenance is honest about the waste model. With a fitted
+      KM survival curve loaded, the report is non-degraded with a PREDICTIVE_ENTROPY
+      confidence basis (1 − H(waste_prob), varying with horizon); with no fitted model the
+      report is honestly degraded with the I-7 floor — the legacy code stamped Provenance.real
+      even on the unfitted numpy fallback.
+    assertion: "(serving_model.is_real implies (not provenance.degraded and basis == PREDICTIVE_ENTROPY)) and (unfitted implies provenance.degraded)"
+    severity: critical
+
 preconditions:
   - id: "PRE-SA-001"
     description: "Route plan includes fuel_estimate_liters"

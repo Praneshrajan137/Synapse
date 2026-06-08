@@ -7,6 +7,7 @@ Port: 8001
 from __future__ import annotations
 
 from contextlib import asynccontextmanager
+from pathlib import Path
 from typing import TYPE_CHECKING
 
 import structlog
@@ -18,7 +19,10 @@ from synapse_common.models import DemandForecast
 
 from agents.demand_prophet.config import DemandProphetConfig
 from agents.demand_prophet.inference.pipeline import DemandProphetPipeline
-from agents.demand_prophet.inference.serving_model import load_serving_model
+from agents.demand_prophet.inference.serving_model import (
+    build_demand_prophet_model,
+    load_serving_model,
+)
 
 if TYPE_CHECKING:
     from collections.abc import AsyncIterator
@@ -29,12 +33,19 @@ _pipeline: DemandProphetPipeline | None = None
 _config: DemandProphetConfig | None = None
 
 
-def _build_model_registry(config: DemandProphetConfig) -> ModelRegistry:
-    """Construct the MLflow-backed registry. Never raises — degrades (I-7, ADR-041).
+ROOT = Path(__file__).resolve().parents[3]
+# Where train.py writes the serving artifact (``{name}.pt`` + ``{name}.serving.json``).
+SERVING_CHECKPOINT_DIR = ROOT / "artifacts" / "checkpoints"
 
-    A reachable MLflow tracking server yields an ``MlflowClient``; otherwise the
-    registry is constructed with ``mlflow_client=None`` and every ``load`` returns
-    a degraded handle, so serving falls back to the honest EMA path.
+
+def _build_model_registry(config: DemandProphetConfig) -> ModelRegistry:
+    """Construct the registry with a lineage path AND a $0 serving path (ADR-043).
+
+    Lineage: a reachable MLflow tracking server yields an ``MlflowClient``.
+    Serving ($0): a checkpoint resolved from the local ``artifacts/checkpoints``
+    dir and/or an HF Hub repo (``DP_HF_REPO``), built into a concrete model by
+    :func:`build_demand_prophet_model`. With neither reachable, every ``load``
+    returns a degraded handle and serving falls back to the honest EMA path (I-7).
     """
     # Bound the HTTP timeout so an unreachable tracking server fails fast and
     # serving degrades within seconds instead of blocking startup (the MlflowClient
@@ -44,39 +55,35 @@ def _build_model_registry(config: DemandProphetConfig) -> ModelRegistry:
 
     os.environ.setdefault("MLFLOW_HTTP_REQUEST_TIMEOUT", "3")
     os.environ.setdefault("MLFLOW_HTTP_REQUEST_MAX_RETRIES", "1")
+    hf_repo = os.environ.get("DP_HF_REPO") or None
+    client = None
     try:
         from mlflow.tracking import MlflowClient  # noqa: PLC0415
 
         client = MlflowClient(tracking_uri=config.mlflow_tracking_uri)
-        return ModelRegistry(client, tracking_uri=config.mlflow_tracking_uri)
     except Exception as exc:  # noqa: BLE001 — MLflow absent/unreachable degrades (I-7)
-        logger.warning("mlflow_unavailable", error=str(exc), fallback="degraded serving")
-        return ModelRegistry(None)
+        logger.warning("mlflow_unavailable", error=str(exc), fallback="checkpoint/EMA serving")
+    return ModelRegistry(
+        client,
+        tracking_uri=config.mlflow_tracking_uri,
+        checkpoint_dir=SERVING_CHECKPOINT_DIR,
+        hf_repo=hf_repo,
+        model_builder=build_demand_prophet_model,
+    )
 
 
 def _build_pipeline(config: DemandProphetConfig) -> DemandProphetPipeline:
-    """Load the trained model + conformal calibrator and wire the real pipeline.
+    """Resolve the trained model (which carries its fitted calibrator) and wire it.
 
-    This is the C39 serving-truth path: serving now resolves a real checkpoint via
-    ModelRegistry instead of always constructing ``model=None``. Any failure along
-    the way degrades to the honest fallback rather than taking the agent down (I-7).
+    This is the C39 serving-truth path: serving resolves a real checkpoint via
+    ModelRegistry instead of always constructing ``model=None``. The calibrator is
+    restored *fitted* from the checkpoint sidecar and travels on the serving model
+    (ADR-043) — no unfit calibrator is ever constructed (the latent-500 fix). Any
+    failure degrades to the honest fallback rather than taking the agent down (I-7).
     """
     registry = _build_model_registry(config)
     model = load_serving_model(registry, city=getattr(config, "city", "bengaluru"))
-    calibrator = None
-    if model is not None:
-        try:
-            from agents.demand_prophet.training.conformal import (  # noqa: PLC0415
-                ConformalCalibrator,
-            )
-
-            calibrator = ConformalCalibrator(
-                alpha=config.conformal_alpha,
-                coverage_target=config.conformal_coverage_target,
-            )
-        except Exception as exc:  # noqa: BLE001 — calibrator optional; serve point+raw band
-            logger.warning("calibrator_init_failed", error=str(exc))
-            calibrator = None
+    calibrator = getattr(model, "calibrator", None) if model is not None else None
     return DemandProphetPipeline(model=model, conformal_calibrator=calibrator)
 
 

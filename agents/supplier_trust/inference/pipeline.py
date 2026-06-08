@@ -14,19 +14,20 @@ from typing import TYPE_CHECKING, Any
 
 import numpy as np
 import structlog
-import torch
 from synapse_common.dbc import post, pre
 from synapse_common.provenance import ConfidenceBasis, FeatureSource, Provenance
 
 from agents.supplier_trust.config import SupplierTrustConfig
-from agents.supplier_trust.models.bayesian_lead import (
-    BayesianLeadTimeModel,
-    LeadTimePosterior,
-)
 
+# torch-free: the summary type lives in posterior.py; the pyro SVI model
+# (BayesianLeadTimeModel) is imported lazily only on the fit-per-call fallback so
+# the serving path (conjugate SupplierServingModel) runs without torch (ADR-043).
 if TYPE_CHECKING:
     from synapse_common.graph_client import GraphClient
 
+    from agents.supplier_trust.inference.serving_model import SupplierServingModel
+    from agents.supplier_trust.models.bayesian_lead import BayesianLeadTimeModel
+    from agents.supplier_trust.models.posterior import LeadTimePosterior
     from agents.supplier_trust.models.trust_gnn import SupplierTrustGNN
 
 logger = structlog.get_logger(__name__)
@@ -52,19 +53,36 @@ class SupplierTrustPipeline:
         bayesian_model: BayesianLeadTimeModel | None = None,
         config: SupplierTrustConfig | None = None,
         graph_client: GraphClient | None = None,
+        serving_model: SupplierServingModel | None = None,
     ) -> None:
         self._config = config or SupplierTrustConfig()
         self._gnn = gnn_model
-        self._bayesian = bayesian_model or BayesianLeadTimeModel(
+        # ADR-043: when a fitted prior is resolved by serve.py via ModelRegistry,
+        # scoring uses the torch-free conjugate SupplierServingModel. The pyro SVI
+        # model is the fit-per-call fallback (I-7), constructed lazily only then —
+        # so importing this pipeline never requires torch/pyro.
+        self._serving_model = serving_model
+        self._bayesian = bayesian_model  # may be None → built lazily on fallback
+        self._graph = graph_client  # may be None — graph signal is optional
+        # ADR-040: provenance of the most recent score, read by serve.py.
+        self.last_provenance: Provenance = Provenance.degraded_fallback()
+
+    def _ensure_bayesian(self) -> BayesianLeadTimeModel:
+        """Lazily construct the pyro SVI model for the fit-per-call fallback."""
+        if self._bayesian is not None:
+            return self._bayesian
+        from agents.supplier_trust.models.bayesian_lead import (  # noqa: PLC0415
+            BayesianLeadTimeModel,
+        )
+
+        self._bayesian = BayesianLeadTimeModel(
             prior_mu=self._config.prior_mu,
             prior_sigma=self._config.prior_sigma,
             learning_rate=self._config.svi_learning_rate,
             num_steps=self._config.svi_num_steps,
             num_samples=self._config.num_posterior_samples,
         )
-        self._graph = graph_client  # may be None — graph signal is optional
-        # ADR-040: provenance of the most recent score, read by serve.py.
-        self.last_provenance: Provenance = Provenance.degraded_fallback()
+        return self._bayesian
 
     @pre(
         lambda self, supplier_id, delivery_history, is_new_vendor=False, city="bengaluru": bool(
@@ -99,13 +117,23 @@ class SupplierTrustPipeline:
         if is_new_vendor or not delivery_history:
             return self._score_new_vendor(supplier_id)
 
-        lead_times = torch.tensor(
-            [d["lead_time_days"] for d in delivery_history],
-            dtype=torch.float32,
+        lead_days = np.asarray(
+            [float(d["lead_time_days"]) for d in delivery_history], dtype=np.float64
         )
-        lead_times = torch.clamp(lead_times, min=0.01)
+        if self._serving_model is not None and getattr(self._serving_model, "is_real", False):
+            # ADR-043 serving path: closed-form conjugate posterior (torch-free).
+            posterior = self._serving_model.posterior(np.clip(lead_days, 0.01, None))
+            model_ver = f"supplier_bayesian_serving:{self._serving_model.version}"
+        else:
+            # I-7 fallback: per-call SVI fit (needs torch/pyro; imported lazily).
+            import torch  # noqa: PLC0415
 
-        posterior = self._bayesian.predict(lead_times)
+            bayesian = self._ensure_bayesian()
+            lead_times = torch.clamp(
+                torch.tensor(lead_days.tolist(), dtype=torch.float32), min=0.01
+            )
+            posterior = bayesian.predict(lead_times)
+            model_ver = f"supplier_bayesian_lead:{bayesian.__class__.__name__}"
 
         on_time_rate = self._compute_on_time_rate(delivery_history)
         consecutive_late = self._count_consecutive_late(delivery_history)
@@ -125,7 +153,7 @@ class SupplierTrustPipeline:
 
         confidence = self._compute_confidence(delivery_history, posterior)
         self.last_provenance = Provenance.real(
-            model_version=f"supplier_bayesian_lead:{self._bayesian.__class__.__name__}",
+            model_version=model_ver,
             confidence_basis=ConfidenceBasis.POSTERIOR_SPREAD,
             feature_source=FeatureSource.DIRECT,
         )

@@ -8,6 +8,8 @@ INV-DP-002: 90% interval achieves >=85% empirical coverage.
 
 from __future__ import annotations
 
+from typing import Any
+
 import numpy as np
 import structlog
 
@@ -145,3 +147,40 @@ class ConformalCalibrator:
     def get_adjustments(self) -> dict[str, tuple[float, float]]:
         """Return calibration adjustments for MLflow logging."""
         return self._quantile_adjustments.copy()
+
+    # ------------------------------------------------------------------ #
+    # Serving persistence (ADR-043): the fitted state must travel with the
+    # checkpoint, or serving rebuilds an *unfit* calibrator whose first
+    # predict_intervals() raises (the latent-500 bug this fixes). The state is
+    # a small, deterministic JSON-able dict carried in the checkpoint sidecar.
+    # ------------------------------------------------------------------ #
+    def to_state(self) -> dict[str, Any]:
+        """Serialize the fitted calibration to a deterministic JSON-able dict."""
+        if not self._calibrated:
+            raise RuntimeError("refusing to serialize an unfit calibrator (ADR-043)")
+        return {
+            "alpha": self.alpha,
+            "coverage_target": self.coverage_target,
+            # tuples → lists so the structure round-trips through JSON unchanged.
+            "adjustments": {h: [lo, hi] for h, (lo, hi) in self._quantile_adjustments.items()},
+            "last_coverage_p90": self.last_coverage_p90,
+            "last_coverage_per_horizon": dict(self.last_coverage_per_horizon),
+        }
+
+    @classmethod
+    def from_state(cls, state: dict[str, Any]) -> ConformalCalibrator:
+        """Reconstruct a *fitted* calibrator from :meth:`to_state` output."""
+        calib = cls(
+            alpha=float(state["alpha"]),
+            coverage_target=float(state["coverage_target"]),
+        )
+        adjustments: dict[str, Any] = state.get("adjustments", {}) or {}
+        calib._quantile_adjustments = {
+            str(h): (float(pair[0]), float(pair[1])) for h, pair in adjustments.items()
+        }
+        cov_p90 = state.get("last_coverage_p90")
+        calib.last_coverage_p90 = float(cov_p90) if cov_p90 is not None else None
+        per_horizon: dict[str, Any] = state.get("last_coverage_per_horizon", {}) or {}
+        calib.last_coverage_per_horizon = {str(h): float(c) for h, c in per_horizon.items()}
+        calib._calibrated = True
+        return calib

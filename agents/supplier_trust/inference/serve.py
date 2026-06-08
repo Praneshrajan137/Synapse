@@ -2,16 +2,23 @@
 
 from __future__ import annotations
 
+import os
 from contextlib import asynccontextmanager
+from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 import structlog
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel, Field
+from synapse_common.model_registry import ModelRegistry
 
 from agents.supplier_trust.inference.pipeline import (
     SupplierTrustPipeline,
     TrustScoreResult,
+)
+from agents.supplier_trust.inference.serving_model import (
+    build_supplier_model,
+    load_serving_model,
 )
 
 if TYPE_CHECKING:
@@ -20,12 +27,37 @@ if TYPE_CHECKING:
 logger = structlog.get_logger(__name__)
 _pipeline: SupplierTrustPipeline | None = None
 
+ROOT = Path(__file__).resolve().parents[3]
+# Where train.py writes the SVI-fitted lead-time prior (supplier_bayesian.pt + sidecar).
+SERVING_CHECKPOINT_DIR = ROOT / "artifacts" / "checkpoints"
+
+
+def _build_pipeline() -> SupplierTrustPipeline:
+    """Resolve the SVI-fitted lead-time prior and wire it (C39, ADR-043).
+
+    The $0 ModelRegistry source resolves the prior checkpoint; an injected builder
+    turns it into a torch-free conjugate SupplierServingModel. With no checkpoint
+    the serving model is None and scoring takes the per-call SVI fit fallback (I-7).
+    """
+    registry = ModelRegistry(
+        None,
+        checkpoint_dir=SERVING_CHECKPOINT_DIR,
+        hf_repo=os.environ.get("ST_HF_REPO") or None,
+        model_builder=build_supplier_model,
+    )
+    serving_model = load_serving_model(registry)
+    return SupplierTrustPipeline(serving_model=serving_model)
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     global _pipeline  # noqa: PLW0603
-    _pipeline = SupplierTrustPipeline()
-    logger.info("supplier_trust_started", port=8007)
+    _pipeline = _build_pipeline()
+    logger.info(
+        "supplier_trust_started",
+        port=8007,
+        calibrated=_pipeline._serving_model is not None,
+    )
     yield
     logger.info("supplier_trust_shutdown")
 

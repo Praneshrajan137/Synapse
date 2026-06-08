@@ -25,10 +25,10 @@ class _FakeOnline:
         n = len(self._skus)
         return {
             "sku_id": self._skus,
-            "demand_features:rolling_7d_mean": [10.0] * n,
-            "demand_features:rolling_7d_std": [1.0] * n,
-            "demand_features:trend": [0.1] * n,
-            "demand_features:dow_seasonality": [0.2] * n,
+            "sku_demand_signals:rolling_mean_7d": [10.0] * n,
+            "sku_demand_signals:rolling_std_7d": [1.0] * n,
+            "sku_demand_signals:trend_slope": [0.1] * n,
+            "sku_demand_signals:seasonality_idx": [0.2] * n,
         }
 
 

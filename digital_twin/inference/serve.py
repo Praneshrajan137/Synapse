@@ -37,7 +37,7 @@ AGENT_CARD = AgentCard(
     version="1.0.0",
     url="http://digital-twin:8009",
     capabilities=["simulate", "monte_carlo", "what_if", "divergence_check"],
-    supported_methods=["simulate", "get_topology", "health"],
+    supported_methods=["simulate", "monte_carlo", "health"],
 )
 
 
@@ -140,6 +140,24 @@ async def a2a_handler(request: A2ARequest) -> A2AResponse:
             return A2AResponse(
                 id=request.id,
                 error={"code": -32602, "message": str(e)},
+            )
+
+    if request.method == "monte_carlo":
+        # C7 (ADR-043): the orchestrator verifies a Tier-4 action against the twin's
+        # Monte-Carlo what-if. Returns a MonteCarloOutput (consumer contract in
+        # orchestrator/contracts/twin_simulation_contract.py). Honest failure on a
+        # bad request or sim error — never a 500 that breaks the A2A envelope.
+        try:
+            from digital_twin.simulation.monte_carlo import MonteCarloRunner
+
+            n = int(request.params.get("n_scenarios", 1000))
+            output = MonteCarloRunner().run_scenarios(n=n)
+            return A2AResponse(id=request.id, result=output.to_dict())
+        except (ValueError, TypeError) as e:
+            return A2AResponse(id=request.id, error={"code": -32602, "message": str(e)})
+        except Exception as e:  # noqa: BLE001 — sim/engine failure degrades (I-7)
+            return A2AResponse(
+                id=request.id, error={"code": -32000, "message": f"monte_carlo failed: {e}"}
             )
 
     if request.method == "health":

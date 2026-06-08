@@ -61,6 +61,16 @@ invariants:
     assertion: "output.to_deterministic_json() == output.to_deterministic_json()"
     severity: critical
 
+  - id: "INV-RN-010"
+    description: >
+      Runtime reality (ADR-043): when a trained optimality-gap calibration is loaded,
+      the Tier-2 solver output is genuinely real -- provenance.degraded is False with an
+      OPTIMALITY_GAP confidence basis, and confidence is the calibrated optimality
+      percentile (a near-optimal route scores higher than a loose one), never the
+      greedy Tier-1 floor.
+    assertion: "not provenance.degraded and provenance.confidence_basis == OPTIMALITY_GAP and confidence != 0.5"
+    severity: critical
+
 preconditions:
   - id: "PRE-RN-001"
     description: "Order batch non-empty"

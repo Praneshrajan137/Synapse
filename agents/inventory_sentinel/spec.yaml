@@ -55,6 +55,15 @@ invariants:
     assertion: "output.to_deterministic_json() == output.to_deterministic_json()"
     severity: critical
 
+  - id: "INV-IS-009"
+    description: >
+      Runtime reality (ADR-043): when the fitted conformal calibration is loaded, the newsvendor
+      decision is non-degraded with a RESIDUAL_VARIANCE confidence basis, and confidence varies
+      with forecast volatility (a low-variance SKU is more confident than a high-variance one) —
+      with no calibration the bounds are empty and the decision is honestly degraded.
+    assertion: "serving_model.is_real implies (not provenance.degraded and basis == RESIDUAL_VARIANCE and confidence(low_vol) > confidence(high_vol))"
+    severity: critical
+
 preconditions:
   - id: "PRE-IS-001"
     description: "Store ID valid"

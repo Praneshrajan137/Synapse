@@ -129,6 +129,11 @@ module = "feast.*"
 ignore_missing_imports = true
 
 [[tool.mypy.overrides]]
+# huggingface_hub is the $0 serving-checkpoint source (ADR-043); imported lazily.
+module = "huggingface_hub.*"
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
 module = "flwr.*"
 ignore_missing_imports = true
 

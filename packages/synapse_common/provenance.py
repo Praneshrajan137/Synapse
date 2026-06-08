@@ -53,6 +53,8 @@ class ConfidenceBasis(StrEnum):
     OPTIMALITY_GAP = "optimality_gap"  # solver gap to the exact optimum (lower gap → higher conf)
     RESIDUAL_VARIANCE = "residual_variance"
     SURVIVAL_CI_WIDTH = "survival_ci_width"
+    ANOMALY_SCORE_MARGIN = "anomaly_score_margin"  # |score − threshold| (decisiveness of the call)
+    PREDICTIVE_ENTROPY = "predictive_entropy"  # 1 − H(p) of a probabilistic prediction
     FALLBACK_FLOOR = "fallback_floor"  # degraded path: confidence is the I-7 floor
     CONSTANT = "constant"  # NEVER acceptable on a real path — flagged by substance_truth
 
