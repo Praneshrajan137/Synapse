@@ -11,7 +11,11 @@ RUN pip install --no-cache-dir -r /tmp/requirements.txt \
     opentelemetry-api==1.27.0 opentelemetry-sdk==1.27.0 \
     opentelemetry-instrumentation-fastapi==0.48b0 \
     opentelemetry-instrumentation-requests==0.48b0 \
-    opentelemetry-exporter-otlp-proto-http==1.27.0
+    opentelemetry-exporter-otlp-proto-http==1.27.0 \
+    'aiokafka>=0.10,<0.12' 'neo4j>=5.20,<5.26'
+# aiokafka: the /ws/firehose consumer (without it the firehose degrades to
+# heartbeat-only and never streams Kafka decisions to the UI).
+# neo4j: the /api/v1/topology graph (without it topology returns synthetic data).
 
 COPY packages/ /app/packages/
 COPY api/ /app/api/
