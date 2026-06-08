@@ -12,9 +12,11 @@ RUN pip install --no-cache-dir -r /tmp/requirements.txt \
     opentelemetry-instrumentation-fastapi==0.48b0 \
     opentelemetry-instrumentation-requests==0.48b0 \
     opentelemetry-exporter-otlp-proto-http==1.27.0 \
-    'aiokafka>=0.10,<0.12' 'neo4j>=5.20,<5.26'
+    'aiokafka>=0.10,<0.12' 'neo4j>=5.20,<5.26' 'zstandard>=0.22,<0.24'
 # aiokafka: the /ws/firehose consumer (without it the firehose degrades to
 # heartbeat-only and never streams Kafka decisions to the UI).
+# zstandard: the orchestrator publishes zstd-compressed Kafka messages; without
+# it aiokafka raises UnsupportedCodecError and the firehose delivers nothing.
 # neo4j: the /api/v1/topology graph (without it topology returns synthetic data).
 
 COPY packages/ /app/packages/
