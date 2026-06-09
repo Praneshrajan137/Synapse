@@ -77,8 +77,12 @@ def train(config: object | None = None, *, smoke: bool = False) -> TrainResult:
 
     seed = 42
     rng = np.random.default_rng(seed)
-    n_suppliers = 30 if smoke else 120
-    n_obs = 24 if smoke else 60
+    # Smoke uses a deliberately small panel for CI speed, but the held-out 80%
+    # interval coverage (C40) is estimated over n_suppliers/2 × n_obs/2 points, so
+    # too-small a panel makes the estimate noisy and biased low. 40×40 keeps the
+    # SVI fit trivial (1600 pooled points) while giving a stable ~0.78 estimate.
+    n_suppliers = 40 if smoke else 120
+    n_obs = 40 if smoke else 60
     num_steps = 200 if smoke else 1000
 
     panels = _generate_panel(rng, n_suppliers, n_obs)
@@ -91,8 +95,14 @@ def train(config: object | None = None, *, smoke: bool = False) -> TrainResult:
     # residual std → the per-delivery log-noise sigma.
     log_means = np.array([float(np.mean(np.log(p))) for p in panels])
     prior_mu_scale = float(np.std(log_means)) or 0.1
-    within_resid = np.concatenate([np.log(p) - np.mean(np.log(p)) for p in panels])
-    sigma = float(np.std(within_resid)) or 0.1
+    # Unbiased pooled within-supplier log-noise: each panel loses one degree of
+    # freedom to its own sample mean, so divide the pooled residual SS by
+    # (N_total − n_suppliers), not N. The old ddof=0 np.std estimate biased sigma
+    # low (~0.39 vs true 0.40), narrowing the predictive interval and dragging
+    # held-out coverage below the C40 floor.
+    _resid_ss = sum(float(np.sum((np.log(p) - np.mean(np.log(p))) ** 2)) for p in panels)
+    _resid_dof = max(sum(len(p) for p in panels) - len(panels), 1)
+    sigma = float(np.sqrt(_resid_ss / _resid_dof)) or 0.1
 
     prior = {
         "prior_mu": round(float(mu_loc), 6),
