@@ -15,6 +15,12 @@ dependencies = [
     "prometheus-client>=0.20.0,<1.0",
     "structlog>=24.1.0,<25.0",
     "deal>=4.24.0,<5.0",
+    # RUNTIME dep: synapse_common.schemas + schema_registry hard-import
+    # Draft7Validator at module load, and both sit on the agent serving import
+    # path (pricing_oracle a2a handler, routing_navigator pipeline). It was
+    # mis-classified as dev-only, so production images (core deps only) crash-
+    # looped with "ModuleNotFoundError: No module named 'jsonschema'". MIT.
+    "jsonschema>=4.22.0,<5.0",
 ]
 
 [project.optional-dependencies]
@@ -29,7 +35,7 @@ dev = [
     "whatthepatch>=1.0.7,<2.0",
     "schemathesis>=3.30.0,<4.0",
     "pyyaml>=6.0.0,<7.0",
-    "jsonschema>=4.22.0,<5.0",
+    # jsonschema is now a CORE dependency (above) — dev installs inherit it.
 ]
 
 [tool.setuptools.packages.find]
