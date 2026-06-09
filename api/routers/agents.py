@@ -49,7 +49,10 @@ async def _probe(name: str, overlay: str | None) -> tuple[str, str]:
         return name, f"unreachable: {exc.__class__.__name__}"
 
 
-@router.get("/")
+# Empty path (not "/") so the canonical route is exactly the prefix
+# "/api/v1/agents" — matching the frontend's no-trailing-slash call
+# (frontend/src/transport/synapse-api.ts) instead of 307-redirecting it.
+@router.get("")
 async def list_agents() -> dict[str, Any]:
     overlay = os.environ.get("SYNAPSE_CITY_OVERLAY")
     health_results = await asyncio.gather(*[_probe(a, overlay) for a in AGENTS])
