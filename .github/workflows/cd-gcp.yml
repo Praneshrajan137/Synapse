@@ -213,8 +213,31 @@ jobs:
           echo "Instance status before start: ${STATUS}"
           if [ "${STATUS}" != "RUNNING" ]; then
             echo "Starting ${{ vars.GCP_VM }}…"
-            gcloud compute instances start ${{ vars.GCP_VM }} \
-              --zone=${{ vars.GCP_ZONE }} --quiet
+            # A specific machine type in a single zone can be transiently out of
+            # capacity (ZONE_RESOURCE_POOL_EXHAUSTED) — the boot disk is zonal so
+            # we cannot fail over to another zone, and we do NOT silently upgrade
+            # to a pricier machine type (cost stays at the e2-standard-8 baseline,
+            # I-1). Capacity almost always returns within minutes, so retry the
+            # SAME type with backoff (45,90,135,180,225s ≈ 11 min total) before
+            # giving up with an actionable message.
+            started=""
+            for attempt in 1 2 3 4 5; do
+              if gcloud compute instances start ${{ vars.GCP_VM }} \
+                   --zone=${{ vars.GCP_ZONE }} --quiet 2>/tmp/vm_start.err; then
+                started=1; break
+              fi
+              cat /tmp/vm_start.err
+              if ! grep -q ZONE_RESOURCE_POOL_EXHAUSTED /tmp/vm_start.err; then
+                echo "::error::instance start failed for a non-capacity reason"; exit 1
+              fi
+              wait=$((attempt * 45))
+              echo "Zone capacity exhausted; retrying in ${wait}s (attempt ${attempt}/5)…"
+              sleep "${wait}"
+            done
+            if [ -z "${started}" ]; then
+              echo "::error::asia-south1-a has no e2-standard-8 capacity after 5 attempts (~11 min). Transient GCP constraint — re-run this deploy later, or temporarily widen the ADR-036 auto-stop window so the VM stays up between demos."
+              exit 1
+            fi
             # Boot + sshd + IAP backend can take ~30-60s on first start.
             for i in $(seq 1 18); do
               if gcloud compute ssh ${{ vars.GCP_VM }} \
