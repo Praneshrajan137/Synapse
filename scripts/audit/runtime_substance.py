@@ -349,7 +349,14 @@ def _probe_pricing_oracle() -> RuntimeProbe:
             "pricing_features:demand_elasticity": lambda i: -0.5 - 0.3 * i,
             "pricing_features:competitor_price_ratio": lambda i: 0.9 + 0.1 * i,
             "pricing_features:inventory_pressure": lambda i: 0.2 + 0.2 * i,
-            "pricing_features:rolling_7d_units": lambda i: 50.0 + 10.0 * i,
+            # Normalized scale (matches the unit-test fixture + the standardized
+            # controls the elasticity model was fit on). rolling_7d_units is NOT
+            # materialized in production (it resolves to 0 via the FeatureProvider),
+            # so raw counts (50/60/70) are out-of-distribution: the +0.10 weight
+            # makes 0.10*50=+5 dominate the linear sum, saturating every SKU at the
+            # -0.01 elasticity clip -> identical confidence. Normalized values keep
+            # the per-SKU demand-elasticity signal visible so confidence varies.
+            "pricing_features:rolling_7d_units": lambda i: 0.4 + 0.2 * i,
         }
     )
     registry = ModelRegistry(None, checkpoint_dir=ckpt.parent, model_builder=build_pricing_model)
