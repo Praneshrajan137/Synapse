@@ -99,7 +99,7 @@ def train(config: object | None = None, *, smoke: bool = False) -> TrainResult:
     import torch  # noqa: PLC0415
 
     from agents.pricing_oracle.models.maddpg import CATEGORIES as MADDPG_CATS  # noqa: PLC0415
-    from agents.pricing_oracle.models.maddpg import PricingMADDPG  # noqa: PLC0415
+    from agents.pricing_oracle.models.maddpg import ESSENTIAL_CAP, PricingMADDPG  # noqa: PLC0415
 
     seed = 42
     torch.manual_seed(seed)
@@ -141,8 +141,16 @@ def train(config: object | None = None, *, smoke: bool = False) -> TrainResult:
         for c in MADDPG_CATS:
             el = torch.tensor(BASE_ELASTICITY[c], dtype=torch.float32)
             cost = torch.tensor(costs[c], dtype=torch.float32)
+            # The bad baseline is a fixed naive gouge multiplier, held to the SAME
+            # guardrail the policy obeys: essentials are HARD-CAPPED at 1.3 (I-6).
+            # Essentials are so inelastic (el=-0.3) their unconstrained profit
+            # optimum sits at m*=cost-1/el≈3.8 — far past the cap — so an uncapped
+            # 2.5 would out-earn the capped policy and make the comparison measure
+            # the guardrail, not learning. Capping the baseline identically makes
+            # essential a fair tie; the four elastic categories carry the margin.
+            bad_mult = min(2.5, ESSENTIAL_CAP) if c == "essential" else 2.5
             good += float(_profit(trained[c].squeeze(), el, cost))
-            bad += float(_profit(torch.tensor(2.5), el, cost))
+            bad += float(_profit(torch.tensor(bad_mult), el, cost))
     good_beats_bad = good > bad
 
     CHECKPOINT_DIR.mkdir(parents=True, exist_ok=True)
