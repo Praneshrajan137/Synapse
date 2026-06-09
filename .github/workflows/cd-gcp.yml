@@ -246,6 +246,8 @@ jobs:
             --zone=${{ vars.GCP_ZONE }} \
             --tunnel-through-iap \
             --quiet \
+            --ssh-flag="-o ServerAliveInterval=30" \
+            --ssh-flag="-o ServerAliveCountMax=20" \
             --command="set -e; \
                 if [ ! -d ~/synapse/.git ]; then \
                   git clone ${CLONE_URL} ~/synapse; \
@@ -306,6 +308,8 @@ jobs:
             --zone=${{ vars.GCP_ZONE }} \
             --tunnel-through-iap \
             --quiet \
+            --ssh-flag="-o ServerAliveInterval=30" \
+            --ssh-flag="-o ServerAliveCountMax=20" \
             --command="cd ~/synapse && touch .env.gcp .env.gcp.local && echo 'env overlays present:' && ls -la .env.gcp .env.gcp.local"
 
       - name: Cosign verify images BEFORE start
@@ -321,6 +325,8 @@ jobs:
             --zone=${{ vars.GCP_ZONE }} \
             --tunnel-through-iap \
             --quiet \
+            --ssh-flag="-o ServerAliveInterval=30" \
+            --ssh-flag="-o ServerAliveCountMax=20" \
             --command="set -e; cd ~/synapse && \
                        gcloud --quiet auth configure-docker ${{ env.AR_HOST }} && \
                        export GITHUB_REPO='${{ github.repository }}' && \
@@ -341,6 +347,8 @@ jobs:
             --zone=${{ vars.GCP_ZONE }} \
             --tunnel-through-iap \
             --quiet \
+            --ssh-flag="-o ServerAliveInterval=30" \
+            --ssh-flag="-o ServerAliveCountMax=20" \
             --command="set -e; cd ~/synapse && \
                        gcloud --quiet auth configure-docker ${{ env.AR_HOST }} && \
                        echo '== Deploying:' && cat .env.gcp.version && \
@@ -379,6 +387,8 @@ jobs:
             --zone=${{ vars.GCP_ZONE }} \
             --tunnel-through-iap \
             --quiet \
+            --ssh-flag="-o ServerAliveInterval=30" \
+            --ssh-flag="-o ServerAliveCountMax=20" \
             --command="cd ~/synapse && \
                        docker compose -f docker/docker-compose.gcp.yml --env-file .env.gcp --env-file .env.gcp.local exec -T postgres psql -U synapse -d synapse_audit -v ON_ERROR_STOP=1 -f /docker-entrypoint-initdb.d/07_ws5_steering.sql && \
                        docker compose -f docker/docker-compose.gcp.yml --env-file .env.gcp --env-file .env.gcp.local exec -T postgres psql -U synapse -d synapse_audit -v ON_ERROR_STOP=1 -f /docker-entrypoint-initdb.d/08_wsA_consensus_city.sql"
@@ -394,6 +404,8 @@ jobs:
             --zone=${{ vars.GCP_ZONE }} \
             --tunnel-through-iap \
             --quiet \
+            --ssh-flag="-o ServerAliveInterval=30" \
+            --ssh-flag="-o ServerAliveCountMax=20" \
             --command="cd ~/synapse && \
                        (command -v jq >/dev/null 2>&1 || sudo apt-get install -y jq >/dev/null 2>&1) && \
                        bash scripts/create_kafka_topics.sh"
@@ -404,6 +416,8 @@ jobs:
             --zone=${{ vars.GCP_ZONE }} \
             --tunnel-through-iap \
             --quiet \
+            --ssh-flag="-o ServerAliveInterval=30" \
+            --ssh-flag="-o ServerAliveCountMax=20" \
             --command="for i in \$(seq 1 30); do \
                          curl -sf http://localhost/healthz >/dev/null && echo 'Frontend OK' && exit 0; \
                          echo \"...not ready (\$i/30)\"; sleep 10; \
@@ -418,6 +432,8 @@ jobs:
             --zone=${{ vars.GCP_ZONE }} \
             --tunnel-through-iap \
             --quiet \
+            --ssh-flag="-o ServerAliveInterval=30" \
+            --ssh-flag="-o ServerAliveCountMax=20" \
             --command="cd ~/synapse && \
                        docker compose -f docker/docker-compose.gcp.yml --env-file .env.gcp --env-file .env.gcp.local \
                          exec -T orchestrator python -m orchestrator.audit.cli verify || \
