@@ -70,6 +70,7 @@ jobs:
       # native arm64 runner — re-add `linux/arm64` here once an Ampere
       # self-hosted runner is registered (see deploy-oracle-canary).
       - name: Build + push (amd64)
+        id: build
         uses: docker/build-push-action@v5
         with:
           context: ${{ steps.ctx.outputs.context }}
@@ -92,14 +93,25 @@ jobs:
         uses: sigstore/cosign-installer@v3
         with:
           cosign-release: 'v2.4.0'
-      - name: Sign images (keyless via GitHub OIDC)
+      - name: Sign image (keyless via GitHub OIDC, by digest)
         env:
           COSIGN_EXPERIMENTAL: "1"
         run: |
-          cosign sign --yes \
-            ghcr.io/${{ steps.repo.outputs.slug }}/${{ matrix.component }}:${{ github.sha }}
-          cosign sign --yes \
-            ghcr.io/${{ steps.repo.outputs.slug }}/${{ matrix.component }}:latest
+          # Sign BY DIGEST, not tag. cosign warns that signing a tag can sign a
+          # different image than intended (a tag is mutable); the :sha and :latest
+          # tags both resolve to this one immutable digest, so a single digest
+          # signature covers both. Retry to ride out transient sigstore/Fulcio
+          # HTTP/2 stream errors ("INTERNAL_ERROR; received from peer") that
+          # previously failed the whole matrix leg (one flaky leg = red CD).
+          ref="ghcr.io/${{ steps.repo.outputs.slug }}/${{ matrix.component }}@${{ steps.build.outputs.digest }}"
+          for attempt in 1 2 3; do
+            if cosign sign --yes "$ref"; then
+              echo "signed $ref"; exit 0
+            fi
+            echo "cosign sign attempt $attempt failed; retrying in $((attempt * 10))s"
+            sleep $((attempt * 10))
+          done
+          echo "cosign sign failed after 3 attempts for $ref"; exit 1
 
   sbom-and-cve-gates:
     # WS-8 §3 + §4: SBOM-drift gate + CVE-budget gate. Runs on every push
