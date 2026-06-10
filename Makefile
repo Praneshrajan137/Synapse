@@ -582,6 +582,11 @@ deploy-gcp-verify: ## Verify GCP deployment health (endpoints + audit chain inte
 	@echo "  Frontend  : https://$(GCP_IP)/   (or your DOMAIN_NAME)"
 	@echo "============================================="
 
+verify-live: ## Assert the live deploy is current + working (Deploy Truth oracle, external mode)
+	@test -n "$(GCP_IP)" || (echo "ERROR: GCP_IP not set" && exit 1)
+	python scripts/deploy/verify_live.py --external --base-url https://$(subst .,-,$(GCP_IP)).nip.io \
+		$(if $(EXPECT_SHA),--expect-sha $(EXPECT_SHA),)
+
 deploy-gcp-smoke: ## End-to-end smoke check on GCP VM (memory, docker, ollama, mounts)
 	@test -n "$(GCP_IP)" || (echo "ERROR: GCP_IP not set" && exit 1)
 	@echo "=== GCP VM smoke checks ==="

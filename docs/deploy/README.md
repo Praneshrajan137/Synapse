@@ -42,7 +42,24 @@ The compose file at `docker/docker-compose.gcp.yml` references **pre-built, cosi
 
 ### Verifying a deploy succeeded
 
-The deployed git SHA is visible in three independent places. They must all agree with `git rev-parse main`:
+**Since Sprint 14 this is automatic.** Every CD-GCP run ends with two blocking
+steps driven by `scripts/deploy/verify_live.py` (the deploy-truth oracle):
+
+- **containers** (on the VM): every compose service running + healthy,
+  `RestartCount == 0`, and one decision probed end-to-end through
+  orchestrator → outbox → Kafka;
+- **external** (from the runner): deployed `/version` SHA **==** the merged
+  commit, plus healthz / topology / agents (no 307) / decisions auth gate /
+  firehose WebSocket handshake.
+
+A failure turns the workflow red **and auto-opens a `sev1 deploy-failure`
+issue**. To run the same assertions by hand:
+
+```bash
+make verify-live GCP_IP=<ip> EXPECT_SHA=$(git rev-parse main)
+```
+
+The deployed git SHA is also visible in three independent places. They must all agree with `git rev-parse main`:
 
 ```bash
 # 1. The API gateway reports its own SHA

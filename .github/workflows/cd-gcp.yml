@@ -56,6 +56,7 @@ permissions:
   contents: read
   id-token: write  # required by google-github-actions/auth (WIF)
   packages: read
+  issues: write  # deploy-failure auto-issue (Deploy Truth, Sprint 14)
 
 concurrency:
   group: cd-gcp
@@ -74,19 +75,24 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
+        # `entry` = the module the container's CMD imports. The import-smoke
+        # step imports it inside the freshly built image, so a runtime dep
+        # missing from the image (CI installs dev deps; images don't — the
+        # jsonschema incident) fails HERE, before anything is deployed.
+        # Frontend is static nginx: no Python entry, smoke skipped.
         include:
-          - { image: api-gateway,          context: ".", dockerfile: api/Dockerfile }
-          - { image: orchestrator,         context: ".", dockerfile: orchestrator/Dockerfile }
-          - { image: digital-twin,         context: ".", dockerfile: digital_twin/Dockerfile }
-          - { image: demand-prophet,       context: ".", dockerfile: agents/demand_prophet/Dockerfile }
-          - { image: routing-navigator,    context: ".", dockerfile: agents/routing_navigator/Dockerfile }
-          - { image: inventory-sentinel,   context: ".", dockerfile: agents/inventory_sentinel/Dockerfile }
-          - { image: freshness-guardian,   context: ".", dockerfile: agents/freshness_guardian/Dockerfile }
-          - { image: pricing-oracle,       context: ".", dockerfile: agents/pricing_oracle/Dockerfile }
-          - { image: disruption-shield,    context: ".", dockerfile: agents/disruption_shield/Dockerfile }
-          - { image: supplier-trust,       context: ".", dockerfile: agents/supplier_trust/Dockerfile }
-          - { image: sustainability-agent, context: ".", dockerfile: agents/sustainability_agent/Dockerfile }
-          - { image: frontend,             context: "frontend", dockerfile: frontend/Dockerfile }
+          - { image: api-gateway,          context: ".", dockerfile: api/Dockerfile,                          entry: api.main }
+          - { image: orchestrator,         context: ".", dockerfile: orchestrator/Dockerfile,                 entry: orchestrator.inference.serve }
+          - { image: digital-twin,         context: ".", dockerfile: digital_twin/Dockerfile,                 entry: digital_twin.inference.serve }
+          - { image: demand-prophet,       context: ".", dockerfile: agents/demand_prophet/Dockerfile,        entry: agents.demand_prophet.inference.serve }
+          - { image: routing-navigator,    context: ".", dockerfile: agents/routing_navigator/Dockerfile,     entry: agents.routing_navigator.inference.serve }
+          - { image: inventory-sentinel,   context: ".", dockerfile: agents/inventory_sentinel/Dockerfile,    entry: agents.inventory_sentinel.inference.serve }
+          - { image: freshness-guardian,   context: ".", dockerfile: agents/freshness_guardian/Dockerfile,    entry: agents.freshness_guardian.inference.serve }
+          - { image: pricing-oracle,       context: ".", dockerfile: agents/pricing_oracle/Dockerfile,        entry: agents.pricing_oracle.inference.serve }
+          - { image: disruption-shield,    context: ".", dockerfile: agents/disruption_shield/Dockerfile,     entry: agents.disruption_shield.inference.serve }
+          - { image: supplier-trust,       context: ".", dockerfile: agents/supplier_trust/Dockerfile,        entry: agents.supplier_trust.inference.serve }
+          - { image: sustainability-agent, context: ".", dockerfile: agents/sustainability_agent/Dockerfile,  entry: agents.sustainability_agent.inference.serve }
+          - { image: frontend,             context: "frontend", dockerfile: frontend/Dockerfile,              entry: "" }
     steps:
       - uses: actions/checkout@v4
 
@@ -161,6 +167,18 @@ jobs:
             org.opencontainers.image.created=${{ steps.tags.outputs.build_time }}
           cache-from: type=gha,scope=${{ matrix.image }}
           cache-to: type=gha,scope=${{ matrix.image }},mode=max
+
+      - name: Import smoke (runtime-deps truth, Sprint 14)
+        if: matrix.entry != ''
+        run: |
+          # Import the exact module the container's CMD runs, inside the
+          # image just pushed (by digest — immutable). A runtime dependency
+          # that exists in CI but not in the image fails here, before the
+          # image is signed or deployed. This is precisely the test that
+          # would have caught the jsonschema crash-loop (PR #42) pre-deploy.
+          docker run --rm \
+            "${{ steps.tags.outputs.image_ref }}@${{ steps.build.outputs.digest }}" \
+            python -c "import importlib; importlib.import_module('${{ matrix.entry }}'); print('import-smoke OK: ${{ matrix.entry }}')"
 
       - name: Install Cosign
         uses: sigstore/cosign-installer@v3
@@ -449,6 +467,40 @@ jobs:
                        docker compose -f ~/synapse/docker/docker-compose.gcp.yml ps; \
                        exit 1"
 
+      - name: Verify deploy truth (containers)
+        run: |
+          # Deploy Truth (Sprint 14): "Wait for health" only proves nginx
+          # answers — the jsonschema incident shipped with 2 agents crash-
+          # looping behind a green deploy. This asserts EVERY compose
+          # service is running + healthy, RestartCount==0 (fresh deploy),
+          # and one decision actually flows orchestrator -> outbox ->
+          # Kafka. Any failure fails the deploy loudly.
+          gcloud compute ssh ${{ vars.GCP_VM }} \
+            --zone=${{ vars.GCP_ZONE }} \
+            --tunnel-through-iap \
+            --quiet \
+            --ssh-flag="-o ServerAliveInterval=30" \
+            --ssh-flag="-o ServerAliveCountMax=20" \
+            --command="set -e; cd ~/synapse && \
+                       (command -v python3 >/dev/null 2>&1 || sudo apt-get install -y python3 >/dev/null 2>&1) && \
+                       python3 scripts/deploy/verify_live.py --on-vm --probe-decision"
+
+      - name: Verify deploy truth (external)
+        run: |
+          # The user-facing assertion: from OUTSIDE the VM, the deployed
+          # /version SHA must equal the commit this workflow is deploying
+          # (kills the "months-stale link" failure mode), and every public
+          # surface (healthz, topology, agents, decisions auth gate,
+          # firehose WebSocket) must answer correctly.
+          IP="$(gcloud compute instances describe ${{ vars.GCP_VM }} \
+            --zone=${{ vars.GCP_ZONE }} \
+            --format='get(networkInterfaces[0].accessConfigs[0].natIP)')"
+          HOST="$(echo "$IP" | tr '.' '-').nip.io"
+          echo "Probing https://${HOST} expecting sha ${{ github.sha }}"
+          python3 scripts/deploy/verify_live.py --external \
+            --base-url "https://${HOST}" \
+            --expect-sha "${{ github.sha }}"
+
       - name: Audit-chain integrity (Sprint 9 verifier)
         run: |
           gcloud compute ssh ${{ vars.GCP_VM }} \
@@ -484,3 +536,39 @@ jobs:
             echo "gcloud compute start-iap-tunnel ${{ vars.GCP_VM }} 3000 --local-host-port=localhost:3000 --zone=${{ vars.GCP_ZONE }}"
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Open issue on deploy failure
+        if: failure()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            // Deploy Truth (Sprint 14): a failed deploy on main must be
+            // LOUD — an issue + the email GitHub sends for it — never a
+            // red icon nobody looks at. Dedupe per-SHA so retries of the
+            // same commit don't spam.
+            const sha = context.sha.substring(0, 7);
+            const marker = `deploy-failure-${sha}`;
+            const open = await github.rest.issues.listForRepo({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              state: "open",
+              labels: "deploy-failure",
+            });
+            if (open.data.some((i) => i.body && i.body.includes(marker))) {
+              core.info(`open deploy-failure issue for ${sha} already exists`);
+              return;
+            }
+            const runUrl = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
+            await github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: `Deploy failed on main @ ${sha}`,
+              body:
+                `<!-- ${marker} -->\n` +
+                `CD-GCP failed for commit \`${context.sha}\`.\n\n` +
+                `- Run: ${runUrl}\n` +
+                `- The live system may be STALE or BROKEN until this is fixed.\n` +
+                `- Triage: check the failed step; \`make verify-live GCP_IP=<ip>\` ` +
+                `shows what a user currently sees.\n`,
+              labels: ["sev1", "deploy-failure", "auto-opened"],
+            });
