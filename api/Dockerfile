@@ -23,6 +23,10 @@ RUN pip install --no-cache-dir -r /tmp/requirements.txt \
 
 COPY packages/ /app/packages/
 COPY api/ /app/api/
+# Sprint 14: the always-alive traffic loop runs as a separate compose
+# service (`traffic-generator`) that REUSES this image with a command
+# override — no extra image in the CD matrix (C27 lockstep untouched).
+COPY scripts/traffic/ /app/scripts/traffic/
 ENV PYTHONPATH=/app/packages:/app
 
 # Build-args supplied by .github/workflows/cd-gcp.yml so GET /version reports

@@ -1,0 +1,143 @@
+# Live Truth — scheduled deploy-truth watchdog (Sprint 14).
+#
+# Per-deploy verification (cd-gcp.yml + C47) proves a deploy worked AT
+# DEPLOY TIME. This workflow proves the live system STAYS current and
+# working between deploys: 4x/day it asserts the deployed /version SHA
+# equals main HEAD (the "months-stale link" detector), every public
+# surface answers, and every container on the VM is running + healthy.
+# Any failure auto-opens a sev1 issue. Worst-case detection latency for
+# silent staleness/breakage drops from "whenever a human looks" to ~4h.
+name: Live Truth (watchdog)
+
+on:
+  schedule:
+    # 4x/day inside the VM's auto-stop up-window (09:00-23:00 IST =
+    # 03:30-17:30 UTC, ADR-036): 10:30 / 14:30 / 18:30 / 21:30 IST.
+    - cron: "0 5,9,13,16 * * *"
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+  id-token: write  # WIF auth for gcloud (VM status + IAP SSH)
+  issues: write    # auto-open the live-truth failure issue
+  actions: read    # in-flight cd-gcp guard
+
+concurrency:
+  group: live-truth
+  cancel-in-progress: false
+
+jobs:
+  watchdog:
+    name: Verify the live system is current + working
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Guard — skip while a deploy is in flight
+        id: guard
+        uses: actions/github-script@v7
+        with:
+          script: |
+            // A cd-gcp run mid-rollout means the deployed SHA legitimately
+            // trails main HEAD for ~25 min. Skip rather than false-alarm;
+            // the deploy run itself ends with the same assertions (C47).
+            const runs = await github.rest.actions.listWorkflowRuns({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              workflow_id: "cd-gcp.yml",
+              per_page: 10,
+            });
+            const live = runs.data.workflow_runs.filter(
+              (r) => r.status === "in_progress" || r.status === "queued"
+            );
+            core.setOutput("deploying", String(live.length > 0));
+            if (live.length > 0) {
+              core.notice(`cd-gcp run ${live[0].id} in flight — skipping watchdog`);
+            }
+
+      - id: auth
+        name: Authenticate to GCP via Workload Identity Federation
+        if: steps.guard.outputs.deploying != 'true'
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ vars.GCP_WIF_PROVIDER }}
+          service_account: ${{ vars.GCP_WIF_SA }}
+          create_credentials_file: true
+
+      - name: gcloud SDK
+        if: steps.guard.outputs.deploying != 'true'
+        uses: google-github-actions/setup-gcloud@v2
+
+      - name: VM must be RUNNING inside the up-window
+        if: steps.guard.outputs.deploying != 'true'
+        run: |
+          STATUS="$(gcloud compute instances describe ${{ vars.GCP_VM }} \
+            --zone=${{ vars.GCP_ZONE }} --format='value(status)')"
+          echo "Instance status: ${STATUS}"
+          if [ "${STATUS}" != "RUNNING" ]; then
+            echo "::error::VM is ${STATUS} during the scheduled up-window (ADR-036 says it should be RUNNING)"
+            exit 1
+          fi
+
+      - name: Verify live truth (external — deployed must equal main HEAD)
+        if: steps.guard.outputs.deploying != 'true'
+        run: |
+          # Scheduled runs check out main HEAD, so GITHUB_SHA *is* the
+          # staleness reference: deployed /version must match it.
+          IP="$(gcloud compute instances describe ${{ vars.GCP_VM }} \
+            --zone=${{ vars.GCP_ZONE }} \
+            --format='get(networkInterfaces[0].accessConfigs[0].natIP)')"
+          HOST="$(echo "$IP" | tr '.' '-').nip.io"
+          echo "Probing https://${HOST} expecting sha ${GITHUB_SHA}"
+          python3 scripts/deploy/verify_live.py --external \
+            --base-url "https://${HOST}" \
+            --expect-sha "${GITHUB_SHA}"
+
+      - name: Verify live truth (containers)
+        if: steps.guard.outputs.deploying != 'true'
+        run: |
+          # --max-restarts 2 (vs 0 at deploy time): the nightly auto-stop /
+          # start cycle may legitimately bounce a container once or twice.
+          gcloud compute ssh ${{ vars.GCP_VM }} \
+            --zone=${{ vars.GCP_ZONE }} \
+            --tunnel-through-iap \
+            --quiet \
+            --ssh-flag="-o ServerAliveInterval=30" \
+            --ssh-flag="-o ServerAliveCountMax=20" \
+            --command="set -e; cd ~/synapse && \
+                       (command -v python3 >/dev/null 2>&1 || sudo apt-get install -y python3 >/dev/null 2>&1) && \
+                       python3 scripts/deploy/verify_live.py --on-vm --max-restarts 2"
+
+      - name: Open issue on live-truth failure
+        if: failure()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            // One open live-truth issue at a time — a broken system must be
+            // loud once, not 4x daily.
+            const open = await github.rest.issues.listForRepo({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              state: "open",
+              labels: "live-truth",
+            });
+            if (open.data.length > 0) {
+              core.info("an open live-truth issue already exists — not duplicating");
+              return;
+            }
+            const runUrl = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
+            await github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: `Live system is stale or broken (watchdog @ ${context.sha.substring(0, 7)})`,
+              body:
+                `The scheduled deploy-truth watchdog failed.\n\n` +
+                `- Run: ${runUrl}\n` +
+                `- Either the deployed SHA trails main, an endpoint is down, ` +
+                `the VM is stopped in its up-window, or a container is ` +
+                `unhealthy/crash-looping.\n` +
+                `- Triage: open the failed step; \`make verify-live GCP_IP=<ip>\` ` +
+                `reproduces the external assertions from your machine.\n`,
+              labels: ["sev1", "live-truth", "auto-opened"],
+            });
