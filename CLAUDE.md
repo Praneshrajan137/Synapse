@@ -170,6 +170,11 @@
 - E-S13-07: Windows console default codepage is cp1252; both `Path.read_text()` and `print()` raise on Unicode (em-dashes, arrows). Always pass `encoding='utf-8'` to `read_text` in scripts and replace `→` with `->`, `─` with `-`, `•` with `*` in print output. The previous `check_spec_coverage.py` crashed on the first non-ASCII byte in any test file
 - E-S13-08: `coverage_ratchet.py`'s `Path.relative_to(ROOT)` raises `ValueError` when the input path is on a different drive than `ROOT` (Windows). Wrap in try/except — `.resolve()` first, then `.relative_to()` with fallback to the absolute path
 
+### Sprint 14 Error Patterns
+- E-S14-01: `docker run <image> python -c ...` does NOT replace an `ENTRYPOINT` — the args are APPENDED to it (digital-twin's `ENTRYPOINT ["python","-m","uvicorn",...]` received `python -c` as uvicorn options → `No such option '-c'`). Always use `docker run --entrypoint python <image> -c ...` when the image may define an ENTRYPOINT; it is also correct for CMD-style images
+- E-S14-02: a step inside the `deploy-to-vm` job can never alert on a BUILD failure — a failed matrix leg skips the whole deploy job. Workflow-level alerting must be a dedicated job with `needs: [all jobs]` + `if: failure()`
+- E-S14-03: a compose service that overrides `command:` away from the image's server inherits the image's Dockerfile `HEALTHCHECK` (which probes the server it no longer runs) and turns permanently unhealthy — override `healthcheck:` in compose too (the traffic-generator uses a heartbeat-file check for this reason)
+
 ### Chromatic System Error Patterns
 - E-CLR-01: Gamut-map with `culori.clampChroma` (preserves L+H exactly), NOT `toGamut` — `toGamut`'s RGB round-trip drifts hue several degrees
 - E-CLR-02: Round chroma DOWN after gamut mapping — rounding to nearest can re-inflate a boundary colour back out of sRGB gamut (INV-CLR-008)
