@@ -1,0 +1,95 @@
+# CD Recovery (Sprint 14, E-S14-07).
+#
+# The dominant CD failure class is TRANSIENT runner-egress flakes — on
+# 2026-06-10 a single run lost three legs to three different external
+# services in one 15-min window (docker.io `context deadline exceeded`,
+# sigstore `stream error INTERNAL_ERROR`, GHA-cache blob GET failure).
+# A 13-job pipeline makes ~40 single-attempt network calls; patching
+# retries step-by-step is whack-a-mole. This is the one mechanism:
+#
+#   1. On a failed CD run (attempt 1 only): re-run JUST the failed jobs.
+#      Real failures fail again on attempt 2 and alert as usual; the
+#      attempt cap means no retry loops.
+#   2. On a fully-green CD-GCP run: close every open `deploy-failure` /
+#      `live-truth` issue — a verified-green deploy (C47 gates passed)
+#      refutes "the live system may be stale or broken".
+#
+# workflow_run only fires for workflows on the default branch.
+name: CD Recovery
+
+on:
+  workflow_run:
+    workflows:
+      - "CD — GCP (primary deployment target)"
+      - "SYNAPSE CD"
+    types: [completed]
+
+permissions:
+  actions: write  # re-run failed jobs
+  issues: write   # close stale deploy-failure/live-truth issues
+
+jobs:
+  rerun-transient:
+    name: Re-run failed jobs once (transient egress flakes)
+    if: >-
+      github.event.workflow_run.conclusion == 'failure' &&
+      github.event.workflow_run.run_attempt < 2
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/github-script@v7
+        with:
+          script: |
+            const run = context.payload.workflow_run;
+            core.notice(
+              `Re-running failed jobs of "${run.name}" run ${run.id} ` +
+              `(attempt ${run.run_attempt} -> ${run.run_attempt + 1}). ` +
+              `Transient egress flakes are the dominant CD failure class; ` +
+              `a real failure will fail attempt 2 and alert normally.`
+            );
+            await github.rest.actions.reRunWorkflowFailedJobs({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              run_id: run.id,
+            });
+
+  close-stale-alerts:
+    name: Close deploy alerts after a verified-green deploy
+    if: >-
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.name == 'CD — GCP (primary deployment target)'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/github-script@v7
+        with:
+          script: |
+            const run = context.payload.workflow_run;
+            const runUrl = run.html_url;
+            for (const label of ["deploy-failure", "live-truth"]) {
+              const open = await github.rest.issues.listForRepo({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                state: "open",
+                labels: label,
+              });
+              for (const issue of open.data) {
+                await github.rest.issues.createComment({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  issue_number: issue.number,
+                  body:
+                    `Auto-closing: CD-GCP completed fully green for ` +
+                    `\`${run.head_sha.substring(0, 7)}\` — every C47 deploy-truth ` +
+                    `gate passed (all containers healthy, decision flow proven, ` +
+                    `deployed /version SHA == main). ${runUrl}`,
+                });
+                await github.rest.issues.update({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  issue_number: issue.number,
+                  state: "closed",
+                });
+                core.notice(`closed #${issue.number} (${label})`);
+              }
+            }
