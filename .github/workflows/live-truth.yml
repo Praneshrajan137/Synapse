@@ -11,9 +11,14 @@ name: Live Truth (watchdog)
 
 on:
   schedule:
-    # 4x/day inside the VM's auto-stop up-window (09:00-23:00 IST =
-    # 03:30-17:30 UTC, ADR-036): 10:30 / 14:30 / 18:30 / 21:30 IST.
-    - cron: "0 5,9,13,16 * * *"
+    # 2x/day inside the VM's REAL auto-stop window. The attached resource
+    # policy is `synapse-3hr-window`: start 04:30 UTC / stop 07:30 UTC
+    # daily (10:00-13:00 IST) — verified against live `gcloud compute
+    # operations list` 2026-06-10, NOT the stale "09:00-23:00 IST" in the
+    # ADR-036 docs. A cron outside the real window fires on an
+    # intentionally-stopped VM and opens a false sev1 daily.
+    # 05:00 UTC = 10:30 IST, 07:00 UTC = 12:30 IST.
+    - cron: "0 5,7 * * *"
   workflow_dispatch: {}
 
 permissions:
@@ -107,7 +112,7 @@ jobs:
             --ssh-flag="-o ServerAliveCountMax=20" \
             --command="set -e; cd ~/synapse && \
                        (command -v python3 >/dev/null 2>&1 || sudo apt-get install -y python3 >/dev/null 2>&1) && \
-                       python3 scripts/deploy/verify_live.py --on-vm --max-restarts 2"
+                       python3 scripts/deploy/verify_live.py --on-vm --max-restarts 2 --settle-seconds 120"
 
       - name: Open issue on live-truth failure
         if: failure()

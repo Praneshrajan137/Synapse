@@ -344,18 +344,36 @@ def probe_decision(compose_file: str, env_files: list[str], wait_seconds: int = 
     )
 
 
+def _containers_snapshot(compose_file: str, env_files: list[str]) -> list[CheckResult]:
+    try:
+        ps_out = _run(_compose_cmd(compose_file, env_files) + ["ps", "--format", "json"])
+        return evaluate_containers(parse_compose_ps(ps_out))
+    except (subprocess.SubprocessError, json.JSONDecodeError) as exc:
+        return [CheckResult("compose_ps", False, f"failed: {exc}")]
+
+
 def run_on_vm(
     compose_file: str,
     env_files: list[str],
     max_restarts: int,
     with_decision_probe: bool,
+    settle_seconds: int = 0,
 ) -> list[CheckResult]:
     results: list[CheckResult] = []
-    try:
-        ps_out = _run(_compose_cmd(compose_file, env_files) + ["ps", "--format", "json"])
-        results.extend(evaluate_containers(parse_compose_ps(ps_out)))
-    except (subprocess.SubprocessError, json.JSONDecodeError) as exc:
-        results.append(CheckResult("compose_ps", False, f"failed: {exc}"))
+    # Assert EVENTUAL health within the settle window, not instant health.
+    # Right after `up --force-recreate`, 21 containers + image extraction
+    # saturate the VM and a tight Dockerfile healthcheck (5s timeout, no
+    # start_period) can flap unhealthy for a few minutes — disruption-shield
+    # did exactly this on the first gated deploy, while being perfectly
+    # healthy 54s after a calm boot. A container that is still broken at the
+    # end of the window fails the deploy as before.
+    deadline = time.monotonic() + settle_seconds
+    while True:
+        container_results = _containers_snapshot(compose_file, env_files)
+        if all(r.ok for r in container_results) or time.monotonic() >= deadline:
+            break
+        time.sleep(10)
+    results.extend(container_results)
     try:
         counts = collect_restart_counts(compose_file, env_files)
         results.extend(evaluate_restart_counts(counts, max_restarts))
@@ -410,6 +428,12 @@ def main(argv: list[str] | None = None) -> int:
         action="store_true",
         help="trigger one decision and assert it reaches the outbox/Kafka",
     )
+    parser.add_argument(
+        "--settle-seconds",
+        type=int,
+        default=0,
+        help="poll container health up to N seconds before judging (post-deploy stampede)",
+    )
     args = parser.parse_args(argv)
 
     if args.external:
@@ -418,7 +442,13 @@ def main(argv: list[str] | None = None) -> int:
         results = run_external(args.base_url.rstrip("/"), args.expect_sha)
     else:
         env_files = args.env_file or [".env.gcp", ".env.gcp.local", ".env.gcp.version"]
-        results = run_on_vm(args.compose_file, env_files, args.max_restarts, args.probe_decision)
+        results = run_on_vm(
+            args.compose_file,
+            env_files,
+            args.max_restarts,
+            args.probe_decision,
+            settle_seconds=args.settle_seconds,
+        )
     return report(results)
 
 
