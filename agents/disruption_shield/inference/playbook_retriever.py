@@ -85,9 +85,13 @@ class PlaybookRetriever:
         self._index: Any | None = None
         self._embedder: Any | None = None
 
-        if _HAS_SENTENCE_TRANSFORMERS:
-            self._embedder = SentenceTransformer(embedding_model)
-
+        # Pinecone FIRST: retrieve() needs BOTH the index and the embedder
+        # (it falls back to cached playbooks if either is missing), so when
+        # Pinecone is unconfigured the embedder would never be used — yet
+        # SentenceTransformer(all-mpnet-base-v2) downloads ~420MB from HF
+        # Hub on every force-recreated boot, blocking the server lifespan
+        # (and /health) for ~11 minutes. That blackout failed the C47
+        # deploy gate twice. Load the embedder only when an index exists.
         if _HAS_PINECONE:
             try:
                 pc = Pinecone()
@@ -96,6 +100,14 @@ class PlaybookRetriever:
             except Exception as exc:
                 logger.warning("pinecone_init_failed", error=str(exc))
                 self._index = None
+
+        if self._index is not None and _HAS_SENTENCE_TRANSFORMERS:
+            self._embedder = SentenceTransformer(embedding_model)
+        elif self._index is None:
+            logger.info(
+                "playbook_embedder_skipped",
+                reason="pinecone_unconfigured_fallback_playbooks_active",
+            )
 
     def retrieve(
         self,
