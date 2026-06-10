@@ -618,6 +618,9 @@ def check_gcp_compose_pulls_images() -> CheckResult:
         "disruption-shield": "disruption-shield",
         "supplier-trust": "supplier-trust",
         "sustainability-agent": "sustainability-agent",
+        # Sprint 14: the always-alive traffic loop reuses the api-gateway
+        # image with a command override — still pull-from-AR only.
+        "traffic-generator": "api-gateway",
     }
     expected_image = re.compile(
         r"^\$\{SYNAPSE_AR_REPO_URL[^}]*\}/(?P<name>[A-Za-z0-9-]+):\$\{SYNAPSE_VERSION"
@@ -1410,6 +1413,42 @@ def check_compose_health_complete() -> CheckResult:
         "Compose health complete",
         "PASS",
         f"all {len(services)} services carry a healthcheck (compose or Dockerfile)",
+    )
+
+
+# ---------------------------------------------------------------------------
+# C48: a scheduled watchdog asserts the live system stays current + working
+# ---------------------------------------------------------------------------
+# Deploy Truth (Sprint 14). C47 proves a deploy worked AT deploy time; the
+# watchdog proves the live system STAYS current between deploys — deployed
+# /version == main HEAD, endpoints answer, containers healthy — and opens an
+# issue on failure. Without it, staleness is only found when a human looks
+# (historically: months).
+@register("C48", "Live-truth watchdog scheduled with issue-on-failure")
+def check_live_watchdog() -> CheckResult:
+    wf = ROOT / ".github" / "workflows" / "live-truth.yml"
+    if not wf.is_file():
+        return CheckResult("C48", "Live watchdog", "FAIL", "live-truth.yml missing")
+    text = wf.read_text(encoding="utf-8")
+    missing = [
+        want
+        for want in (
+            "schedule:",
+            "workflow_dispatch",
+            "verify_live.py --external",
+            "verify_live.py --on-vm",
+            "if: failure()",
+            "live-truth",
+        )
+        if want not in text
+    ]
+    if missing:
+        return CheckResult("C48", "Live watchdog", "FAIL", f"live-truth.yml missing: {missing}")
+    return CheckResult(
+        "C48",
+        "Live watchdog",
+        "PASS",
+        "scheduled external+container truth checks with auto-issue on failure",
     )
 
 
