@@ -142,6 +142,15 @@ services:
       --default-artifact-root /mlflow/artifacts
     ports: ["5000:5000"]
     volumes: ["mlflow_data:/mlflow"]
+    # Deploy Truth (Sprint 14): every service must carry a healthcheck so the
+    # post-deploy "all containers healthy" assertion is total, not partial.
+    # The mlflow image is python-slim (no curl/wget) — probe via stdlib.
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:5000/health', timeout=5)"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
     restart: unless-stopped
     deploy:
       resources:
@@ -160,6 +169,12 @@ services:
       - ../infrastructure/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
       - ../infrastructure/prometheus/alert_rules.yml:/etc/prometheus/alert_rules.yml:ro
       - prometheus_data:/prometheus
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:9090/-/healthy"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 15s
     restart: unless-stopped
     deploy:
       resources:
@@ -180,6 +195,12 @@ services:
       - grafana_data:/var/lib/grafana
       - ../infrastructure/grafana/provisioning:/etc/grafana/provisioning:ro
       - ../infrastructure/grafana/dashboards:/var/lib/grafana/dashboards:ro
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:3000/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
     restart: unless-stopped
     deploy:
       resources:

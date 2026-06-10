@@ -1282,6 +1282,138 @@ def check_no_dead_modules() -> CheckResult:
 
 
 # ---------------------------------------------------------------------------
+# C47: every deploy is verified end-to-end before the workflow goes green
+# ---------------------------------------------------------------------------
+# Deploy Truth (Sprint 14). The original incident class: a deploy "succeeds"
+# while the live system is stale or broken (months-stale link; jsonschema
+# crash-loop behind a green run). cd-gcp.yml must (a) assert container truth
+# on the VM, (b) assert the deployed /version SHA equals the deployed commit
+# from OUTSIDE, and (c) open an issue on any failure so it is loud.
+@register("C47", "Deploy truth gated in cd-gcp.yml (SHA + containers + issue)")
+def check_deploy_truth_gated() -> CheckResult:
+    cd = ROOT / ".github" / "workflows" / "cd-gcp.yml"
+    oracle = ROOT / "scripts" / "deploy" / "verify_live.py"
+    if not oracle.is_file():
+        return CheckResult("C47", "Deploy truth gated", "FAIL", "verify_live.py missing")
+    if not cd.is_file():
+        return CheckResult("C47", "Deploy truth gated", "FAIL", "cd-gcp.yml missing")
+    text = cd.read_text(encoding="utf-8")
+    missing = [
+        want
+        for want in (
+            "Verify deploy truth (containers)",
+            "Verify deploy truth (external)",
+            "verify_live.py --on-vm --probe-decision",
+            '--expect-sha "${{ github.sha }}"',
+            "Open issue on deploy failure",
+            "if: failure()",
+        )
+        if want not in text
+    ]
+    if missing:
+        return CheckResult(
+            "C47", "Deploy truth gated", "FAIL", f"cd-gcp.yml missing: {missing}"
+        )
+    return CheckResult(
+        "C47",
+        "Deploy truth gated",
+        "PASS",
+        "deploys assert SHA + all-containers + decision-flow, and fail loudly",
+    )
+
+
+# ---------------------------------------------------------------------------
+# C49: import-smoke covers every Python image in the CD build matrix
+# ---------------------------------------------------------------------------
+# Lockstep gate in the C27 style: every Python image built by cd-gcp.yml must
+# declare its `entry` module so the import-smoke step exercises it inside the
+# pushed image. A runtime dep present in CI but absent from an image (the
+# jsonschema incident, PR #42) then fails at build time, pre-deploy.
+@register("C49", "Import smoke covers every Python image in the CD matrix")
+def check_image_smoke_covers_matrix() -> CheckResult:
+    cd = ROOT / ".github" / "workflows" / "cd-gcp.yml"
+    if not cd.is_file():
+        return CheckResult("C49", "Import smoke coverage", "FAIL", "cd-gcp.yml missing")
+    text = cd.read_text(encoding="utf-8")
+    if "Import smoke" not in text or "importlib.import_module" not in text:
+        return CheckResult(
+            "C49", "Import smoke coverage", "FAIL", "import-smoke step missing"
+        )
+    rows = re.findall(
+        r"image:\s*([A-Za-z0-9-]+),.*?entry:\s*([A-Za-z0-9_.]+|\"\")", text
+    )
+    if not rows:
+        return CheckResult(
+            "C49", "Import smoke coverage", "FAIL", "no matrix entry fields parsed"
+        )
+    no_entry = sorted(img for img, entry in rows if entry in ('""', "") and img != "frontend")
+    if no_entry:
+        return CheckResult(
+            "C49",
+            "Import smoke coverage",
+            "FAIL",
+            f"Python images without an import-smoke entry: {no_entry}",
+        )
+    smoked = sum(1 for _img, entry in rows if entry not in ('""', ""))
+    return CheckResult(
+        "C49",
+        "Import smoke coverage",
+        "PASS",
+        f"{smoked} Python images import-smoked before deploy (frontend static, skipped)",
+    )
+
+
+# ---------------------------------------------------------------------------
+# C50: every GCP compose service resolves to a healthcheck
+# ---------------------------------------------------------------------------
+# The post-deploy "all containers healthy" assertion (C47) is only total if
+# every service actually carries a healthcheck — either a compose-level block
+# or a HEALTHCHECK in the SYNAPSE-owned Dockerfile its image was built from.
+@register("C50", "Every GCP compose service resolves to a healthcheck")
+def check_compose_health_complete() -> CheckResult:
+    compose = ROOT / "docker" / "docker-compose.gcp.yml"
+    if not compose.is_file():
+        return CheckResult("C50", "Compose health complete", "FAIL", "gcp compose missing")
+    try:
+        import yaml as _yaml
+    except ImportError:
+        return CheckResult("C50", "Compose health complete", "SKIP", "PyYAML not installed")
+    doc = _yaml.safe_load(compose.read_text(encoding="utf-8")) or {}
+    services = doc.get("services", {})
+    if not services:
+        return CheckResult("C50", "Compose health complete", "FAIL", "no services parsed")
+    unchecked: list[str] = []
+    for name, svc in services.items():
+        if "healthcheck" in (svc or {}):
+            continue
+        snake = name.replace("-", "_")
+        candidates = [
+            ROOT / snake / "Dockerfile",
+            ROOT / "agents" / snake / "Dockerfile",
+        ]
+        if name == "api":
+            candidates.insert(0, ROOT / "api" / "Dockerfile")
+        if not any(
+            c.is_file() and "HEALTHCHECK" in c.read_text(encoding="utf-8")
+            for c in candidates
+        ):
+            unchecked.append(name)
+    if unchecked:
+        return CheckResult(
+            "C50",
+            "Compose health complete",
+            "FAIL",
+            f"services with no healthcheck anywhere: {sorted(unchecked)}",
+        )
+    return CheckResult(
+        "C50",
+        "Compose health complete",
+        "PASS",
+        f"all {len(services)} services carry a healthcheck (compose or Dockerfile)",
+    )
+
+
+# ---------------------------------------------------------------------------
 # Main entry
 # ---------------------------------------------------------------------------
 def run(as_json: bool = False) -> int:
