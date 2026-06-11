@@ -13,6 +13,12 @@ interface SessionState {
   readonly operatorTokenRef: string | null;
   readonly accessToken: string | null;
   readonly tokenExpiresAt: number | null;
+  /**
+   * Boot auto-login lifecycle (Sprint 16, not persisted): "pending" while
+   * the silent admin sign-in is in flight so RouteGuard can show the boot
+   * splash instead of flashing /login; "settled" once resolved either way.
+   */
+  readonly bootAuth: "idle" | "pending" | "settled";
   setAuth(
     role: Role,
     accessToken: string,
@@ -21,6 +27,7 @@ interface SessionState {
   ): void;
   rotateAccessToken(accessToken: string, expiresInSeconds: number): void;
   clearAuth(): void;
+  setBootAuth(state: "idle" | "pending" | "settled"): void;
 }
 
 interface PersistedPrefs {
@@ -35,6 +42,7 @@ export const useSessionStore = create<SessionState>()(
       operatorTokenRef: null,
       accessToken: null,
       tokenExpiresAt: null,
+      bootAuth: "idle",
       setAuth(role, accessToken, operatorTokenRef, expiresInSeconds) {
         set({
           role,
@@ -56,6 +64,9 @@ export const useSessionStore = create<SessionState>()(
           operatorTokenRef: null,
           tokenExpiresAt: null,
         });
+      },
+      setBootAuth(state) {
+        set({ bootAuth: state });
       },
     }),
     {
