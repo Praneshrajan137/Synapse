@@ -129,6 +129,7 @@ class AuditLogger:
                     "phase_reached": decision.phase_reached,
                     "escalated": decision.escalated_to_human,
                     "selected_action": decision.selected_action,
+                    "timestamp": decision.timestamp.isoformat(),
                     # ADR-044 honesty channel: the firehose envelope tells the
                     # UI whether ANY input proposal ran degraded, and whether
                     # the decision is traffic-generator synthetic — without
@@ -139,6 +140,18 @@ class AuditLogger:
                         for p in decision.proposals
                     ),
                     "is_synthetic": is_synthetic_decision(decision.context_messages),
+                    # Lean per-agent summary (NOT the full proposals — those
+                    # carry whole forecast arrays). Drives the CouncilStrip /
+                    # CortexBanner per-agent activity lights and the per-agent
+                    # degraded marker without a detail fetch.
+                    "agents": [
+                        {
+                            "agent_name": str(p.agent_name),
+                            "confidence": p.confidence,
+                            "degraded": bool(p.provenance is not None and p.provenance.degraded),
+                        }
+                        for p in decision.proposals
+                    ],
                 },
             )
             await session.commit()

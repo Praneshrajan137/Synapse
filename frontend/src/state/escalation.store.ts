@@ -32,7 +32,11 @@ export const useEscalationStore = create<EscalationState>((set) => ({
       message,
       status: "pending",
     };
-    set((s) => ({ entries: [...s.entries, entry] }));
+    // At-most-once per decision (FE-INV-034 family): the same escalation can
+    // now arrive via BOTH the legacy /ws/escalation socket and the firehose
+    // `escalation` channel (ADR-044), and replays after reconnect re-deliver.
+    // A duplicate decision_id is the same escalation — never a second entry.
+    set((s) => (s.entries.some((e) => e.id === entry.id) ? s : { entries: [...s.entries, entry] }));
   },
   markActed(id, action) {
     set((s) => ({

@@ -13,6 +13,7 @@ export * from "./supplier-score";
 export * from "./carbon-report";
 export * from "./twin-state";
 export * from "./consensus-decision";
+export * from "./decision-envelope";
 export * from "./escalation";
 export * from "./audit-row";
 export * from "./agent-health";

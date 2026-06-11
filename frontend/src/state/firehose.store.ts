@@ -1,4 +1,4 @@
-import type { ConsensusDecision } from "@domain/consensus-decision";
+import type { LiveDecision } from "@domain/decision-envelope";
 import type { DemandForecast } from "@domain/demand-forecast";
 import type { DisruptionAlert } from "@domain/disruption-alert";
 import type { RoutePlan } from "@domain/route-plan";
@@ -22,13 +22,13 @@ function appendBounded<T>(b: Bounded<T>, value: T): Bounded<T> {
 }
 
 interface FirehoseState {
-  decisions: Bounded<ConsensusDecision>;
+  decisions: Bounded<LiveDecision>;
   disruptions: Bounded<DisruptionAlert>;
   routes: Bounded<RoutePlan>;
   demand: Bounded<DemandForecast>;
   twin: Bounded<TwinState>;
   lastSeq: Readonly<Record<string, number>>;
-  appendDecision(d: ConsensusDecision, seq: number): void;
+  appendDecision(d: LiveDecision, seq: number): void;
   appendDisruption(d: DisruptionAlert, seq: number): void;
   appendRoute(r: RoutePlan, seq: number): void;
   appendDemand(d: DemandForecast, seq: number): void;

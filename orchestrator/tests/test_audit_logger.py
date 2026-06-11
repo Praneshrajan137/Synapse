@@ -348,6 +348,25 @@ async def test_outbox_payload_degraded_true_when_any_proposal_degraded() -> None
 
 
 @pytest.mark.asyncio
+async def test_outbox_payload_carries_timestamp_and_agent_summary() -> None:
+    """The live-feed envelope needs a render timestamp and the lean per-agent
+    summary (agent_name + confidence + degraded) — the full proposals carry
+    whole forecast arrays and must NOT ride the firehose."""
+    from synapse_common.provenance import Provenance
+
+    factory = _session_factory_returning(scalar_value=None)
+    logger = AuditLogger(factory)
+    decision = _make_decision_with(provenance=Provenance.degraded_fallback(), confidence=0.9)
+    await logger.log_decision(decision)
+    payload = factory.recorders[-1].added_rows[1].payload
+    assert payload["timestamp"] == decision.timestamp.isoformat()
+    assert payload["agents"] == [
+        {"agent_name": "demand_prophet", "confidence": 0.9, "degraded": True}
+    ]
+    assert "proposals" not in payload, "full proposals must not ride the firehose"
+
+
+@pytest.mark.asyncio
 async def test_outbox_payload_is_synthetic_for_traffic_generator_order() -> None:
     factory = _session_factory_returning(scalar_value=None)
     logger = AuditLogger(factory)

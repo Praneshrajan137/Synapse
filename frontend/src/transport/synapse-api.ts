@@ -46,6 +46,8 @@ export type OverrideApiResponse = z.infer<typeof OverrideApiResponseSchema>;
 // ─── Decision detail (mirror api/routers/decisions.py get_decision) ───────
 // Loose on the JSONB-bag fields (proposals, audit_trace, etc.) — those are
 // validated by callers when they reshape into ConsensusDecision.
+// ADR-044 anatomy + honesty fields are `.optional()` so this client keeps
+// validating against pre-044 gateways (additive contract).
 export const DecisionDetailResponseSchema = z
   .object({
     audit_id: z.string(),
@@ -62,9 +64,34 @@ export const DecisionDetailResponseSchema = z
     audit_trace: z.unknown(),
     created_at: z.string().nullable().optional(),
     escalations: z.array(z.unknown()).optional(),
+    // ADR-044 — previously-imprisoned audit_consensus columns.
+    debate_rounds: z.number().int().min(0).optional(),
+    pareto_front: z.array(z.record(z.unknown())).nullable().optional(),
+    execution_confirmations: z.array(z.string()).nullable().optional(),
+    context_messages: z.array(z.record(z.unknown())).nullable().optional(),
+    outcome: z.record(z.unknown()).nullable().optional(),
+    prev_hash: z.string().nullable().optional(),
+    current_hash: z.string().nullable().optional(),
+    // Tri-state: true = single-row hash recompute matches; false = content
+    // altered since insert; null = pre-Sprint-9 legacy row (E-S9-01).
+    chain_verified: z.boolean().nullable().optional(),
+    degraded: z.boolean().optional(),
+    is_synthetic: z.boolean().optional(),
   })
   .passthrough();
 export type DecisionDetailResponse = z.infer<typeof DecisionDetailResponseSchema>;
+
+// ─── System posture (mirror api/routers/system.py, ADR-044 D4) ────────────
+// The DegradedBanner's data source: brownout level per city + every circuit
+// breaker's state. Polled (~15s); a fetch failure renders "posture unknown".
+export const SystemPostureSchema = z
+  .object({
+    brownout: z.record(z.string()).default({}),
+    breakers: z.record(z.string()).default({}),
+    degraded: z.boolean(),
+  })
+  .passthrough();
+export type SystemPosture = z.infer<typeof SystemPostureSchema>;
 
 // ─── Topology (mirror api/routers/topology.py) ────────────────────────────
 const TopologyNodeSchema = z
@@ -250,6 +277,14 @@ export function createSynapseApi(deps: SynapseApiDeps) {
         query: { city },
         schema: TopologyResponseSchema,
         schemaId: "TopologyResponse",
+      }),
+
+    // ─── System posture (ADR-044 D4) ──────────────────────────────────
+    // Brownout level per city + breaker states; drives the DegradedBanner.
+    getSystemPosture: (): Promise<SystemPosture> =>
+      gateway.get("/api/v1/system/posture", {
+        schema: SystemPostureSchema,
+        schemaId: "SystemPosture",
       }),
 
     // ─── Steering (WS-5) ──────────────────────────────────────────────

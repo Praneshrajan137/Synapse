@@ -13,7 +13,9 @@ import { useCityStores } from "./useCityStores";
  */
 export function MissionControl() {
   const firehose = useFirehose({
-    topics: ["decision", "disruption", "routing", "demand", "metric"],
+    // ADR-044: `escalation` rides the same multiplexed socket, so the
+    // cockpit queue fills while the operator is still on Mission Control.
+    topics: ["decision", "disruption", "routing", "demand", "metric", "escalation"],
   });
   const stores = useCityStores();
 

@@ -372,10 +372,11 @@ invariants:
       segment (scripts/demo/*.py) inside the Evidence panel; the
       backend's run wrapper streams progress over SSE.
     implementations:
+      # api/routers/demo.py was removed in the module-liveness sweep
+      # (96f73d3); the FE surfaces remain the enforcement points.
       - frontend/src/surfaces/demo-theater/DemoTheater.tsx
       - frontend/src/surfaces/demo-theater/useDemoRun.ts
       - frontend/src/surfaces/demo-theater/useArtifact.ts
-      - api/routers/demo.py
     tests:
       - frontend/tests/e2e/demo.spec.ts
     status: enforced
@@ -496,4 +497,81 @@ invariants:
     tests:
       - frontend/src/surfaces/steering/__tests__/Steering.test.tsx
       - frontend/tests/e2e/steering.spec.ts
+    status: enforced
+
+  - id: FE-INV-034
+    title: Structured provenance is rendered whenever present; degraded is never hidden
+    mirrors: ADR-040, ADR-044, I-7
+    description: >
+      Every surface that renders a proposal or decision carrying structured
+      provenance shows the ProvenanceChip (model version, feature source,
+      confidence basis); a degraded=true output renders the chroma-drained
+      degraded state with an explicit text label (INV-CLR-011/016) and is
+      never silently suppressed. Decisions whose envelope reports
+      degraded=true carry a visible degraded marker in the live tail.
+    implementations:
+      - frontend/src/design-system/compounds/ProvenanceChip.tsx
+      - frontend/src/surfaces/mission-control/DecisionFirehoseTail.tsx
+    tests:
+      - frontend/src/design-system/compounds/__tests__/HonestyChannel.test.tsx
+    status: enforced
+
+  - id: FE-INV-035
+    title: System degradation posture is visible on every surface
+    mirrors: ADR-044, I-7, E-S9-04
+    description: >
+      The DegradedBanner mounts in the Shell (above every route) and renders
+      whenever GET /api/v1/system/posture reports brownout shedding or an
+      open dependency breaker, naming WHAT is degraded. A posture fetch
+      failure renders "posture unknown" -- the banner never fails silently
+      green. It is not dismissible while the condition holds (there is no
+      dismiss affordance at all).
+    implementations:
+      - frontend/src/design-system/compounds/DegradedBanner.tsx
+      - frontend/src/hooks/use-posture.ts
+      - frontend/src/app/Shell.tsx
+      - api/routers/system.py
+      - orchestrator/inference/posture.py
+    tests:
+      - frontend/src/design-system/compounds/__tests__/HonestyChannel.test.tsx
+      - api/tests/test_system_posture.py
+      - orchestrator/tests/test_posture.py
+    status: enforced
+
+  - id: FE-INV-036
+    title: Synthetic decisions are always visibly marked, never colour-only
+    mirrors: ADR-044 D5, INV-CLR-011
+    description: >
+      A decision whose envelope reports is_synthetic=true (the traffic
+      generator's "synthetic-" order prefix, owned by
+      packages/synapse_common/synthetic.py) always renders the
+      SyntheticBadge: the synthetic state colour PLUS a dashed ring and a
+      text label, so demo pulses are distinguishable from real commerce
+      under CVD, grayscale, or print.
+    implementations:
+      - frontend/src/design-system/compounds/SyntheticBadge.tsx
+      - frontend/src/surfaces/mission-control/DecisionFirehoseTail.tsx
+      - frontend/src/domain/decision-envelope.ts
+    tests:
+      - frontend/src/design-system/compounds/__tests__/HonestyChannel.test.tsx
+      - frontend/src/domain/__tests__/decision-envelope.test.ts
+    status: enforced
+
+  - id: FE-INV-037
+    title: Escalations apply at-most-once across dual delivery paths
+    mirrors: ADR-044 D3, FE-INV-008
+    description: >
+      HITL escalations arrive via BOTH the legacy /ws/escalation socket and
+      the firehose `escalation` channel during the transition, and WS
+      replays re-deliver after reconnect. The escalation store ignores a
+      duplicate decision_id -- the queue never shows the same escalation
+      twice and an acted entry is never reset to pending by a replay.
+    implementations:
+      - frontend/src/state/escalation.store.ts
+      - frontend/src/transport/firehose.ts
+      - frontend/src/hooks/use-firehose.ts
+      - api/routers/firehose.py
+    tests:
+      - frontend/src/state/__tests__/escalation-store.test.ts
+      - api/tests/test_firehose_channels.py
     status: enforced

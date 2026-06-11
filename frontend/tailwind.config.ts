@@ -47,6 +47,12 @@ export default {
           warning: "rgb(var(--syn-signal-warning) / <alpha-value>)",
           danger: "rgb(var(--syn-signal-danger) / <alpha-value>)",
         },
+        // Honesty states (Chromatic v1.1.0, ADR-044). Full oklch() vars —
+        // no <alpha-value> support; tint via color-mix() in component CSS.
+        state: {
+          degraded: "var(--syn-state-degraded)",
+          synthetic: "var(--syn-state-synthetic)",
+        },
         accent: "rgb(var(--syn-accent) / <alpha-value>)",
       },
       fontFamily: {
@@ -85,10 +91,13 @@ export default {
         fast: "var(--syn-motion-fast)",
         medium: "var(--syn-motion-medium)",
         slow: "var(--syn-motion-slow)",
+        arrive: "var(--syn-motion-arrive)",
+        urgent: "var(--syn-motion-urgent)",
       },
       transitionTimingFunction: {
         standard: "var(--syn-ease-standard)",
         emphasized: "var(--syn-ease-emphasized)",
+        entrance: "var(--syn-ease-entrance)",
       },
       keyframes: {
         "pulse-confidence": {

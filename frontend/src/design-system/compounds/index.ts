@@ -18,3 +18,6 @@ export * from "./ParetoParallel";
 export * from "./ThresholdCountdown";
 export * from "./DivergenceTrace";
 export * from "./OutcomeBand";
+export * from "./ProvenanceChip";
+export * from "./SyntheticBadge";
+export * from "./DegradedBanner";

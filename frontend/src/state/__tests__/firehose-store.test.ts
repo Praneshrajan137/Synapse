@@ -1,23 +1,22 @@
-import type { ConsensusDecision } from "@domain/consensus-decision";
+import type { LiveDecision } from "@domain/decision-envelope";
 import { useFirehoseStore } from "@state/firehose.store";
 import { beforeEach, describe, expect, it } from "vitest";
 
 // FE-INV-016 + FE-INV-017 — firehose store is append-only and city-flushable.
+// The buffer holds LEAN decision envelopes (ADR-044), not full audit rows.
 
-function makeDecision(id: string, confidence = 0.85): ConsensusDecision {
+function makeDecision(id: string, confidence = 0.85): LiveDecision {
   return {
     decision_id: id,
     timestamp: "2026-05-18T10:00:00.000Z",
     tier: "tier_2",
-    proposals: [],
     selected_action: {},
-    pareto_weights: {},
     confidence,
-    audit_trace: [],
     phase_reached: 1,
-    debate_rounds: 0,
-    context_messages: [],
-    execution_confirmations: [],
+    escalated: false,
+    degraded: false,
+    is_synthetic: false,
+    agents: [],
   };
 }
 

@@ -32,8 +32,10 @@ export function AgentDetail() {
 
   const lastDecisions = useMemo(
     () =>
+      // ADR-044: the live envelope's lean `agents` summary names the
+      // contributing agents (the full proposals stay in the audit row).
       decisions
-        .filter((d) => d.proposals.some((p) => (p as Record<string, unknown>).agent_name === name))
+        .filter((d) => d.agents.some((a) => a.agent_name === name))
         .slice(-12)
         .reverse(),
     [decisions, name],

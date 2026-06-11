@@ -1,6 +1,7 @@
 import { EscalationMessageSchema } from "@domain/escalation";
 import { ConnectionPill } from "@ds/compounds";
 import { Badge } from "@ds/primitives";
+import { useFirehose } from "@hooks/use-firehose";
 import { useWs } from "@hooks/use-ws";
 import { useEscalationStore } from "@state/escalation.store";
 import { useEffect, useMemo, useState } from "react";
@@ -29,6 +30,11 @@ const WS_URL = `${window.location.protocol === "https:" ? "wss" : "ws"}://${
  */
 export function Cockpit() {
   const ws = useWs(WS_URL);
+  // ADR-044: escalations ALSO push through the multiplexed firehose
+  // (`synapse.orchestrator.escalation` → channel "escalation"). The store
+  // dedupes by decision_id, so the legacy socket and the firehose can
+  // coexist during the transition.
+  useFirehose({ topics: ["escalation"] });
   const entries = useEscalationStore((s) => s.entries);
   const append = useEscalationStore((s) => s.append);
   const setConnected = useEscalationStore((s) => s.setConnected);
