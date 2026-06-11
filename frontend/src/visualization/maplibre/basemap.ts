@@ -25,27 +25,30 @@ export function buildBasemapStyle(tilesUrl: string): maplibregl.StyleSpecificati
     },
     glyphs: "https://protomaps.github.io/basemaps-assets/fonts/{fontstack}/{range}.pbf",
     // chromatic-allow: the MapLibre style spec requires literal colour values
-    // in its paint JSON — it cannot read CSS custom properties. Tracked for
-    // chromatic-token migration (INV-CLR-009).
+    // in its paint JSON — it cannot read CSS custom properties. Each value
+    // below is the v1.2.0 Obsidian dist hex for the named token (ADR-045);
+    // lib/__tests__/chromatics.test.ts pins them against dist so drift is a
+    // failing test, not a review hope. Water is the DEEP VOID — darker than
+    // land, so the coastline reads as depth on the cold-void canvas.
     layers: [
       {
         id: "background",
         type: "background",
-        paint: { "background-color": "#020617" }, // chromatic-allow
+        paint: { "background-color": "#06080f" }, // chromatic-allow ← color.surface.canvas dark
       },
       {
         id: "land",
         type: "fill",
         source: "synapse_tiles",
         "source-layer": "earth",
-        paint: { "fill-color": "#0f172a" }, // chromatic-allow
+        paint: { "fill-color": "#0e121a" }, // chromatic-allow ← color.surface.panel dark
       },
       {
         id: "water",
         type: "fill",
         source: "synapse_tiles",
         "source-layer": "water",
-        paint: { "fill-color": "#1e293b" }, // chromatic-allow
+        paint: { "fill-color": "#020307" }, // chromatic-allow ← color.text.inverse dark (the deep void)
       },
       {
         id: "roads",
@@ -53,7 +56,7 @@ export function buildBasemapStyle(tilesUrl: string): maplibregl.StyleSpecificati
         source: "synapse_tiles",
         "source-layer": "roads",
         paint: {
-          "line-color": "#334155", // chromatic-allow
+          "line-color": "#343840", // chromatic-allow ← color.border.subtle dark
           "line-width": 0.5,
         },
       },
@@ -62,7 +65,7 @@ export function buildBasemapStyle(tilesUrl: string): maplibregl.StyleSpecificati
         type: "fill",
         source: "synapse_tiles",
         "source-layer": "buildings",
-        paint: { "fill-color": "#1f2937", "fill-opacity": 0.4 }, // chromatic-allow
+        paint: { "fill-color": "#181c24", "fill-opacity": 0.4 }, // chromatic-allow ← color.surface.raised dark
       },
     ],
   } as unknown as maplibregl.StyleSpecification;

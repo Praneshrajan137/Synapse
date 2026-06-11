@@ -1,34 +1,42 @@
 /* SYNAPSE design tokens — values referenced by tailwind.config.ts.
    Dark theme is the default (ops centers). Light + high-contrast layered
    in via [data-theme] selectors. Colors expressed as space-separated RGB
-   so Tailwind <alpha-value> works. */
+   so Tailwind <alpha-value> works.
+
+   v2 (Sprint 16, ADR-045 "Obsidian"): every value below is transcribed from
+   design-system/color/dist/tokens.json `rgb255` fields — the governed OKLCH
+   system (Chromatic v1.2.0) finally drives the UI. The parallel slate fork
+   is dead; TIER is the H258 cognition-lightness ramp (INV-CLR-006), not four
+   unrelated hues. lib/__tests__/chromatics.test.ts pins these mirrors
+   against dist — drift is a failing test. */
 
 :root,
 [data-theme="dark"] {
-  /* Surfaces */
-  --syn-canvas: 2 6 23; /* slate-950 */
-  --syn-surface: 15 23 42; /* slate-900 */
-  --syn-surface-raised: 30 41 59; /* slate-800 */
-  --syn-surface-sunken: 2 6 23;
-  --syn-ink: 226 232 240; /* slate-200 */
-  --syn-ink-muted: 148 163 184; /* slate-400 */
-  --syn-ink-subtle: 100 116 139; /* slate-500 */
-  --syn-ink-inverse: 15 23 42;
-  --syn-border: 51 65 85; /* slate-700 */
-  --syn-border-strong: 100 116 139;
+  /* Surfaces — the cold void (ref.neutral H265; elevation reads borderless). */
+  --syn-canvas: 6 8 15; /* color.surface.canvas */
+  --syn-surface: 14 18 26; /* color.surface.panel */
+  --syn-surface-raised: 24 28 36; /* color.surface.raised */
+  --syn-overlay: 38 42 51; /* color.surface.overlay */
+  --syn-surface-sunken: 2 3 7; /* deep void (ref.neutral.100) */
+  --syn-ink: 245 246 248; /* color.text.primary */
+  --syn-ink-muted: 184 186 192; /* color.text.secondary */
+  --syn-ink-subtle: 155 158 165; /* color.text.tertiary */
+  --syn-ink-inverse: 2 3 7; /* color.text.inverse */
+  --syn-border: 52 56 64; /* color.border.subtle — EARNED, not default chrome */
+  --syn-border-strong: 73 77 85; /* color.border.strong */
 
-  /* Tier palette (tier_router.py SLAs) */
-  --syn-tier-1: 52 211 153; /* emerald-400 :: <100ms */
-  --syn-tier-2: 56 189 248; /* sky-400     :: <500ms */
-  --syn-tier-3: 251 191 36; /* amber-400   :: 2-15s  */
-  --syn-tier-4: 251 113 133; /* rose-400    :: 15-120s */
+  /* Tier — the H258 cognition ramp (I-8/INV-CLR-006): one hue, lightness
+     falls as deliberation deepens. Tier 1 reflexive → Tier 4 deep thought. */
+  --syn-tier-1: 173 205 252; /* color.tier.1 */
+  --syn-tier-2: 120 163 227; /* color.tier.2 */
+  --syn-tier-3: 68 122 201; /* color.tier.3 */
+  --syn-tier-4: 13 83 175; /* color.tier.4 */
 
-  /* Confidence ramp (I-5) — legacy 3-stop sRGB bands, kept for existing
-     consumers (ConfidenceChip/Gauge). New surfaces use the continuous
-     gate-anchored OKLCH scale below via lib/chromatics.ts. */
-  --syn-confidence-ok: 34 197 94; /* green-500  :: >=0.9 */
-  --syn-confidence-warn: 234 179 8; /* yellow-500 :: 0.7-0.9 */
-  --syn-confidence-risk: 239 68 68; /* red-500    :: <0.7 */
+  /* Confidence — the gate-anchored stops (I-5). Channel vars kept for legacy
+     band consumers; the continuous scale lives in lib/chromatics.ts. */
+  --syn-confidence-ok: 105 218 126; /* color.confidence.autonomous */
+  --syn-confidence-warn: 247 184 61; /* color.confidence.escalation */
+  --syn-confidence-risk: 233 80 72; /* color.confidence.low */
 
   /* Gate-anchored confidence diverging scale (INV-CLR-007), mirrors
      design-system/color/dist confidenceColor() dark stops. Stops sit
@@ -41,17 +49,18 @@
     oklch(0.84 0.115 184) 100%
   );
 
-  /* Neutral mix target — colour drains toward this near-monochrome grey at
+  /* Neutral mix target — colour drains toward this near-monochrome base at
      rest, so agent hues are rationed and fire only on activity (PR-CLR-002;
      "quiet by default"). Consumed by lib/chromatics.ts::rationedAgentColor. */
-  --syn-neutral-mix: oklch(0.55 0.012 255);
+  --syn-neutral-mix: oklch(0.55 0.012 265);
 
-  /* Semantic signals */
-  --syn-signal-info: 56 189 248;
-  --syn-signal-success: 34 197 94;
-  --syn-signal-warning: 234 179 8;
-  --syn-signal-danger: 239 68 68;
-  --syn-accent: 129 140 248; /* indigo-400 */
+  /* Semantic signals (color.state.*) */
+  --syn-signal-info: 102 180 252;
+  --syn-signal-success: 91 212 125;
+  --syn-signal-warning: 255 184 77;
+  --syn-signal-danger: 235 68 65;
+  --syn-accent: 149 192 255; /* color.brand.base — the cognition blue */
+  --syn-brand: 149 192 255; /* color.brand.base */
 
   /* Honesty states (Chromatic v1.1.0, ADR-044) — mirrors
      design-system/color/dist tokens (pinned by chromatics.test.ts).
@@ -83,13 +92,17 @@
   --syn-radius-lg: 8px;
   --syn-radius-xl: 12px;
 
-  /* Elevation */
-  --syn-elev-0: 0 0 0 0 rgba(0, 0, 0, 0);
-  --syn-elev-1: 0 1px 2px rgba(2, 6, 23, 0.4);
-  --syn-elev-2: 0 4px 8px rgba(2, 6, 23, 0.45);
-  --syn-elev-3: 0 8px 16px rgba(2, 6, 23, 0.5);
-  --syn-elev-4: 0 16px 32px rgba(2, 6, 23, 0.55);
-  --syn-focus-ring: 0 0 0 2px rgba(56, 189, 248, 0.65);
+  /* Obsidian depth (ADR-045): elevation = surface step + top-edge highlight
+     + ambient shadow. Borders are reserved for interactive/alert states.
+     surface_highlight_alpha_dark + ambient_glow_alpha are spec thresholds. */
+  --syn-surface-highlight: rgb(255 255 255 / 0.04);
+  --syn-card-edge: transparent;
+  --syn-elev-0: 0 0 0 0 rgb(0 0 0 / 0);
+  --syn-elev-1: 0 1px 2px rgb(0 0 0 / 0.45), 0 1px 8px rgb(0 0 0 / 0.25);
+  --syn-elev-2: 0 2px 4px rgb(0 0 0 / 0.5), 0 4px 16px rgb(0 0 0 / 0.3);
+  --syn-elev-3: 0 4px 8px rgb(0 0 0 / 0.55), 0 8px 28px rgb(0 0 0 / 0.35);
+  --syn-elev-4: 0 8px 16px rgb(0 0 0 / 0.6), 0 16px 48px rgb(0 0 0 / 0.4);
+  --syn-focus-ring: 0 0 0 2px rgb(154 195 255 / 0.65); /* color.focus.ring */
 
   /* Motion — tier-aware (FE-P2) */
   --syn-motion-instant: 0ms;
@@ -108,16 +121,37 @@
 }
 
 [data-theme="light"] {
-  --syn-canvas: 248 250 252;
-  --syn-surface: 255 255 255;
-  --syn-surface-raised: 241 245 249;
-  --syn-surface-sunken: 226 232 240;
-  --syn-ink: 15 23 42;
-  --syn-ink-muted: 51 65 85;
-  --syn-ink-subtle: 100 116 139;
-  --syn-ink-inverse: 248 250 252;
-  --syn-border: 203 213 225;
-  --syn-border-strong: 148 163 184;
+  --syn-canvas: 242 243 246; /* color.surface.canvas */
+  --syn-surface: 252 252 253; /* color.surface.panel */
+  /* DELIBERATE deviation from dist (governed light panel=raised=overlay):
+     hover affordances (hover:bg-surface-raised) need a visible tint step in
+     light; dist relies on shadow-only elevation there. ADR-045 light note. */
+  --syn-surface-raised: 245 246 249;
+  --syn-overlay: 252 252 253; /* color.surface.overlay */
+  --syn-surface-sunken: 228 230 234;
+  --syn-ink: 28 31 39; /* color.text.primary */
+  --syn-ink-muted: 73 77 85; /* color.text.secondary */
+  --syn-ink-subtle: 96 99 106; /* color.text.tertiary */
+  --syn-ink-inverse: 252 252 253;
+  --syn-border: 228 230 234; /* color.border.subtle */
+  --syn-border-strong: 213 215 220; /* color.border.strong */
+
+  /* Tier — deep variants for light canvas (H258 ramp). */
+  --syn-tier-1: 131 166 218;
+  --syn-tier-2: 89 135 203;
+  --syn-tier-3: 48 103 184;
+  --syn-tier-4: 0 72 159;
+
+  --syn-confidence-ok: 0 147 66; /* color.confidence.autonomous */
+  --syn-confidence-warn: 202 138 0; /* color.confidence.escalation */
+  --syn-confidence-risk: 199 24 29; /* color.confidence.low */
+
+  --syn-signal-info: 0 108 180;
+  --syn-signal-success: 0 127 56;
+  --syn-signal-warning: 182 119 0;
+  --syn-signal-danger: 198 0 26;
+  --syn-accent: 42 103 189; /* color.brand.base */
+  --syn-brand: 42 103 189;
 
   /* Agent identity — deep variants for light canvas (INV-CLR-012) */
   --syn-agent-demand-prophet: oklch(0.54 0.185 292);
@@ -137,22 +171,40 @@
     oklch(0.58 0.1597 150) 80%,
     oklch(0.6 0.1074 182) 100%
   );
-  --syn-neutral-mix: oklch(0.62 0.012 255);
+  --syn-neutral-mix: oklch(0.62 0.012 265);
 
   /* Honesty states — deep variants for light canvas (v1.1.0, ADR-044). */
   --syn-state-degraded: oklch(0.58 0.055 84);
   --syn-state-synthetic: oklch(0.6 0.145 310);
+
+  /* Obsidian depth, light: shadow + hairline (an inset white highlight is
+     invisible on white — ADR-045). */
+  --syn-surface-highlight: transparent;
+  --syn-card-edge: rgb(228 230 234 / 0.8);
+  --syn-elev-1: 0 1px 2px rgb(28 31 39 / 0.06), 0 1px 6px rgb(28 31 39 / 0.05);
+  --syn-elev-2: 0 2px 4px rgb(28 31 39 / 0.07), 0 4px 12px rgb(28 31 39 / 0.06);
+  --syn-elev-3: 0 4px 8px rgb(28 31 39 / 0.08), 0 8px 20px rgb(28 31 39 / 0.07);
+  --syn-elev-4: 0 8px 16px rgb(28 31 39 / 0.1), 0 16px 36px rgb(28 31 39 / 0.08);
+  --syn-focus-ring: 0 0 0 2px rgb(42 103 189 / 0.65);
 }
 
 [data-theme="hc"] {
-  /* High-contrast (WCAG AAA) */
+  /* High-contrast (WCAG AAA): borderless depth is a contrast-budget luxury
+     AAA can't afford — hard borders, no shadows, no glow (ADR-045). */
   --syn-canvas: 0 0 0;
   --syn-surface: 0 0 0;
   --syn-surface-raised: 17 17 17;
+  --syn-overlay: 17 17 17;
   --syn-ink: 255 255 255;
   --syn-ink-muted: 229 231 235;
   --syn-border-strong: 255 255 255;
-  --syn-focus-ring: 0 0 0 3px rgba(255, 255, 255, 1);
+  --syn-surface-highlight: transparent;
+  --syn-card-edge: rgb(255 255 255 / 0.9);
+  --syn-elev-1: none;
+  --syn-elev-2: none;
+  --syn-elev-3: none;
+  --syn-elev-4: none;
+  --syn-focus-ring: 0 0 0 3px rgb(255 255 255 / 1);
   /* High-contrast: neutral mix is a plain grey so rationed agent dots stay
      legible against pure black; the diverging hue is decorative here and the
      numeric/textual signal carries meaning (INV-CLR-011). */

@@ -8,17 +8,38 @@
       name="description"
       content="SYNAPSE Console — command center for an autonomous quick-commerce supply chain."
     />
-    <meta name="theme-color" content="#020617" />
+    <meta name="theme-color" content="#06080f" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <!-- Paint-critical self-hosted faces (ADR-045); mono swaps late by design. -->
+    <link
+      rel="preload"
+      as="font"
+      type="font/woff2"
+      crossorigin
+      href="/fonts/InterVariable.woff2"
+    />
+    <link
+      rel="preload"
+      as="font"
+      type="font/woff2"
+      crossorigin
+      href="/fonts/SpaceGrotesk[wght].woff2"
+    />
     <title>SYNAPSE Console</title>
     <script>
       // No-flash theme: apply the saved theme before first paint.
       // Default is dark — operators run in low-ambient control rooms.
+      // Reads the zustand-persisted store (localStorage["synapse.theme"],
+      // JSON envelope) — the previous bare "synapse-theme" key never existed,
+      // so saved themes flashed dark on every reload.
       (function () {
         try {
-          var t = localStorage.getItem("synapse-theme");
-          if (t === "light" || t === "dark") {
-            document.documentElement.setAttribute("data-theme", t);
+          var raw = localStorage.getItem("synapse.theme");
+          if (raw) {
+            var t = JSON.parse(raw).state.theme;
+            if (t === "light" || t === "dark" || t === "hc") {
+              document.documentElement.setAttribute("data-theme", t);
+            }
           }
         } catch (e) {
           /* localStorage unavailable — keep the dark default */

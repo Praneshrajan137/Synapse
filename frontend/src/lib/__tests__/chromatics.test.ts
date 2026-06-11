@@ -215,6 +215,111 @@ describe("honesty-state colours mirror the canonical tokens", () => {
   });
 });
 
+describe("Obsidian mirrors — the FE palette IS the governed palette (ADR-045)", () => {
+  const tokensCss = readFileSync(
+    join(REPO_ROOT, "frontend", "src", "styles", "tokens.css"),
+    "utf8",
+  );
+
+  /** All `--name: R G B;` declarations for a var, in source order
+   *  (dark `:root` block first, then light, then any hc override). */
+  const rgbTriplets = (name: string): number[][] =>
+    [...tokensCss.matchAll(new RegExp(`${name}:\\s*(\\d+) (\\d+) (\\d+);`, "g"))].map((m) => [
+      Number(m[1]),
+      Number(m[2]),
+      Number(m[3]),
+    ]);
+
+  const distRgb = (token: string, theme: "dark" | "light"): readonly number[] => {
+    const t = DIST_TOKENS[token] as unknown as {
+      dark: { rgb255: number[] };
+      light: { rgb255: number[] };
+    };
+    return t[theme].rgb255;
+  };
+
+  // tokens.css var → dist token. Light `--syn-surface-raised` is a
+  // DELIBERATE deviation (hover affordance; ADR-045 light note) and is
+  // excluded from the light pin.
+  const MIRRORS: ReadonlyArray<readonly [string, string, "both" | "dark-only"]> = [
+    ["--syn-canvas", "color.surface.canvas", "both"],
+    ["--syn-surface", "color.surface.panel", "both"],
+    ["--syn-surface-raised", "color.surface.raised", "dark-only"],
+    ["--syn-overlay", "color.surface.overlay", "both"],
+    ["--syn-ink", "color.text.primary", "both"],
+    ["--syn-ink-muted", "color.text.secondary", "both"],
+    ["--syn-ink-subtle", "color.text.tertiary", "both"],
+    ["--syn-border", "color.border.subtle", "both"],
+    ["--syn-border-strong", "color.border.strong", "both"],
+    ["--syn-tier-1", "color.tier.1", "both"],
+    ["--syn-tier-2", "color.tier.2", "both"],
+    ["--syn-tier-3", "color.tier.3", "both"],
+    ["--syn-tier-4", "color.tier.4", "both"],
+    ["--syn-brand", "color.brand.base", "both"],
+    ["--syn-accent", "color.brand.base", "both"],
+    ["--syn-signal-info", "color.state.info", "both"],
+    ["--syn-signal-success", "color.state.success", "both"],
+    ["--syn-signal-warning", "color.state.warning", "both"],
+    ["--syn-signal-danger", "color.state.danger", "both"],
+    ["--syn-confidence-ok", "color.confidence.autonomous", "both"],
+    ["--syn-confidence-warn", "color.confidence.escalation", "both"],
+    ["--syn-confidence-risk", "color.confidence.low", "both"],
+  ];
+
+  it("every surface/text/tier/brand/signal var matches dist rgb255 exactly", () => {
+    for (const [varName, token, scope] of MIRRORS) {
+      const values = rgbTriplets(varName);
+      expect(values.length, `${varName} declared`).toBeGreaterThanOrEqual(2);
+      expect(values[0], `${varName} dark`).toEqual([...distRgb(token, "dark")]);
+      if (scope === "both") {
+        expect(values[1], `${varName} light`).toEqual([...distRgb(token, "light")]);
+      }
+    }
+  });
+
+  it("the tier vars speak the governed H258 lightness ramp, not four hues", () => {
+    // Monotone lightness: each tier strictly darker than the previous
+    // (relative luminance proxy: channel sum falls tier 1 → 4, both themes).
+    for (const theme of [0, 1] as const) {
+      const sums = [1, 2, 3, 4].map((n) => {
+        const v = rgbTriplets(`--syn-tier-${n}`)[theme];
+        if (!v) throw new Error(`missing tier ${n}`);
+        return v.reduce((acc, channel) => acc + channel, 0);
+      });
+      for (let i = 1; i < sums.length; i++) {
+        expect(sums[i], `tier ${i + 1} darker than tier ${i} (theme ${theme})`).toBeLessThan(
+          sums[i - 1] as number,
+        );
+      }
+    }
+  });
+
+  it("MapLibre basemap literals are the dist hex values (chromatic-allow, pinned)", () => {
+    const basemap = readFileSync(
+      join(REPO_ROOT, "frontend", "src", "visualization", "maplibre", "basemap.ts"),
+      "utf8",
+    );
+    const distHex = (token: string): string =>
+      (DIST_TOKENS[token] as unknown as { dark: { hex: string } }).dark.hex;
+    expect(basemap).toContain(distHex("color.surface.canvas")); // background
+    expect(basemap).toContain(distHex("color.surface.panel")); // land
+    expect(basemap).toContain(distHex("color.text.inverse")); // water (deep void)
+    expect(basemap).toContain(distHex("color.border.subtle")); // roads
+    expect(basemap).toContain(distHex("color.surface.raised")); // buildings
+  });
+
+  it("deck.gl palette tuples are the dist rgb255 values (WebGL mirror, pinned)", async () => {
+    const palette = await import("../../visualization/deck-gl/palette");
+    expect(palette.DECK_NEUTRAL.slice(0, 3)).toEqual([...distRgb("color.state.neutral", "dark")]);
+    expect(palette.DECK_INFO.slice(0, 3)).toEqual([...distRgb("color.state.info", "dark")]);
+    expect(palette.DECK_WARN.slice(0, 3)).toEqual([...distRgb("color.state.warning", "dark")]);
+    expect(palette.DECK_RISK.slice(0, 3)).toEqual([...distRgb("color.state.danger", "dark")]);
+    expect(palette.DECK_RISK_SOFT.slice(0, 3)).toEqual([
+      ...distRgb("color.confidence.low", "dark"),
+    ]);
+  });
+});
+
 describe("rationedAgentColor — quiet-by-default", () => {
   it("mixes toward the neutral base at rest, full hue at activity", () => {
     const rest = rationedAgentColor("var(--syn-agent-pricing-oracle)", 0);
