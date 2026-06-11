@@ -6,7 +6,7 @@ import { type FreshnessAlert, FreshnessAlertSchema } from "@domain/freshness-ale
 import { type PricingUpdate, PricingUpdateSchema } from "@domain/pricing-update";
 import type { City } from "@domain/primitives";
 import { type RoutePlan, RoutePlanSchema } from "@domain/route-plan";
-import { type TwinState, TwinStateSchema } from "@domain/twin-state";
+import { type TwinDivergenceEvent, TwinDivergenceEventSchema } from "@domain/twin-state";
 import { type WsMultiplex, createWsMultiplex } from "./ws-multiplex";
 
 // Typed wrapper around the WS multiplex pointed at /ws/firehose.
@@ -34,7 +34,7 @@ interface ChannelPayloadMap {
   disruption: DisruptionAlert;
   routing: RoutePlan;
   demand: DemandForecast;
-  twin: TwinState;
+  twin: TwinDivergenceEvent;
   freshness: FreshnessAlert;
   pricing: PricingUpdate;
   escalation: EscalationMessage;
@@ -46,7 +46,10 @@ const SCHEMAS = {
   disruption: DisruptionAlertSchema,
   routing: RoutePlanSchema,
   demand: DemandForecastSchema,
-  twin: TwinStateSchema,
+  // Union: the DivergenceMonitor's alert shape (the real producer) OR a full
+  // TwinState snapshot — alerts previously failed the snapshot schema and
+  // the twin channel was silently dead (same defect class as `decision`).
+  twin: TwinDivergenceEventSchema,
   freshness: FreshnessAlertSchema,
   pricing: PricingUpdateSchema,
   escalation: EscalationMessageSchema,

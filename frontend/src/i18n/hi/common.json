@@ -26,5 +26,13 @@
   "posture.unknown": "स्थिति अज्ञात",
   "posture.unknown_detail": "डिग्रेडेशन स्थिति प्राप्त नहीं हो सकी — उत्तर मिलने तक डिग्रेडेड माना जाएगा।",
   "posture.brownout_item": "{{city}} ब्राउनआउट: {{level}}",
-  "posture.breaker_item": "{{name}} ब्रेकर {{state}}"
+  "posture.breaker_item": "{{name}} ब्रेकर {{state}}",
+  "chain.verified": "चेन सत्यापित",
+  "chain.tampered": "चेन बेमेल",
+  "chain.legacy": "प्री-चेन पंक्ति",
+  "chain.hash_title": "संग्रहीत prev_hash → current_hash; इस पंक्ति की सामग्री की पुनर्गणना मेल नहीं खाती",
+  "twin.caveat": "ट्विन विचलित",
+  "twin.caveat_aria": "डिजिटल ट्विन लाइव स्थिति से विचलित (KL {{kl}}) — विश्वास आशावादी हो सकता है",
+  "twin.caveat_title": "डिजिटल ट्विन KL विचलन {{kl}} पुनः-सिंक सीमा से अधिक — विश्वास मान उस मॉडल पर आधारित हैं जो अभी वास्तविकता से असहमत है",
+  "twin.caveat_title_agent": "{{agent}} के लिए डिजिटल ट्विन विचलित (KL {{kl}}) — विश्वास आशावादी हो सकता है"
 }

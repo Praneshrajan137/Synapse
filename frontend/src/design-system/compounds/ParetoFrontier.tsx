@@ -26,18 +26,19 @@ interface ParetoFrontierProps {
 
 const MARGIN = { top: 16, right: 16, bottom: 32, left: 40 };
 
-// chromatic-allow: visx paints these straight onto <svg> stroke/fill, which the
-// --syn-* channel tokens can't reach without a colour-function wrapper.
-// Tracked for chromatic-token migration (INV-CLR-009).
+// Chromatic-token migration (ADR-044 Phase 4): SVG presentation attributes
+// accept CSS colour functions, so the --syn-* channel tokens reach visx via
+// rgb(var(--…)) — no raw literals (INV-CLR-009), and the scatter now flips
+// with [data-theme] like everything else.
 const AXIS = {
-  line: "rgb(100 116 139)", // chromatic-allow
-  label: "rgb(148 163 184)", // chromatic-allow
+  line: "rgb(var(--syn-ink-subtle))",
+  label: "rgb(var(--syn-ink-muted))",
 } as const;
 const DOT = {
-  selected: "rgb(56 189 248)", // chromatic-allow
-  dominated: "rgb(100 116 139)", // chromatic-allow
-  normal: "rgb(129 140 248)", // chromatic-allow
-  ring: "rgb(248 250 252)", // chromatic-allow
+  selected: "rgb(var(--syn-signal-info))",
+  dominated: "rgb(var(--syn-ink-subtle))",
+  normal: "rgb(var(--syn-accent))",
+  ring: "rgb(var(--syn-ink))",
 } as const;
 
 /**

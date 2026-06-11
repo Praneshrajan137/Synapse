@@ -2,7 +2,7 @@ import type { LiveDecision } from "@domain/decision-envelope";
 import type { DemandForecast } from "@domain/demand-forecast";
 import type { DisruptionAlert } from "@domain/disruption-alert";
 import type { RoutePlan } from "@domain/route-plan";
-import type { TwinState } from "@domain/twin-state";
+import type { TwinDivergenceEvent } from "@domain/twin-state";
 import { create } from "zustand";
 
 // Per-channel bounded ring buffers (append-only — FE-INV-017). Switching
@@ -26,13 +26,13 @@ interface FirehoseState {
   disruptions: Bounded<DisruptionAlert>;
   routes: Bounded<RoutePlan>;
   demand: Bounded<DemandForecast>;
-  twin: Bounded<TwinState>;
+  twin: Bounded<TwinDivergenceEvent>;
   lastSeq: Readonly<Record<string, number>>;
   appendDecision(d: LiveDecision, seq: number): void;
   appendDisruption(d: DisruptionAlert, seq: number): void;
   appendRoute(r: RoutePlan, seq: number): void;
   appendDemand(d: DemandForecast, seq: number): void;
-  appendTwin(t: TwinState, seq: number): void;
+  appendTwin(t: TwinDivergenceEvent, seq: number): void;
   flushAll(): void;
 }
 

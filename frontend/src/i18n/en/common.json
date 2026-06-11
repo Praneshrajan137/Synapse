@@ -26,5 +26,13 @@
   "posture.unknown": "Posture unknown",
   "posture.unknown_detail": "The degradation posture could not be fetched — treating as degraded until it answers.",
   "posture.brownout_item": "{{city}} brownout: {{level}}",
-  "posture.breaker_item": "{{name}} breaker {{state}}"
+  "posture.breaker_item": "{{name}} breaker {{state}}",
+  "chain.verified": "Chain verified",
+  "chain.tampered": "Chain mismatch",
+  "chain.legacy": "Pre-chain row",
+  "chain.hash_title": "Stored prev_hash → current_hash; the recompute over this row's content does not match",
+  "twin.caveat": "Twin diverging",
+  "twin.caveat_aria": "Digital twin diverging from live state (KL {{kl}}) — confidence may be optimistic",
+  "twin.caveat_title": "Digital twin KL divergence {{kl}} exceeds the re-sync threshold — confidence values rest on a model currently disagreeing with reality",
+  "twin.caveat_title_agent": "Digital twin diverging for {{agent}} (KL {{kl}}) — confidence may be optimistic"
 }

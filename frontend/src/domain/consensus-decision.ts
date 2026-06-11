@@ -15,6 +15,18 @@ const ZProposal = z
     confidence: ZConfidence.optional(),
     justification_trace: z.array(z.string()).optional(),
     status: z.enum(["proposed", "rejected", "selected", "modified"]).optional(),
+    // ADR-044: structured provenance (synapse_common.models.Provenance) —
+    // optional/nullable so pre-044 proposals keep validating.
+    provenance: z
+      .object({
+        model_version: z.string().optional(),
+        feature_source: z.string().optional(),
+        degraded: z.boolean().optional(),
+        confidence_basis: z.string().optional(),
+      })
+      .passthrough()
+      .nullable()
+      .optional(),
   })
   .passthrough();
 
