@@ -13,17 +13,27 @@ import { fileURLToPath } from "node:url";
 const HEX = /#[0-9a-fA-F]{3}(?:[0-9a-fA-F]{3}(?:[0-9a-fA-F]{2})?)?\b/g;
 const FUNC = /\b(?:rgba?|hsla?)\s*\(/g;
 const ALLOW = /chromatic-allow/;
+const TOKEN_FUNCTION_ARG = /^\s*var\(--(?:syn|color)-[A-Za-z0-9_-]+\)/;
+
+function isTokenWrappedColorFunction(line, match) {
+  return TOKEN_FUNCTION_ARG.test(line.slice(match.index + match[0].length));
+}
 
 /** Find raw colour literals in a source string. Returns [{ line, match }]. */
 export function findHexLiterals(source) {
   const findings = [];
   source.split(/\r?\n/).forEach((line, i) => {
     if (ALLOW.test(line)) return;
-    for (const re of [HEX, FUNC]) {
-      re.lastIndex = 0;
-      let m;
-      while ((m = re.exec(line)) !== null) {
-        findings.push({ line: i + 1, match: m[0] });
+    HEX.lastIndex = 0;
+    let hexMatch;
+    while ((hexMatch = HEX.exec(line)) !== null) {
+      findings.push({ line: i + 1, match: hexMatch[0] });
+    }
+    FUNC.lastIndex = 0;
+    let funcMatch;
+    while ((funcMatch = FUNC.exec(line)) !== null) {
+      if (!isTokenWrappedColorFunction(line, funcMatch)) {
+        findings.push({ line: i + 1, match: funcMatch[0] });
       }
     }
   });

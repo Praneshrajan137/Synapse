@@ -17,8 +17,7 @@ interface CalibrationCurveProps {
 }
 
 // Chromatic-token migration (ADR-044 Phase 4): recharts forwards these onto
-// SVG/inline styles, which both accept CSS colour functions — rgb(var(--…))
-// reaches the channel tokens with no raw literal (INV-CLR-009) and flips
+// SVG/inline styles, which accept token-wrapped CSS colour functions and flip
 // with [data-theme].
 const CHART = {
   axisLabel: "rgb(var(--syn-ink-muted))",

@@ -157,8 +157,14 @@ describe("INV-CLR-009 — no raw colour literals", () => {
   it("INV-CLR-009 the hex detector flags raw literals and passes token usage", () => {
     expect(findHexLiterals('const a = "#ff0000";')).toHaveLength(1);
     expect(findHexLiterals("background: rgb(1,2,3)")).toHaveLength(1);
+    expect(findHexLiterals("background: rgba(1,2,3,0.4)")).toHaveLength(1);
+    expect(findHexLiterals("background: hsl(120 50% 50%)")).toHaveLength(1);
     expect(findHexLiterals("color: #abc;")).toHaveLength(1);
     expect(findHexLiterals('color: "var(--color-text-primary)"')).toHaveLength(0);
+    expect(findHexLiterals('color: "rgb(var(--syn-border))"')).toHaveLength(0);
+    expect(findHexLiterals('color: "rgba(var(--syn-border) / 0.4)"')).toHaveLength(0);
+    expect(findHexLiterals('color: "hsl(var(--color-accent))"')).toHaveLength(0);
+    expect(findHexLiterals('color: "hsla(var(--color-accent) / 0.5)"')).toHaveLength(0);
     expect(findHexLiterals("// brand #ff0000 chromatic-allow")).toHaveLength(0);
   });
 });

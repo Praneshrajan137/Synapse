@@ -8,8 +8,7 @@ interface ConfidenceGaugeProps {
 }
 
 // Chromatic-token migration (ADR-044 Phase 4): SVG presentation attributes
-// accept CSS colour functions — rgb(var(--…)) reaches the channel tokens
-// with no raw literal (INV-CLR-009) and flips with [data-theme].
+// accept token-wrapped CSS colour functions and flip with [data-theme].
 const BAND_COLOR: Record<ReturnType<typeof confidenceBand>, string> = {
   ok: "rgb(var(--syn-confidence-ok))",
   warn: "rgb(var(--syn-confidence-warn))",

@@ -26,10 +26,9 @@ export function ThemeToggle() {
   }
 
   return (
-    <div
-      role="group"
+    <fieldset
       aria-label={t("theme.label")}
-      className="flex items-center rounded-md border border-border bg-surface p-0.5"
+      className="m-0 flex min-w-0 items-center rounded-md border border-border bg-surface p-0.5"
     >
       {THEMES.map((option) => {
         const selected = option === theme;
@@ -51,6 +50,6 @@ export function ThemeToggle() {
           </button>
         );
       })}
-    </div>
+    </fieldset>
   );
 }

@@ -367,6 +367,54 @@ async def test_outbox_payload_carries_timestamp_and_agent_summary() -> None:
 
 
 @pytest.mark.asyncio
+async def test_outbox_payload_degraded_if_any_proposal_degraded() -> None:
+    """Mutation guard: the honesty envelope is an ANY over proposals, and the
+    per-agent summaries preserve each proposal's own degraded state."""
+    from synapse_common.provenance import ConfidenceBasis, Provenance
+
+    decision = _make_decision()
+    decision = decision.model_copy(
+        update={
+            "proposals": [
+                AgentProposal(
+                    agent_name=AgentName.DEMAND_PROPHET,
+                    decision_id=uuid4(),
+                    utility_score=0.7,
+                    confidence=0.91,
+                    justification_trace=["real"],
+                    payload={},
+                    tier=DecisionTier.TIER_1,
+                    provenance=Provenance.real(
+                        model_version="registry-v9",
+                        confidence_basis=ConfidenceBasis.CONFORMAL_INTERVAL,
+                    ),
+                ),
+                AgentProposal(
+                    agent_name=AgentName.ROUTING_NAVIGATOR,
+                    decision_id=uuid4(),
+                    utility_score=0.4,
+                    confidence=0.5,
+                    justification_trace=["fallback"],
+                    payload={},
+                    tier=DecisionTier.TIER_1,
+                    provenance=Provenance.degraded_fallback(),
+                ),
+            ]
+        }
+    )
+    factory = _session_factory_returning(scalar_value=None)
+    logger = AuditLogger(factory)
+    await logger.log_decision(decision)
+
+    payload = factory.recorders[-1].added_rows[1].payload
+    assert payload["degraded"] is True
+    assert payload["agents"] == [
+        {"agent_name": "demand_prophet", "confidence": 0.91, "degraded": False},
+        {"agent_name": "routing_navigator", "confidence": 0.5, "degraded": True},
+    ]
+
+
+@pytest.mark.asyncio
 async def test_outbox_payload_is_synthetic_for_traffic_generator_order() -> None:
     factory = _session_factory_returning(scalar_value=None)
     logger = AuditLogger(factory)
