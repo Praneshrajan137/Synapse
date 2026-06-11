@@ -20,6 +20,7 @@ import { ROOT } from "./_load.mjs";
 import { wcag, apca } from "../build/contrast.mjs";
 import { deltaEOK, hueDistance, simulateCvd, CVD_TYPES } from "../build/cvd.mjs";
 import { isInGamut, toRgb } from "../build/resolve.mjs";
+import { converter } from "culori";
 import { findHexLiterals } from "../scripts/lint-hex.mjs";
 import { confidenceColor, confidenceZone, AGENTS as TS_AGENTS } from "../dist/tokens.ts";
 
@@ -217,6 +218,129 @@ describe("INV-CLR-014 — semantic state palette distinctness", () => {
             ).toBeGreaterThanOrEqual(THRESHOLDS.semantic_min_deltaeok_cvd);
           }
         }
+      }
+    }
+  });
+});
+
+// ============================================================================
+// v1.1.0 (ADR-044) — honesty states, process-state grammar, interaction recipes
+// ============================================================================
+
+describe("INV-CLR-015 — 7-state distinctness (5 + degraded + synthetic)", () => {
+  it("INV-CLR-015 all 7 semantic states are mutually distinct, normal + CVD", () => {
+    const states = ["success", "warning", "danger", "info", "neutral", "degraded", "synthetic"];
+    for (const theme of THEMES) {
+      const cols = states.map((s) => color(`color.state.${s}`, theme));
+      for (let i = 0; i < states.length; i++) {
+        for (let j = i + 1; j < states.length; j++) {
+          expect(
+            deltaEOK(cols[i], cols[j]),
+            `${states[i]}/${states[j]} ${theme}`,
+          ).toBeGreaterThanOrEqual(THRESHOLDS.semantic_min_deltaeok);
+          for (const cvd of CVD_TYPES) {
+            expect(
+              deltaEOK(simulateCvd(cols[i], cvd), simulateCvd(cols[j], cvd)),
+              `${states[i]}/${states[j]} ${theme} ${cvd}`,
+            ).toBeGreaterThanOrEqual(THRESHOLDS.semantic_min_deltaeok_cvd);
+          }
+        }
+      }
+    }
+  });
+});
+
+describe("INV-CLR-016 — degraded is chroma-drained", () => {
+  it("INV-CLR-016 degraded chroma sits at/below the drain ceiling in both themes", () => {
+    for (const theme of THEMES) {
+      const degraded = color("color.state.degraded", theme);
+      expect(degraded.c, `degraded chroma ${theme}`).toBeLessThanOrEqual(
+        THRESHOLDS.degraded_max_chroma,
+      );
+    }
+  });
+
+  it("INV-CLR-016 degraded is visibly less saturated than every full state", () => {
+    const fullStates = ["success", "warning", "danger", "info"];
+    for (const theme of THEMES) {
+      const degraded = color("color.state.degraded", theme);
+      const minFull = Math.min(...fullStates.map((s) => color(`color.state.${s}`, theme).c));
+      expect(degraded.c, `drain gap ${theme}`).toBeLessThanOrEqual(
+        minFull - THRESHOLDS.degraded_min_chroma_gap,
+      );
+    }
+  });
+});
+
+describe("INV-CLR-017 — process-state factors strictly monotone with activity", () => {
+  const factor = (name) => {
+    const t = TOKENS[`factor.agentstate.${name}`];
+    expect(t, `factor.agentstate.${name} emitted`).toBeDefined();
+    return t.value;
+  };
+
+  it("INV-CLR-017 interrupted < waiting < thinking < debating < acting == 1.0", () => {
+    const seq = ["interrupted", "waiting", "thinking", "debating", "acting"].map(factor);
+    for (let i = 1; i < seq.length; i++) {
+      expect(seq[i], `monotone at index ${i}`).toBeGreaterThan(seq[i - 1]);
+    }
+    expect(seq[seq.length - 1]).toBe(1);
+  });
+
+  it("INV-CLR-017 every factor is in (0, 1] — identity never fully vanishes", () => {
+    for (const name of ["interrupted", "waiting", "thinking", "debating", "acting", "escalated"]) {
+      const f = factor(name);
+      expect(f, `${name} > 0`).toBeGreaterThan(0);
+      expect(f, `${name} <= 1`).toBeLessThanOrEqual(1);
+    }
+  });
+
+  it("INV-CLR-017 escalated holds full chroma (urgency composes with the danger ring, not a drain)", () => {
+    expect(factor("escalated")).toBe(1);
+  });
+});
+
+describe("INV-CLR-018 — interaction tints never sink text below contrast", () => {
+  // The interaction recipes are color-mix() in component CSS; the spec pins
+  // the mix constants so this test can verify the composite the user sees.
+  // mix(in oklab, overlay a%, surface) == interpolate surface->overlay at a.
+  const mixOklab = (surface, overlay, alpha) => {
+    const lab = converter("oklab");
+    const s = lab(surface);
+    const o = lab(overlay);
+    const lerp = (x, y) => x + (y - x) * alpha;
+    return { mode: "oklab", l: lerp(s.l, o.l), a: lerp(s.a, o.a), b: lerp(s.b, o.b) };
+  };
+
+  it("INV-CLR-018 body text on hover-tinted surfaces clears WCAG AA + APCA primary", () => {
+    for (const theme of THEMES) {
+      const alpha = THRESHOLDS[`interaction_hover_alpha_${theme}`];
+      const text = color("color.text.primary", theme);
+      for (const s of ["canvas", "panel", "raised"]) {
+        const hovered = mixOklab(color(`color.surface.${s}`, theme), text, alpha);
+        expect(wcag(text, hovered), `hover ${s} ${theme} wcag`).toBeGreaterThanOrEqual(
+          THRESHOLDS.wcag_text_normal,
+        );
+        expect(Math.abs(apca(text, hovered)), `hover ${s} ${theme} apca`).toBeGreaterThanOrEqual(
+          THRESHOLDS.apca_primary_lc,
+        );
+      }
+    }
+  });
+
+  it("INV-CLR-018 body text on selected (brand-tinted) surfaces clears WCAG AA + APCA primary", () => {
+    for (const theme of THEMES) {
+      const alpha = THRESHOLDS[`interaction_selected_alpha_${theme}`];
+      const text = color("color.text.primary", theme);
+      const brand = color("color.brand.base", theme);
+      for (const s of ["canvas", "panel", "raised"]) {
+        const selected = mixOklab(color(`color.surface.${s}`, theme), brand, alpha);
+        expect(wcag(text, selected), `selected ${s} ${theme} wcag`).toBeGreaterThanOrEqual(
+          THRESHOLDS.wcag_text_normal,
+        );
+        expect(Math.abs(apca(text, selected)), `selected ${s} ${theme} apca`).toBeGreaterThanOrEqual(
+          THRESHOLDS.apca_primary_lc,
+        );
       }
     }
   });

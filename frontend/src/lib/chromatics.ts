@@ -163,3 +163,68 @@ export function rationedAgentColor(agentVar: string, activity: number): string {
   const pct = Math.round(18 + a * 82);
   return `color-mix(in oklab, ${agentVar} ${pct}%, var(--syn-neutral-mix))`;
 }
+
+// ---------------------------------------------------------------------------
+// Chromatic v1.1.0 (ADR-044) — agent process-state grammar + honesty states.
+// ---------------------------------------------------------------------------
+
+/**
+ * What an agent is DOING, as a chromatic state. Identity hue is FROZEN
+ * (INV-CLR-012); process state is encoded as chroma rationing — a scalar
+ * factor on the identity colour, strictly monotone with cognitive activity
+ * (INV-CLR-017). `recovered` is deliberately absent: recovery is a motion
+ * event (one arrive-flash, then settle), not a colour.
+ */
+export type AgentProcessState =
+  | "interrupted"
+  | "waiting"
+  | "thinking"
+  | "debating"
+  | "acting"
+  | "escalated";
+
+/**
+ * Mirror of `factor.agentstate.*` in design-system/color/dist/tokens.json —
+ * pinned byte-for-byte by chromatics.test.ts so the FE and the token system
+ * cannot drift. escalated holds FULL chroma: urgency composes with the
+ * danger ring + the 1200ms urgent pulse, never a colour change (MR-CLR-004:
+ * state must not masquerade as a different agent).
+ */
+export const AGENT_STATE_FACTOR: Record<AgentProcessState, number> = {
+  interrupted: 0.25,
+  waiting: 0.35,
+  thinking: 0.55,
+  debating: 0.8,
+  acting: 1,
+  escalated: 1,
+};
+
+/**
+ * The identity colour of an agent in a given process state. The chroma
+ * factor maps directly to the identity share of a `color-mix()` toward the
+ * quiet neutral base — an interrupted agent is nearly achromatic but never
+ * invisible (the factor floor is 0.25, INV-CLR-017), an acting agent burns
+ * at full identity. Token-only output (INV-CLR-009).
+ */
+export function processStateColor(agentVar: string, state: AgentProcessState): string {
+  const pct = Math.round(AGENT_STATE_FACTOR[state] * 100);
+  return `color-mix(in oklab, ${agentVar} ${pct}%, var(--syn-neutral-mix))`;
+}
+
+/**
+ * The degraded honesty state (ADR-040/ADR-044): any output produced on a
+ * fallback path renders in this chroma-drained caution colour — running on
+ * reduced information must LOOK like reduced information (INV-CLR-016).
+ */
+export function degradedStateColor(): string {
+  return "var(--syn-state-degraded)";
+}
+
+/**
+ * The synthetic honesty state: traffic-generator decisions (`is_synthetic`)
+ * render in this violet — always paired with a dashed ring + glyph, never
+ * colour alone (INV-CLR-011).
+ */
+export function syntheticStateColor(): string {
+  return "var(--syn-state-synthetic)";
+}

@@ -23,7 +23,9 @@ const TOKEN_FILES = [
 
 // Only these top-level groups are emitted as runtime artifacts. `ref.*`
 // primitives are build-time only (three-tier token architecture).
-const EMIT_PREFIXES = ["color.", "motion.", "radius."];
+// v1.1.0 (ADR-044): `factor.*` carries the agent process-state chroma-
+// rationing scalars — emitted so the FE mirror can be pinned against dist.
+const EMIT_PREFIXES = ["color.", "motion.", "radius.", "factor."];
 const isEmitted = (path) => EMIT_PREFIXES.some((p) => path.startsWith(p));
 
 const cssVar = (path) => `--${path.replace(/\./g, "-")}`;
@@ -320,11 +322,14 @@ module.exports = {
         standard: "var(--motion-ease-standard)",
         decelerate: "var(--motion-ease-decelerate)",
         emphasized: "var(--motion-ease-emphasized)",
+        entrance: "var(--motion-ease-entrance)",
       },
       transitionDuration: {
         fast: "var(--motion-duration-fast)",
         base: "var(--motion-duration-base)",
         slow: "var(--motion-duration-slow)",
+        arrive: "var(--motion-duration-arrive)",
+        urgent: "var(--motion-duration-urgent)",
       },
       backgroundImage: {
         "gradient-confidence": "var(--gradient-confidence)",

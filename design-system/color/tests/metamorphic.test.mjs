@@ -3,7 +3,7 @@
 // metamorphic transforms: a property must survive the transform.
 // ============================================================================
 import { describe, it, expect } from "vitest";
-import { AGENTS, THRESHOLDS, color, CONTRAST_PAIRS } from "./_load.mjs";
+import { AGENTS, THRESHOLDS, TOKENS, color, CONTRAST_PAIRS } from "./_load.mjs";
 import { wcag } from "../build/contrast.mjs";
 import { deltaEOK, simulateCvd, CVD_TYPES } from "../build/cvd.mjs";
 import { confidenceColor } from "../dist/tokens.ts";
@@ -46,6 +46,50 @@ describe("MR-CLR-003 — rising confidence advances the red->teal axis", () => {
         const h = +m[1];
         expect(h, `hue at v=${v} (${theme})`).toBeGreaterThanOrEqual(prevH - 1e-6);
         prevH = h;
+      }
+    }
+  });
+});
+
+describe("MR-CLR-004 — degradation (chroma rationing) preserves identity", () => {
+  // The process-state grammar (ADR-044): state = chroma factor over the
+  // FROZEN identity hue. The transform must never read as a different agent.
+  const ration = (c, f) => ({ mode: "oklch", l: c.l, c: c.c * f, h: c.h });
+
+  it("MR-CLR-004 every factor < 1 strictly reduces chroma and leaves L and H untouched", () => {
+    const factors = ["interrupted", "waiting", "thinking", "debating"].map(
+      (n) => TOKENS[`factor.agentstate.${n}`].value,
+    );
+    for (const theme of ["light", "dark"]) {
+      for (const agent of AGENTS) {
+        const identity = color(`color.agent.${agent}`, theme);
+        for (const f of factors) {
+          const rationed = ration(identity, f);
+          expect(rationed.c, `${agent} ${theme} f=${f} chroma`).toBeLessThan(identity.c);
+          expect(rationed.l, `${agent} ${theme} f=${f} lightness`).toBe(identity.l);
+          expect(
+            Math.abs(rationed.h - identity.h),
+            `${agent} ${theme} f=${f} hue drift`,
+          ).toBeLessThan(2);
+        }
+      }
+    }
+  });
+
+  it("MR-CLR-004 rationing never collapses two agents into the same colour", () => {
+    // Even at the deepest drain (interrupted), the 8 identities must remain
+    // pairwise separable under normal vision — the CVD-grade threshold is the
+    // floor because drained chroma approaches the CVD-compressed regime.
+    const f = TOKENS["factor.agentstate.interrupted"].value;
+    for (const theme of ["light", "dark"]) {
+      const drained = AGENTS.map((a) => ration(color(`color.agent.${a}`, theme), f));
+      for (let i = 0; i < drained.length; i++) {
+        for (let j = i + 1; j < drained.length; j++) {
+          expect(
+            deltaEOK(drained[i], drained[j]),
+            `${AGENTS[i]}/${AGENTS[j]} ${theme} drained`,
+          ).toBeGreaterThanOrEqual(THRESHOLDS.agent_pair_min_deltaeok_cvd);
+        }
       }
     }
   });

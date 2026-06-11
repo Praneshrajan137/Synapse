@@ -88,7 +88,7 @@
         "required": ["description", "encoding"],
         "properties": {
           "description": { "type": "string" },
-          "encoding": { "enum": ["hue", "lightness", "diverging", "categorical", "neutral"] },
+          "encoding": { "enum": ["hue", "lightness", "diverging", "categorical", "neutral", "chroma-factor"] },
           "members": { "type": "array", "items": { "type": "string" } }
         }
       }
