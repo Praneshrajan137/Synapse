@@ -20,6 +20,10 @@ export function usePosture() {
     queryFn: () => api.getSystemPosture(),
     refetchInterval: 15_000,
     staleTime: 10_000,
-    retry: 2,
+    // The http-client already runs 5 Full-Jitter attempts per call
+    // (FE-INV-006); layering react-query retries on top tripled that and
+    // delayed the honest "posture unknown" banner by minutes. The 15s
+    // refetchInterval IS the retry loop.
+    retry: false,
   });
 }
