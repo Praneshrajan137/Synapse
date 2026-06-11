@@ -54,14 +54,21 @@ class InventorySentinelA2AHandler:
         sku_ids = ctx.get("sku_ids", ["SKU001"])
         store_id = ctx.get("store_id", "STORE_BLR_001")
         actions = self._pipeline.decide(sku_ids, store_id)
+        # I-5/ADR-040: proposal confidence is the mean of the per-action
+        # confidences (forecast volatility) — never a constant, so the HITL
+        # gate can actually fire on low-confidence decisions.
+        avg_confidence = sum(a.confidence for a in actions) / len(actions) if actions else 0.0
         proposal = AgentProposal(
             # ADR-044: structured provenance rides with the proposal (I-3/I-4).
             provenance=self._pipeline.last_provenance,
             agent_name=AgentName.INVENTORY_SENTINEL,
             decision_id=UUID(ctx.get("decision_id", str(uuid4()))),
-            utility_score=0.85,
-            confidence=0.8,
-            justification_trace=[f"Generated {len(actions)} inventory actions"],
+            utility_score=min(avg_confidence, 1.0),
+            confidence=avg_confidence,
+            justification_trace=[
+                f"Generated {len(actions)} inventory actions",
+                f"Average confidence: {avg_confidence:.3f}",
+            ],
             payload={"actions": [a.model_dump(mode="json") for a in actions]},
             tier=DecisionTier.TIER_2,
         )

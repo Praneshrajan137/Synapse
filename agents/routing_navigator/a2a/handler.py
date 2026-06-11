@@ -58,16 +58,22 @@ class RoutingNavigatorA2AHandler:
 
         routes = self._pipeline.route(orders, riders, store_id)
 
+        # I-5/ADR-040: proposal confidence is the mean of the per-route solver
+        # confidences (optimality gap, or the 0.5 Tier-1 floor) — never a
+        # constant, so the HITL gate can actually fire on low-quality routes.
+        avg_confidence = sum(r.confidence for r in routes) / len(routes) if routes else 0.0
+
         proposal = AgentProposal(
             # ADR-044: structured provenance rides with the proposal (I-3/I-4).
             provenance=self._pipeline.last_provenance,
             agent_name=AgentName.ROUTING_NAVIGATOR,
             decision_id=UUID(context.get("decision_id", str(uuid4()))),
-            utility_score=0.8,
-            confidence=0.85,
+            utility_score=min(avg_confidence, 1.0),
+            confidence=avg_confidence,
             justification_trace=[
                 f"Generated {len(routes)} routes for {len(orders)} orders",
                 f"Total distance: {sum(r.total_distance_km for r in routes):.1f} km",
+                f"Average confidence: {avg_confidence:.3f}",
             ],
             payload={"routes": [r.model_dump(mode="json") for r in routes]},
             tier=DecisionTier.TIER_1,
