@@ -1,4 +1,5 @@
 import { useCityStore } from "@state/city.store";
+import { useEscalationStore } from "@state/escalation.store";
 import { useFirehoseStore } from "@state/firehose.store";
 import { type FirehoseChannel, type FirehoseClient, createFirehose } from "@transport/firehose";
 import type { WsState } from "@transport/ws-multiplex";
@@ -28,6 +29,7 @@ export function useFirehose({ topics }: UseFirehoseOptions): UseFirehoseResult {
     demand: s.appendDemand,
     twin: s.appendTwin,
   }));
+  const appendEscalation = useEscalationStore((s) => s.append);
   const lastSeq = useFirehoseStore((s) => s.lastSeq);
   const [state, setState] = useState<WsState>("idle");
   const ref = useRef<FirehoseClient | null>(null);
@@ -45,7 +47,19 @@ export function useFirehose({ topics }: UseFirehoseOptions): UseFirehoseResult {
 
     const offs: Array<() => void> = [];
     if (topics.includes("decision")) {
-      offs.push(client.on("decision", (d, env) => append.decision(d, env.seq)));
+      offs.push(
+        client.on("decision", (d, env) =>
+          // Pre-ADR-044 envelopes carry no payload timestamp — fall back to
+          // the server envelope ts so relative-time rendering never breaks.
+          append.decision({ ...d, timestamp: d.timestamp ?? env.ts }, env.seq),
+        ),
+      );
+    }
+    if (topics.includes("escalation")) {
+      // ADR-044: HITL escalations push through the multiplexed socket; the
+      // store ignores duplicate decision_ids (the legacy /ws/escalation
+      // socket may deliver the same message during the transition).
+      offs.push(client.on("escalation", (m) => appendEscalation(m)));
     }
     if (topics.includes("disruption")) {
       offs.push(client.on("disruption", (d, env) => append.disruption(d, env.seq)));

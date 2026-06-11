@@ -1,4 +1,11 @@
-import { BuildSHAChip, CitySwitcher, LanguagePicker, OperatorIdentity } from "@ds/compounds";
+import {
+  BuildSHAChip,
+  CitySwitcher,
+  DegradedBanner,
+  LanguagePicker,
+  OperatorIdentity,
+  ThemeToggle,
+} from "@ds/compounds";
 import { cn } from "@lib/cn";
 import { NavLink, Outlet } from "react-router-dom";
 import { CommandPalette } from "./CommandPalette";
@@ -53,10 +60,14 @@ export function Shell() {
         <div className="flex items-center gap-3">
           <CitySwitcher />
           <LanguagePicker />
+          <ThemeToggle />
           <OperatorIdentity />
           <BuildSHAChip />
         </div>
       </header>
+      {/* ADR-044: system-level honesty — brownout/breaker degradation is
+          visible on EVERY surface, not buried in Prometheus (FE-INV-035). */}
+      <DegradedBanner />
       <main className="flex-1 overflow-auto bg-canvas p-6">
         <Outlet />
       </main>

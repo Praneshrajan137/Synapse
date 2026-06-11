@@ -372,10 +372,11 @@ invariants:
       segment (scripts/demo/*.py) inside the Evidence panel; the
       backend's run wrapper streams progress over SSE.
     implementations:
+      # api/routers/demo.py was removed in the module-liveness sweep
+      # (96f73d3); the FE surfaces remain the enforcement points.
       - frontend/src/surfaces/demo-theater/DemoTheater.tsx
       - frontend/src/surfaces/demo-theater/useDemoRun.ts
       - frontend/src/surfaces/demo-theater/useArtifact.ts
-      - api/routers/demo.py
     tests:
       - frontend/tests/e2e/demo.spec.ts
     status: enforced
@@ -496,4 +497,140 @@ invariants:
     tests:
       - frontend/src/surfaces/steering/__tests__/Steering.test.tsx
       - frontend/tests/e2e/steering.spec.ts
+    status: enforced
+
+  - id: FE-INV-034
+    title: Structured provenance is rendered whenever present; degraded is never hidden
+    mirrors: ADR-040, ADR-044, I-7
+    description: >
+      Every surface that renders a proposal or decision carrying structured
+      provenance shows the ProvenanceChip (model version, feature source,
+      confidence basis); a degraded=true output renders the chroma-drained
+      degraded state with an explicit text label (INV-CLR-011/016) and is
+      never silently suppressed. Decisions whose envelope reports
+      degraded=true carry a visible degraded marker in the live tail.
+    implementations:
+      - frontend/src/design-system/compounds/ProvenanceChip.tsx
+      - frontend/src/surfaces/mission-control/DecisionFirehoseTail.tsx
+    tests:
+      - frontend/src/design-system/compounds/__tests__/HonestyChannel.test.tsx
+    status: enforced
+
+  - id: FE-INV-035
+    title: System degradation posture is visible on every surface
+    mirrors: ADR-044, I-7, E-S9-04
+    description: >
+      The DegradedBanner mounts in the Shell (above every route) and renders
+      whenever GET /api/v1/system/posture reports brownout shedding or an
+      open dependency breaker, naming WHAT is degraded. A posture fetch
+      failure renders "posture unknown" -- the banner never fails silently
+      green. It is not dismissible while the condition holds (there is no
+      dismiss affordance at all).
+    implementations:
+      - frontend/src/design-system/compounds/DegradedBanner.tsx
+      - frontend/src/hooks/use-posture.ts
+      - frontend/src/app/Shell.tsx
+      - api/routers/system.py
+      - orchestrator/inference/posture.py
+    tests:
+      - frontend/src/design-system/compounds/__tests__/HonestyChannel.test.tsx
+      - api/tests/test_system_posture.py
+      - orchestrator/tests/test_posture.py
+    status: enforced
+
+  - id: FE-INV-036
+    title: Synthetic decisions are always visibly marked, never colour-only
+    mirrors: ADR-044 D5, INV-CLR-011
+    description: >
+      A decision whose envelope reports is_synthetic=true (the traffic
+      generator's "synthetic-" order prefix, owned by
+      packages/synapse_common/synthetic.py) always renders the
+      SyntheticBadge: the synthetic state colour PLUS a dashed ring and a
+      text label, so demo pulses are distinguishable from real commerce
+      under CVD, grayscale, or print.
+    implementations:
+      - frontend/src/design-system/compounds/SyntheticBadge.tsx
+      - frontend/src/surfaces/mission-control/DecisionFirehoseTail.tsx
+      - frontend/src/domain/decision-envelope.ts
+    tests:
+      - frontend/src/design-system/compounds/__tests__/HonestyChannel.test.tsx
+      - frontend/src/domain/__tests__/decision-envelope.test.ts
+    status: enforced
+
+  - id: FE-INV-037
+    title: Escalations apply at-most-once across dual delivery paths
+    mirrors: ADR-044 D3, FE-INV-008
+    description: >
+      HITL escalations arrive via BOTH the legacy /ws/escalation socket and
+      the firehose `escalation` channel during the transition, and WS
+      replays re-deliver after reconnect. The escalation store ignores a
+      duplicate decision_id -- the queue never shows the same escalation
+      twice and an acted entry is never reset to pending by a replay.
+    implementations:
+      - frontend/src/state/escalation.store.ts
+      - frontend/src/transport/firehose.ts
+      - frontend/src/hooks/use-firehose.ts
+      - api/routers/firehose.py
+    tests:
+      - frontend/src/state/__tests__/escalation-store.test.ts
+      - api/tests/test_firehose_channels.py
+    status: enforced
+
+  - id: FE-INV-038
+    title: Guardrail violations render individually with severity, never count-only
+    mirrors: I-5, I-6, ADR-044
+    description: >
+      An escalation carrying guardrail violations renders EVERY violation
+      with its code, message, and severity (low/medium/high/critical mapped
+      to warning/danger tones plus the severity word -- INV-CLR-011). The
+      previous count-plus-first-message collapse hid exactly the constraints
+      an overriding operator is accountable for. A missing severity defaults
+      to medium rather than hiding the row.
+    implementations:
+      - frontend/src/surfaces/override-cockpit/EscalationCard.tsx
+      - frontend/src/domain/escalation.ts
+    tests:
+      - frontend/src/surfaces/override-cockpit/__tests__/EscalationCardViolations.test.tsx
+    status: enforced
+
+  - id: FE-INV-039
+    title: Audit-chain integrity is tri-state exhaustive on the decision detail
+    mirrors: ADR-033, ADR-044 D6, E-S9-01
+    description: >
+      The decision detail renders ChainIntegrityChip from the API's
+      chain_verified field with all three states distinct: true (single-row
+      hash recompute matches), false (content altered since insert -- danger
+      tone plus the truncated prev/current hash pair for the forensic
+      trail), and null/legacy (pre-Sprint-9 row -- renders "pre-chain",
+      NEVER "verified"). The full chain walk remains `synapse audit
+      verify`'s job.
+    implementations:
+      - frontend/src/design-system/compounds/ChainIntegrityChip.tsx
+      - frontend/src/surfaces/decision-theater/DecisionDetail.tsx
+      - api/routers/decisions.py
+    tests:
+      - frontend/src/design-system/compounds/__tests__/DecisionAnatomy.test.tsx
+      - api/tests/test_decisions_table.py
+    status: enforced
+
+  - id: FE-INV-040
+    title: Animation is never the sole information channel
+    mirrors: INV-CLR-011, INV-CLR-013, ADR-044
+    description: >
+      Every animated state (the acting pulse, the synthetic demo-pulse, the
+      escalation urgent beacon, decision arrival) has a static fallback that
+      preserves the information when prefers-reduced-motion zeroes the
+      motion tokens: process states carry a STATUS WORD + data-process-state
+      attribute, the synthetic badge keeps its dashed ring + label, pending
+      escalations read from sort order + the queue count. Motion explains
+      causality and urgency-as-frequency (urgent = half the ambient breath)
+      but a frozen frame loses nothing.
+    implementations:
+      - frontend/src/design-system/compounds/CouncilStrip.tsx
+      - frontend/src/design-system/compounds/SyntheticBadge.tsx
+      - frontend/src/surfaces/override-cockpit/EscalationQueue.tsx
+      - frontend/src/styles/tokens.css
+      - frontend/tailwind.config.ts
+    tests:
+      - frontend/src/design-system/compounds/__tests__/MotionGrammar.test.tsx
     status: enforced

@@ -68,6 +68,8 @@ class FreshnessGuardianA2AHandler:
         avg_confidence = sum(a["confidence"] for a in alerts) / len(alerts) if alerts else 0.0
 
         proposal = AgentProposal(
+            # ADR-044: structured provenance rides with the proposal (I-3/I-4).
+            provenance=self._pipeline.last_provenance,
             agent_name=AgentName.FRESHNESS_GUARDIAN,
             decision_id=UUID(decision_id) if isinstance(decision_id, str) else decision_id,
             utility_score=min(avg_confidence, 1.0),

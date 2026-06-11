@@ -64,11 +64,13 @@ export function CortexBanner() {
     for (const d of posture) tierMix[d.tier] = (tierMix[d.tier] ?? 0) + 1;
 
     // An agent is "active" if it proposed in any of the last few decisions.
+    // ADR-044: the live envelope carries the lean `agents` summary (the full
+    // proposals stay in the audit row).
     const activeAgents = new Set<AgentName>();
     for (const d of decisions.slice(-8)) {
-      for (const p of d.proposals ?? []) {
-        if (p.agent_name && AGENT_SET.has(p.agent_name)) {
-          activeAgents.add(p.agent_name as AgentName);
+      for (const a of d.agents) {
+        if (AGENT_SET.has(a.agent_name)) {
+          activeAgents.add(a.agent_name as AgentName);
         }
       }
     }

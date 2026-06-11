@@ -39,6 +39,10 @@ CHANNEL_TOPIC: dict[str, str] = {
     "demand": "synapse.demand.forecast",
     "freshness": "synapse.freshness.alert",
     "pricing": "synapse.pricing.update",
+    # ADR-044: HITL escalations push to the cockpit through the same
+    # multiplexed socket instead of a separate orchestrator WS connection.
+    # The topic itself is Sprint-1 frozen (#9); this is a consumer addition.
+    "escalation": "synapse.orchestrator.escalation",
 }
 
 

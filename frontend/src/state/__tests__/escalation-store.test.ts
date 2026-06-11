@@ -43,4 +43,27 @@ describe("escalation store (append-only, I-14 mirror)", () => {
     expect((store as unknown as { remove?: unknown }).remove).toBeUndefined();
     expect((store as unknown as { pop?: unknown }).pop).toBeUndefined();
   });
+
+  // ADR-044 / FE-INV-037: the same escalation can arrive via BOTH the legacy
+  // /ws/escalation socket and the firehose `escalation` channel, and replays
+  // after reconnect re-deliver. At-most-once per decision_id.
+  it("ignores a duplicate decision_id (dual-path delivery + replays)", () => {
+    const store = useEscalationStore.getState();
+    store.append(fixture("11111111-1111-4111-8111-111111111111", 0.5));
+    store.append(fixture("11111111-1111-4111-8111-111111111111", 0.6));
+    const entries = useEscalationStore.getState().entries;
+    expect(entries).toHaveLength(1);
+    // First delivery wins — the duplicate never overwrites.
+    expect(entries[0]?.message.confidence).toBe(0.5);
+  });
+
+  it("dedup does not lose acted status on replay", () => {
+    const store = useEscalationStore.getState();
+    store.append(fixture("11111111-1111-4111-8111-111111111111"));
+    store.markActed("11111111-1111-4111-8111-111111111111", "rejected");
+    store.append(fixture("11111111-1111-4111-8111-111111111111"));
+    const entries = useEscalationStore.getState().entries;
+    expect(entries).toHaveLength(1);
+    expect(entries[0]?.status).toBe("acted");
+  });
 });

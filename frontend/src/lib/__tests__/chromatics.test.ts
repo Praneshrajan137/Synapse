@@ -1,12 +1,27 @@
+import { readFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import {
+  AGENT_STATE_FACTOR,
+  type AgentProcessState,
   CONFIDENCE_GATE,
   type ChromaticTheme,
   confidenceColor,
   confidenceZone,
+  degradedStateColor,
+  processStateColor,
   rationedAgentColor,
+  syntheticStateColor,
   vsupChromaFactor,
 } from "../chromatics";
+
+// The canonical token build — the FE mirrors below are pinned against it so
+// the two systems cannot drift (frontend/src/lib/__tests__ → repo root).
+const REPO_ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "..", "..", "..");
+const DIST_TOKENS = JSON.parse(
+  readFileSync(join(REPO_ROOT, "design-system", "color", "dist", "tokens.json"), "utf8"),
+).tokens as Record<string, { type: string; value?: unknown; [theme: string]: unknown }>;
 
 // Parse an `oklch(L C H)` string back into numbers for assertions.
 function parseOklch(value: string): { l: number; c: number; h: number } {
@@ -112,6 +127,91 @@ describe("confidenceColor with VSUP", () => {
 
   it("leaves high-confidence colour untouched (factor 1 above the gate)", () => {
     expect(confidenceColor(0.9, { vsup: true })).toBe(confidenceColor(0.9, { vsup: false }));
+  });
+});
+
+describe("AGENT_STATE_FACTOR — process-state grammar (Chromatic v1.1.0)", () => {
+  it("mirrors design-system factor.agentstate.* exactly (no drift)", () => {
+    for (const [state, factor] of Object.entries(AGENT_STATE_FACTOR)) {
+      const token = DIST_TOKENS[`factor.agentstate.${state}`];
+      expect(token, `factor.agentstate.${state} exists in dist`).toBeDefined();
+      expect(token?.value, `factor.agentstate.${state}`).toBe(factor);
+    }
+  });
+
+  it("is strictly monotone with cognitive activity (INV-CLR-017)", () => {
+    const seq: AgentProcessState[] = ["interrupted", "waiting", "thinking", "debating", "acting"];
+    for (let i = 1; i < seq.length; i++) {
+      const cur = seq[i];
+      const prev = seq[i - 1];
+      if (cur === undefined || prev === undefined) continue;
+      expect(AGENT_STATE_FACTOR[cur]).toBeGreaterThan(AGENT_STATE_FACTOR[prev]);
+    }
+    expect(AGENT_STATE_FACTOR.acting).toBe(1);
+    expect(AGENT_STATE_FACTOR.escalated).toBe(1);
+  });
+});
+
+describe("processStateColor — identity rationed by state", () => {
+  it("maps the factor directly to the identity share of the mix", () => {
+    const v = "var(--syn-agent-demand-prophet)";
+    expect(processStateColor(v, "interrupted")).toContain("25%");
+    expect(processStateColor(v, "thinking")).toContain("55%");
+    expect(processStateColor(v, "acting")).toContain("100%");
+    expect(processStateColor(v, "interrupted")).toContain("color-mix(in oklab");
+    expect(processStateColor(v, "interrupted")).toContain("var(--syn-neutral-mix)");
+  });
+
+  it("escalated keeps full identity chroma (urgency is the ring + pulse, not a drain)", () => {
+    const v = "var(--syn-agent-disruption-shield)";
+    expect(processStateColor(v, "escalated")).toBe(processStateColor(v, "acting"));
+  });
+
+  it("never emits a raw colour literal (INV-CLR-009)", () => {
+    const s = processStateColor("var(--syn-agent-pricing-oracle)", "debating");
+    expect(s).not.toMatch(/#[0-9a-f]{3,8}/i);
+    expect(s).not.toMatch(/\b(rgba?|hsla?)\s*\(/);
+  });
+});
+
+describe("honesty-state colours mirror the canonical tokens", () => {
+  const parse = (s: string): { l: number; c: number; h: number } => {
+    const m = /oklch\(([\d.]+) ([\d.]+) ([\d.]+)\)/.exec(s);
+    if (!m) throw new Error(`not oklch: ${s}`);
+    return { l: Number(m[1]), c: Number(m[2]), h: Number(m[3]) };
+  };
+
+  it("returns token references only (INV-CLR-009)", () => {
+    expect(degradedStateColor()).toBe("var(--syn-state-degraded)");
+    expect(syntheticStateColor()).toBe("var(--syn-state-synthetic)");
+  });
+
+  it("tokens.css --syn-state-* values match design-system dist exactly", () => {
+    const css = readFileSync(join(REPO_ROOT, "frontend", "src", "styles", "tokens.css"), "utf8");
+    const varValues = (name: string): string[] =>
+      [...css.matchAll(new RegExp(`${name}:\\s*(oklch\\([^)]+\\))`, "g"))].map((m) => m[1] ?? "");
+
+    for (const [state, varName] of [
+      ["degraded", "--syn-state-degraded"],
+      ["synthetic", "--syn-state-synthetic"],
+    ] as const) {
+      const token = DIST_TOKENS[`color.state.${state}`] as unknown as {
+        light: { oklch: { l: number; c: number; h: number } };
+        dark: { oklch: { l: number; c: number; h: number } };
+      };
+      const values = varValues(varName).map(parse);
+      expect(values.length, `${varName} declared for dark + light`).toBeGreaterThanOrEqual(2);
+      // tokens.css declares dark first (:root) then the light override.
+      const [dark, light] = values;
+      for (const [mirror, canon] of [
+        [dark, token.dark.oklch],
+        [light, token.light.oklch],
+      ] as const) {
+        expect(mirror?.l).toBeCloseTo(canon.l, 4);
+        expect(mirror?.c).toBeCloseTo(canon.c, 4);
+        expect(mirror?.h).toBeCloseTo(canon.h, 2);
+      }
+    }
   });
 });
 

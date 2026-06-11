@@ -36,7 +36,10 @@ export function LivingMap({ stores }: LivingMapProps) {
   return (
     <Suspense
       fallback={
-        <div className="syn-card flex h-[420px] items-center justify-center text-sm text-ink-muted">
+        <div
+          className="syn-card syn-skeleton flex h-[420px] items-center justify-center text-sm text-ink-muted"
+          aria-busy="true"
+        >
           Loading map…
         </div>
       }

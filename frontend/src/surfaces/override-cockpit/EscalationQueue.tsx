@@ -50,6 +50,16 @@ export function EscalationQueue({ entries, activeId, onSelect }: EscalationQueue
                 )}
               >
                 <div className="flex items-center gap-2">
+                  {!isActed && (
+                    // Urgency is FREQUENCY (ADR-044): the pending beacon beats
+                    // at half the ambient breath. The "pending" state also
+                    // reads from sort order + the queue header count, so a
+                    // frozen dot under reduced motion loses nothing.
+                    <span
+                      className="size-1.5 shrink-0 animate-urgent-pulse rounded-full bg-signal-danger"
+                      aria-hidden
+                    />
+                  )}
                   <span className="font-mono text-2xs text-ink-muted">
                     {fmt.shortId(msg.decision_id)}
                   </span>

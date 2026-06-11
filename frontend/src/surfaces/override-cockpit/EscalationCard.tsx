@@ -95,9 +95,8 @@ export function EscalationCard({ message, receivedAt, pending, onCommit }: Escal
               <TierBadge tier={tier} />
             </div>
             <p className="mt-1 text-xs text-ink-muted">
-              {message.violations.length > 0
-                ? `${message.violations.length} violation${message.violations.length === 1 ? "" : "s"} — ${message.violations[0]?.message}`
-                : (message.reason ?? "Escalated for human judgement")}
+              {message.violations.length === 0 &&
+                (message.reason ?? "Escalated for human judgement")}
             </p>
             <p className="text-2xs text-ink-subtle">
               Received {fmt.relativeTime(new Date(receivedAt).toISOString())}
@@ -108,6 +107,35 @@ export function EscalationCard({ message, receivedAt, pending, onCommit }: Escal
 
       {/* The Threshold spine — the operator always knows the cost of not acting. */}
       <ThresholdCountdown startedAtMs={startedAtMs} />
+
+      {/* FE-INV-038: every violation is rendered with its severity — never
+          collapsed to a count. The operator overriding a guardrail must see
+          exactly WHICH constraints fired and how hard. */}
+      {message.violations.length > 0 && (
+        <section aria-label="Guardrail violations" className="space-y-1.5">
+          <h3 className="text-2xs uppercase tracking-wide text-ink-muted">
+            Guardrail violations ({message.violations.length})
+          </h3>
+          <ul className="space-y-1">
+            {message.violations.map((v) => {
+              const severity = v.severity ?? "medium";
+              const tone =
+                severity === "critical" || severity === "high"
+                  ? "text-signal-danger"
+                  : severity === "medium"
+                    ? "text-signal-warning"
+                    : "text-ink-muted";
+              return (
+                <li key={`${v.code}:${v.message}`} className="flex items-start gap-2 text-xs">
+                  <span className={`shrink-0 font-semibold uppercase ${tone}`}>{severity}</span>
+                  <span className="font-mono text-2xs text-ink-subtle">{v.code}</span>
+                  <span className="text-ink-muted">{v.message}</span>
+                </li>
+              );
+            })}
+          </ul>
+        </section>
+      )}
 
       <section aria-label="Agent proposals" className="space-y-2">
         <h3 className="text-2xs uppercase tracking-wide text-ink-muted">Proposals</h3>

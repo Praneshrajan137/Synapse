@@ -1,6 +1,6 @@
 {
-  "version": "1.2.0",
-  "description": "SYNAPSE Kafka Topic Registry. Sprint 1 froze inter-agent topics (1-16). Sprint 7 added topic 17 as the only freeze exception per ADR-029. WS-3 (ADR-038) replaced the fictional 'all_agents' consumer entries with the empirical consumer set and added a 'category' field. Every topic's consumer list is enforced by scripts/audit/topic_consumer_truth.py — drift fails CI.",
+  "version": "1.3.0",
+  "description": "SYNAPSE Kafka Topic Registry. Sprint 1 froze inter-agent topics (1-16). Sprint 7 added topic 17 as the only freeze exception per ADR-029. WS-3 (ADR-038) replaced the fictional 'all_agents' consumer entries with the empirical consumer set and added a 'category' field. ADR-044 registered api_firehose — the gateway's /ws/firehose multiplexer had been a real (unregistered) consumer of 8 topics since P2, and now also consumes synapse.orchestrator.escalation for realtime cockpit pushes. Every topic's consumer list is enforced by scripts/audit/topic_consumer_truth.py — drift fails CI.",
   "categories": {
     "agent_publication":  "Agent fan-out via Kafka — read by the digital twin and the audit sink. No agent currently subscribes (HTTP-A2A is the inter-agent path; ADR-038).",
     "ingress":            "External ingress events written by the API gateway via the outbox.",
@@ -9,22 +9,22 @@
     "platform":           "Cross-cutting infrastructure topics (audit log, agent metrics) consumed by Postgres sink / Prometheus exporter."
   },
   "topics": [
-    {"name": "synapse.demand.forecast",        "partitions": 8,  "retention_hours": 72,   "producer": "demand_prophet",       "consumers": ["audit_logger"], "consumers_planned": ["inventory_sentinel", "pricing_oracle", "orchestrator"], "category": "agent_publication"},
+    {"name": "synapse.demand.forecast",        "partitions": 8,  "retention_hours": 72,   "producer": "demand_prophet",       "consumers": ["audit_logger", "api_firehose"], "consumers_planned": ["inventory_sentinel", "pricing_oracle", "orchestrator"], "category": "agent_publication"},
     {"name": "synapse.demand.drift_alert",     "partitions": 1,  "retention_hours": 24,   "producer": "demand_prophet",       "consumers": ["audit_logger"], "consumers_planned": ["ml_pipeline"], "category": "agent_publication"},
-    {"name": "synapse.routing.plan",           "partitions": 8,  "retention_hours": 24,   "producer": "routing_navigator",    "consumers": ["audit_logger"], "consumers_planned": ["orchestrator", "sustainability_agent"], "category": "agent_publication"},
+    {"name": "synapse.routing.plan",           "partitions": 8,  "retention_hours": 24,   "producer": "routing_navigator",    "consumers": ["audit_logger", "api_firehose"], "consumers_planned": ["orchestrator", "sustainability_agent"], "category": "agent_publication"},
     {"name": "synapse.inventory.state",        "partitions": 8,  "retention_hours": 72,   "producer": "inventory_sentinel",   "consumers": ["audit_logger"], "consumers_planned": ["demand_prophet", "freshness_guardian"], "category": "agent_publication"},
     {"name": "synapse.inventory.reorder",      "partitions": 4,  "retention_hours": 48,   "producer": "inventory_sentinel",   "consumers": ["audit_logger"], "consumers_planned": ["supplier_trust", "orchestrator"], "category": "agent_publication"},
-    {"name": "synapse.pricing.update",         "partitions": 4,  "retention_hours": 24,   "producer": "pricing_oracle",       "consumers": ["audit_logger"], "consumers_planned": ["demand_prophet", "orchestrator"], "category": "agent_publication"},
-    {"name": "synapse.disruption.alert",       "partitions": 2,  "retention_hours": 168,  "producer": "disruption_shield",    "consumers": ["audit_logger"], "consumers_planned": ["orchestrator"], "category": "agent_publication"},
+    {"name": "synapse.pricing.update",         "partitions": 4,  "retention_hours": 24,   "producer": "pricing_oracle",       "consumers": ["audit_logger", "api_firehose"], "consumers_planned": ["demand_prophet", "orchestrator"], "category": "agent_publication"},
+    {"name": "synapse.disruption.alert",       "partitions": 2,  "retention_hours": 168,  "producer": "disruption_shield",    "consumers": ["audit_logger", "api_firehose"], "consumers_planned": ["orchestrator"], "category": "agent_publication"},
     {"name": "synapse.disruption.playbook",    "partitions": 2,  "retention_hours": 168,  "producer": "disruption_shield",    "consumers": ["audit_logger"], "consumers_planned": ["routing_navigator", "inventory_sentinel"], "category": "agent_publication"},
     {"name": "synapse.supplier.score",         "partitions": 2,  "retention_hours": 168,  "producer": "supplier_trust",       "consumers": ["audit_logger"], "consumers_planned": ["inventory_sentinel", "orchestrator"], "category": "agent_publication"},
     {"name": "synapse.sustainability.carbon",  "partitions": 2,  "retention_hours": 168,  "producer": "sustainability_agent", "consumers": ["audit_logger"], "consumers_planned": ["orchestrator", "routing_navigator"], "category": "agent_publication"},
-    {"name": "synapse.freshness.alert",        "partitions": 4,  "retention_hours": 24,   "producer": "freshness_guardian",   "consumers": ["audit_logger"], "consumers_planned": ["inventory_sentinel", "pricing_oracle"], "category": "agent_publication"},
-    {"name": "synapse.orchestrator.decision",  "partitions": 4,  "retention_hours": 720,  "producer": "orchestrator",         "consumers": ["audit_logger"], "consumers_planned": ["digital_twin"], "category": "orchestration"},
-    {"name": "synapse.orchestrator.escalation","partitions": 1,  "retention_hours": 720,  "producer": "orchestrator",         "consumers": ["audit_logger"], "consumers_planned": ["hitl_console"], "category": "orchestration"},
-    {"name": "synapse.twin.divergence",        "partitions": 1,  "retention_hours": 168,  "producer": "digital_twin",         "consumers": ["audit_logger"], "consumers_planned": ["disruption_shield", "orchestrator"], "category": "twin_sync"},
+    {"name": "synapse.freshness.alert",        "partitions": 4,  "retention_hours": 24,   "producer": "freshness_guardian",   "consumers": ["audit_logger", "api_firehose"], "consumers_planned": ["inventory_sentinel", "pricing_oracle"], "category": "agent_publication"},
+    {"name": "synapse.orchestrator.decision",  "partitions": 4,  "retention_hours": 720,  "producer": "orchestrator",         "consumers": ["audit_logger", "api_firehose"], "consumers_planned": ["digital_twin"], "category": "orchestration"},
+    {"name": "synapse.orchestrator.escalation","partitions": 1,  "retention_hours": 720,  "producer": "orchestrator",         "consumers": ["audit_logger", "api_firehose"], "consumers_planned": ["hitl_console"], "category": "orchestration"},
+    {"name": "synapse.twin.divergence",        "partitions": 1,  "retention_hours": 168,  "producer": "digital_twin",         "consumers": ["audit_logger", "api_firehose"], "consumers_planned": ["disruption_shield", "orchestrator"], "category": "twin_sync"},
     {"name": "synapse.audit.log",              "partitions": 4,  "retention_hours": -1,   "producer": "all_agents",           "consumers": ["postgres_sink"], "consumers_planned": ["compliance"], "category": "platform"},
-    {"name": "synapse.metrics.agent",          "partitions": 8,  "retention_hours": 24,   "producer": "all_agents",           "consumers": ["prometheus_exporter"], "consumers_planned": [], "category": "platform"},
+    {"name": "synapse.metrics.agent",          "partitions": 8,  "retention_hours": 24,   "producer": "all_agents",           "consumers": ["prometheus_exporter", "api_firehose"], "consumers_planned": [], "category": "platform"},
     {"name": "synapse.orders.demand",          "partitions": 8,  "retention_hours": 24,   "producer": "api_gateway",          "consumers": ["audit_logger"], "consumers_planned": ["demand_prophet", "inventory_sentinel", "orchestrator"], "category": "ingress", "schema": "proto/domain/order_request.schema.json", "adr": "ADR-029"}
   ],
   "non_registered_consumed_topics": {

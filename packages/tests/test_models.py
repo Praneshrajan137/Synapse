@@ -234,3 +234,66 @@ class TestSynapseBaseModelExtra:
                 content={},
                 unknown_field="boom",  # type: ignore[call-arg]
             )
+
+
+class TestProposalProvenance:
+    """ADR-044: structured provenance is optional and additive on AgentProposal."""
+
+    @staticmethod
+    def _proposal(**overrides: object) -> AgentProposal:
+        from typing import Any, cast
+
+        kwargs: dict[str, Any] = {
+            "agent_name": AgentName.DEMAND_PROPHET,
+            "decision_id": uuid4(),
+            "utility_score": 0.8,
+            "confidence": 0.85,
+            "justification_trace": ["t"],
+            "payload": {"forecasts": []},
+            "tier": DecisionTier.TIER_2,
+        }
+        kwargs.update(cast("dict[str, Any]", overrides))
+        return AgentProposal(**kwargs)
+
+    def test_absent_provenance_defaults_to_none(self) -> None:
+        """Pre-044 producers keep validating; the field defaults to None."""
+        proposal = self._proposal()
+        assert proposal.provenance is None
+
+    def test_provenance_round_trips_deterministic_json(self) -> None:
+        from synapse_common.provenance import ConfidenceBasis, Provenance
+
+        prov = Provenance.real(
+            model_version="registry-v1.2.3",
+            confidence_basis=ConfidenceBasis.CONFORMAL_INTERVAL,
+        )
+        proposal = self._proposal(provenance=prov)
+        import json as _json
+
+        wire = _json.loads(proposal.to_deterministic_json())
+        assert wire["provenance"] == {
+            "model_version": "registry-v1.2.3",
+            "feature_source": "feast",
+            "degraded": False,
+            "confidence_basis": "conformal_interval",
+        }
+        # And the wire form re-validates to the same typed value object.
+        revalidated = AgentProposal.model_validate(wire)
+        assert revalidated.provenance == prov
+
+    def test_degraded_fallback_is_visible_on_the_wire(self) -> None:
+        from synapse_common.provenance import Provenance
+
+        proposal = self._proposal(provenance=Provenance.degraded_fallback())
+        assert proposal.provenance is not None
+        assert proposal.provenance.degraded is True
+
+    def test_provenance_reexport_is_models_definition(self) -> None:
+        """synapse_common.provenance re-exports the models definitions
+        (ADR-044 move) — they must be the SAME classes, not copies."""
+        from synapse_common import models, provenance
+
+        assert provenance.Provenance is models.Provenance
+        assert provenance.ConfidenceBasis is models.ConfidenceBasis
+        assert provenance.FeatureSource is models.FeatureSource
+        assert provenance.DEGRADED_VERSION == models.DEGRADED_VERSION

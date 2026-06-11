@@ -23,6 +23,9 @@ export const AuditRowSchema = z
     execution_confirmations: z.array(z.string()).optional(),
     audit_trace: z.array(z.string()).optional(),
     created_at: ZIsoTimestamp,
+    // ADR-044 honesty fields (additive — optional for pre-044 gateways).
+    degraded: z.boolean().optional(),
+    is_synthetic: z.boolean().optional(),
   })
   .passthrough();
 

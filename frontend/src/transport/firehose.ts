@@ -1,16 +1,22 @@
-import { type ConsensusDecision, ConsensusDecisionSchema } from "@domain/consensus-decision";
+import { type DecisionEnvelope, DecisionEnvelopeSchema } from "@domain/decision-envelope";
 import { type DemandForecast, DemandForecastSchema } from "@domain/demand-forecast";
 import { type DisruptionAlert, DisruptionAlertSchema } from "@domain/disruption-alert";
+import { type EscalationMessage, EscalationMessageSchema } from "@domain/escalation";
 import { type FreshnessAlert, FreshnessAlertSchema } from "@domain/freshness-alert";
 import { type PricingUpdate, PricingUpdateSchema } from "@domain/pricing-update";
 import type { City } from "@domain/primitives";
 import { type RoutePlan, RoutePlanSchema } from "@domain/route-plan";
-import { type TwinState, TwinStateSchema } from "@domain/twin-state";
+import { type TwinDivergenceEvent, TwinDivergenceEventSchema } from "@domain/twin-state";
 import { type WsMultiplex, createWsMultiplex } from "./ws-multiplex";
 
 // Typed wrapper around the WS multiplex pointed at /ws/firehose.
 // Server envelope: { topic, seq, ts, payload }. We unwrap and Zod-validate
 // per-channel payloads before dispatching to listeners.
+//
+// ADR-044: `decision` validates against the LEAN DecisionEnvelopeSchema (the
+// outbox payload that actually flows — the previous strict ConsensusDecision
+// schema rejected every live envelope), and the new `escalation` channel
+// carries HITL escalations through the same multiplexed socket.
 
 export type FirehoseChannel =
   | "decision"
@@ -20,27 +26,33 @@ export type FirehoseChannel =
   | "twin"
   | "freshness"
   | "pricing"
+  | "escalation"
   | "metric";
 
 interface ChannelPayloadMap {
-  decision: ConsensusDecision;
+  decision: DecisionEnvelope;
   disruption: DisruptionAlert;
   routing: RoutePlan;
   demand: DemandForecast;
-  twin: TwinState;
+  twin: TwinDivergenceEvent;
   freshness: FreshnessAlert;
   pricing: PricingUpdate;
+  escalation: EscalationMessage;
   metric: Record<string, unknown>;
 }
 
 const SCHEMAS = {
-  decision: ConsensusDecisionSchema,
+  decision: DecisionEnvelopeSchema,
   disruption: DisruptionAlertSchema,
   routing: RoutePlanSchema,
   demand: DemandForecastSchema,
-  twin: TwinStateSchema,
+  // Union: the DivergenceMonitor's alert shape (the real producer) OR a full
+  // TwinState snapshot — alerts previously failed the snapshot schema and
+  // the twin channel was silently dead (same defect class as `decision`).
+  twin: TwinDivergenceEventSchema,
   freshness: FreshnessAlertSchema,
   pricing: PricingUpdateSchema,
+  escalation: EscalationMessageSchema,
   metric: null,
 } as const;
 

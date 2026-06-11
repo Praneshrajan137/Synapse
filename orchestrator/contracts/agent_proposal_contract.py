@@ -65,3 +65,45 @@ class TestAgentProposalContract:
         response = _mock_agent_response(agent_name)
         proposal = AgentProposal(**response)
         assert proposal.tier in list(DecisionTier)
+
+    # ADR-044: structured provenance is OPTIONAL on the wire. Producers that
+    # attach it must round-trip the typed value object; producers that predate
+    # the field must keep validating (provenance=None), so a mixed-version
+    # fleet never rejects proposals during a rolling deploy.
+
+    @pytest.mark.contract()
+    @pytest.mark.parametrize("agent_name", AGENT_NAMES)
+    def test_proposal_without_provenance_validates(self, agent_name: str) -> None:
+        response = _mock_agent_response(agent_name)
+        proposal = AgentProposal(**response)
+        assert proposal.provenance is None
+
+    @pytest.mark.contract()
+    @pytest.mark.parametrize("agent_name", AGENT_NAMES)
+    def test_proposal_with_provenance_round_trips(self, agent_name: str) -> None:
+        response = _mock_agent_response(agent_name)
+        response["provenance"] = {
+            "model_version": "registry-v1.2.3",
+            "feature_source": "feast",
+            "degraded": False,
+            "confidence_basis": "conformal_interval",
+        }
+        proposal = AgentProposal(**response)
+        assert proposal.provenance is not None
+        assert proposal.provenance.degraded is False
+        assert proposal.provenance.model_version == "registry-v1.2.3"
+
+    @pytest.mark.contract()
+    @pytest.mark.parametrize("agent_name", AGENT_NAMES)
+    def test_degraded_provenance_is_visible(self, agent_name: str) -> None:
+        """The honesty channel: a degraded fallback MUST surface as degraded=True."""
+        response = _mock_agent_response(agent_name)
+        response["provenance"] = {
+            "model_version": "degraded",
+            "feature_source": "fallback",
+            "degraded": True,
+            "confidence_basis": "fallback_floor",
+        }
+        proposal = AgentProposal(**response)
+        assert proposal.provenance is not None
+        assert proposal.provenance.degraded is True

@@ -16,16 +16,16 @@ interface CalibrationCurveProps {
   readonly className?: string;
 }
 
-// chromatic-allow: recharts paints these straight onto its own <svg>; the
-// --syn-* channel tokens can't reach them without a colour-function wrapper.
-// Tracked for chromatic-token migration (INV-CLR-009).
+// Chromatic-token migration (ADR-044 Phase 4): recharts forwards these onto
+// SVG/inline styles, which accept token-wrapped CSS colour functions and flip
+// with [data-theme].
 const CHART = {
-  axisLabel: "rgb(148 163 184)", // chromatic-allow
-  tooltipBg: "rgb(15 23 42)", // chromatic-allow
-  tooltipBorder: "rgb(51 65 85)", // chromatic-allow
-  diagonal: "rgb(100 116 139)", // chromatic-allow
-  target: "rgb(34 197 94)", // chromatic-allow
-  empirical: "rgb(56 189 248)", // chromatic-allow
+  axisLabel: "rgb(var(--syn-ink-muted))",
+  tooltipBg: "rgb(var(--syn-surface))",
+  tooltipBorder: "rgb(var(--syn-border))",
+  diagonal: "rgb(var(--syn-ink-subtle))",
+  target: "rgb(var(--syn-signal-success))",
+  empirical: "rgb(var(--syn-signal-info))",
 } as const;
 
 /**

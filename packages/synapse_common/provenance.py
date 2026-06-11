@@ -19,104 +19,22 @@ Every served agent output carries a :class:`Provenance` value object recording
 Provenance is a frozen value object (DDD). It is additive and optional on the
 domain output models, so it does not break I-3 (existing consumers ignore it)
 and stays out of the KV-cached prompt body (I-13).
+
+ADR-044: the definitions moved to ``synapse_common.models`` because
+``AgentProposal`` now carries a typed ``provenance`` field and this module
+imports from ``models`` — keeping the value object next to the proposal keeps
+the import graph acyclic. This module remains the canonical import path for
+agent pipelines and tests; everything re-exports unchanged.
 """
 
 from __future__ import annotations
 
-from enum import StrEnum
-
-from pydantic import Field
-
-from synapse_common.models import SynapseBaseModel
-
-DEGRADED_VERSION = "degraded"
-
-
-class FeatureSource(StrEnum):
-    """Where the features feeding a prediction came from."""
-
-    FEAST = "feast"
-    FALLBACK = "fallback"
-    DIRECT = "direct"  # supplied in-request (agent does not read the online store)
-
-
-class ConfidenceBasis(StrEnum):
-    """How a served ``confidence`` value was derived. ``CONSTANT`` is a smell —
-    it means confidence is not tied to model uncertainty and I-5 cannot fire."""
-
-    CONFORMAL_INTERVAL = "conformal_interval"
-    ENSEMBLE_VARIANCE = "ensemble_variance"
-    POSTERIOR_SPREAD = "posterior_spread"
-    DECODER_ENTROPY = "decoder_entropy"
-    CRITIC_VALUE_SPREAD = "critic_value_spread"
-    ELASTICITY_STRENGTH = "elasticity_strength"  # |tanh(elasticity)| — causal signal strength
-    OPTIMALITY_GAP = "optimality_gap"  # solver gap to the exact optimum (lower gap → higher conf)
-    RESIDUAL_VARIANCE = "residual_variance"
-    SURVIVAL_CI_WIDTH = "survival_ci_width"
-    ANOMALY_SCORE_MARGIN = "anomaly_score_margin"  # |score − threshold| (decisiveness of the call)
-    PREDICTIVE_ENTROPY = "predictive_entropy"  # 1 − H(p) of a probabilistic prediction
-    FALLBACK_FLOOR = "fallback_floor"  # degraded path: confidence is the I-7 floor
-    CONSTANT = "constant"  # NEVER acceptable on a real path — flagged by substance_truth
-
-
-class Provenance(SynapseBaseModel):
-    """Immutable record of how an agent output was produced (ADR-040)."""
-
-    model_version: str = Field(
-        default=DEGRADED_VERSION,
-        description="Registry version/sha, or 'degraded' when no real model was loaded.",
-    )
-    feature_source: FeatureSource = FeatureSource.FALLBACK
-    degraded: bool = True
-    confidence_basis: ConfidenceBasis = ConfidenceBasis.FALLBACK_FLOOR
-
-    @classmethod
-    def real(
-        cls,
-        *,
-        model_version: str,
-        confidence_basis: ConfidenceBasis,
-        feature_source: FeatureSource = FeatureSource.FEAST,
-    ) -> Provenance:
-        """Construct provenance for a genuine, non-degraded prediction."""
-        if model_version == DEGRADED_VERSION:
-            raise ValueError("real() requires a concrete model_version, not 'degraded'")
-        if confidence_basis in (ConfidenceBasis.CONSTANT, ConfidenceBasis.FALLBACK_FLOOR):
-            raise ValueError(
-                "real() requires an uncertainty-derived confidence_basis "
-                "(not CONSTANT/FALLBACK_FLOOR)"
-            )
-        return cls(
-            model_version=model_version,
-            feature_source=feature_source,
-            degraded=False,
-            confidence_basis=confidence_basis,
-        )
-
-    @classmethod
-    def degraded_fallback(
-        cls,
-        *,
-        feature_source: FeatureSource = FeatureSource.FALLBACK,
-        model_version: str = DEGRADED_VERSION,
-    ) -> Provenance:
-        """Construct provenance for a degraded (I-7 fallback) prediction."""
-        return cls(
-            model_version=model_version,
-            feature_source=feature_source,
-            degraded=True,
-            confidence_basis=ConfidenceBasis.FALLBACK_FLOOR,
-        )
-
-    def trace_line(self) -> str:
-        """Human-readable provenance line for ``justification_trace`` (no schema churn)."""
-        return (
-            f"provenance: model_version={self.model_version} "
-            f"feature_source={self.feature_source.value} "
-            f"degraded={str(self.degraded).lower()} "
-            f"confidence_basis={self.confidence_basis.value}"
-        )
-
+from synapse_common.models import (
+    DEGRADED_VERSION,
+    ConfidenceBasis,
+    FeatureSource,
+    Provenance,
+)
 
 __all__ = [
     "DEGRADED_VERSION",

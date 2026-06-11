@@ -168,6 +168,15 @@ def get_controller(city: str) -> BrownoutController | None:
     return _REGISTRY.get(city)
 
 
+def registered_controllers() -> dict[str, BrownoutController]:
+    """Snapshot of every registered controller, keyed by city (ADR-044).
+
+    Read-only posture surface for ``GET /api/v1/status/posture`` — lets the
+    operator UI report the live brownout level per city. Returns a copy.
+    """
+    return dict(_REGISTRY)
+
+
 def clear_registry() -> None:
     """Test-only helper; production code never clears the registry mid-flight."""
     _REGISTRY.clear()

@@ -1,10 +1,11 @@
-import { ConfidenceChip, TierBadge } from "@ds/compounds";
+import { ConfidenceChip, SyntheticBadge, TierBadge } from "@ds/compounds";
 import { Badge } from "@ds/primitives";
 import { useSynapseApi } from "@hooks/use-synapse-api";
 import { fmt } from "@lib/formatters";
 import { useCityStore } from "@state/city.store";
 import { useQuery } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { Link } from "react-router-dom";
 
 /**
@@ -13,6 +14,7 @@ import { Link } from "react-router-dom";
  * escalated / tier. CSV export (FE-INV-027 — no PII).
  */
 export function AuditVault() {
+  const { t } = useTranslation("common");
   const api = useSynapseApi();
   const city = useCityStore((s) => s.city);
   const [search, setSearch] = useState("");
@@ -38,6 +40,8 @@ export function AuditVault() {
       "phase_reached",
       "confidence",
       "escalated",
+      "degraded",
+      "is_synthetic",
       "created_at",
     ];
     const lines = [
@@ -51,6 +55,8 @@ export function AuditVault() {
           r.phase_reached,
           r.confidence.toFixed(4),
           r.escalated ? "true" : "false",
+          r.degraded ? "true" : "false",
+          r.is_synthetic ? "true" : "false",
           r.created_at ?? "",
         ]
           .map((v) => `"${String(v).replace(/"/g, '""')}"`)
@@ -136,11 +142,24 @@ export function AuditVault() {
                   <ConfidenceChip value={r.confidence} />
                 </td>
                 <td className="px-3 py-2">
-                  {r.escalated ? (
-                    <Badge tone="warning">esc.</Badge>
-                  ) : (
-                    <Badge tone="neutral">auto</Badge>
-                  )}
+                  <span className="inline-flex items-center gap-1">
+                    {r.escalated ? (
+                      <Badge tone="warning">esc.</Badge>
+                    ) : (
+                      <Badge tone="neutral">auto</Badge>
+                    )}
+                    {r.degraded && (
+                      <span
+                        className="text-state-degraded"
+                        role="img"
+                        aria-label={t("provenance.degraded")}
+                        title={t("provenance.degraded")}
+                      >
+                        ▲
+                      </span>
+                    )}
+                    {r.is_synthetic && <SyntheticBadge />}
+                  </span>
                 </td>
                 <td className="px-3 py-2 text-2xs text-ink-muted">{r.city ?? city}</td>
                 <td className="px-3 py-2 text-2xs text-ink-muted">

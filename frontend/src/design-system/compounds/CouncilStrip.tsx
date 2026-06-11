@@ -5,7 +5,7 @@ import {
   AGENT_NAMES,
   type AgentName,
 } from "@lib/agent-identity";
-import { rationedAgentColor } from "@lib/chromatics";
+import { type AgentProcessState, processStateColor, rationedAgentColor } from "@lib/chromatics";
 import { cn } from "@lib/cn";
 import { fmt } from "@lib/formatters";
 
@@ -68,18 +68,27 @@ export function mapAgentHealth(raw: string | undefined | null): AgentHealth {
   return "unknown";
 }
 
-/** How much of the agent's identity hue to show, by health + activity. */
-function activityFor(state: CouncilAgentState): number {
-  switch (state.status) {
-    case "unreachable":
-      return 0.1; // drained — the colour has left the room
-    case "unknown":
-      return 0.12;
-    case "degraded":
-      return 0.5; // present but visibly not at full strength
-    case "healthy":
-      return state.active ? 1 : 0.34; // full on activity, quiet at rest
-  }
+/**
+ * Map health + activity to the v1.1.0 process-state grammar (ADR-044,
+ * INV-CLR-017): what we can HONESTLY derive from the live signals today —
+ * acting (in a live decision), waiting (healthy, idle), interrupted
+ * (unreachable). Deeper states (thinking/debating) need per-agent phase
+ * events the backend does not push yet; we never fabricate them.
+ * Returns null for the two non-process tints (degraded health, unknown).
+ */
+export function processStateFor(state: CouncilAgentState): AgentProcessState | null {
+  if (state.status === "unreachable") return "interrupted";
+  if (state.status === "healthy") return state.active ? "acting" : "waiting";
+  return null;
+}
+
+/** Identity colour for a cell — token-governed factors for process states,
+ * documented local tints for the health states outside the grammar. */
+function dotColorFor(state: CouncilAgentState, colorVar: string): string {
+  const processState = processStateFor(state);
+  if (processState) return processStateColor(colorVar, processState);
+  // degraded: present but visibly not at full strength; unknown: near-mute.
+  return rationedAgentColor(colorVar, state.status === "degraded" ? 0.5 : 0.12);
 }
 
 export function CouncilStrip({
@@ -96,8 +105,8 @@ export function CouncilStrip({
       {AGENT_NAMES.map((agent) => {
         const state: CouncilAgentState = states?.[agent] ?? { status: "unknown" };
         const health = state.status;
-        const activity = activityFor(state);
-        const dotColor = rationedAgentColor(AGENT_COLOR_VAR[agent], activity);
+        const processState = processStateFor(state);
+        const dotColor = dotColorFor(state, AGENT_COLOR_VAR[agent]);
         const interactive = Boolean(onSelectAgent);
         const selected = selectedAgent === agent;
         const degraded = health === "degraded" || health === "unreachable";
@@ -124,6 +133,7 @@ export function CouncilStrip({
                     "aria-pressed": selected,
                   }
                 : {})}
+              data-process-state={processState ?? undefined}
               aria-label={ariaLabel}
               title={ariaLabel}
               className={cn(

@@ -11,12 +11,15 @@
 # schema/color-spec.schema.json instead.
 # ============================================================================
 system_name: synapse-color
-version: "1.0.0"
+version: "1.1.0"
 description: >
   Perceptual OKLCH design-token color system for the SYNAPSE multi-agent
   quick-commerce platform. Encodes agent identity, decision tier, and
   confidence as orthogonal perceptual dimensions; dual-theme; governed by
-  contrast and color-vision-deficiency invariants.
+  contrast and color-vision-deficiency invariants. v1.1.0 (ADR-044, additive
+  — frozen agent hues untouched) adds the honesty states (degraded,
+  synthetic), the agent process-state chroma-rationing grammar, and the
+  urgency/arrival motion vocabulary.
 
 principles:
   - id: PR-CLR-001
@@ -52,6 +55,20 @@ thresholds:
   semantic_min_deltaeok_cvd: 0.020
   confidence_gate_low: 0.70
   confidence_gate_high: 0.80
+  # v1.1.0 (ADR-044) — honesty states + interaction recipes.
+  # degraded_max_chroma: the degraded state is DRAINED — running on reduced
+  # information must read as visibly less saturated than every full state.
+  degraded_max_chroma: 0.08
+  degraded_min_chroma_gap: 0.05
+  # Interaction tints are color-mix() recipes in component CSS (the vars hold
+  # full oklch() colours, not channels — see build.mjs banner). The recipe
+  # constants are specified HERE so the contrast invariant (INV-CLR-018) can
+  # pin them; the FE must use these exact mix percentages.
+  interaction_hover_alpha_light: 0.06
+  interaction_hover_alpha_dark: 0.08
+  interaction_selected_alpha_light: 0.14
+  interaction_selected_alpha_dark: 0.18
+  interaction_disabled_alpha: 0.38
 
 invariants:
   - id: "INV-CLR-001"
@@ -124,6 +141,26 @@ invariants:
     assertion: "for all semantic pairs (s1,s2): deltaEOK >= semantic_min_deltaeok normal and >= semantic_min_deltaeok_cvd under each CVD"
     severity: high
 
+  - id: "INV-CLR-015"
+    description: "v1.1.0: the distinctness matrix extends to all 7 semantic states (5 + degraded + synthetic) — mutually distinguishable in both themes and under CVD simulation"
+    assertion: "for all pairs over {success,warning,danger,info,neutral,degraded,synthetic}: deltaEOK >= semantic_min_deltaeok normal and >= semantic_min_deltaeok_cvd under each CVD, both themes"
+    severity: high
+
+  - id: "INV-CLR-016"
+    description: "The degraded state is chroma-drained: running on reduced information must read as visibly less saturated than every full-saturation state (the VSUP philosophy as a state token)"
+    assertion: "C(degraded) <= degraded_max_chroma in both themes AND C(degraded) <= min(C(success),C(warning),C(danger),C(info)) - degraded_min_chroma_gap"
+    severity: high
+
+  - id: "INV-CLR-017"
+    description: "Agent process-state chroma factors are strictly monotone with cognitive activity and never zero — identity must remain legible even when interrupted"
+    assertion: "0 < interrupted < waiting < thinking < debating < acting == 1.0; escalated == 1.0 (escalated composes with the danger ring, not a colour change)"
+    severity: high
+
+  - id: "INV-CLR-018"
+    description: "Text over interaction-tinted surfaces still passes the contrast invariants — hover and selected tints (the color-mix recipes pinned in thresholds) never push body text below WCAG AA / APCA primary; disabled (interaction_disabled_alpha) is the one documented exemption"
+    assertion: "for each theme: wcag(text.primary, mix(text.primary,a_hover,surface)) >= wcag_text_normal and abs(apca) >= apca_primary_lc; same for mix(brand.base,a_selected,surface)"
+    severity: high
+
 preconditions:
   - id: "PRE-CLR-001"
     description: "All token JSON files validate against the DTCG token schema"
@@ -153,6 +190,10 @@ metamorphic_relations:
     description: "Increasing confidence advances along the red->teal axis"
     transform: "increase a confidence value in [0,1]"
     expected: "the mapped color's OKLCH hue coordinate is non-decreasing"
+  - id: "MR-CLR-004"
+    description: "Degradation (chroma rationing) preserves identity"
+    transform: "apply any factor.agentstate scalar f < 1 to an agent identity color: (L, C, H) -> (L, C*f, H)"
+    expected: "chroma strictly decreases, lightness is unchanged, hue is unchanged (|dH| < 2 deg) — state never masquerades as a different agent"
 
 palettes:
   surface:
@@ -180,9 +221,13 @@ palettes:
     encoding: diverging
     members: [low, escalation-band, autonomous]
   semantic:
-    description: "State feedback — success, warning, danger, info, neutral"
+    description: "State feedback — success, warning, danger, info, neutral, plus the v1.1.0 honesty states degraded (fallback-path output, chroma-drained) and synthetic (traffic-generator decisions)"
     encoding: categorical
-    members: [success, warning, danger, info, neutral]
+    members: [success, warning, danger, info, neutral, degraded, synthetic]
+  processstate:
+    description: "Agent process states — chroma-rationing factors over the frozen identity hue (interrupted/waiting/thinking/debating/acting/escalated); not colours of their own"
+    encoding: chroma-factor
+    members: [interrupted, waiting, thinking, debating, acting, escalated]
 
 testing_layers:
   - layer: "1-SDD"

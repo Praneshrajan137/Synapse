@@ -37,12 +37,14 @@
       "high": { "$value": { "light": "oklch(0.60 0.110 182)", "dark": "oklch(0.84 0.115 184)" } }
     },
     "state": {
-      "$description": "Semantic state hues. Hue intentionally overlaps the disruption/pricing/freshness agents (risk is red, value is gold, fresh is green); separation from agent colors is carried by lightness + chroma (INV-CLR-014).",
+      "$description": "Semantic state hues. Hue intentionally overlaps the disruption/pricing/freshness agents (risk is red, value is gold, fresh is green); separation from agent colors is carried by lightness + chroma (INV-CLR-014). v1.1.0 (ADR-044) adds the two honesty states: degraded (caution-family hue, chroma drained to ~1/3 of warning — the colour is literally running on reduced information, the VSUP philosophy as a state token; the chroma gap survives CVD because CVD compresses hue, not chroma) and synthetic (violet, >60 deg from every other state; never colour-only — always paired with a dashed ring + glyph per INV-CLR-011).",
       "success": { "$value": { "light": "oklch(0.52 0.150 150)", "dark": "oklch(0.78 0.165 150)" } },
       "warning": { "$value": { "light": "oklch(0.62 0.145 72)", "dark": "oklch(0.83 0.150 74)" } },
       "danger": { "$value": { "light": "oklch(0.52 0.215 26)", "dark": "oklch(0.63 0.205 26)" } },
       "info": { "$value": { "light": "oklch(0.52 0.150 248)", "dark": "oklch(0.75 0.130 248)" } },
-      "neutral": { "$value": { "light": "oklch(0.50 0.012 255)", "dark": "oklch(0.72 0.010 255)" } }
+      "neutral": { "$value": { "light": "oklch(0.50 0.012 255)", "dark": "oklch(0.72 0.010 255)" } },
+      "degraded": { "$value": { "light": "oklch(0.58 0.055 84)", "dark": "oklch(0.78 0.060 84)" } },
+      "synthetic": { "$value": { "light": "oklch(0.60 0.145 310)", "dark": "oklch(0.75 0.120 310)" } }
     }
   }
 }

@@ -55,12 +55,14 @@
       "peak": { "$value": "{ref.confidence.high}" }
     },
     "state": {
-      "$description": "State feedback — separated from agent colours by lightness/chroma (INV-CLR-014).",
+      "$description": "State feedback — separated from agent colours by lightness/chroma (INV-CLR-014/015). degraded + synthetic are the v1.1.0 honesty states (ADR-044): degraded marks any output produced on a fallback path (chroma-drained, INV-CLR-016); synthetic marks traffic-generator decisions.",
       "success": { "$value": "{ref.state.success}" },
       "warning": { "$value": "{ref.state.warning}" },
       "danger": { "$value": "{ref.state.danger}" },
       "info": { "$value": "{ref.state.info}" },
-      "neutral": { "$value": "{ref.state.neutral}" }
+      "neutral": { "$value": "{ref.state.neutral}" },
+      "degraded": { "$value": "{ref.state.degraded}" },
+      "synthetic": { "$value": "{ref.state.synthetic}" }
     },
     "hitl": {
       "$description": "Human-in-the-loop decision outcomes (I-5 escalation console).",
@@ -71,19 +73,34 @@
     }
   },
   "motion": {
-    "$description": "Motion tokens — all consuming components must respect prefers-reduced-motion (INV-CLR-013).",
+    "$description": "Motion tokens — all consuming components must respect prefers-reduced-motion (INV-CLR-013). v1.1.0 (ADR-044): urgent is the escalation pulse — exactly half the 2400ms ambient pulse, because urgency is encoded as FREQUENCY, not a new colour; arrive is the decision-arrival entrance, between base and slow; entrance is a hard-decelerate curve for elements entering the stage.",
     "duration": {
       "$type": "duration",
       "fast": { "$value": "120ms" },
       "base": { "$value": "200ms" },
       "slow": { "$value": "360ms" },
+      "arrive": { "$value": "280ms" },
+      "urgent": { "$value": "1200ms" },
       "pulse": { "$value": "2400ms" }
     },
     "ease": {
       "$type": "cubicBezier",
       "standard": { "$value": "cubic-bezier(0.4, 0, 0.2, 1)" },
       "decelerate": { "$value": "cubic-bezier(0, 0, 0.2, 1)" },
-      "emphasized": { "$value": "cubic-bezier(0.4, 0, 0.6, 1)" }
+      "emphasized": { "$value": "cubic-bezier(0.4, 0, 0.6, 1)" },
+      "entrance": { "$value": "cubic-bezier(0.05, 0.7, 0.1, 1)" }
+    }
+  },
+  "factor": {
+    "$description": "Agent process-state grammar (ADR-044): identity hue is FROZEN (INV-CLR-012); what an agent is DOING is encoded as chroma rationing — a scalar factor applied to the identity colour's chroma (the rationedAgentColor pattern). Strictly monotone with cognitive activity (INV-CLR-017): an interrupted agent is nearly achromatic, an acting agent burns at full identity. escalated stays at full chroma and composes with the danger ring + urgent pulse (a composition rule, not a colour); recovered is a motion event, not a colour.",
+    "agentstate": {
+      "$type": "number",
+      "interrupted": { "$value": 0.25 },
+      "waiting": { "$value": 0.35 },
+      "thinking": { "$value": 0.55 },
+      "debating": { "$value": 0.8 },
+      "acting": { "$value": 1 },
+      "escalated": { "$value": 1 }
     }
   },
   "radius": {

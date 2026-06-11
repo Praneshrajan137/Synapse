@@ -1,14 +1,20 @@
 import { ConsensusDecisionSchema } from "@domain/consensus-decision";
 import {
   AgentProposalChip,
+  ChainIntegrityChip,
   ConfidenceChip,
   ParetoFrontier,
   ParetoParallel,
   type ParetoPoint,
+  ProvenanceChip,
+  type ProvenanceLike,
   ReasoningTimeline,
+  SyntheticBadge,
   TierBadge,
+  TwinDivergenceCaveat,
 } from "@ds/compounds";
 import { Badge } from "@ds/primitives";
+import { useFirehose } from "@hooks/use-firehose";
 import { useSynapseApi } from "@hooks/use-synapse-api";
 import { fmt } from "@lib/formatters";
 import { phaseName, replayDecision } from "@lib/replay";
@@ -40,15 +46,15 @@ export function DecisionDetail() {
         confidence: raw.confidence ?? 0,
         audit_trace: raw.audit_trace ?? [],
         phase_reached: raw.phase_reached ?? 1,
-        debate_rounds: 0,
+        // ADR-044: the previously-imprisoned anatomy columns now flow.
+        debate_rounds: raw.debate_rounds ?? 0,
         human_override: raw.human_override ?? null,
         // The 8-D arbitration front, when the audit row carries it (Tier 3–4).
         // Fast-path decisions and older rows have none — ParetoParallel then
         // renders an honest empty state.
-        pareto_front:
-          (raw as { pareto_front?: Array<Record<string, unknown>> | null }).pareto_front ?? null,
-        context_messages: [],
-        execution_confirmations: [],
+        pareto_front: raw.pareto_front ?? null,
+        context_messages: raw.context_messages ?? [],
+        execution_confirmations: raw.execution_confirmations ?? [],
         escalated_to_human: raw.escalated ?? false,
       };
       const parsed = ConsensusDecisionSchema.safeParse(candidate);
@@ -61,6 +67,11 @@ export function DecisionDetail() {
   });
 
   const decision = query.data?.decision;
+  const raw = query.data?.raw;
+
+  // Live twin-divergence feed for the trust caveat next to confidence —
+  // confidence numbers rest on the twin's world-model (I-12).
+  useFirehose({ topics: ["twin"] });
 
   // URL-synced replay phase (FE-INV-028): `?phase=N` is the source of
   // truth so a replay frame is shareable. The Zod parser tolerates the
@@ -148,7 +159,14 @@ export function DecisionDetail() {
           <h1 className="font-mono text-xl font-semibold text-ink">{decision.decision_id}</h1>
           <TierBadge tier={decision.tier} />
           <ConfidenceChip value={decision.confidence} />
+          <TwinDivergenceCaveat />
           {decision.escalated_to_human && <Badge tone="warning">Escalated</Badge>}
+          {raw?.is_synthetic && <SyntheticBadge />}
+          <ChainIntegrityChip
+            verified={raw?.chain_verified}
+            prevHash={raw?.prev_hash}
+            currentHash={raw?.current_hash}
+          />
         </div>
         <p className="text-2xs text-ink-subtle">Committed {fmt.relativeTime(decision.timestamp)}</p>
       </header>
@@ -198,28 +216,130 @@ export function DecisionDetail() {
                   // because two proposals with the same agent_name would be a
                   // domain bug, not a key collision.
                   const stableKey = `${agentName}:${p.utility_score ?? "u"}:${p.confidence ?? "c"}`;
+                  // ADR-044: structured provenance rides inside the proposal.
+                  const provenance =
+                    p.provenance && typeof p.provenance === "object"
+                      ? (p.provenance as ProvenanceLike)
+                      : null;
+                  const justification = Array.isArray(p.justification_trace)
+                    ? p.justification_trace
+                    : [];
                   return (
-                    <AgentProposalChip
-                      key={stableKey}
-                      agentName={agentName}
-                      utilityScore={
-                        typeof p.utility_score === "number" ? p.utility_score : undefined
-                      }
-                      confidence={typeof p.confidence === "number" ? p.confidence : undefined}
-                      status={
-                        (p.status as
-                          | "proposed"
-                          | "rejected"
-                          | "selected"
-                          | "modified"
-                          | undefined) ?? "proposed"
-                      }
-                    />
+                    <div key={stableKey} className="space-y-1">
+                      <AgentProposalChip
+                        agentName={agentName}
+                        utilityScore={
+                          typeof p.utility_score === "number" ? p.utility_score : undefined
+                        }
+                        confidence={typeof p.confidence === "number" ? p.confidence : undefined}
+                        status={
+                          (p.status as
+                            | "proposed"
+                            | "rejected"
+                            | "selected"
+                            | "modified"
+                            | undefined) ?? "proposed"
+                        }
+                      />
+                      <ProvenanceChip provenance={provenance} />
+                      {justification.length > 0 && (
+                        <details className="text-2xs text-ink-muted">
+                          <summary className="cursor-pointer">
+                            Justification ({justification.length})
+                          </summary>
+                          <ul className="mt-1 list-disc space-y-0.5 pl-4">
+                            {justification.map((line) => (
+                              <li key={line} className="break-words">
+                                {line}
+                              </li>
+                            ))}
+                          </ul>
+                        </details>
+                      )}
+                    </div>
                   );
                 })}
               </div>
             )}
           </div>
+
+          {(decision.execution_confirmations.length > 0 ||
+            (raw?.outcome && Object.keys(raw.outcome).length > 0)) && (
+            <div className="syn-card-raised grid gap-4 p-4 md:grid-cols-2">
+              <div className="space-y-2">
+                <h2 className="text-sm font-semibold text-ink">Execution confirmations</h2>
+                {decision.execution_confirmations.length === 0 ? (
+                  <p className="text-xs text-ink-muted">No confirmations recorded.</p>
+                ) : (
+                  <ul className="space-y-1 text-xs">
+                    {decision.execution_confirmations.map((c, i) => (
+                      <li key={`${c}-${String(i)}`} className="flex items-center gap-2 font-mono">
+                        <span
+                          className={
+                            c.startsWith("error") ? "text-signal-danger" : "text-signal-success"
+                          }
+                          aria-hidden
+                        >
+                          {c.startsWith("error") ? "✗" : "✓"}
+                        </span>
+                        <span className="break-all text-ink-muted">{c}</span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+              {raw?.outcome && Object.keys(raw.outcome).length > 0 && (
+                <div className="space-y-2">
+                  <h2 className="text-sm font-semibold text-ink">Outcome</h2>
+                  <dl className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs">
+                    {Object.entries(raw.outcome).map(([k, v]) => (
+                      <div key={k} className="contents">
+                        <dt className="text-ink-muted">{k.replace(/_/g, " ")}</dt>
+                        <dd className="font-mono tabular-nums text-ink">
+                          {typeof v === "number" ? v.toFixed(3) : String(v)}
+                        </dd>
+                      </div>
+                    ))}
+                  </dl>
+                </div>
+              )}
+            </div>
+          )}
+
+          {Array.isArray(raw?.escalations) && raw.escalations.length > 0 && (
+            <div className="syn-card-raised space-y-2 p-4">
+              <h2 className="text-sm font-semibold text-ink">Operator overrides</h2>
+              <ul className="space-y-2">
+                {(raw.escalations as Array<Record<string, unknown>>).map((e) => (
+                  <li
+                    key={String(e.audit_escalation_id ?? e.override_at)}
+                    className="flex flex-wrap items-center gap-2 text-xs"
+                  >
+                    <Badge
+                      tone={
+                        e.override_action === "approved"
+                          ? "success"
+                          : e.override_action === "rejected"
+                            ? "danger"
+                            : "warning"
+                      }
+                    >
+                      {String(e.override_action ?? "pending")}
+                    </Badge>
+                    <span className="font-mono text-ink-muted">
+                      {String(e.operator_token_ref ?? "")}
+                    </span>
+                    <span className="text-ink-muted">{String(e.override_reason ?? "")}</span>
+                    {typeof e.override_at === "string" && (
+                      <span className="ml-auto text-ink-subtle">
+                        {fmt.relativeTime(e.override_at)}
+                      </span>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
 
           <div className="syn-card-raised space-y-2 p-4">
             <h2 className="text-sm font-semibold text-ink">Consensus front — 8 objectives</h2>

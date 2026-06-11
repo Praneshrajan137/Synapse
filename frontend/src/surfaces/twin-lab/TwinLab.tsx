@@ -77,7 +77,10 @@ export function TwinLab() {
       <div className="grid gap-4 lg:grid-cols-[1fr_320px]">
         <Suspense
           fallback={
-            <div className="syn-card flex h-[420px] items-center justify-center text-sm text-ink-muted">
+            <div
+              className="syn-card syn-skeleton flex h-[420px] items-center justify-center text-sm text-ink-muted"
+              aria-busy="true"
+            >
               Loading supply network…
             </div>
           }

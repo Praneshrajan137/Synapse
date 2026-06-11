@@ -7,13 +7,12 @@ interface ConfidenceGaugeProps {
   readonly label?: string;
 }
 
-// chromatic-allow: these feed raw <svg> stroke/fill attributes, which the
-// --syn-* channel tokens cannot reach without a colour-function wrapper.
-// Tracked for chromatic-token migration (INV-CLR-009).
-const BAND_HEX: Record<ReturnType<typeof confidenceBand>, string> = {
-  ok: "rgb(34 197 94)", // chromatic-allow
-  warn: "rgb(234 179 8)", // chromatic-allow
-  risk: "rgb(239 68 68)", // chromatic-allow
+// Chromatic-token migration (ADR-044 Phase 4): SVG presentation attributes
+// accept token-wrapped CSS colour functions and flip with [data-theme].
+const BAND_COLOR: Record<ReturnType<typeof confidenceBand>, string> = {
+  ok: "rgb(var(--syn-confidence-ok))",
+  warn: "rgb(var(--syn-confidence-warn))",
+  risk: "rgb(var(--syn-confidence-risk))",
 };
 
 /**
@@ -25,7 +24,7 @@ export function ConfidenceGauge({ value, size = 100, thickness = 6, label }: Con
   const clamped = Math.max(0, Math.min(1, value));
   const pct = Math.round(clamped * 100);
   const ramp = confidenceBand(clamped);
-  const color = BAND_HEX[ramp];
+  const color = BAND_COLOR[ramp];
   const r = size / 2 - thickness;
   const circumference = 2 * Math.PI * r;
   const offset = circumference * (1 - clamped);
@@ -43,7 +42,7 @@ export function ConfidenceGauge({ value, size = 100, thickness = 6, label }: Con
         cy={size / 2}
         r={r}
         fill="none"
-        stroke="rgb(51 65 85)" // chromatic-allow: raw <svg> track stroke (INV-CLR-009)
+        stroke="rgb(var(--syn-border))"
         strokeWidth={thickness}
       />
       <circle

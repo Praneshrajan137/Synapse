@@ -53,6 +53,15 @@
   --syn-signal-danger: 239 68 68;
   --syn-accent: 129 140 248; /* indigo-400 */
 
+  /* Honesty states (Chromatic v1.1.0, ADR-044) — mirrors
+     design-system/color/dist tokens (pinned by chromatics.test.ts).
+     degraded: caution-family hue, chroma drained to ~1/3 of warning — the
+     colour is literally running on reduced information (INV-CLR-016).
+     synthetic: violet, >60° from every semantic state; NEVER colour-only —
+     always paired with a dashed ring + glyph (INV-CLR-011). */
+  --syn-state-degraded: oklch(0.78 0.06 84);
+  --syn-state-synthetic: oklch(0.75 0.12 310);
+
   /* Agent identity (FROZEN per INV-CLR-012, mirrors
      design-system/color/tokens/agents.tokens.json — dark = bright variants
      for dark canvas. Used by the ProposalConstellation viz and any future
@@ -88,8 +97,14 @@
   --syn-motion-medium: 240ms;
   --syn-motion-slow: 480ms;
   --syn-motion-breath: 2400ms; /* the Cortex Pulse — the only always-on motion */
+  /* v1.1.0 (ADR-044): urgency is encoded as FREQUENCY — the escalation pulse
+     is exactly half the ambient breath. arrive is the decision-arrival
+     entrance; entrance is its hard-decelerate curve. */
+  --syn-motion-urgent: 1200ms;
+  --syn-motion-arrive: 280ms;
   --syn-ease-standard: cubic-bezier(0.2, 0, 0, 1);
   --syn-ease-emphasized: cubic-bezier(0.3, 0, 0.8, 0.15);
+  --syn-ease-entrance: cubic-bezier(0.05, 0.7, 0.1, 1);
 }
 
 [data-theme="light"] {
@@ -123,6 +138,10 @@
     oklch(0.6 0.1074 182) 100%
   );
   --syn-neutral-mix: oklch(0.62 0.012 255);
+
+  /* Honesty states — deep variants for light canvas (v1.1.0, ADR-044). */
+  --syn-state-degraded: oklch(0.58 0.055 84);
+  --syn-state-synthetic: oklch(0.6 0.145 310);
 }
 
 [data-theme="hc"] {
@@ -151,5 +170,7 @@
     --syn-motion-medium: 0ms;
     --syn-motion-slow: 0ms;
     --syn-motion-breath: 0ms;
+    --syn-motion-urgent: 0ms;
+    --syn-motion-arrive: 0ms;
   }
 }

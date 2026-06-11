@@ -14,7 +14,11 @@ on:
       - 'agents/*/training/rewards.py'
       - 'orchestrator/guardrails/rules.py'
       - 'orchestrator/audit/logger.py'
-      - 'orchestrator/audit/hash_chain.py'
+      # ADR-044 D6: the chain-hash implementation moved to the shared package
+      # (the API gateway needs it for chain_verified); the orchestrator path
+      # re-exports and is covered by normal unit tests. The mutation gate
+      # follows the implementation.
+      - 'packages/synapse_common/audit_chain.py'
 
 env:
   PYTHONPATH: "."
@@ -181,7 +185,7 @@ jobs:
           targets=""
           for f in ${changed}; do
             case "${f}" in
-              agents/*/training/rewards.py|orchestrator/guardrails/rules.py|orchestrator/audit/logger.py|orchestrator/audit/hash_chain.py)
+              agents/*/training/rewards.py|orchestrator/guardrails/rules.py|orchestrator/audit/logger.py|packages/synapse_common/audit_chain.py)
                 targets="${targets} ${f}"
                 ;;
             esac
@@ -224,11 +228,14 @@ jobs:
                 threshold=10
                 label="audit/logger"
                 ;;
-              orchestrator/audit/hash_chain.py)
-                test_path="orchestrator/tests/test_hash_chain.py"
-                runner="python -m pytest ${test_path} -x -q"
+              packages/synapse_common/audit_chain.py)
+                # ADR-044 D6: shared implementation — killed by BOTH the
+                # byte-pin suite in packages/tests and the orchestrator
+                # chain-walk suite (which imports through the re-export).
+                test_path="packages/tests/test_audit_chain.py"
+                runner="python -m pytest ${test_path} orchestrator/tests/test_hash_chain.py -x -q"
                 threshold=10
-                label="audit/hash_chain"
+                label="audit/chain-shared"
                 ;;
             esac
             if [ ! -f "${test_path}" ]; then

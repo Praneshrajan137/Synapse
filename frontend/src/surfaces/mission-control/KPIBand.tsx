@@ -25,7 +25,7 @@ export function KPIBand() {
       recentDecisions.length === 0
         ? null
         : recentDecisions.reduce((acc, d) => acc + d.confidence, 0) / recentDecisions.length;
-    const escalations = recentDecisions.filter((d) => d.escalated_to_human).length;
+    const escalations = recentDecisions.filter((d) => d.escalated).length;
     const activeDisruptions = disruptions.length;
 
     return [
