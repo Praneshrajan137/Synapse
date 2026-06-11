@@ -273,6 +273,153 @@ async def test_return_value_is_uuid() -> None:
     assert isinstance(result, UUID)
 
 
+# =============================================================================
+# ADR-044 — honesty fields on the outbox payload + provenance-bearing chains
+# =============================================================================
+
+
+def _make_decision_with(
+    *,
+    provenance: Any = None,
+    order_id: str | None = None,
+    confidence: float = 0.95,
+) -> ConsensusDecision:
+    """Decision factory with optional structured provenance + request context."""
+    from synapse_common.models import ContextMessage
+
+    context = []
+    if order_id is not None:
+        context.append(
+            ContextMessage(
+                source="orchestrator",
+                content={
+                    "type": "decision_request",
+                    "tier": "tier_1",
+                    "request": {"order_id": order_id},
+                },
+            )
+        )
+    return ConsensusDecision(
+        decision_id=uuid4(),
+        tier=DecisionTier.TIER_1,
+        proposals=[
+            AgentProposal(
+                agent_name=AgentName.DEMAND_PROPHET,
+                decision_id=uuid4(),
+                utility_score=0.7,
+                confidence=confidence,
+                justification_trace=["t"],
+                payload={},
+                tier=DecisionTier.TIER_1,
+                provenance=provenance,
+            )
+        ],
+        selected_action={"action": "noop"},
+        pareto_weights={"latency": 1.0},
+        confidence=confidence,
+        audit_trace=["t"],
+        context_messages=context,
+    )
+
+
+@pytest.mark.asyncio
+async def test_outbox_payload_carries_honesty_fields_false_case() -> None:
+    """ADR-044: the firehose envelope (outbox payload) MUST carry degraded +
+    is_synthetic. Default decision: both False — and the keys must EXIST
+    (a mutant dropping them would make the FE render undefined as falsy,
+    silently disabling the honesty channel)."""
+    factory = _session_factory_returning(scalar_value=None)
+    logger = AuditLogger(factory)
+    await logger.log_decision(_make_decision())
+    outbox_row = factory.recorders[-1].added_rows[1]
+    assert outbox_row.payload["degraded"] is False
+    assert outbox_row.payload["is_synthetic"] is False
+
+
+@pytest.mark.asyncio
+async def test_outbox_payload_degraded_true_when_any_proposal_degraded() -> None:
+    from synapse_common.provenance import Provenance
+
+    factory = _session_factory_returning(scalar_value=None)
+    logger = AuditLogger(factory)
+    await logger.log_decision(_make_decision_with(provenance=Provenance.degraded_fallback()))
+    outbox_row = factory.recorders[-1].added_rows[1]
+    assert outbox_row.payload["degraded"] is True
+
+
+@pytest.mark.asyncio
+async def test_outbox_payload_is_synthetic_for_traffic_generator_order() -> None:
+    factory = _session_factory_returning(scalar_value=None)
+    logger = AuditLogger(factory)
+    await logger.log_decision(_make_decision_with(order_id="synthetic-1718000000-3"))
+    outbox_row = factory.recorders[-1].added_rows[1]
+    assert outbox_row.payload["is_synthetic"] is True
+
+
+@pytest.mark.asyncio
+async def test_real_provenance_not_degraded_in_outbox() -> None:
+    from synapse_common.provenance import ConfidenceBasis, Provenance
+
+    factory = _session_factory_returning(scalar_value=None)
+    logger = AuditLogger(factory)
+    await logger.log_decision(
+        _make_decision_with(
+            provenance=Provenance.real(
+                model_version="registry-v9",
+                confidence_basis=ConfidenceBasis.CONFORMAL_INTERVAL,
+            )
+        )
+    )
+    outbox_row = factory.recorders[-1].added_rows[1]
+    assert outbox_row.payload["degraded"] is False
+
+
+@pytest.mark.asyncio
+async def test_mixed_legacy_and_provenance_chain_verifies() -> None:
+    """ADR-044 D2 chain-safety: a legacy-shaped decision (no provenance)
+    followed by a provenance-bearing one must verify link-by-link with the
+    SAME recompute the verifier CLI uses — stored == hashed, both shapes."""
+    from synapse_common.audit_chain import verify_row_hash
+    from synapse_common.provenance import Provenance
+
+    factory = _session_factory_returning(scalar_value=None)
+    logger = AuditLogger(factory)
+
+    legacy_shaped = _make_decision()
+    provenance_bearing = _make_decision_with(provenance=Provenance.degraded_fallback())
+    await logger.log_decision(legacy_shaped)
+    await logger.log_decision(provenance_bearing)
+
+    rows = [r.added_rows[0] for r in factory.recorders]
+    assert rows[1].prev_hash == rows[0].current_hash
+    for row in rows:
+        assert verify_row_hash(
+            prev_hash=row.prev_hash,
+            current_hash=row.current_hash,
+            decision_id=row.decision_id,
+            tier=row.tier,
+            selected_action=row.selected_action,
+            pareto_weights=row.pareto_weights,
+            confidence=row.confidence,
+            proposals=row.proposals,
+            audit_trace=row.audit_trace,
+        )
+
+
+@pytest.mark.asyncio
+async def test_stored_proposals_include_structured_provenance() -> None:
+    """The audit row's proposals JSONB carries the provenance dict — the
+    decisions API reads it from there (no regex over trace strings)."""
+    from synapse_common.provenance import Provenance
+
+    factory = _session_factory_returning(scalar_value=None)
+    logger = AuditLogger(factory)
+    await logger.log_decision(_make_decision_with(provenance=Provenance.degraded_fallback()))
+    row = factory.recorders[-1].added_rows[0]
+    assert row.proposals[0]["provenance"]["degraded"] is True
+    assert row.proposals[0]["provenance"]["confidence_basis"] == "fallback_floor"
+
+
 @pytest.mark.asyncio
 async def test_three_decisions_strict_chain_walk() -> None:
     """End-to-end chain integrity: walking three logged decisions, each

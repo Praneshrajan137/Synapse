@@ -94,6 +94,8 @@ class DisruptionShieldA2AHandler:
         }
 
         proposal = AgentProposal(
+            # ADR-044: structured provenance rides with the proposal (I-3/I-4).
+            provenance=self._pipeline.last_provenance,
             agent_name=AgentName.DISRUPTION_SHIELD,
             decision_id=UUID(decision_id) if isinstance(decision_id, str) else decision_id,
             utility_score=min(alert.ensemble_score, 1.0),

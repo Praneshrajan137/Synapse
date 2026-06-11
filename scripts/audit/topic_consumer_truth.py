@@ -47,6 +47,10 @@ CONSUMER_LOCATIONS: dict[str, list[str]] = {
     "disruption_shield": ["agents/disruption_shield/**/*.py"],
     "orchestrator": ["orchestrator/**/*.py"],
     "digital_twin": ["digital_twin/**/*.py"],
+    # ADR-044: the API gateway's /ws/firehose multiplexer is a real Kafka
+    # consumer (AIOKafkaConsumer over the CHANNEL_TOPIC map) — registering it
+    # closes the WS-3-era gap where it consumed 8 topics unregistered.
+    "api_firehose": ["api/routers/**/*.py"],
     "audit_logger": ["orchestrator/audit/**/*.py", "scripts/audit/**/*.py"],
     "ml_pipeline": ["ml_pipelines/**/*.py"],
     "postgres_sink": ["scripts/**/*.py", "orchestrator/audit/**/*.py"],

@@ -115,6 +115,7 @@ class AuditLogger:
             # the audit row and the outbox row (atomic; ties Kafka delivery to
             # audit-row existence — ADR-026).
             from synapse_common.outbox import enqueue as _outbox_enqueue
+            from synapse_common.synthetic import is_synthetic_decision
 
             await _outbox_enqueue(
                 session,
@@ -128,6 +129,16 @@ class AuditLogger:
                     "phase_reached": decision.phase_reached,
                     "escalated": decision.escalated_to_human,
                     "selected_action": decision.selected_action,
+                    # ADR-044 honesty channel: the firehose envelope tells the
+                    # UI whether ANY input proposal ran degraded, and whether
+                    # the decision is traffic-generator synthetic — without
+                    # these the live feed renders fallbacks and demo pulses
+                    # indistinguishably from real, fully-modelled commerce.
+                    "degraded": any(
+                        p.provenance is not None and p.provenance.degraded
+                        for p in decision.proposals
+                    ),
+                    "is_synthetic": is_synthetic_decision(decision.context_messages),
                 },
             )
             await session.commit()

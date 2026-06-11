@@ -70,6 +70,24 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     tier_router = TierRouter()
     guardrails = GuardrailEngine(confidence_threshold=_config.confidence_threshold)
     audit_logger = AuditLogger(session_factory)
+
+    # ADR-044: register per-city brownout controllers at startup so the
+    # posture endpoint (and @tier_budget's on_exceed="brownout" path,
+    # E-S9-04) have live controllers instead of silently no-opping.
+    # The "ollama"/"postgres" breaker names match the documented registry
+    # convention (synapse_common.breakers.get_breaker).
+    from synapse_common.breakers import get_breaker
+
+    from orchestrator.consensus import brownout as brownout_registry
+
+    for _city in ("bengaluru", "mumbai"):
+        brownout_registry.register(
+            brownout_registry.BrownoutController(
+                _city,
+                ollama_breaker=get_breaker("ollama"),
+                postgres_breaker=get_breaker("postgres"),
+            )
+        )
     _ws_manager = WebSocketManager()
     _hitl = HITLEscalation(
         kafka_producer=kafka_producer,
@@ -174,6 +192,20 @@ async def health() -> dict[str, Any]:
         "agent": "orchestrator",
         "version": "0.4.0",
     }
+
+
+@app.get("/api/v1/status/posture")
+async def status_posture() -> dict[str, Any]:
+    """ADR-044: live degradation posture — brownout level per city + every
+    circuit breaker's state. Until this endpoint, brownout/breaker state was
+    Prometheus-only: the system could shed Tier-4 work or trip a dependency
+    breaker with NOTHING in the operator UI saying so. The API gateway
+    proxies this at ``GET /api/v1/system/posture`` (JWT) and the frontend
+    polls it for the DegradedBanner.
+    """
+    from orchestrator.inference.posture import compute_posture
+
+    return compute_posture()
 
 
 @app.get("/metrics")

@@ -84,6 +84,8 @@ class SupplierTrustA2AHandler:
             payload["last_delivery_ts"] = last_ts
 
         proposal = AgentProposal(
+            # ADR-044: structured provenance rides with the proposal (I-3/I-4).
+            provenance=self._pipeline.last_provenance,
             agent_name=AgentName.SUPPLIER_TRUST,
             decision_id=UUID(ctx.get("decision_id", str(uuid4()))),
             utility_score=result.trust_score,

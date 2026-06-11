@@ -428,6 +428,13 @@ class ConsensusProtocol:
         """
         degraded: list[str] = []
         for p in proposals:
+            # ADR-044: the typed AgentProposal.provenance field is authoritative;
+            # the payload["provenance"] dict remains as the pre-044 fallback so
+            # proposals from older agents are still read honestly.
+            if p.provenance is not None:
+                if p.provenance.degraded:
+                    degraded.append(str(p.agent_name))
+                continue
             payload = p.payload if isinstance(p.payload, dict) else {}
             prov = payload.get("provenance", {})
             if isinstance(prov, dict) and prov.get("degraded") is True:

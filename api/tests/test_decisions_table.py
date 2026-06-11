@@ -45,3 +45,56 @@ def test_detail_query_uses_consensus_column_names() -> None:
     # audit_consensus calls the JSONB column `proposals`, not `agent_proposals`.
     assert "agent_proposals" not in src
     assert "proposals" in src
+
+
+# --------------------------------------------------------------------------- #
+# ADR-044 — additive anatomy + honesty fields
+# --------------------------------------------------------------------------- #
+
+
+def test_detail_selects_every_anatomy_column() -> None:
+    """The decision-detail SELECT must carry the previously-imprisoned
+    audit_consensus columns. Dropping any of these silently re-hides
+    intelligence the FE renders (Living Interface Phases 3-4)."""
+    src = _source()
+    for column in (
+        "debate_rounds",
+        "pareto_front",
+        "execution_confirmations",
+        "context_messages",
+        "outcome",
+        "prev_hash",
+        "current_hash",
+    ):
+        assert column in src, f"detail SELECT lost ADR-044 column: {column}"
+
+
+def test_detail_response_carries_computed_honesty_fields() -> None:
+    src = _source()
+    for key in ('"chain_verified"', '"degraded"', '"is_synthetic"'):
+        assert key in src, f"detail response lost ADR-044 computed field: {key}"
+
+
+def test_recent_computes_honesty_flags_in_sql() -> None:
+    """/recent derives degraded + is_synthetic via jsonb_path_exists so the
+    row-heavy JSONB columns never leave the database."""
+    src = _source()
+    assert "jsonb_path_exists(proposals" in src
+    assert "jsonb_path_exists(context_messages" in src
+
+
+def test_synthetic_prefix_has_single_owner() -> None:
+    """The 'synthetic-' rule is owned by synapse_common.synthetic and passed
+    into the jsonpath as a variable — a second hardcoded copy in this router
+    would let the two definitions drift."""
+    src = _source()
+    assert "SYNTHETIC_ORDER_PREFIX" in src
+    assert "'synthetic-" not in src.replace("SYNTHETIC_ORDER_PREFIX", "")
+
+
+def test_chain_verification_uses_shared_implementation() -> None:
+    """chain_verified must recompute via synapse_common.audit_chain — the
+    SAME functions the writer hashes with (ADR-044 D6), never a local copy."""
+    src = _source()
+    assert "from synapse_common.audit_chain import verify_row_hash" in src
+    assert "hashlib" not in src, "no local hash reimplementation in the router"

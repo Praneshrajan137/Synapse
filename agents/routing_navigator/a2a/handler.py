@@ -59,6 +59,8 @@ class RoutingNavigatorA2AHandler:
         routes = self._pipeline.route(orders, riders, store_id)
 
         proposal = AgentProposal(
+            # ADR-044: structured provenance rides with the proposal (I-3/I-4).
+            provenance=self._pipeline.last_provenance,
             agent_name=AgentName.ROUTING_NAVIGATOR,
             decision_id=UUID(context.get("decision_id", str(uuid4()))),
             utility_score=0.8,

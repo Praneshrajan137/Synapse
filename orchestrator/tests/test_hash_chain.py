@@ -252,3 +252,37 @@ def test_no_collisions_across_distinct_inputs(seed: int) -> None:
         d = hash_payload_for_row(prev, row)
         assert d not in seen, f"Collision in seeded sweep — digest fn broken: {d}"
         seen.add(d)
+
+
+# =============================================================================
+# ADR-044 D6 -- the orchestrator path is a re-export of the shared module
+# =============================================================================
+
+
+def test_reexport_is_shared_implementation_not_a_copy() -> None:
+    """orchestrator.audit.hash_chain remains the canonical orchestrator import
+    path (ADR-044 D6) -- and must be the SAME function objects as
+    synapse_common.audit_chain, never a divergent copy. Two implementations
+    of the chain hash is how a tamper-evidence system quietly dies."""
+    from synapse_common import audit_chain as shared
+
+    from orchestrator.audit import hash_chain as orch
+
+    assert orch.GENESIS_HASH == shared.GENESIS_HASH
+    assert orch.hash_payload_for_row is shared.hash_payload_for_row
+    assert orch.make_canonical_row is shared.make_canonical_row
+    assert orch.verify_row_hash is shared.verify_row_hash
+
+
+def test_reexport_public_surface_pinned() -> None:
+    """Pin __all__ so a mutated/dropped export name fails loudly here."""
+    from orchestrator.audit import hash_chain
+
+    assert hash_chain.__all__ == [
+        "GENESIS_HASH",
+        "hash_payload_for_row",
+        "make_canonical_row",
+        "verify_row_hash",
+    ]
+    for name in hash_chain.__all__:
+        assert hasattr(hash_chain, name)

@@ -55,6 +55,8 @@ class InventorySentinelA2AHandler:
         store_id = ctx.get("store_id", "STORE_BLR_001")
         actions = self._pipeline.decide(sku_ids, store_id)
         proposal = AgentProposal(
+            # ADR-044: structured provenance rides with the proposal (I-3/I-4).
+            provenance=self._pipeline.last_provenance,
             agent_name=AgentName.INVENTORY_SENTINEL,
             decision_id=UUID(ctx.get("decision_id", str(uuid4()))),
             utility_score=0.85,

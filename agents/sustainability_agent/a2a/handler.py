@@ -95,6 +95,8 @@ class SustainabilityAgentA2AHandler:
         }
 
         proposal = AgentProposal(
+            # ADR-044: structured provenance rides with the proposal (I-3/I-4).
+            provenance=self._pipeline.last_provenance,
             agent_name=AgentName.SUSTAINABILITY_AGENT,
             decision_id=UUID(decision_id) if isinstance(decision_id, str) else decision_id,
             utility_score=min(report.confidence, 1.0),

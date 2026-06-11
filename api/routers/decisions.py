@@ -19,10 +19,10 @@ import httpx
 import structlog
 from fastapi import APIRouter, Depends, HTTPException, Path, status
 from pydantic import BaseModel, Field, field_validator
-
-from api.middleware.jwt import CurrentOperator, RequireRole
 from synapse_common.auth import OperatorContext, Role
 from synapse_common.tracing import inject_a2a_headers
+
+from api.middleware.jwt import CurrentOperator, RequireRole
 
 logger = structlog.get_logger(__name__)
 router = APIRouter()
@@ -100,12 +100,13 @@ async def recent_decisions(
         raise HTTPException(status_code=422, detail="invalid city")
     try:
         import psycopg2
+        from synapse_common.synthetic import SYNTHETIC_ORDER_PREFIX
 
         conn = psycopg2.connect(_dsn())
         try:
             with conn.cursor() as cur:
                 where = ["1=1"]
-                params: list[Any] = []
+                params: list[Any] = [SYNTHETIC_ORDER_PREFIX]
                 if tier is not None:
                     where.append("tier = %s")
                     params.append(tier)
@@ -121,8 +122,24 @@ async def recent_decisions(
                     # actually writes (AuditConsensusRow). The legacy
                     # audit_decisions table has no writer and lacks
                     # phase_reached; reading it 503'd the live feed.
+                    #
+                    # ADR-044 honesty channel (additive, computed in SQL so the
+                    # row-heavy JSONB columns never leave the database):
+                    #   degraded     — any proposal's structured provenance ran
+                    #                  a fallback (PG16; jsonb_path_exists is
+                    #                  PG12+).
+                    #   is_synthetic — the decision_request context message
+                    #                  carries a traffic-generator order_id
+                    #                  (prefix rule owned by
+                    #                  synapse_common.synthetic, passed as a
+                    #                  jsonpath var — single source of truth).
                     "SELECT id AS audit_id, decision_id, tier, phase_reached, "
-                    "       confidence, escalated, city, created_at "
+                    "       confidence, escalated, city, created_at, "
+                    "       COALESCE(jsonb_path_exists(proposals, "
+                    "         '$[*].provenance.degraded ? (@ == true)'), false) AS degraded, "
+                    "       COALESCE(jsonb_path_exists(context_messages, "
+                    "         '$[*].content.request.order_id ? (@ starts with $prefix)', "
+                    "         jsonb_build_object('prefix', %s::text)), false) AS is_synthetic "
                     "FROM audit_consensus "
                     f"WHERE {' AND '.join(where)} "
                     "ORDER BY created_at DESC LIMIT %s",
@@ -138,6 +155,8 @@ async def recent_decisions(
                         "escalated": bool(r[5]),
                         "city": r[6],
                         "created_at": r[7].isoformat() if r[7] else None,
+                        "degraded": bool(r[8]),
+                        "is_synthetic": bool(r[9]),
                     }
                     for r in cur.fetchall()
                 ]
@@ -155,7 +174,15 @@ async def get_decision(
     decision_id: UUID,
     op: Annotated[OperatorContext, Depends(CurrentOperator)],
 ) -> dict[str, Any]:
-    """P3: single audit row with full append-only context."""
+    """P3: single audit row with full append-only context.
+
+    ADR-044: the row's previously-unexposed anatomy columns (debate_rounds,
+    pareto_front, execution_confirmations, context_messages, outcome, the
+    tamper-evidence hashes) now reach the response, plus three computed
+    fields — ``degraded``, ``is_synthetic``, and ``chain_verified`` (a
+    single-row hash recompute; the full chain walk stays with
+    ``synapse audit verify``). All additive; existing keys unchanged.
+    """
     try:
         import psycopg2
 
@@ -169,7 +196,9 @@ async def get_decision(
                     "SELECT id AS audit_id, decision_id, tier, phase_reached, "
                     "       confidence, escalated, city, "
                     "       proposals, selected_action, pareto_weights, "
-                    "       human_override, audit_trace, created_at "
+                    "       human_override, audit_trace, created_at, "
+                    "       debate_rounds, pareto_front, execution_confirmations, "
+                    "       context_messages, outcome, prev_hash, current_hash "
                     "FROM audit_consensus WHERE decision_id = %s",
                     (str(decision_id),),
                 )
@@ -206,6 +235,36 @@ async def get_decision(
     except Exception as exc:  # noqa: BLE001
         raise HTTPException(status_code=503, detail=f"audit unavailable: {exc}") from exc
 
+    proposals = row[7] if isinstance(row[7], list) else []
+    context_messages = row[16] if isinstance(row[16], list) else []
+    prev_hash: str | None = row[18]
+    current_hash: str | None = row[19]
+
+    from synapse_common.audit_chain import verify_row_hash
+    from synapse_common.synthetic import is_synthetic_decision
+
+    degraded = any(
+        isinstance(p, dict)
+        and isinstance(p.get("provenance"), dict)
+        and p["provenance"].get("degraded") is True
+        for p in proposals
+    )
+    # Tri-state: True (recomputed hash matches), False (content altered since
+    # insert), None (pre-Sprint-9 legacy row with no chain values — E-S9-01).
+    chain_verified: bool | None = None
+    if current_hash is not None:
+        chain_verified = verify_row_hash(
+            prev_hash=prev_hash,
+            current_hash=current_hash,
+            decision_id=row[1],
+            tier=row[2],
+            selected_action=row[8] if isinstance(row[8], dict) else {},
+            pareto_weights=row[9] if isinstance(row[9], dict) else {},
+            confidence=float(row[4]),
+            proposals=proposals,
+            audit_trace=row[11] if isinstance(row[11], list) else [],
+        )
+
     return {
         "audit_id": str(row[0]),
         "decision_id": str(row[1]),
@@ -221,6 +280,17 @@ async def get_decision(
         "audit_trace": row[11],
         "created_at": row[12].isoformat() if row[12] else None,
         "escalations": escalations,
+        # ADR-044 additive anatomy + honesty fields.
+        "debate_rounds": row[13] if row[13] is not None else 0,
+        "pareto_front": row[14],
+        "execution_confirmations": row[15],
+        "context_messages": row[16],
+        "outcome": row[17],
+        "prev_hash": prev_hash,
+        "current_hash": current_hash,
+        "chain_verified": chain_verified,
+        "degraded": degraded,
+        "is_synthetic": is_synthetic_decision(context_messages),
     }
 
 

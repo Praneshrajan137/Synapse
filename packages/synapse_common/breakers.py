@@ -258,6 +258,18 @@ def get_breaker(
     return breaker
 
 
+def all_breakers() -> dict[str, AsyncBreaker]:
+    """Snapshot of every registered breaker, keyed by dependency name.
+
+    ADR-044: read-only posture surface — the orchestrator's
+    ``GET /api/v1/status/posture`` reports each breaker's state so the
+    operator UI can show *which* dependency is degrading the system instead
+    of a mute green/red dot. Returns a copy; callers cannot mutate the
+    registry through it.
+    """
+    return dict(_REGISTRY)
+
+
 def reset_registry() -> None:
     """Test helper: clear all registered breakers. Do not call in prod."""
     _REGISTRY.clear()
