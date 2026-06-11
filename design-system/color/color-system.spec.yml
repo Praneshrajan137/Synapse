@@ -11,7 +11,7 @@
 # schema/color-spec.schema.json instead.
 # ============================================================================
 system_name: synapse-color
-version: "1.1.0"
+version: "1.2.0"
 description: >
   Perceptual OKLCH design-token color system for the SYNAPSE multi-agent
   quick-commerce platform. Encodes agent identity, decision tier, and
@@ -69,6 +69,13 @@ thresholds:
   interaction_selected_alpha_light: 0.14
   interaction_selected_alpha_dark: 0.18
   interaction_disabled_alpha: 0.38
+  # v1.2.0 (ADR-045) — Obsidian depth recipes. Elevation is surface-step +
+  # top-edge highlight + ambient shadow; borders are reserved for interactive
+  # and alert states (dark theme; light keeps hairlines; hc keeps strong
+  # borders). The glow is a NEUTRAL brand-tinted constant — ADR-044 rejected
+  # posture-driven ambience; degradation is a marker, never a mood.
+  surface_highlight_alpha_dark: 0.04
+  ambient_glow_alpha: 0.04
 
 invariants:
   - id: "INV-CLR-001"
