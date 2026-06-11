@@ -27,7 +27,10 @@ export function DecisionFirehoseTail() {
           </li>
         )}
         {decisions.map((d) => (
-          <li key={d.decision_id} className="flex items-center gap-3 px-3 py-2 text-xs">
+          <li
+            key={d.decision_id}
+            className="flex animate-arrive items-center gap-3 px-3 py-2 text-xs"
+          >
             <span className="font-mono text-ink-muted">{fmt.shortId(d.decision_id)}</span>
             <TierBadge tier={d.tier} />
             <ConfidenceChip value={d.confidence} />

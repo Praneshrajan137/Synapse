@@ -19,6 +19,10 @@ export function SyntheticBadge({ className }: SyntheticBadgeProps) {
       className={cn(
         "inline-flex items-center gap-1 rounded-sm border border-dashed px-1.5 py-0.5",
         "text-2xs font-medium uppercase tracking-wide text-state-synthetic",
+        // The demo pulse: staged traffic breathes at the ambient cadence.
+        // Under prefers-reduced-motion the animation freezes; the dashed
+        // ring + label still carry the state (FE-INV-040, INV-CLR-011).
+        "animate-demo-pulse",
         className,
       )}
       style={{ borderColor: "var(--syn-state-synthetic)" }}

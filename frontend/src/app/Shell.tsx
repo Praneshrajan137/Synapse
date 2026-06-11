@@ -4,6 +4,7 @@ import {
   DegradedBanner,
   LanguagePicker,
   OperatorIdentity,
+  ThemeToggle,
 } from "@ds/compounds";
 import { cn } from "@lib/cn";
 import { NavLink, Outlet } from "react-router-dom";
@@ -59,6 +60,7 @@ export function Shell() {
         <div className="flex items-center gap-3">
           <CitySwitcher />
           <LanguagePicker />
+          <ThemeToggle />
           <OperatorIdentity />
           <BuildSHAChip />
         </div>

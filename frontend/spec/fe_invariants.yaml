@@ -612,3 +612,25 @@ invariants:
       - frontend/src/design-system/compounds/__tests__/DecisionAnatomy.test.tsx
       - api/tests/test_decisions_table.py
     status: enforced
+
+  - id: FE-INV-040
+    title: Animation is never the sole information channel
+    mirrors: INV-CLR-011, INV-CLR-013, ADR-044
+    description: >
+      Every animated state (the acting pulse, the synthetic demo-pulse, the
+      escalation urgent beacon, decision arrival) has a static fallback that
+      preserves the information when prefers-reduced-motion zeroes the
+      motion tokens: process states carry a STATUS WORD + data-process-state
+      attribute, the synthetic badge keeps its dashed ring + label, pending
+      escalations read from sort order + the queue count. Motion explains
+      causality and urgency-as-frequency (urgent = half the ambient breath)
+      but a frozen frame loses nothing.
+    implementations:
+      - frontend/src/design-system/compounds/CouncilStrip.tsx
+      - frontend/src/design-system/compounds/SyntheticBadge.tsx
+      - frontend/src/surfaces/override-cockpit/EscalationQueue.tsx
+      - frontend/src/styles/tokens.css
+      - frontend/tailwind.config.ts
+    tests:
+      - frontend/src/design-system/compounds/__tests__/MotionGrammar.test.tsx
+    status: enforced

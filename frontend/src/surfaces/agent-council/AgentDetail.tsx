@@ -1,7 +1,11 @@
 import { AGENT_NAMES, type AgentMetrics, type AgentName } from "@domain/agent-health";
+import type { LiveDecision } from "@domain/decision-envelope";
 import { CalibrationCurve, ConfidenceChip, TierBadge } from "@ds/compounds";
+import { mapAgentHealth, processStateFor } from "@ds/compounds/CouncilStrip";
 import { Badge } from "@ds/primitives";
 import { useSynapseApi } from "@hooks/use-synapse-api";
+import { AGENT_COLOR_VAR, type AgentName as IdentityAgentName } from "@lib/agent-identity";
+import { processStateColor } from "@lib/chromatics";
 import { fmt } from "@lib/formatters";
 import { useFirehoseStore } from "@state/firehose.store";
 import { useQuery } from "@tanstack/react-query";
@@ -10,6 +14,43 @@ import { Link, useParams } from "react-router-dom";
 
 function isAgentName(value: string | undefined): value is AgentName {
   return !!value && (AGENT_NAMES as readonly string[]).includes(value);
+}
+
+/**
+ * The agent's current process state (ADR-044 grammar): acting when it
+ * contributed to a recent live decision, waiting when healthy and idle,
+ * interrupted when unreachable. Identity hue stays frozen; the state is
+ * the chroma ration + the state WORD (INV-CLR-011, FE-INV-040).
+ */
+function ProcessStatePanel({
+  name,
+  metrics,
+  decisions,
+}: {
+  readonly name: AgentName;
+  readonly metrics: AgentMetrics;
+  readonly decisions: ReadonlyArray<LiveDecision>;
+}) {
+  const active = useMemo(
+    () => decisions.slice(-8).some((d) => d.agents.some((a) => a.agent_name === name)),
+    [decisions, name],
+  );
+  const state = processStateFor({ status: mapAgentHealth(metrics.status), active });
+  if (!state) return null;
+  const colorVar = AGENT_COLOR_VAR[name as IdentityAgentName];
+  return (
+    <span
+      className="inline-flex items-center gap-1.5 rounded-md border border-border bg-surface px-2 py-1 text-2xs font-medium uppercase tracking-wide text-ink-muted"
+      data-process-state={state}
+    >
+      <span
+        className="size-2 rounded-full"
+        style={{ background: processStateColor(colorVar, state) }}
+        aria-hidden
+      />
+      {state}
+    </span>
+  );
 }
 
 /** Per-agent drill-down. P2 ships latency + calibration; P3 adds reward source link. */
@@ -73,7 +114,12 @@ export function AgentDetail() {
           </Link>
           <h1 className="text-2xl font-semibold capitalize text-ink">{name.replace(/_/g, " ")}</h1>
         </div>
-        <Badge tone={metrics.status === "healthy" ? "success" : "warning"}>{metrics.status}</Badge>
+        <div className="flex items-center gap-2">
+          <ProcessStatePanel name={name} metrics={metrics} decisions={decisions} />
+          <Badge tone={metrics.status === "healthy" ? "success" : "warning"}>
+            {metrics.status}
+          </Badge>
+        </div>
       </header>
 
       <div className="grid gap-4 md:grid-cols-3">
