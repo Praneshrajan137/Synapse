@@ -112,7 +112,9 @@ export function AgentDetail() {
           <Link to="/agents" className="text-2xs text-ink-muted hover:text-ink">
             ← Agent Council
           </Link>
-          <h1 className="text-2xl font-semibold capitalize text-ink">{name.replace(/_/g, " ")}</h1>
+          <h1 className="font-display text-display-md font-semibold capitalize text-ink">
+            {name.replace(/_/g, " ")}
+          </h1>
         </div>
         <div className="flex items-center gap-2">
           <ProcessStatePanel name={name} metrics={metrics} decisions={decisions} />

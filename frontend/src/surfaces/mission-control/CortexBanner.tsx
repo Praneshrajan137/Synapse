@@ -113,8 +113,10 @@ export function CortexBanner() {
   const canSonify = sonificationSupported();
 
   return (
+    // The hero band (ADR-045): the Cortex IS the flagship — the breathing
+    // pulse scaled up on the gradient void, the council row beside it.
     <section
-      className="syn-card-raised grid items-center gap-5 p-5 lg:grid-cols-[240px_minmax(0,1fr)]"
+      className="syn-hero grid items-center gap-6 p-6 lg:grid-cols-[300px_minmax(0,1fr)]"
       aria-label="Cortex — system pulse and agent council"
     >
       <div className="mx-auto">

@@ -1,4 +1,4 @@
-import { ConfidenceChip, SyntheticBadge, TierBadge } from "@ds/compounds";
+import { ConfidenceChip, PageHeader, SyntheticBadge, TierBadge } from "@ds/compounds";
 import { Badge } from "@ds/primitives";
 import { useSynapseApi } from "@hooks/use-synapse-api";
 import { fmt } from "@lib/formatters";
@@ -74,44 +74,41 @@ export function AuditVault() {
 
   return (
     <section className="space-y-4">
-      <header className="flex flex-wrap items-end justify-between gap-3">
-        <div className="space-y-0.5">
-          <h1 className="text-2xl font-semibold text-ink">Audit Vault</h1>
-          <p className="text-sm text-ink-muted">
-            Append-only decision provenance (I-4). Operator identity is rendered by Vault-token
-            reference only (FE-INV-019). Export contains zero PII.
-          </p>
-        </div>
-        <div className="flex items-center gap-2">
-          <input
-            type="search"
-            placeholder="Search…"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="h-9 w-64 rounded-md border border-border bg-surface px-3 text-sm text-ink placeholder:text-ink-subtle focus-visible:shadow-focus focus-visible:outline-none"
-          />
-          <button
-            type="button"
-            onClick={exportCsv}
-            className="h-9 rounded-md border border-border bg-surface-raised px-3 text-sm font-medium text-ink hover:bg-surface focus-visible:outline-none focus-visible:shadow-focus"
-          >
-            Export CSV
-          </button>
-        </div>
-      </header>
+      <PageHeader
+        title="Audit Vault"
+        subtitle="Append-only decision provenance (I-4). Operator identity is rendered by Vault-token reference only (FE-INV-019). Export contains zero PII."
+        actions={
+          <>
+            <input
+              type="search"
+              placeholder="Search…"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="h-9 w-64 rounded-md border border-border bg-surface px-3 text-sm text-ink placeholder:text-ink-subtle focus-visible:shadow-focus focus-visible:outline-none"
+            />
+            <button
+              type="button"
+              onClick={exportCsv}
+              className="h-9 rounded-md border border-border bg-surface-raised px-3 text-sm font-medium text-ink hover:bg-surface focus-visible:outline-none focus-visible:shadow-focus"
+            >
+              Export CSV
+            </button>
+          </>
+        }
+      />
 
-      <div className="syn-card overflow-hidden">
+      <div className="syn-card max-h-[70vh] overflow-auto">
         <table className="w-full text-left text-sm">
-          <thead className="bg-surface-raised text-2xs uppercase tracking-wide text-ink-muted">
+          <thead className="sticky top-0 z-10 bg-surface-raised text-2xs uppercase tracking-wide text-ink-muted shadow-[inset_0_-1px_0_rgb(var(--syn-border))]">
             <tr>
-              <th className="px-3 py-2">Audit</th>
-              <th className="px-3 py-2">Decision</th>
-              <th className="px-3 py-2">Tier</th>
-              <th className="px-3 py-2">Conf.</th>
-              <th className="px-3 py-2">Esc.</th>
-              <th className="px-3 py-2">City</th>
-              <th className="px-3 py-2">When</th>
-              <th className="px-3 py-2 sr-only">View</th>
+              <th className="px-3 py-1.5">Audit</th>
+              <th className="px-3 py-1.5">Decision</th>
+              <th className="px-3 py-1.5">Tier</th>
+              <th className="px-3 py-1.5">Conf.</th>
+              <th className="px-3 py-1.5">Esc.</th>
+              <th className="px-3 py-1.5">City</th>
+              <th className="px-3 py-1.5">When</th>
+              <th className="px-3 py-1.5 sr-only">View</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-border">
@@ -131,17 +128,17 @@ export function AuditVault() {
             )}
             {filtered.map((r) => (
               <tr key={r.audit_id} className="hover:bg-surface-raised/50">
-                <td className="px-3 py-2 font-mono text-2xs text-ink-muted">{r.audit_id}</td>
-                <td className="px-3 py-2 font-mono text-2xs text-ink">
+                <td className="px-3 py-1.5 font-mono text-2xs text-ink-muted">{r.audit_id}</td>
+                <td className="px-3 py-1.5 font-mono text-2xs text-ink">
                   {fmt.shortId(r.decision_id)}
                 </td>
-                <td className="px-3 py-2">
+                <td className="px-3 py-1.5">
                   <TierBadge tier={r.tier} />
                 </td>
-                <td className="px-3 py-2">
+                <td className="px-3 py-1.5">
                   <ConfidenceChip value={r.confidence} />
                 </td>
-                <td className="px-3 py-2">
+                <td className="px-3 py-1.5">
                   <span className="inline-flex items-center gap-1">
                     {r.escalated ? (
                       <Badge tone="warning">esc.</Badge>
@@ -161,11 +158,11 @@ export function AuditVault() {
                     {r.is_synthetic && <SyntheticBadge />}
                   </span>
                 </td>
-                <td className="px-3 py-2 text-2xs text-ink-muted">{r.city ?? city}</td>
-                <td className="px-3 py-2 text-2xs text-ink-muted">
+                <td className="px-3 py-1.5 text-2xs text-ink-muted">{r.city ?? city}</td>
+                <td className="px-3 py-1.5 text-2xs text-ink-muted">
                   {fmt.relativeTime(r.created_at ?? new Date().toISOString())}
                 </td>
-                <td className="px-3 py-2 text-right">
+                <td className="px-3 py-1.5 text-right">
                   <Link
                     to={`/decisions/${r.decision_id}`}
                     className="text-2xs font-medium text-accent hover:underline"

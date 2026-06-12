@@ -1,4 +1,4 @@
-import { ConfidenceChip, TierBadge } from "@ds/compounds";
+import { ConfidenceChip, PageHeader, TierBadge } from "@ds/compounds";
 import { Badge } from "@ds/primitives";
 import { useSynapseApi } from "@hooks/use-synapse-api";
 import { fmt } from "@lib/formatters";
@@ -35,22 +35,19 @@ export function DecisionTheater() {
 
   return (
     <section className="space-y-4">
-      <header className="flex flex-wrap items-end justify-between gap-3">
-        <div className="space-y-0.5">
-          <h1 className="text-2xl font-semibold text-ink">Decision Theater</h1>
-          <p className="text-sm text-ink-muted">
-            Audit-anchored history with server-side filtering. Click a row to replay the 5-phase
-            consensus.
-          </p>
-        </div>
-        <input
-          type="search"
-          placeholder="Search decisions…"
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          className="h-9 w-72 rounded-md border border-border bg-surface px-3 text-sm text-ink placeholder:text-ink-subtle focus-visible:shadow-focus focus-visible:outline-none"
-        />
-      </header>
+      <PageHeader
+        title="Decision Theater"
+        subtitle="Audit-anchored history with server-side filtering. Click a row to replay the 5-phase consensus."
+        actions={
+          <input
+            type="search"
+            placeholder="Search decisions…"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="h-9 w-72 rounded-md border border-border bg-surface px-3 text-sm text-ink placeholder:text-ink-subtle focus-visible:shadow-focus focus-visible:outline-none"
+          />
+        }
+      />
 
       <DecisionFilters value={filters} onChange={setFilters} />
 

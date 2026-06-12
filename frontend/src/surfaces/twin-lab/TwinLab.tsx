@@ -1,5 +1,5 @@
 import type { TwinState } from "@domain/twin-state";
-import { DivergenceTrace } from "@ds/compounds";
+import { DivergenceTrace, PageHeader } from "@ds/compounds";
 import { Badge } from "@ds/primitives";
 import { useFirehose } from "@hooks/use-firehose";
 import { useSynapseApi } from "@hooks/use-synapse-api";
@@ -52,20 +52,17 @@ export function TwinLab() {
 
   return (
     <section className="space-y-5">
-      <header className="flex flex-wrap items-end justify-between gap-3">
-        <div className="space-y-0.5">
-          <h1 className="text-2xl font-semibold text-ink">Twin Lab</h1>
-          <p className="text-sm text-ink-muted">
-            Run what-if scenarios against the digital twin (I-12). KL divergence vs the live
-            distribution is tracked per run and over time.
-          </p>
-        </div>
-        {result?.sync_status && (
-          <Badge tone={result.sync_status === "synced" ? "success" : "warning"}>
-            {result.sync_status}
-          </Badge>
-        )}
-      </header>
+      <PageHeader
+        title="Twin Lab"
+        subtitle="Run what-if scenarios against the digital twin (I-12). KL divergence vs the live distribution is tracked per run and over time."
+        status={
+          result?.sync_status ? (
+            <Badge tone={result.sync_status === "synced" ? "success" : "warning"}>
+              {result.sync_status}
+            </Badge>
+          ) : undefined
+        }
+      />
 
       <div className="grid gap-4 lg:grid-cols-[1fr_minmax(0,2fr)]">
         <DivergenceMeter value={klValue} />
