@@ -1,5 +1,5 @@
 import { AGENT_NAMES, type AgentMetrics, type AgentName } from "@domain/agent-health";
-import { ConfidenceChip } from "@ds/compounds";
+import { ConfidenceChip, PageHeader } from "@ds/compounds";
 import { Badge } from "@ds/primitives";
 import { useSynapseApi } from "@hooks/use-synapse-api";
 import { fmt } from "@lib/formatters";
@@ -23,13 +23,10 @@ export function AgentCouncil() {
 
   return (
     <section className="space-y-4">
-      <header className="space-y-1">
-        <h1 className="text-2xl font-semibold text-ink">Agent Council</h1>
-        <p className="text-sm text-ink-muted">
-          8 specialised agents — independent rewards (I-2). Per-agent latency percentiles and
-          calibration coverage are sourced from Prometheus via the gateway.
-        </p>
-      </header>
+      <PageHeader
+        title="Agent Council"
+        subtitle="8 specialised agents — independent rewards (I-2). Per-agent latency percentiles and calibration coverage are sourced from Prometheus via the gateway."
+      />
       <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4">
         {AGENT_NAMES.map((name) => {
           const value = agents.data?.agents?.[name] as AgentMetrics | string | undefined;

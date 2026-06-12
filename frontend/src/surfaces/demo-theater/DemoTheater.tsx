@@ -1,3 +1,4 @@
+import { PageHeader } from "@ds/compounds";
 import { Badge, Button } from "@ds/primitives";
 import { cn } from "@lib/cn";
 import { useEffect, useState } from "react";
@@ -54,13 +55,11 @@ export function DemoTheater() {
 
   return (
     <section className="space-y-5">
-      <header className="flex flex-wrap items-end justify-between gap-3">
-        <div className="space-y-0.5">
-          <h1 className="text-2xl font-semibold text-ink">{t("title")}</h1>
-          <p className="text-sm text-ink-muted">{t("subtitle")}</p>
-        </div>
-        <div className="flex items-center gap-2">
-          {demo.running ? (
+      <PageHeader
+        title={t("title")}
+        subtitle={t("subtitle")}
+        actions={
+          demo.running ? (
             <>
               <Badge tone="info">running</Badge>
               <Button variant="ghost" size="sm" onClick={() => void demo.cancel()}>
@@ -71,9 +70,9 @@ export function DemoTheater() {
             <Button variant="primary" size="md" onClick={() => void demo.start()}>
               {t("controls.run")}
             </Button>
-          )}
-        </div>
-      </header>
+          )
+        }
+      />
 
       {demo.error && (
         <div

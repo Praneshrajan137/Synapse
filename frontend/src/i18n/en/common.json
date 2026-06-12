@@ -35,6 +35,7 @@
   "twin.caveat_aria": "Digital twin diverging from live state (KL {{kl}}) — confidence may be optimistic",
   "twin.caveat_title": "Digital twin KL divergence {{kl}} exceeds the re-sync threshold — confidence values rest on a model currently disagreeing with reality",
   "twin.caveat_title_agent": "Digital twin diverging for {{agent}} (KL {{kl}}) — confidence may be optimistic",
+  "auth.signing_in": "Connecting to the console…",
   "theme.label": "Theme",
   "theme.dark": "Dark theme",
   "theme.light": "Light theme",

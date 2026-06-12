@@ -24,3 +24,4 @@ export * from "./DegradedBanner";
 export * from "./ChainIntegrityChip";
 export * from "./TwinDivergenceCaveat";
 export * from "./ThemeToggle";
+export * from "./PageHeader";

@@ -13,16 +13,18 @@ interface KPITileProps {
   readonly tone?: "neutral" | "ok" | "warn" | "risk";
 }
 
-const TONE_CLASS = {
-  neutral: "border-border",
-  ok: "border-confidence-ok/40",
-  warn: "border-confidence-warn/40",
-  risk: "border-confidence-risk/50",
+// Obsidian (ADR-045): the accent rail is EARNED — only an alerting tile
+// carries one; a healthy tile is a quiet borderless card.
+const TONE_RAIL = {
+  neutral: "",
+  ok: "border-l-2 border-confidence-ok/60",
+  warn: "border-l-2 border-confidence-warn/70",
+  risk: "border-l-2 border-confidence-risk/80",
 } as const;
 
 /**
- * Mission Control KPI tile. Headline number, optional sparkline, optional
- * threshold-driven tone, optional Link to a source page (FE-P1).
+ * Mission Control KPI tile. Tracked micro-label, display numeral
+ * (Space Grotesk, tabular), signal-coloured delta with a direction glyph.
  */
 export function KPITile({
   label,
@@ -35,14 +37,16 @@ export function KPITile({
   return (
     <div
       className={cn(
-        "syn-card border-l-4 px-4 py-3 transition-colors duration-fast ease-standard",
-        TONE_CLASS[tone],
+        "syn-card px-4 py-3 transition-colors duration-fast ease-standard",
+        TONE_RAIL[tone],
         className,
       )}
     >
-      <div className="text-2xs uppercase tracking-wide text-ink-muted">{label}</div>
+      <div className="text-2xs uppercase tracking-[0.14em] text-ink-subtle">{label}</div>
       <div className="mt-1 flex items-baseline gap-2">
-        <div className="text-2xl font-semibold tabular-nums text-ink">{value}</div>
+        <div className="font-display text-display-lg font-medium tabular-nums text-ink">
+          {value}
+        </div>
         {delta && (
           <span
             className={cn(
@@ -50,6 +54,7 @@ export function KPITile({
               delta.value >= 0 ? "text-signal-success" : "text-signal-danger",
             )}
           >
+            <span aria-hidden>{delta.value >= 0 ? "▲" : "▼"} </span>
             {delta.value >= 0 ? "+" : ""}
             {delta.value.toFixed(1)}
             {delta.label ?? "%"}

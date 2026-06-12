@@ -1,5 +1,6 @@
+import { confidenceColor, confidenceZone } from "@lib/chromatics";
 import { cn } from "@lib/cn";
-import { confidenceBand } from "@lib/confidence";
+import { useThemeStore } from "@state/theme.store";
 
 interface ConfidenceChipProps {
   readonly value: number;
@@ -9,16 +10,17 @@ interface ConfidenceChipProps {
   readonly ariaLabel?: string;
 }
 
-const BAND_CLASS = {
-  ok: "bg-confidence-ok/15 text-confidence-ok",
-  warn: "bg-confidence-warn/15 text-confidence-warn",
-  risk: "bg-confidence-risk/15 text-confidence-risk",
-} as const;
-
 /**
- * Numeric confidence chip with a ramped color and an optional MAPIE band.
- * Generalization of ConfidenceGauge.jsx — used inline in decision rows,
- * agent cards, and the escalation header.
+ * Numeric confidence chip on the CONTINUOUS gate-anchored scale (ADR-045):
+ * the colour is `confidenceColor(value, {vsup: true})` — hue sweeps
+ * red→amber→green→teal across the exact I-5 gates (0.70/0.80, INV-CLR-007)
+ * and chroma drains as confidence falls (VSUP), so a shaky number LOOKS
+ * shaky. The legacy 3-stop band classes were quantised at 0.9/0.7 — wrong
+ * gates, wrong philosophy.
+ *
+ * The `confidence-{ok|warn|risk}` literal class is a stable test/automation
+ * hook (zone-mapped: autonomous→ok, escalation→warn, low→risk); colour is
+ * never the sole channel — the percentage is the signal (INV-CLR-011).
  */
 export function ConfidenceChip({
   value,
@@ -27,19 +29,23 @@ export function ConfidenceChip({
   className,
   ariaLabel,
 }: ConfidenceChipProps) {
+  const theme = useThemeStore((s) => s.theme);
   const clamped = Math.max(0, Math.min(1, value));
-  const ramp = confidenceBand(clamped);
+  const zone = confidenceZone(clamped);
+  const bandToken = zone === "autonomous" ? "ok" : zone === "escalation" ? "warn" : "risk";
   const below = clamped < threshold;
   const pct = Math.round(clamped * 100);
+  const color = confidenceColor(clamped, { theme, vsup: true });
 
   return (
     <span
       className={cn(
         "inline-flex items-center gap-1.5 rounded-sm px-1.5 py-0.5 text-2xs font-semibold tabular-nums",
-        BAND_CLASS[ramp],
+        `confidence-${bandToken}`,
         below && "ring-1 ring-confidence-risk/40",
         className,
       )}
+      style={{ color, background: `color-mix(in oklab, ${color} 15%, transparent)` }}
       role="img"
       aria-label={ariaLabel ?? `Confidence ${pct} percent${below ? ", below threshold" : ""}`}
       title={

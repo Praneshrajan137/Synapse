@@ -3,28 +3,29 @@
   "color": {
     "$type": "color",
     "surface": {
-      "$description": "Elevation ramp — canvas (page) to overlay (modals/popovers).",
-      "canvas": { "$value": { "light": "{ref.neutral.972}", "dark": "{ref.neutral.160}" } },
-      "panel": { "$value": { "light": "{ref.neutral.990}", "dark": "{ref.neutral.205}" } },
-      "raised": { "$value": { "light": "{ref.neutral.990}", "dark": "{ref.neutral.255}" } },
-      "overlay": { "$value": { "light": "{ref.neutral.990}", "dark": "{ref.neutral.310}" } }
+      "$description": "Elevation ramp — canvas (page) to overlay (modals/popovers). v1.2.0 Obsidian: deeper canvas, LARGER lightness steps so elevation reads through surface contrast alone (borderless depth, ADR-045).",
+      "canvas": { "$value": { "light": "{ref.neutral.965}", "dark": "{ref.neutral.135}" } },
+      "panel": { "$value": { "light": "{ref.neutral.990}", "dark": "{ref.neutral.180}" } },
+      "raised": { "$value": { "light": "{ref.neutral.990}", "dark": "{ref.neutral.225}" } },
+      "overlay": { "$value": { "light": "{ref.neutral.990}", "dark": "{ref.neutral.285}" } }
     },
     "border": {
-      "subtle": { "$value": { "light": "{ref.neutral.945}", "dark": "{ref.neutral.255}" } },
-      "strong": { "$value": { "light": "{ref.neutral.900}", "dark": "{ref.neutral.380}" } }
+      "$description": "Borders are EARNED in the Obsidian system (ADR-045): interactive affordances, table rules, and alert states — never default panel chrome (dark theme; light keeps hairlines; hc keeps strong borders).",
+      "subtle": { "$value": { "light": "{ref.neutral.925}", "dark": "{ref.neutral.340}" } },
+      "strong": { "$value": { "light": "{ref.neutral.880}", "dark": "{ref.neutral.420}" } }
     },
     "text": {
-      "$description": "Type hierarchy — primary (body), secondary (labels), tertiary (muted), inverse (on coloured fills).",
+      "$description": "Type hierarchy — primary (body), secondary (labels), tertiary (muted), inverse (on coloured fills). v1.2.0 widens the secondary/tertiary spread so the hierarchy is visible, not just measurable.",
       "primary": { "$value": { "light": "{ref.neutral.240}", "dark": "{ref.neutral.972}" } },
-      "secondary": { "$value": { "light": "{ref.neutral.430}", "dark": "{ref.neutral.760}" } },
-      "tertiary": { "$value": { "light": "{ref.neutral.480}", "dark": "{ref.neutral.720}" } },
-      "inverse": { "$value": { "light": "{ref.neutral.990}", "dark": "{ref.neutral.115}" } }
+      "secondary": { "$value": { "light": "{ref.neutral.420}", "dark": "{ref.neutral.790}" } },
+      "tertiary": { "$value": { "light": "{ref.neutral.500}", "dark": "{ref.neutral.700}" } },
+      "inverse": { "$value": { "light": "{ref.neutral.990}", "dark": "{ref.neutral.100}" } }
     },
     "brand": {
       "$description": "SYNAPSE system identity — the cognition hue (H258); shares the tier family. base is tuned bright in dark theme so a near-black label on a brand button clears APCA.",
       "base": { "$value": { "light": "oklch(0.52 0.150 258)", "dark": "oklch(0.80 0.135 258)" } },
       "emphasis": { "$value": { "light": "oklch(0.44 0.165 258)", "dark": "oklch(0.87 0.095 258)" } },
-      "fg": { "$value": { "light": "{ref.neutral.990}", "dark": "{ref.neutral.115}" } }
+      "fg": { "$value": { "light": "{ref.neutral.990}", "dark": "{ref.neutral.100}" } }
     },
     "focus": {
       "ring": { "$value": { "light": "oklch(0.52 0.150 258)", "dark": "oklch(0.81 0.120 258)" } }

@@ -1,3 +1,4 @@
+import { PageHeader } from "@ds/compounds/PageHeader";
 import {
   AGENT_NAMES,
   type AgentName,
@@ -176,13 +177,11 @@ export function Steering() {
 
   return (
     <section className="mx-auto flex max-w-3xl flex-col gap-4">
-      <header className="space-y-1">
-        <h1 className="flex items-center gap-2 text-lg font-semibold text-ink">
-          <Sliders size={18} className="text-accent" aria-hidden="true" />
-          {t("title")}
-        </h1>
-        <p className="max-w-2xl text-sm text-ink-muted">{t("subtitle")}</p>
-      </header>
+      <PageHeader
+        title={t("title")}
+        subtitle={t("subtitle")}
+        status={<Sliders size={18} className="text-accent" aria-hidden="true" />}
+      />
 
       <Card>
         <CardHeader>

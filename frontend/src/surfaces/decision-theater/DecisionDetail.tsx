@@ -156,7 +156,9 @@ export function DecisionDetail() {
           ← Decision Theater
         </Link>
         <div className="flex flex-wrap items-center gap-2">
-          <h1 className="font-mono text-xl font-semibold text-ink">{decision.decision_id}</h1>
+          <h1 className="font-mono text-lg font-medium tracking-tight text-ink">
+            {decision.decision_id}
+          </h1>
           <TierBadge tier={decision.tier} />
           <ConfidenceChip value={decision.confidence} />
           <TwinDivergenceCaveat />

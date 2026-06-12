@@ -1,5 +1,6 @@
 import { applyTheme, useThemeStore } from "@state/theme.store";
 import { useAuthRefresh } from "@surfaces/auth/useAuthRefresh";
+import { useBootAutoLogin } from "@surfaces/auth/useBootAutoLogin";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { ReactQueryDevtools } from "@tanstack/react-query-devtools";
 import { type PropsWithChildren, useEffect } from "react";
@@ -23,8 +24,10 @@ export const queryClient = new QueryClient({
 
 function SessionSidecar() {
   // Mounts inside the QueryClient so useSynapseApi() can resolve. Returns
-  // null but keeps the silent refresh timer alive.
+  // null but keeps the silent refresh timer alive. Sprint 16: also fires
+  // the one-shot boot auto-login so the console opens without a login wall.
   useAuthRefresh();
+  useBootAutoLogin();
   return null;
 }
 

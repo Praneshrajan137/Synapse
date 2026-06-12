@@ -16,6 +16,7 @@ export default {
           DEFAULT: "rgb(var(--syn-surface) / <alpha-value>)",
           raised: "rgb(var(--syn-surface-raised) / <alpha-value>)",
           sunken: "rgb(var(--syn-surface-sunken) / <alpha-value>)",
+          overlay: "rgb(var(--syn-overlay) / <alpha-value>)",
         },
         ink: {
           DEFAULT: "rgb(var(--syn-ink) / <alpha-value>)",
@@ -54,10 +55,14 @@ export default {
           synthetic: "var(--syn-state-synthetic)",
         },
         accent: "rgb(var(--syn-accent) / <alpha-value>)",
+        brand: "rgb(var(--syn-brand) / <alpha-value>)",
       },
       fontFamily: {
-        sans: ["Inter", "InterVariable", "ui-sans-serif", "system-ui", "sans-serif"],
-        mono: ["JetBrainsMono", "ui-monospace", "SFMono-Regular", "monospace"],
+        // Self-hosted faces (ADR-045; see public/fonts/FONTS.md). Family
+        // names must match the @font-face declarations in styles/fonts.css.
+        display: ['"Space Grotesk"', '"Inter Variable"', "ui-sans-serif", "system-ui", "sans-serif"],
+        sans: ['"Inter Variable"', "Inter", "ui-sans-serif", "system-ui", "sans-serif"],
+        mono: ['"JetBrains Mono"', "ui-monospace", "SFMono-Regular", "monospace"],
       },
       fontSize: {
         "2xs": ["0.6875rem", { lineHeight: "1rem" }],
@@ -70,6 +75,13 @@ export default {
         "3xl": ["1.875rem", { lineHeight: "2.25rem" }],
         "4xl": ["2.25rem", { lineHeight: "2.5rem" }],
         "5xl": ["3rem", { lineHeight: "1.05" }],
+        // Display scale (ADR-045) — Space Grotesk territory: page titles,
+        // hero numerals. Tight leading + negative tracking per size.
+        "display-sm": ["1.375rem", { lineHeight: "1.25", letterSpacing: "-0.01em" }],
+        "display-md": ["1.75rem", { lineHeight: "1.15", letterSpacing: "-0.015em" }],
+        "display-lg": ["2.25rem", { lineHeight: "1.05", letterSpacing: "-0.02em" }],
+        "display-xl": ["3rem", { lineHeight: "1.02", letterSpacing: "-0.022em" }],
+        "display-2xl": ["3.75rem", { lineHeight: "1", letterSpacing: "-0.025em" }],
       },
       borderRadius: {
         xs: "var(--syn-radius-xs)",

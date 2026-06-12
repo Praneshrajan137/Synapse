@@ -14,16 +14,19 @@
 
 export type RGBA = [number, number, number, number];
 
-/** Quiet base — a dark store / idle node at rest. Neutral slate, translucent. */
-export const DECK_NEUTRAL: RGBA = [100, 116, 139, 150]; // ~ --syn-ink-subtle
-/** Muted connector line at rest (routes with nothing wrong). */
-export const DECK_MUTED_LINE: RGBA = [100, 116, 139, 120];
+// v1.2.0 Obsidian (ADR-045): every tuple below is a dist rgb255 mirror,
+// pinned against dist by lib/__tests__/chromatics.test.ts.
 
-// Signal palette — reserved for abnormality. Mirrors --syn-confidence/-signal.
-export const DECK_INFO: RGBA = [56, 189, 248, 170]; // sky-400
-export const DECK_WARN: RGBA = [234, 179, 8, 220]; // amber  — saturation > 0.7
-export const DECK_RISK: RGBA = [239, 68, 68, 230]; // red    — saturation > 0.9
-export const DECK_RISK_SOFT: RGBA = [251, 113, 133, 210]; // rose — risk arc target
+/** Quiet base — a dark store / idle node at rest. The state-neutral grey. */
+export const DECK_NEUTRAL: RGBA = [161, 165, 171, 150]; // ← color.state.neutral dark
+/** Muted connector line at rest (routes with nothing wrong). */
+export const DECK_MUTED_LINE: RGBA = [161, 165, 171, 120];
+
+// Signal palette — reserved for abnormality. Mirrors color.state/confidence.
+export const DECK_INFO: RGBA = [102, 180, 252, 170]; // ← color.state.info dark
+export const DECK_WARN: RGBA = [255, 184, 77, 220]; // ← color.state.warning dark — saturation > 0.7
+export const DECK_RISK: RGBA = [235, 68, 65, 230]; // ← color.state.danger dark — saturation > 0.9
+export const DECK_RISK_SOFT: RGBA = [233, 80, 72, 210]; // ← color.confidence.low dark — risk arc target
 
 export const SATURATION_WARN = 0.7;
 export const SATURATION_RISK = 0.9;

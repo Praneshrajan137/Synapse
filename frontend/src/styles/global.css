@@ -1,3 +1,4 @@
+@import "./fonts.css";
 @import "./tokens.css";
 
 @tailwind base;
@@ -14,6 +15,20 @@
   body {
     @apply bg-canvas text-ink font-sans antialiased;
     font-feature-settings: "ss01", "cv11", "tnum";
+    /* Obsidian ambient (ADR-045): a barely-there brand-tinted glow from the
+       top of the void — a NEUTRAL constant (ambient_glow_alpha spec
+       threshold), never posture-driven (ADR-044: degradation is a marker,
+       not a mood). */
+    background-image: radial-gradient(
+      120% 55% at 50% -12%,
+      rgb(var(--syn-brand) / 0.04),
+      transparent 60%
+    );
+    background-attachment: fixed;
+  }
+
+  [data-theme="hc"] body {
+    background-image: none;
   }
 
   *:focus-visible {
@@ -25,15 +40,48 @@
   .tabular-nums {
     font-variant-numeric: tabular-nums;
   }
+
+  /* Themed thin scrollbars — chrome quiet enough to live on the void. */
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: rgb(var(--syn-border)) transparent;
+  }
+  *::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+  *::-webkit-scrollbar-thumb {
+    background: rgb(var(--syn-border));
+    border-radius: 4px;
+  }
+  *::-webkit-scrollbar-track {
+    background: transparent;
+  }
 }
 
 @layer components {
+  /* Obsidian depth (ADR-045): elevation = surface step + top-edge highlight
+     + ambient shadow. The edge ring is a box-shadow (no layout shift) and
+     per-theme: transparent in dark (borders are EARNED), hairline in light,
+     hard border in hc. */
   .syn-card {
-    @apply bg-surface rounded-lg border border-border shadow-e1;
+    @apply bg-surface rounded-lg;
+    box-shadow: inset 0 1px 0 var(--syn-surface-highlight), 0 0 0 1px var(--syn-card-edge),
+      var(--syn-elev-1);
   }
 
   .syn-card-raised {
-    @apply bg-surface-raised rounded-lg border border-border shadow-e2;
+    @apply bg-surface-raised rounded-lg;
+    box-shadow: inset 0 1px 0 var(--syn-surface-highlight), 0 0 0 1px var(--syn-card-edge),
+      var(--syn-elev-2);
+  }
+
+  /* Hero band — the flagship treatment (Cortex banner). */
+  .syn-hero {
+    @apply rounded-xl;
+    background: linear-gradient(180deg, rgb(var(--syn-surface)) 0%, rgb(var(--syn-canvas)) 130%);
+    box-shadow: inset 0 1px 0 var(--syn-surface-highlight), 0 0 0 1px var(--syn-card-edge),
+      var(--syn-elev-2);
   }
 
   .syn-skeleton {

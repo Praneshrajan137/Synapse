@@ -116,7 +116,7 @@ export function Cockpit() {
     <section className="flex h-full flex-col gap-4">
       <header className="flex flex-wrap items-center justify-between gap-3">
         <div className="space-y-0.5">
-          <h1 className="text-2xl font-semibold text-ink">Override Cockpit</h1>
+          <h1 className="font-display text-display-md font-semibold text-ink">Override Cockpit</h1>
           <p className="text-sm text-ink-muted">
             Confidence-gated escalations stream in via{" "}
             <code className="font-mono text-ink">/ws/escalation</code>. Acting commits an immutable
