@@ -6,6 +6,7 @@ import {
   OperatorIdentity,
   ThemeToggle,
 } from "@ds/compounds";
+import { BrandMark } from "@ds/primitives";
 import { cn } from "@lib/cn";
 import { NavLink, Outlet } from "react-router-dom";
 import { CommandPalette } from "./CommandPalette";
@@ -30,16 +31,23 @@ const NAV_ITEMS = [
 export function Shell() {
   return (
     <div className="flex h-screen flex-col bg-canvas text-ink">
-      <header className="flex items-center gap-6 border-b border-border bg-surface px-6 py-2.5">
-        <div className="flex items-center gap-2">
-          <div
-            aria-hidden
-            className="h-5 w-5 rounded-sm bg-gradient-to-br from-tier-2 via-accent to-tier-3"
-          />
-          <span className="text-sm font-semibold tracking-wide text-ink">SYNAPSE</span>
-          <span className="hidden text-2xs uppercase text-ink-subtle md:inline">Console</span>
+      {/* Obsidian chrome (ADR-045): panel-step bar with an inset bottom
+          hairline instead of a border; the BrandMark pulse-ring glyph;
+          nav active = brand underline rail. */}
+      <header
+        className="flex items-center gap-6 bg-surface px-6 py-2"
+        style={{ boxShadow: "inset 0 -1px 0 rgb(var(--syn-border) / 0.6)" }}
+      >
+        <div className="flex items-center gap-2.5">
+          <BrandMark />
+          <span className="font-display text-sm font-semibold tracking-[0.08em] text-ink">
+            SYNAPSE
+          </span>
+          <span className="hidden text-2xs uppercase tracking-[0.2em] text-ink-subtle md:inline">
+            Console
+          </span>
         </div>
-        <nav aria-label="Primary" className="flex flex-1 items-center gap-1 overflow-x-auto">
+        <nav aria-label="Primary" className="flex flex-1 items-center gap-0.5 overflow-x-auto">
           {NAV_ITEMS.map((item) => (
             <NavLink
               key={item.path}
@@ -47,9 +55,12 @@ export function Shell() {
               {...("end" in item ? { end: item.end } : {})}
               className={({ isActive }) =>
                 cn(
-                  "rounded px-3 py-1.5 text-xs font-medium transition-colors duration-fast ease-standard",
+                  "relative whitespace-nowrap rounded px-3 py-2 text-xs font-medium transition-colors duration-fast ease-standard",
                   "focus-visible:outline-none focus-visible:shadow-focus",
-                  isActive ? "bg-surface-raised text-ink" : "text-ink-muted hover:text-ink",
+                  "after:absolute after:inset-x-3 after:-bottom-px after:h-0.5 after:rounded-full after:transition-colors after:duration-fast",
+                  isActive
+                    ? "text-ink after:bg-brand"
+                    : "text-ink-muted after:bg-transparent hover:bg-surface-raised/60 hover:text-ink",
                 )
               }
             >
@@ -57,7 +68,7 @@ export function Shell() {
             </NavLink>
           ))}
         </nav>
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2">
           <CitySwitcher />
           <LanguagePicker />
           <ThemeToggle />
