@@ -277,7 +277,7 @@ describe("Obsidian mirrors — the FE palette IS the governed palette (ADR-045)"
     }
   });
 
-  it("the tier vars speak the governed H258 lightness ramp, not four hues", () => {
+  it("the tier vars speak the governed H65 brass lightness ramp, not four hues", () => {
     // Monotone lightness: each tier strictly darker than the previous
     // (relative luminance proxy: channel sum falls tier 1 → 4, both themes).
     for (const theme of [0, 1] as const) {

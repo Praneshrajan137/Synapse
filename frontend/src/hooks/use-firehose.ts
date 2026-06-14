@@ -28,9 +28,12 @@ export function useFirehose({ topics }: UseFirehoseOptions): UseFirehoseResult {
     routing: s.appendRoute,
     demand: s.appendDemand,
     twin: s.appendTwin,
+    pricing: s.appendPricing,
+    freshness: s.appendFreshness,
   }));
   const appendEscalation = useEscalationStore((s) => s.append);
   const lastSeq = useFirehoseStore((s) => s.lastSeq);
+  const setConnection = useFirehoseStore((s) => s.setConnection);
   const [state, setState] = useState<WsState>("idle");
   const ref = useRef<FirehoseClient | null>(null);
 
@@ -42,8 +45,13 @@ export function useFirehose({ topics }: UseFirehoseOptions): UseFirehoseResult {
       sinceSeq: lastSeq[topics[0] ?? "decision"],
     });
     ref.current = client;
-    const offState = client.onState(setState);
-    setState(client.state());
+    const onState = (s: WsState) => {
+      setState(s);
+      // Lift to the global store so the attention beacon can read it (Shell).
+      setConnection(s);
+    };
+    const offState = client.onState(onState);
+    onState(client.state());
 
     const offs: Array<() => void> = [];
     if (topics.includes("decision")) {
@@ -73,12 +81,20 @@ export function useFirehose({ topics }: UseFirehoseOptions): UseFirehoseResult {
     if (topics.includes("twin")) {
       offs.push(client.on("twin", (t, env) => append.twin(t, env.seq)));
     }
+    if (topics.includes("pricing")) {
+      offs.push(client.on("pricing", (p, env) => append.pricing(p, env.seq)));
+    }
+    if (topics.includes("freshness")) {
+      offs.push(client.on("freshness", (f, env) => append.freshness(f, env.seq)));
+    }
 
     return () => {
       for (const off of offs) off();
       offState();
       client.close();
       ref.current = null;
+      // No socket on this surface anymore — don't show a phantom "offline".
+      setConnection("idle");
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [city, topics.join(",")]);

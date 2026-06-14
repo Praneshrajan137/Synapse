@@ -1,4 +1,4 @@
-import { ConnectionPill, PageHeader } from "@ds/compounds";
+import { ConnectionPill, PageHeader, SystemTrustTile } from "@ds/compounds";
 import { useFirehose } from "@hooks/use-firehose";
 import { CortexBanner } from "./CortexBanner";
 import { DecisionFirehoseTail } from "./DecisionFirehoseTail";
@@ -34,6 +34,8 @@ export function MissionControl() {
           />
         }
       />
+
+      <SystemTrustTile />
 
       <DisruptionBanner />
 

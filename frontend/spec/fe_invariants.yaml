@@ -177,15 +177,16 @@ invariants:
     status: enforced
 
   - id: FE-INV-013
-    title: No hard-coded user-visible strings (i18n)
+    title: User-visible strings thread through the i18n catalog (English-only)
     mirrors: ADR-012
     description: >
-      All user-visible copy threads through i18next catalogs (EN + HI).
-      LanguagePicker is mounted in the Shell; the Demo Theater + every
-      surface header consume the relevant namespace.
+      All user-visible copy threads through the i18next catalog. The UI ships in
+      English ONLY (Sprint 18): a single `en` catalog, supportedLngs ["en"], and
+      no language switcher or language detector — see the CLAUDE.md "English-only
+      UI" rule. The Demo Theater + every surface header consume the relevant
+      namespace.
     implementations:
       - frontend/src/i18n/index.ts
-      - frontend/src/design-system/compounds/LanguagePicker.tsx
       - frontend/src/surfaces/demo-theater/DemoTheater.tsx
     tests:
       - frontend/spec/check_fe_invariants.py

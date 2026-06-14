@@ -3,37 +3,41 @@
    in via [data-theme] selectors. Colors expressed as space-separated RGB
    so Tailwind <alpha-value> works.
 
-   v2 (Sprint 16, ADR-045 "Obsidian"): every value below is transcribed from
-   design-system/color/dist/tokens.json `rgb255` fields — the governed OKLCH
-   system (Chromatic v1.2.0) finally drives the UI. The parallel slate fork
-   is dead; TIER is the H258 cognition-lightness ramp (INV-CLR-006), not four
-   unrelated hues. lib/__tests__/chromatics.test.ts pins these mirrors
-   against dist — drift is a failing test. */
+   v3 (Sprint 17, ADR-046 "Warm-Graphite Neutralization"): every value below
+   is transcribed from design-system/color/dist/tokens.json `rgb255` fields —
+   the governed OKLCH system (Chromatic v1.3.0). The foundation is now a faint
+   warm graphite (ref.neutral H75, near-neutral) instead of the blue-violet
+   void; the SYNAPSE signature (brand/focus/tier) is warm brass (H65). Blue is
+   gone from the chrome — it survives only as the measured info state (H248).
+   "Quiet foundation, loud meaning." lib/__tests__/chromatics.test.ts pins
+   these mirrors against dist — drift is a failing test. */
 
 :root,
 [data-theme="dark"] {
-  /* Surfaces — the cold void (ref.neutral H265; elevation reads borderless). */
-  --syn-canvas: 6 8 15; /* color.surface.canvas */
-  --syn-surface: 14 18 26; /* color.surface.panel */
-  --syn-surface-raised: 24 28 36; /* color.surface.raised */
-  --syn-overlay: 38 42 51; /* color.surface.overlay */
-  --syn-surface-sunken: 2 3 7; /* deep void (ref.neutral.100) */
-  --syn-ink: 245 246 248; /* color.text.primary */
-  --syn-ink-muted: 184 186 192; /* color.text.secondary */
-  --syn-ink-subtle: 155 158 165; /* color.text.tertiary */
-  --syn-ink-inverse: 2 3 7; /* color.text.inverse */
-  --syn-border: 52 56 64; /* color.border.subtle — EARNED, not default chrome */
-  --syn-border-strong: 73 77 85; /* color.border.strong */
+  /* Surfaces — warm-graphite Obsidian (ref.neutral H75; elevation borderless). */
+  --syn-canvas: 10 8 5; /* color.surface.canvas */
+  --syn-surface: 20 17 13; /* color.surface.panel */
+  --syn-surface-raised: 31 27 23; /* color.surface.raised */
+  --syn-overlay: 45 42 37; /* color.surface.overlay */
+  --syn-surface-sunken: 4 3 2; /* deep void (ref.neutral.100) */
+  --syn-ink: 246 245 244; /* color.text.primary */
+  --syn-ink-muted: 188 186 184; /* color.text.secondary */
+  --syn-ink-subtle: 160 158 155; /* color.text.tertiary */
+  --syn-ink-inverse: 4 3 2; /* color.text.inverse */
+  --syn-border: 58 55 51; /* color.border.subtle — EARNED, not default chrome */
+  --syn-border-strong: 79 77 73; /* color.border.strong */
 
-  /* Tier — the H258 cognition ramp (I-8/INV-CLR-006): one hue, lightness
-     falls as deliberation deepens. Tier 1 reflexive → Tier 4 deep thought. */
-  --syn-tier-1: 173 205 252; /* color.tier.1 */
-  --syn-tier-2: 120 163 227; /* color.tier.2 */
-  --syn-tier-3: 68 122 201; /* color.tier.3 */
-  --syn-tier-4: 13 83 175; /* color.tier.4 */
+  /* Tier — the H65 warm-brass cognition ramp (I-8/INV-CLR-006): one hue,
+     lightness falls as deliberation deepens. Tier 1 reflexive (light gold) →
+     Tier 4 deep thought (bronze). Chroma stays modest — "quiet chrome". */
+  --syn-tier-1: 226 197 169; /* color.tier.1 */
+  --syn-tier-2: 192 153 115; /* color.tier.2 */
+  --syn-tier-3: 159 111 61; /* color.tier.3 */
+  --syn-tier-4: 126 74 0; /* color.tier.4 */
 
   /* Confidence — the gate-anchored stops (I-5). Channel vars kept for legacy
-     band consumers; the continuous scale lives in lib/chromatics.ts. */
+     band consumers; the continuous scale lives in lib/chromatics.ts.
+     UNCHANGED in v1.3.0 — confidence carries meaning, not chrome. */
   --syn-confidence-ok: 105 218 126; /* color.confidence.autonomous */
   --syn-confidence-warn: 247 184 61; /* color.confidence.escalation */
   --syn-confidence-risk: 233 80 72; /* color.confidence.low */
@@ -49,18 +53,18 @@
     oklch(0.84 0.115 184) 100%
   );
 
-  /* Neutral mix target — colour drains toward this near-monochrome base at
-     rest, so agent hues are rationed and fire only on activity (PR-CLR-002;
+  /* Neutral mix target — colour drains toward this near-monochrome warm base
+     at rest, so agent hues are rationed and fire only on activity (PR-CLR-002;
      "quiet by default"). Consumed by lib/chromatics.ts::rationedAgentColor. */
-  --syn-neutral-mix: oklch(0.55 0.012 265);
+  --syn-neutral-mix: oklch(0.55 0.006 75);
 
-  /* Semantic signals (color.state.*) */
+  /* Semantic signals (color.state.*) — info is the one measured blue. */
   --syn-signal-info: 102 180 252;
   --syn-signal-success: 91 212 125;
   --syn-signal-warning: 255 184 77;
   --syn-signal-danger: 235 68 65;
-  --syn-accent: 149 192 255; /* color.brand.base — the cognition blue */
-  --syn-brand: 149 192 255; /* color.brand.base */
+  --syn-accent: 249 170 88; /* color.brand.base — the warm-brass signature */
+  --syn-brand: 249 170 88; /* color.brand.base */
 
   /* Honesty states (Chromatic v1.1.0, ADR-044) — mirrors
      design-system/color/dist tokens (pinned by chromatics.test.ts).
@@ -102,7 +106,7 @@
   --syn-elev-2: 0 2px 4px rgb(0 0 0 / 0.5), 0 4px 16px rgb(0 0 0 / 0.3);
   --syn-elev-3: 0 4px 8px rgb(0 0 0 / 0.55), 0 8px 28px rgb(0 0 0 / 0.35);
   --syn-elev-4: 0 8px 16px rgb(0 0 0 / 0.6), 0 16px 48px rgb(0 0 0 / 0.4);
-  --syn-focus-ring: 0 0 0 2px rgb(154 195 255 / 0.65); /* color.focus.ring */
+  --syn-focus-ring: 0 0 0 2px rgb(250 174 96 / 0.65); /* color.focus.ring */
 
   /* Motion — tier-aware (FE-P2) */
   --syn-motion-instant: 0ms;
@@ -121,26 +125,26 @@
 }
 
 [data-theme="light"] {
-  --syn-canvas: 242 243 246; /* color.surface.canvas */
-  --syn-surface: 252 252 253; /* color.surface.panel */
+  --syn-canvas: 244 243 242; /* color.surface.canvas */
+  --syn-surface: 253 252 251; /* color.surface.panel */
   /* DELIBERATE deviation from dist (governed light panel=raised=overlay):
      hover affordances (hover:bg-surface-raised) need a visible tint step in
      light; dist relies on shadow-only elevation there. ADR-045 light note. */
-  --syn-surface-raised: 245 246 249;
-  --syn-overlay: 252 252 253; /* color.surface.overlay */
-  --syn-surface-sunken: 228 230 234;
-  --syn-ink: 28 31 39; /* color.text.primary */
-  --syn-ink-muted: 73 77 85; /* color.text.secondary */
-  --syn-ink-subtle: 96 99 106; /* color.text.tertiary */
-  --syn-ink-inverse: 252 252 253;
-  --syn-border: 228 230 234; /* color.border.subtle */
-  --syn-border-strong: 213 215 220; /* color.border.strong */
+  --syn-surface-raised: 247 246 244;
+  --syn-overlay: 253 252 251; /* color.surface.overlay */
+  --syn-surface-sunken: 231 230 228;
+  --syn-ink: 34 31 27; /* color.text.primary */
+  --syn-ink-muted: 79 77 73; /* color.text.secondary */
+  --syn-ink-subtle: 101 99 95; /* color.text.tertiary */
+  --syn-ink-inverse: 253 252 251;
+  --syn-border: 231 230 228; /* color.border.subtle */
+  --syn-border-strong: 217 215 213; /* color.border.strong */
 
-  /* Tier — deep variants for light canvas (H258 ramp). */
-  --syn-tier-1: 131 166 218;
-  --syn-tier-2: 89 135 203;
-  --syn-tier-3: 48 103 184;
-  --syn-tier-4: 0 72 159;
+  /* Tier — deep variants for light canvas (H65 brass ramp). */
+  --syn-tier-1: 189 158 129;
+  --syn-tier-2: 166 125 85;
+  --syn-tier-3: 140 93 43;
+  --syn-tier-4: 111 64 0;
 
   --syn-confidence-ok: 0 147 66; /* color.confidence.autonomous */
   --syn-confidence-warn: 202 138 0; /* color.confidence.escalation */
@@ -150,8 +154,8 @@
   --syn-signal-success: 0 127 56;
   --syn-signal-warning: 182 119 0;
   --syn-signal-danger: 198 0 26;
-  --syn-accent: 42 103 189; /* color.brand.base */
-  --syn-brand: 42 103 189;
+  --syn-accent: 125 74 7; /* color.brand.base — deep bronze for white-text contrast */
+  --syn-brand: 125 74 7;
 
   /* Agent identity — deep variants for light canvas (INV-CLR-012) */
   --syn-agent-demand-prophet: oklch(0.54 0.185 292);
@@ -171,7 +175,7 @@
     oklch(0.58 0.1597 150) 80%,
     oklch(0.6 0.1074 182) 100%
   );
-  --syn-neutral-mix: oklch(0.62 0.012 265);
+  --syn-neutral-mix: oklch(0.62 0.006 75);
 
   /* Honesty states — deep variants for light canvas (v1.1.0, ADR-044). */
   --syn-state-degraded: oklch(0.58 0.055 84);
@@ -180,12 +184,12 @@
   /* Obsidian depth, light: shadow + hairline (an inset white highlight is
      invisible on white — ADR-045). */
   --syn-surface-highlight: transparent;
-  --syn-card-edge: rgb(228 230 234 / 0.8);
-  --syn-elev-1: 0 1px 2px rgb(28 31 39 / 0.06), 0 1px 6px rgb(28 31 39 / 0.05);
-  --syn-elev-2: 0 2px 4px rgb(28 31 39 / 0.07), 0 4px 12px rgb(28 31 39 / 0.06);
-  --syn-elev-3: 0 4px 8px rgb(28 31 39 / 0.08), 0 8px 20px rgb(28 31 39 / 0.07);
-  --syn-elev-4: 0 8px 16px rgb(28 31 39 / 0.1), 0 16px 36px rgb(28 31 39 / 0.08);
-  --syn-focus-ring: 0 0 0 2px rgb(42 103 189 / 0.65);
+  --syn-card-edge: rgb(231 230 228 / 0.8);
+  --syn-elev-1: 0 1px 2px rgb(34 31 27 / 0.06), 0 1px 6px rgb(34 31 27 / 0.05);
+  --syn-elev-2: 0 2px 4px rgb(34 31 27 / 0.07), 0 4px 12px rgb(34 31 27 / 0.06);
+  --syn-elev-3: 0 4px 8px rgb(34 31 27 / 0.08), 0 8px 20px rgb(34 31 27 / 0.07);
+  --syn-elev-4: 0 8px 16px rgb(34 31 27 / 0.1), 0 16px 36px rgb(34 31 27 / 0.08);
+  --syn-focus-ring: 0 0 0 2px rgb(150 88 0 / 0.65);
 }
 
 [data-theme="hc"] {

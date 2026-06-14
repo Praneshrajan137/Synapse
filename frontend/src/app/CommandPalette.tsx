@@ -105,6 +105,20 @@ export function CommandPalette() {
         run: go("/steering"),
       },
       {
+        id: "go-markets",
+        title: "Live Markets",
+        group: "Go to",
+        keywords: "pricing freshness markdown shelf-life elasticity",
+        run: go("/markets"),
+      },
+      {
+        id: "go-ingress",
+        title: "Ingress Console",
+        group: "Go to",
+        keywords: "order submit trigger decision pipeline",
+        run: go("/ingress"),
+      },
+      {
         id: "go-audit",
         title: "Audit Vault",
         group: "Go to",

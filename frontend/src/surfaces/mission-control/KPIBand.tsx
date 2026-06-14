@@ -4,18 +4,22 @@ import { useFirehoseStore } from "@state/firehose.store";
 import { useMemo } from "react";
 
 /**
- * KPI band derived from the firehose store. Tiles update as decisions /
- * routes / demand arrive. P2 ships the seed metrics; P4 wires the rest
- * via the BE `metric` channel.
+ * KPI band derived from the firehose store. These are an HONEST live-window
+ * view — counts/means over the last N events actually received on this client's
+ * socket, NOT server-aggregated rates. (Real rate/SLO metrics await a typed BE
+ * `metric` channel; until then we label the window explicitly rather than imply
+ * authority — ADR-044 honesty.)
  */
+const WINDOW = 60;
+
 export function KPIBand() {
   const decisions = useFirehoseStore((s) => s.decisions.items);
   const routes = useFirehoseStore((s) => s.routes.items);
   const disruptions = useFirehoseStore((s) => s.disruptions.items);
 
   const tiles = useMemo(() => {
-    const recentDecisions = decisions.slice(-60);
-    const recentRoutes = routes.slice(-60);
+    const recentDecisions = decisions.slice(-WINDOW);
+    const recentRoutes = routes.slice(-WINDOW);
     const ordersPerMin = recentDecisions.length;
     const avgDeliveryMin =
       recentRoutes.length === 0
@@ -31,7 +35,7 @@ export function KPIBand() {
     return [
       {
         key: "orders_min",
-        label: "Decisions / min",
+        label: "Decisions (live)",
         value: fmt.compact(ordersPerMin),
         tone: "neutral" as const,
       },
@@ -43,7 +47,7 @@ export function KPIBand() {
       },
       {
         key: "confidence",
-        label: "Avg confidence",
+        label: "Avg confidence (live)",
         value: confidenceAvg !== null ? `${(confidenceAvg * 100).toFixed(0)}%` : "—",
         // Quiet by default (P3): healthy = neutral; colour only when the gate
         // is at risk. The Pulse above already carries the live confidence temp.
@@ -64,13 +68,13 @@ export function KPIBand() {
       },
       {
         key: "disruptions",
-        label: "Active disruptions",
+        label: "Recent disruptions",
         value: fmt.compact(activeDisruptions),
         tone: activeDisruptions === 0 ? ("neutral" as const) : ("risk" as const),
       },
       {
         key: "routes",
-        label: "Routes / window",
+        label: "Routes (live)",
         value: fmt.compact(routes.length),
         tone: "neutral" as const,
       },
@@ -78,10 +82,16 @@ export function KPIBand() {
   }, [decisions, routes, disruptions]);
 
   return (
-    <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
-      {tiles.map((t) => (
-        <KPITile key={t.key} label={t.label} value={t.value} tone={t.tone} />
-      ))}
+    <div className="space-y-1.5">
+      <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
+        {tiles.map((t) => (
+          <KPITile key={t.key} label={t.label} value={t.value} tone={t.tone} />
+        ))}
+      </div>
+      <p className="text-2xs text-ink-subtle">
+        Live window — counts &amp; means over the last {WINDOW} firehose events on this client, not
+        server-aggregated rates.
+      </p>
     </div>
   );
 }

@@ -5,6 +5,8 @@ import { Login } from "@surfaces/auth/Login";
 import { DecisionDetail } from "@surfaces/decision-theater/DecisionDetail";
 import { DecisionTheater } from "@surfaces/decision-theater/DecisionTheater";
 import { DemoTheater } from "@surfaces/demo-theater/DemoTheater";
+import { Ingress } from "@surfaces/ingress/Ingress";
+import { LiveMarkets } from "@surfaces/live-markets/LiveMarkets";
 import { MissionControl } from "@surfaces/mission-control/MissionControl";
 import { Cockpit } from "@surfaces/override-cockpit/Cockpit";
 import { Steering } from "@surfaces/steering/Steering";
@@ -80,6 +82,22 @@ export const router = createBrowserRouter([
         element: (
           <RouteGuard minRole="engineer">
             <TwinLab />
+          </RouteGuard>
+        ),
+      },
+      {
+        path: "markets",
+        element: (
+          <RouteGuard minRole="viewer">
+            <LiveMarkets />
+          </RouteGuard>
+        ),
+      },
+      {
+        path: "ingress",
+        element: (
+          <RouteGuard minRole="ops">
+            <Ingress />
           </RouteGuard>
         ),
       },

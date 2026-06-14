@@ -14,13 +14,13 @@
 
 export type RGBA = [number, number, number, number];
 
-// v1.2.0 Obsidian (ADR-045): every tuple below is a dist rgb255 mirror,
+// v1.3.0 warm-graphite (ADR-046): every tuple below is a dist rgb255 mirror,
 // pinned against dist by lib/__tests__/chromatics.test.ts.
 
 /** Quiet base — a dark store / idle node at rest. The state-neutral grey. */
-export const DECK_NEUTRAL: RGBA = [161, 165, 171, 150]; // ← color.state.neutral dark
+export const DECK_NEUTRAL: RGBA = [148, 146, 142, 150]; // ← color.state.neutral dark
 /** Muted connector line at rest (routes with nothing wrong). */
-export const DECK_MUTED_LINE: RGBA = [161, 165, 171, 120];
+export const DECK_MUTED_LINE: RGBA = [148, 146, 142, 120];
 
 // Signal palette — reserved for abnormality. Mirrors color.state/confidence.
 export const DECK_INFO: RGBA = [102, 180, 252, 170]; // ← color.state.info dark

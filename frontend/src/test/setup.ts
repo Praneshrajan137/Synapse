@@ -1,6 +1,6 @@
 import "@testing-library/jest-dom/vitest";
 import { cleanup } from "@testing-library/react";
-import { afterAll, afterEach, beforeAll, expect } from "vitest";
+import { afterAll, afterEach, beforeAll, beforeEach, expect, vi } from "vitest";
 import { server } from "./msw-server";
 
 // a11y matcher for the axe test layer (SENSORIUM accessibility rigor —
@@ -36,8 +36,42 @@ expect.extend({
   },
 });
 
+// Inert global WebSocket for jsdom (CI crash-class guard).
+//
+// Any component that mounts `useFirehose` opens `new WebSocket(...)`. Without a
+// stub, MSW intercepts a real socket and the half-open stream is destroyed on
+// teardown — aborting the vitest worker with a native libuv assertion
+// (uv__stream_destroy) on CI. This inert socket never opens, sends nothing, and
+// closes cleanly, so no native stream ever exists. Installed per-test so the
+// transport firehose test (which stubs its own MockWebSocket + unstubs after
+// each) stays compatible. Tests that need socket behaviour stub their own.
+class InertWebSocket {
+  static readonly CONNECTING = 0;
+  static readonly OPEN = 1;
+  static readonly CLOSING = 2;
+  static readonly CLOSED = 3;
+  readyState = InertWebSocket.CONNECTING;
+  onopen: (() => void) | null = null;
+  onmessage: ((event: MessageEvent<string>) => void) | null = null;
+  onclose: (() => void) | null = null;
+  onerror: (() => void) | null = null;
+  constructor(readonly url: string) {}
+  send(_data: string): void {}
+  close(): void {
+    this.readyState = InertWebSocket.CLOSED;
+    this.onclose?.();
+  }
+  addEventListener(): void {}
+  removeEventListener(): void {}
+}
+
 // Start MSW for every test; reset handlers between tests.
 beforeAll(() => server.listen({ onUnhandledRequest: "warn" }));
+beforeEach(() => {
+  // After MSW's beforeAll listen() patches the global, override with the inert
+  // socket so live WS connections are never opened in jsdom.
+  vi.stubGlobal("WebSocket", InertWebSocket);
+});
 afterEach(() => {
   cleanup();
   server.resetHandlers();
