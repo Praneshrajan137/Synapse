@@ -5,6 +5,7 @@ import type { FreshnessAlert } from "@domain/freshness-alert";
 import type { PricingUpdate } from "@domain/pricing-update";
 import type { RoutePlan } from "@domain/route-plan";
 import type { TwinDivergenceEvent } from "@domain/twin-state";
+import type { WsState } from "@transport/ws-multiplex";
 import { create } from "zustand";
 
 // Per-channel bounded ring buffers (append-only — FE-INV-017). Switching
@@ -31,6 +32,11 @@ interface FirehoseState {
   twin: Bounded<TwinDivergenceEvent>;
   pricing: Bounded<PricingUpdate>;
   freshness: Bounded<FreshnessAlert>;
+  // Live WS state of the currently-mounted firehose, lifted here so the
+  // Shell-level attention beacon can alarm on a dropped feed without owning a
+  // second socket. Surfaces reset it to "idle" on unmount (no phantom offline).
+  connection: WsState;
+  setConnection(state: WsState): void;
   lastSeq: Readonly<Record<string, number>>;
   appendDecision(d: LiveDecision, seq: number): void;
   appendDisruption(d: DisruptionAlert, seq: number): void;
@@ -50,6 +56,10 @@ export const useFirehoseStore = create<FirehoseState>((set) => ({
   twin: newBounded(100),
   pricing: newBounded(200),
   freshness: newBounded(200),
+  connection: "idle",
+  setConnection(state) {
+    set({ connection: state });
+  },
   lastSeq: {},
   appendDecision(d, seq) {
     set((s) => ({

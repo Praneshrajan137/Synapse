@@ -1,4 +1,5 @@
 import {
+  AttentionBeacon,
   BuildSHAChip,
   CitySwitcher,
   DegradedBanner,
@@ -8,6 +9,7 @@ import {
 } from "@ds/compounds";
 import { BrandMark } from "@ds/primitives";
 import { cn } from "@lib/cn";
+import { useEscalationStore } from "@state/escalation.store";
 import { NavLink, Outlet } from "react-router-dom";
 import { CommandPalette } from "./CommandPalette";
 
@@ -31,6 +33,11 @@ const NAV_ITEMS = [
  * routes so KV-cache-like client-side render stays inexpensive.
  */
 export function Shell() {
+  // Live count of decisions awaiting a human (I-5). Drives the Cockpit nav
+  // badge so the human-in-the-loop backlog is visible from every surface.
+  const pendingEscalations = useEscalationStore(
+    (s) => s.entries.filter((e) => e.status === "pending").length,
+  );
   return (
     <div className="flex h-screen flex-col bg-canvas text-ink">
       {/* Obsidian chrome (ADR-045): panel-step bar with an inset bottom
@@ -67,10 +74,19 @@ export function Shell() {
               }
             >
               {item.label}
+              {item.path === "/cockpit" && pendingEscalations > 0 && (
+                <span
+                  className="ml-1.5 inline-flex min-w-4 items-center justify-center rounded-full bg-signal-danger/20 px-1 text-2xs font-semibold tabular-nums text-signal-danger"
+                  aria-label={`${pendingEscalations} awaiting decision`}
+                >
+                  {pendingEscalations}
+                </span>
+              )}
             </NavLink>
           ))}
         </nav>
         <div className="flex items-center gap-2">
+          <AttentionBeacon />
           <CitySwitcher />
           <LanguagePicker />
           <ThemeToggle />
