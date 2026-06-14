@@ -1,3 +1,4 @@
+import type { DemandForecast } from "@domain/demand-forecast";
 import type { FreshnessAlert } from "@domain/freshness-alert";
 import type { PricingUpdate } from "@domain/pricing-update";
 import { ConfidenceChip, ConnectionPill, PageHeader } from "@ds/compounds";
@@ -118,19 +119,62 @@ function FreshnessRow({ row }: { readonly row: FreshnessAlert }) {
   );
 }
 
+const DEMAND_HORIZONS = ["15min", "1h", "6h", "24h", "7d"] as const;
+
+function DemandRow({ row }: { readonly row: DemandForecast }) {
+  return (
+    <tr className="hover:bg-surface-raised/50">
+      <td className="px-3 py-2 font-mono text-2xs tabular-nums text-ink-muted">
+        {fmt.relativeTime(row.forecast_timestamp)}
+      </td>
+      <td className="px-3 py-2 font-mono text-2xs text-ink">{fmt.shortId(row.sku_id)}</td>
+      <td className="px-3 py-2 font-mono text-2xs text-ink-muted">{row.store_id}</td>
+      {DEMAND_HORIZONS.map((h) => {
+        const point = row.horizons[h];
+        const lo = row.lower_90[h];
+        const hi = row.upper_90[h];
+        return (
+          <td key={h} className="px-3 py-2 font-mono text-2xs tabular-nums text-ink">
+            {point != null ? Math.round(point) : "—"}
+            {lo != null && hi != null && (
+              <div className="text-ink-subtle" title="90% conformal interval">
+                {Math.round(lo)}–{Math.round(hi)}
+              </div>
+            )}
+          </td>
+        );
+      })}
+      <td className="px-3 py-2">
+        {row.drift_detected ? (
+          <Badge tone="warning" title="Distribution drift detected — forecast under review">
+            Drift
+          </Badge>
+        ) : (
+          <Badge tone="neutral">Stable</Badge>
+        )}
+      </td>
+      <td className="px-3 py-2">
+        <ConfidenceChip value={row.confidence} />
+      </td>
+    </tr>
+  );
+}
+
 export function LiveMarkets() {
-  const { state } = useFirehose({ topics: ["pricing", "freshness"] });
+  const { state } = useFirehose({ topics: ["pricing", "freshness", "demand"] });
   const pricing = useFirehoseStore((s) => s.pricing.items);
   const freshness = useFirehoseStore((s) => s.freshness.items);
+  const demand = useFirehoseStore((s) => s.demand.items);
 
   const pricingRows = newestFirst(pricing);
   const freshnessRows = newestFirst(freshness);
+  const demandRows = newestFirst(demand);
 
   return (
     <section className="space-y-4">
       <PageHeader
         title="Live Markets"
-        subtitle="Streams the Pricing Oracle's price moves and the Freshness Guardian's shelf-life alerts in real time off the firehose."
+        subtitle="Streams the Pricing Oracle's price moves, the Freshness Guardian's shelf-life alerts, and the Demand Prophet's multi-horizon forecasts in real time off the firehose."
         status={<ConnectionPill state={state} />}
       />
 
@@ -232,6 +276,60 @@ export function LiveMarkets() {
           </table>
         </section>
       </div>
+
+      <section className="syn-card overflow-hidden" aria-label="Recent demand forecasts">
+        <header className="flex items-center justify-between border-border border-b bg-surface-raised px-3 py-2">
+          <h2 className="font-semibold text-ink text-sm">Demand Prophet</h2>
+          <span className="font-mono text-2xs tabular-nums text-ink-muted">
+            {demandRows.length}
+          </span>
+        </header>
+        <div className="overflow-x-auto">
+          <table className="w-full text-left text-sm">
+            <thead className="bg-surface-raised text-2xs text-ink-muted uppercase tracking-wide">
+              <tr>
+                <th scope="col" className="px-3 py-2">
+                  Time
+                </th>
+                <th scope="col" className="px-3 py-2">
+                  SKU
+                </th>
+                <th scope="col" className="px-3 py-2">
+                  Store
+                </th>
+                {DEMAND_HORIZONS.map((h) => (
+                  <th key={h} scope="col" className="px-3 py-2">
+                    {h}
+                  </th>
+                ))}
+                <th scope="col" className="px-3 py-2">
+                  Drift
+                </th>
+                <th scope="col" className="px-3 py-2">
+                  Conf.
+                </th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-border">
+              {demandRows.length === 0 ? (
+                <tr>
+                  <td colSpan={10} className="px-3 py-8 text-center text-ink-muted">
+                    Waiting for live demand forecasts… (point forecast with the 90% conformal band
+                    beneath)
+                  </td>
+                </tr>
+              ) : (
+                demandRows.map((row) => (
+                  <DemandRow
+                    key={`${row.sku_id}-${row.store_id}-${row.forecast_timestamp}`}
+                    row={row}
+                  />
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+      </section>
     </section>
   );
 }

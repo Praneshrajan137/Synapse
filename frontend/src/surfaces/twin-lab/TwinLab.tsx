@@ -8,6 +8,7 @@ import { useMutation } from "@tanstack/react-query";
 import { Suspense, lazy, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { DivergenceMeter } from "./DivergenceMeter";
+import { NodeInspector } from "./NodeInspector";
 import { ScenarioBuilder, type ScenarioRequest } from "./ScenarioBuilder";
 import { useTopology } from "./useTopology";
 
@@ -26,6 +27,7 @@ export function TwinLab() {
   const api = useSynapseApi();
   const topology = useTopology();
   const [result, setResult] = useState<TwinState | null>(null);
+  const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
 
   // Subscribe to the live twin channel so the divergence trace shows drift over
   // time, not just the latest scenario's snapshot (I-12).
@@ -85,9 +87,19 @@ export function TwinLab() {
           <SupplyNetworkGraph
             nodes={topology.data?.nodes ?? []}
             edges={topology.data?.edges ?? []}
+            selectedId={selectedNodeId}
+            onSelectNode={setSelectedNodeId}
           />
         </Suspense>
-        <ScenarioBuilder pending={sim.isPending} onRun={(req) => sim.mutate(req)} />
+        <div className="space-y-4">
+          <ScenarioBuilder pending={sim.isPending} onRun={(req) => sim.mutate(req)} />
+          <NodeInspector
+            selectedId={selectedNodeId}
+            nodes={topology.data?.nodes ?? []}
+            edges={topology.data?.edges ?? []}
+            onClose={() => setSelectedNodeId(null)}
+          />
+        </div>
       </div>
 
       {result && (

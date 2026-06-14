@@ -1,3 +1,4 @@
+import type { DemandForecast } from "@domain/demand-forecast";
 import type { FreshnessAlert } from "@domain/freshness-alert";
 import type { PricingUpdate } from "@domain/pricing-update";
 import { useFirehoseStore } from "@state/firehose.store";
@@ -22,6 +23,26 @@ function seedFreshness(...rows: ReadonlyArray<FreshnessAlert>) {
   act(() => {
     rows.forEach((r, i) => useFirehoseStore.getState().appendFreshness(r, i + 1));
   });
+}
+
+function seedDemand(...rows: ReadonlyArray<DemandForecast>) {
+  act(() => {
+    rows.forEach((r, i) => useFirehoseStore.getState().appendDemand(r, i + 1));
+  });
+}
+
+function demand(overrides: Partial<DemandForecast> = {}): DemandForecast {
+  return {
+    sku_id: "sku_eggs_042",
+    store_id: "store_blr_003",
+    forecast_timestamp: "2026-06-14T10:02:00+00:00",
+    horizons: { "15min": 12, "1h": 40, "24h": 320 },
+    lower_90: { "15min": 8, "1h": 33, "24h": 290 },
+    upper_90: { "15min": 17, "1h": 48, "24h": 355 },
+    confidence: 0.88,
+    drift_detected: false,
+    ...overrides,
+  } as DemandForecast;
 }
 
 function pricing(overrides: Partial<PricingUpdate> = {}): PricingUpdate {
@@ -90,6 +111,16 @@ describe("LiveMarkets surface", () => {
     expect(screen.getByText(/1\.30× \(cap\)/)).toBeInTheDocument();
     expect(screen.getByText(/Essential/)).toBeInTheDocument();
     expect(screen.getByText(/Cap/)).toBeInTheDocument();
+  });
+
+  it("renders demand forecasts with point values, the conformal band, and a drift badge", () => {
+    render(<LiveMarkets />);
+    seedDemand(demand({ drift_detected: true }));
+    expect(screen.getByText("sku_eggs")).toBeInTheDocument();
+    // point forecast (24h ≈ 320) and the 90% band beneath it (290–355)
+    expect(screen.getByText("320")).toBeInTheDocument();
+    expect(screen.getByText("290–355")).toBeInTheDocument();
+    expect(screen.getByTitle(/Distribution drift detected/)).toBeInTheDocument();
   });
 
   it("renders the FSSAI badge for freshness alerts", () => {
