@@ -1,11 +1,11 @@
-// i18n bootstrap (P4.B26 / FE-INV-013).
+// i18n bootstrap (English-only — see CLAUDE.md "English-only UI" rule).
 //
-// i18next + react-i18next + browser language detector. English (en) is
-// the source; Hindi (hi) is the v1 catalog. Locales are split per surface
-// namespace for lazy-loading.
+// The UI ships in English only. The i18next + react-i18next machinery is kept
+// because ~18 surfaces resolve copy through `t()` / `useTranslation`, but there
+// is exactly ONE locale (`en`) and no language detector or switcher — language
+// is deterministically English. Do NOT add another locale catalog or a picker.
 
 import i18n from "i18next";
-import LanguageDetector from "i18next-browser-languagedetector";
 import { initReactI18next } from "react-i18next";
 
 import enAgents from "./en/agent-council.json";
@@ -19,18 +19,7 @@ import enMission from "./en/mission-control.json";
 import enSteering from "./en/steering.json";
 import enTwin from "./en/twin-lab.json";
 
-import hiAgents from "./hi/agent-council.json";
-import hiAudit from "./hi/audit-vault.json";
-import hiAuth from "./hi/auth.json";
-import hiCockpit from "./hi/cockpit.json";
-import hiCommon from "./hi/common.json";
-import hiDecisions from "./hi/decision-theater.json";
-import hiDemo from "./hi/demo-theater.json";
-import hiMission from "./hi/mission-control.json";
-import hiSteering from "./hi/steering.json";
-import hiTwin from "./hi/twin-lab.json";
-
-export type Locale = "en" | "hi" | "kn" | "mr";
+export type Locale = "en";
 
 export const DEFAULT_LOCALE: Locale = "en";
 
@@ -47,41 +36,27 @@ export const NAMESPACES = [
   "steering",
 ] as const;
 
-void i18n
-  .use(LanguageDetector)
-  .use(initReactI18next)
-  .init({
-    fallbackLng: DEFAULT_LOCALE,
-    supportedLngs: ["en", "hi"],
-    defaultNS: "common",
-    interpolation: { escapeValue: false },
-    resources: {
-      en: {
-        common: enCommon,
-        cockpit: enCockpit,
-        "mission-control": enMission,
-        "decision-theater": enDecisions,
-        "agent-council": enAgents,
-        "twin-lab": enTwin,
-        "demo-theater": enDemo,
-        "audit-vault": enAudit,
-        auth: enAuth,
-        steering: enSteering,
-      },
-      hi: {
-        common: hiCommon,
-        cockpit: hiCockpit,
-        "mission-control": hiMission,
-        "decision-theater": hiDecisions,
-        "agent-council": hiAgents,
-        "twin-lab": hiTwin,
-        "demo-theater": hiDemo,
-        "audit-vault": hiAudit,
-        auth: hiAuth,
-        steering: hiSteering,
-      },
+void i18n.use(initReactI18next).init({
+  lng: DEFAULT_LOCALE,
+  fallbackLng: DEFAULT_LOCALE,
+  supportedLngs: ["en"],
+  defaultNS: "common",
+  interpolation: { escapeValue: false },
+  resources: {
+    en: {
+      common: enCommon,
+      cockpit: enCockpit,
+      "mission-control": enMission,
+      "decision-theater": enDecisions,
+      "agent-council": enAgents,
+      "twin-lab": enTwin,
+      "demo-theater": enDemo,
+      "audit-vault": enAudit,
+      auth: enAuth,
+      steering: enSteering,
     },
-  });
+  },
+});
 
 export { i18n };
 

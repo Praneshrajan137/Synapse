@@ -24,6 +24,7 @@
 - Confidence-gated execution — below threshold triggers HITL escalation (I-5)
 
 ### Code Quality Rules
+- **English-only UI.** The frontend ships in English ONLY. NEVER add a locale catalog beyond `frontend/src/i18n/en`, reintroduce Hindi (or any other language), add a language switcher/picker, or re-enable a language detector. `supportedLngs` stays `["en"]`. (Sprint 18 removed the half-wired Hindi; the operator's standing preference is English-only, now and in future.)
 - NEVER use `print()` for logging — structlog only
 - NEVER use bare `except:` — always catch specific exceptions
 - NEVER import paid API clients (openai, anthropic, cohere, replicate) — CI blocks this (I-1)

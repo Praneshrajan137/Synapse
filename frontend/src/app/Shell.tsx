@@ -4,7 +4,6 @@ import {
   CatchUpBanner,
   CitySwitcher,
   DegradedBanner,
-  LanguagePicker,
   OperatorIdentity,
   ThemeToggle,
 } from "@ds/compounds";
@@ -105,7 +104,6 @@ export function Shell() {
         <div className="flex items-center gap-2">
           <AttentionBeacon />
           <CitySwitcher />
-          <LanguagePicker />
           <ThemeToggle />
           <OperatorIdentity />
           <BuildSHAChip />

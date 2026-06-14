@@ -74,7 +74,6 @@
     "graphology-communities-louvain": "^2.0.1",
     "graphology-layout-forceatlas2": "^0.10.1",
     "i18next": "^23.16.0",
-    "i18next-browser-languagedetector": "^8.0.0",
     "lucide-react": "^0.453.0",
     "maplibre-gl": "^4.7.1",
     "openapi-fetch": "^0.13.0",
