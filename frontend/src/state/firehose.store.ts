@@ -1,6 +1,8 @@
 import type { LiveDecision } from "@domain/decision-envelope";
 import type { DemandForecast } from "@domain/demand-forecast";
 import type { DisruptionAlert } from "@domain/disruption-alert";
+import type { FreshnessAlert } from "@domain/freshness-alert";
+import type { PricingUpdate } from "@domain/pricing-update";
 import type { RoutePlan } from "@domain/route-plan";
 import type { TwinDivergenceEvent } from "@domain/twin-state";
 import { create } from "zustand";
@@ -27,12 +29,16 @@ interface FirehoseState {
   routes: Bounded<RoutePlan>;
   demand: Bounded<DemandForecast>;
   twin: Bounded<TwinDivergenceEvent>;
+  pricing: Bounded<PricingUpdate>;
+  freshness: Bounded<FreshnessAlert>;
   lastSeq: Readonly<Record<string, number>>;
   appendDecision(d: LiveDecision, seq: number): void;
   appendDisruption(d: DisruptionAlert, seq: number): void;
   appendRoute(r: RoutePlan, seq: number): void;
   appendDemand(d: DemandForecast, seq: number): void;
   appendTwin(t: TwinDivergenceEvent, seq: number): void;
+  appendPricing(p: PricingUpdate, seq: number): void;
+  appendFreshness(f: FreshnessAlert, seq: number): void;
   flushAll(): void;
 }
 
@@ -42,6 +48,8 @@ export const useFirehoseStore = create<FirehoseState>((set) => ({
   routes: newBounded(200),
   demand: newBounded(500),
   twin: newBounded(100),
+  pricing: newBounded(200),
+  freshness: newBounded(200),
   lastSeq: {},
   appendDecision(d, seq) {
     set((s) => ({
@@ -70,6 +78,15 @@ export const useFirehoseStore = create<FirehoseState>((set) => ({
   appendTwin(t, seq) {
     set((s) => ({ twin: appendBounded(s.twin, t), lastSeq: { ...s.lastSeq, twin: seq } }));
   },
+  appendPricing(p, seq) {
+    set((s) => ({ pricing: appendBounded(s.pricing, p), lastSeq: { ...s.lastSeq, pricing: seq } }));
+  },
+  appendFreshness(f, seq) {
+    set((s) => ({
+      freshness: appendBounded(s.freshness, f),
+      lastSeq: { ...s.lastSeq, freshness: seq },
+    }));
+  },
   flushAll() {
     set({
       decisions: newBounded(200),
@@ -77,6 +94,8 @@ export const useFirehoseStore = create<FirehoseState>((set) => ({
       routes: newBounded(200),
       demand: newBounded(500),
       twin: newBounded(100),
+      pricing: newBounded(200),
+      freshness: newBounded(200),
       lastSeq: {},
     });
   },

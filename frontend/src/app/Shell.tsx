@@ -17,6 +17,8 @@ const NAV_ITEMS = [
   { path: "/decisions", label: "Decision Theater" },
   { path: "/agents", label: "Agent Council" },
   { path: "/twin", label: "Twin Lab" },
+  { path: "/markets", label: "Live Markets" },
+  { path: "/ingress", label: "Ingress" },
   { path: "/steering", label: "Steering" },
   { path: "/audit", label: "Audit Vault" },
   { path: "/demo", label: "Demo Theater" },

@@ -28,6 +28,8 @@ export function useFirehose({ topics }: UseFirehoseOptions): UseFirehoseResult {
     routing: s.appendRoute,
     demand: s.appendDemand,
     twin: s.appendTwin,
+    pricing: s.appendPricing,
+    freshness: s.appendFreshness,
   }));
   const appendEscalation = useEscalationStore((s) => s.append);
   const lastSeq = useFirehoseStore((s) => s.lastSeq);
@@ -72,6 +74,12 @@ export function useFirehose({ topics }: UseFirehoseOptions): UseFirehoseResult {
     }
     if (topics.includes("twin")) {
       offs.push(client.on("twin", (t, env) => append.twin(t, env.seq)));
+    }
+    if (topics.includes("pricing")) {
+      offs.push(client.on("pricing", (p, env) => append.pricing(p, env.seq)));
+    }
+    if (topics.includes("freshness")) {
+      offs.push(client.on("freshness", (f, env) => append.freshness(f, env.seq)));
     }
 
     return () => {
