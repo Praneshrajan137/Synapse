@@ -3,31 +3,31 @@
   "ref": {
     "$type": "color",
     "neutral": {
-      "$description": "Elevation + text ramp — the Obsidian cold void (v1.2.0, ADR-045). Hue 265 (deep blue-violet), chroma RISES with depth so the darkest surfaces read rich rather than dead grey, and the L steps between surfaces are LARGE enough that elevation is legible without borders (borderless depth). Keyed by approximate lightness x1000.",
-      "100": { "$value": "oklch(0.100 0.014 265)" },
-      "135": { "$value": "oklch(0.135 0.016 265)" },
-      "180": { "$value": "oklch(0.180 0.018 265)" },
-      "225": { "$value": "oklch(0.225 0.018 265)" },
-      "240": { "$value": "oklch(0.240 0.015 265)" },
-      "285": { "$value": "oklch(0.285 0.017 265)" },
-      "340": { "$value": "oklch(0.340 0.016 265)" },
-      "420": { "$value": "oklch(0.420 0.014 265)" },
-      "500": { "$value": "oklch(0.500 0.012 265)" },
-      "620": { "$value": "oklch(0.620 0.012 265)" },
-      "700": { "$value": "oklch(0.700 0.010 265)" },
-      "790": { "$value": "oklch(0.790 0.008 265)" },
-      "880": { "$value": "oklch(0.880 0.007 265)" },
-      "925": { "$value": "oklch(0.925 0.006 265)" },
-      "965": { "$value": "oklch(0.965 0.004 265)" },
-      "972": { "$value": "oklch(0.972 0.003 265)" },
-      "990": { "$value": "oklch(0.992 0.0015 265)" }
+      "$description": "Elevation + text ramp — warm-graphite Obsidian (v1.3.0, ADR-046). Hue 75 (faint warm graphite, NOT blue) at very low chroma; chroma RISES with depth so the darkest surfaces read rich rather than dead grey, and the L steps between surfaces are LARGE enough that elevation is legible without borders (borderless depth). The foundation is deliberately near-neutral so the semantic palette (agents, confidence, states) carries the colour — 'quiet foundation, loud meaning'. Keyed by approximate lightness x1000.",
+      "100": { "$value": "oklch(0.100 0.008 75)" },
+      "135": { "$value": "oklch(0.135 0.009 75)" },
+      "180": { "$value": "oklch(0.180 0.010 75)" },
+      "225": { "$value": "oklch(0.225 0.010 75)" },
+      "240": { "$value": "oklch(0.240 0.009 75)" },
+      "285": { "$value": "oklch(0.285 0.009 75)" },
+      "340": { "$value": "oklch(0.340 0.008 75)" },
+      "420": { "$value": "oklch(0.420 0.007 75)" },
+      "500": { "$value": "oklch(0.500 0.006 75)" },
+      "620": { "$value": "oklch(0.620 0.006 75)" },
+      "700": { "$value": "oklch(0.700 0.005 75)" },
+      "790": { "$value": "oklch(0.790 0.004 75)" },
+      "880": { "$value": "oklch(0.880 0.004 75)" },
+      "925": { "$value": "oklch(0.925 0.003 75)" },
+      "965": { "$value": "oklch(0.965 0.0025 75)" },
+      "972": { "$value": "oklch(0.972 0.002 75)" },
+      "990": { "$value": "oklch(0.992 0.0015 75)" }
     },
     "tier": {
-      "$description": "Decision-tier ramp (I-8). Ordinal data on the Lightness axis: one cognition hue (H258), strictly monotone-decreasing L from Tier 1 (reflexive) to Tier 4 (deep deliberation).",
-      "1": { "$value": { "light": "oklch(0.72 0.085 258)", "dark": "oklch(0.84 0.075 258)" } },
-      "2": { "$value": { "light": "oklch(0.62 0.115 258)", "dark": "oklch(0.71 0.105 258)" } },
-      "3": { "$value": { "light": "oklch(0.52 0.140 258)", "dark": "oklch(0.58 0.135 258)" } },
-      "4": { "$value": { "light": "oklch(0.42 0.160 258)", "dark": "oklch(0.46 0.160 258)" } }
+      "$description": "Decision-tier ramp (I-8). Ordinal data on the Lightness axis: one cognition hue (H65, warm brass — the SYNAPSE signature, v1.3.0/ADR-046), strictly monotone-decreasing L from Tier 1 (reflexive, light gold) to Tier 4 (deep deliberation, bronze). Chroma is kept MODEST so tier reads as ordered lightness ('quiet chrome'), rising slightly with depth so deeper deliberation reads richer.",
+      "1": { "$value": { "light": "oklch(0.72 0.055 65)", "dark": "oklch(0.84 0.050 65)" } },
+      "2": { "$value": { "light": "oklch(0.62 0.075 65)", "dark": "oklch(0.71 0.070 65)" } },
+      "3": { "$value": { "light": "oklch(0.52 0.090 65)", "dark": "oklch(0.58 0.090 65)" } },
+      "4": { "$value": { "light": "oklch(0.42 0.100 65)", "dark": "oklch(0.46 0.105 65)" } }
     },
     "confidence": {
       "$description": "Confidence diverging scale (I-5). Continuous in OKLab; hue rises monotonically red->amber->green->teal. Stops anchored at the gate thresholds 0.00 / 0.70 / 0.80 / 1.00.",
@@ -42,7 +42,7 @@
       "warning": { "$value": { "light": "oklch(0.62 0.145 72)", "dark": "oklch(0.83 0.150 74)" } },
       "danger": { "$value": { "light": "oklch(0.52 0.215 26)", "dark": "oklch(0.63 0.205 26)" } },
       "info": { "$value": { "light": "oklch(0.52 0.150 248)", "dark": "oklch(0.75 0.130 248)" } },
-      "neutral": { "$value": { "light": "oklch(0.50 0.012 265)", "dark": "oklch(0.72 0.010 265)" } },
+      "neutral": { "$value": { "light": "oklch(0.48 0.008 75)", "dark": "oklch(0.66 0.006 75)" } },
       "degraded": { "$value": { "light": "oklch(0.58 0.055 84)", "dark": "oklch(0.78 0.060 84)" } },
       "synthetic": { "$value": { "light": "oklch(0.60 0.145 310)", "dark": "oklch(0.75 0.120 310)" } }
     }

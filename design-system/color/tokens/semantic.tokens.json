@@ -22,13 +22,13 @@
       "inverse": { "$value": { "light": "{ref.neutral.990}", "dark": "{ref.neutral.100}" } }
     },
     "brand": {
-      "$description": "SYNAPSE system identity — the cognition hue (H258); shares the tier family. base is tuned bright in dark theme so a near-black label on a brand button clears APCA.",
-      "base": { "$value": { "light": "oklch(0.52 0.150 258)", "dark": "oklch(0.80 0.135 258)" } },
-      "emphasis": { "$value": { "light": "oklch(0.44 0.165 258)", "dark": "oklch(0.87 0.095 258)" } },
+      "$description": "SYNAPSE system identity — the warm-brass cognition hue (H65, v1.3.0/ADR-046); shares the tier family. The accent is RATIONED to one primary action per surface ('quiet foundation, loud meaning'). Dark theme: a bright gold base carries a near-black label (clears APCA secondary). Light theme: a deeper bronze base carries a white label (gold is intrinsically light, so the solid affordance is darkened to keep white-text contrast).",
+      "base": { "$value": { "light": "oklch(0.46 0.100 65)", "dark": "oklch(0.80 0.135 65)" } },
+      "emphasis": { "$value": { "light": "oklch(0.40 0.105 65)", "dark": "oklch(0.87 0.100 65)" } },
       "fg": { "$value": { "light": "{ref.neutral.990}", "dark": "{ref.neutral.100}" } }
     },
     "focus": {
-      "ring": { "$value": { "light": "oklch(0.52 0.150 258)", "dark": "oklch(0.81 0.120 258)" } }
+      "ring": { "$value": { "light": "oklch(0.52 0.120 65)", "dark": "oklch(0.81 0.130 65)" } }
     },
     "agent": {
       "$description": "8 agent identities — categorical, Hue axis. Scoped to identity affordances only.",
