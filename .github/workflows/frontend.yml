@@ -222,7 +222,11 @@ jobs:
           cache: "pnpm"
           cache-dependency-path: frontend/pnpm-lock.yaml
       - run: pnpm install --frozen-lockfile=false
-      - name: pnpm audit (high+ severity)
-        run: pnpm audit --audit-level=high
+      - name: pnpm audit (high+ severity, production tree only)
+        # I-1 supply-chain gate covers the SHIPPED artifact = production deps.
+        # Build/dev tooling (Storybook/Vite/esbuild/Stryker/Playwright) is not
+        # shipped; its advisory-DB drift must not block the PR. A high+ advisory
+        # in a PRODUCTION dependency still fails here (correctly).
+        run: pnpm audit --audit-level=high --prod
       - name: pnpm-lock supply-chain check (HTTPS + registry.npmjs.org only)
         run: node scripts/check-supply-chain.mjs

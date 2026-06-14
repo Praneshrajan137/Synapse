@@ -74,7 +74,9 @@ describe("AttentionBeacon", () => {
     render(wrapper(<AttentionBeacon />));
 
     await user.click(screen.getByRole("button", { expanded: false }));
-    expect(within(screen.getByRole("menu")).getByText(/circuit breaker/)).toBeInTheDocument();
+    expect(
+      within(screen.getByRole("region", { name: /Attention items/ })).getByText(/circuit breaker/),
+    ).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: /Acknowledge/ }));
     // Once acked, the degradation is gone and the beacon falls back to All clear.
     expect(screen.getByText(/All clear/)).toBeInTheDocument();

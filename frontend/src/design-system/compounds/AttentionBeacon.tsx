@@ -98,8 +98,7 @@ export function AttentionBeacon() {
             className="fixed inset-0 z-40 cursor-default"
             onClick={() => setOpen(false)}
           />
-          <div
-            role="menu"
+          <section
             aria-label="Attention items"
             className="syn-card-raised absolute right-0 z-50 mt-1 w-80 space-y-1 p-2"
           >
@@ -144,7 +143,7 @@ export function AttentionBeacon() {
                 )}
               </div>
             ))}
-          </div>
+          </section>
         </>
       )}
     </div>
