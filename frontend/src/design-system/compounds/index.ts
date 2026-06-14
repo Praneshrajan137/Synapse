@@ -26,3 +26,4 @@ export * from "./TwinDivergenceCaveat";
 export * from "./ThemeToggle";
 export * from "./PageHeader";
 export * from "./AttentionBeacon";
+export * from "./SystemTrustTile";
