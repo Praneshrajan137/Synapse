@@ -115,7 +115,7 @@ groups:
       summary: orchestrator-tier4-latency burning at 6.0x over 6h/1h
       runbook_url: https://github.com/Praneshrajan137/synapse/blob/main/docs/runbooks/brownout_active.md
 # ─────────────────────────────────────────────────────────────────────────────
-# Sprint 17 (ADR-046) — continuous burn-rate recording rules.
+# Sprint 19 (ADR-047) — continuous burn-rate recording rules.
 #
 # The alert rules above are binary (firing / not). The Standing Watch surface
 # renders a CONTINUOUS gauge, so we record the burn ratio (error_rate / budget)

@@ -9,7 +9,7 @@ export interface UseEscalationAnalyticsParams {
 }
 
 /**
- * Escalation pressure + resolution analytics (ADR-046), polled from
+ * Escalation pressure + resolution analytics (ADR-047), polled from
  * GET /api/v1/escalations/analytics. 30s cadence.
  */
 export function useEscalationAnalytics(params: UseEscalationAnalyticsParams = {}) {

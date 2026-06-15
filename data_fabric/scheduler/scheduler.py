@@ -51,7 +51,7 @@ def _feast_compact() -> int:
 
 
 def _outcome_score() -> int:
-    # Sprint 17 (ADR-046): close the outcome loop — score settled decisions
+    # Sprint 19 (ADR-047): close the outcome loop — score settled decisions
     # against realized signals and append to decision_outcomes. Runs every
     # 15 min so the Standing Watch calibration view stays fresh.
     try:

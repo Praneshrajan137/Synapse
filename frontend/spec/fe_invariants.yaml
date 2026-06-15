@@ -638,7 +638,7 @@ invariants:
 
   - id: FE-INV-041
     title: Outcome is tri-state honest; unknown is never rendered as confirmed
-    mirrors: ADR-046, I-7, FE-INV-039
+    mirrors: ADR-047, I-7, FE-INV-039
     description: >
       The Standing Watch calibration panel and the decision-detail Outcome
       section render outcomes as exactly three distinct states — confirmed,
@@ -658,7 +658,7 @@ invariants:
 
   - id: FE-INV-042
     title: SLO burn shows fast+slow windows and degrades to "burn unknown", never silent-green
-    mirrors: ADR-046, FE-INV-035
+    mirrors: ADR-047, FE-INV-035
     description: >
       The SLO burn board renders BOTH the fast (1h) and slow (6h) burn for every
       tier, with an explicit severity word (healthy / burning / critical /
@@ -677,7 +677,7 @@ invariants:
 
   - id: FE-INV-043
     title: Calibration always discloses sample size, horizon, and "as of"
-    mirrors: ADR-046, I-7
+    mirrors: ADR-047, I-7
     description: >
       The calibration panel ALWAYS shows n (scored + unknown), the window, and
       the as_of timestamp, and flags a thin sample as provisional — there is no
@@ -696,7 +696,7 @@ invariants:
 
   - id: FE-INV-044
     title: Supervisory aggregates segment synthetic from real, labelled
-    mirrors: ADR-046, ADR-044 D5, FE-INV-036
+    mirrors: ADR-047, ADR-044 D5, FE-INV-036
     description: >
       Every Standing Watch aggregate (calibration, confidence distribution)
       excludes is_synthetic decisions by default and exposes a labelled toggle

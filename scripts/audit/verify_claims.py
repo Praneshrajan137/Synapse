@@ -1453,7 +1453,7 @@ def check_live_watchdog() -> CheckResult:
 
 
 # ---------------------------------------------------------------------------
-# C51: Decision outcomes are scored, append-only, never fabricated (ADR-046)
+# C51: Decision outcomes are scored, append-only, never fabricated (ADR-047)
 # ---------------------------------------------------------------------------
 @register("C51", "Decision outcomes never fabricated")
 def check_outcome_truth() -> CheckResult:
@@ -1476,7 +1476,7 @@ def check_outcome_truth() -> CheckResult:
     missing = [
         rel
         for rel in (
-            "infrastructure/postgres/08_sprint17_outcomes.sql",
+            "infrastructure/postgres/08_sprint19_outcomes.sql",
             "data_fabric/jobs/outcome_score.py",
             "packages/synapse_common/outcomes.py",
         )
@@ -1493,7 +1493,7 @@ def check_outcome_truth() -> CheckResult:
 
 
 # ---------------------------------------------------------------------------
-# C52: Operations aggregate endpoints exist + authenticated (ADR-046)
+# C52: Operations aggregate endpoints exist + authenticated (ADR-047)
 # ---------------------------------------------------------------------------
 @register("C52", "Operations aggregate endpoints exist")
 def check_operations_endpoints() -> CheckResult:

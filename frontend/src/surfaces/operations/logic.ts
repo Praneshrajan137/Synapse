@@ -1,7 +1,7 @@
 import type { CalibrationBin } from "@domain/operations";
 
 /**
- * Pure logic for the Standing Watch surface (ADR-046) — extracted so the
+ * Pure logic for the Standing Watch surface (ADR-047) — extracted so the
  * honesty-bearing math is unit- and mutation-testable away from React.
  */
 

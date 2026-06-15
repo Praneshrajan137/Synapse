@@ -7,7 +7,7 @@ import { useState } from "react";
 import { confidenceSamples } from "./logic";
 
 /**
- * Confidence distribution (ADR-046) — wires the previously-unused OutcomeBand
+ * Confidence distribution (ADR-047) — wires the previously-unused OutcomeBand
  * quantile dotplot to a real signal: the confidence of recent decisions, with
  * the I-5 HITL gate (0.70) as the threshold. "N of 20 recent decisions sit
  * below the escalation gate" is something an operator can act on.

@@ -152,10 +152,10 @@ app.include_router(agents.router, prefix="/api/v1/agents", tags=["agents"])
 app.include_router(steering.router, prefix="/api/v1/steering", tags=["steering"])
 # ADR-044: degradation posture (brownout + breaker states) for the FE's
 # DegradedBanner — the system-level honesty channel.
-# ADR-046: system.router also serves /slo (Prometheus burn) and /calibration
+# ADR-047: system.router also serves /slo (Prometheus burn) and /calibration
 # (reliability curve) for the Standing Watch surface.
 app.include_router(system.router, prefix="/api/v1/system", tags=["system"])
-# ADR-046: escalation pressure + resolution analytics for Standing Watch.
+# ADR-047: escalation pressure + resolution analytics for Standing Watch.
 app.include_router(escalations.router, prefix="/api/v1/escalations", tags=["escalations"])
 # Previously-unmounted routers (the module-liveness audit found these defined but
 # never included → the frontend's real-time firehose, twin topology graph, and

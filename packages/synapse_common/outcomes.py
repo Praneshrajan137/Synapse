@@ -1,4 +1,4 @@
-"""Honest decision-outcome contract (Sprint 17, ADR-046).
+"""Honest decision-outcome contract (Sprint 19, ADR-047).
 
 The pure, deterministic core of the outcome loop — no I/O, no clock, no DB.
 The scorer (``data_fabric/jobs/outcome_score.py``) uses these to derive an

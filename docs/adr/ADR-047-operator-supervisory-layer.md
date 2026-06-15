@@ -1,8 +1,8 @@
-# ADR-046 — The Operator Supervisory Layer (Standing Watch)
+# ADR-047 — The Operator Supervisory Layer (Standing Watch)
 
 - **Status:** Accepted
 - **Date:** 2026-06-15
-- **Sprint:** 17 (`sprint17/standing-watch`)
+- **Sprint:** 19 (`sprint17/standing-watch`)
 - **Supersedes / extends:** ADR-044 (AUX truth exposure — per-decision honesty), ADR-040/041 (honest provenance + degradation), ADR-033 (audit chain)
 - **Related invariants:** I-3, I-5, I-7, I-14; FE-INV-034..040 (per-decision honesty), new FE-INV-041..044
 

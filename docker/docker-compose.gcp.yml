@@ -123,10 +123,10 @@ services:
       # already-initialised live volume (initdb.d only fires on an empty datadir).
       - ../infrastructure/postgres/06_ws5_steering.sql:/docker-entrypoint-initdb.d/07_ws5_steering.sql:ro
       - ../infrastructure/postgres/07_wsA_consensus_city.sql:/docker-entrypoint-initdb.d/08_wsA_consensus_city.sql:ro
-      # Sprint 17 (ADR-046): append-only decision_outcomes fact stream. Fully
+      # Sprint 19 (ADR-047): append-only decision_outcomes fact stream. Fully
       # idempotent + I-4 self-test; the "Apply forward DB migrations" CD step
       # also runs it against the already-initialised live volume.
-      - ../infrastructure/postgres/08_sprint17_outcomes.sql:/docker-entrypoint-initdb.d/09_sprint17_outcomes.sql:ro
+      - ../infrastructure/postgres/08_sprint19_outcomes.sql:/docker-entrypoint-initdb.d/09_sprint19_outcomes.sql:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-synapse} -d ${POSTGRES_DB:-synapse_audit}"]
       interval: 10s
@@ -462,7 +462,7 @@ services:
       resources:
         limits: { cpus: "0.1", memory: 192M }
 
-  # Sprint 17 (ADR-046): the always-alive outcome scorer. Every few minutes it
+  # Sprint 19 (ADR-047): the always-alive outcome scorer. Every few minutes it
   # scores settled decisions (audit_consensus) against realized signals and
   # appends to the append-only decision_outcomes table, so the Standing Watch
   # calibration view is fed live. REUSES the api-gateway image (no build:, no

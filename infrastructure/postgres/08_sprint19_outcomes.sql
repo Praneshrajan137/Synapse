@@ -1,5 +1,5 @@
 -- ============================================================================
--- SYNAPSE Sprint 17 (ADR-046) — decision_outcomes (append-only fact stream)
+-- SYNAPSE Sprint 19 (ADR-047) — decision_outcomes (append-only fact stream)
 --
 -- The `outcome` JSONB column on audit_consensus (02_sprint4_consensus.sql:23)
 -- has existed since Sprint 4 but the audit logger never wrote it — the system
@@ -18,7 +18,7 @@
 CREATE TABLE IF NOT EXISTS decision_outcomes (
     id           UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     decision_id  UUID NOT NULL,
-    -- Tri-state honesty (ADR-046 D3): an outcome is `unknown` until a realized
+    -- Tri-state honesty (ADR-047 D3): an outcome is `unknown` until a realized
     -- signal exists. `confirmed`/`diverged` are NEVER written without evidence.
     status       VARCHAR(16) NOT NULL CHECK (status IN ('confirmed','diverged','unknown')),
     -- Which realized signal produced the verdict: execution_confirmations,

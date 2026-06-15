@@ -1,4 +1,4 @@
-"""The outcome-truth gate must actually catch a fabricated outcome (Sprint 17).
+"""The outcome-truth gate must actually catch a fabricated outcome (Sprint 19).
 
 A gate that passes on everything is theatre. These tests prove it flags a
 hardcoded positive status and stays silent on honest derivation, and that the

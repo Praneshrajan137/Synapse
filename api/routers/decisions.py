@@ -228,7 +228,7 @@ async def get_decision(
                     }
                     for er in cur.fetchall()
                 ]
-                # Sprint 17 (ADR-046): the latest scored outcome from the
+                # Sprint 19 (ADR-047): the latest scored outcome from the
                 # append-only decision_outcomes fact stream. The legacy
                 # audit_consensus.outcome column was never written (UPDATE is
                 # revoked, I-4); the real "what actually happened" lives here.
@@ -310,7 +310,7 @@ async def get_decision(
         "pareto_front": row[14],
         "execution_confirmations": row[15],
         "context_messages": row[16],
-        # ADR-046: prefer the scored fact stream; fall back to the legacy
+        # ADR-047: prefer the scored fact stream; fall back to the legacy
         # (always-NULL) audit_consensus.outcome column for shape stability.
         "outcome": scored_outcome if scored_outcome is not None else row[17],
         "prev_hash": prev_hash,

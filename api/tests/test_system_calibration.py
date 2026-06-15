@@ -1,4 +1,4 @@
-"""Calibration endpoint tests (Sprint 17, ADR-046).
+"""Calibration endpoint tests (Sprint 19, ADR-047).
 
 ``GET /api/v1/system/calibration`` scores confidence against the realized
 outcomes. It must: exclude synthetic by default (FE-INV-044), disclose n

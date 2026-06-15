@@ -1,4 +1,4 @@
-"""Escalations analytics router (Sprint 17, ADR-046).
+"""Escalations analytics router (Sprint 19, ADR-047).
 
 ``GET /api/v1/escalations/analytics`` aggregates the HITL escalation pressure
 over a window for the Standing Watch surface: how many escalations, how the

@@ -1,7 +1,7 @@
 import { z } from "zod";
 
 /**
- * Operations / Standing Watch contracts (Sprint 17, ADR-046).
+ * Operations / Standing Watch contracts (Sprint 19, ADR-047).
  *
  * Mirror the additive supervisory endpoints:
  *   - GET /api/v1/system/slo          (api/routers/system.py)

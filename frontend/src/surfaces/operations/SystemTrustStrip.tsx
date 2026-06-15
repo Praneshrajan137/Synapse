@@ -2,7 +2,7 @@ import { usePostureHistory } from "@hooks/use-posture-history";
 import { cn } from "@lib/cn";
 
 /**
- * System trust strip (ADR-046): the posture TRAJECTORY (not just the current
+ * System trust strip (ADR-047): the posture TRAJECTORY (not just the current
  * banner) — a sample-per-poll timeline, the brownout level per city, and the
  * breaker board. A failed poll is a drained "unknown" cell, never a healthy
  * green one (FE-INV-035/042).

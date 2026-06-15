@@ -10,7 +10,7 @@ export interface UseCalibrationParams {
 }
 
 /**
- * System confidence calibration (ADR-046) from the scored outcomes — the
+ * System confidence calibration (ADR-047) from the scored outcomes — the
  * reliability curve + Brier. Calibration moves slowly; 60s cadence. The city
  * + include_synthetic + window are part of the cache key so toggling them
  * refetches cleanly (FE-INV-016).

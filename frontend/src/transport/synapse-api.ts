@@ -295,7 +295,7 @@ export function createSynapseApi(deps: SynapseApiDeps) {
         schemaId: "SystemPosture",
       }),
 
-    // ─── Operations / Standing Watch (ADR-046) ────────────────────────
+    // ─── Operations / Standing Watch (ADR-047) ────────────────────────
     // SLO burn (Prometheus multi-window), confidence calibration (scored
     // outcomes), and escalation pressure. Every "could be missing" number
     // arrives nullable so the UI renders "unknown", never a healthy lie.

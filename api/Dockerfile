@@ -27,7 +27,7 @@ COPY api/ /app/api/
 # service (`traffic-generator`) that REUSES this image with a command
 # override — no extra image in the CD matrix (C27 lockstep untouched).
 COPY scripts/traffic/ /app/scripts/traffic/
-# Sprint 17: the always-alive outcome scorer (`outcome-scorer` compose service)
+# Sprint 19: the always-alive outcome scorer (`outcome-scorer` compose service)
 # REUSES this image and runs scripts/traffic/outcome_score_loop.py, which imports
 # the gated DB driver from data_fabric.jobs.outcome_score. Copy only the jobs
 # subtree (no parquet / no heavy deps — outcome_score.py needs synapse_common +

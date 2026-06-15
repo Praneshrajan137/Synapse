@@ -8,7 +8,7 @@ import { SloBurnBoard } from "./SloBurnBoard";
 import { SystemTrustStrip } from "./SystemTrustStrip";
 
 /**
- * Operations — Standing Watch (ADR-046).
+ * Operations — Standing Watch (ADR-047).
  *
  * Mission Control is the present tense ("what is happening now"); this is the
  * trend-and-trust tense. It answers the three questions that define supervising

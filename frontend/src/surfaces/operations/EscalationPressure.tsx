@@ -5,7 +5,7 @@ import { cn } from "@lib/cn";
 import { Link } from "react-router-dom";
 
 /**
- * Escalation pressure (ADR-046): how many escalations, how fast they were
+ * Escalation pressure (ADR-047): how many escalations, how fast they were
  * resolved, the override-action mix, and the dominant reasons — the
  * "where must I intervene, and did my intervention help" read. Links to the
  * Cockpit where the operator acts.

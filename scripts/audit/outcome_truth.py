@@ -1,4 +1,4 @@
-"""Make the SYNAPSE *outcome honesty* mechanically enforceable (Sprint 17, ADR-046).
+"""Make the SYNAPSE *outcome honesty* mechanically enforceable (Sprint 19, ADR-047).
 
 The outcome loop is only worth anything if an outcome is never *fabricated*. A
 ``confirmed``/``diverged`` outcome must be DERIVED from a realized signal

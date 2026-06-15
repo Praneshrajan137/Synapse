@@ -1,4 +1,4 @@
-"""Escalation analytics endpoint tests (Sprint 17, ADR-046).
+"""Escalation analytics endpoint tests (Sprint 19, ADR-047).
 
 ``GET /api/v1/escalations/analytics`` is the Standing Watch escalation-pressure
 panel's data source: JWT-gated, a pure SQL aggregate over audit_escalations.

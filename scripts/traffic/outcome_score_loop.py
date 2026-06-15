@@ -1,4 +1,4 @@
-"""SYNAPSE -- always-alive outcome scorer (Sprint 17, ADR-046).
+"""SYNAPSE -- always-alive outcome scorer (Sprint 19, ADR-047).
 
 Runs as the ``outcome-scorer`` compose service, REUSING the api-gateway image
 (no new CD-matrix image -- ADR-039 / C27 safe), exactly like the

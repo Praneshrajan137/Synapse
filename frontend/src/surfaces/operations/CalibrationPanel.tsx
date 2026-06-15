@@ -12,7 +12,7 @@ interface CalibrationPanelProps {
 
 /**
  * "Are the confidences calibrated to reality?" — the reliability curve + Brier
- * over the scored outcomes (ADR-046). Defaults to REAL decisions only
+ * over the scored outcomes (ADR-047). Defaults to REAL decisions only
  * (FE-INV-044); always discloses n + as_of + window (FE-INV-043) so a thin
  * sample reads as thin, never a confident-looking curve on no evidence.
  */

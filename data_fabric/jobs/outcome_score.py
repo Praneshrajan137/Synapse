@@ -1,4 +1,4 @@
-"""Decision outcome scoring job (Sprint 17, ADR-046).
+"""Decision outcome scoring job (Sprint 19, ADR-047).
 
 The delayed scorer that finally closes the outcome loop. For every decision
 older than the settle horizon that has no outcome yet, it derives an honest
@@ -92,7 +92,7 @@ def score_outcomes(
                     execution_confirmations=execution_confirmations,
                     # Per-decision twin divergence is not yet joinable in the
                     # DB (it is a Prometheus/firehose signal). Wiring it is the
-                    # named next ratchet (ADR-046 D4); until then this source is
+                    # named next ratchet (ADR-047 D4); until then this source is
                     # absent and the scorer falls back to `unknown` honestly.
                     twin_divergence=None,
                     horizon_s=horizon_s,

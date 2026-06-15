@@ -1,4 +1,4 @@
-"""SLO burn endpoint tests (Sprint 17, ADR-046).
+"""SLO burn endpoint tests (Sprint 19, ADR-047).
 
 ``GET /api/v1/system/slo`` is the Standing Watch burn gauge's data source:
 JWT-gated, computes multi-window burn from Prometheus, and reports ``source:

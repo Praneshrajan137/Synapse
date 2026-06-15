@@ -52,7 +52,7 @@ async def system_posture(
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Sprint 17 (ADR-046) — SLO burn (the supervisory "is it healthy over time" read)
+# Sprint 19 (ADR-047) — SLO burn (the supervisory "is it healthy over time" read)
 # ─────────────────────────────────────────────────────────────────────────────
 
 PROM_URL = os.environ.get("SYNAPSE_PROMETHEUS_URL", "http://prometheus:9090")
@@ -132,7 +132,7 @@ def _severity(burn_fast: float | None, burn_slow: float | None) -> str:
 async def system_slo(
     op: Annotated[OperatorContext, Depends(CurrentOperator)],
 ) -> dict[str, Any]:
-    """Per-tier multi-window SLO burn for the Standing Watch surface (ADR-046).
+    """Per-tier multi-window SLO burn for the Standing Watch surface (ADR-047).
 
     Read-only (VIEWER). Computes burn inline from the raw histogram metrics so
     it does not depend on the recording rules being loaded; an unreachable
@@ -183,7 +183,7 @@ async def system_slo(
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Sprint 17 (ADR-046) — calibration (are the confidences calibrated to reality?)
+# Sprint 19 (ADR-047) — calibration (are the confidences calibrated to reality?)
 # ─────────────────────────────────────────────────────────────────────────────
 
 _VALID_CITIES = {"bengaluru", "mumbai"}
@@ -226,7 +226,7 @@ async def system_calibration(
     include_synthetic: bool = False,
     city: str | None = None,
 ) -> dict[str, Any]:
-    """System-level confidence calibration from the scored outcomes (ADR-046).
+    """System-level confidence calibration from the scored outcomes (ADR-047).
 
     Reliability curve (predicted confidence vs. realized-correct fraction) +
     Brier score, over the latest outcome per decision in the window. Defaults
@@ -271,7 +271,7 @@ async def system_calibration(
                 )
                 rows = cur.fetchall()
         except pg_errors.UndefinedTable:
-            # Fresh deploy before the 08_sprint17_outcomes migration applies —
+            # Fresh deploy before the 08_sprint19_outcomes migration applies —
             # honest "no outcomes yet", not a 503.
             conn.rollback()
             return _empty_calibration(window_hours, include_synthetic, city)

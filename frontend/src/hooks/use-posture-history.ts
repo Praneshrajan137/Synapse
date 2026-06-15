@@ -11,7 +11,7 @@ export interface PostureSample {
 }
 
 /**
- * A bounded, append-only history of posture samples (ADR-046) built on top of
+ * A bounded, append-only history of posture samples (ADR-047) built on top of
  * the existing ~15s posture poll. Posture is polled, not pushed (frozen Kafka
  * set), so the trajectory is reconstructed client-side from each poll.
  *

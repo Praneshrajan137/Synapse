@@ -293,7 +293,7 @@ export function DecisionDetail() {
               {raw?.outcome &&
                 Object.keys(raw.outcome).length > 0 &&
                 (() => {
-                  // ADR-046: the scored outcome from the append-only
+                  // ADR-047: the scored outcome from the append-only
                   // decision_outcomes stream. Tri-state (FE-INV-041): `unknown`
                   // is its own drained state, NEVER shown as confirmed.
                   const o = raw.outcome as Record<string, unknown>;

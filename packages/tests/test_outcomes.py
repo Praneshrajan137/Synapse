@@ -1,4 +1,4 @@
-"""Tests for the honest outcome contract (Sprint 17, ADR-046).
+"""Tests for the honest outcome contract (Sprint 19, ADR-047).
 
 Pins the substance core: outcomes are derived from realized signals, default
 to ``unknown`` without evidence, and the calibration math discloses (never
