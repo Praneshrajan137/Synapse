@@ -16,7 +16,7 @@
 
 ### Documentation Discipline
 - When you discover a non-obvious, load-bearing fact (a hidden coupling, a wrong-looking-but-correct value, a "this is where X actually lives"), record it where a **mechanical gate can see it** — a `docs/state/CURRENT.md` row + a `scripts/audit/verify_claims.py` check, a CLAUDE.md "Accumulated Error Patterns" entry, or an ADR — never leave it only in session/PR context. Re-deriving a known fact is the single most expensive recurring line in this repo; a fact worth discovering twice is worth a gate.
-- This file (`CLAUDE.md`) and `.claude/skills/` are the SINGLE SOURCE OF TRUTH for governance. The cross-tool mirrors `AGENTS.md` and `.agents/` are **generated** from them by `scripts/sync_agents.py` and must never be hand-edited; `verify_claims.py` C54 fails CI on drift. Edit the source, then run `python scripts/sync_agents.py`.
+- This file (`CLAUDE.md`) and `.claude/skills/` are the SINGLE SOURCE OF TRUTH for governance. (The former cross-tool `AGENTS.md` / `.agents/` mirror + its `sync_agents.py` generator and C54 gate were removed per operator preference — Claude reads `CLAUDE.md` + `.claude/skills/` directly; do not reintroduce a generated mirror.)
 
 ### Architecture Rules
 - 8 specialized agents, each in `agents/<name>/` with canonical structure

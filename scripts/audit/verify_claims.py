@@ -1531,27 +1531,6 @@ def check_operations_endpoints() -> CheckResult:
 
 
 # ---------------------------------------------------------------------------
-# C54: AGENTS.md / .agents mirror CLAUDE.md / .claude (single source, no drift)
-# ---------------------------------------------------------------------------
-@register("C54", "Portable agent orientation mirrors the Claude source")
-def check_agents_mirror() -> CheckResult:
-    try:
-        from scripts.sync_agents import check as agents_check
-    except ImportError as exc:
-        return CheckResult("C54", "Agents mirror", "SKIP", f"sync_agents import failed: {exc}")
-    drift = agents_check()
-    if drift:
-        more = f" (+{len(drift) - 1} more)" if len(drift) > 1 else ""
-        return CheckResult("C54", "Agents mirror", "FAIL", f"{drift[0]}{more}")
-    return CheckResult(
-        "C54",
-        "Agents mirror",
-        "PASS",
-        "AGENTS.md + .agents/ generated-in-sync with CLAUDE.md + .claude/skills",
-    )
-
-
-# ---------------------------------------------------------------------------
 # C55: audit_outbox DDL matches the ORM (Sprint 20). Before this the ORM and the
 # mounted DDL drifted (the ORM had audit_id/headers/next_attempt_at + an
 # outbox_status ENUM; the DDL had message_key/attempts/trace_id + TEXT status),
