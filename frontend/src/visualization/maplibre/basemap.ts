@@ -26,29 +26,29 @@ export function buildBasemapStyle(tilesUrl: string): maplibregl.StyleSpecificati
     glyphs: "https://protomaps.github.io/basemaps-assets/fonts/{fontstack}/{range}.pbf",
     // chromatic-allow: the MapLibre style spec requires literal colour values
     // in its paint JSON — it cannot read CSS custom properties. Each value
-    // below is the v1.3.0 warm-graphite dist hex for the named token (ADR-046);
-    // lib/__tests__/chromatics.test.ts pins them against dist so drift is a
-    // failing test, not a review hope. Water is the DEEP VOID — darker than
-    // land, so the coastline reads as depth on the warm-graphite canvas.
+    // below is the v2.0.0 cool blue-graphite dist hex for the named token
+    // (ADR-048); lib/__tests__/chromatics.test.ts pins them against dist so
+    // drift is a failing test, not a review hope. Water is the DEEP VOID —
+    // darker than land, so the coastline reads as depth on the cool canvas.
     layers: [
       {
         id: "background",
         type: "background",
-        paint: { "background-color": "#0a0805" }, // chromatic-allow ← color.surface.canvas dark
+        paint: { "background-color": "#05090e" }, // chromatic-allow ← color.surface.canvas dark
       },
       {
         id: "land",
         type: "fill",
         source: "synapse_tiles",
         "source-layer": "earth",
-        paint: { "fill-color": "#14110d" }, // chromatic-allow ← color.surface.panel dark
+        paint: { "fill-color": "#0c1218" }, // chromatic-allow ← color.surface.panel dark
       },
       {
         id: "water",
         type: "fill",
         source: "synapse_tiles",
         "source-layer": "water",
-        paint: { "fill-color": "#040302" }, // chromatic-allow ← color.text.inverse dark (the deep void)
+        paint: { "fill-color": "#020407" }, // chromatic-allow ← color.text.inverse dark (the deep void)
       },
       {
         id: "roads",
@@ -56,7 +56,7 @@ export function buildBasemapStyle(tilesUrl: string): maplibregl.StyleSpecificati
         source: "synapse_tiles",
         "source-layer": "roads",
         paint: {
-          "line-color": "#3a3733", // chromatic-allow ← color.border.subtle dark
+          "line-color": "#34383d", // chromatic-allow ← color.border.subtle dark
           "line-width": 0.5,
         },
       },
@@ -65,7 +65,7 @@ export function buildBasemapStyle(tilesUrl: string): maplibregl.StyleSpecificati
         type: "fill",
         source: "synapse_tiles",
         "source-layer": "buildings",
-        paint: { "fill-color": "#1f1b17", "fill-opacity": 0.4 }, // chromatic-allow ← color.surface.raised dark
+        paint: { "fill-color": "#171c23", "fill-opacity": 0.4 }, // chromatic-allow ← color.surface.raised dark
       },
     ],
   } as unknown as maplibregl.StyleSpecification;
