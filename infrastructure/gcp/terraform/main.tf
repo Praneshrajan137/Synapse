@@ -227,9 +227,14 @@ resource "google_compute_instance" "synapse" {
   }
 }
 
-# ── Tier-A: nightly auto-stop schedule ──────────────────────────────────────
-# Slashes credit burn from ~$195/mo to ~$65/mo by stopping the VM nights/weekends.
-# Cron strings are UTC; defaults = 09:00-23:00 IST (03:30-17:30 UTC).
+# ── Tier-A: auto-stop schedule (on-demand cost model) ───────────────────────
+# Stops the VM on a schedule to cap credit burn. The daily auto-START is OFF by
+# default (enable_auto_start=false): a started VM burns credits even when idle,
+# and cold-starting an auto-stopped VM is exactly what threw
+# ZONE_RESOURCE_POOL_EXHAUSTED. The VM is instead started on demand by the
+# weekly cd-gcp scheduled run / manual workflow_dispatch, which stops it again.
+# The vm_stop_schedule is always present (when enable_auto_stop=true) as a
+# safety net so a forgotten-running VM self-stops. Cron strings are UTC.
 resource "google_compute_resource_policy" "auto_stop" {
   count  = var.enable_auto_stop ? 1 : 0
   name   = "${var.vm_name}-auto-stop"
@@ -237,8 +242,11 @@ resource "google_compute_resource_policy" "auto_stop" {
 
   instance_schedule_policy {
     time_zone = "Etc/UTC"
-    vm_start_schedule {
-      schedule = var.auto_stop_start_cron
+    dynamic "vm_start_schedule" {
+      for_each = var.enable_auto_start ? [1] : []
+      content {
+        schedule = var.auto_stop_start_cron
+      }
     }
     vm_stop_schedule {
       schedule = var.auto_stop_stop_cron

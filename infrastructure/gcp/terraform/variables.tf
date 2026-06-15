@@ -152,9 +152,15 @@ variable "iap_users" {
 
 # ── Auto-stop schedule (Tier-A) ────────────────────────────────────────────
 variable "enable_auto_stop" {
-  description = "Attach a resource policy that stops the VM nightly and restarts it in the morning. Slashes credit burn from ~$195/mo to ~$65/mo."
+  description = "Attach a resource policy that stops the VM on a schedule (and optionally starts it — see enable_auto_start). Slashes credit burn."
   type        = bool
   default     = true
+}
+
+variable "enable_auto_start" {
+  description = "Also attach a daily VM START schedule. OFF by default (on-demand cost model): the VM is started only by the weekly cd-gcp scheduled run or a manual deploy, then stopped again. A daily auto-start burns credits even when the VM is idle and risks ZONE_RESOURCE_POOL_EXHAUSTED on every cold start. The auto-STOP schedule stays on as a safety net regardless of this flag."
+  type        = bool
+  default     = false
 }
 
 variable "auto_stop_start_cron" {

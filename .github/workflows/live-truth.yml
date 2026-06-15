@@ -2,23 +2,23 @@
 #
 # Per-deploy verification (cd-gcp.yml + C47) proves a deploy worked AT
 # DEPLOY TIME. This workflow proves the live system STAYS current and
-# working between deploys: 4x/day it asserts the deployed /version SHA
-# equals main HEAD (the "months-stale link" detector), every public
-# surface answers, and every container on the VM is running + healthy.
-# Any failure auto-opens a sev1 issue. Worst-case detection latency for
-# silent staleness/breakage drops from "whenever a human looks" to ~4h.
+# working: it asserts the deployed /version SHA equals main HEAD (the
+# "months-stale link" detector), every public surface answers, and every
+# container on the VM is running + healthy. Any failure auto-opens a sev1.
+#
+# On-demand cost model (2026-06-15): the VM is OFF by default and comes up
+# only for the weekly cd-gcp scheduled deploy (Mon 05:00 UTC) or a manual
+# demo. So this watchdog runs WEEKLY (Mon 06:00 UTC, ~1h after the deploy
+# starts) and treats a stopped VM as EXPECTED — it skips gracefully rather
+# than opening a false sev1. It only verifies when the VM is actually up.
 name: Live Truth (watchdog)
 
 on:
   schedule:
-    # 2x/day inside the VM's REAL auto-stop window. The attached resource
-    # policy is `synapse-3hr-window`: start 04:30 UTC / stop 07:30 UTC
-    # daily (10:00-13:00 IST) — verified against live `gcloud compute
-    # operations list` 2026-06-10, NOT the stale "09:00-23:00 IST" in the
-    # ADR-036 docs. A cron outside the real window fires on an
-    # intentionally-stopped VM and opens a false sev1 daily.
-    # 05:00 UTC = 10:30 IST, 07:00 UTC = 12:30 IST.
-    - cron: "0 5,7 * * *"
+    # Weekly, ~1h after the weekly cd-gcp deploy kicks off (Mon 05:00 UTC).
+    # If the VM is TERMINATED (the normal between-demos state) the job skips
+    # gracefully — see the "VM state" step below. 06:00 UTC = 11:30 IST.
+    - cron: "0 6 * * 1"
   workflow_dispatch: {}
 
 permissions:
@@ -74,19 +74,28 @@ jobs:
         if: steps.guard.outputs.deploying != 'true'
         uses: google-github-actions/setup-gcloud@v2
 
-      - name: VM must be RUNNING inside the up-window
+      - name: VM state — skip gracefully when stopped (on-demand model)
+        id: vmstate
         if: steps.guard.outputs.deploying != 'true'
         run: |
+          # On-demand cost model: the VM is normally TERMINATED between the
+          # weekly deploy and demos. A stopped VM is EXPECTED, not an incident,
+          # so log a notice and mark vm_down=true to skip the live checks —
+          # never open a false sev1. The weekly cd-gcp scheduled run is what
+          # actually starts -> verifies -> stops the VM; this watchdog only
+          # confirms health when the VM happens to be up (e.g. a manual demo).
           STATUS="$(gcloud compute instances describe ${{ vars.GCP_VM }} \
             --zone=${{ vars.GCP_ZONE }} --format='value(status)')"
           echo "Instance status: ${STATUS}"
           if [ "${STATUS}" != "RUNNING" ]; then
-            echo "::error::VM is ${STATUS} during the scheduled up-window (ADR-036 says it should be RUNNING)"
-            exit 1
+            echo "::notice::VM is ${STATUS} (expected in on-demand mode) — skipping live checks"
+            echo "vm_down=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "vm_down=false" >> "$GITHUB_OUTPUT"
           fi
 
       - name: Verify live truth (external — deployed must equal main HEAD)
-        if: steps.guard.outputs.deploying != 'true'
+        if: steps.guard.outputs.deploying != 'true' && steps.vmstate.outputs.vm_down != 'true'
         run: |
           # Scheduled runs check out main HEAD, so GITHUB_SHA *is* the
           # staleness reference: deployed /version must match it.
@@ -100,7 +109,7 @@ jobs:
             --expect-sha "${GITHUB_SHA}"
 
       - name: Verify live truth (containers)
-        if: steps.guard.outputs.deploying != 'true'
+        if: steps.guard.outputs.deploying != 'true' && steps.vmstate.outputs.vm_down != 'true'
         run: |
           # --max-restarts 2 (vs 0 at deploy time): the nightly auto-stop /
           # start cycle may legitimately bounce a container once or twice.
