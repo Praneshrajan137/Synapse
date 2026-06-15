@@ -45,6 +45,17 @@ on:
       - "docs/**"
       - "plans/**"
       - "notebooks/**"
+  # Weekly on-demand demo cadence (cost control). A push to main now BUILDS +
+  # signs images only (the deploy-to-vm `if:` skips plain pushes) — it never
+  # cold-starts the VM. The live system comes up exactly once a week here:
+  # this scheduled run starts the VM, deploys + verifies (~30 min), then STOPS
+  # it again (see the "Stop VM after scheduled weekly run" step). This both
+  # eliminates the per-push ZONE_RESOURCE_POOL_EXHAUSTED cold-start failure and
+  # slashes credit burn (the VM is off the other ~6.5 days). Mon 05:00 UTC =
+  # 10:30 IST. The daily VM auto-START resource policy must also be detached
+  # (operator gcloud step) so nothing else starts the VM behind our back.
+  schedule:
+    - cron: "0 5 * * 1"
   workflow_dispatch:
     inputs:
       dryrun:
@@ -205,7 +216,16 @@ jobs:
     needs: build-push-sign
     runs-on: ubuntu-latest
     timeout-minutes: 30
-    if: github.event.inputs.dryrun != 'true'
+    # Deploy ONLY on the weekly schedule, an explicit manual run, or a release
+    # tag — never on a plain push to main. A push builds + signs images (above)
+    # but must not cold-start the VM (that cold-start is what threw
+    # ZONE_RESOURCE_POOL_EXHAUSTED, and it burns credits on every merge). On a
+    # push this job is SKIPPED (not failed), so `alert-on-failure` stays quiet.
+    if: >-
+      github.event.inputs.dryrun != 'true' &&
+      (github.event_name == 'workflow_dispatch' ||
+       github.event_name == 'schedule' ||
+       github.ref_type == 'tag')
     steps:
       - uses: actions/checkout@v4
 
@@ -540,6 +560,19 @@ jobs:
             echo "gcloud compute start-iap-tunnel ${{ vars.GCP_VM }} 3000 --local-host-port=localhost:3000 --zone=${{ vars.GCP_ZONE }}"
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Stop VM after scheduled weekly run (preserve credits)
+        # The weekly schedule is the ONLY automated VM run. Bound it to ~30 min
+        # by stopping the VM as soon as verification finishes. `always()` so a
+        # failed verify never leaves the VM running and burning credits.
+        # Manual `workflow_dispatch` / `v*`-tag deploys intentionally leave the
+        # VM UP so the operator can show a live demo — only the schedule stops it.
+        if: always() && github.event_name == 'schedule'
+        run: |
+          echo "Weekly run complete — stopping ${{ vars.GCP_VM }} to preserve credits."
+          gcloud compute instances stop ${{ vars.GCP_VM }} \
+            --zone=${{ vars.GCP_ZONE }} --quiet || \
+            echo "::warning::stop returned non-zero (VM may already be stopping)"
 
   # ── Loud failure (Sprint 14) ───────────────────────────────────────────
   # A dedicated job, not a step inside deploy-to-vm: a failed BUILD leg
