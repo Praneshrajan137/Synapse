@@ -24,7 +24,8 @@
     "src/transport/firehose.ts",
     "src/transport/auth-refresh.ts",
     "src/state/escalation.store.ts",
-    "src/state/firehose.store.ts"
+    "src/state/firehose.store.ts",
+    "src/surfaces/operations/logic.ts"
   ],
   "_thresholds_comment": "Sprint 13 §Phase 4.1: break bumped 26 -> 50 after json-canonical.ts hit 96.30% kill rate (8 new survivor-killing tests in `src/lib/__tests__/json-canonical.test.ts`, verified locally 2026-05-29). 50 is the user's Sprint-13 target. Next ratchet step (50 -> 70 -> 85) requires test coverage on the remaining mutate files (jitter-retry, replay, confidence, http-client, ws-multiplex, firehose, auth-refresh, escalation.store, firehose.store). The 85 destination matches CLAUDE.md mutation rule (<15% survival = >=85% killed). Each PR that adds tests bumps `break` upward via the same operator step as the coverage ratchet; PRs that lower it bounce in review. Never set back to null.",
   "thresholds": {

@@ -17,6 +17,8 @@ import { CommandPalette } from "./CommandPalette";
 // Investigate → Configure — so the structure mirrors how the work actually
 // flows, not the order features were built. Routes are unchanged (muscle
 // memory preserved); only the visual grouping + order change.
+// Sprint 19 adds /operations (Standing Watch) to the Monitor group — the
+// aggregate, temporal, outcome-closing supervisory surface.
 type NavGroup = "Monitor" | "Intervene" | "Investigate" | "Configure";
 const NAV_ITEMS: ReadonlyArray<{
   path: string;
@@ -26,6 +28,7 @@ const NAV_ITEMS: ReadonlyArray<{
 }> = [
   { path: "/", label: "Mission Control", group: "Monitor", end: true },
   { path: "/markets", label: "Live Markets", group: "Monitor" },
+  { path: "/operations", label: "Operations", group: "Monitor" },
   { path: "/cockpit", label: "Override Cockpit", group: "Intervene" },
   { path: "/ingress", label: "Ingress", group: "Intervene" },
   { path: "/decisions", label: "Decision Theater", group: "Investigate" },

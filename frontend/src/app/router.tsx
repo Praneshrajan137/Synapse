@@ -11,9 +11,16 @@ import { MissionControl } from "@surfaces/mission-control/MissionControl";
 import { Cockpit } from "@surfaces/override-cockpit/Cockpit";
 import { Steering } from "@surfaces/steering/Steering";
 import { TwinLab } from "@surfaces/twin-lab/TwinLab";
+import { Suspense, lazy } from "react";
 import { Navigate, createBrowserRouter } from "react-router-dom";
 import { RouteGuard } from "./RouteGuard";
 import { Shell } from "./Shell";
+
+// Operations is route-split (FE-INV-014/025): its panels stay out of the entry
+// bundle so the flagship surfaces load fast.
+const Operations = lazy(() =>
+  import("@surfaces/operations/Operations").then((m) => ({ default: m.Operations })),
+);
 
 export const router = createBrowserRouter([
   { path: "/login", element: <Login /> },
@@ -114,6 +121,18 @@ export const router = createBrowserRouter([
         element: (
           <RouteGuard minRole="ops">
             <Steering />
+          </RouteGuard>
+        ),
+      },
+      {
+        path: "operations",
+        element: (
+          <RouteGuard minRole="viewer">
+            <Suspense
+              fallback={<div className="p-6 text-sm text-ink-muted">Loading Standing Watch…</div>}
+            >
+              <Operations />
+            </Suspense>
           </RouteGuard>
         ),
       },

@@ -50,12 +50,25 @@ def _feast_compact() -> int:
     return compact_feature_views()
 
 
+def _outcome_score() -> int:
+    # Sprint 19 (ADR-047): close the outcome loop — score settled decisions
+    # against realized signals and append to decision_outcomes. Runs every
+    # 15 min so the Standing Watch calibration view stays fresh.
+    try:
+        from data_fabric.jobs.outcome_score import run_outcome_scoring
+    except ImportError:
+        logger.warning("outcome_score_unavailable")
+        return 0
+    return run_outcome_scoring()
+
+
 JOBS: dict[str, tuple[str, Callable[[], int]]] = {
     "conformal_recal_bengaluru": ("0 2 * * *", _conformal_recal_bengaluru),
     "conformal_recal_mumbai": ("30 2 * * *", _conformal_recal_mumbai),
     "drift_psi": ("0 3 * * *", _drift_psi),
     "audit_archive": ("0 4 * * *", _audit_archive),
     "feast_compact": ("0 5 * * *", _feast_compact),
+    "outcome_score": ("*/15 * * * *", _outcome_score),
 }
 
 
