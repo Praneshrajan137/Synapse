@@ -435,7 +435,8 @@ jobs:
             --ssh-flag="-o ServerAliveCountMax=20" \
             --command="cd ~/synapse && \
                        docker compose -f docker/docker-compose.gcp.yml --env-file .env.gcp --env-file .env.gcp.local exec -T postgres psql -U synapse -d synapse_audit -v ON_ERROR_STOP=1 -f /docker-entrypoint-initdb.d/07_ws5_steering.sql && \
-                       docker compose -f docker/docker-compose.gcp.yml --env-file .env.gcp --env-file .env.gcp.local exec -T postgres psql -U synapse -d synapse_audit -v ON_ERROR_STOP=1 -f /docker-entrypoint-initdb.d/08_wsA_consensus_city.sql"
+                       docker compose -f docker/docker-compose.gcp.yml --env-file .env.gcp --env-file .env.gcp.local exec -T postgres psql -U synapse -d synapse_audit -v ON_ERROR_STOP=1 -f /docker-entrypoint-initdb.d/08_wsA_consensus_city.sql && \
+                       docker compose -f docker/docker-compose.gcp.yml --env-file .env.gcp --env-file .env.gcp.local exec -T postgres psql -U synapse -d synapse_audit -v ON_ERROR_STOP=1 -f /docker-entrypoint-initdb.d/09_sprint17_outcomes.sql"
 
       - name: Provision Kafka topics (auto.create is disabled — pre-provision)
         run: |
