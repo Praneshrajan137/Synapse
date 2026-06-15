@@ -1453,6 +1453,105 @@ def check_live_watchdog() -> CheckResult:
 
 
 # ---------------------------------------------------------------------------
+# C51: Decision outcomes are scored, append-only, never fabricated (ADR-046)
+# ---------------------------------------------------------------------------
+@register("C51", "Decision outcomes never fabricated")
+def check_outcome_truth() -> CheckResult:
+    try:
+        from scripts.audit.outcome_truth import collect
+    except ImportError as exc:
+        return CheckResult("C51", "Outcome truth", "SKIP", f"outcome_truth import failed: {exc}")
+    reports = collect()
+    total = sum(len(v) for _rel, v in reports)
+    if total > 0:
+        first = next((v[0] for _rel, v in reports if v), None)
+        where = f"{first.file}:{first.line} {first.kind}" if first else ""
+        return CheckResult(
+            "C51",
+            "Outcome truth",
+            "FAIL",
+            f"{total} fabricated/dishonest outcome path(s) - {where}",
+        )
+    # The scorer + table + the honest pure contract must all be present.
+    missing = [
+        rel
+        for rel in (
+            "infrastructure/postgres/08_sprint17_outcomes.sql",
+            "data_fabric/jobs/outcome_score.py",
+            "packages/synapse_common/outcomes.py",
+        )
+        if not (ROOT / rel).is_file()
+    ]
+    if missing:
+        return CheckResult("C51", "Outcome truth", "FAIL", f"missing outcome wiring: {missing}")
+    return CheckResult(
+        "C51",
+        "Outcome truth",
+        "PASS",
+        "0 fabricated outcomes; append-only decision_outcomes + scorer + honest contract present",
+    )
+
+
+# ---------------------------------------------------------------------------
+# C52: Operations aggregate endpoints exist + authenticated (ADR-046)
+# ---------------------------------------------------------------------------
+@register("C52", "Operations aggregate endpoints exist")
+def check_operations_endpoints() -> CheckResult:
+    system_py = ROOT / "api" / "routers" / "system.py"
+    escal_py = ROOT / "api" / "routers" / "escalations.py"
+    main_py = ROOT / "api" / "main.py"
+    for path in (system_py, escal_py, main_py):
+        if not path.is_file():
+            return CheckResult("C52", "Operations endpoints", "SKIP", f"{path.name} missing")
+    sys_src = system_py.read_text(encoding="utf-8")
+    esc_src = escal_py.read_text(encoding="utf-8")
+    main_src = main_py.read_text(encoding="utf-8")
+
+    problems: list[str] = []
+    if '@router.get("/slo")' not in sys_src:
+        problems.append("missing /slo")
+    if '@router.get("/calibration")' not in sys_src:
+        problems.append("missing /calibration")
+    if '@router.get("/analytics")' not in esc_src:
+        problems.append("missing /analytics")
+    if "escalations.router" not in main_src:
+        problems.append("escalations router not mounted")
+    # Each supervisory read must be JWT-gated (VIEWER) — a trust surface that
+    # leaks to anonymous callers is a different bug.
+    if "CurrentOperator" not in sys_src or "CurrentOperator" not in esc_src:
+        problems.append("an endpoint is not CurrentOperator-gated")
+    if problems:
+        return CheckResult("C52", "Operations endpoints", "FAIL", "; ".join(problems))
+    return CheckResult(
+        "C52",
+        "Operations endpoints",
+        "PASS",
+        "/slo + /calibration + /escalations/analytics mounted and VIEWER-gated",
+    )
+
+
+# ---------------------------------------------------------------------------
+# C54: AGENTS.md / .agents mirror CLAUDE.md / .claude (single source, no drift)
+# ---------------------------------------------------------------------------
+@register("C54", "Portable agent orientation mirrors the Claude source")
+def check_agents_mirror() -> CheckResult:
+    try:
+        from scripts.sync_agents import check as agents_check
+    except ImportError as exc:
+        return CheckResult("C54", "Agents mirror", "SKIP", f"sync_agents import failed: {exc}")
+    drift = agents_check()
+    if drift:
+        more = f" (+{len(drift) - 1} more)" if len(drift) > 1 else ""
+        return CheckResult("C54", "Agents mirror", "FAIL", f"{drift[0]}{more}")
+    return CheckResult(
+        "C54",
+        "Agents mirror",
+        "PASS",
+        "AGENTS.md + .agents/ generated-in-sync with CLAUDE.md + .claude/skills",
+    )
+
+
+# ---------------------------------------------------------------------------
 # Main entry
 # ---------------------------------------------------------------------------
 def run(as_json: bool = False) -> int:

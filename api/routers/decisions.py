@@ -228,6 +228,31 @@ async def get_decision(
                     }
                     for er in cur.fetchall()
                 ]
+                # Sprint 17 (ADR-046): the latest scored outcome from the
+                # append-only decision_outcomes fact stream. The legacy
+                # audit_consensus.outcome column was never written (UPDATE is
+                # revoked, I-4); the real "what actually happened" lives here.
+                # Tolerate a pre-migration deploy: a missing table degrades to
+                # outcome=None, never a 503 on the existing detail endpoint.
+                scored_outcome: dict[str, Any] | None = None
+                try:
+                    cur.execute(
+                        "SELECT status, source, realized, error, scored_at "
+                        "FROM decision_outcomes WHERE decision_id = %s "
+                        "ORDER BY scored_at DESC LIMIT 1",
+                        (str(decision_id),),
+                    )
+                    orow = cur.fetchone()
+                    if orow is not None:
+                        scored_outcome = {
+                            "status": orow[0],
+                            "source": orow[1],
+                            "realized": orow[2],
+                            "error": orow[3],
+                            "scored_at": orow[4].isoformat() if orow[4] else None,
+                        }
+                except psycopg2.errors.UndefinedTable:
+                    conn.rollback()
         finally:
             conn.close()
     except HTTPException:
@@ -285,7 +310,9 @@ async def get_decision(
         "pareto_front": row[14],
         "execution_confirmations": row[15],
         "context_messages": row[16],
-        "outcome": row[17],
+        # ADR-046: prefer the scored fact stream; fall back to the legacy
+        # (always-NULL) audit_consensus.outcome column for shape stability.
+        "outcome": scored_outcome if scored_outcome is not None else row[17],
         "prev_hash": prev_hash,
         "current_hash": current_hash,
         "chain_verified": chain_verified,

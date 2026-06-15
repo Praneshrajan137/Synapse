@@ -1,6 +1,14 @@
 import { type AgentHealthResponse, AgentHealthResponseSchema } from "@domain/agent-health";
 import { type AuditListResponse, AuditListResponseSchema } from "@domain/audit-row";
 import { type ConsensusDecision, ConsensusDecisionSchema } from "@domain/consensus-decision";
+import {
+  type CalibrationResponse,
+  CalibrationResponseSchema,
+  type EscalationAnalytics,
+  EscalationAnalyticsSchema,
+  type SloResponse,
+  SloResponseSchema,
+} from "@domain/operations";
 import type { City } from "@domain/primitives";
 import { type TwinState, TwinStateSchema } from "@domain/twin-state";
 import type { Tier } from "@lib/confidence";
@@ -285,6 +293,32 @@ export function createSynapseApi(deps: SynapseApiDeps) {
       gateway.get("/api/v1/system/posture", {
         schema: SystemPostureSchema,
         schemaId: "SystemPosture",
+      }),
+
+    // ─── Operations / Standing Watch (ADR-046) ────────────────────────
+    // SLO burn (Prometheus multi-window), confidence calibration (scored
+    // outcomes), and escalation pressure. Every "could be missing" number
+    // arrives nullable so the UI renders "unknown", never a healthy lie.
+    getSlo: (): Promise<SloResponse> =>
+      gateway.get("/api/v1/system/slo", {
+        schema: SloResponseSchema,
+        schemaId: "SloResponse",
+      }),
+    getCalibration: (
+      params: { window_hours?: number; include_synthetic?: boolean; city?: City } = {},
+    ): Promise<CalibrationResponse> =>
+      gateway.get("/api/v1/system/calibration", {
+        query: params,
+        schema: CalibrationResponseSchema,
+        schemaId: "CalibrationResponse",
+      }),
+    getEscalationAnalytics: (
+      params: { window_hours?: number; city?: City } = {},
+    ): Promise<EscalationAnalytics> =>
+      gateway.get("/api/v1/escalations/analytics", {
+        query: params,
+        schema: EscalationAnalyticsSchema,
+        schemaId: "EscalationAnalytics",
       }),
 
     // ─── Steering (WS-5) ──────────────────────────────────────────────

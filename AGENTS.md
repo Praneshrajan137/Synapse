@@ -1,4 +1,9 @@
-# CLAUDE.md — SYNAPSE Repository Governance
+<!-- GENERATED from CLAUDE.md by scripts/sync_agents.py - DO NOT EDIT.
+     CLAUDE.md + .claude/skills/ are the single source of truth; edit
+     there and re-run `python scripts/sync_agents.py`. Drift is blocked
+     by verify_claims.py C54. -->
+
+# AGENTS.md — SYNAPSE Repository Governance
 
 ## Project Identity
 - **Name**: SYNAPSE — Supply Yield Network with Autonomous Planning, Sensing & Execution

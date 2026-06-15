@@ -290,21 +290,60 @@ export function DecisionDetail() {
                   </ul>
                 )}
               </div>
-              {raw?.outcome && Object.keys(raw.outcome).length > 0 && (
-                <div className="space-y-2">
-                  <h2 className="text-sm font-semibold text-ink">Outcome</h2>
-                  <dl className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs">
-                    {Object.entries(raw.outcome).map(([k, v]) => (
-                      <div key={k} className="contents">
-                        <dt className="text-ink-muted">{k.replace(/_/g, " ")}</dt>
-                        <dd className="font-mono tabular-nums text-ink">
-                          {typeof v === "number" ? v.toFixed(3) : String(v)}
-                        </dd>
-                      </div>
-                    ))}
-                  </dl>
-                </div>
-              )}
+              {raw?.outcome &&
+                Object.keys(raw.outcome).length > 0 &&
+                (() => {
+                  // ADR-046: the scored outcome from the append-only
+                  // decision_outcomes stream. Tri-state (FE-INV-041): `unknown`
+                  // is its own drained state, NEVER shown as confirmed.
+                  const o = raw.outcome as Record<string, unknown>;
+                  const status = typeof o.status === "string" ? o.status : "unknown";
+                  const tone =
+                    status === "confirmed"
+                      ? "text-signal-success"
+                      : status === "diverged"
+                        ? "text-signal-danger"
+                        : "text-state-degraded";
+                  const label =
+                    status === "confirmed"
+                      ? "Confirmed — played out as decided"
+                      : status === "diverged"
+                        ? "Diverged — reality differed"
+                        : "Unknown — not yet realized";
+                  return (
+                    <div className="space-y-2">
+                      <h2 className="text-sm font-semibold text-ink">Outcome</h2>
+                      <p className={`text-sm font-medium ${tone}`}>
+                        <span aria-hidden>
+                          {status === "confirmed" ? "✓ " : status === "diverged" ? "✗ " : "? "}
+                        </span>
+                        {label}
+                      </p>
+                      <dl className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs">
+                        {typeof o.source === "string" && o.source !== "none" && (
+                          <div className="contents">
+                            <dt className="text-ink-muted">realized via</dt>
+                            <dd className="font-mono text-ink">{o.source.replace(/_/g, " ")}</dd>
+                          </div>
+                        )}
+                        {typeof o.error === "number" && (
+                          <div className="contents">
+                            <dt className="text-ink-muted">error</dt>
+                            <dd className="font-mono tabular-nums text-ink">
+                              {o.error.toFixed(3)}
+                            </dd>
+                          </div>
+                        )}
+                        {typeof o.scored_at === "string" && (
+                          <div className="contents">
+                            <dt className="text-ink-muted">scored</dt>
+                            <dd className="text-ink">{fmt.relativeTime(o.scored_at)}</dd>
+                          </div>
+                        )}
+                      </dl>
+                    </div>
+                  );
+                })()}
             </div>
           )}
 

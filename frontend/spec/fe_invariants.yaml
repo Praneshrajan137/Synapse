@@ -635,3 +635,80 @@ invariants:
     tests:
       - frontend/src/design-system/compounds/__tests__/MotionGrammar.test.tsx
     status: enforced
+
+  - id: FE-INV-041
+    title: Outcome is tri-state honest; unknown is never rendered as confirmed
+    mirrors: ADR-046, I-7, FE-INV-039
+    description: >
+      The Standing Watch calibration panel and the decision-detail Outcome
+      section render outcomes as exactly three distinct states — confirmed,
+      diverged, and unknown — where `unknown` (not yet realized / no evidence)
+      carries the chroma-drained honesty marker and is NEVER folded into
+      confirmed. The tri-state mix is derived by the tested pure helper
+      (`outcomeMix`), which clamps confirmed to the scored total so rounding can
+      never imply more confirmations than there were scored decisions. Mirrors
+      the chain-integrity tri-state discipline (FE-INV-039).
+    implementations:
+      - frontend/src/surfaces/operations/logic.ts
+      - frontend/src/surfaces/operations/CalibrationPanel.tsx
+      - frontend/src/surfaces/decision-theater/DecisionDetail.tsx
+    tests:
+      - frontend/src/surfaces/operations/__tests__/logic.test.ts
+    status: enforced
+
+  - id: FE-INV-042
+    title: SLO burn shows fast+slow windows and degrades to "burn unknown", never silent-green
+    mirrors: ADR-046, FE-INV-035
+    description: >
+      The SLO burn board renders BOTH the fast (1h) and slow (6h) burn for every
+      tier, with an explicit severity word (healthy / burning / critical /
+      burn unknown). When Prometheus is unreachable (source "unknown") or a
+      window is null, the tile reads "burn unknown" with a drained track — it
+      NEVER renders a healthy green bar or a fabricated 0, mirroring the
+      DegradedBanner's "posture unknown" honesty (FE-INV-035).
+    implementations:
+      - frontend/src/surfaces/operations/SloBurnBoard.tsx
+      - frontend/src/hooks/use-slo.ts
+      - api/routers/system.py
+    tests:
+      - frontend/src/surfaces/operations/__tests__/SloBurnBoard.test.tsx
+      - api/tests/test_system_slo.py
+    status: enforced
+
+  - id: FE-INV-043
+    title: Calibration always discloses sample size, horizon, and "as of"
+    mirrors: ADR-046, I-7
+    description: >
+      The calibration panel ALWAYS shows n (scored + unknown), the window, and
+      the as_of timestamp, and flags a thin sample as provisional — there is no
+      reliability curve without statistical-power disclosure. An all-empty curve
+      says "awaiting scored outcomes" rather than drawing a flat confident line;
+      a null Brier renders as "—", never 0. The backend returns null (not 0) for
+      a Brier with no scored evidence.
+    implementations:
+      - frontend/src/surfaces/operations/CalibrationPanel.tsx
+      - frontend/src/surfaces/operations/ReliabilityCurve.tsx
+      - api/routers/system.py
+    tests:
+      - frontend/src/surfaces/operations/__tests__/ReliabilityCurve.test.tsx
+      - api/tests/test_system_calibration.py
+    status: enforced
+
+  - id: FE-INV-044
+    title: Supervisory aggregates segment synthetic from real, labelled
+    mirrors: ADR-046, ADR-044 D5, FE-INV-036
+    description: >
+      Every Standing Watch aggregate (calibration, confidence distribution)
+      excludes is_synthetic decisions by default and exposes a labelled toggle
+      to include them — demo pulses from the traffic generator never silently
+      launder the trust read. The segmentation is the tested pure helper
+      (`confidenceSamples`); the calibration endpoint defaults
+      include_synthetic=false.
+    implementations:
+      - frontend/src/surfaces/operations/logic.ts
+      - frontend/src/surfaces/operations/ConfidenceDistribution.tsx
+      - api/routers/system.py
+    tests:
+      - frontend/src/surfaces/operations/__tests__/logic.test.ts
+      - api/tests/test_system_calibration.py
+    status: enforced

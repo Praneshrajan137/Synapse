@@ -1,5 +1,6 @@
 import { ConnectionPill, PageHeader, SystemTrustTile } from "@ds/compounds";
 import { useFirehose } from "@hooks/use-firehose";
+import { Link } from "react-router-dom";
 import { CortexBanner } from "./CortexBanner";
 import { DecisionFirehoseTail } from "./DecisionFirehoseTail";
 import { DisruptionBanner } from "./DisruptionBanner";
@@ -28,10 +29,18 @@ export function MissionControl() {
         title="Mission Control"
         subtitle="Live KPI band, decision firehose, and the city's living map."
         actions={
-          <ConnectionPill
-            state={firehose.state}
-            label={firehose.connected ? "Firehose live" : "Firehose"}
-          />
+          <>
+            <Link
+              to="/operations"
+              className="rounded-md px-2 py-1 text-2xs font-medium text-ink-muted transition-colors duration-fast hover:text-ink focus-visible:outline-none focus-visible:shadow-focus"
+            >
+              Standing Watch →
+            </Link>
+            <ConnectionPill
+              state={firehose.state}
+              label={firehose.connected ? "Firehose live" : "Firehose"}
+            />
+          </>
         }
       />
 

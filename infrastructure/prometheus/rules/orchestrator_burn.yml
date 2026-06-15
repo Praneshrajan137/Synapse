@@ -114,3 +114,64 @@ groups:
     annotations:
       summary: orchestrator-tier4-latency burning at 6.0x over 6h/1h
       runbook_url: https://github.com/Praneshrajan137/synapse/blob/main/docs/runbooks/brownout_active.md
+# ─────────────────────────────────────────────────────────────────────────────
+# Sprint 17 (ADR-046) — continuous burn-rate recording rules.
+#
+# The alert rules above are binary (firing / not). The Standing Watch surface
+# renders a CONTINUOUS gauge, so we record the burn ratio (error_rate / budget)
+# per tier per window. budget = 1 - objective: tier1 0.005, tier2 0.01,
+# tier3 0.03, tier4 0.05 — the SAME numbers _TIER_SLO encodes in
+# api/routers/system.py (kept in lockstep). The /api/v1/system/slo endpoint
+# computes the identical math inline so it works even before these load.
+# ─────────────────────────────────────────────────────────────────────────────
+- name: synapse-slo-burn-recording
+  interval: 30s
+  rules:
+  - record: synapse:slo_burn_rate:1h
+    labels:
+      tier: tier_1
+      slo: orchestrator-tier1-latency
+    expr: (1 - (sum(rate(synapse_inference_latency_seconds_bucket{tier="tier_1",le="0.1"}[1h]))
+      / sum(rate(synapse_inference_latency_seconds_count{tier="tier_1"}[1h])))) / 0.005
+  - record: synapse:slo_burn_rate:6h
+    labels:
+      tier: tier_1
+      slo: orchestrator-tier1-latency
+    expr: (1 - (sum(rate(synapse_inference_latency_seconds_bucket{tier="tier_1",le="0.1"}[6h]))
+      / sum(rate(synapse_inference_latency_seconds_count{tier="tier_1"}[6h])))) / 0.005
+  - record: synapse:slo_burn_rate:1h
+    labels:
+      tier: tier_2
+      slo: orchestrator-tier2-latency
+    expr: (1 - (sum(rate(synapse_inference_latency_seconds_bucket{tier="tier_2",le="0.5"}[1h]))
+      / sum(rate(synapse_inference_latency_seconds_count{tier="tier_2"}[1h])))) / 0.01
+  - record: synapse:slo_burn_rate:6h
+    labels:
+      tier: tier_2
+      slo: orchestrator-tier2-latency
+    expr: (1 - (sum(rate(synapse_inference_latency_seconds_bucket{tier="tier_2",le="0.5"}[6h]))
+      / sum(rate(synapse_inference_latency_seconds_count{tier="tier_2"}[6h])))) / 0.01
+  - record: synapse:slo_burn_rate:1h
+    labels:
+      tier: tier_3
+      slo: orchestrator-tier3-latency
+    expr: (1 - (sum(rate(synapse_consensus_duration_seconds_bucket{tier="tier_3",le="15"}[1h]))
+      / sum(rate(synapse_consensus_duration_seconds_count{tier="tier_3"}[1h])))) / 0.03
+  - record: synapse:slo_burn_rate:6h
+    labels:
+      tier: tier_3
+      slo: orchestrator-tier3-latency
+    expr: (1 - (sum(rate(synapse_consensus_duration_seconds_bucket{tier="tier_3",le="15"}[6h]))
+      / sum(rate(synapse_consensus_duration_seconds_count{tier="tier_3"}[6h])))) / 0.03
+  - record: synapse:slo_burn_rate:1h
+    labels:
+      tier: tier_4
+      slo: orchestrator-tier4-latency
+    expr: (1 - (sum(rate(synapse_consensus_duration_seconds_bucket{tier="tier_4",le="120"}[1h]))
+      / sum(rate(synapse_consensus_duration_seconds_count{tier="tier_4"}[1h])))) / 0.05
+  - record: synapse:slo_burn_rate:6h
+    labels:
+      tier: tier_4
+      slo: orchestrator-tier4-latency
+    expr: (1 - (sum(rate(synapse_consensus_duration_seconds_bucket{tier="tier_4",le="120"}[6h]))
+      / sum(rate(synapse_consensus_duration_seconds_count{tier="tier_4"}[6h])))) / 0.05
