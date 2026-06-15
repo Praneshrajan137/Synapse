@@ -68,6 +68,7 @@ class RateLimiter:
         self._idle_evict = idle_evict_sec
         self._buckets: dict[str, TokenBucket] = {}
         self._lock = threading.Lock()
+        self._last_evict = 0.0
 
     def check(self, key: str, *, now: float | None = None, cost: float = 1.0) -> tuple[bool, float]:
         """Return ``(allowed, retry_after_seconds)`` for ``key``."""
@@ -85,9 +86,16 @@ class RateLimiter:
             return allowed, retry
 
     def _maybe_evict(self, now: float) -> None:
-        """Drop buckets idle past the eviction horizon (bounds memory)."""
-        if len(self._buckets) < 1024:
+        """Drop buckets idle past the eviction horizon (bounds memory).
+
+        PR-5: scan at most once per idle window (bounds the O(n) cost), but always
+        when the map grows large (bounds memory under many unique IPs even within a
+        single window). Previously eviction NEVER ran below 1024 buckets, so a long-
+        lived process leaked one bucket per distinct IP it ever saw, up to 1024.
+        """
+        if now - self._last_evict < self._idle_evict and len(self._buckets) < 1024:
             return
+        self._last_evict = now
         stale = [k for k, b in self._buckets.items() if now - b.last > self._idle_evict]
         for k in stale:
             del self._buckets[k]

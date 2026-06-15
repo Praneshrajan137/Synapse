@@ -61,3 +61,20 @@ class TestRateLimiter:
             RateLimiter(rate_per_sec=0, burst=1)
         with pytest.raises(ValueError, match="positive"):
             RateLimiter(rate_per_sec=1, burst=0)
+
+    def test_evicts_idle_buckets_after_window(self) -> None:
+        # PR-5: idle buckets are reclaimed once a check arrives past the window —
+        # previously eviction never ran below 1024 buckets (a slow leak).
+        rl = RateLimiter(rate_per_sec=1, burst=1, idle_evict_sec=300.0)
+        rl.check("ip-old", now=0.0)
+        assert "ip-old" in rl._buckets
+        rl.check("ip-new", now=400.0)  # > idle window → scan runs
+        assert "ip-old" not in rl._buckets  # idle bucket dropped
+        assert "ip-new" in rl._buckets  # fresh bucket kept
+
+    def test_no_eviction_within_window(self) -> None:
+        # Within the window and below the size cap, no scan (keeps it cheap).
+        rl = RateLimiter(rate_per_sec=1, burst=1, idle_evict_sec=300.0)
+        rl.check("a", now=0.0)
+        rl.check("b", now=10.0)
+        assert {"a", "b"} <= set(rl._buckets)

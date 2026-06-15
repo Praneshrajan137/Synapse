@@ -20,6 +20,7 @@ import structlog
 from fastapi import APIRouter, Depends, HTTPException, Path, status
 from pydantic import BaseModel, Field, field_validator
 from synapse_common.auth import OperatorContext, Role
+from synapse_common.clients import get_client
 from synapse_common.tracing import inject_a2a_headers
 
 from api.middleware.jwt import CurrentOperator, RequireRole
@@ -47,6 +48,27 @@ def _dsn() -> str:
     return dsn
 
 
+# PR-4 (P1.5): a slow/hung DB must never block a worker forever. connect_timeout
+# bounds the TCP/auth handshake; the server-side statement_timeout (ms) bounds any
+# single query. Both tunable via env. The read endpoints below are plain `def` so
+# FastAPI runs them in its threadpool — the blocking psycopg2 work never starves
+# the event loop (previously they were `async def`, blocking every concurrent
+# request on one slow query).
+_CONNECT_TIMEOUT_S = int(os.environ.get("SYNAPSE_DB_CONNECT_TIMEOUT", "5"))
+_STATEMENT_TIMEOUT_MS = int(os.environ.get("SYNAPSE_DB_STATEMENT_TIMEOUT_MS", "30000"))
+
+
+def _connect() -> Any:
+    """psycopg2 connection with bounded connect + statement timeouts."""
+    import psycopg2
+
+    return psycopg2.connect(
+        _dsn(),
+        connect_timeout=_CONNECT_TIMEOUT_S,
+        options=f"-c statement_timeout={_STATEMENT_TIMEOUT_MS}",
+    )
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 # Existing endpoints (kept; SELECT now aliases `id` → `audit_id` to match
 # the documented API shape the FE consumes).
@@ -65,12 +87,15 @@ async def trigger_decision(
     trace_headers: dict[str, str] = {}
     inject_a2a_headers(trace_headers)
     try:
-        async with httpx.AsyncClient(timeout=30.0) as client:
-            resp = await client.post(
-                f"{ORCHESTRATOR_URL}/api/v1/decisions",
-                json=payload,
-                headers=trace_headers,
-            )
+        # PR-4 (P1.6): reuse the shared bulkhead pool instead of a fresh client +
+        # connection pool per request (defeated pooling, risked exhaustion).
+        client = await get_client("orchestrator")
+        resp = await client.post(
+            f"{ORCHESTRATOR_URL}/api/v1/decisions",
+            json=payload,
+            headers=trace_headers,
+            timeout=30.0,
+        )
     except httpx.HTTPError as exc:
         raise HTTPException(status_code=503, detail=f"orchestrator unreachable: {exc}") from exc
     if resp.status_code != 200:
@@ -79,7 +104,7 @@ async def trigger_decision(
 
 
 @router.get("/recent")
-async def recent_decisions(
+def recent_decisions(
     op: Annotated[OperatorContext, Depends(CurrentOperator)],
     limit: int = 20,
     tier: str | None = None,
@@ -99,10 +124,9 @@ async def recent_decisions(
     if city is not None and city not in {"bengaluru", "mumbai"}:
         raise HTTPException(status_code=422, detail="invalid city")
     try:
-        import psycopg2
         from synapse_common.synthetic import SYNTHETIC_ORDER_PREFIX
 
-        conn = psycopg2.connect(_dsn())
+        conn = _connect()
         try:
             with conn.cursor() as cur:
                 where = ["1=1"]
@@ -170,7 +194,7 @@ async def recent_decisions(
 
 
 @router.get("/{decision_id}")
-async def get_decision(
+def get_decision(
     decision_id: UUID,
     op: Annotated[OperatorContext, Depends(CurrentOperator)],
 ) -> dict[str, Any]:
@@ -186,7 +210,7 @@ async def get_decision(
     try:
         import psycopg2
 
-        conn = psycopg2.connect(_dsn())
+        conn = _connect()
         try:
             with conn.cursor() as cur:
                 cur.execute(
@@ -397,10 +421,15 @@ async def override_decision(
         human_action_blob["modified_action"] = body.modified_action
 
     try:
-        import psycopg2
         from psycopg2.errors import UniqueViolation
 
-        conn = psycopg2.connect(_dsn())
+        # NOTE: this operator-override path is async (it awaits the orchestrator
+        # notify below) and still does its psycopg2 work inline. It is a rare,
+        # human-driven action and is now bounded by _connect()'s connect +
+        # statement timeouts; the hot, high-QPS read paths above are the ones
+        # moved to the threadpool. A future change can move this DB block to
+        # anyio.to_thread once it has a real-Postgres test.
+        conn = _connect()
         try:
             with conn, conn.cursor() as cur:
                 # WS-2 idempotency: if the caller supplied a key, check for
@@ -511,19 +540,21 @@ async def override_decision(
     inject_a2a_headers(notify_headers)
     orchestrator_ok = False
     try:
-        async with httpx.AsyncClient(timeout=10.0) as client:
-            resp = await client.post(
-                f"{ORCHESTRATOR_URL}/api/v1/hitl/{decision_id}/resolve",
-                json={
-                    "audit_escalation_id": escalation_id,
-                    "operator_token_ref": op.token_ref,
-                    "action": body.action,
-                    "reason": body.reason,
-                    "modified_action": body.modified_action,
-                },
-                headers=notify_headers,
-            )
-            orchestrator_ok = resp.status_code in (200, 202, 204)
+        # PR-4 (P1.6): shared bulkhead pool, not a per-request client.
+        client = await get_client("orchestrator")
+        resp = await client.post(
+            f"{ORCHESTRATOR_URL}/api/v1/hitl/{decision_id}/resolve",
+            json={
+                "audit_escalation_id": escalation_id,
+                "operator_token_ref": op.token_ref,
+                "action": body.action,
+                "reason": body.reason,
+                "modified_action": body.modified_action,
+            },
+            headers=notify_headers,
+            timeout=10.0,
+        )
+        orchestrator_ok = resp.status_code in (200, 202, 204)
     except httpx.HTTPError as exc:
         logger.warning(
             "orchestrator_notify_failed",

@@ -16,6 +16,7 @@ FE shows "Live" rather than "Offline" — degrades gracefully).
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import json
 import os
 from typing import Any
@@ -27,6 +28,12 @@ logger = structlog.get_logger(__name__)
 router = APIRouter()
 
 KAFKA_BOOTSTRAP = os.environ.get("SYNAPSE_KAFKA_BOOTSTRAP", "kafka:9092")
+
+# PR-5 backpressure tunables. A slow WS client must not back up the shared Kafka
+# consumer loop; bound the per-send wait and the consumer's per-poll buffer.
+SEND_TIMEOUT_S = float(os.environ.get("SYNAPSE_FIREHOSE_SEND_TIMEOUT", "5"))
+MAX_POLL_RECORDS = int(os.environ.get("SYNAPSE_FIREHOSE_MAX_POLL_RECORDS", "200"))
+FETCH_MAX_BYTES = int(os.environ.get("SYNAPSE_FIREHOSE_FETCH_MAX_BYTES", str(1024 * 1024)))
 
 # Curated FE channel → Kafka topic map. Keys are stable across versions
 # (the FE binds to them); changing values requires migration.
@@ -81,7 +88,19 @@ async def firehose(
                 "ts": _now_iso(),
                 "payload": payload,
             }
-        await websocket.send_text(_canonical_json(envelope))
+        # PR-5 backpressure: bound the send. A consumer too slow to drain within
+        # SEND_TIMEOUT_S is dropped (socket closed) rather than stalling the shared
+        # Kafka consumer loop for everyone; the FE reconnects with since_seq.
+        try:
+            await asyncio.wait_for(
+                websocket.send_text(_canonical_json(envelope)),
+                timeout=SEND_TIMEOUT_S,
+            )
+        except (TimeoutError, asyncio.TimeoutError):
+            logger.warning("firehose_slow_consumer_dropped", channel=channel, seq=seq)
+            with contextlib.suppress(Exception):
+                await websocket.close(code=status.WS_1011_INTERNAL_ERROR)
+            raise
 
     consumer_task = asyncio.create_task(_consume(valid, city, send_event))
     try:
@@ -126,6 +145,8 @@ async def _consume(
         bootstrap_servers=KAFKA_BOOTSTRAP,
         enable_auto_commit=False,
         auto_offset_reset="latest",
+        max_poll_records=MAX_POLL_RECORDS,
+        fetch_max_bytes=FETCH_MAX_BYTES,
         value_deserializer=lambda v: json.loads(v.decode("utf-8")),
     )
     try:

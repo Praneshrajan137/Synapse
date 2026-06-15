@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import os
 import time
 from datetime import UTC
 from typing import TYPE_CHECKING, Any
@@ -73,7 +74,9 @@ AGENT_ENDPOINTS: dict[str, str] = {
 # (orchestrator/contracts/twin_simulation_contract.py). Bounded + degrades
 # honestly (I-7) so a slow/absent twin never stalls or 504s the decision.
 TWIN_ENDPOINT = "http://digital-twin:8009"
-TWIN_SCENARIOS = 1000
+# PR-5: tunable so the synchronous twin-verify cap (~8s on a small CPU VM) can be
+# matched to the deployment's compute instead of a hardcoded 1000-scenario run.
+TWIN_SCENARIOS = int(os.environ.get("SYNAPSE_TWIN_SCENARIOS", "1000"))
 
 
 class ConsensusProtocol:
@@ -182,7 +185,7 @@ class ConsensusProtocol:
         request: dict[str, Any],
         tier: DecisionTier,
     ) -> ConsensusDecision:
-        proposals = await self._phase_collect(request)
+        proposals = await self._phase_collect(request, tier)
 
         decision = self._build_decision(
             proposals=proposals,
@@ -202,7 +205,7 @@ class ConsensusProtocol:
         tier: DecisionTier,
         classification: TierClassification,
     ) -> ConsensusDecision:
-        proposals = await self._phase_collect(request)
+        proposals = await self._phase_collect(request, tier)
 
         debate_rounds = 0
         conflict = self._detect_conflicts(proposals)
@@ -250,11 +253,12 @@ class ConsensusProtocol:
     async def _phase_collect(
         self,
         request: dict[str, Any],
+        tier: DecisionTier,
     ) -> list[AgentProposal]:
         self._fsm.transition("decision_request_received")
 
         tasks = {
-            name: self._request_proposal(name, url, request)
+            name: self._request_proposal(name, url, request, tier)
             for name, url in AGENT_ENDPOINTS.items()
         }
         results = await asyncio.gather(
@@ -288,12 +292,16 @@ class ConsensusProtocol:
         agent_name: str,
         agent_url: str,
         request: dict[str, Any],
+        tier: DecisionTier,
     ) -> AgentProposal:
+        # PR-4 (P1.6): tier-aware timeout (I-10 SLAs: T1=2s … T4=120s) instead of a
+        # single fixed proposal_timeout for every tier — so a fast tier fails fast on
+        # a dead agent rather than waiting the worst-case budget.
         response = await send_a2a_request(
             target_url=agent_url,
             method="proposal",
             params={"decision_context": request},
-            timeout=self._config.proposal_timeout_seconds,
+            tier=tier,
         )
         if response.error:
             raise RuntimeError(f"{agent_name}: {response.error}")

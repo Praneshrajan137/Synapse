@@ -19,6 +19,10 @@ logger = structlog.get_logger(__name__)
 
 _JSON_KWARGS: dict[str, Any] = {"sort_keys": True, "separators": (",", ":")}
 
+# PR-5: cap concurrent Pinecone lookups in retrieve_batch so a large batch can't
+# open hundreds of connections at once.
+_BATCH_MAX_CONCURRENCY = 32
+
 
 class SemanticDecisionCache:
     """Pinecone-backed semantic cache for consensus decisions."""
@@ -93,10 +97,18 @@ class SemanticDecisionCache:
         if not queries:
             return {}
 
+        # PR-5: bound fan-out concurrency and isolate failures — one bad query
+        # becomes a miss for that key, never a failed batch.
+        sem = asyncio.Semaphore(_BATCH_MAX_CONCURRENCY)
+
         async def _one(
             embedding: list[float], context_hash: str
         ) -> tuple[str, dict[str, Any] | None]:
-            cached = await self.check_cache(embedding, context_hash)
+            async with sem:
+                try:
+                    cached = await self.check_cache(embedding, context_hash)
+                except Exception:  # noqa: BLE001 — a miss must never fail the batch
+                    cached = None
             return context_hash, cached
 
         results = await asyncio.gather(
