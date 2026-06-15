@@ -437,16 +437,17 @@ jobs:
                          images --quiet | xargs -r -n1 docker inspect --format \
                          '{{.RepoTags}} -> {{.Id}}'"
 
-      - name: Apply forward DB migrations (existing volume)
+      - name: Apply DB migrations (idempotent runner, existing volume)
         run: |
           # docker-entrypoint-initdb.d only runs on an EMPTY data dir, so an
-          # already-provisioned postgres_data volume never picks up new SQL.
-          # Apply the idempotent forward migrations explicitly on every deploy.
-          # Both files are pure ADD COLUMN/CREATE ... IF NOT EXISTS, so
-          # re-running them is a no-op once applied; ON_ERROR_STOP=1 fails the
-          # deploy loudly if one is ever not idempotent. -U/-d use the public
-          # (non-secret) defaults from docker-compose.gcp.yml (synapse /
-          # synapse_audit); the password lives in the container env, not here.
+          # already-provisioned postgres_data volume never picks up new/changed SQL.
+          # scripts/db/migrate.sh is the SINGLE source of apply-order: it applies
+          # the FULL ordered chain idempotently (self-healing — it reconciles a
+          # partially-initialised volume), with ON_ERROR_STOP=1. This replaces the
+          # old hand-listed 3-file step, which is exactly how the WS-2 outbox
+          # migration was forgotten and the outbox subsystem rotted. -U/-d use the
+          # public (non-secret) defaults from docker-compose.gcp.yml; the password
+          # lives in the container env, not here.
           gcloud compute ssh ${{ vars.GCP_VM }} \
             --zone=${{ vars.GCP_ZONE }} \
             --tunnel-through-iap \
@@ -454,9 +455,9 @@ jobs:
             --ssh-flag="-o ServerAliveInterval=30" \
             --ssh-flag="-o ServerAliveCountMax=20" \
             --command="cd ~/synapse && \
-                       docker compose -f docker/docker-compose.gcp.yml --env-file .env.gcp --env-file .env.gcp.local exec -T postgres psql -U synapse -d synapse_audit -v ON_ERROR_STOP=1 -f /docker-entrypoint-initdb.d/07_ws5_steering.sql && \
-                       docker compose -f docker/docker-compose.gcp.yml --env-file .env.gcp --env-file .env.gcp.local exec -T postgres psql -U synapse -d synapse_audit -v ON_ERROR_STOP=1 -f /docker-entrypoint-initdb.d/08_wsA_consensus_city.sql && \
-                       docker compose -f docker/docker-compose.gcp.yml --env-file .env.gcp --env-file .env.gcp.local exec -T postgres psql -U synapse -d synapse_audit -v ON_ERROR_STOP=1 -f /docker-entrypoint-initdb.d/09_sprint19_outcomes.sql"
+                       SYN_PSQL='docker compose -f docker/docker-compose.gcp.yml --env-file .env.gcp --env-file .env.gcp.local exec -T postgres psql -U synapse -d synapse_audit' \
+                       SYN_INITDB_DIR=/docker-entrypoint-initdb.d \
+                       bash scripts/db/migrate.sh"
 
       - name: Provision Kafka topics (auto.create is disabled — pre-provision)
         run: |

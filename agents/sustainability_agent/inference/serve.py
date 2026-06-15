@@ -110,6 +110,9 @@ async def handle_a2a(request: dict[str, object]) -> dict[str, object]:
 
 @app.get("/health", response_model=HealthResponse)
 async def health() -> HealthResponse:
+    # Honest readiness (P1.1): 503 when the pipeline never initialised.
+    if _pipeline is None:
+        raise HTTPException(status_code=503, detail="pipeline not initialised")
     return HealthResponse(
         status="healthy",
         carbon_tracker_ready=_pipeline is not None and _pipeline._carbon is not None,

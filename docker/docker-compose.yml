@@ -164,10 +164,27 @@ services:
       - "5432:5432"
     volumes:
       - postgres-data:/var/lib/postgresql/data
+      # Sprint 20 (PR-2): dev now mounts the FULL ordered chain, identical to
+      # docker-compose.gcp.yml. Previously dev mounted only 01-04, so audit_outbox/
+      # audit_steering/decision_outcomes did not exist locally — and the orchestrator
+      # connects as synapse_app (no CREATE on PG16's public schema), so create_all
+      # could not make them either. That parity hole is exactly why the outbox schema
+      # rot (C55) escaped local testing. This ordering is the single source mirrored
+      # in scripts/db/migrate.sh.
       - ../infrastructure/postgres/init_audit.sql:/docker-entrypoint-initdb.d/01_init_audit.sql:ro
       - ../infrastructure/postgres/02_sprint4_consensus.sql:/docker-entrypoint-initdb.d/02_sprint4_consensus.sql:ro
       - ../infrastructure/postgres/03_p1_override.sql:/docker-entrypoint-initdb.d/03_p1_override.sql:ro
       - ../infrastructure/postgres/04_p3_city.sql:/docker-entrypoint-initdb.d/04_p3_city.sql:ro
+      - ../infrastructure/postgres/03_sprint7_outbox.sql:/docker-entrypoint-initdb.d/05_sprint7_outbox.sql:ro
+      - ../infrastructure/postgres/05_ws2_orders_outbox.sql:/docker-entrypoint-initdb.d/06_ws2_orders_outbox.sql:ro
+      - ../infrastructure/postgres/04_sprint9_audit_chain.sql:/docker-entrypoint-initdb.d/07_sprint9_audit_chain.sql:ro
+      - ../infrastructure/postgres/06_ws5_steering.sql:/docker-entrypoint-initdb.d/08_ws5_steering.sql:ro
+      - ../infrastructure/postgres/07_wsA_consensus_city.sql:/docker-entrypoint-initdb.d/09_wsA_consensus_city.sql:ro
+      - ../infrastructure/postgres/08_sprint19_outcomes.sql:/docker-entrypoint-initdb.d/10_sprint19_outcomes.sql:ro
+      # NOTE (deliberate divergence): dev has no api-gateway service — nginx routes
+      # /api/ straight to the orchestrator. The api/ gateway (auth, rate limiting) is
+      # exercised by api/tests + runs in docker-compose.gcp.yml. Schema parity (the
+      # bug class that actually escaped) is what PR-2 restores here.
     networks:
       - infra-net
       - agents-net

@@ -216,3 +216,54 @@ DIGITAL_TWIN_KL_DIVERGENCE = Gauge(
     "KL(twin || live) per agent (I-12, INV-TW-003). Re-sync triggers above 0.1.",
     ["agent_name"],
 )
+
+# --- Sprint 20 (PR-3) — surface silent failures + per-dependency observability --
+# Before these, three critical paths were invisible: which agent's A2A call is slow
+# or failing (the consensus fan-out had no per-target metric), how often the rate
+# limiter rejects, and whether the digital-twin simulation is erroring. A failure
+# nobody can see is the worst failure mode (structured-pessimism lens).
+
+# Per-target A2A call observability, emitted caller-side in a2a_sdk._do_send.
+A2A_REQUEST_LATENCY = Histogram(
+    "synapse_a2a_request_latency_seconds",
+    "A2A JSON-RPC call latency (caller side) by target host and method",
+    ["target", "method"],
+    buckets=[0.01, 0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0, 10.0, 30.0, 60.0, 120.0],
+)
+
+A2A_REQUESTS_TOTAL = Counter(
+    "synapse_a2a_requests_total",
+    "A2A JSON-RPC calls by target host, method and outcome "
+    "(ok|client_error|server_error|transport_error)",
+    ["target", "method", "outcome"],
+)
+
+# Rate-limit rejections (HTTP 429), emitted by the API gateway middleware. Path is
+# coarsened to the first two segments to bound label cardinality (no decision IDs).
+RATELIMIT_REJECTIONS_TOTAL = Counter(
+    "synapse_ratelimit_rejections_total",
+    "API requests rejected (HTTP 429) by the application-layer rate limiter",
+    ["path"],
+)
+
+# Digital-twin simulation observability, emitted by digital_twin/inference/serve.py.
+TWIN_SIMULATION_TOTAL = Counter(
+    "synapse_twin_simulation_total",
+    "Digital-twin A2A simulation calls by method and outcome (ok|bad_request|error)",
+    ["method", "outcome"],
+)
+
+TWIN_SIMULATION_LATENCY = Histogram(
+    "synapse_twin_simulation_latency_seconds",
+    "Digital-twin simulation handler latency by method",
+    ["method"],
+    buckets=[0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0, 8.0, 10.0, 30.0],
+)
+
+# 1 if a critical dependency was unavailable at process startup (e.g. Kafka). This
+# replaces a silent ``except: producer=None`` with an operator-visible signal.
+STARTUP_DEGRADED = Gauge(
+    "synapse_startup_degraded",
+    "1 if a critical dependency was unavailable at process startup, by dependency",
+    ["dependency"],
+)

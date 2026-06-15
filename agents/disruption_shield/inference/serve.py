@@ -67,7 +67,9 @@ app = FastAPI(
 
 @app.get("/health")
 async def health() -> dict[str, object]:
-    """Health check endpoint."""
+    """Health check endpoint. Honest readiness (P1.1): 503 when unready."""
+    if _pipeline is None:
+        raise HTTPException(status_code=503, detail="pipeline not initialised")
     return {
         "status": "healthy",
         "agent": "disruption_shield",

@@ -14,6 +14,7 @@ Sprint-7 hardening (WS-1 §4, WS-2 §1, ADR-025/026):
 from __future__ import annotations
 
 import json
+import time
 from typing import Any
 from uuid import uuid4
 
@@ -22,6 +23,7 @@ import structlog
 
 from synapse_common.breakers import get_breaker
 from synapse_common.clients import get_client
+from synapse_common.metrics import A2A_REQUEST_LATENCY, A2A_REQUESTS_TOTAL
 from synapse_common.models import DecisionTier, SynapseBaseModel
 from synapse_common.retry import retry_with_jitter
 from synapse_common.tracing import inject_a2a_headers
@@ -140,6 +142,12 @@ async def _do_send(
 
     client = await get_client("a2a")
     body = json.dumps(request.model_dump(mode="json"), **JSON_KWARGS)
+    # PR-3 observability: per-target call latency + outcome. Before this the
+    # consensus fan-out had no per-agent metric, so a slow/failing single agent
+    # was invisible (you could only see the aggregate consensus duration).
+    target = _target_label(target_url)
+    start = time.monotonic()
+    outcome = "ok"
     try:
         response = await client.post(
             f"{target_url}/a2a",
@@ -149,6 +157,7 @@ async def _do_send(
         )
         response.raise_for_status()
     except httpx.HTTPStatusError as exc:
+        outcome = "client_error" if 400 <= exc.response.status_code < 500 else "server_error"
         if 400 <= exc.response.status_code < 500:
             logger.error(
                 "a2a_client_error_no_retry",
@@ -157,8 +166,15 @@ async def _do_send(
                 status=exc.response.status_code,
                 request_id=request.id,
             )
-            raise
         raise
+    except httpx.TransportError:
+        outcome = "transport_error"
+        raise
+    finally:
+        A2A_REQUEST_LATENCY.labels(target=target, method=method).observe(
+            time.monotonic() - start
+        )
+        A2A_REQUESTS_TOTAL.labels(target=target, method=method, outcome=outcome).inc()
     return A2AResponse.model_validate(response.json())
 
 
@@ -167,3 +183,9 @@ def _breaker_name(target_url: str) -> str:
     netloc = target_url.split("://", 1)[-1]
     netloc = netloc.split("/", 1)[0]
     return f"a2a:{netloc}"
+
+
+def _target_label(target_url: str) -> str:
+    """Low-cardinality metric label: the target host (no scheme/port/path)."""
+    netloc = target_url.split("://", 1)[-1].split("/", 1)[0]
+    return netloc.split(":")[0]

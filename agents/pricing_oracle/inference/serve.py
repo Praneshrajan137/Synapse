@@ -151,6 +151,9 @@ async def price(request: PriceRequest) -> PriceResponse:
 
 @app.get("/health", response_model=HealthResponse)
 async def health() -> HealthResponse:
+    # Honest readiness (P1.1): 503 when the pipeline never initialised.
+    if _pipeline is None:
+        raise HTTPException(status_code=503, detail="pipeline not initialised")
     return HealthResponse(
         status="healthy",
         model_loaded=_pipeline is not None and _pipeline._model is not None,

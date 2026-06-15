@@ -17,13 +17,17 @@ from uuid import UUID
 
 import structlog
 from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
-from fastapi.responses import Response
+from fastapi.responses import JSONResponse, Response
 from pydantic import BaseModel, Field
-from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
+from sqlalchemy import text
+from sqlalchemy.ext.asyncio import AsyncEngine, async_sessionmaker, create_async_engine
+from synapse_common.health import readiness_response
 from synapse_common.kafka_client import KafkaConfig, SynapseProducer
+from synapse_common.metrics import STARTUP_DEGRADED
 
 from orchestrator.a2a.handler import OrchestratorA2AHandler
 from orchestrator.audit.logger import AuditLogger
+from orchestrator.audit.models import AuditOutboxRow
 from orchestrator.audit.models import Base as AuditBase
 from orchestrator.config import OrchestratorConfig
 from orchestrator.consensus.protocol import ConsensusProtocol
@@ -47,25 +51,45 @@ _ws_manager: WebSocketManager | None = None
 _a2a_handler: OrchestratorA2AHandler | None = None
 _hitl: HITLEscalation | None = None
 _outbox_dispatcher: OutboxDispatcher | None = None
+_engine: AsyncEngine | None = None
+_kafka_ok: bool = False
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     global _config, _protocol, _ws_manager, _a2a_handler, _hitl, _outbox_dispatcher
+    global _engine, _kafka_ok
 
     _config = OrchestratorConfig()
 
     engine = create_async_engine(_config.postgresql_url, echo=False)
+    _engine = engine
     async with engine.begin() as conn:
         await conn.run_sync(AuditBase.metadata.create_all)
+        # P1.2 fail-fast: refuse to start if the live audit_outbox columns drift from
+        # the ORM. Otherwise the dispatcher swallows the schema error on every drain
+        # (silently, forever) and no decision reaches Kafka. C55 guards this in CI;
+        # this is its runtime counterpart against the actual deployed database.
+        await _assert_outbox_schema(conn)
     session_factory = async_sessionmaker(engine, expire_on_commit=False)
 
     kafka_cfg = KafkaConfig(bootstrap_servers=_config.kafka_bootstrap_servers)
     try:
         kafka_producer = SynapseProducer(kafka_cfg)
-    except Exception:
+        _kafka_ok = True
+        STARTUP_DEGRADED.labels(dependency="kafka").set(0.0)
+    except Exception as exc:
         kafka_producer = None
-        logger.warning("kafka_unavailable_at_startup")
+        _kafka_ok = False
+        STARTUP_DEGRADED.labels(dependency="kafka").set(1.0)
+        # ERROR, not WARNING: the outbox dispatcher is disabled in this state, so
+        # PENDING rows accumulate and no decision reaches Kafka until a restart with
+        # Kafka up. Surfaced via synapse_startup_degraded + /health "degraded".
+        logger.error(
+            "kafka_unavailable_at_startup",
+            error=str(exc),
+            impact="outbox dispatcher disabled; PENDING rows accumulate until restart",
+        )
 
     tier_router = TierRouter()
     guardrails = GuardrailEngine(confidence_threshold=_config.confidence_threshold)
@@ -143,6 +167,44 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     await ollama_client.close()
 
 
+async def _assert_outbox_schema(conn: Any) -> None:
+    """Assert the live ``audit_outbox`` table has every ORM column (P1.2).
+
+    A drift here is exactly what gate C55 catches statically: the dispatcher's
+    claim/INSERT would error every cycle and the error would be swallowed. Fail
+    fast and loud instead of degrading silently — the operator must run
+    ``scripts/db/migrate.sh``.
+    """
+    expected = {c.name for c in AuditOutboxRow.__table__.columns}
+    result = await conn.execute(
+        text(
+            "SELECT column_name FROM information_schema.columns "
+            "WHERE table_name = 'audit_outbox'"
+        )
+    )
+    actual = {row[0] for row in result}
+    missing = expected - actual
+    if missing:
+        raise RuntimeError(
+            f"audit_outbox schema drift: ORM columns missing in DB: {sorted(missing)}. "
+            "Run scripts/db/migrate.sh (C55 guards this statically; this is the "
+            "runtime guard against the deployed database)."
+        )
+
+
+async def _ping_db() -> bool:
+    """Return True iff a trivial query against the audit DB succeeds (for /health)."""
+    if _engine is None:
+        return False
+    try:
+        async with _engine.connect() as conn:
+            await conn.execute(text("SELECT 1"))
+        return True
+    except Exception as exc:  # noqa: BLE001 — health probes must never raise
+        logger.warning("health_db_ping_failed", error=str(exc))
+        return False
+
+
 app = FastAPI(
     title="SYNAPSE Orchestrator",
     version="0.4.0",
@@ -186,12 +248,25 @@ async def create_decision(request: DecisionRequest) -> DecisionResponse:
 
 
 @app.get("/health")
-async def health() -> dict[str, Any]:
-    return {
-        "status": "healthy",
-        "agent": "orchestrator",
-        "version": "0.4.0",
-    }
+async def health() -> JSONResponse:
+    """Honest readiness (P1.1): HTTP 503 unless the protocol is initialised AND the
+    audit DB answers. Kafka down is 'degraded' (tier-1/2 still serve), not unready.
+    The Dockerfile HEALTHCHECK / compose probe and the C47/C50 deploy gates now
+    reflect real readiness instead of merely 'the HTTP port answers'.
+    """
+    db_ok = await _ping_db()
+    ready = _protocol is not None and db_ok
+    dispatcher_running = _outbox_dispatcher is not None and _outbox_dispatcher.running
+    return readiness_response(
+        "orchestrator",
+        ready=ready,
+        degraded=not _kafka_ok or not dispatcher_running,
+        version="0.4.0",
+        database=db_ok,
+        protocol=_protocol is not None,
+        kafka="up" if _kafka_ok else "down",
+        outbox_dispatcher="running" if dispatcher_running else "stopped",
+    )
 
 
 @app.get("/api/v1/status/posture")

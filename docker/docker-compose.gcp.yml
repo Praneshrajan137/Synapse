@@ -107,26 +107,30 @@ services:
     ports: ["5432:5432"]
     volumes:
       - postgres_data:/var/lib/postgresql/data
-      # Sequenced 01-06 so docker-entrypoint-initdb.d applies them in order.
-      # Sprint 7 outbox + Sprint 9 audit chain MUST run last (extend earlier tables).
-      # Source of truth: orchestrator/audit/migrations/ (mirrored here per E-S9-14).
+      # Sequenced 01-10 so docker-entrypoint-initdb.d applies them in order. This
+      # ordering is the single source of truth, mirrored in scripts/db/migrate.sh
+      # (the runner that applies them to an already-initialised live volume, since
+      # initdb.d only fires on an empty datadir). Source: orchestrator/audit/
+      # migrations/ (mirrored here per E-S9-14). Outbox/WS-2/audit-chain extend
+      # earlier tables, so they MUST run after them.
       - ../infrastructure/postgres/init_audit.sql:/docker-entrypoint-initdb.d/01_init_audit.sql:ro
       - ../infrastructure/postgres/02_sprint4_consensus.sql:/docker-entrypoint-initdb.d/02_sprint4_consensus.sql:ro
       - ../infrastructure/postgres/03_p1_override.sql:/docker-entrypoint-initdb.d/03_p1_override.sql:ro
       - ../infrastructure/postgres/04_p3_city.sql:/docker-entrypoint-initdb.d/04_p3_city.sql:ro
       - ../infrastructure/postgres/03_sprint7_outbox.sql:/docker-entrypoint-initdb.d/05_sprint7_outbox.sql:ro
-      - ../infrastructure/postgres/04_sprint9_audit_chain.sql:/docker-entrypoint-initdb.d/06_sprint9_audit_chain.sql:ro
+      # WS-2: orders ingress through the outbox + override idempotency. Was
+      # silently dropped (it ALTERed a non-existent audit_id column and errored);
+      # now ORM-true + idempotent, so re-included. MUST run after the outbox table.
+      - ../infrastructure/postgres/05_ws2_orders_outbox.sql:/docker-entrypoint-initdb.d/06_ws2_orders_outbox.sql:ro
+      - ../infrastructure/postgres/04_sprint9_audit_chain.sql:/docker-entrypoint-initdb.d/07_sprint9_audit_chain.sql:ro
       # Phase A (WS-A): steering table (was silently dropped from the mounts —
       # left /api/v1/steering broken) + city column on audit_consensus (lets the
       # decisions feed read the real write-target table). Both fully idempotent.
-      # The "Apply forward DB migrations" CD step also runs these against the
-      # already-initialised live volume (initdb.d only fires on an empty datadir).
-      - ../infrastructure/postgres/06_ws5_steering.sql:/docker-entrypoint-initdb.d/07_ws5_steering.sql:ro
-      - ../infrastructure/postgres/07_wsA_consensus_city.sql:/docker-entrypoint-initdb.d/08_wsA_consensus_city.sql:ro
+      - ../infrastructure/postgres/06_ws5_steering.sql:/docker-entrypoint-initdb.d/08_ws5_steering.sql:ro
+      - ../infrastructure/postgres/07_wsA_consensus_city.sql:/docker-entrypoint-initdb.d/09_wsA_consensus_city.sql:ro
       # Sprint 19 (ADR-047): append-only decision_outcomes fact stream. Fully
-      # idempotent + I-4 self-test; the "Apply forward DB migrations" CD step
-      # also runs it against the already-initialised live volume.
-      - ../infrastructure/postgres/08_sprint19_outcomes.sql:/docker-entrypoint-initdb.d/09_sprint19_outcomes.sql:ro
+      # idempotent + I-4 self-test.
+      - ../infrastructure/postgres/08_sprint19_outcomes.sql:/docker-entrypoint-initdb.d/10_sprint19_outcomes.sql:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-synapse} -d ${POSTGRES_DB:-synapse_audit}"]
       interval: 10s

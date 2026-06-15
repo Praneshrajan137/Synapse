@@ -104,6 +104,9 @@ async def handle_a2a(request: dict[str, object]) -> dict[str, object]:
 
 @app.get("/health")
 async def health() -> dict[str, Any]:
+    # Honest readiness (P1.1): 503 when the pipeline never initialised.
+    if _pipeline is None:
+        raise HTTPException(status_code=503, detail="pipeline not initialised")
     return {
         "status": "healthy",
         "agent": "routing_navigator",

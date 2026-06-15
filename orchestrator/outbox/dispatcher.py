@@ -175,7 +175,10 @@ class OutboxDispatcher:
                 lag = max(0.0, (now - oldest).total_seconds())
                 OUTBOX_LAG_SECONDS.set(lag)
         except Exception as exc:  # noqa: BLE001
-            # Never let the metric path bring the dispatcher down.
+            # Never let the metric path bring the dispatcher down. PR-3: also emit a
+            # counter so a persistently failing lag observation (e.g. schema drift)
+            # is visible to Prometheus, not just a DEBUG line nobody reads.
+            OUTBOX_DISPATCH_TOTAL.labels(status="observe_error").inc()
             logger.debug("outbox_lag_observation_failed", error=str(exc))
 
     async def _drain_once(self) -> int:
@@ -187,6 +190,10 @@ class OutboxDispatcher:
                     return 0
                 await session.commit()
         except Exception as exc:  # noqa: BLE001
+            # PR-3: surface the swallow. A persistent claim error (e.g. schema
+            # drift) was WARNING-only — invisible to Prometheus while the outbox
+            # silently never drained. The counter makes it alertable.
+            OUTBOX_DISPATCH_TOTAL.labels(status="claim_error").inc()
             logger.warning("outbox_claim_failed", error=str(exc))
             return 0
 

@@ -24,6 +24,7 @@ from pydantic import BaseModel, Field
 from digital_twin.config import TwinConfig
 from digital_twin.simulation.what_if import ScenarioSpec, WhatIfEngine, WhatIfResult
 from synapse_common.a2a_sdk import A2ARequest, A2AResponse, AgentCard
+from synapse_common.metrics import TWIN_SIMULATION_LATENCY, TWIN_SIMULATION_TOTAL
 from synapse_common.models import AgentName
 
 logger = structlog.get_logger(__name__)
@@ -129,6 +130,10 @@ async def metrics() -> Response:
 async def a2a_handler(request: A2ARequest) -> A2AResponse:
     """A2A JSON-RPC 2.0 endpoint (I-9)."""
     if request.method == "simulate" and _engine is not None:
+        # PR-3: time + count every simulation by outcome. A cascade of twin
+        # failures used to be invisible (no metric, no error log).
+        start = time.monotonic()
+        outcome = "ok"
         try:
             spec = ScenarioSpec(**request.params)
             result = _engine.simulate(spec)
@@ -137,16 +142,22 @@ async def a2a_handler(request: A2ARequest) -> A2AResponse:
                 result=result.model_dump(mode="json"),
             )
         except (ValueError, TypeError) as e:
+            outcome = "bad_request"
             return A2AResponse(
                 id=request.id,
                 error={"code": -32602, "message": str(e)},
             )
+        finally:
+            TWIN_SIMULATION_LATENCY.labels(method="simulate").observe(time.monotonic() - start)
+            TWIN_SIMULATION_TOTAL.labels(method="simulate", outcome=outcome).inc()
 
     if request.method == "monte_carlo":
         # C7 (ADR-043): the orchestrator verifies a Tier-4 action against the twin's
         # Monte-Carlo what-if. Returns a MonteCarloOutput (consumer contract in
         # orchestrator/contracts/twin_simulation_contract.py). Honest failure on a
         # bad request or sim error — never a 500 that breaks the A2A envelope.
+        start = time.monotonic()
+        outcome = "ok"
         try:
             from digital_twin.simulation.monte_carlo import MonteCarloRunner
 
@@ -154,11 +165,18 @@ async def a2a_handler(request: A2ARequest) -> A2AResponse:
             output = MonteCarloRunner().run_scenarios(n=n)
             return A2AResponse(id=request.id, result=output.to_dict())
         except (ValueError, TypeError) as e:
+            outcome = "bad_request"
             return A2AResponse(id=request.id, error={"code": -32602, "message": str(e)})
         except Exception as e:  # noqa: BLE001 — sim/engine failure degrades (I-7)
+            outcome = "error"
+            # PR-3: was fully silent (no log, no metric). Surface it.
+            logger.error("twin_monte_carlo_failed", error=str(e))
             return A2AResponse(
                 id=request.id, error={"code": -32000, "message": f"monte_carlo failed: {e}"}
             )
+        finally:
+            TWIN_SIMULATION_LATENCY.labels(method="monte_carlo").observe(time.monotonic() - start)
+            TWIN_SIMULATION_TOTAL.labels(method="monte_carlo", outcome=outcome).inc()
 
     if request.method == "health":
         return A2AResponse(

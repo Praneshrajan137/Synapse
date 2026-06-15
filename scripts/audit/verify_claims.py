@@ -1552,6 +1552,39 @@ def check_agents_mirror() -> CheckResult:
 
 
 # ---------------------------------------------------------------------------
+# C55: audit_outbox DDL matches the ORM (Sprint 20). Before this the ORM and the
+# mounted DDL drifted (the ORM had audit_id/headers/next_attempt_at + an
+# outbox_status ENUM; the DDL had message_key/attempts/trace_id + TEXT status),
+# so on a fresh DB the enqueue INSERT failed and rolled back the whole
+# decision-logging transaction — the orchestrator could log NO decisions.
+# ---------------------------------------------------------------------------
+@register("C55", "audit_outbox DDL matches the ORM (no schema drift)")
+def check_outbox_schema_truth() -> CheckResult:
+    try:
+        from scripts.audit.outbox_schema_truth import collect
+    except ImportError as exc:
+        return CheckResult(
+            "C55", "Outbox schema truth", "SKIP", f"outbox_schema_truth import failed: {exc}"
+        )
+    violations = collect()
+    total = len(violations)
+    if total > 0:
+        first = violations[0]
+        return CheckResult(
+            "C55",
+            "Outbox schema truth",
+            "FAIL",
+            f"{total} ORM<->DDL drift(s) - {first.file} {first.kind}: {first.detail}",
+        )
+    return CheckResult(
+        "C55",
+        "Outbox schema truth",
+        "PASS",
+        "ORM == canonical DDL == docker mirror; outbox enqueue cannot fail on a fresh DB",
+    )
+
+
+# ---------------------------------------------------------------------------
 # Main entry
 # ---------------------------------------------------------------------------
 def run(as_json: bool = False) -> int:

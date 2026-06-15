@@ -19,6 +19,7 @@ import structlog
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
 from starlette.responses import JSONResponse, Response
+from synapse_common.metrics import RATELIMIT_REJECTIONS_TOTAL
 from synapse_common.ratelimit import RateLimiter
 
 logger = structlog.get_logger(__name__)
@@ -33,6 +34,11 @@ def _client_key(request: Request) -> str:
     if xff:
         return xff.split(",")[0].strip()
     return request.client.host if request.client else "unknown"
+
+
+def _coarse_path(path: str) -> str:
+    """First two path segments only — bounds metric label cardinality (no IDs)."""
+    return "/".join(path.split("/")[:3]) or "/"
 
 
 class RateLimitMiddleware(BaseHTTPMiddleware):
@@ -65,6 +71,7 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         allowed, retry_after = self._limiter.check(_client_key(request))
         if not allowed:
             retry_s = max(1, int(retry_after + 0.999))  # ceil to whole seconds
+            RATELIMIT_REJECTIONS_TOTAL.labels(path=_coarse_path(request.url.path)).inc()
             logger.warning("ratelimited", client=_client_key(request), path=request.url.path)
             return JSONResponse(
                 status_code=429,

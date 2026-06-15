@@ -1,0 +1,10 @@
+# Shell scripts MUST keep LF line endings — they execute on the Linux GCP VM
+# (e.g. scripts/db/migrate.sh, scripts/create_kafka_topics.sh, cd-gcp.yml steps).
+# A CRLF shebang fails with "bad interpreter: /usr/bin/env bash\r". The repo had
+# no .gitattributes and relied on each developer's core.autocrlf; this makes the
+# line ending deterministic regardless of the checkout platform.
+*.sh text eol=lf
+
+# SQL init/migration files are read by psql inside the postgres container; keep
+# them LF for byte-stable behaviour and to silence autocrlf normalisation churn.
+*.sql text eol=lf
