@@ -67,6 +67,31 @@ The current posture, now *named*. ADR-037's mechanisms **are** this tier:
 | Models | CPU-only smoke training in CI; full checkpoints trained out-of-band (free GPU/Colab) and published to HF Hub free tier |
 | SLA | None. Latency/availability are best-effort |
 
+### Tier-D operating decisions (standing, from 2026-06-17)
+
+Deliberate, dated choices — not temporary states. They hold until the project is
+**fully finished and ready for distribution**, at which point Tier P is activated
+by an explicit spend decision. Until then every choice below optimises for
+*credit conservation*, so the GCP trial credit is spent intentionally at launch
+rather than drained on an always-on demo:
+
+- **Region — single-region `asia-south1` (Bangalore).** No multi-region. Bangalore
+  is the home market (the domain is Bangalore/Mumbai quick-commerce) and the
+  lowest-latency, lowest-cost region for the operator. Multi-region is a Tier-P /
+  post-distribution concern only; [ADR-036](ADR-036-gcp-single-vm-not-gke.md) keeps
+  the single-VM topology.
+- **Deploy cadence — the weekly ~30-minute window STAYS.** A push to `main`
+  builds + signs images only; the VM comes up once a week
+  (`cd-gcp.yml` `cron: "0 5 * * 1"`), deploys + verifies (~30 min), then stops.
+  **Rationale:** this conserves the GCP trial credit so it can be spent deliberately
+  when the system is distribution-ready, instead of bleeding on an always-on demo.
+  **Do NOT move to always-on serving before then.** The `doc_truth` gate (C56)
+  guards this cadence claim from silently drifting.
+- **Language — English-only, permanently.** No i18n / locale catalog / language
+  switcher / language detector, in *any* tier (CLAUDE.md Code Quality Rules;
+  standing operator preference). Stated here so "production" is never misread as
+  "add languages" — it is not, now or after distribution.
+
 ### Tier P — Production (costed; activated only by explicit operator spend)
 
 What "production-intent" actually requires. **No part of this is built until the
