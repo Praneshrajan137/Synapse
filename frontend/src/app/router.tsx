@@ -21,6 +21,11 @@ import { Shell } from "./Shell";
 const Operations = lazy(() =>
   import("@surfaces/operations/Operations").then((m) => ({ default: m.Operations })),
 );
+// Council Theater is route-split too (FE-INV-014/025): the choreography pulls
+// the proposal/Pareto viz + framer-motion, kept out of the entry bundle.
+const CouncilTheater = lazy(() =>
+  import("@surfaces/council-theater/CouncilTheater").then((m) => ({ default: m.CouncilTheater })),
+);
 
 export const router = createBrowserRouter([
   { path: "/login", element: <Login /> },
@@ -57,6 +62,18 @@ export const router = createBrowserRouter([
         element: (
           <RouteGuard minRole="viewer">
             <DecisionDetail />
+          </RouteGuard>
+        ),
+      },
+      {
+        path: "council/:id",
+        element: (
+          <RouteGuard minRole="viewer">
+            <Suspense
+              fallback={<div className="p-6 text-sm text-ink-muted">Loading Council Theater…</div>}
+            >
+              <CouncilTheater />
+            </Suspense>
           </RouteGuard>
         ),
       },

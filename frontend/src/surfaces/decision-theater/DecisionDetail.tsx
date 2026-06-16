@@ -1,4 +1,3 @@
-import { ConsensusDecisionSchema } from "@domain/consensus-decision";
 import {
   AgentProposalChip,
   ChainIntegrityChip,
@@ -14,57 +13,21 @@ import {
   TwinDivergenceCaveat,
 } from "@ds/compounds";
 import { Badge } from "@ds/primitives";
+import { useDecisionQuery } from "@hooks/use-decision";
 import { useFirehose } from "@hooks/use-firehose";
-import { useSynapseApi } from "@hooks/use-synapse-api";
 import { fmt } from "@lib/formatters";
 import { phaseName, replayDecision } from "@lib/replay";
 import * as Slider from "@radix-ui/react-slider";
-import { useQuery } from "@tanstack/react-query";
 import { useCallback, useMemo } from "react";
 import { Link, useParams, useSearchParams } from "react-router-dom";
 import { z } from "zod";
 
 export function DecisionDetail() {
   const { id } = useParams<{ id: string }>();
-  const api = useSynapseApi();
-  // WS-4 §4a: the GET /api/v1/decisions/{id} call is now on the typed
-  // client (`api.getDecision`). The DecisionDetailResponseSchema validates
-  // the envelope at the wire boundary; we still reshape into the
-  // ConsensusDecision shape here for the replay function to consume.
-  const query = useQuery({
-    queryKey: ["decision", id],
-    queryFn: async () => {
-      if (!id) throw new Error("missing decision id");
-      const raw = await api.getDecision(id);
-      const candidate = {
-        decision_id: raw.decision_id ?? id,
-        timestamp: raw.created_at ?? new Date().toISOString(),
-        tier: raw.tier ?? "tier_2",
-        proposals: raw.proposals ?? [],
-        selected_action: raw.selected_action ?? {},
-        pareto_weights: raw.pareto_weights ?? {},
-        confidence: raw.confidence ?? 0,
-        audit_trace: raw.audit_trace ?? [],
-        phase_reached: raw.phase_reached ?? 1,
-        // ADR-044: the previously-imprisoned anatomy columns now flow.
-        debate_rounds: raw.debate_rounds ?? 0,
-        human_override: raw.human_override ?? null,
-        // The 8-D arbitration front, when the audit row carries it (Tier 3–4).
-        // Fast-path decisions and older rows have none — ParetoParallel then
-        // renders an honest empty state.
-        pareto_front: raw.pareto_front ?? null,
-        context_messages: raw.context_messages ?? [],
-        execution_confirmations: raw.execution_confirmations ?? [],
-        escalated_to_human: raw.escalated ?? false,
-      };
-      const parsed = ConsensusDecisionSchema.safeParse(candidate);
-      if (!parsed.success) {
-        throw new Error(`schema violation: ${parsed.error.issues[0]?.message ?? "unknown"}`);
-      }
-      return { decision: parsed.data, raw };
-    },
-    enabled: !!id,
-  });
+  // Shared, validated decision source (hooks/use-decision). The Council Theater
+  // consumes the SAME hook, so the analyst scrubber here and the cinematic
+  // reconstruction there can never drift on the reshape (FE-INV-002).
+  const query = useDecisionQuery(id);
 
   const decision = query.data?.decision;
   const raw = query.data?.raw;
@@ -171,6 +134,12 @@ export function DecisionDetail() {
           />
         </div>
         <p className="text-2xs text-ink-subtle">Committed {fmt.relativeTime(decision.timestamp)}</p>
+        <Link
+          to={`/council/${decision.decision_id}`}
+          className="inline-flex w-fit items-center gap-1 text-2xs font-medium text-accent hover:underline"
+        >
+          Watch deliberation →
+        </Link>
       </header>
 
       <section className="grid gap-4 lg:grid-cols-[220px_minmax(0,1fr)]">

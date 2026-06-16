@@ -2,6 +2,7 @@ import type { City } from "@domain/primitives";
 import { fuzzyFilter } from "@lib/fuzzy";
 import * as Dialog from "@radix-ui/react-dialog";
 import { useCityStore } from "@state/city.store";
+import { useFirehoseStore } from "@state/firehose.store";
 import { applyTheme, useThemeStore } from "@state/theme.store";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
@@ -82,6 +83,19 @@ export function CommandPalette() {
         group: "Go to",
         keywords: "tribunal pareto replay",
         run: go("/decisions"),
+      },
+      {
+        id: "go-council",
+        title: "Council Theater (latest)",
+        group: "Go to",
+        keywords: "deliberation consensus reconstruction reasoning debate replay",
+        run: () => {
+          // Best-effort: open the most recent live decision's reconstruction;
+          // fall back to the Decision Theater list when the firehose is empty.
+          const latest = useFirehoseStore.getState().decisions.items.at(-1);
+          navigate(latest ? `/council/${latest.decision_id}` : "/decisions");
+          setOpen(false);
+        },
       },
       {
         id: "go-agents",
