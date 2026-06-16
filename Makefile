@@ -315,7 +315,7 @@ sprint5-verify: ## Full Sprint 5 quality gate verification
 # ============================================================================
 .PHONY: generate-bengaluru generate-mumbai convert-parquet-mumbai seed-mumbai
 .PHONY: transfer-train cold-start-baseline ab-test
-.PHONY: demo demo-fast demo-mumbai verify-multi-city sprint6-verify
+.PHONY: demo demo-up demo-fast demo-mumbai verify-multi-city sprint6-verify
 .PHONY: mumbai-up mumbai-down sprint6-full sprint5-exit-gate
 
 COMPOSE_MUMBAI := docker compose -f docker/docker-compose.yml -f docker/docker-compose.mumbai.yml --env-file docker/.env
@@ -372,7 +372,12 @@ jobs-feast-compact: ## Compact the Feast offline parquet store (data_fabric.jobs
 jobs-scheduler: ## Run the APScheduler batch orchestrator on-demand (data_fabric.scheduler.scheduler)
 	python -m data_fabric.scheduler.scheduler
 
-demo: ## Run the full 5-minute demo
+demo-up: up ## ONE COMMAND (fresh clone): build+start the full stack, wait for health, then run the demo
+	@echo "Waiting up to 180s for the API gateway to report healthy..."
+	@for i in $$(seq 1 36); do $(COMPOSE) ps api 2>/dev/null | grep -qi healthy && { echo "  api gateway healthy"; break; }; sleep 5; done
+	@$(MAKE) demo
+
+demo: ## Run the 5-segment demo choreography (assumes the stack is already up — use `make demo-up` from a clean clone)
 	bash scripts/demo/run_demo.sh bengaluru 1.0
 
 demo-fast: ## Run demo at 3x speed (for verification)
