@@ -1,4 +1,4 @@
-# ADR-048: The Cognition Channel — making the council's deliberation legible (phased)
+# ADR-051: The Cognition Channel — making the council's deliberation legible (phased)
 
 ## Status
 Accepted — **Phases 1–3 implemented.** Phase 1: Council Theater (recorded
@@ -93,9 +93,11 @@ derivation is now backed by evidence, so Phase 3 is pure WIRING:
 - **FE-INV-048** enforces the honesty (derived only from real events, never stale).
 
 ### Numbering note
-On disk the max ADR is 047. **ADR-049** (two-tier cost) and **ADR-050** (STRIDE threat
-model) are already claimed by in-flight PRs, so this is **ADR-048**. Phase 3 needed no new
-ADR or chromatic version because it reused the existing factor.agentstate grammar.
+This work started as ADR-048, but while it was in review three ADRs landed on main:
+**ADR-048** (cobalt-reversal chromatic v2.0.0), **ADR-049** (two-tier cost model) and
+**ADR-050** (STRIDE threat model). To avoid the collision the cognition channel was
+renumbered to **ADR-051**. Phase 3 needed no new ADR or chromatic version anyway, because
+it reused the existing factor.agentstate grammar.
 
 ## Consequences
 **Easier:** operators see the *reasoning*, not just the verdict; the recorded anatomy
