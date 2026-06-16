@@ -49,7 +49,7 @@
 - NEVER use the broad `*/training/*` coverage omit — it hid `rewards.py` (mutation-tested at <15% survival) from the coverage gate. Use the narrow per-file patterns in pyproject (C32)
 
 ### Kafka Rules
-- 17 topics defined in `infrastructure/kafka/topics.json`. Sprint 1 froze inter-agent topics (1-16). Sprint 7 added topic 17 `synapse.orders.demand` as the only ingress freeze exception per [ADR-029](docs/adr/ADR-029-orders-ingress-topic.md) (ingress is a different category from inter-agent communication). Future freeze exceptions require a fresh ADR
+- 18 topics defined in `infrastructure/kafka/topics.json`. Sprint 1 froze inter-agent topics (1-16). Sprint 7 added topic 17 `synapse.orders.demand` as an ingress freeze exception per [ADR-029](docs/adr/ADR-029-orders-ingress-topic.md); ADR-048 added topic 18 `synapse.orchestrator.phase` as an observability (live cognition telemetry) freeze exception — both are different categories from inter-agent communication. Future freeze exceptions require a fresh ADR
 - NEVER use direct kafka-python — use `synapse_common.kafka_client` only
 - NEVER enable `auto.create.topics` — all topics are pre-provisioned
 - All messages use deterministic serialization for KV-cache preservation (I-13)
