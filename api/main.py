@@ -87,6 +87,42 @@ def _install_profiler(app: FastAPI) -> None:
     logger.info("synapse_profile_middleware_installed")
 
 
+def _install_origin_guards(app: FastAPI) -> None:
+    """F2 (ADR-050): explicit CORS allow-list + trusted-host filter.
+
+    Both env-driven. CORS defaults to localhost dev origins — the same-origin FE
+    (served by nginx alongside the API) is unaffected, since CORS only governs
+    *cross-origin* browser requests. TrustedHost defaults to ``*`` for Tier-D
+    (no-op); Tier-P MUST set ``SYNAPSE_ALLOWED_HOSTS`` to the real host(s) before
+    public exposure (ADR-049 Tier-P gate).
+    """
+    from starlette.middleware.cors import CORSMiddleware
+    from starlette.middleware.trustedhost import TrustedHostMiddleware
+
+    hosts = [
+        h.strip() for h in os.environ.get("SYNAPSE_ALLOWED_HOSTS", "*").split(",") if h.strip()
+    ]
+    origins = [
+        o.strip()
+        for o in os.environ.get(
+            "SYNAPSE_ALLOWED_ORIGINS",
+            "http://localhost,http://localhost:5173,http://localhost:8080",
+        ).split(",")
+        if o.strip()
+    ]
+    # Added last → outermost: CORS sees every request/response; TrustedHost guards
+    # the Host header beneath it.
+    app.add_middleware(TrustedHostMiddleware, allowed_hosts=hosts or ["*"])
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=origins,
+        allow_credentials=True,
+        allow_methods=["GET", "POST", "OPTIONS"],
+        allow_headers=["Authorization", "Content-Type", "Idempotency-Key"],
+    )
+    logger.info("origin_guards_installed", allowed_origins=origins, allowed_hosts=hosts)
+
+
 def _postgres_dsn() -> str:
     """Resolve the async audit DSN. Fail-fast — never embed a credential.
 
@@ -169,6 +205,10 @@ app.include_router(telemetry.router, prefix="/api/v1", tags=["telemetry"])
 # Application-layer rate limiting (token bucket per client IP). nginx limits at
 # the edge; this protects the gateway when reached directly. Health/metrics exempt.
 app.add_middleware(RateLimitMiddleware)
+
+# F2 (ADR-050): CORS allow-list + trusted-host filter (env-driven). Added after
+# RateLimit so CORS is the outermost layer.
+_install_origin_guards(app)
 
 _install_profiler(app)
 
