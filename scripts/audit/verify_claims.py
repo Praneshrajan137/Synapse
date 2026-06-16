@@ -1563,6 +1563,24 @@ def check_outbox_schema_truth() -> CheckResult:
     )
 
 
+@register("C56", "Docs match mechanical reality (no narrative drift)")
+def check_doc_truth() -> CheckResult:
+    """Phase 0 narrative-truth gate — the one new gate worth adding.
+
+    Pins the load-bearing numbers/cadence claims in CLAUDE.md + workflow headers
+    to their mechanical source (the spec-coverage --threshold, the deploy
+    cadence) and FAILs on drift — closing the root cause of the biggest risk in
+    this repo: the narrative silently diverging from what the gates enforce.
+    """
+    try:
+        from scripts.audit.doc_truth import evaluate as _eval_doc
+    except ImportError as exc:
+        return CheckResult("C56", "Doc truth", "SKIP", f"doc_truth import failed: {exc}")
+    probe = _eval_doc()
+    status = {"ok": "PASS", "fail": "FAIL", "skip": "SKIP"}[probe.status]
+    return CheckResult("C56", "Doc truth", status, probe.detail)
+
+
 # ---------------------------------------------------------------------------
 # Main entry
 # ---------------------------------------------------------------------------
@@ -1594,6 +1612,17 @@ def run(as_json: bool = False) -> int:
             f"Summary: PASS={pass_n} FAIL={fail_n} PARTIAL={partial_n} "
             f"SKIP={skip_n} TOTAL={len(results)}"
         )
+        if skip_n:
+            # A SKIP is NOT a PASS — the claim was not verified in this
+            # environment (missing dep/file, or an unpublished artifact).
+            # Surface them loudly so a green-looking headline is never mistaken
+            # for "everything proven". C46 (a real published model serves at
+            # $0) is the load-bearing one to watch here.
+            print()
+            print(f"NOT VERIFIED -- {skip_n} SKIP (a SKIP is not a PASS):")
+            for r in results:
+                if r.status == "SKIP":
+                    print(f"  [--] {r.cid:>4} {r.title:<40} {r.detail}")
 
     return 1 if fail_n else 0
 
