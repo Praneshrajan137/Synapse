@@ -70,7 +70,11 @@ def try_publish(event: dict[str, Any]) -> bool:
             {"bootstrap.servers": KAFKA_BOOTSTRAP, "message.timeout.ms": 3000}
         )
         payload = json.dumps(event, sort_keys=True, separators=(",", ":"))
-        producer.produce("synapse.signals.disruption", payload.encode("utf-8"))
+        # Publish to the REGISTERED disruption topic (topics.json) — the firehose
+        # `disruption` channel + audit sink consume it. The prior ad-hoc
+        # "synapse.signals.disruption" was unregistered and failed the
+        # topic-registry contract test (no such namespace exists).
+        producer.produce("synapse.disruption.alert", payload.encode("utf-8"))
         producer.flush(timeout=5)
         return True
     except Exception as exc:  # noqa: BLE001
