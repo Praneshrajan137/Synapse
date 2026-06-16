@@ -715,7 +715,7 @@ invariants:
 
   - id: FE-INV-045
     title: Council Theater renders only recorded phases; nothing is fabricated
-    mirrors: I-7, ADR-040, ADR-048, FE-INV-009, FE-INV-028
+    mirrors: I-7, ADR-040, ADR-051, FE-INV-009, FE-INV-028
     description: >
       The Council Theater choreography reconstructs ONE recorded decision row
       via the pure `replayDecision` slicer — the auto-advance drives only the
@@ -752,11 +752,11 @@ invariants:
 
   - id: FE-INV-047
     title: Council Theater is a labelled recorded reconstruction, never live
-    mirrors: ADR-044 D5, ADR-048, FE-INV-036, I-7
+    mirrors: ADR-044 D5, ADR-051, FE-INV-036, I-7
     description: >
       The Council Theater surface and the choreography are labelled a RECORDED
       RECONSTRUCTION (never "live") — the live cognition channel is the deferred
-      ADR-048 follow-up. A synthetic decision (is_synthetic) always carries the
+      ADR-051 follow-up. A synthetic decision (is_synthetic) always carries the
       SyntheticBadge, and the scored outcome renders the ADR-047 tri-state where
       `unknown` is never shown as confirmed. The surface never shows a silent
       empty stage: loading, error, and not-found are explicit states.
@@ -770,7 +770,7 @@ invariants:
 
   - id: FE-INV-048
     title: Live council cognition is derived only from real events, never shown stale
-    mirrors: ADR-048, INV-CLR-017, I-7, FE-INV-040
+    mirrors: ADR-051, INV-CLR-017, I-7, FE-INV-040
     description: >
       The CouncilStrip renders live per-agent cognition (thinking / debating /
       acting) ONLY from the real `cognition` firehose channel (the orchestrator's

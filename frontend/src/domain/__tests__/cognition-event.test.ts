@@ -1,7 +1,7 @@
 import { CognitionEventSchema } from "@domain/cognition-event";
 import { describe, expect, it } from "vitest";
 
-describe("CognitionEventSchema (ADR-048)", () => {
+describe("CognitionEventSchema (ADR-051)", () => {
   it("accepts a well-formed phase event", () => {
     const r = CognitionEventSchema.safeParse({
       type: "cognition_phase",

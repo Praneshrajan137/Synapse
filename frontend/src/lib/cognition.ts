@@ -2,7 +2,7 @@ import type { CognitionEvent, CognitionPhase } from "@domain/cognition-event";
 import { AGENT_NAMES, type AgentName } from "@lib/agent-identity";
 import type { AgentProcessState } from "@lib/chromatics";
 
-// ADR-048: derive the council's LIVE cognition from the recent phase-event
+// ADR-051: derive the council's LIVE cognition from the recent phase-event
 // buffer, so the CouncilStrip can show the agents thinking/debating in real
 // time — backed by REAL orchestrator FSM events, never fabricated (I-7).
 

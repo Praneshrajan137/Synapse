@@ -41,7 +41,7 @@ export interface CouncilStripProps {
   /** Per-agent state. Missing agents render as `unknown` (honest default). */
   readonly states?: Partial<Record<AgentName, CouncilAgentState>> | undefined;
   /**
-   * ADR-048: live per-agent cognition (thinking / debating / acting) derived
+   * ADR-051: live per-agent cognition (thinking / debating / acting) derived
    * from the real cognition stream. When present for an agent it OVERRIDES the
    * health-derived process state — the council shows what each mind is doing
    * RIGHT NOW, backed by real FSM events (never fabricated, I-7).
@@ -66,7 +66,7 @@ const STATUS_TONE: Record<AgentHealth, string> = {
   unknown: "text-ink-subtle",
 };
 
-// ADR-048: live cognition states carry their OWN status word so a live council
+// ADR-051: live cognition states carry their OWN status word so a live council
 // is legible without colour (INV-CLR-011). Only the active cognition states get
 // a word; rest/interrupted keep the health word.
 const PROCESS_WORD: Partial<Record<AgentProcessState, string>> = {

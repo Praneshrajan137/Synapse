@@ -80,7 +80,7 @@ export function CortexBanner() {
     return { rate, confidence, tierMix, activeAgents };
   }, [decisions]);
 
-  // ADR-048: live council cognition (FSM phase events) — the strip shows the
+  // ADR-051: live council cognition (FSM phase events) — the strip shows the
   // agents thinking/debating in real time. Null when the stream is stale, so a
   // quiet council is never painted "live".
   const live = useMemo(() => deriveLiveCognition(cognitionEvents, Date.now()), [cognitionEvents]);

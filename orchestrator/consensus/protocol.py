@@ -108,7 +108,7 @@ class ConsensusProtocol:
         self._semantic_cache = semantic_cache
         self._kafka = kafka_producer
         self._fsm = OrchestratorStateMachine()
-        # ADR-048: correlation id for the live cognition stream. Generated at run
+        # ADR-051: correlation id for the live cognition stream. Generated at run
         # start so the phase events and the final ConsensusDecision share one id —
         # the live stream and the recorded Council Theater reconstruction line up.
         self._decision_id: UUID | None = None
@@ -145,7 +145,7 @@ class ConsensusProtocol:
         )
         self._context_messages.append(recitation)
 
-    # ── Live cognition telemetry (ADR-048) ──────────────────────────────
+    # ── Live cognition telemetry (ADR-051) ──────────────────────────────
 
     def _emit_phase(
         self,
@@ -197,7 +197,7 @@ class ConsensusProtocol:
     ) -> ConsensusDecision:
         """Execute the full consensus lifecycle for a single decision."""
         self._reset()
-        # ADR-048: stamp the correlation id + city up front so every phase event
+        # ADR-051: stamp the correlation id + city up front so every phase event
         # carries them and the final decision reuses the same id.
         self._decision_id = uuid4()
         self._city = decision_request.get("city") if isinstance(decision_request, dict) else None
@@ -346,7 +346,7 @@ class ConsensusProtocol:
         # Phase 1.5 (#64): event-source each agent's domain output onto its
         # firehose topic (ADR-038) so the FE pricing/demand/freshness surfaces
         # show live data. Pre-debate proposals = "what each agent proposed".
-        # Best-effort (I-7) — never blocks consensus. (Coexists with the ADR-048
+        # Best-effort (I-7) — never blocks consensus. (Coexists with the ADR-051
         # cognition phase events above.)
         emit_agent_signals(self._kafka, proposals)
         return proposals

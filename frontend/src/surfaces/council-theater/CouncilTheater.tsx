@@ -5,7 +5,7 @@ import { Link, useParams, useSearchParams } from "react-router-dom";
 import { z } from "zod";
 
 /**
- * Council Theater (ADR-048) — a flagship stage for the council's recorded
+ * Council Theater (ADR-051) — a flagship stage for the council's recorded
  * deliberation. Fetches one decision via the shared `useDecisionQuery` (the
  * same validated source the analyst Decision Theater detail uses, so the two
  * can never drift) and hands it to the ConsensusChoreography for a narrated,

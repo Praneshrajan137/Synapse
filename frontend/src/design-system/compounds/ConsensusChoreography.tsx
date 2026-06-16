@@ -30,7 +30,7 @@ import { SyntheticBadge } from "./SyntheticBadge";
  * phase INDEX, never the slice. A phase the row did not record (no debate on a
  * fast path, no Pareto front) renders an explicit "not recorded" state; nothing
  * is invented. It is labelled a RECORDED RECONSTRUCTION, never "live" — the live
- * cognition channel is the deferred follow-up (ADR-048).
+ * cognition channel is the deferred follow-up (ADR-051).
  *
  * Motion is causality, not decoration: phases cross-fade in sequence, and
  * `prefers-reduced-motion` collapses the player into a static, all-phases-at-once

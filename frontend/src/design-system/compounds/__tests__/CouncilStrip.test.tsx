@@ -91,7 +91,7 @@ describe("CouncilStrip", () => {
   });
 });
 
-describe("CouncilStrip — live cognition (ADR-048)", () => {
+describe("CouncilStrip — live cognition (ADR-051)", () => {
   it("renders the live process word, overriding health (INV-CLR-011 text parity)", () => {
     render(
       <CouncilStrip

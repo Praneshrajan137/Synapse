@@ -1,4 +1,4 @@
-"""ADR-048: the live Cognition Channel — the protocol streams real FSM phase
+"""ADR-051: the live Cognition Channel — the protocol streams real FSM phase
 transitions to ``synapse.orchestrator.phase``, correlated to the final decision.
 
 These prove the emission is honest (real run, not a stub), correlated (one id),

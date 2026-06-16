@@ -2,7 +2,7 @@ import { z } from "zod";
 import { ZUuid } from "./primitives";
 
 /**
- * The live Cognition Channel payload (ADR-048) — one FSM phase transition the
+ * The live Cognition Channel payload (ADR-051) — one FSM phase transition the
  * orchestrator emits to `synapse.orchestrator.phase` and the firehose relays as
  * the `cognition` channel. Lets the AUX show the council thinking/debating LIVE
  * from real events, not just the final verdict.

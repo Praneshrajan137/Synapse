@@ -33,7 +33,7 @@ interface FirehoseState {
   twin: Bounded<TwinDivergenceEvent>;
   pricing: Bounded<PricingUpdate>;
   freshness: Bounded<FreshnessAlert>;
-  // ADR-048: live cognition phase events (the council's FSM transitions).
+  // ADR-051: live cognition phase events (the council's FSM transitions).
   cognition: Bounded<CognitionEvent>;
   // Live WS state of the currently-mounted firehose, lifted here so the
   // Shell-level attention beacon can alarm on a dropped feed without owning a
