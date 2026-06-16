@@ -11,7 +11,7 @@
 # schema/color-spec.schema.json instead.
 # ============================================================================
 system_name: synapse-color
-version: "1.3.0"
+version: "2.0.0"
 description: >
   Perceptual OKLCH design-token color system for the SYNAPSE multi-agent
   quick-commerce platform. Encodes agent identity, decision tier, and
@@ -19,7 +19,14 @@ description: >
   contrast and color-vision-deficiency invariants. v1.1.0 (ADR-044, additive
   — frozen agent hues untouched) adds the honesty states (degraded,
   synthetic), the agent process-state chroma-rationing grammar, and the
-  urgency/arrival motion vocabulary.
+  urgency/arrival motion vocabulary. v2.0.0 (ADR-048) is the cobalt reversal:
+  the foundation moves from warm graphite to a cool blue-graphite (H250), the
+  brand/focus/tier signature moves from warm brass (H65) to royal cobalt
+  (H250), the pricing_oracle agent identity is re-hued off amber-gold to
+  deep blue-violet (H80 -> H270, under the INV-CLR-012 version-bump clause),
+  and warning + the confidence caution band move off gold to orange (H50/H55)
+  so the cool cobalt chrome owns the blue band while warm caution stays the
+  complementary pop.
 
 principles:
   - id: PR-CLR-001

@@ -177,10 +177,7 @@ async def _assert_outbox_schema(conn: Any) -> None:
     """
     expected = {c.name for c in AuditOutboxRow.__table__.columns}
     result = await conn.execute(
-        text(
-            "SELECT column_name FROM information_schema.columns "
-            "WHERE table_name = 'audit_outbox'"
-        )
+        text("SELECT column_name FROM information_schema.columns WHERE table_name = 'audit_outbox'")
     )
     actual = {row[0] for row in result}
     missing = expected - actual

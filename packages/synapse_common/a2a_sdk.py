@@ -171,9 +171,7 @@ async def _do_send(
         outcome = "transport_error"
         raise
     finally:
-        A2A_REQUEST_LATENCY.labels(target=target, method=method).observe(
-            time.monotonic() - start
-        )
+        A2A_REQUEST_LATENCY.labels(target=target, method=method).observe(time.monotonic() - start)
         A2A_REQUESTS_TOTAL.labels(target=target, method=method, outcome=outcome).inc()
     return A2AResponse.model_validate(response.json())
 

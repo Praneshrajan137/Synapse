@@ -14,17 +14,17 @@
 
 export type RGBA = [number, number, number, number];
 
-// v1.3.0 warm-graphite (ADR-046): every tuple below is a dist rgb255 mirror,
-// pinned against dist by lib/__tests__/chromatics.test.ts.
+// v2.0.0 cool blue-graphite (ADR-048): every tuple below is a dist rgb255
+// mirror, pinned against dist by lib/__tests__/chromatics.test.ts.
 
 /** Quiet base — a dark store / idle node at rest. The state-neutral grey. */
-export const DECK_NEUTRAL: RGBA = [148, 146, 142, 150]; // ← color.state.neutral dark
+export const DECK_NEUTRAL: RGBA = [143, 146, 150, 150]; // ← color.state.neutral dark
 /** Muted connector line at rest (routes with nothing wrong). */
-export const DECK_MUTED_LINE: RGBA = [148, 146, 142, 120];
+export const DECK_MUTED_LINE: RGBA = [143, 146, 150, 120];
 
 // Signal palette — reserved for abnormality. Mirrors color.state/confidence.
 export const DECK_INFO: RGBA = [102, 180, 252, 170]; // ← color.state.info dark
-export const DECK_WARN: RGBA = [255, 184, 77, 220]; // ← color.state.warning dark — saturation > 0.7
+export const DECK_WARN: RGBA = [245, 116, 0, 220]; // ← color.state.warning dark (orange) — saturation > 0.7
 export const DECK_RISK: RGBA = [235, 68, 65, 230]; // ← color.state.danger dark — saturation > 0.9
 export const DECK_RISK_SOFT: RGBA = [233, 80, 72, 210]; // ← color.confidence.low dark — risk arc target
 

@@ -38,6 +38,7 @@ from synapse_common.models import (
     MessageStatus,
 )
 
+from orchestrator.consensus.firehose_signals import emit_agent_signals
 from orchestrator.consensus.models import ConflictReport, TierClassification
 from orchestrator.consensus.pareto import OBJECTIVES, run_pareto_arbitration
 from orchestrator.state_machine import OrchestratorStateMachine
@@ -342,6 +343,12 @@ class ConsensusProtocol:
                     )
                 )
                 self._emit_phase("collecting", agent_name=name, event="failed")
+        # Phase 1.5 (#64): event-source each agent's domain output onto its
+        # firehose topic (ADR-038) so the FE pricing/demand/freshness surfaces
+        # show live data. Pre-debate proposals = "what each agent proposed".
+        # Best-effort (I-7) — never blocks consensus. (Coexists with the ADR-048
+        # cognition phase events above.)
+        emit_agent_signals(self._kafka, proposals)
         return proposals
 
     async def _request_proposal(

@@ -10,8 +10,11 @@ name: CD — GCP (primary deployment target)
 #
 # ADR-039 — pull-from-AR contract. The compose file at
 # `docker/docker-compose.gcp.yml` references images by `image:` (never `build:`),
-# and `verify_claims.py` (C26) fails CI on regression. This trigger fires on
-# every merge to main so the VM is never more than one workflow run behind HEAD.
+# and `verify_claims.py` (C26) fails CI on regression. A push to main BUILDS +
+# signs images only; the actual VM deploy runs on the weekly schedule / `v*` tag
+# / manual dispatch (see the `on:` block and the `deploy-to-vm` `if:` below) —
+# NOT on every plain push. The live VM is intentionally stale (and stopped)
+# between weekly runs; the live-truth watchdog must account for that window.
 #
 # Auth: Workload Identity Federation only. There are no JSON service-account
 # keys in this repository's secrets. See infrastructure/gcp/terraform/wif.tf

@@ -7,7 +7,7 @@
 // (ok / warn / risk). The canonical SYNAPSE Chromatic System
 // (`design-system/color/dist/tokens.ts::confidenceColor`) defines a *continuous*
 // diverging scale in OKLCH whose stops are anchored EXACTLY at the I-5 gates
-// (0.00 / 0.70 / 0.80 / 1.00) and whose hue sweeps red → amber → green → teal
+// (0.00 / 0.70 / 0.80 / 1.00) and whose hue sweeps red → orange → green → teal
 // (INV-CLR-007). This module mirrors that scale for the frontend so confidence
 // is rendered perceptually, not bucketed — and adds the VSUP layer that drains
 // chroma as confidence falls below the gate, so a low-confidence value LOOKS
@@ -51,13 +51,13 @@ type StopQuad = readonly [Stop, Stop, Stop, Stop];
 const STOPS: Record<"light" | "dark", StopQuad> = {
   light: [
     { pos: 0, l: 0.53, c: 0.205, h: 27 }, // red    — no confidence
-    { pos: 0.7, l: 0.68, c: 0.1428, h: 76 }, // amber  — low gate
+    { pos: 0.7, l: 0.68, c: 0.155, h: 55 }, // orange — low gate
     { pos: 0.8, l: 0.58, c: 0.1597, h: 150 }, // green  — high gate
     { pos: 1, l: 0.6, c: 0.1074, h: 182 }, // teal   — peak
   ],
   dark: [
     { pos: 0, l: 0.64, c: 0.19, h: 27 },
-    { pos: 0.7, l: 0.82, c: 0.15, h: 80 },
+    { pos: 0.7, l: 0.82, c: 0.1174, h: 55 },
     { pos: 0.8, l: 0.8, c: 0.165, h: 148 },
     { pos: 1, l: 0.84, c: 0.115, h: 184 },
   ],

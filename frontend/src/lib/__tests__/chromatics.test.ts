@@ -65,7 +65,7 @@ describe("confidenceColor — gate-anchored diverging scale (INV-CLR-007)", () =
   });
 
   it("interpolates the hue exactly at the I-5 gate anchors", () => {
-    expect(parseOklch(confidenceColor(0.7)).h).toBeCloseTo(80, 0); // low gate (dark)
+    expect(parseOklch(confidenceColor(0.7)).h).toBeCloseTo(55, 0); // low gate (dark) — orange (v2.0.0)
     expect(parseOklch(confidenceColor(0.8)).h).toBeCloseTo(148, 0); // high gate (dark)
   });
 
@@ -277,7 +277,7 @@ describe("Obsidian mirrors — the FE palette IS the governed palette (ADR-045)"
     }
   });
 
-  it("the tier vars speak the governed H65 brass lightness ramp, not four hues", () => {
+  it("the tier vars speak the governed H250 cobalt lightness ramp, not four hues", () => {
     // Monotone lightness: each tier strictly darker than the previous
     // (relative luminance proxy: channel sum falls tier 1 → 4, both themes).
     for (const theme of [0, 1] as const) {
