@@ -85,13 +85,22 @@ jobs:
           print('OK $spec')
           "
           done
-      - name: License audit (I-1)
+      - name: License audit (I-1 — ADVISORY, non-blocking)
+        # Honest label: the trailing `|| true` makes this informational, not a
+        # gate. pip-licenses' classifier strings are noisy across the full dep
+        # tree, so a hard failure here would be flaky. The BLOCKING I-1
+        # enforcement is the paid-API-import grep in the next step.
         run: |
           pip install pip-licenses
           pip-licenses --allow-only="MIT;Apache-2.0;Apache Software License;BSD-2-Clause;BSD-3-Clause;PSF;Python Software Foundation License;ISC;MPL-2.0;BSD License" || true
-      - name: No paid API imports (I-1)
+      - name: No paid API imports (I-1 — BLOCKING)
+        # The real I-1 gate. Scoped to EVERY Python source tree (not just
+        # agents/orchestrator/packages — api/, digital_twin/, data_fabric/,
+        # ml_pipelines/ and scripts/ were previously unscanned) and now also
+        # catches `replicate` (the 4th paid client named in CLAUDE.md I-1).
         run: |
-          if grep -rn "import openai\|from openai\|import anthropic\|from anthropic\|import cohere\|from cohere" agents/ orchestrator/ packages/; then
+          if grep -rn "import openai\|from openai\|import anthropic\|from anthropic\|import cohere\|from cohere\|import replicate\|from replicate" \
+              agents/ orchestrator/ packages/ api/ digital_twin/ data_fabric/ ml_pipelines/ scripts/; then
             echo "Paid API import detected — violates I-1"
             exit 1
           fi
@@ -122,6 +131,11 @@ jobs:
           python -m scripts.audit.training_truth --check
           python -m scripts.audit.serving_truth --check
           python -m scripts.audit.confidence_basis_truth --check
+      - name: Narrative-truth gate (docs match mechanical reality — C56)
+        # Pins CLAUDE.md's load-bearing numbers/cadence claims to their source
+        # (spec-coverage --threshold, deploy cadence) so the narrative cannot
+        # silently drift from what the gates enforce. Pure stdlib (regex).
+        run: python -m scripts.audit.doc_truth --check
       - name: Unit tests (all gated trees, branch coverage on)
         # Sprint 13 §Phase 1.3 + 2 / Plan v2 §Phase 4: single pytest run across
         # packages/tests, agents/, orchestrator/, digital_twin/, api/ with branch
