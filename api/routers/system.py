@@ -219,8 +219,11 @@ def _empty_calibration(window_hours: int, include_synthetic: bool, city: str | N
     }
 
 
+# Sync handler (not async): FastAPI threadpools non-async path operations, so the
+# blocking psycopg2 read never starves the event loop — the decisions.py pattern
+# + the async-hygiene contract (no sync I/O inside async def).
 @router.get("/calibration")
-async def system_calibration(
+def system_calibration(
     op: Annotated[OperatorContext, Depends(CurrentOperator)],
     window_hours: int = 168,
     include_synthetic: bool = False,

@@ -77,12 +77,15 @@ class SteeringResponse(BaseModel):
     created_at: str
 
 
+# Sync handler (not async): FastAPI threadpools non-async path operations, so the
+# blocking psycopg2 audit insert never starves the event loop — the decisions.py
+# pattern + the async-hygiene contract (no sync I/O inside async def).
 @router.post(
     "/",
     response_model=SteeringResponse,
     status_code=status.HTTP_201_CREATED,
 )
-async def submit_steering(
+def submit_steering(
     body: SteeringChange,
     op: Annotated[OperatorContext, Depends(RequireRole(Role.OPS))],
 ) -> SteeringResponse:

@@ -111,6 +111,19 @@ def validate_payload(name: str, payload: dict[str, Any]) -> None:
         raise SchemaValidationError(name, formatted)
 
 
+def validate_handler_input(schema_name: str, payload: dict[str, Any]) -> None:
+    """Canonical handler-boundary validator (WS-2 §4, I-3).
+
+    An ingress/handler that builds an outbound payload calls this AT THE
+    BOUNDARY — before it enqueues or returns — so the JSON-Schema contract is
+    enforced mechanically, not by reviewer discipline (tests/contracts/
+    test_schema_at_handler_boundary.py asserts handlers reference it). Thin named
+    entry point over ``validate_payload``; raises ``SchemaValidationError`` on
+    mismatch.
+    """
+    validate_payload(schema_name, payload)
+
+
 # ---------------------------------------------------------------------------
 # Agent proposal-payload validation (Sprint 7, WS-2 / I-3).
 #

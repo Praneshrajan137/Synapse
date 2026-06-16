@@ -45,8 +45,11 @@ def _dsn() -> str:
     return dsn
 
 
+# Sync handler (not async): FastAPI runs non-async path operations in its
+# threadpool, so the blocking psycopg2 read never starves the event loop — the
+# decisions.py pattern + the async-hygiene contract (no sync I/O inside async def).
 @router.get("/analytics")
-async def escalation_analytics(
+def escalation_analytics(
     op: Annotated[OperatorContext, Depends(CurrentOperator)],
     window_hours: int = 24,
     city: str | None = None,

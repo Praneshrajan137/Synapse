@@ -26,8 +26,7 @@ from fastapi import APIRouter, Header, HTTPException, Request, status
 from pydantic import BaseModel, Field
 
 from synapse_common.outbox import enqueue
-from synapse_common.schema_registry import SchemaViolation
-from synapse_common.schema_registry import validate as validate_schema
+from synapse_common.schemas import SchemaValidationError, validate_handler_input
 from synapse_common.tracing import inject_a2a_headers
 
 logger = structlog.get_logger(__name__)
@@ -80,9 +79,10 @@ async def create_order(
 
     # (1) Validate at the I-3 boundary, not just Pydantic. Pydantic protects
     # the intra-process contract; JSON-Schema protects the Kafka contract.
+    # validate_handler_input is the canonical WS-2 §4 boundary validator.
     try:
-        validate_schema(payload, "domain.order_request")
-    except SchemaViolation as exc:
+        validate_handler_input("order_request", payload)
+    except SchemaValidationError as exc:
         logger.warning("order_schema_violation", errors=exc.errors, order_id=order_id)
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
