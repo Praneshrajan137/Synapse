@@ -1,3 +1,4 @@
+import { type CognitionEvent, CognitionEventSchema } from "@domain/cognition-event";
 import { type DecisionEnvelope, DecisionEnvelopeSchema } from "@domain/decision-envelope";
 import { type DemandForecast, DemandForecastSchema } from "@domain/demand-forecast";
 import { type DisruptionAlert, DisruptionAlertSchema } from "@domain/disruption-alert";
@@ -27,6 +28,7 @@ export type FirehoseChannel =
   | "freshness"
   | "pricing"
   | "escalation"
+  | "cognition"
   | "metric";
 
 interface ChannelPayloadMap {
@@ -38,6 +40,7 @@ interface ChannelPayloadMap {
   freshness: FreshnessAlert;
   pricing: PricingUpdate;
   escalation: EscalationMessage;
+  cognition: CognitionEvent;
   metric: Record<string, unknown>;
 }
 
@@ -53,6 +56,7 @@ const SCHEMAS = {
   freshness: FreshnessAlertSchema,
   pricing: PricingUpdateSchema,
   escalation: EscalationMessageSchema,
+  cognition: CognitionEventSchema,
   metric: null,
 } as const;
 

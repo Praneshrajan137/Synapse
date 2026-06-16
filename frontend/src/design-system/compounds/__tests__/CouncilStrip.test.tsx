@@ -90,3 +90,27 @@ describe("CouncilStrip", () => {
     expect(cell.getAttribute("aria-pressed")).toBe("true");
   });
 });
+
+describe("CouncilStrip — live cognition (ADR-048)", () => {
+  it("renders the live process word, overriding health (INV-CLR-011 text parity)", () => {
+    render(
+      <CouncilStrip
+        states={{ demand_prophet: { status: "healthy" } }}
+        liveStates={{ demand_prophet: "thinking" }}
+      />,
+    );
+    expect(screen.getByText("thinking")).toBeInTheDocument();
+  });
+
+  it("exposes the live process state as the data-process-state grammar hook", () => {
+    render(
+      <CouncilStrip
+        states={{ pricing_oracle: { status: "healthy" } }}
+        liveStates={{ pricing_oracle: "debating" }}
+      />,
+    );
+    const cell = screen.getByLabelText(/Pricing Oracle/);
+    expect(cell.getAttribute("data-process-state")).toBe("debating");
+    expect(cell).toHaveTextContent(/debating/);
+  });
+});

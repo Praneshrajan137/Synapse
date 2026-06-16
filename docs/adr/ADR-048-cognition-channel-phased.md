@@ -1,8 +1,11 @@
 # ADR-048: The Cognition Channel — making the council's deliberation legible (phased)
 
 ## Status
-Accepted — **Phase 1 (Council Theater) implemented**; Phases 2–3 (live telemetry +
-agent-lifecycle tokens) **deferred** to a follow-up PR.
+Accepted — **Phases 1–3 implemented.** Phase 1: Council Theater (recorded
+reconstruction). Phase 2: the live phase-telemetry Kafka topic + firehose
+`cognition` channel. Phase 3: the live AUX derivation, reusing the EXISTING
+`factor.agentstate` chroma grammar — **no new tokens, no chromatic version bump,
+`design-system/color/dist` byte-unchanged** (see §B for why).
 
 ## Context
 SYNAPSE's actual "thinking" is the five-phase consensus FSM in
@@ -51,8 +54,8 @@ A frontend-only, **honest reconstruction** of one recorded decision row:
 - Invariants: **FE-INV-045** (renders only recorded phases), **FE-INV-046** (reduced-motion
   static reveal), **FE-INV-047** (labelled reconstruction; synthetic marked).
 
-### Phase 2 — Live phase-telemetry channel (deferred)
-Turn the reconstruction *live*:
+### Phase 2 — Live phase-telemetry channel (IMPLEMENTED)
+Turn the council's reasoning *live*:
 - Emit FSM phase transitions from `protocol.py` (`_phase_collect/_debate/_arbitrate/
   _execute`) to a **new Kafka topic** `synapse.orchestrator.phase`. The inter-agent topic
   set is frozen (CLAUDE.md Kafka Rules); adding a topic requires a **fresh ADR exception**,
@@ -66,20 +69,33 @@ Turn the reconstruction *live*:
   executing|learning", agent_name?, round?, ts }` — additive/`.passthrough()` so future
   keys never break the schema.
 
-### Phase 3 — Agent-lifecycle state tokens (deferred, lands WITH Phase 2)
-- Chromatic **v1.4.0**: additive `state.cognition.*` tokens
-  (thinking/searching/planning/streaming/debating) extending the existing
-  `factor.agentstate.*` chroma-rationing (INV-CLR-017). **Frozen agent hues untouched**
-  (INV-CLR-012). Reserve **INV-CLR-019+**. Authored in OKLCH; `npm run build` + commit the
-  regenerated `dist/` lands only in that PR (so this PR's determinism gate stays green).
-- Extend `processStateFor` to honestly derive `thinking/debating/streaming` from the live
-  `cognition` events — replacing the current honest refusal with honest *evidence*.
+### Phase 3 — Live agent-lifecycle cognition (IMPLEMENTED — no new tokens)
+**Finding during implementation:** the chroma factors this needed ALREADY EXISTED.
+`factor.agentstate` (INV-CLR-017, Sprint 15) already defines `thinking: 0.55` and
+`debating: 0.8` — added with foresight, but `processStateFor` honestly *refused* to
+return them because no live telemetry existed. With Phase 2 emitting real events, the
+derivation is now backed by evidence, so Phase 3 is pure WIRING:
+- `lib/cognition.ts::deriveLiveCognition` maps the live `cognition` buffer → per-agent
+  process states (thinking while computing a proposal, debating during debate, acting on
+  execute). Honest about staleness (null when the stream is cold) and invents nothing for
+  orchestrator-level phases (arbitrating/learning fall back to health).
+- `CouncilStrip` gains a `liveStates` prop, rendered with the EXISTING `processStateColor`
+  (the frozen factor.agentstate chroma on the frozen agent hue, INV-CLR-012/017) + a
+  STATUS WORD (INV-CLR-011). `CortexBanner` feeds it from the live stream on Mission Control.
+- **No `state.cognition.*` tokens, no chromatic version bump, no `dist/` change.** The
+  orthogonal encoding (identity → hue, process → chroma factor) already covered cognition;
+  standalone tokens would have *duplicated* the grammar. The leaner, system-consistent
+  outcome — the original §B over-specified.
+- Live cognition lands on the Mission Control **CouncilStrip** (watching the council think
+  in real time), NOT Council Theater: you cannot "reconstruct" an in-flight decision whose
+  audit row does not exist yet, so Council Theater stays the recorded stage for *completed*
+  decisions.
+- **FE-INV-048** enforces the honesty (derived only from real events, never stale).
 
 ### Numbering note
 On disk the max ADR is 047. **ADR-049** (two-tier cost) and **ADR-050** (STRIDE threat
-model) are already claimed by in-flight PRs, so this is **ADR-048**. When Phase 2/3 ships,
-the agent-lifecycle-token work — if it warrants its own ADR — takes the next free number
-at that time, rather than reserving one now for unbuilt code.
+model) are already claimed by in-flight PRs, so this is **ADR-048**. Phase 3 needed no new
+ADR or chromatic version because it reused the existing factor.agentstate grammar.
 
 ## Consequences
 **Easier:** operators see the *reasoning*, not just the verdict; the recorded anatomy
@@ -89,9 +105,8 @@ validated decision source removes a drift class.
 
 **Harder / cost:** Phase 2 requires a frozen-topic governance exception plus backend
 emission and a firehose consumer; until then Council Theater is reconstruction-only
-(clearly labelled, never "live"). Phase 3 is a chromatic version bump with its own dist
-rebuild. None of that lands in this PR, so the substance shipped here is fully honest and
-self-contained.
+(clearly labelled, never "live"). Phase 3 reused the existing factor.agentstate chroma
+grammar, so no chromatic version bump or dist rebuild was needed — the leaner outcome.
 
 ## Alternatives Rejected
 - **Upgrade the DecisionDetail slider in place.** Rejected: the analyst scrubber and the

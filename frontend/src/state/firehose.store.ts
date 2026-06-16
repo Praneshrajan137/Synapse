@@ -1,3 +1,4 @@
+import type { CognitionEvent } from "@domain/cognition-event";
 import type { LiveDecision } from "@domain/decision-envelope";
 import type { DemandForecast } from "@domain/demand-forecast";
 import type { DisruptionAlert } from "@domain/disruption-alert";
@@ -32,6 +33,8 @@ interface FirehoseState {
   twin: Bounded<TwinDivergenceEvent>;
   pricing: Bounded<PricingUpdate>;
   freshness: Bounded<FreshnessAlert>;
+  // ADR-048: live cognition phase events (the council's FSM transitions).
+  cognition: Bounded<CognitionEvent>;
   // Live WS state of the currently-mounted firehose, lifted here so the
   // Shell-level attention beacon can alarm on a dropped feed without owning a
   // second socket. Surfaces reset it to "idle" on unmount (no phantom offline).
@@ -45,6 +48,7 @@ interface FirehoseState {
   appendTwin(t: TwinDivergenceEvent, seq: number): void;
   appendPricing(p: PricingUpdate, seq: number): void;
   appendFreshness(f: FreshnessAlert, seq: number): void;
+  appendCognition(c: CognitionEvent, seq: number): void;
   flushAll(): void;
 }
 
@@ -56,6 +60,7 @@ export const useFirehoseStore = create<FirehoseState>((set) => ({
   twin: newBounded(100),
   pricing: newBounded(200),
   freshness: newBounded(200),
+  cognition: newBounded(200),
   connection: "idle",
   setConnection(state) {
     set({ connection: state });
@@ -97,6 +102,12 @@ export const useFirehoseStore = create<FirehoseState>((set) => ({
       lastSeq: { ...s.lastSeq, freshness: seq },
     }));
   },
+  appendCognition(c, seq) {
+    set((s) => ({
+      cognition: appendBounded(s.cognition, c),
+      lastSeq: { ...s.lastSeq, cognition: seq },
+    }));
+  },
   flushAll() {
     set({
       decisions: newBounded(200),
@@ -106,6 +117,7 @@ export const useFirehoseStore = create<FirehoseState>((set) => ({
       twin: newBounded(100),
       pricing: newBounded(200),
       freshness: newBounded(200),
+      cognition: newBounded(200),
       lastSeq: {},
     });
   },

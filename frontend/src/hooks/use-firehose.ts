@@ -30,6 +30,7 @@ export function useFirehose({ topics }: UseFirehoseOptions): UseFirehoseResult {
     twin: s.appendTwin,
     pricing: s.appendPricing,
     freshness: s.appendFreshness,
+    cognition: s.appendCognition,
   }));
   const appendEscalation = useEscalationStore((s) => s.append);
   const lastSeq = useFirehoseStore((s) => s.lastSeq);
@@ -86,6 +87,11 @@ export function useFirehose({ topics }: UseFirehoseOptions): UseFirehoseResult {
     }
     if (topics.includes("freshness")) {
       offs.push(client.on("freshness", (f, env) => append.freshness(f, env.seq)));
+    }
+    if (topics.includes("cognition")) {
+      // ADR-048: live council cognition (FSM phase transitions) → the CouncilStrip
+      // shows the agents thinking/debating in real time, derived from real events.
+      offs.push(client.on("cognition", (c, env) => append.cognition(c, env.seq)));
     }
 
     return () => {

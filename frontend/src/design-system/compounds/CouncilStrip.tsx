@@ -40,6 +40,13 @@ export interface CouncilAgentState {
 export interface CouncilStripProps {
   /** Per-agent state. Missing agents render as `unknown` (honest default). */
   readonly states?: Partial<Record<AgentName, CouncilAgentState>> | undefined;
+  /**
+   * ADR-048: live per-agent cognition (thinking / debating / acting) derived
+   * from the real cognition stream. When present for an agent it OVERRIDES the
+   * health-derived process state — the council shows what each mind is doing
+   * RIGHT NOW, backed by real FSM events (never fabricated, I-7).
+   */
+  readonly liveStates?: Partial<Record<AgentName, AgentProcessState>> | undefined;
   readonly selectedAgent?: AgentName | null | undefined;
   readonly onSelectAgent?: ((agent: AgentName) => void) | undefined;
   readonly className?: string | undefined;
@@ -57,6 +64,15 @@ const STATUS_TONE: Record<AgentHealth, string> = {
   degraded: "text-signal-warning",
   unreachable: "text-signal-danger",
   unknown: "text-ink-subtle",
+};
+
+// ADR-048: live cognition states carry their OWN status word so a live council
+// is legible without colour (INV-CLR-011). Only the active cognition states get
+// a word; rest/interrupted keep the health word.
+const PROCESS_WORD: Partial<Record<AgentProcessState, string>> = {
+  thinking: "thinking",
+  debating: "debating",
+  acting: "acting",
 };
 
 /** Normalise a raw `GET /api/v1/agents` status string to an `AgentHealth`. */
@@ -84,8 +100,12 @@ export function processStateFor(state: CouncilAgentState): AgentProcessState | n
 
 /** Identity colour for a cell — token-governed factors for process states,
  * documented local tints for the health states outside the grammar. */
-function dotColorFor(state: CouncilAgentState, colorVar: string): string {
-  const processState = processStateFor(state);
+function dotColorFor(
+  state: CouncilAgentState,
+  colorVar: string,
+  override?: AgentProcessState | null,
+): string {
+  const processState = override ?? processStateFor(state);
   if (processState) return processStateColor(colorVar, processState);
   // degraded: present but visibly not at full strength; unknown: near-mute.
   return rationedAgentColor(colorVar, state.status === "degraded" ? 0.5 : 0.12);
@@ -93,6 +113,7 @@ function dotColorFor(state: CouncilAgentState, colorVar: string): string {
 
 export function CouncilStrip({
   states,
+  liveStates,
   selectedAgent = null,
   onSelectAgent,
   className,
@@ -105,8 +126,11 @@ export function CouncilStrip({
       {AGENT_NAMES.map((agent) => {
         const state: CouncilAgentState = states?.[agent] ?? { status: "unknown" };
         const health = state.status;
-        const processState = processStateFor(state);
-        const dotColor = dotColorFor(state, AGENT_COLOR_VAR[agent]);
+        const live = liveStates?.[agent] ?? null;
+        const processState = live ?? processStateFor(state);
+        const liveWord = live ? PROCESS_WORD[live] : undefined;
+        const active = state.active === true || live !== null;
+        const dotColor = dotColorFor(state, AGENT_COLOR_VAR[agent], live);
         const interactive = Boolean(onSelectAgent);
         const selected = selectedAgent === agent;
         const degraded = health === "degraded" || health === "unreachable";
@@ -114,7 +138,8 @@ export function CouncilStrip({
         const parts = [
           `${AGENT_LABEL[agent]}: ${health === "unknown" ? "status unknown" : STATUS_WORD[health]}`,
         ];
-        if (state.active) parts.push("active in a live decision");
+        if (liveWord) parts.push(liveWord);
+        else if (state.active) parts.push("active in a live decision");
         if (state.latencyP99Ms != null) parts.push(`p99 ${fmt.durationMs(state.latencyP99Ms)}`);
         if (state.calibration90 != null) {
           parts.push(`calibration ${Math.round(state.calibration90 * 100)} percent`);
@@ -148,11 +173,11 @@ export function CouncilStrip({
               <span
                 className={cn(
                   "relative flex size-7 items-center justify-center rounded-full border",
-                  state.active && "animate-pulse-confidence",
+                  active && "animate-pulse-confidence",
                 )}
                 style={{
                   background: dotColor,
-                  borderColor: state.active ? AGENT_COLOR_VAR[agent] : "transparent",
+                  borderColor: active ? AGENT_COLOR_VAR[agent] : "transparent",
                 }}
                 aria-hidden="true"
               >
@@ -166,11 +191,11 @@ export function CouncilStrip({
               <span
                 className={cn(
                   "text-[0.6rem] font-semibold uppercase tracking-wide tabular-nums",
-                  STATUS_TONE[health],
+                  liveWord ? "text-accent" : STATUS_TONE[health],
                 )}
                 aria-hidden="true"
               >
-                {STATUS_WORD[health]}
+                {liveWord ?? STATUS_WORD[health]}
               </span>
             </Cell>
           </li>

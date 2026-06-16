@@ -18,7 +18,7 @@ export function MissionControl() {
   const firehose = useFirehose({
     // ADR-044: `escalation` rides the same multiplexed socket, so the
     // cockpit queue fills while the operator is still on Mission Control.
-    topics: ["decision", "disruption", "routing", "demand", "metric", "escalation"],
+    topics: ["decision", "disruption", "routing", "demand", "metric", "escalation", "cognition"],
   });
   const stores = useCityStores();
 
