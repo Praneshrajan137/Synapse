@@ -1,7 +1,7 @@
 # ============================================================================
 # SYNAPSE Makefile — Development Automation
 # ============================================================================
-.PHONY: help up down test lint typecheck verify-infra seed generate-spec-tests fuzz mutate clean chaos-test load-test security-test dragonfly-eval sprint5-verify verify-services doctor verify-claims verify-claims-json verify-intelligence feast-build feast-up
+.PHONY: help up down test lint typecheck verify-infra seed generate-spec-tests fuzz mutate clean chaos-test load-test security-test dragonfly-eval sprint5-verify verify-services doctor verify-claims verify-claims-json verify-intelligence verify-agency feast-build feast-up
 
 SHELL := /bin/bash
 COMPOSE := docker compose -f docker/docker-compose.yml --env-file docker/.env
@@ -20,6 +20,9 @@ verify-claims-json: ## Same as verify-claims but emit machine-readable JSON
 
 verify-topology: ## Verify topics.json consumers map to real Consumer.subscribe call sites (ADR-038)
 	@python -m scripts.audit.topic_consumer_truth
+
+verify-agency: ## Verify the agentic loop is real — perceive→decide→act→learn (ADR-052)
+	@python -m scripts.audit.agency_truth --check
 
 feast-build: ## Generate the Feast offline demand-signals parquet from real history (ADR-042 §Feast)
 	@python scripts/build_feature_store.py --city bengaluru

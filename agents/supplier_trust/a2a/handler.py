@@ -22,8 +22,15 @@ class SupplierTrustA2AHandler:
     Methods: proposal(), debate_respond(), execute() via JSON-RPC.
     """
 
-    def __init__(self, pipeline: SupplierTrustPipeline | None = None) -> None:
+    def __init__(
+        self,
+        pipeline: SupplierTrustPipeline | None = None,
+        *,
+        kafka_producer: Any = None,
+    ) -> None:
         self._pipeline = pipeline or SupplierTrustPipeline()
+        # ADR-052: execute() event-sources the ratified score for real (no fake flag).
+        self._kafka = kafka_producer
 
     def handle_request(self, request: dict[str, Any]) -> dict[str, Any]:
         """Route JSON-RPC request to the appropriate method."""
@@ -134,11 +141,26 @@ class SupplierTrustA2AHandler:
         }
 
     def execute(self, params: dict[str, Any]) -> dict[str, Any]:
-        """Execute the consensus action -- publish trust score to Kafka."""
+        """Publish the ratified trust score to Kafka (ADR-052 — real, honest).
+
+        ``kafka_published`` now reflects an ACTUAL produce: True only when a producer is
+        wired and the publish succeeded; False (with a log) otherwise. The old stub
+        always returned ``True`` regardless of whether anything was published.
+        """
+        decision_id = str(params.get("decision_id", ""))
+        proposal = params.get("ratified_proposal") or {}
+        payload = proposal.get("payload", {}) if isinstance(proposal, dict) else {}
+        published = False
+        if self._kafka is not None and payload:
+            try:
+                self._kafka.produce("synapse.supplier.score", value=payload, key=decision_id)
+                published = True
+            except Exception as exc:  # noqa: BLE001 — Kafka outage degrades honestly (I-7)
+                logger.warning("supplier_score_publish_failed", error=str(exc))
         return {
             "status": "executed",
-            "decision_id": params.get("decision_id", ""),
+            "decision_id": decision_id,
             "agent": "supplier_trust",
-            "kafka_published": True,
+            "kafka_published": published,
             "topic": "synapse.supplier.score",
         }

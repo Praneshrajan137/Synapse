@@ -10,6 +10,7 @@ from typing import TYPE_CHECKING, Any
 import structlog
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel, Field
+from synapse_common.kafka_client import KafkaConfig, SynapseProducer
 from synapse_common.model_registry import ModelRegistry
 from synapse_common.models import InventoryAction
 
@@ -24,6 +25,7 @@ if TYPE_CHECKING:
 
 logger = structlog.get_logger(__name__)
 _pipeline: InventorySentinelPipeline | None = None
+_producer: SynapseProducer | None = None
 
 ROOT = Path(__file__).resolve().parents[3]
 SERVING_CHECKPOINT_DIR = ROOT / "artifacts" / "checkpoints"
@@ -31,7 +33,7 @@ SERVING_CHECKPOINT_DIR = ROOT / "artifacts" / "checkpoints"
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
-    global _pipeline
+    global _pipeline, _producer
     registry = ModelRegistry(
         None,
         checkpoint_dir=SERVING_CHECKPOINT_DIR,
@@ -40,6 +42,15 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     )
     serving_model = load_serving_model(registry)
     _pipeline = InventorySentinelPipeline(serving_model=serving_model)
+    # ADR-052: a producer so execute()'s reorder event-sources for real. Guarded — a
+    # Kafka outage degrades to kafka_published=False, never blocks the agent (I-7).
+    try:
+        _producer = SynapseProducer(
+            KafkaConfig(bootstrap_servers=os.environ.get("KAFKA_BOOTSTRAP_SERVERS", "kafka:9092"))
+        )
+    except Exception as exc:  # noqa: BLE001 — honest degradation (I-7)
+        logger.warning("kafka_producer_unavailable", error=str(exc))
+        _producer = None
     logger.info("inventory_sentinel_started", port=8003, model_loaded=serving_model is not None)
     yield
 
@@ -70,7 +81,7 @@ async def handle_a2a(request: dict[str, object]) -> dict[str, object]:
     """A2A JSON-RPC handler for Orchestrator consensus (mirrors freshness_guardian)."""
     from agents.inventory_sentinel.a2a.handler import InventorySentinelA2AHandler
 
-    handler = InventorySentinelA2AHandler(_pipeline)
+    handler = InventorySentinelA2AHandler(_pipeline, kafka_producer=_producer)
     return handler.handle_request(request)  # type: ignore[arg-type]
 
 
