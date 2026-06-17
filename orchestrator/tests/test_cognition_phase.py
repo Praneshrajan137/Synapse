@@ -13,7 +13,6 @@ from unittest.mock import AsyncMock, MagicMock
 from uuid import uuid4
 
 import pytest
-
 from synapse_common.models import DecisionTier
 
 from orchestrator.config import OrchestratorConfig
