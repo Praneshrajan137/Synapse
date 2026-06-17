@@ -151,7 +151,8 @@ class SensorLoop:
         inventory = state.get("inventory", {})
         if isinstance(inventory, dict):
             low = sorted(
-                sku for sku, level in inventory.items()
+                sku
+                for sku, level in inventory.items()
                 if isinstance(level, (int, float)) and level < self._reorder_point
             )
             if low:

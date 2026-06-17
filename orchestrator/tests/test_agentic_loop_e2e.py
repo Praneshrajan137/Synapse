@@ -61,8 +61,12 @@ class InProcessConsensus:
         low = request.get("sku_ids", [])
         actions = [
             {
-                "store_id": request["store_id"], "sku_id": sku, "action_type": "reorder",
-                "quantity": 500.0, "safety_stock_multiplier": 1.0, "reorder_point": 40,
+                "store_id": request["store_id"],
+                "sku_id": sku,
+                "action_type": "reorder",
+                "quantity": 500.0,
+                "safety_stock_multiplier": 1.0,
+                "reorder_point": 40,
                 "confidence": 0.8,
             }
             for sku in low
@@ -94,8 +98,11 @@ async def test_autonomous_loop_perceives_decides_and_acts_on_the_world() -> None
     #    no human POST, no synthetic ticker.
     consensus = InProcessConsensus(rt)
     sensor = SensorLoop(
-        consensus, InProcessWorldClient(rt), cities=["bengaluru"],
-        reorder_point=40.0, heartbeat_idle_polls=0,
+        consensus,
+        InProcessWorldClient(rt),
+        cities=["bengaluru"],
+        reorder_point=40.0,
+        heartbeat_idle_polls=0,
     )
     fired = await sensor.poll_once()
 

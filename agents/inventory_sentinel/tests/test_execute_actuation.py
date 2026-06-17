@@ -39,12 +39,22 @@ def _params(actions: list[dict[str, Any]], decision_id: str = "d1") -> dict[str,
 
 
 REORDER = {
-    "store_id": "s", "sku_id": "sku_0", "action_type": "reorder", "quantity": 120.0,
-    "safety_stock_multiplier": 1.5, "reorder_point": 40, "confidence": 0.8,
+    "store_id": "s",
+    "sku_id": "sku_0",
+    "action_type": "reorder",
+    "quantity": 120.0,
+    "safety_stock_multiplier": 1.5,
+    "reorder_point": 40,
+    "confidence": 0.8,
 }
 MARKDOWN = {
-    "store_id": "s", "sku_id": "sku_1", "action_type": "markdown", "quantity": 5.0,
-    "safety_stock_multiplier": 1.0, "reorder_point": 10, "confidence": 0.7,
+    "store_id": "s",
+    "sku_id": "sku_1",
+    "action_type": "markdown",
+    "quantity": 5.0,
+    "safety_stock_multiplier": 1.0,
+    "reorder_point": 10,
+    "confidence": 0.7,
 }
 
 
@@ -88,8 +98,6 @@ def test_execute_world_unavailable_degrades_without_crash() -> None:
 
 def test_handle_request_routes_execute() -> None:
     handler = InventorySentinelA2AHandler(actuator=FakeActuator(), kafka_producer=FakeProducer())
-    resp = handler.handle_request(
-        {"method": "execute", "id": "x", "params": _params([REORDER])}
-    )
+    resp = handler.handle_request({"method": "execute", "id": "x", "params": _params([REORDER])})
     assert resp["result"]["status"] == "executed"
     assert resp["result"]["reordered_skus"] == ["sku_0"]

@@ -15,15 +15,24 @@ from orchestrator.consensus.protocol import ConsensusProtocol
 
 def _proposal(name: AgentName, utility: float) -> AgentProposal:
     return AgentProposal(
-        agent_name=name, decision_id=uuid4(), utility_score=utility, confidence=utility,
-        justification_trace=["t"], payload={}, tier=DecisionTier.TIER_2,
+        agent_name=name,
+        decision_id=uuid4(),
+        utility_score=utility,
+        confidence=utility,
+        justification_trace=["t"],
+        payload={},
+        tier=DecisionTier.TIER_2,
     )
 
 
 def _decision(proposals: list[AgentProposal]) -> ConsensusDecision:
     return ConsensusDecision(
-        tier=DecisionTier.TIER_2, proposals=proposals, selected_action={},
-        pareto_weights={}, confidence=0.8, audit_trace=["t"],
+        tier=DecisionTier.TIER_2,
+        proposals=proposals,
+        selected_action={},
+        pareto_weights={},
+        confidence=0.8,
+        audit_trace=["t"],
     )
 
 

@@ -59,7 +59,11 @@ async def test_debounce_prevents_double_fire() -> None:
     world = FakeWorld({"bengaluru": {"inventory": {"sku_0": 5.0}}})
     proto = FakeProtocol()
     loop = SensorLoop(
-        proto, world, cities=["bengaluru"], reorder_point=40.0, debounce_s=999.0,
+        proto,
+        world,
+        cities=["bengaluru"],
+        reorder_point=40.0,
+        debounce_s=999.0,
         heartbeat_idle_polls=0,
     )
     await loop.poll_once()
