@@ -40,10 +40,12 @@ from synapse_common.models import (
 
 from orchestrator.consensus.firehose_signals import emit_agent_signals
 from orchestrator.consensus.models import ConflictReport, TierClassification
-from orchestrator.consensus.pareto import OBJECTIVES, run_pareto_arbitration
+from orchestrator.consensus.pareto import run_pareto_arbitration
 from orchestrator.state_machine import OrchestratorStateMachine
 
 if TYPE_CHECKING:
+    from collections.abc import Awaitable, Callable
+
     from orchestrator.audit.logger import AuditLogger
     from orchestrator.config import OrchestratorConfig
     from orchestrator.consensus.tier_router import TierRouter
@@ -67,6 +69,21 @@ AGENT_ENDPOINTS: dict[str, str] = {
     "disruption_shield": "http://disruption-shield:8006",
     "supplier_trust": "http://supplier-trust:8007",
     "sustainability_agent": "http://sustainability-agent:8008",
+}
+
+# Each agent's own meta-RL objective (matches pareto._AGENT_TO_OBJECTIVE). The old
+# `_phase_learn` matched these with a substring test that silently NEVER fired
+# ("inventorysentinel" is not a substring of "inventoryfillrate"), so the learning
+# signal was effectively empty. ADR-052 uses this explicit map.
+_AGENT_OBJECTIVE: dict[str, str] = {
+    "demand_prophet": "demand_accuracy",
+    "routing_navigator": "route_efficiency",
+    "inventory_sentinel": "inventory_fill_rate",
+    "freshness_guardian": "freshness_score",
+    "pricing_oracle": "pricing_revenue",
+    "disruption_shield": "disruption_readiness",
+    "supplier_trust": "supplier_reliability",
+    "sustainability_agent": "carbon_efficiency",
 }
 
 # C7 (ADR-043): Tier-4 decisions are verified against the digital twin's
@@ -96,6 +113,7 @@ class ConsensusProtocol:
         meta_rl: MetaRLAgent,
         semantic_cache: SemanticDecisionCache,
         kafka_producer: Any = None,
+        world_observer: Callable[[str], Awaitable[dict[str, Any] | None]] | None = None,
     ) -> None:
         self._config = config
         self._tier_router = tier_router
@@ -107,6 +125,9 @@ class ConsensusProtocol:
         self._meta_rl = meta_rl
         self._semantic_cache = semantic_cache
         self._kafka = kafka_producer
+        # ADR-052: perceive the realized world to learn from reality (not predicted
+        # utility). Async (city -> WorldState dict | None); None ⇒ degrade honestly.
+        self._world_observer = world_observer
         self._fsm = OrchestratorStateMachine()
         # ADR-051: correlation id for the live cognition stream. Generated at run
         # start so the phase events and the final ConsensusDecision share one id —
@@ -544,6 +565,11 @@ class ConsensusProtocol:
                     params={
                         "decision_id": str(decision.decision_id),
                         "consensus_action": decision.selected_action,
+                        # ADR-052: an agent enacts ITS OWN ratified proposal on the world
+                        # (real actuation), and needs the city to route to the right
+                        # WorldRuntime. `self._city` was stamped at run_consensus start.
+                        "city": self._city,
+                        "ratified_proposal": json.loads(proposal.to_deterministic_json()),
                     },
                     timeout=self._config.execution_timeout_seconds,
                 )
@@ -575,14 +601,21 @@ class ConsensusProtocol:
         self._fsm.transition("execution_complete")
         self._emit_phase("learning")
 
-        outcome: dict[str, float] = {}
-        for proposal in decision.proposals:
-            agent_key = str(proposal.agent_name)
-            for obj in OBJECTIVES:
-                if agent_key.replace("_", "") in obj.replace("_", ""):
-                    outcome[obj] = float(proposal.utility_score)
+        # ADR-052: learn from the REALIZED world, not the predicted utility_score.
+        # Perceive the post-execution world for this city; objectives the world can
+        # observe (fill rate, spoilage, delivery) get the realized value, the rest fall
+        # back to predicted utility. An unreachable world degrades to the old
+        # predicted-utility path (I-7). This closes the loop Agent-audit flagged:
+        # meta-RL previously learned only from its own predictions.
+        world_state: dict[str, Any] | None = None
+        if self._world_observer is not None and self._city is not None:
+            try:
+                world_state = await self._world_observer(self._city)
+            except Exception as exc:  # noqa: BLE001 — a missing world degrades learning (I-7)
+                logger.warning("learn_world_unavailable", error=str(exc))
+                world_state = None
 
-        self._meta_rl.update(outcome)
+        self._meta_rl.update(self._build_learning_outcome(decision, world_state))
 
         if decision.tier in (DecisionTier.TIER_3, DecisionTier.TIER_4):
             await self._semantic_cache.store_decision(
@@ -592,6 +625,32 @@ class ConsensusProtocol:
             )
 
         self._fsm.transition("updates_applied")
+
+    def _build_learning_outcome(
+        self,
+        decision: ConsensusDecision,
+        world_state: dict[str, Any] | None,
+    ) -> dict[str, float]:
+        """Map the realized world + proposals onto the 8 meta-RL objective scores.
+
+        World-observable objectives use the REALIZED KPI; the rest fall back to the
+        agent's predicted ``utility_score`` (no realized signal exists for them yet —
+        honest, not fabricated). Pure given its inputs, so it is unit-tested directly.
+        """
+        outcome: dict[str, float] = {}
+        if world_state is not None:
+            if "fill_rate" in world_state:
+                outcome["inventory_fill_rate"] = float(world_state["fill_rate"])
+            if "spoilage_rate" in world_state:
+                outcome["freshness_score"] = max(0.0, 1.0 - float(world_state["spoilage_rate"]))
+            if "avg_delivery_min" in world_state:
+                delivery = float(world_state["avg_delivery_min"])
+                outcome["route_efficiency"] = max(0.0, min(1.0, 1.0 - delivery / 60.0))
+        for proposal in decision.proposals:
+            obj = _AGENT_OBJECTIVE.get(str(proposal.agent_name))
+            if obj is not None and obj not in outcome:
+                outcome[obj] = float(proposal.utility_score)
+        return outcome
 
     # ── Helpers ─────────────────────────────────────────────────────────
 

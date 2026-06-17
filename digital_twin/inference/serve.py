@@ -11,21 +11,40 @@ Port: 8009
 """
 from __future__ import annotations
 
-import json
+import os
 import time
 from contextlib import asynccontextmanager
-from typing import Any, AsyncIterator
+from typing import TYPE_CHECKING, Any
 
 import structlog
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import Response
 from pydantic import BaseModel, Field
+from synapse_common.a2a_sdk import A2ARequest, A2AResponse, AgentCard
+from synapse_common.metrics import TWIN_SIMULATION_LATENCY, TWIN_SIMULATION_TOTAL
+from synapse_common.world.models import WorldAction
 
 from digital_twin.config import TwinConfig
 from digital_twin.simulation.what_if import ScenarioSpec, WhatIfEngine, WhatIfResult
-from synapse_common.a2a_sdk import A2ARequest, A2AResponse, AgentCard
-from synapse_common.metrics import TWIN_SIMULATION_LATENCY, TWIN_SIMULATION_TOTAL
-from synapse_common.models import AgentName
+from digital_twin.world import (
+    WorldRuntime,
+    all_runtimes,
+    get_runtime,
+    register_runtime,
+    reset_runtimes,
+)
+
+if TYPE_CHECKING:
+    from collections.abc import AsyncIterator
+
+# ADR-052: the standing world clock. Per-city WorldRuntimes advance on their own so the
+# system perceives + acts continuously, not only when POSTed. All env-tunable.
+WORLD_ENABLED = os.environ.get("TW_WORLD_ENABLED", "1") not in ("0", "false", "False")
+WORLD_CITIES = [
+    c.strip() for c in os.environ.get("TW_WORLD_CITIES", "bengaluru,mumbai").split(",") if c.strip()
+]
+WORLD_STEP_HOURS = float(os.environ.get("TW_WORLD_STEP_HOURS", "1.0"))
+WORLD_REAL_SECONDS = float(os.environ.get("TW_WORLD_REAL_SECONDS_PER_STEP", "5.0"))
 
 logger = structlog.get_logger(__name__)
 
@@ -37,8 +56,10 @@ AGENT_CARD = AgentCard(
     description="Supply chain digital twin — simulation, Monte Carlo, and What-If analysis",
     version="1.0.0",
     url="http://digital-twin:8009",
-    capabilities=["simulate", "monte_carlo", "what_if", "divergence_check"],
-    supported_methods=["simulate", "monte_carlo", "health"],
+    capabilities=["simulate", "monte_carlo", "what_if", "divergence_check", "standing_world"],
+    supported_methods=[
+        "simulate", "monte_carlo", "health", "world_state", "apply_action", "inject_disruption"
+    ],
 )
 
 
@@ -47,9 +68,79 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     global _config, _engine
     _config = TwinConfig()
     _engine = WhatIfEngine(config=_config)
-    logger.info("twin_server_started", port=_config.port)
+
+    # ADR-052: boot the standing world(s). Guarded — a world that fails to start must
+    # NOT take the twin's what-if/monte-carlo service down (I-7); it degrades to "no
+    # world for that city" and the orchestrator SensorLoop idles honestly.
+    if WORLD_ENABLED:
+        for city in WORLD_CITIES:
+            try:
+                runtime = WorldRuntime(
+                    city=city,
+                    step_hours=WORLD_STEP_HOURS,
+                    real_seconds_per_step=WORLD_REAL_SECONDS,
+                )
+                runtime.start(run_clock=True)
+                register_runtime(runtime)
+                logger.info("world_runtime_started", city=city)
+            except Exception as exc:  # noqa: BLE001 — a dead world never crashes the twin (I-7)
+                logger.error("world_runtime_start_failed", city=city, error=str(exc))
+
+    logger.info("twin_server_started", port=_config.port, worlds=list(all_runtimes()))
     yield
+    reset_runtimes()
     logger.info("twin_server_shutdown")
+
+
+def _world_state_response(request: A2ARequest) -> A2AResponse:
+    """A2A ``world_state`` — the perceive snapshot the orchestrator SensorLoop polls."""
+    try:
+        city = str(request.params.get("city", "bengaluru"))
+        runtime = get_runtime(city)
+        if runtime is None:
+            return A2AResponse(
+                id=request.id, error={"code": -32004, "message": f"no standing world for {city}"}
+            )
+        return A2AResponse(id=request.id, result=runtime.perceive().model_dump(mode="json"))
+    except Exception as exc:  # noqa: BLE001 — degrade honestly, never break the A2A envelope (I-7)
+        logger.error("world_state_failed", error=str(exc))
+        return A2AResponse(id=request.id, error={"code": -32000, "message": str(exc)})
+
+
+def _apply_action_response(request: A2ARequest) -> A2AResponse:
+    """A2A ``apply_action`` — an agent's execute() actuates the world through here."""
+    try:
+        action = WorldAction.model_validate(request.params)
+        runtime = get_runtime(action.city)
+        if runtime is None:
+            return A2AResponse(
+                id=request.id,
+                error={"code": -32004, "message": f"no standing world for {action.city}"},
+            )
+        return A2AResponse(id=request.id, result=runtime.apply_action(action))
+    except Exception as exc:  # noqa: BLE001 — bad action / sim error degrades, never 500s (I-7)
+        logger.error("apply_action_failed", error=str(exc))
+        return A2AResponse(id=request.id, error={"code": -32602, "message": str(exc)})
+
+
+def _inject_disruption_response(request: A2ARequest) -> A2AResponse:
+    """A2A ``inject_disruption`` — shock the live world (demo + disruption-shield path)."""
+    try:
+        city = str(request.params.get("city", "bengaluru"))
+        runtime = get_runtime(city)
+        if runtime is None:
+            return A2AResponse(
+                id=request.id, error={"code": -32004, "message": f"no standing world for {city}"}
+            )
+        result = runtime.inject_disruption(
+            failure_rate_multiplier=float(request.params.get("failure_rate_multiplier", 1.0)),
+            spoilage_rate_multiplier=float(request.params.get("spoilage_rate_multiplier", 1.0)),
+            lead_time_multiplier=float(request.params.get("lead_time_multiplier", 1.0)),
+        )
+        return A2AResponse(id=request.id, result=result)
+    except Exception as exc:  # noqa: BLE001 — honest degradation (I-7)
+        logger.error("inject_disruption_failed", error=str(exc))
+        return A2AResponse(id=request.id, error={"code": -32000, "message": str(exc)})
 
 
 app = FastAPI(
@@ -80,6 +171,8 @@ class HealthResponse(BaseModel):
     agent: str = "digital_twin"
     engine_ready: bool
     uptime_seconds: float
+    # ADR-052: per-city standing-world clock liveness (additive; does not gate status).
+    worlds_advancing: dict[str, bool] = Field(default_factory=dict)
 
 
 _start_time: float = time.monotonic()
@@ -112,10 +205,12 @@ async def simulate(request: SimulateRequest) -> WhatIfResult:
 
 @app.get("/health", response_model=HealthResponse)
 async def health() -> HealthResponse:
+    worlds = {city: rt.perceive().clock_advancing for city, rt in all_runtimes().items()}
     return HealthResponse(
         status="healthy",
         engine_ready=_engine is not None,
         uptime_seconds=round(time.monotonic() - _start_time, 1),
+        worlds_advancing=worlds,
     )
 
 
@@ -184,6 +279,15 @@ async def a2a_handler(request: A2ARequest) -> A2AResponse:
             result={"status": "healthy", "engine_ready": _engine is not None},
         )
 
+    if request.method == "world_state":
+        return _world_state_response(request)
+
+    if request.method == "apply_action":
+        return _apply_action_response(request)
+
+    if request.method == "inject_disruption":
+        return _inject_disruption_response(request)
+
     if request.method == "agent_card":
         return A2AResponse(
             id=request.id,
@@ -194,6 +298,15 @@ async def a2a_handler(request: A2ARequest) -> A2AResponse:
         id=request.id,
         error={"code": -32601, "message": f"Method not found: {request.method}"},
     )
+
+
+@app.get("/world/state")
+async def world_state(city: str = "bengaluru") -> dict[str, Any]:
+    """REST mirror of A2A ``world_state`` — for the demo + cockpit observability."""
+    runtime = get_runtime(city)
+    if runtime is None:
+        raise HTTPException(status_code=404, detail=f"no standing world for {city}")
+    return runtime.perceive().model_dump(mode="json")
 
 
 def main() -> None:

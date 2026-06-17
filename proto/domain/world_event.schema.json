@@ -1,0 +1,21 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "synapse.domain.world_event",
+  "title": "Digital-Twin World Event",
+  "description": "One event reported by the standing WorldRuntime (ADR-052): a demand arrival, stockout/spoilage risk, disruption, or restock. Perceived by the orchestrator SensorLoop and event-sourced to existing Kafka topics for observability.",
+  "type": "object",
+  "required": ["event_id", "kind", "city", "sim_time_min"],
+  "properties": {
+    "event_id": {"type": "string", "minLength": 1},
+    "kind": {"type": "string", "enum": ["demand_arrival", "stockout_risk", "spoilage_risk", "disruption", "restock"]},
+    "city": {"type": "string", "enum": ["bengaluru", "mumbai"]},
+    "sim_time_min": {"type": "number", "minimum": 0},
+    "store_id": {"type": ["string", "null"]},
+    "sku_id": {"type": ["string", "null"]},
+    "quantity": {"type": ["number", "null"], "minimum": 0},
+    "severity": {"type": "number", "minimum": 0.0, "maximum": 1.0},
+    "detail": {"type": "object", "additionalProperties": {"type": "number"}},
+    "ts": {"type": "string", "format": "date-time"}
+  },
+  "additionalProperties": false
+}

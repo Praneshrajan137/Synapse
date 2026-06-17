@@ -1581,6 +1581,23 @@ def check_doc_truth() -> CheckResult:
     return CheckResult("C56", "Doc truth", status, probe.detail)
 
 
+@register("C57", "Agentic loop is real (perceive→decide→act→learn)")
+def check_agency_loop() -> CheckResult:
+    """ADR-052 agency gate — the system is autonomous, not request-response.
+
+    Asserts the five structural loop invariants (SensorLoop triggers consensus on its
+    own; it is wired into the orchestrator; the standing WorldRuntime perceives + is
+    actuated; consensus learns from the realized world; ≥1 agent execute() actuates)
+    and the stub-execute ratchet. A regression to the dormant pipeline fails CI.
+    """
+    try:
+        from scripts.audit.agency_truth import evaluate as _eval_agency
+    except ImportError as exc:
+        return CheckResult("C57", "Agency loop", "SKIP", f"agency_truth import failed: {exc}")
+    probe = _eval_agency()
+    return CheckResult("C57", "Agency loop", "PASS" if probe.ok else "FAIL", probe.detail)
+
+
 # ---------------------------------------------------------------------------
 # Main entry
 # ---------------------------------------------------------------------------
