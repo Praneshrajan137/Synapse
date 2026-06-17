@@ -13,6 +13,7 @@ export * from "./ProposalConstellation";
 export * from "./BuildSHAChip";
 export * from "./Pulse";
 export * from "./CouncilStrip";
+export * from "./ConsensusChoreography";
 export * from "./ParetoParallel";
 export * from "./ThresholdCountdown";
 export * from "./DivergenceTrace";

@@ -4,6 +4,7 @@ import { useSonification } from "@hooks/use-sonification";
 import { useSynapseApi } from "@hooks/use-synapse-api";
 import { AGENT_NAMES, type AgentName } from "@lib/agent-identity";
 import { confidenceZone } from "@lib/chromatics";
+import { deriveLiveCognition, phaseLabel } from "@lib/cognition";
 import type { Tier } from "@lib/confidence";
 import { sonificationSupported } from "@lib/sonification";
 import { useFirehoseStore } from "@state/firehose.store";
@@ -32,6 +33,7 @@ const AGENT_SET: ReadonlySet<string> = new Set(AGENT_NAMES);
 
 export function CortexBanner() {
   const decisions = useFirehoseStore((s) => s.decisions.items);
+  const cognitionEvents = useFirehoseStore((s) => s.cognition.items);
   const theme = useThemeStore((s) => s.theme);
   const api = useSynapseApi();
 
@@ -77,6 +79,11 @@ export function CortexBanner() {
 
     return { rate, confidence, tierMix, activeAgents };
   }, [decisions]);
+
+  // ADR-051: live council cognition (FSM phase events) — the strip shows the
+  // agents thinking/debating in real time. Null when the stream is stale, so a
+  // quiet council is never painted "live".
+  const live = useMemo(() => deriveLiveCognition(cognitionEvents, Date.now()), [cognitionEvents]);
 
   const states = useMemo<Partial<Record<AgentName, CouncilAgentState>>>(() => {
     const out: Partial<Record<AgentName, CouncilAgentState>> = {};
@@ -133,9 +140,11 @@ export function CortexBanner() {
           <div className="space-y-1">
             <p className="text-sm text-ink">{read}</p>
             <p className="text-2xs uppercase tracking-wider text-ink-subtle">
-              {activeCount > 0
-                ? `${activeCount} of ${AGENT_NAMES.length} agents active`
-                : "Council quiet"}
+              {live
+                ? `Council ${phaseLabel(live.phase)}`
+                : activeCount > 0
+                  ? `${activeCount} of ${AGENT_NAMES.length} agents active`
+                  : "Council quiet"}
             </p>
           </div>
           {canSonify && (
@@ -155,7 +164,7 @@ export function CortexBanner() {
             </button>
           )}
         </div>
-        <CouncilStrip states={states} />
+        <CouncilStrip states={states} liveStates={live?.agentStates} />
       </div>
     </section>
   );

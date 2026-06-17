@@ -712,3 +712,83 @@ invariants:
       - frontend/src/surfaces/operations/__tests__/logic.test.ts
       - api/tests/test_system_calibration.py
     status: enforced
+
+  - id: FE-INV-045
+    title: Council Theater renders only recorded phases; nothing is fabricated
+    mirrors: I-7, ADR-040, ADR-051, FE-INV-009, FE-INV-028
+    description: >
+      The Council Theater choreography reconstructs ONE recorded decision row
+      via the pure `replayDecision` slicer — the auto-advance drives only the
+      phase index, never the slice (FE-INV-028). A phase the row did not record
+      renders an explicit honest state: a `debate_rounds === 0` decision shows
+      "no debate — fast path" rather than a fabricated transcript, and a null
+      `pareto_front` shows the empty-front state. The shared `reshapeDecision`
+      boundary (hooks/use-decision) defaults the anatomy honestly so the
+      analyst detail and the cinematic reconstruction can never drift.
+    implementations:
+      - frontend/src/design-system/compounds/ConsensusChoreography.tsx
+      - frontend/src/hooks/use-decision.ts
+      - frontend/src/lib/replay.ts
+    tests:
+      - frontend/src/design-system/compounds/__tests__/ConsensusChoreography.test.tsx
+      - frontend/src/hooks/__tests__/use-decision.test.ts
+    status: enforced
+
+  - id: FE-INV-046
+    title: Choreography degrades to a static all-phase reveal under reduced motion
+    mirrors: INV-CLR-011, ADR-044, FE-INV-040
+    description: >
+      With prefers-reduced-motion the ConsensusChoreography drops the
+      auto-narration entirely and reveals every recorded phase at once,
+      statically, with each state carried by text (phase name, agent label,
+      confidence %, "recorded" status) — never motion or colour alone. The
+      transport controls (play/pause/scrub) are absent and an aria-live region
+      narrates phase changes in the motion path. Parity with FE-INV-040.
+    implementations:
+      - frontend/src/design-system/compounds/ConsensusChoreography.tsx
+    tests:
+      - frontend/src/design-system/compounds/__tests__/ConsensusChoreography.test.tsx
+    status: enforced
+
+  - id: FE-INV-047
+    title: Council Theater is a labelled recorded reconstruction, never live
+    mirrors: ADR-044 D5, ADR-051, FE-INV-036, I-7
+    description: >
+      The Council Theater surface and the choreography are labelled a RECORDED
+      RECONSTRUCTION (never "live") — the live cognition channel is the deferred
+      ADR-051 follow-up. A synthetic decision (is_synthetic) always carries the
+      SyntheticBadge, and the scored outcome renders the ADR-047 tri-state where
+      `unknown` is never shown as confirmed. The surface never shows a silent
+      empty stage: loading, error, and not-found are explicit states.
+    implementations:
+      - frontend/src/surfaces/council-theater/CouncilTheater.tsx
+      - frontend/src/design-system/compounds/ConsensusChoreography.tsx
+    tests:
+      - frontend/src/design-system/compounds/__tests__/ConsensusChoreography.test.tsx
+      - frontend/src/surfaces/council-theater/__tests__/CouncilTheater.test.tsx
+    status: enforced
+
+  - id: FE-INV-048
+    title: Live council cognition is derived only from real events, never shown stale
+    mirrors: ADR-051, INV-CLR-017, I-7, FE-INV-040
+    description: >
+      The CouncilStrip renders live per-agent cognition (thinking / debating /
+      acting) ONLY from the real `cognition` firehose channel (the orchestrator's
+      FSM phase events), via the pure `deriveLiveCognition` helper. The derivation
+      returns null when the stream is stale (no event within the window) so a quiet
+      council is never painted "live"; the arbitrating/learning phases invent no
+      per-agent state (health fallback). Every live state carries a STATUS WORD so
+      it survives colour-blindness and reduced motion (INV-CLR-011), reusing the
+      FROZEN factor.agentstate chroma factors (INV-CLR-017) — no new tokens, the
+      chromatic dist is byte-unchanged. The cognition event schema rejects unknown
+      phases (no fabricated cognition state).
+    implementations:
+      - frontend/src/lib/cognition.ts
+      - frontend/src/domain/cognition-event.ts
+      - frontend/src/design-system/compounds/CouncilStrip.tsx
+      - frontend/src/surfaces/mission-control/CortexBanner.tsx
+    tests:
+      - frontend/src/lib/__tests__/cognition.test.ts
+      - frontend/src/domain/__tests__/cognition-event.test.ts
+      - frontend/src/design-system/compounds/__tests__/CouncilStrip.test.tsx
+    status: enforced

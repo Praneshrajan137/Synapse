@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # ============================================================================
 # SYNAPSE — Kafka Topic Provisioner
-# Reads topics.json and creates all 16 topics with correct configuration.
+# Reads topics.json and creates every registered topic with correct configuration.
 # Run AFTER Kafka is healthy: ./scripts/create_kafka_topics.sh
 # ============================================================================
 set -euo pipefail

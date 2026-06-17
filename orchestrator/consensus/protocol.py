@@ -16,8 +16,9 @@ import asyncio
 import json
 import os
 import time
-from datetime import UTC
+from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
+from uuid import UUID, uuid4
 
 import deal
 import structlog
@@ -107,6 +108,11 @@ class ConsensusProtocol:
         self._semantic_cache = semantic_cache
         self._kafka = kafka_producer
         self._fsm = OrchestratorStateMachine()
+        # ADR-051: correlation id for the live cognition stream. Generated at run
+        # start so the phase events and the final ConsensusDecision share one id —
+        # the live stream and the recorded Council Theater reconstruction line up.
+        self._decision_id: UUID | None = None
+        self._city: str | None = None
 
         self._context_messages: list[ContextMessage] = []
         self._tool_call_count: int = 0
@@ -139,6 +145,50 @@ class ConsensusProtocol:
         )
         self._context_messages.append(recitation)
 
+    # ── Live cognition telemetry (ADR-051) ──────────────────────────────
+
+    def _emit_phase(
+        self,
+        phase: str,
+        *,
+        agent_name: str | None = None,
+        round_: int | None = None,
+        event: str | None = None,
+    ) -> None:
+        """Publish one FSM phase-transition event to ``synapse.orchestrator.phase``.
+
+        This is the live Cognition Channel: the firehose streams the council's
+        *reasoning* (collecting → debating → arbitrating → executing → learning),
+        not only the final verdict, so the AUX grammar can show thinking/debating
+        honestly from REAL events. Fire-and-forget and fully guarded — a missing
+        or slow producer NEVER blocks or fails the decision (I-7). Correlated to
+        the eventual ConsensusDecision by ``decision_id``.
+        """
+        if self._kafka is None or self._decision_id is None:
+            return
+        payload: dict[str, Any] = {
+            "type": "cognition_phase",
+            "decision_id": str(self._decision_id),
+            "phase": phase,
+            "ts": datetime.now(UTC).isoformat(),
+        }
+        if self._city is not None:
+            payload["city"] = self._city
+        if agent_name is not None:
+            payload["agent_name"] = agent_name
+        if round_ is not None:
+            payload["round"] = round_
+        if event is not None:
+            payload["event"] = event
+        try:
+            self._kafka.produce(
+                "synapse.orchestrator.phase",
+                value=payload,
+                key=str(self._decision_id),
+            )
+        except Exception as exc:  # noqa: BLE001 — telemetry is best-effort (I-7)
+            logger.warning("cognition_phase_emit_failed", phase=phase, error=str(exc))
+
     # ── Main entry point ────────────────────────────────────────────────
 
     async def run_consensus(
@@ -147,6 +197,10 @@ class ConsensusProtocol:
     ) -> ConsensusDecision:
         """Execute the full consensus lifecycle for a single decision."""
         self._reset()
+        # ADR-051: stamp the correlation id + city up front so every phase event
+        # carries them and the final decision reuses the same id.
+        self._decision_id = uuid4()
+        self._city = decision_request.get("city") if isinstance(decision_request, dict) else None
         start = time.monotonic()
 
         classification = self._tier_router.classify(decision_request)
@@ -257,6 +311,7 @@ class ConsensusProtocol:
         tier: DecisionTier,
     ) -> list[AgentProposal]:
         self._fsm.transition("decision_request_received")
+        self._emit_phase("collecting")
 
         tasks = {
             name: self._request_proposal(name, url, request, tier)
@@ -278,6 +333,7 @@ class ConsensusProtocol:
                         content=json.loads(result.to_deterministic_json()),
                     )
                 )
+                self._emit_phase("collecting", agent_name=name, event="proposed")
             else:
                 self._append_context(
                     ContextMessage(
@@ -286,10 +342,12 @@ class ConsensusProtocol:
                         status=MessageStatus.ERROR,
                     )
                 )
-        # Phase 1.5: event-source each agent's domain output onto its firehose
-        # topic (ADR-038) so the FE pricing/demand/freshness surfaces show live
-        # data. Pre-debate proposals = "what each agent proposed". Best-effort
-        # (I-7) — never blocks consensus.
+                self._emit_phase("collecting", agent_name=name, event="failed")
+        # Phase 1.5 (#64): event-source each agent's domain output onto its
+        # firehose topic (ADR-038) so the FE pricing/demand/freshness surfaces
+        # show live data. Pre-debate proposals = "what each agent proposed".
+        # Best-effort (I-7) — never blocks consensus. (Coexists with the ADR-051
+        # cognition phase events above.)
         emit_agent_signals(self._kafka, proposals)
         return proposals
 
@@ -328,6 +386,7 @@ class ConsensusProtocol:
 
         for round_num in range(1, self._config.debate_max_rounds + 1):
             rounds = round_num
+            self._emit_phase("debating", round_=round_num)
 
             if model:
                 messages = self._ctx_builder.build_ollama_messages(self._context_messages)
@@ -381,6 +440,7 @@ class ConsensusProtocol:
         proposals: list[AgentProposal],
     ) -> dict[str, Any]:
         self._fsm.transition("convergence_or_max_rounds")
+        self._emit_phase("arbitrating")
         weights = self._meta_rl.get_weights(self._system_state())
         result: dict[str, Any] = run_pareto_arbitration(proposals, weights)
         self._append_context(
@@ -471,6 +531,7 @@ class ConsensusProtocol:
         decision: ConsensusDecision,
     ) -> ConsensusDecision:
         self._fsm.transition("pareto_solution_selected")
+        self._emit_phase("executing")
 
         confirmations: list[str] = []
         for proposal in decision.proposals:
@@ -512,6 +573,7 @@ class ConsensusProtocol:
 
     async def _phase_learn(self, decision: ConsensusDecision) -> None:
         self._fsm.transition("execution_complete")
+        self._emit_phase("learning")
 
         outcome: dict[str, float] = {}
         for proposal in decision.proposals:
@@ -563,6 +625,7 @@ class ConsensusProtocol:
     ) -> ConsensusDecision:
         best = max(proposals, key=lambda p: p.utility_score) if proposals else None
         return ConsensusDecision(
+            decision_id=self._decision_id or uuid4(),
             tier=tier,
             proposals=proposals,
             selected_action=best.payload if best else {},
@@ -576,8 +639,6 @@ class ConsensusProtocol:
         )
 
     def _system_state(self) -> dict[str, Any]:
-        from datetime import datetime
-
         return {
             "hour_of_day": datetime.now(UTC).hour,
             "active_disruptions": 0,
@@ -587,4 +648,6 @@ class ConsensusProtocol:
     def _reset(self) -> None:
         self._context_messages = []
         self._tool_call_count = 0
+        self._decision_id = None
+        self._city = None
         self._fsm.reset()

@@ -53,6 +53,10 @@ CHANNEL_TOPIC: dict[str, str] = {
     # multiplexed socket instead of a separate orchestrator WS connection.
     # The topic itself is Sprint-1 frozen (#9); this is a consumer addition.
     "escalation": "synapse.orchestrator.escalation",
+    # ADR-051: the live Cognition Channel — the orchestrator's FSM phase
+    # transitions (collecting → debating → arbitrating → executing → learning),
+    # so the AUX can show the council thinking/debating live, not just the verdict.
+    "cognition": "synapse.orchestrator.phase",
 }
 
 

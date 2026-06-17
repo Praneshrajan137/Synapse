@@ -59,7 +59,7 @@ def render_context(agents: list[dict[str, Any]]) -> str:
         lines.append(f'        System({name}, "{name}", "{desc}")')
     lines += [
         "    }",
-        '    System_Ext(kafka, "Kafka", "17 topics, frozen post-Sprint 7")',
+        '    System_Ext(kafka, "Kafka", "18 topics, frozen post-Sprint 7")',
         '    System_Ext(postgres, "Postgres", "Append-only audit + chained hash")',
         '    System_Ext(neo4j, "Neo4j", "Supply network graph (per-city)")',
         '    Rel(operator, orchestrator, "Triggers decisions")',

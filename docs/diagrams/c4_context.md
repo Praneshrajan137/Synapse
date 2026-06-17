@@ -15,7 +15,7 @@ C4Context
         System(supplier_trust, "supplier_trust", "Bayesian trust scoring with GNN embeddings on temporal knowledge graph for supplier reliability")
         System(sustainability_agent, "sustainability_agent", "Carbon footprint tracking, food waste survival analysis, and ESG report generation with provenance")
     }
-    System_Ext(kafka, "Kafka", "17 topics, frozen post-Sprint 7")
+    System_Ext(kafka, "Kafka", "18 topics, frozen post-Sprint 7")
     System_Ext(postgres, "Postgres", "Append-only audit + chained hash")
     System_Ext(neo4j, "Neo4j", "Supply network graph (per-city)")
     Rel(operator, orchestrator, "Triggers decisions")
