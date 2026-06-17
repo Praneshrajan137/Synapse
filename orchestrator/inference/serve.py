@@ -11,6 +11,7 @@ Endpoints:
 
 from __future__ import annotations
 
+import os
 from contextlib import asynccontextmanager
 from typing import TYPE_CHECKING, Any
 from uuid import UUID
@@ -39,6 +40,7 @@ from orchestrator.llm.ollama_client import OllamaClient
 from orchestrator.llm.semantic_cache import SemanticDecisionCache
 from orchestrator.meta_rl.meta_agent import MetaRLAgent
 from orchestrator.outbox.dispatcher import OutboxDispatcher
+from orchestrator.sensor import A2AWorldClient, SensorLoop
 
 if TYPE_CHECKING:
     from collections.abc import AsyncIterator
@@ -51,6 +53,7 @@ _ws_manager: WebSocketManager | None = None
 _a2a_handler: OrchestratorA2AHandler | None = None
 _hitl: HITLEscalation | None = None
 _outbox_dispatcher: OutboxDispatcher | None = None
+_sensor_loop: SensorLoop | None = None
 _engine: AsyncEngine | None = None
 _kafka_ok: bool = False
 
@@ -58,7 +61,7 @@ _kafka_ok: bool = False
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     global _config, _protocol, _ws_manager, _a2a_handler, _hitl, _outbox_dispatcher
-    global _engine, _kafka_ok
+    global _sensor_loop, _engine, _kafka_ok
 
     _config = OrchestratorConfig()
 
@@ -141,6 +144,9 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         meta_rl=meta_rl,
         semantic_cache=semantic_cache,
         kafka_producer=kafka_producer,
+        # ADR-052: learn from the realized world. Short timeout so the learning-phase
+        # perceive never delays a decision; degrades to predicted utility if absent (I-7).
+        world_observer=A2AWorldClient(timeout=2.0).world_state,
     )
     _a2a_handler = OrchestratorA2AHandler(consensus_protocol=_protocol)
 
@@ -159,9 +165,32 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
             ),
         )
 
-    logger.info("orchestrator_started", port=_config.port)
+    # ADR-052 (the keystone): start the autonomous SensorLoop so the system perceives the
+    # standing world and convenes consensus ON ITS OWN — no human POST, no synthetic ticker.
+    # Guarded: a sensor failure must never block startup (tier-1/2 POST path still serves).
+    if os.environ.get("SYNAPSE_SENSOR_ENABLED", "1") not in ("0", "false", "False"):
+        try:
+            cities = [
+                c.strip()
+                for c in os.environ.get("SYNAPSE_SENSOR_CITIES", "bengaluru,mumbai").split(",")
+                if c.strip()
+            ]
+            _sensor_loop = SensorLoop(
+                _protocol,
+                A2AWorldClient(),
+                cities=cities,
+                poll_interval_s=float(os.environ.get("SYNAPSE_SENSOR_POLL_SECONDS", "10")),
+            )
+            await _sensor_loop.start()
+        except Exception as exc:  # noqa: BLE001 — autonomy is additive; never block startup (I-7)
+            logger.error("sensor_loop_start_failed", error=str(exc))
+            _sensor_loop = None
+
+    logger.info("orchestrator_started", port=_config.port, sensor=_sensor_loop is not None)
     yield
 
+    if _sensor_loop is not None:
+        await _sensor_loop.stop()
     if _outbox_dispatcher is not None:
         await _outbox_dispatcher.stop()
     await ollama_client.close()
@@ -263,6 +292,7 @@ async def health() -> JSONResponse:
         protocol=_protocol is not None,
         kafka="up" if _kafka_ok else "down",
         outbox_dispatcher="running" if dispatcher_running else "stopped",
+        sensor_loop="running" if (_sensor_loop is not None and _sensor_loop.running) else "stopped",
     )
 
 

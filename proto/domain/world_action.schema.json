@@ -1,0 +1,18 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "synapse.domain.world_action",
+  "title": "Digital-Twin World Action",
+  "description": "A concrete mutation an agent applies to the standing WorldRuntime on execute() (ADR-052). This is real actuation: it changes world state, replacing the status-dict-only execute() stubs the audit flagged.",
+  "type": "object",
+  "required": ["action_id", "kind", "city"],
+  "properties": {
+    "action_id": {"type": "string", "minLength": 1},
+    "kind": {"type": "string", "enum": ["set_policy", "reorder", "set_price_mult", "inject_disruption"]},
+    "city": {"type": "string", "enum": ["bengaluru", "mumbai"]},
+    "store_id": {"type": ["string", "null"]},
+    "sku_id": {"type": ["string", "null"]},
+    "params": {"type": "object", "additionalProperties": {"type": "number"}},
+    "decision_id": {"type": ["string", "null"]}
+  },
+  "additionalProperties": false
+}

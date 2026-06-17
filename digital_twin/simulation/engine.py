@@ -117,6 +117,11 @@ class SupplyChainSimulation:
         self._dispatch_speed = 1.0       # >1 = faster pick/pack → lower latency
         self._restock_threshold = 50.0   # safety-stock level that triggers restock
         self._order_qty_mult = 1.0       # scales the restock amount
+        # ADR-052 actuation levers (neutral defaults reproduce historical behaviour
+        # exactly, so the run()-based determinism tests are unaffected).
+        self._demand_mult = 1.0          # >1 = more demand (e.g. a price cut)
+        self._lead_time_mult = 1.0       # >1 = slower supplier restock lead time
+        self._order_seq = 0              # id counter for externally-injected orders
 
     def set_policy(
         self,
@@ -124,12 +129,15 @@ class SupplyChainSimulation:
         dispatch_speed: float | None = None,
         restock_threshold: float | None = None,
         order_qty_mult: float | None = None,
+        demand_mult: float | None = None,
+        lead_time_mult: float | None = None,
     ) -> None:
-        """Update the supply-policy levers an RL agent controls.
+        """Update the supply-policy levers an RL agent / live decision controls.
 
         The running SimPy processes read these on each iteration, so a policy
         change mid-episode takes effect on subsequent dispatches/restocks — this
-        is what makes the Gym env's action genuinely affect the reward.
+        is what makes the Gym env's action (and an agent's live ``execute()``)
+        genuinely affect the dynamics.
         """
         if dispatch_speed is not None:
             self._dispatch_speed = max(0.1, float(dispatch_speed))
@@ -137,6 +145,75 @@ class SupplyChainSimulation:
             self._restock_threshold = max(0.0, float(restock_threshold))
         if order_qty_mult is not None:
             self._order_qty_mult = max(0.1, float(order_qty_mult))
+        if demand_mult is not None:
+            self._demand_mult = max(0.01, float(demand_mult))
+        if lead_time_mult is not None:
+            self._lead_time_mult = max(0.1, float(lead_time_mult))
+
+    def inject_shock(
+        self,
+        *,
+        failure_rate_multiplier: float | None = None,
+        spoilage_rate_multiplier: float | None = None,
+        lead_time_multiplier: float | None = None,
+    ) -> None:
+        """Apply a disruption shock to the running world (ADR-052 actuation).
+
+        Unlike the constructor shocks (set once at episode start), these mutate the
+        LIVE world mid-run so a disruption-shield decision visibly degrades delivery
+        / spoilage / lead time — and the next perceive() reflects it.
+        """
+        if failure_rate_multiplier is not None:
+            self._failure_rate_multiplier = max(1.0, float(failure_rate_multiplier))
+        if spoilage_rate_multiplier is not None:
+            self._spoilage_rate_multiplier = max(0.0, float(spoilage_rate_multiplier))
+        if lead_time_multiplier is not None:
+            self._lead_time_mult = max(0.1, float(lead_time_multiplier))
+
+    def inject_orders(self, n: int) -> None:
+        """Schedule ``n`` exogenous orders on the running env (ADR-052 WorldSource path).
+
+        When ``start(external_demand=True)`` is used, the endogenous Poisson process is
+        off and demand comes only from here — this is how a pluggable ``WorldSource``
+        (SimWorldSource now, ExternalFeedSource later) drives the SAME downstream
+        dynamics (pick/pack → delivery → inventory depletion).
+        """
+        if n <= 0:
+            return
+        if self._env is None:
+            self.start(external_demand=True)
+        assert self._env is not None
+        for _ in range(int(n)):
+            self._order_seq += 1
+            self._metrics.orders_created += 1
+            self._env.process(self._pick_pack_dispatch(self._env, self._order_seq))
+
+    def add_stock(self, sku_id: str, quantity: float) -> float:
+        """Replenish a SKU's stock (ADR-052 reorder actuation). Returns the new level."""
+        self._inventory[sku_id] = self._inventory.get(sku_id, 0.0) + max(0.0, float(quantity))
+        return self._inventory[sku_id]
+
+    # ── Public read accessors (so callers need not reach into privates) ──
+
+    @property
+    def inventory(self) -> dict[str, float]:
+        """A copy of the current per-SKU stock levels."""
+        return dict(self._inventory)
+
+    @property
+    def metrics(self) -> SimulationMetrics:
+        """The live accumulated metrics object."""
+        return self._metrics
+
+    @property
+    def sim_time_min(self) -> float:
+        """Current simulation clock, in minutes."""
+        return self._sim_time_min
+
+    @property
+    def demand_mult(self) -> float:
+        """Current demand multiplier (1.0 = neutral)."""
+        return self._demand_mult
 
     def _init_env(self) -> simpy.Environment:
         if self._seed is not None:
@@ -148,7 +225,7 @@ class SupplyChainSimulation:
         order_id = 0
         while True:
             inter_arrival = self._rng.exponential(
-                1.0 / self._config.order_arrival_rate
+                1.0 / (self._config.order_arrival_rate * self._demand_mult)
             )
             yield env.timeout(inter_arrival)
             order_id += 1
@@ -216,7 +293,7 @@ class SupplyChainSimulation:
             restock_amount = 200.0 * self._order_qty_mult
             for sku, level in list(self._inventory.items()):
                 if level < safety_stock:
-                    lead_time = self._rng.uniform(30.0, 120.0)
+                    lead_time = self._rng.uniform(30.0, 120.0) * self._lead_time_mult
                     yield env.timeout(lead_time)
                     self._inventory[sku] = level + restock_amount
                     self._metrics.restocks_triggered += 1
@@ -241,18 +318,25 @@ class SupplyChainSimulation:
                     self._freshness[sku] = 1.0
                     logger.debug("spoilage", sku=sku)
 
-    def start(self) -> SupplyChainSimulation:
+    def start(self, external_demand: bool = False) -> SupplyChainSimulation:
         """Create one persistent SimPy env + processes and reset accumulators.
 
         Unlike the old run()-per-call shape, the env survives across advance()
         calls so the Gym wrapper's state (inventory, metrics) persists between
         steps. Returns self for chaining.
+
+        ``external_demand=True`` (ADR-052) turns OFF the endogenous Poisson arrival
+        process so demand comes only from ``inject_orders()`` — the path a pluggable
+        ``WorldSource`` uses to drive the world. The default (False) is the
+        historical self-generating behaviour the existing tests depend on.
         """
         self._metrics = SimulationMetrics()
         self._inventory = {f"sku_{i}": 100.0 for i in range(10)}
         self._freshness = {f"sku_{i}": 1.0 for i in range(10)}
+        self._order_seq = 0
         env = self._init_env()
-        env.process(self._order_arrival(env))
+        if not external_demand:
+            env.process(self._order_arrival(env))
         env.process(self._restock(env))
         env.process(self._spoilage(env))
         self._env = env
