@@ -8,6 +8,7 @@ from typing import Any
 from uuid import UUID, uuid4
 
 import structlog
+from synapse_common.debate import build_debate_response
 from synapse_common.models import AgentName, AgentProposal, DecisionTier
 from synapse_common.schemas import validate_agent_payload
 from synapse_common.world import Actuator, WorldAction, WorldActionKind, WorldActuator
@@ -41,7 +42,7 @@ class InventorySentinelA2AHandler:
             if method == "proposal":
                 result = self.proposal(params)
             elif method == "debate_respond":
-                result = {"status": "maintained", "round": params.get("round_number", 1)}
+                result = self.debate_respond(params)
             elif method == "execute":
                 result = self.execute(params)
             else:
@@ -83,6 +84,13 @@ class InventorySentinelA2AHandler:
         # I-3: validate every emitted payload against proto/domain/.
         validate_agent_payload("inventory_sentinel", proposal.payload)
         return json.loads(proposal.to_deterministic_json())
+
+    def debate_respond(self, params: dict[str, Any]) -> dict[str, Any]:
+        # ADR-052/R3: bounded rule-based concession toward the round consensus, with
+        # any revised payload validated against proto/domain/ (I-3) via the shared helper.
+        response = build_debate_response("inventory_sentinel", params)
+        logger.info("debate_respond", round=response["round"], status=response["status"])
+        return response
 
     def execute(self, params: dict[str, Any]) -> dict[str, Any]:
         """Enact the ratified reorder ON THE WORLD (ADR-052 — real actuation).

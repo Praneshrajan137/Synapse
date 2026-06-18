@@ -9,15 +9,21 @@ Implements the three mandatory A2A methods:
 from __future__ import annotations
 
 import json
+from datetime import UTC, datetime
 from typing import Any
 from uuid import UUID, uuid4
 
 import structlog
+from synapse_common.debate import build_debate_response
 from synapse_common.models import AgentName, AgentProposal, DecisionTier
 from synapse_common.schemas import validate_agent_payload
 
 from agents.sustainability_agent.inference.pipeline import SustainabilityPipeline
 from agents.sustainability_agent.state_machine import SustainabilityAgentStateMachine
+
+# Honest No-Op event-source topic (R6.2/R6.5): records that no carbon lever exists in the
+# standing world, so the gate marks this agent converted without any fabricated actuation.
+CARBON_TOPIC = "synapse.sustainability.carbon"
 
 # India grid emission factor: ~0.79 kg CO2 / kWh (Central Electricity Authority,
 # Apr-2025 baseline). Used to derive energy_kwh from the compute CO2 component.
@@ -29,9 +35,18 @@ logger = structlog.get_logger(__name__)
 class SustainabilityAgentA2AHandler:
     """A2A handler for Sustainability Agent. JSON-RPC 2.0 protocol."""
 
-    def __init__(self, pipeline: SustainabilityPipeline | None = None) -> None:
+    def __init__(
+        self,
+        pipeline: SustainabilityPipeline | None = None,
+        *,
+        kafka_producer: Any = None,
+    ) -> None:
         self._pipeline = pipeline or SustainabilityPipeline()
         self._fsm = SustainabilityAgentStateMachine()
+        # ADR-052/R6.2: carbon_efficiency has NO natural world-mutation lever in the
+        # standing WorldRuntime, so execute() is an Honest No-Op — it constructs no
+        # fabricated effect and only event-sources the ratified result through Kafka.
+        self._kafka = kafka_producer
 
     def handle_request(self, request: dict[str, Any]) -> dict[str, Any]:
         method = request.get("method", "")
@@ -123,31 +138,78 @@ class SustainabilityAgentA2AHandler:
         return result
 
     def debate_respond(self, params: dict[str, Any]) -> dict[str, Any]:
-        round_number = params.get("round_number", 1)
-        logger.info("debate_respond", round=round_number, action="maintain_assessment")
+        # ADR-052/R3: bounded rule-based concession toward the round consensus, with
+        # any revised payload validated against proto/domain/ (I-3) via the shared helper.
+        response = build_debate_response("sustainability_agent", params)
+        logger.info("debate_respond", round=response["round"], status=response["status"])
         self._fsm.record_tool_call()
-        return {"status": "maintained", "round": round_number}
+        return response
 
     def execute(self, consensus_action: dict[str, Any]) -> dict[str, Any]:
+        """Honest No-Op for carbon_efficiency (ADR-052 — R6.1/R6.2/R6.4/R6.5/R7.4).
+
+        The standing ``WorldRuntime`` has no carbon lever, so this agent constructs NO
+        fabricated effect and never returns ``"executed"``. It returns status
+        ``"diverged"`` with empty ``world_effects`` and ``reason="no_carbon_lever"``,
+        leaving the world observed via ``perceive()`` unchanged. It still performs one
+        honest event-source ``produce`` (recording that no carbon lever exists) so the
+        anti-regression gate marks the agent converted, not a stub. ``kafka_published``
+        reflects a REAL produce (never a bare ``True``) and a Kafka outage degrades
+        honestly to ``False`` without raising (I-7, R7.2).
+        """
         self._fsm.transition("consensus_reached")
         self._fsm.transition("execution_confirmed")
 
-        decision_id = consensus_action.get("decision_id", str(uuid4()))
+        decision_id = str(consensus_action.get("decision_id") or uuid4())
+        city = str(consensus_action.get("city") or "")
 
-        logger.info(
-            "report_published",
-            decision_id=decision_id,
-            topic="synapse.sustainability.carbon",
-        )
+        # Honest event-source: no world mutation, just a truthful record of the no-op.
+        # A direct guarded ``self._kafka.produce`` (the gate's converted marker, R8.6) so
+        # ``kafka_published`` reflects a REAL produce (never a bare ``True``); a Kafka
+        # outage degrades honestly to ``False`` without raising into the caller
+        # (I-7, R5.7, R7.2).
+        kafka_published = False
+        if self._kafka is not None:
+            try:
+                self._kafka.produce(
+                    CARBON_TOPIC,
+                    value={
+                        "decision_id": decision_id,
+                        "city": city,
+                        "agent": "sustainability_agent",
+                        "status": "diverged",
+                        "reason": "no_carbon_lever",
+                        "world_effects": [],
+                        "ts": datetime.now(UTC).isoformat(),
+                    },
+                    key=decision_id,
+                )
+                kafka_published = True
+            except Exception as exc:  # noqa: BLE001 — a Kafka outage degrades honestly (I-7)
+                logger.warning(
+                    "publish_failed",
+                    agent="sustainability_agent",
+                    topic=CARBON_TOPIC,
+                    error=str(exc),
+                )
 
         self._fsm.transition("policy_updated")
         self._fsm.record_tool_call()
-
+        logger.info(
+            "sustainability_diverged",
+            decision_id=decision_id,
+            city=city,
+            reason="no_carbon_lever",
+            kafka_published=kafka_published,
+        )
         return {
-            "status": "executed",
+            "status": "diverged",
             "decision_id": decision_id,
-            "kafka_published": True,
-            "mlflow_logged": True,
+            "city": city,
+            "agent": "sustainability_agent",
+            "world_effects": [],
+            "kafka_published": kafka_published,
+            "reason": "no_carbon_lever",
         }
 
     @staticmethod

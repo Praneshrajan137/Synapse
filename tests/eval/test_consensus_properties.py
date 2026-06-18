@@ -14,8 +14,10 @@ consensus protocol preserves three load-bearing invariants:
 The strategies are intentionally permissive — corner cases (NaN confidences,
 empty proposal sets, all-tied utilities) ARE what we want surfaced.
 
-Runs at ``max_examples=500`` in PR CI, ``5_000`` nightly (via the
-``--hypothesis-profile=nightly`` argument).
+Example budget is controlled by the active Hypothesis profile (see the root
+``conftest.py``): ``dev`` (10) for fast local runs, ``default``/``ci`` (500) in
+PR CI, and ``nightly`` (5_000) for exhaustive fuzzing. Select one with
+``HYPOTHESIS_PROFILE=dev`` or ``--hypothesis-profile=nightly``.
 """
 
 from __future__ import annotations
@@ -87,9 +89,7 @@ proposals_st = st.lists(proposal_st, min_size=1, max_size=8)
 # I-B: confidence gating
 # ---------------------------------------------------------------------------
 @given(proposals=proposals_st, threshold=st.floats(min_value=0.5, max_value=0.99))
-@settings(
-    max_examples=500, deadline=None, suppress_health_check=[HealthCheck.function_scoped_fixture]
-)
+@settings(deadline=None, suppress_health_check=[HealthCheck.function_scoped_fixture])
 def test_confidence_gate_never_bypassed(proposals: list[dict[str, Any]], threshold: float) -> None:
     """No proposal with confidence < threshold may be auto-selected.
 
@@ -133,9 +133,7 @@ def test_confidence_gate_never_bypassed(proposals: list[dict[str, Any]], thresho
     attacker_agent=agent_name_st,
     inflation=st.floats(min_value=0.0, max_value=0.5),
 )
-@settings(
-    max_examples=500, deadline=None, suppress_health_check=[HealthCheck.function_scoped_fixture]
-)
+@settings(deadline=None, suppress_health_check=[HealthCheck.function_scoped_fixture])
 def test_inflation_does_not_change_winner_when_utility_dominates(
     base: list[dict[str, Any]],
     attacker_agent: str,

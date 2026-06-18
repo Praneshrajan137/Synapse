@@ -9,12 +9,22 @@ Implements the three mandatory A2A methods:
 from __future__ import annotations
 
 import json
+from datetime import UTC, datetime
 from typing import Any
 from uuid import UUID, uuid4
 
 import structlog
+from synapse_common.debate import build_debate_response
 from synapse_common.models import AgentName, AgentProposal, DecisionTier
-from synapse_common.schemas import validate_agent_payload
+from synapse_common.schemas import SchemaValidationError, validate_agent_payload
+from synapse_common.world import (
+    ActuationItem,
+    Actuator,
+    WorldActionKind,
+    actuate_items,
+    honest_produce,
+    resolve_actuator,
+)
 
 from agents.freshness_guardian.inference.pipeline import (
     FreshnessGuardianPipeline,
@@ -28,9 +38,21 @@ logger = structlog.get_logger(__name__)
 class FreshnessGuardianA2AHandler:
     """A2A handler for Freshness Guardian agent. JSON-RPC 2.0 protocol."""
 
-    def __init__(self, pipeline: FreshnessGuardianPipeline | None = None) -> None:
+    def __init__(
+        self,
+        pipeline: FreshnessGuardianPipeline | None = None,
+        *,
+        actuator: Actuator | None = None,
+        kafka_producer: Any = None,
+    ) -> None:
         self._pipeline = pipeline or FreshnessGuardianPipeline()
         self._fsm = FreshnessGuardianStateMachine()
+        # ADR-052: execute() lowers spoilage exposure on the standing world through the
+        # closest existing lever — SET_POLICY dispatch_speed (R6.3) — and event-sources the
+        # ratified alert through Kafka. No direct spoilage-reduction lever exists, so faster
+        # pick/pack (less time-at-risk per unit) is the honest, observable proxy.
+        self._actuator: Actuator = resolve_actuator(actuator)
+        self._kafka = kafka_producer
 
     def handle_request(self, request: dict[str, Any]) -> dict[str, Any]:
         method = request.get("method", "")
@@ -93,31 +115,136 @@ class FreshnessGuardianA2AHandler:
         return result
 
     def debate_respond(self, params: dict[str, Any]) -> dict[str, Any]:
-        round_number = params.get("round_number", 1)
-        logger.info("debate_respond", round=round_number, action="maintain_assessment")
+        # ADR-052/R3: bounded rule-based concession toward the round consensus, with
+        # any revised payload validated against proto/domain/ (I-3) via the shared helper.
+        response = build_debate_response("freshness_guardian", params)
+        logger.info("debate_respond", round=response["round"], status=response["status"])
         self._fsm.record_tool_call()
-        return {"status": "maintained", "round": round_number}
+        return response
 
     def execute(self, consensus_action: dict[str, Any]) -> dict[str, Any]:
+        """Enact the ratified freshness decision ON THE WORLD (ADR-052 — real actuation).
+
+        No direct spoilage-reduction lever exists, so this raises ``dispatch_speed`` via the
+        closest existing lever — ``SET_POLICY`` (R6.3). Faster pick/pack lowers each unit's
+        time-at-risk, reducing spoilage exposure (observable in ``perceive()`` KPIs). One
+        ``WorldAction`` is applied per *spoilage-relevant* actionable item (an alert the
+        pipeline already flagged with ``markdown_applied=True``); the raised ``dispatch_speed``
+        is derived from that alert's ``markdown_pct`` (spoilage urgency) and clamped ``>= 0.1``.
+
+        Falls back to an **Honest No-Op** — status ``"diverged"``, empty ``world_effects``,
+        an honest reason — when no spoilage-relevant item exists, or degrades honestly when
+        the world or Kafka is unavailable or the city is missing (I-7, R5/R6/R7). Returns the
+        ACTUAL effect; ``kafka_published`` reflects a real produce (never a bare ``True``).
+        """
         self._fsm.transition("consensus_reached")
         self._fsm.transition("execution_confirmed")
 
-        decision_id = consensus_action.get("decision_id", str(uuid4()))
+        decision_id = str(consensus_action.get("decision_id") or uuid4())
+        city = str(consensus_action.get("city") or "")
+        proposal = consensus_action.get("ratified_proposal") or {}
+        payload = proposal.get("payload", {}) if isinstance(proposal, dict) else {}
+        alerts = payload.get("alerts", []) if isinstance(payload, dict) else []
 
-        logger.info(
-            "freshness_alert_published",
+        # I-3: validate the ratified payload against proto/domain/ before it drives the
+        # world. An invalid payload is rejected (never propagated) and diverges honestly.
+        try:
+            validate_agent_payload(
+                "freshness_guardian", payload if isinstance(payload, dict) else {}
+            )
+        except SchemaValidationError as exc:
+            logger.warning(
+                "actuation_degraded", agent="freshness_guardian", reason="invalid_payload"
+            )
+            return self._diverged(decision_id, city, "invalid_payload", error=str(exc))
+
+        # One SET_POLICY dispatch_speed action per spoilage-relevant actionable item: an alert
+        # the pipeline already flagged for spoilage mitigation (markdown_applied). With none,
+        # actuate_items returns the Honest No-Op (diverged, empty effects) — R6.1/R6.4.
+        items: list[ActuationItem] = []
+        for alert in alerts:
+            if not isinstance(alert, dict) or not alert.get("markdown_applied"):
+                continue
+            # Raise dispatch_speed proportional to spoilage urgency (markdown_pct, 0..100),
+            # clamped >= 0.1 to stay within the world's accepted range (R6.3).
+            dispatch_speed = max(0.1, 1.0 + float(alert.get("markdown_pct", 0.0)) / 100.0)
+            sku = alert.get("sku_id")
+            store = alert.get("store_id")
+            items.append(
+                ActuationItem(
+                    action_id=f"fg-{decision_id}-{sku}",
+                    params={"dispatch_speed": dispatch_speed},
+                    sku_id=str(sku) if sku is not None else None,
+                    store_id=str(store) if store is not None else None,
+                )
+            )
+
+        outcome = actuate_items(
+            agent_name="freshness_guardian",
+            kind=WorldActionKind.SET_POLICY,
+            city=city,
             decision_id=decision_id,
-            topic="synapse.freshness.alert",
+            items=items,
+            actuator=self._actuator,
         )
+
+        # Event-source only the items the world actually applied (honest, never a stub True).
+        applied_items = [
+            {"sku_id": item.sku_id, "dispatch_speed": item.params["dispatch_speed"]}
+            for item, effect in zip(items, outcome.world_effects, strict=False)
+            if effect.get("applied")
+        ]
+        kafka_published = False
+        if applied_items:
+            kafka_published = honest_produce(
+                self._kafka,
+                "synapse.freshness.alert",
+                value={
+                    "decision_id": decision_id,
+                    "city": city,
+                    "items": applied_items,
+                    "ts": datetime.now(UTC).isoformat(),
+                },
+                key=decision_id,
+                agent_name="freshness_guardian",
+            )
 
         self._fsm.transition("policy_updated")
         self._fsm.record_tool_call()
-
+        logger.info(
+            "freshness_executed",
+            decision_id=decision_id,
+            city=city,
+            status=outcome.status,
+            applied=outcome.applied_count,
+            kafka_published=kafka_published,
+        )
         return {
-            "status": "executed",
+            "status": outcome.status,
             "decision_id": decision_id,
-            "kafka_published": True,
+            "city": city,
+            "agent": "freshness_guardian",
+            "world_effects": outcome.world_effects,
+            "kafka_published": kafka_published,
+            "reason": outcome.reason,
         }
+
+    def _diverged(
+        self, decision_id: str, city: str, reason: str, *, error: str | None = None
+    ) -> dict[str, Any]:
+        """Build an honest divergence result (no world effect applied)."""
+        result: dict[str, Any] = {
+            "status": "diverged",
+            "decision_id": decision_id,
+            "city": city,
+            "agent": "freshness_guardian",
+            "world_effects": [],
+            "kafka_published": False,
+            "reason": reason,
+        }
+        if error is not None:
+            result["error"] = error
+        return result
 
     @staticmethod
     def _error_response(request_id: str, code: int, message: str) -> dict[str, Any]:
