@@ -12,6 +12,7 @@
 
 ### Workflow Rules
 - **NEVER use `git worktree add` in this repo.** All work happens on a single working copy at the repo root, on a feature branch off `main`. To work on multiple things in parallel, use `git stash`, separate clones, or sequential branches — never worktrees. Reason: in May 2026 a worktree sprawl across `.claude/worktrees/` produced ~50K LOC of unmerged parallel rewrites that required an 8-PR consolidation effort (see `consolidate/backend-2026-05-24` branch + the `archive/*` tags) to recover from. The `.claude/worktrees/` directory is gitignored and must remain empty in any new clone.
+- **One task → one fresh branch off `main` → one focused PR.** Start every new task/session on a NEW branch cut from up-to-date `main` (`git fetch && git checkout -b <type>/<short-slug> origin/main`; prefixes `feat/` `fix/` `chore/` `docs/`). NEVER pile multiple unrelated tasks onto a long-lived feature branch, and NEVER start a new task on top of an in-flight one — that is how `feat/cognition-channel` accumulated the cognition channel (ADR-051) **and** the agentic loop (ADR-052), so a PR off it showed a noisy 65-file diff (vs. the real 33) once cognition was already on `main`. Sync the branch with `main` before opening the PR. (With the no-worktree rule above: plain branches only.)
 - All consolidation source branches are preserved as immutable tags `archive/<branch>-<sha>` even after their working trees are removed. To revive any historical branch: `git checkout -b recover/<name> archive/<name>-<sha>`.
 
 ### Documentation Discipline
