@@ -14,8 +14,17 @@ from typing import Any
 from uuid import UUID, uuid4
 
 import structlog
+from synapse_common.debate import build_debate_response
 from synapse_common.models import AgentName, AgentProposal, DecisionTier
-from synapse_common.schemas import validate_agent_payload
+from synapse_common.schemas import SchemaValidationError, validate_agent_payload
+from synapse_common.world import (
+    ActuationItem,
+    Actuator,
+    WorldActionKind,
+    actuate_items,
+    honest_produce,
+    resolve_actuator,
+)
 
 from agents.disruption_shield.inference.pipeline import (
     DisruptionRequest,
@@ -29,9 +38,19 @@ logger = structlog.get_logger(__name__)
 class DisruptionShieldA2AHandler:
     """A2A handler for Disruption Shield agent. JSON-RPC 2.0 protocol."""
 
-    def __init__(self, pipeline: DisruptionShieldPipeline | None = None) -> None:
+    def __init__(
+        self,
+        pipeline: DisruptionShieldPipeline | None = None,
+        *,
+        actuator: Actuator | None = None,
+        kafka_producer: Any = None,
+    ) -> None:
         self._pipeline = pipeline or DisruptionShieldPipeline()
         self._fsm = DisruptionShieldStateMachine()
+        # ADR-052: execute() adjusts the world's lead-time policy through this client
+        # (real state change), and event-sources the ratified mitigation through Kafka.
+        self._actuator: Actuator = resolve_actuator(actuator)
+        self._kafka = kafka_producer
 
     def handle_request(self, request: dict[str, Any]) -> dict[str, Any]:
         method = request.get("method", "")
@@ -122,32 +141,122 @@ class DisruptionShieldA2AHandler:
         return result
 
     def debate_respond(self, params: dict[str, Any]) -> dict[str, Any]:
-        round_number = params.get("round_number", 1)
-        logger.info("debate_respond", round=round_number, action="maintain_assessment")
+        # ADR-052/R3: bounded rule-based concession toward the round consensus, with
+        # any revised payload validated against proto/domain/ (I-3) via the shared helper.
+        response = build_debate_response("disruption_shield", params)
+        logger.info("debate_respond", round=response["round"], status=response["status"])
         self._fsm.record_tool_call()
-        return {"status": "maintained", "round": round_number}
+        return response
 
     def execute(self, consensus_action: dict[str, Any]) -> dict[str, Any]:
+        """Enact the ratified mitigation ON THE WORLD (ADR-052 — real actuation).
+
+        Replaces the status-dict stub that changed nothing. The ratified disruption alert
+        supplies a lead-time signal: a more severe disruption lengthens supplier lead times,
+        so this maps the alert's ``alert_level`` (1-10) to a ``lead_time_mult`` lever value
+        (``>= 0.1``) and applies one ``SET_POLICY`` ``WorldAction`` (the world's restock
+        lead time scales by that multiplier), then event-sources the mitigation to
+        ``synapse.disruption.alert``. Returns the ACTUAL effect; ``kafka_published`` reflects
+        a real produce (never a bare ``True``). Degrades honestly — status ``"diverged"``,
+        empty ``world_effects``, ``kafka_published=False`` — when the world or Kafka is
+        unavailable, the city is missing, or no actionable mitigation exists (I-7, R5/R7).
+        """
         self._fsm.transition("consensus_reached")
         self._fsm.transition("execution_confirmed")
 
-        decision_id = consensus_action.get("decision_id", str(uuid4()))
+        decision_id = str(consensus_action.get("decision_id") or uuid4())
+        city = str(consensus_action.get("city") or "")
+        proposal = consensus_action.get("ratified_proposal") or {}
+        payload = proposal.get("payload", {}) if isinstance(proposal, dict) else {}
+        if not isinstance(payload, dict):
+            payload = {}
 
-        logger.info(
-            "disruption_alert_published",
+        # I-3: validate the ratified payload against proto/domain/ before it drives the
+        # world. An invalid payload is rejected (never propagated) and diverges honestly.
+        try:
+            validate_agent_payload("disruption_shield", payload)
+        except SchemaValidationError as exc:
+            logger.warning(
+                "actuation_degraded", agent="disruption_shield", reason="invalid_payload"
+            )
+            return self._diverged(decision_id, city, "invalid_payload", error=str(exc))
+
+        # The ratified alert is a single actionable item: its severity (alert_level, 1-10)
+        # sets how much the disruption stretches lead time. alert_level/5 maps a baseline
+        # level-5 alert to 1.0x and a level-10 alert to 2.0x; the sim clamps to >= 0.1.
+        items: list[ActuationItem] = []
+        alert_level = payload.get("alert_level")
+        if isinstance(alert_level, (int, float)) and float(alert_level) > 0.0:
+            lead_time_mult = max(0.1, float(alert_level) / 5.0)
+            items.append(
+                ActuationItem(
+                    action_id=f"ds-{decision_id}",
+                    params={"lead_time_mult": lead_time_mult},
+                )
+            )
+
+        outcome = actuate_items(
+            agent_name="disruption_shield",
+            kind=WorldActionKind.SET_POLICY,
+            city=city,
             decision_id=decision_id,
-            topics=["synapse.disruption.alert", "synapse.disruption.playbook"],
+            items=items,
+            actuator=self._actuator,
         )
+
+        # Event-source only when the world actually applied the mitigation (never a stub True).
+        kafka_published = False
+        if outcome.applied_count > 0:
+            kafka_published = honest_produce(
+                self._kafka,
+                "synapse.disruption.alert",
+                value={
+                    "decision_id": decision_id,
+                    "city": city,
+                    "alert_id": payload.get("alert_id"),
+                    "lead_time_mult": items[0].params["lead_time_mult"],
+                    "ts": datetime.now(UTC).isoformat(),
+                },
+                key=decision_id,
+                agent_name="disruption_shield",
+            )
 
         self._fsm.transition("policy_updated")
         self._fsm.record_tool_call()
-
+        logger.info(
+            "disruption_executed",
+            decision_id=decision_id,
+            city=city,
+            status=outcome.status,
+            applied=outcome.applied_count,
+            kafka_published=kafka_published,
+        )
         return {
-            "status": "executed",
+            "status": outcome.status,
             "decision_id": decision_id,
-            "kafka_published": True,
-            "topics": ["synapse.disruption.alert", "synapse.disruption.playbook"],
+            "city": city,
+            "agent": "disruption_shield",
+            "world_effects": outcome.world_effects,
+            "kafka_published": kafka_published,
+            "reason": outcome.reason,
         }
+
+    def _diverged(
+        self, decision_id: str, city: str, reason: str, *, error: str | None = None
+    ) -> dict[str, Any]:
+        """Build an honest divergence result (no world effect applied)."""
+        result: dict[str, Any] = {
+            "status": "diverged",
+            "decision_id": decision_id,
+            "city": city,
+            "agent": "disruption_shield",
+            "world_effects": [],
+            "kafka_published": False,
+            "reason": reason,
+        }
+        if error is not None:
+            result["error"] = error
+        return result
 
     @staticmethod
     def _error_response(request_id: str, code: int, message: str) -> dict[str, Any]:

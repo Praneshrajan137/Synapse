@@ -7,6 +7,7 @@ Pareto-optimal weight vector and selects the knee point.
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
 import numpy as np
@@ -57,6 +58,115 @@ _AGENT_TO_OBJECTIVE: dict[str, str] = {
     "supplier_trust": "supplier_reliability",
     "sustainability_agent": "carbon_efficiency",
 }
+
+
+@dataclass(frozen=True)
+class BindingSelection:
+    """Deterministic, auditable outcome of binding Pareto-knee selection.
+
+    Attributes:
+        selected_agent: Mapped agent of the winning proposal; ``None`` when no
+            eligible candidate exists.
+        selected_index: Index into the *input* ``proposals`` list of the winner;
+            ``None`` when no eligible candidate exists.
+        weighted_scores: ``agent_name -> Σ knee_weight[obj]·utility`` for every
+            *evaluated* (eligible) candidate. Recorded for audit (R2.2).
+        excluded_agents: Candidates with no ``_AGENT_TO_OBJECTIVE`` entry; these
+            are recorded without a fabricated score (R1.5, I-7).
+        tie_break_applied: ``True`` when two or more eligible candidates tied on
+            weighted score within ``tolerance`` and a deterministic tie-break ran.
+        tie_break_reason: Empty string when no tie occurred; otherwise the
+            deterministic outcome, e.g. ``"objective_order:demand_accuracy"`` or
+            ``"agent_name:demand_prophet"`` (R2.5).
+    """
+
+    selected_agent: str | None
+    selected_index: int | None
+    weighted_scores: dict[str, float]
+    excluded_agents: list[str]
+    tie_break_applied: bool
+    tie_break_reason: str
+
+
+def select_binding_action(
+    proposals: list[AgentProposal],
+    knee_weights: dict[str, float],
+    *,
+    neutral_baseline: float = 0.5,
+    tolerance: float = 1e-9,
+) -> BindingSelection:
+    """Select the ratified action by applying Pareto-knee weights (pure).
+
+    For each proposal, the per-objective utility vector mirrors
+    ``_build_utility_matrix``: the agent's own objective contributes its
+    ``utility_score`` and every other objective contributes ``neutral_baseline``
+    (0.5). The weighted score therefore collapses to::
+
+        score = knee_weight[own_obj]·utility_score
+              + neutral_baseline · Σ_{obj ≠ own_obj} knee_weight[obj]
+
+    The eligible proposal with the highest score is selected. Ties (scores equal
+    within ``tolerance``) are broken deterministically by preferring the proposal
+    whose mapped objective appears earliest in ``OBJECTIVES``, then by ascending
+    agent name (R1.4). Proposals whose agent has no ``_AGENT_TO_OBJECTIVE`` entry
+    are excluded without a fabricated score (R1.5, I-7).
+
+    This function is pure: it performs no I/O and mutates no globals, so repeated
+    evaluation with identical inputs yields the identical result (R2.1).
+    """
+    weighted_scores: dict[str, float] = {}
+    excluded_agents: list[str] = []
+    # Each eligible entry: (original_index, agent_name, objective, score).
+    eligible: list[tuple[int, str, str, float]] = []
+
+    for index, proposal in enumerate(proposals):
+        agent_name = str(proposal.agent_name)
+        objective = _AGENT_TO_OBJECTIVE.get(agent_name)
+        if objective is None:
+            excluded_agents.append(agent_name)
+            continue
+        own_weight = knee_weights.get(objective, 0.0)
+        others_weight = sum(knee_weights.get(obj, 0.0) for obj in OBJECTIVES if obj != objective)
+        score = own_weight * float(proposal.utility_score) + neutral_baseline * others_weight
+        weighted_scores[agent_name] = score
+        eligible.append((index, agent_name, objective, score))
+
+    if not eligible:
+        return BindingSelection(
+            selected_agent=None,
+            selected_index=None,
+            weighted_scores=weighted_scores,
+            excluded_agents=excluded_agents,
+            tie_break_applied=False,
+            tie_break_reason="",
+        )
+
+    # Stable sort over (-score, OBJECTIVES.index(obj), agent_name) so selection
+    # is identical across runs and processes (R1.4, R2.1).
+    eligible.sort(key=lambda entry: (-entry[3], OBJECTIVES.index(entry[2]), entry[1]))
+
+    winner_index, winner_agent, winner_obj, winner_score = eligible[0]
+
+    # A tie occurred when another eligible candidate's score equals the winner's
+    # within tolerance. Determine which deterministic rule resolved it.
+    tied = [entry for entry in eligible if abs(entry[3] - winner_score) <= tolerance]
+    tie_break_applied = len(tied) > 1
+    tie_break_reason = ""
+    if tie_break_applied:
+        _, runner_agent, runner_obj, _ = eligible[1]
+        if OBJECTIVES.index(winner_obj) < OBJECTIVES.index(runner_obj):
+            tie_break_reason = f"objective_order:{winner_obj}"
+        else:
+            tie_break_reason = f"agent_name:{winner_agent}"
+
+    return BindingSelection(
+        selected_agent=winner_agent,
+        selected_index=winner_index,
+        weighted_scores=weighted_scores,
+        excluded_agents=excluded_agents,
+        tie_break_applied=tie_break_applied,
+        tie_break_reason=tie_break_reason,
+    )
 
 
 def _build_utility_matrix(proposals: list[AgentProposal]) -> FloatArray:

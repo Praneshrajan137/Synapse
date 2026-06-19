@@ -37,10 +37,15 @@ from synapse_common.models import (
     DecisionTier,
     MessageStatus,
 )
+from synapse_common.schemas import SchemaValidationError, validate_agent_payload
 
 from orchestrator.consensus.firehose_signals import emit_agent_signals
 from orchestrator.consensus.models import ConflictReport, TierClassification
-from orchestrator.consensus.pareto import run_pareto_arbitration
+from orchestrator.consensus.pareto import (
+    BindingSelection,
+    run_pareto_arbitration,
+    select_binding_action,
+)
 from orchestrator.state_machine import OrchestratorStateMachine
 
 if TYPE_CHECKING:
@@ -59,6 +64,29 @@ if TYPE_CHECKING:
 logger = structlog.get_logger(__name__)
 
 _JSON_KWARGS: dict[str, Any] = {"sort_keys": True, "separators": (",", ":")}
+
+# Precision for rounding floats embedded in the append-only `audit_trace`. Fixing
+# the precision keeps the binding-arbitration trace byte-stable across repeated
+# executions and separate process invocations (R2.1/R2.3).
+_AUDIT_FLOAT_PRECISION = 9
+
+
+def _canonical_json(value: Any) -> str:
+    """Serialize ``value`` to a canonical, byte-stable JSON string (I-14, R2.3)."""
+    return json.dumps(value, **_JSON_KWARGS)
+
+
+def _round_floats(mapping: dict[str, float]) -> dict[str, float]:
+    """Round a ``str -> float`` mapping to a fixed precision for stable audit output."""
+    return {key: round(float(val), _AUDIT_FLOAT_PRECISION) for key, val in mapping.items()}
+
+
+# R4.1/R4.4: the LLM-mediated debate analysis is best-effort. Each attempt is
+# bounded to 30s (R4.1) and retried at most once for a total of 2 calls per round
+# (R4.4); after the attempts are exhausted the round degrades honestly (I-7) while
+# rule-based concession continues (R4.2).
+_DEBATE_LLM_TIMEOUT_S = 30.0
+_DEBATE_LLM_MAX_ATTEMPTS = 2
 
 AGENT_ENDPOINTS: dict[str, str] = {
     "demand_prophet": "http://demand-prophet:8001",
@@ -263,11 +291,13 @@ class ConsensusProtocol:
     ) -> ConsensusDecision:
         proposals = await self._phase_collect(request, tier)
 
+        fast_best = max(proposals, key=lambda p: p.utility_score) if proposals else None
         decision = self._build_decision(
             proposals=proposals,
             tier=tier,
             phase_reached=4,
             pareto_weights=self._meta_rl.get_weights(self._system_state()),
+            fast_best=fast_best,
         )
         decision = await self._phase_execute(decision)
         await self._phase_learn(decision)
@@ -295,6 +325,24 @@ class ConsensusProtocol:
         pareto_result = await self._phase_arbitrate(proposals)
         weights = pareto_result["selected_weights"]
 
+        # Binding Pareto arbitration (R1.1): apply the knee weights to the
+        # per-objective proposal utilities and let that selection — not a raw
+        # `utility_score` argmax — drive the ratified action on the full path.
+        selection = select_binding_action(proposals, weights)
+        self._append_context(
+            ContextMessage(
+                source="orchestrator",
+                content={
+                    "type": "binding_selection",
+                    "selected_agent": selection.selected_agent,
+                    "selected_index": selection.selected_index,
+                    "weighted_scores": _round_floats(selection.weighted_scores),
+                    "excluded_agents": list(selection.excluded_agents),
+                    "tie_break_applied": selection.tie_break_applied,
+                    "tie_break_reason": selection.tie_break_reason,
+                },
+            )
+        )
         decision = self._build_decision(
             proposals=proposals,
             tier=tier,
@@ -302,6 +350,7 @@ class ConsensusProtocol:
             pareto_weights=weights,
             pareto_front=pareto_result["pareto_front"],
             debate_rounds=debate_rounds,
+            selection=selection,
         )
 
         # ADR-043/C7: record whether the decision rested on any degraded agent input
@@ -410,20 +459,16 @@ class ConsensusProtocol:
             self._emit_phase("debating", round_=round_num)
 
             if model:
-                messages = self._ctx_builder.build_ollama_messages(self._context_messages)
-                mask = self._tier_router.get_tool_mask(tier)
-                try:
-                    llm_response = await self._ollama.chat(
-                        model=model,
-                        messages=messages,
-                        prefill=mask.get("prefill"),
+                content, degraded_reason = await self._run_debate_llm_analysis(model, tier)
+                if degraded_reason is not None:
+                    # R4.1/R4.3: the LLM is unavailable after the bounded attempts.
+                    # DEGRADE the round honestly — record the failure reason — but
+                    # do NOT break: concession is LLM-independent (R4.2), so the
+                    # round still runs concession and the convergence check below,
+                    # and arbitration proceeds with the most-recent proposals.
+                    logger.warning(
+                        "debate_llm_unavailable", round=round_num, reason=degraded_reason
                     )
-                except Exception as exc:  # noqa: BLE001 — LLM is best-effort (I-7)
-                    # If Ollama is unreachable/slow, DEGRADE the debate rather than
-                    # 504 the whole decision: record the failure and proceed to
-                    # arbitration with the proposals already collected. The LLM
-                    # only mediates debate; it is not load-bearing for a decision.
-                    logger.warning("debate_llm_unavailable", round=round_num, error=str(exc))
                     self._append_context(
                         ContextMessage(
                             source="orchestrator",
@@ -432,27 +477,230 @@ class ConsensusProtocol:
                                 "round": round_num,
                                 "llm_analysis": "",
                                 "degraded": True,
+                                "degraded_reason": degraded_reason,
                             },
                             status=MessageStatus.ERROR,
                         )
                     )
-                    break
-                self._append_context(
-                    ContextMessage(
-                        source="orchestrator",
-                        content={
-                            "type": "debate_round",
-                            "round": round_num,
-                            "llm_analysis": llm_response.get("message", {}).get("content", ""),
-                        },
+                else:
+                    self._append_context(
+                        ContextMessage(
+                            source="orchestrator",
+                            content={
+                                "type": "debate_round",
+                                "round": round_num,
+                                "llm_analysis": content,
+                                "degraded": False,
+                            },
+                        )
                     )
-                )
 
+            # R3.1/R3.8: rule-based concession round. Invoke each agent's
+            # `debate_respond` over A2A and replace a proposal ONLY with a
+            # `"revised"` response whose payload re-validates schema-side;
+            # otherwise retain the prior proposal. Concession is LLM-independent
+            # (R4.2) so it runs whether or not an LLM model mediates this round.
+            proposals = await self._run_concession_round(proposals, tier, round_num)
+
+            # R3.4: stop once the (possibly revised) proposals converge.
             if self._check_convergence(proposals):
                 break
 
         CONSENSUS_DEBATE_ROUNDS.labels(tier=tier.value).observe(rounds)
         return proposals, rounds
+
+    async def _run_debate_llm_analysis(
+        self,
+        model: str,
+        tier: DecisionTier,
+    ) -> tuple[str | None, str | None]:
+        """Run the best-effort, LLM-mediated analysis for one debate round.
+
+        Each attempt is bounded to ``_DEBATE_LLM_TIMEOUT_S`` via ``asyncio.wait_for``
+        (R4.1) and the call is retried at most once for a total of
+        ``_DEBATE_LLM_MAX_ATTEMPTS`` attempts (R4.4). Returns ``(content, None)`` on
+        success or ``(None, reason)`` when the LLM is unavailable after the attempts
+        are exhausted, capturing the failure reason honestly (I-7) — ``"timeout"``
+        on a timed-out attempt, otherwise the exception string.
+        """
+        messages = self._ctx_builder.build_ollama_messages(self._context_messages)
+        mask = self._tier_router.get_tool_mask(tier)
+        last_reason = "llm_unavailable"
+        for attempt in range(1, _DEBATE_LLM_MAX_ATTEMPTS + 1):
+            try:
+                llm_response = await asyncio.wait_for(
+                    self._ollama.chat(
+                        model=model,
+                        messages=messages,
+                        prefill=mask.get("prefill"),
+                    ),
+                    timeout=_DEBATE_LLM_TIMEOUT_S,
+                )
+            except TimeoutError:
+                last_reason = "timeout"
+                logger.warning(
+                    "debate_llm_timeout",
+                    attempt=attempt,
+                    timeout_s=_DEBATE_LLM_TIMEOUT_S,
+                )
+                continue
+            except Exception as exc:  # noqa: BLE001 — LLM is best-effort (I-7)
+                last_reason = str(exc) or exc.__class__.__name__
+                logger.warning("debate_llm_error", attempt=attempt, error=last_reason)
+                continue
+            content = llm_response.get("message", {}).get("content", "")
+            return str(content), None
+        return None, last_reason
+
+    async def _run_concession_round(
+        self,
+        proposals: list[AgentProposal],
+        tier: DecisionTier,
+        round_num: int,
+    ) -> list[AgentProposal]:
+        """Run one rule-based concession round and return the next round's proposals.
+
+        Each conflicting agent's ``debate_respond`` is invoked over A2A (mirroring
+        ``_request_proposal``); the orchestrator replaces an agent's prior proposal
+        only with a ``"revised"`` response whose payload passes ``proto/domain/``
+        schema validation (defense-in-depth re-validation, R3.1/R3.10/I-3), and
+        otherwise retains the prior proposal. The round's revisions are appended to
+        the append-only context (R3.8/I-14).
+        """
+        if len(proposals) < 2:
+            return proposals
+
+        round_utilities = [p.utility_score for p in proposals]
+        tasks = [
+            self._request_debate_response(
+                str(p.agent_name),
+                AGENT_ENDPOINTS.get(str(p.agent_name), ""),
+                p,
+                tier,
+                round_num,
+                round_utilities,
+            )
+            for p in proposals
+        ]
+        results = await asyncio.gather(*tasks, return_exceptions=True)
+
+        revised: list[AgentProposal] = []
+        revisions: list[dict[str, Any]] = []
+        for prior, result in zip(proposals, results, strict=False):
+            new_proposal, record = self._apply_debate_result(prior, result)
+            revised.append(new_proposal)
+            revisions.append(record)
+
+        self._append_context(
+            ContextMessage(
+                source="orchestrator",
+                content={
+                    "type": "debate_revisions",
+                    "round": round_num,
+                    "revisions": revisions,
+                },
+            )
+        )
+        return revised
+
+    async def _request_debate_response(
+        self,
+        agent_name: str,
+        agent_url: str,
+        proposal: AgentProposal,
+        tier: DecisionTier,
+        round_num: int,
+        round_utilities: list[float],
+    ) -> dict[str, Any]:
+        """Invoke one agent's ``debate_respond`` over A2A (mirrors ``_request_proposal``).
+
+        Passes the params the shared ``build_debate_response`` handler expects: the
+        round number, the current round's utility scores, this agent's current
+        ``utility_score``, and its current payload so the agent can honestly revise it.
+        """
+        response = await send_a2a_request(
+            target_url=agent_url,
+            method="debate_respond",
+            params={
+                "round_number": round_num,
+                "round_utilities": round_utilities,
+                "current_utility_score": proposal.utility_score,
+                "current_payload": proposal.payload,
+            },
+            tier=tier,
+        )
+        if response.error:
+            raise RuntimeError(f"{agent_name}: {response.error}")
+        return response.result or {}
+
+    def _apply_debate_result(
+        self,
+        prior: AgentProposal,
+        result: dict[str, Any] | BaseException,
+    ) -> tuple[AgentProposal, dict[str, Any]]:
+        """Reconstruct the next-round proposal from one ``debate_respond`` result.
+
+        Returns ``(proposal, record)`` where ``proposal`` is the honestly revised
+        ``AgentProposal`` when the response is a schema-valid ``"revised"`` reply,
+        otherwise the unchanged prior proposal (R3.1/R3.10). ``record`` is the
+        append-only audit entry describing the outcome for this agent (R3.8).
+        """
+        agent_name = str(prior.agent_name)
+
+        # An A2A failure honestly retains the prior proposal rather than fabricating
+        # a revision (I-7).
+        if isinstance(result, BaseException):
+            return prior, {
+                "agent": agent_name,
+                "status": "error",
+                "prior_utility": prior.utility_score,
+                "error": str(result),
+            }
+
+        if result.get("status") != "revised":
+            return prior, {
+                "agent": agent_name,
+                "status": "maintained",
+                "prior_utility": prior.utility_score,
+                "rationale": str(result.get("rationale", "")),
+            }
+
+        payload = result.get("payload")
+        raw_score = result.get("utility_score")
+        if not isinstance(payload, dict) or not isinstance(raw_score, (int, float)):
+            return prior, {
+                "agent": agent_name,
+                "status": "maintained",
+                "prior_utility": prior.utility_score,
+                "rationale": "revision_missing_fields",
+            }
+
+        # R3.10/I-3: replace ONLY when the revised payload re-validates against the
+        # agent's proto/domain schema; an invalid revision retains the prior position.
+        try:
+            validate_agent_payload(agent_name, payload)
+        except SchemaValidationError:
+            return prior, {
+                "agent": agent_name,
+                "status": "maintained",
+                "prior_utility": prior.utility_score,
+                "rationale": "revision_failed_schema",
+                "schema_valid": False,
+            }
+
+        revised_score = float(raw_score)
+        # Honest reconstruction: preserve agent identity/decision/tier/provenance and
+        # update only the revised payload and utility_score (R3.7).
+        new_proposal = prior.model_copy(
+            update={"payload": payload, "utility_score": revised_score},
+        )
+        return new_proposal, {
+            "agent": agent_name,
+            "status": "revised",
+            "prior_utility": prior.utility_score,
+            "revised_utility": revised_score,
+            "schema_valid": True,
+        }
 
     # ── Phase 3: Pareto arbitration ─────────────────────────────────────
 
@@ -681,16 +929,50 @@ class ConsensusProtocol:
         pareto_weights: dict[str, float],
         pareto_front: list[dict[str, float]] | None = None,
         debate_rounds: int = 0,
+        *,
+        selection: BindingSelection | None = None,
+        fast_best: AgentProposal | None = None,
     ) -> ConsensusDecision:
-        best = max(proposals, key=lambda p: p.utility_score) if proposals else None
+        audit_trace = [f"tier={tier.value}", f"phase={phase_reached}"]
+
+        if selection is not None:
+            # Binding Pareto-knee selection drives the full-path action (R1.1/R1.2).
+            # The raw `utility_score` argmax no longer selects here; it survives only
+            # on the fast path via `fast_best` (R1.6).
+            chosen = (
+                proposals[selection.selected_index]
+                if selection.selected_index is not None
+                else None
+            )
+            selected_action = chosen.payload if chosen is not None else {}
+            confidence = chosen.confidence if chosen is not None else 0.0
+
+            # Append-only binding-arbitration audit (I-14, R2.2/R2.5): the knee
+            # weight vector, every evaluated candidate's weighted score, the
+            # selected identity, any exclusions, and the deterministic tie-break.
+            audit_trace.append(f"knee_weights={_canonical_json(_round_floats(pareto_weights))}")
+            audit_trace.append(
+                f"weighted_scores={_canonical_json(_round_floats(selection.weighted_scores))}"
+            )
+            audit_trace.append(f"binding_selected={selection.selected_agent}")
+            if selection.excluded_agents:
+                audit_trace.append(f"binding_excluded={_canonical_json(selection.excluded_agents)}")
+            if selection.tie_break_applied:
+                audit_trace.append(f"tie_break={selection.tie_break_reason}")
+        else:
+            # Fast path (Tier 1/2) retains raw `utility_score` argmax selection,
+            # supplied by the caller as `fast_best` (R1.6).
+            selected_action = fast_best.payload if fast_best is not None else {}
+            confidence = fast_best.confidence if fast_best is not None else 0.0
+
         return ConsensusDecision(
             decision_id=self._decision_id or uuid4(),
             tier=tier,
             proposals=proposals,
-            selected_action=best.payload if best else {},
+            selected_action=selected_action,
             pareto_weights=pareto_weights,
-            confidence=best.confidence if best else 0.0,
-            audit_trace=[f"tier={tier.value}", f"phase={phase_reached}"],
+            confidence=confidence,
+            audit_trace=audit_trace,
             phase_reached=phase_reached,
             debate_rounds=debate_rounds,
             pareto_front=pareto_front,

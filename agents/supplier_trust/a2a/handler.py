@@ -8,6 +8,7 @@ from typing import Any
 from uuid import UUID, uuid4
 
 import structlog
+from synapse_common.debate import build_debate_response
 from synapse_common.models import AgentName, AgentProposal, DecisionTier
 from synapse_common.schemas import validate_agent_payload
 
@@ -132,13 +133,15 @@ class SupplierTrustA2AHandler:
         return None
 
     def debate_respond(self, params: dict[str, Any]) -> dict[str, Any]:
-        """Respond to a debate round -- maintain position with justification."""
-        return {
-            "status": "maintained",
-            "round": params.get("round_number", 1),
-            "agent": "supplier_trust",
-            "rationale": "Trust score is Bayesian-calibrated; maintaining proposal.",
-        }
+        """Respond to a debate round via bounded rule-based concession (ADR-052/R3).
+
+        Revises the proposal toward the round consensus when outside the convergence
+        band, validating any revised payload against proto/domain/ (I-3); otherwise
+        maintains the prior position. The shared helper keeps all eight agents identical.
+        """
+        response = build_debate_response("supplier_trust", params)
+        logger.info("debate_respond", round=response["round"], status=response["status"])
+        return response
 
     def execute(self, params: dict[str, Any]) -> dict[str, Any]:
         """Publish the ratified trust score to Kafka (ADR-052 — real, honest).

@@ -14,8 +14,17 @@ from typing import Any
 from uuid import UUID, uuid4
 
 import structlog
+from synapse_common.debate import build_debate_response
 from synapse_common.models import AgentName, AgentProposal, DecisionTier
-from synapse_common.schemas import validate_agent_payload
+from synapse_common.schemas import SchemaValidationError, validate_agent_payload
+from synapse_common.world import (
+    ActuationItem,
+    Actuator,
+    WorldActionKind,
+    actuate_items,
+    honest_produce,
+    resolve_actuator,
+)
 
 from agents.pricing_oracle.inference.pipeline import PricingOraclePipeline
 from agents.pricing_oracle.state_machine import PricingOracleStateMachine
@@ -26,9 +35,19 @@ logger = structlog.get_logger(__name__)
 class PricingOracleA2AHandler:
     """A2A handler for Pricing Oracle agent. JSON-RPC 2.0 protocol."""
 
-    def __init__(self, pipeline: PricingOraclePipeline | None = None) -> None:
+    def __init__(
+        self,
+        pipeline: PricingOraclePipeline | None = None,
+        *,
+        actuator: Actuator | None = None,
+        kafka_producer: Any = None,
+    ) -> None:
         self._pipeline = pipeline or PricingOraclePipeline()
         self._fsm = PricingOracleStateMachine()
+        # ADR-052: execute() scales world demand through the price lever via this client
+        # (real state change), and event-sources the ratified update through Kafka.
+        self._actuator: Actuator = resolve_actuator(actuator)
+        self._kafka = kafka_producer
 
     def handle_request(self, request: dict[str, Any]) -> dict[str, Any]:
         method = request.get("method", "")
@@ -127,32 +146,126 @@ class PricingOracleA2AHandler:
         return result
 
     def debate_respond(self, params: dict[str, Any]) -> dict[str, Any]:
-        round_number = params.get("round_number", 1)
-        logger.info("debate_respond", round=round_number, action="maintain_pricing")
+        # ADR-052/R3: bounded rule-based concession toward the round consensus, with
+        # any revised payload validated against proto/domain/ (I-3) via the shared helper.
+        response = build_debate_response("pricing_oracle", params)
+        logger.info("debate_respond", round=response["round"], status=response["status"])
         self._fsm.record_tool_call()
-        return {"status": "maintained", "round": round_number}
+        return response
 
     def execute(self, consensus_action: dict[str, Any]) -> dict[str, Any]:
+        """Enact the ratified pricing ON THE WORLD (ADR-052 — real actuation).
+
+        Replaces the status-dict stub that changed nothing. For every ratified pricing
+        update with a positive multiplier this applies a ``SET_PRICE_MULT`` ``WorldAction``
+        (the world scales demand through its price lever) and event-sources the update to
+        ``synapse.pricing.update``. Returns the ACTUAL effect; ``kafka_published`` reflects
+        a real produce (never a bare ``True``). Degrades honestly — status ``"diverged"``,
+        empty ``world_effects``, ``kafka_published=False`` — when the world or Kafka is
+        unavailable, the city is missing, or no actionable update exists (I-7, R5/R7).
+        """
         self._fsm.transition("consensus_reached")
         self._fsm.transition("execution_confirmed")
 
-        decision_id = consensus_action.get("decision_id", str(uuid4()))
+        decision_id = str(consensus_action.get("decision_id") or uuid4())
+        city = str(consensus_action.get("city") or "")
+        proposal = consensus_action.get("ratified_proposal") or {}
+        payload = proposal.get("payload", {}) if isinstance(proposal, dict) else {}
+        updates = payload.get("updates", []) if isinstance(payload, dict) else []
 
-        logger.info(
-            "pricing_published",
+        # I-3: validate the ratified payload against proto/domain/ before it drives the
+        # world. An invalid payload is rejected (never propagated) and diverges honestly.
+        try:
+            validate_agent_payload("pricing_oracle", payload if isinstance(payload, dict) else {})
+        except SchemaValidationError as exc:
+            logger.warning("actuation_degraded", agent="pricing_oracle", reason="invalid_payload")
+            return self._diverged(decision_id, city, "invalid_payload", error=str(exc))
+
+        # One SET_PRICE_MULT action per actionable item (a ratified update with price > 0).
+        items: list[ActuationItem] = []
+        for update in updates:
+            if not isinstance(update, dict):
+                continue
+            price_mult = float(update.get("multiplier", 0.0))
+            if price_mult <= 0.0:  # R5.2: the lever requires a strictly positive multiplier.
+                continue
+            sku = update.get("sku_id")
+            store = update.get("store_id")
+            items.append(
+                ActuationItem(
+                    action_id=f"po-{decision_id}-{sku}",
+                    params={"price_mult": price_mult},
+                    sku_id=str(sku) if sku is not None else None,
+                    store_id=str(store) if store is not None else None,
+                )
+            )
+
+        outcome = actuate_items(
+            agent_name="pricing_oracle",
+            kind=WorldActionKind.SET_PRICE_MULT,
+            city=city,
             decision_id=decision_id,
-            topic="synapse.pricing.update",
+            items=items,
+            actuator=self._actuator,
         )
+
+        # Event-source only the updates the world actually applied (honest, never a stub True).
+        applied_updates = [
+            {"sku_id": item.sku_id, "price_mult": item.params["price_mult"]}
+            for item, effect in zip(items, outcome.world_effects, strict=False)
+            if effect.get("applied")
+        ]
+        kafka_published = False
+        if applied_updates:
+            kafka_published = honest_produce(
+                self._kafka,
+                "synapse.pricing.update",
+                value={
+                    "decision_id": decision_id,
+                    "city": city,
+                    "updates": applied_updates,
+                    "ts": datetime.now(UTC).isoformat(),
+                },
+                key=decision_id,
+                agent_name="pricing_oracle",
+            )
 
         self._fsm.transition("policy_updated")
         self._fsm.record_tool_call()
-
+        logger.info(
+            "pricing_executed",
+            decision_id=decision_id,
+            city=city,
+            status=outcome.status,
+            applied=outcome.applied_count,
+            kafka_published=kafka_published,
+        )
         return {
-            "status": "executed",
+            "status": outcome.status,
             "decision_id": decision_id,
-            "kafka_published": True,
-            "mlflow_logged": True,
+            "city": city,
+            "agent": "pricing_oracle",
+            "world_effects": outcome.world_effects,
+            "kafka_published": kafka_published,
+            "reason": outcome.reason,
         }
+
+    def _diverged(
+        self, decision_id: str, city: str, reason: str, *, error: str | None = None
+    ) -> dict[str, Any]:
+        """Build an honest divergence result (no world effect applied)."""
+        result: dict[str, Any] = {
+            "status": "diverged",
+            "decision_id": decision_id,
+            "city": city,
+            "agent": "pricing_oracle",
+            "world_effects": [],
+            "kafka_published": False,
+            "reason": reason,
+        }
+        if error is not None:
+            result["error"] = error
+        return result
 
     @staticmethod
     def _error_response(request_id: str, code: int, message: str) -> dict[str, Any]:
