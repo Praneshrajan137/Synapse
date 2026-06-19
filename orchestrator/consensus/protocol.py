@@ -950,17 +950,13 @@ class ConsensusProtocol:
             # Append-only binding-arbitration audit (I-14, R2.2/R2.5): the knee
             # weight vector, every evaluated candidate's weighted score, the
             # selected identity, any exclusions, and the deterministic tie-break.
-            audit_trace.append(
-                f"knee_weights={_canonical_json(_round_floats(pareto_weights))}"
-            )
+            audit_trace.append(f"knee_weights={_canonical_json(_round_floats(pareto_weights))}")
             audit_trace.append(
                 f"weighted_scores={_canonical_json(_round_floats(selection.weighted_scores))}"
             )
             audit_trace.append(f"binding_selected={selection.selected_agent}")
             if selection.excluded_agents:
-                audit_trace.append(
-                    f"binding_excluded={_canonical_json(selection.excluded_agents)}"
-                )
+                audit_trace.append(f"binding_excluded={_canonical_json(selection.excluded_agents)}")
             if selection.tie_break_applied:
                 audit_trace.append(f"tie_break={selection.tie_break_reason}")
         else:

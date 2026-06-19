@@ -273,9 +273,7 @@ def test_debate_replaces_only_valid_revision(cases: list[dict[str, Any]]) -> Non
         )
         for case in cases
     ]
-    response_by_url = {
-        AGENT_ENDPOINTS[case["agent"].value]: _response_for(case) for case in cases
-    }
+    response_by_url = {AGENT_ENDPOINTS[case["agent"].value]: _response_for(case) for case in cases}
 
     async def _fake_send(*, target_url: str, **_kwargs: Any) -> Any:
         return response_by_url[target_url]
@@ -385,9 +383,7 @@ def test_emitted_revised_payload_schema_valid(case: dict[str, Any]) -> None:
     fails validation is rejected (maintained) and never propagated as a revision."""
     agent = case["agent"].value
     payload = (
-        _valid_payload(agent, case["tag"])
-        if case["payload_valid"]
-        else dict(_INVALID_PAYLOAD)
+        _valid_payload(agent, case["tag"]) if case["payload_valid"] else dict(_INVALID_PAYLOAD)
     )
     params: Mapping[str, Any] = {
         "round_number": 2,

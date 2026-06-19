@@ -94,9 +94,7 @@ def _build_protocol() -> ConsensusProtocol:
         context_builder=MagicMock(),
         ollama_client=MagicMock(),
         meta_rl=MagicMock(**{"get_weights.return_value": {obj: 1.0 for obj in OBJECTIVES}}),
-        semantic_cache=MagicMock(
-            available=False, store_decision=AsyncMock(return_value=None)
-        ),
+        semantic_cache=MagicMock(available=False, store_decision=AsyncMock(return_value=None)),
     )
 
 

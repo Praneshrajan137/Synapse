@@ -126,9 +126,7 @@ def select_binding_action(
             excluded_agents.append(agent_name)
             continue
         own_weight = knee_weights.get(objective, 0.0)
-        others_weight = sum(
-            knee_weights.get(obj, 0.0) for obj in OBJECTIVES if obj != objective
-        )
+        others_weight = sum(knee_weights.get(obj, 0.0) for obj in OBJECTIVES if obj != objective)
         score = own_weight * float(proposal.utility_score) + neutral_baseline * others_weight
         weighted_scores[agent_name] = score
         eligible.append((index, agent_name, objective, score))

@@ -129,9 +129,7 @@ def _tied_sets(draw: DrawFn) -> tuple[list[AgentProposal], dict[str, float]]:
     Identical utility + uniform weights ⇒ exactly-equal weighted scores, forcing
     the deterministic tie-break to decide the winner.
     """
-    agents = draw(
-        st.lists(st.sampled_from(MAPPED_AGENTS), min_size=2, max_size=8, unique=True)
-    )
+    agents = draw(st.lists(st.sampled_from(MAPPED_AGENTS), min_size=2, max_size=8, unique=True))
     util = draw(_util_st)
     weight = draw(_weight_st)
     proposals = [_make_proposal(a, util) for a in agents]
@@ -149,12 +147,8 @@ def _mixed_sets(
     draw: DrawFn,
 ) -> tuple[list[AgentProposal], set[str], set[str]]:
     """A mix of mapped proposals and at least one unmapped proposal."""
-    mapped_agents = draw(
-        st.lists(st.sampled_from(MAPPED_AGENTS), max_size=8, unique=True)
-    )
-    unmapped_names = draw(
-        st.lists(_unmapped_name_st, min_size=1, max_size=4, unique=True)
-    )
+    mapped_agents = draw(st.lists(st.sampled_from(MAPPED_AGENTS), max_size=8, unique=True))
+    unmapped_names = draw(st.lists(_unmapped_name_st, min_size=1, max_size=4, unique=True))
     proposals: list[AgentProposal] = [_make_proposal(a, draw(_util_st)) for a in mapped_agents]
     proposals.extend(_make_unmapped(n, draw(_util_st)) for n in unmapped_names)
     return proposals, {str(a) for a in mapped_agents}, set(unmapped_names)
@@ -292,9 +286,7 @@ def test_property4_selection_is_deterministic_and_byte_stable(
 ) -> None:
     """Repeated evaluation yields the identical selection, and the selected
     payload serialized via ``to_deterministic_json`` is byte-identical."""
-    results: list[BindingSelection] = [
-        select_binding_action(proposals, weights) for _ in range(5)
-    ]
+    results: list[BindingSelection] = [select_binding_action(proposals, weights) for _ in range(5)]
 
     first = results[0]
     for other in results[1:]:
