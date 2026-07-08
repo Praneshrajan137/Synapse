@@ -1,5 +1,6 @@
 import { confidenceColor, confidenceZone } from "@lib/chromatics";
 import { cn } from "@lib/cn";
+import { formatConfidence } from "@lib/confidence";
 import { useThemeStore } from "@state/theme.store";
 
 interface ConfidenceChipProps {
@@ -20,7 +21,8 @@ interface ConfidenceChipProps {
  *
  * The `confidence-{ok|warn|risk}` literal class is a stable test/automation
  * hook (zone-mapped: autonomous→ok, escalation→warn, low→risk); colour is
- * never the sole channel — the percentage is the signal (INV-CLR-011).
+ * never the sole channel — the two-decimal numeric value (`formatConfidence`,
+ * `^[01]\.\d{2}$`) is the signal (Req 4.1/4.2, INV-CLR-011).
  */
 export function ConfidenceChip({
   value,
@@ -35,6 +37,10 @@ export function ConfidenceChip({
   const bandToken = zone === "autonomous" ? "ok" : zone === "escalation" ? "warn" : "risk";
   const below = clamped < threshold;
   const pct = Math.round(clamped * 100);
+  // Two-decimal numeric-text channel (Req 4.1/4.2, INV-CLR-011): the value
+  // ALWAYS renders as text matching `^[01]\.\d{2}$` so confidence is never
+  // colour-only. Single source of truth: `formatConfidence` in @lib/confidence.
+  const numeric = formatConfidence(clamped);
   const color = confidenceColor(clamped, { theme, vsup: true });
 
   return (
@@ -59,7 +65,7 @@ export function ConfidenceChip({
         style={{ background: "currentColor" }}
         aria-hidden
       />
-      {pct}%
+      {numeric}
     </span>
   );
 }

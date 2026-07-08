@@ -29,8 +29,13 @@ import { SyntheticBadge } from "./SyntheticBadge";
  * via the pure `replayDecision` (FE-INV-028) — the auto-advance drives only the
  * phase INDEX, never the slice. A phase the row did not record (no debate on a
  * fast path, no Pareto front) renders an explicit "not recorded" state; nothing
- * is invented. It is labelled a RECORDED RECONSTRUCTION, never "live" — the live
- * cognition channel is the deferred follow-up (ADR-051).
+ * is invented. It is labelled a RECORDED RECONSTRUCTION, never "live" — this
+ * compound is deliberately the recorded-replay surface. Live council cognition
+ * is now wired as its own channel (C48): the `cognition` firehose topic feeds
+ * `deriveLiveCognition` (`@lib/cognition`) which drives the real-time
+ * `CortexBanner`/council strip on Mission Control (ADR-051). The two surfaces
+ * are complementary — replay here, live cognition there — not a deferred
+ * follow-up.
  *
  * Motion is causality, not decoration: phases cross-fade in sequence, and
  * `prefers-reduced-motion` collapses the player into a static, all-phases-at-once

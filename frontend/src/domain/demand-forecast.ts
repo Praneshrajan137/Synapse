@@ -12,7 +12,7 @@ const ZHorizonMap = z
     "24h": z.number().min(0).optional(),
     "7d": z.number().min(0).optional(),
   })
-  .strict();
+  .passthrough();
 
 export const DemandForecastSchema = z
   .object({
@@ -25,6 +25,6 @@ export const DemandForecastSchema = z
     confidence: ZConfidence,
     drift_detected: z.boolean(),
   })
-  .strict();
+  .passthrough();
 
 export type DemandForecast = z.infer<typeof DemandForecastSchema>;

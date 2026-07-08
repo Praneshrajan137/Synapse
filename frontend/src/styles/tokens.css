@@ -16,6 +16,10 @@
 
 :root,
 [data-theme="dark"] {
+  /* color-scheme drives UA-rendered controls (form widgets, scrollbars,
+     spellcheck, the native focus ring) to the dark palette so OS-level colour
+     preferences are honoured without in-app config (Req 9.6). */
+  color-scheme: dark;
   /* Surfaces — cool blue-graphite (ref.neutral H250; elevation borderless). */
   --syn-canvas: 5 9 14; /* color.surface.canvas */
   --syn-surface: 12 18 24; /* color.surface.panel */
@@ -124,12 +128,22 @@
      entrance; entrance is its hard-decelerate curve. */
   --syn-motion-urgent: 1200ms;
   --syn-motion-arrive: 280ms;
+  /* Skeleton loading sweep. Continuous while data is pending; zeroed under
+     reduced motion like every other duration token (Req 6.1/6.2). */
+  --syn-motion-shimmer: 1400ms;
   --syn-ease-standard: cubic-bezier(0.2, 0, 0, 1);
   --syn-ease-emphasized: cubic-bezier(0.3, 0, 0.8, 0.15);
   --syn-ease-entrance: cubic-bezier(0.05, 0.7, 0.1, 1);
+  /* Symmetric ease for breathing/pulsing loops (the acting pulse, the demo
+     pulse, the urgent beacon, the Cortex breath) — equivalent to ease-in-out
+     but token-governed so no ad-hoc easing lives in component/config source. */
+  --syn-ease-pulse: cubic-bezier(0.4, 0, 0.6, 1);
+  /* Constant-velocity sweep for the skeleton shimmer. */
+  --syn-ease-linear: linear;
 }
 
 [data-theme="light"] {
+  color-scheme: light;
   --syn-canvas: 242 243 245; /* color.surface.canvas */
   --syn-surface: 252 252 253; /* color.surface.panel */
   /* DELIBERATE deviation from dist (governed light panel=raised=overlay):
@@ -200,6 +214,7 @@
 [data-theme="hc"] {
   /* High-contrast (WCAG AAA): borderless depth is a contrast-budget luxury
      AAA can't afford — hard borders, no shadows, no glow (ADR-045). */
+  color-scheme: dark;
   --syn-canvas: 0 0 0;
   --syn-surface: 0 0 0;
   --syn-surface-raised: 17 17 17;
@@ -233,5 +248,6 @@
     --syn-motion-breath: 0ms;
     --syn-motion-urgent: 0ms;
     --syn-motion-arrive: 0ms;
+    --syn-motion-shimmer: 0ms;
   }
 }

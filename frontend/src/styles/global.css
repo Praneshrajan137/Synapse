@@ -36,6 +36,48 @@
     box-shadow: var(--syn-focus-ring);
   }
 
+  /* Req 9.4 — forced-colors (Windows High Contrast) preservation. In
+     forced-colors mode the UA strips box-shadow, so a focus ring authored as
+     a box-shadow disappears — a keyboard-operability regression. Re-express
+     the focus ring and every earned border as a system-color `outline`/
+     `border` so all boundary information survives while colour defers to the
+     system palette (Req 5.11). No information is lost; only the paint changes. */
+  @media (forced-colors: active) {
+    *:focus-visible {
+      outline: 2px solid Highlight;
+      outline-offset: 2px;
+    }
+
+    .syn-card,
+    .syn-card-raised,
+    .syn-hero {
+      border: 1px solid CanvasText;
+    }
+  }
+
+  /* Req 6.7 — the no-animate exclusion set (ADR-044, FE-INV-040). Two classes
+     of element MUST NOT animate regardless of the motion tokens:
+       1. Prose the operator is actively reading — `.syn-prose` / `[data-reading]`.
+          Motion under running text harms legibility and pulls the eye off the
+          line being read.
+       2. The current keyboard-focus target — `:focus-visible`. A moving or
+          transitioning focus target is a tracking hazard during keyboard
+          navigation; the focus ring must land instantly and hold still.
+     The guard is declarative and uses `!important` so any animated utility that
+     lands on these elements is neutralised at the source — the exclusion is
+     honoured, not merely documented. Static (text / icon / data-*) channels are
+     unaffected, so no information is lost. */
+  .syn-prose,
+  .syn-prose *,
+  [data-reading] {
+    animation: none !important;
+  }
+
+  :focus-visible {
+    animation: none !important;
+    transition: none !important;
+  }
+
   /* Tabular numerals for ops dashboards */
   .tabular-nums {
     font-variant-numeric: tabular-nums;

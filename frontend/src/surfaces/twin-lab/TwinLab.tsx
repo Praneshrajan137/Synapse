@@ -1,15 +1,24 @@
 import type { TwinState } from "@domain/twin-state";
-import { DivergenceTrace, PageHeader } from "@ds/compounds";
+import {
+  DivergenceTrace,
+  PageHeader,
+  SpatialErrorBoundary,
+  UniversalStateView,
+} from "@ds/compounds";
 import { Badge } from "@ds/primitives";
 import { useFirehose } from "@hooks/use-firehose";
 import { useSynapseApi } from "@hooks/use-synapse-api";
+import { useUniversalState } from "@hooks/use-universal-state";
 import { useFirehoseStore } from "@state/firehose.store";
 import { useMutation } from "@tanstack/react-query";
+import { TimeoutError } from "@transport/errors";
 import { Suspense, lazy, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { DivergenceMeter } from "./DivergenceMeter";
 import { NodeInspector } from "./NodeInspector";
 import { ScenarioBuilder, type ScenarioRequest } from "./ScenarioBuilder";
+import { SimulationProgress } from "./SimulationProgress";
+import { SupplyNetworkTable } from "./SupplyNetworkTable";
 import { useTopology } from "./useTopology";
 
 // Phase 6b: lazy-load the WebGL (Sigma) supply graph so it stays out of the
@@ -46,11 +55,26 @@ export function TwinLab() {
       toast.success(`Scenario complete — KL=${data.kl_divergence.toFixed(3)}`);
     },
     onError: (err: Error) => {
+      // A hung run is rejected by the transport's typed timeout (Req 7.6); make
+      // that explicit rather than showing a generic "simulation failed".
+      if (err instanceof TimeoutError) {
+        toast.error("Simulation timed out — the run exceeded the 120s SLA and was rejected.");
+        return;
+      }
       toast.error(`Simulation failed: ${err.message}`);
     },
   });
 
   const klValue = result?.kl_divergence ?? 0;
+
+  // The supply-network topology is the spatial surface's data spine: a failed
+  // or offline load must render a distinct, non-blank state with retry rather
+  // than an empty canvas (Req 7.5, 10.1, 10.7, 10.8).
+  const topologyState = useUniversalState({
+    isLoading: topology.isLoading,
+    isError: topology.isError,
+    itemCount: topology.data?.nodes?.length ?? 0,
+  });
 
   return (
     <section className="space-y-5">
@@ -74,25 +98,58 @@ export function TwinLab() {
       </div>
 
       <div className="grid gap-4 lg:grid-cols-[1fr_320px]">
-        <Suspense
-          fallback={
-            <div
-              className="syn-card syn-skeleton flex h-[420px] items-center justify-center text-sm text-ink-muted"
-              aria-busy="true"
+        <div>
+          {/* Spatial canvas: the boundary catches a failed chunk/render (error +
+              retry, never a blank canvas — Req 7.5); Suspense covers loading;
+              UniversalStateView covers the topology data states (13.2). */}
+          <SpatialErrorBoundary label="supply network" height={420}>
+            <Suspense
+              fallback={
+                <div
+                  className="syn-card syn-skeleton flex h-[420px] items-center justify-center text-sm text-ink-muted"
+                  aria-busy="true"
+                >
+                  Loading supply network…
+                </div>
+              }
             >
-              Loading supply network…
-            </div>
-          }
-        >
-          <SupplyNetworkGraph
+              <UniversalStateView
+                state={topologyState}
+                onRetry={() => void topology.refetch()}
+                className="h-[420px]"
+                labels={{
+                  loadingTitle: "Loading supply network…",
+                  emptyTitle: "No topology for this city yet",
+                  emptyDetail: "The supply network graph will render once nodes are available.",
+                  errorTitle: "Supply network unavailable",
+                  errorDetail:
+                    "Could not load the topology. This is a load failure, not an empty network — retry.",
+                  offlineDetail: "You're offline — reconnect to load the supply network.",
+                }}
+              >
+                <SupplyNetworkGraph
+                  nodes={topology.data?.nodes ?? []}
+                  edges={topology.data?.edges ?? []}
+                  selectedId={selectedNodeId}
+                  onSelectNode={setSelectedNodeId}
+                />
+              </UniversalStateView>
+            </Suspense>
+          </SpatialErrorBoundary>
+
+          {/* Non-spatial equivalent — keyboard/SR-reachable node table (Req 7.4).
+              Outside the boundary so it survives a viz failure and shares the
+              NodeInspector via the same selection state. */}
+          <SupplyNetworkTable
             nodes={topology.data?.nodes ?? []}
             edges={topology.data?.edges ?? []}
             selectedId={selectedNodeId}
             onSelectNode={setSelectedNodeId}
           />
-        </Suspense>
+        </div>
         <div className="space-y-4">
           <ScenarioBuilder pending={sim.isPending} onRun={(req) => sim.mutate(req)} />
+          <SimulationProgress pending={sim.isPending} />
           <NodeInspector
             selectedId={selectedNodeId}
             nodes={topology.data?.nodes ?? []}

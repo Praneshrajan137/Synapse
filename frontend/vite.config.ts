@@ -54,9 +54,27 @@ export default defineConfig(({ mode }) => {
           manualChunks: {
             "react-vendor": ["react", "react-dom", "react-router-dom"],
             "query": ["@tanstack/react-query"],
-            "deck": ["@deck.gl/core", "@deck.gl/layers", "@deck.gl/react"],
+            // FE-INV-025: every heavy viz lib is split into its own chunk so it
+            // never lands in the entry bundle (index-*.js). @deck.gl/aggregation-
+            // layers (HeatmapLayer) must be listed explicitly — without it the
+            // heatmap layer spills into the entry chunk via the eager
+            // MissionControl → LivingMap → deck-gl/layers import.
+            "deck": [
+              "@deck.gl/core",
+              "@deck.gl/layers",
+              "@deck.gl/aggregation-layers",
+              "@deck.gl/react",
+            ],
             "map": ["maplibre-gl"],
             "viz": ["recharts"],
+            // visx feeds ParetoFrontier, which the eager decision/cockpit routes
+            // import — split it out so it stays clear of the entry bundle.
+            "visx": [
+              "@visx/axis",
+              "@visx/group",
+              "@visx/scale",
+              "@visx/shape",
+            ],
             "graph": [
               "sigma",
               "graphology",

@@ -1,8 +1,10 @@
 import { ConsensusChoreography, PageHeader } from "@ds/compounds";
 import { useDecisionQuery } from "@hooks/use-decision";
+import { useOnlineStatus } from "@hooks/use-online-status";
+import { resolveUniversalState } from "@lib/universal-state";
+import { parseSharedPhase } from "@lib/replay";
 import { useCallback, useMemo } from "react";
 import { Link, useParams, useSearchParams } from "react-router-dom";
-import { z } from "zod";
 
 /**
  * Council Theater (ADR-051) — a flagship stage for the council's recorded
@@ -21,11 +23,10 @@ export function CouncilTheater() {
   const query = useDecisionQuery(id);
 
   const [searchParams, setSearchParams] = useSearchParams();
-  const phaseParam = useMemo(
-    () => z.coerce.number().int().min(1).max(5).safeParse(searchParams.get("phase")),
+  const initialPhase = useMemo(
+    () => parseSharedPhase(searchParams.get("phase")),
     [searchParams],
   );
-  const initialPhase = phaseParam.success ? phaseParam.data : undefined;
 
   const onPhaseChange = useCallback(
     (phase: number) => {
@@ -43,6 +44,19 @@ export function CouncilTheater() {
 
   const decision = query.data?.decision;
   const raw = query.data?.raw;
+
+  // Route the single-decision fetch through the shared resolver so an offline
+  // session is distinct from a load failure and from an in-flight load
+  // (Req 10.1, 10.7). A missing decision after a completed, non-error fetch is
+  // still surfaced as "unavailable" rather than a silent blank stage (Req 10.8).
+  const offline = useOnlineStatus();
+  const state = resolveUniversalState({
+    isLoading: query.isLoading,
+    isError: query.isError,
+    isOffline: offline,
+    isDegraded: false, // the global DegradedBanner owns degraded posture here
+    itemCount: decision ? 1 : 0,
+  });
 
   return (
     <section className="space-y-5">
@@ -64,9 +78,20 @@ export function CouncilTheater() {
         </Link>
       </PageHeader>
 
-      {query.isLoading && <p className="text-sm text-ink-muted">Loading deliberation…</p>}
+      {state === "offline" && (
+        <div role="alert" className="text-sm text-confidence-risk">
+          You're offline — the recorded deliberation can't be loaded right now.
+          <div className="mt-2">
+            <Link to="/decisions" className="text-2xs text-accent underline">
+              Back to Decision Theater
+            </Link>
+          </div>
+        </div>
+      )}
 
-      {(query.isError || (!query.isLoading && !decision)) && (
+      {state === "loading" && <p className="text-sm text-ink-muted">Loading deliberation…</p>}
+
+      {(state === "error" || state === "empty") && (
         <div role="alert" className="text-sm text-confidence-risk">
           Decision unavailable: {(query.error as Error | undefined)?.message ?? "not found"}
           <div className="mt-2">
@@ -77,7 +102,7 @@ export function CouncilTheater() {
         </div>
       )}
 
-      {decision && (
+      {state === "populated" && decision && (
         <ConsensusChoreography
           decision={decision}
           raw={raw}

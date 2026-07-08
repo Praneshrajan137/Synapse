@@ -25,7 +25,7 @@ export const PricingUpdateSchema = z
     confidence: ZConfidence,
     audit_id: ZUuid.optional(),
   })
-  .strict()
+  .passthrough()
   .refine((v) => !v.is_essential || v.multiplier <= 1.3, {
     message: "Essential SKU multiplier exceeds 1.3 cap (I-6 hard guardrail)",
     path: ["multiplier"],

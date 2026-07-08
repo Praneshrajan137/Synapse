@@ -149,4 +149,70 @@ describe("createHttpClient", () => {
       schemaId: "typed.v1",
     } satisfies Partial<SchemaViolationError>);
   });
+
+  // Req 7.6 / FE-INV-026: a hung run must be rejected with a typed timeout, not
+  // retried forever, once the deadline elapses.
+  it("rejects a hung request with a typed TimeoutError when the deadline elapses", async () => {
+    vi.useFakeTimers();
+    const fetch = fetchMock();
+    // A never-resolving fetch that only rejects when its signal aborts — the
+    // shape of a genuinely hung request.
+    fetch.mockImplementation((_url: string, init: RequestInit) => {
+      return new Promise((_resolve, reject) => {
+        const signal = init.signal as AbortSignal;
+        signal.addEventListener("abort", () => {
+          reject(Object.assign(new Error("aborted"), { name: "AbortError" }));
+        });
+      });
+    });
+    const client = createHttpClient({ baseUrl: "https://api.synapse.test" });
+
+    const run = client.post("/simulate", { n: 1 }, { idempotent: true, timeoutMs: 120_000 });
+    const assertion = expect(run).rejects.toMatchObject({
+      name: "TimeoutError",
+      timeoutMs: 120_000,
+    });
+    await vi.advanceTimersByTimeAsync(120_000);
+    await assertion;
+    // A hung run is aborted, never retried into a second attempt.
+    expect(fetch).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not time out a request that resolves within the deadline", async () => {
+    vi.useFakeTimers();
+    const fetch = fetchMock();
+    fetch.mockResolvedValueOnce(jsonResponse({ ok: true }));
+    const client = createHttpClient({ baseUrl: "https://api.synapse.test" });
+
+    const run = client.post(
+      "/simulate",
+      { n: 1 },
+      { idempotent: true, timeoutMs: 120_000, schema: z.object({ ok: z.boolean() }) },
+    );
+    await vi.runAllTimersAsync();
+    await expect(run).resolves.toEqual({ ok: true });
+  });
+
+  it("propagates a caller abort as an AbortError, not a TimeoutError", async () => {
+    const fetch = fetchMock();
+    fetch.mockImplementation((_url: string, init: RequestInit) => {
+      return new Promise((_resolve, reject) => {
+        const signal = init.signal as AbortSignal;
+        signal.addEventListener("abort", () => {
+          reject(Object.assign(new Error("aborted"), { name: "AbortError" }));
+        });
+      });
+    });
+    const client = createHttpClient({ baseUrl: "https://api.synapse.test" });
+    const ac = new AbortController();
+
+    const run = client.post(
+      "/simulate",
+      { n: 1 },
+      { idempotent: true, timeoutMs: 120_000, signal: ac.signal },
+    );
+    const assertion = expect(run).rejects.toMatchObject({ name: "AbortError" });
+    ac.abort();
+    await assertion;
+  });
 });

@@ -1,5 +1,5 @@
 import { Button } from "@ds/primitives";
-import { type FormEvent, useState } from "react";
+import { type FormEvent, useId, useState } from "react";
 
 interface ScenarioBuilderProps {
   readonly pending?: boolean;
@@ -57,6 +57,14 @@ const PRESETS: Record<string, ScenarioRequest> = {
 
 export function ScenarioBuilder({ pending, onRun }: ScenarioBuilderProps) {
   const [request, setRequest] = useState<ScenarioRequest>(PRESETS.warehouse_offline!);
+  const nScenariosErrorId = useId();
+  const durationErrorId = useId();
+
+  // Range validity for the free-entry numeric inputs. Out-of-range values are
+  // programmatically associated with a text error (Req 9.7) and block the run.
+  const nScenariosInvalid = request.n_scenarios < 100 || request.n_scenarios > 5000;
+  const durationInvalid = request.duration_hours < 1 || request.duration_hours > 24;
+  const invalid = nScenariosInvalid || durationInvalid;
 
   function applyPreset(name: keyof typeof PRESETS) {
     setRequest(PRESETS[name]!);
@@ -68,6 +76,7 @@ export function ScenarioBuilder({ pending, onRun }: ScenarioBuilderProps) {
 
   function handleSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
+    if (invalid) return;
     onRun(request);
   }
 
@@ -137,8 +146,15 @@ export function ScenarioBuilder({ pending, onRun }: ScenarioBuilderProps) {
             step={100}
             value={request.n_scenarios}
             onChange={(e) => update("n_scenarios", Number(e.target.value))}
-            className="mt-1 h-8 w-full rounded-md border border-border bg-surface px-2 text-sm text-ink"
+            aria-invalid={nScenariosInvalid}
+            aria-describedby={nScenariosInvalid ? nScenariosErrorId : undefined}
+            className="mt-1 h-8 w-full rounded-md border border-border bg-surface px-2 text-sm text-ink aria-[invalid=true]:border-signal-danger"
           />
+          {nScenariosInvalid && (
+            <span id={nScenariosErrorId} role="alert" className="mt-1 block text-signal-danger">
+              Enter between 100 and 5000 scenarios.
+            </span>
+          )}
         </label>
         <label className="block">
           <span className="block uppercase tracking-wide text-ink-muted">duration h</span>
@@ -149,12 +165,19 @@ export function ScenarioBuilder({ pending, onRun }: ScenarioBuilderProps) {
             step={1}
             value={request.duration_hours}
             onChange={(e) => update("duration_hours", Number(e.target.value))}
-            className="mt-1 h-8 w-full rounded-md border border-border bg-surface px-2 text-sm text-ink"
+            aria-invalid={durationInvalid}
+            aria-describedby={durationInvalid ? durationErrorId : undefined}
+            className="mt-1 h-8 w-full rounded-md border border-border bg-surface px-2 text-sm text-ink aria-[invalid=true]:border-signal-danger"
           />
+          {durationInvalid && (
+            <span id={durationErrorId} role="alert" className="mt-1 block text-signal-danger">
+              Enter a duration between 1 and 24 hours.
+            </span>
+          )}
         </label>
       </div>
 
-      <Button type="submit" variant="primary" size="md" disabled={pending} className="w-full">
+      <Button type="submit" variant="primary" size="md" disabled={pending || invalid} className="w-full">
         {pending ? "Running Monte Carlo…" : "Run simulation"}
       </Button>
       <p className="text-2xs text-ink-subtle">

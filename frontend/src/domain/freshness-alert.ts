@@ -19,6 +19,6 @@ export const FreshnessAlertSchema = z
     timestamp: ZIsoTimestamp,
     confidence: ZConfidence,
   })
-  .strict();
+  .passthrough();
 
 export type FreshnessAlert = z.infer<typeof FreshnessAlertSchema>;

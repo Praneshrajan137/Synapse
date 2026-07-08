@@ -1,7 +1,8 @@
 import { AGENT_NAMES, type AgentMetrics, type AgentName } from "@domain/agent-health";
-import { ConfidenceChip, PageHeader } from "@ds/compounds";
+import { ConfidenceChip, PageHeader, UniversalStateView } from "@ds/compounds";
 import { Badge } from "@ds/primitives";
 import { useSynapseApi } from "@hooks/use-synapse-api";
+import { useUniversalState } from "@hooks/use-universal-state";
 import { fmt } from "@lib/formatters";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
@@ -21,13 +22,33 @@ export function AgentCouncil() {
     refetchInterval: 5_000,
   });
 
+  // The agent set is frozen (8 agents), so "populated" is the norm; the
+  // universal state still distinguishes a failed health fetch (error/offline)
+  // and a degraded posture from a healthy board (Req 10.1, 10.7, 10.8).
+  const agentCount = agents.data?.agents ? Object.keys(agents.data.agents).length : 0;
+  const state = useUniversalState({
+    isLoading: agents.isLoading,
+    isError: agents.isError,
+    itemCount: agentCount,
+  });
+
   return (
     <section className="space-y-4">
       <PageHeader
         title="Agent Council"
         subtitle="8 specialised agents — independent rewards (I-2). Per-agent latency percentiles and calibration coverage are sourced from Prometheus via the gateway."
       />
-      <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4">
+      <UniversalStateView
+        state={state}
+        onRetry={() => void agents.refetch()}
+        labels={{
+          emptyTitle: "No agent health yet",
+          emptyDetail: "Waiting for the first agent health report from the gateway.",
+          errorDetail:
+            "Could not reach agent health. This is a load failure, not an empty council — retry.",
+        }}
+      >
+        <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4">
         {AGENT_NAMES.map((name) => {
           const value = agents.data?.agents?.[name] as AgentMetrics | string | undefined;
           const metrics: AgentMetrics =
@@ -77,7 +98,8 @@ export function AgentCouncil() {
             </Link>
           );
         })}
-      </div>
+        </div>
+      </UniversalStateView>
     </section>
   );
 }

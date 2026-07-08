@@ -25,7 +25,7 @@ export const RoutePlanSchema = z
     fuel_estimate_liters: z.number().min(0).optional(),
     freshness_violations: z.number().int().min(0).optional(),
   })
-  .strict();
+  .passthrough();
 
 export type RouteStop = z.infer<typeof RouteStopSchema>;
 export type RoutePlan = z.infer<typeof RoutePlanSchema>;

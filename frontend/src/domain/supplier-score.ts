@@ -10,7 +10,7 @@ const ZLeadTimePosterior = z
     p10_days: z.number().optional(),
     p90_days: z.number().optional(),
   })
-  .strict();
+  .passthrough();
 
 export const SupplierScoreSchema = z
   .object({
@@ -26,6 +26,6 @@ export const SupplierScoreSchema = z
     timestamp: ZIsoTimestamp,
     confidence: ZConfidence,
   })
-  .strict();
+  .passthrough();
 
 export type SupplierScore = z.infer<typeof SupplierScoreSchema>;

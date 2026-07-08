@@ -4,7 +4,13 @@ import { useCalibration } from "@hooks/use-calibration";
 import { cn } from "@lib/cn";
 import { useState } from "react";
 import { ReliabilityCurve } from "./ReliabilityCurve";
-import { outcomeMix } from "./logic";
+import {
+  AWAITING_SCORED_OUTCOMES,
+  formatMetric,
+  hasScoredEvidence,
+  isProvisional,
+  outcomeMix,
+} from "./logic";
 
 interface CalibrationPanelProps {
   readonly city?: City;
@@ -22,7 +28,11 @@ export function CalibrationPanel({ city }: CalibrationPanelProps) {
   const data = q.data;
 
   const brier = data?.brier_score;
-  const thin = (data?.n_scored ?? 0) < 20;
+  const nScored = data?.n_scored ?? 0;
+  // FE-INV-043 (Req 4.4): fewer than 30 scored outcomes reads as provisional.
+  const provisional = isProvisional(nScored);
+  // FE-INV-043 (Req 4.5): no scored evidence → "awaiting scored outcomes".
+  const awaiting = !hasScoredEvidence(nScored);
 
   // Tri-state outcome mix (FE-INV-041): confirmed / diverged / unknown.
   // `unknown` is rendered with the chroma-drained honesty marker — NEVER
@@ -57,7 +67,7 @@ export function CalibrationPanel({ city }: CalibrationPanelProps) {
         <div className="space-y-3">
           <KPITile
             label="Brier score"
-            value={brier === null || brier === undefined ? "—" : brier.toFixed(3)}
+            value={formatMetric(brier)}
             tone={brier === null || brier === undefined ? "neutral" : brier > 0.25 ? "warn" : "ok"}
           />
           <p className="text-2xs text-ink-muted">
@@ -96,7 +106,13 @@ export function CalibrationPanel({ city }: CalibrationPanelProps) {
       <p className="text-2xs text-ink-subtle">
         n={data?.n_scored ?? 0} scored · {data?.n_unknown ?? 0} unknown ·{" "}
         {data?.window_hours ?? 168}h window · as of {data?.as_of ?? "—"}
-        {thin && <span className="text-signal-warning"> · thin sample — read as provisional</span>}
+        {awaiting ? (
+          <span className="text-signal-warning"> · {AWAITING_SCORED_OUTCOMES.toLowerCase()}</span>
+        ) : (
+          provisional && (
+            <span className="text-signal-warning"> · provisional — thin sample (n&lt;30)</span>
+          )
+        )}
       </p>
     </section>
   );

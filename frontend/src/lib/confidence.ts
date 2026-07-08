@@ -31,6 +31,23 @@ export function confidenceBand(value: number): ConfidenceBand {
   return "risk";
 }
 
+/**
+ * Format a confidence value as a fixed two-decimal string in the range
+ * "0.00".."1.00" (Req 4.1). The value is clamped defensively into [0,1] and
+ * non-finite input collapses to "0.00", so the output ALWAYS matches
+ * `^[01]\.\d{2}$` — the numeric-text honesty channel that must render alongside
+ * any confidence colour (Req 4.2, INV-CLR-011). Colour can drain; the number
+ * never lies.
+ *
+ * This is the single source of truth for the two-decimal channel: it lives in
+ * the lib layer so both the design-system `ConfidenceChip` compound and the
+ * `operations` surface consume the identical formatter.
+ */
+export function formatConfidence(x: number): string {
+  const clamped = !Number.isFinite(x) ? 0 : x < 0 ? 0 : x > 1 ? 1 : x;
+  return clamped.toFixed(2);
+}
+
 export function isBelowThreshold(value: number, threshold = 0.7): boolean {
   return value < threshold;
 }

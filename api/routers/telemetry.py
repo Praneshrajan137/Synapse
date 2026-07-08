@@ -30,6 +30,13 @@ ALLOWED_FIELDS = {
     "component_stack",
     "trace_id",
     "build_sha",
+    # Schema-violation detail (FE http-client emits these; kept in lock-step
+    # with the frontend whitelist in frontend/src/lib/log.ts). Safe metadata
+    # only — never a raw payload or field value.
+    "error",
+    "schemaId",
+    "issueCount",
+    "paths",
 }
 ALLOWED_KIND = {"web_vitals", "error", "audit_view", "demo_event"}
 

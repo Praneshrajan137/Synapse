@@ -79,6 +79,37 @@ jobs:
       - name: Size budget
         run: pnpm size || true   # informational in P0; gated in P2 per plan §17
 
+  contract-fidelity:
+    name: Contract fidelity drift (Req 1)
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    needs: quality
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9.12.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20.18"
+          cache: "pnpm"
+          cache-dependency-path: frontend/pnpm-lock.yaml
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile=false
+      - name: Contract fidelity drift report
+        # Runs against the checked-in OpenAPI snapshot (deterministic, offline).
+        # Fails non-zero and names the endpoint/channel if an entitled
+        # capability is uncovered/partial; out-of-scope never fails.
+        run: pnpm contract:drift
+      - uses: actions/upload-artifact@v4
+        if: success() || failure()
+        with:
+          name: contract-drift-report
+          path: |
+            frontend/spec/contract-fidelity/drift-report.json
+            frontend/spec/contract-fidelity/drift-report.md
+          retention-days: 14
+
   fe-invariants:
     name: FE-INV registry coverage
     runs-on: ubuntu-latest
@@ -127,6 +158,172 @@ jobs:
           name: playwright-report
           path: frontend/playwright-report
           retention-days: 7
+
+  e2e-visual:
+    name: Visual regression gate (Req 14)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    needs: build
+    # Same run policy as `e2e`: PR-preview and `v*` tags only. The gate compares
+    # deterministic screenshots (fixed viewport/theme/seed, disabled animation,
+    # fixed fonts, masked volatile regions) against committed baselines using
+    # Playwright's built-in toHaveScreenshot() diffing — $0-cost / OSS, no paid
+    # visual-diffing SaaS (Req 14.6, 20.2). It fails and names the changed
+    # Surface + Theme_Mode when a diff exceeds the threshold defined in
+    # playwright.config.ts (Req 14.2). Baselines are generated on this same
+    # Linux/Chromium runner via `pnpm test:visual:update` and committed, so an
+    # approved change advances the baseline (Req 14.4); see
+    # frontend/tests/e2e/visual/README.md.
+    if: github.event_name == 'pull_request' || startsWith(github.ref, 'refs/tags/v')
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9.12.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20.18"
+          cache: "pnpm"
+          cache-dependency-path: frontend/pnpm-lock.yaml
+      - run: pnpm install --frozen-lockfile=false
+      - run: pnpm exec playwright install --with-deps chromium
+      - run: pnpm build
+      - run: pnpm test:visual
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: visual-regression-report
+          path: frontend/playwright-report
+          retention-days: 7
+
+  e2e-harness:
+    name: Effectiveness harness (Req 1.3, 3, 7) — deterministic
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    needs: build
+    # Same run policy as `e2e` (ADR-039): PR-preview and `v*` tags only. The
+    # Effectiveness_Harness is a Scripted_Proxy driven entirely by the seeded
+    # MSW browser worker + stream driver — it makes ZERO calls to any live or
+    # third-party endpoint, so every measurement is byte-identical across runs
+    # (Req 1.3). That determinism is what lets the harness be a PR gate: it
+    # cannot flake on network or backend state. It runs the Task_Completion_Tests
+    # (Jobs-To-Be-Done, Req 3) and the Resilience_Scenarios (Req 7) on the fixed
+    # Linux/Chromium profile and emits the versioned Effectiveness_Scorecard
+    # (test-results/effectiveness/scorecard.json, Req 4.1) that the
+    # `effectiveness-ratchet` job below gates against. $0-cost / OSS only
+    # (Playwright + MSW, both already in package.json; Req 20.3).
+    if: github.event_name == 'pull_request' || startsWith(github.ref, 'refs/tags/v')
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9.12.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20.18"
+          cache: "pnpm"
+          cache-dependency-path: frontend/pnpm-lock.yaml
+      - run: pnpm install --frozen-lockfile=false
+      - run: pnpm exec playwright install --with-deps chromium
+      - run: pnpm build
+      - name: Task_Completion_Tests + Resilience_Scenarios (seeded, no live network)
+        # Positional filters are OR'd against the test file path, so this runs
+        # exactly the JTBD task-completion suite and every *.resilience.spec.ts
+        # on the deterministic chromium project. The Task_Completion_Tests emit
+        # the single versioned scorecard.json in `afterAll` (chromium is the
+        # canonical emitter).
+        run: pnpm test:e2e --project=chromium task-completion.jtbd resilience.spec
+      - name: Upload effectiveness scorecard
+        uses: actions/upload-artifact@v4
+        if: success() || failure()
+        with:
+          name: effectiveness-scorecard
+          path: frontend/test-results/effectiveness/scorecard.json
+          retention-days: 14
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: harness-playwright-report
+          path: frontend/playwright-report
+          retention-days: 7
+
+  effectiveness-ratchet:
+    name: Effectiveness ratchet (Req 4.3/4.4) — deterministic
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    needs: e2e-harness
+    # Downloads the fresh scorecard the harness emitted and compares it against
+    # the committed baseline (spec/effectiveness/scorecard.baseline.json) via the
+    # pure Effectiveness_Ratchet comparator (`pnpm effectiveness:ratchet`). It
+    # exits NON-ZERO naming the regressed job + metric when steps/latency/error-
+    # rate (or Interruption_Precision) regress beyond tolerance (Req 4.3). Both
+    # sides derive from seeded, byte-identical harness measurements, so the gate
+    # is deterministic and non-flaky (Req 4.4, 20.3). $0-cost / OSS only.
+    if: github.event_name == 'pull_request' || startsWith(github.ref, 'refs/tags/v')
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9.12.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20.18"
+          cache: "pnpm"
+          cache-dependency-path: frontend/pnpm-lock.yaml
+      - run: pnpm install --frozen-lockfile=false
+      - name: Download fresh scorecard
+        # `download-artifact` is a `uses:` step, so the top-level
+        # `working-directory: frontend` default does not apply — the path is
+        # repo-root-relative and lands the artifact where the ratchet's default
+        # fresh path (test-results/effectiveness/scorecard.json, relative to the
+        # frontend root) expects it.
+        uses: actions/download-artifact@v4
+        with:
+          name: effectiveness-scorecard
+          path: frontend/test-results/effectiveness
+      - name: Effectiveness ratchet (fresh scorecard vs committed baseline)
+        run: pnpm effectiveness:ratchet
+
+  mobile-lighthouse:
+    name: Mobile Lighthouse budget (Req 15.4/15.5)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    needs: build
+    # Same run policy as `e2e` (ADR-039): PR-preview and `v*` tags only. This is
+    # the authoritative Web_Vitals_Budget gate for the Mobile_Reality_Profile
+    # (Req 15.4): the OSS Lighthouse CI (@lhci/cli) audits the defined key routes
+    # under a mobile form factor with a throttled 3G-class network + 4× CPU
+    # slowdown (lighthouserc.mobile.json) and FAILS when a route falls below its
+    # mobile budget — LCP ≤ 2.5s, CLS ≤ 0.1, TBT ≤ 300ms (the INP lab proxy)
+    # (Req 15.5). The literal 360px/touch/3G reachability + INP/CLS checks live
+    # in tests/e2e/mobile-reality.spec.ts (run by the `e2e` job). Routes are the
+    # backend-free key entry routes (/login, /) because `pnpm preview` serves the
+    # built app with no backend on the runner; deeper role-gated Surfaces are
+    # covered by the authenticated Playwright mobile spec. $0-cost / OSS only —
+    # Lighthouse is Apache-2.0 (Req 20.2). Uses the runner's pre-installed
+    # Google Chrome (chrome-launcher auto-detects it).
+    if: github.event_name == 'pull_request' || startsWith(github.ref, 'refs/tags/v')
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9.12.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20.18"
+          cache: "pnpm"
+          cache-dependency-path: frontend/pnpm-lock.yaml
+      - run: pnpm install --frozen-lockfile=false
+      - name: Build
+        run: pnpm build
+      - name: Mobile-profile Lighthouse CI (key routes, fails below budget)
+        run: pnpm lhci:mobile
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: lighthouse-mobile-report
+          path: frontend/.lighthouseci
+          retention-days: 14
 
   license-audit:
     name: License audit (I-1)

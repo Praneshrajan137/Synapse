@@ -145,15 +145,18 @@ export default {
         },
       },
       animation: {
-        "pulse-confidence": "pulse-confidence 1.8s ease-in-out infinite",
-        "shimmer": "shimmer 1.4s linear infinite",
+        // Ambient acting/thinking pulse. Beats at the ambient breath cadence
+        // so the urgent beacon (below) is exactly half its period — urgency is
+        // FREQUENCY (Req 6.4). Token-governed so reduced motion zeroes it.
+        "pulse-confidence": "pulse-confidence var(--syn-motion-breath) var(--syn-ease-pulse) infinite",
+        "shimmer": "shimmer var(--syn-motion-shimmer) var(--syn-ease-linear) infinite",
         "fade-in": "fade-in var(--syn-motion-fast) var(--syn-ease-standard)",
-        "breathe": "breathe var(--syn-motion-breath) ease-in-out infinite",
+        "breathe": "breathe var(--syn-motion-breath) var(--syn-ease-pulse) infinite",
         "arrive": "arrive var(--syn-motion-arrive) var(--syn-ease-entrance)",
-        "demo-pulse": "demo-pulse var(--syn-motion-breath) ease-in-out infinite",
+        "demo-pulse": "demo-pulse var(--syn-motion-breath) var(--syn-ease-pulse) infinite",
         // urgency = frequency: the escalation pulse beats at exactly half
         // the ambient breath (1200ms vs 2400ms) — never a new colour.
-        "urgent-pulse": "pulse-confidence var(--syn-motion-urgent) ease-in-out infinite",
+        "urgent-pulse": "pulse-confidence var(--syn-motion-urgent) var(--syn-ease-pulse) infinite",
       },
       backgroundImage: {
         "gradient-confidence": "var(--gradient-confidence)",

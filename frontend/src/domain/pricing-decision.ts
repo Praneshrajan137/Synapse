@@ -13,7 +13,7 @@ export const PricingDecisionSchema = z
     multiplier: z.number().positive(),
     final_price: z.number().positive(),
   })
-  .strict()
+  .passthrough()
   .refine((v) => !v.is_essential || v.multiplier <= 1.3, {
     message: "Essential multiplier exceeds 1.3 cap (I-6)",
     path: ["multiplier"],

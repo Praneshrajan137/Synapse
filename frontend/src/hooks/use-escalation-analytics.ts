@@ -1,5 +1,7 @@
 import type { EscalationAnalytics } from "@domain/operations";
 import type { City } from "@domain/primitives";
+import { metricQueryKey } from "@lib/query-keys";
+import { useCityStore } from "@state/city.store";
 import { useQuery } from "@tanstack/react-query";
 import { useSynapseApi } from "./use-synapse-api";
 
@@ -14,9 +16,11 @@ export interface UseEscalationAnalyticsParams {
  */
 export function useEscalationAnalytics(params: UseEscalationAnalyticsParams = {}) {
   const api = useSynapseApi();
+  const activeCity = useCityStore((s) => s.city);
+  const city = params.city ?? activeCity;
   const windowHours = params.windowHours ?? 24;
   return useQuery<EscalationAnalytics>({
-    queryKey: ["escalation-analytics", windowHours, params.city ?? null],
+    queryKey: metricQueryKey("escalation-analytics", city, { windowHours }),
     queryFn: () =>
       api.getEscalationAnalytics({
         window_hours: windowHours,

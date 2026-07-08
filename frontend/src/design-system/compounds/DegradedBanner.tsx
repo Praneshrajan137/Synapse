@@ -1,4 +1,5 @@
 import { usePosture } from "@hooks/use-posture";
+import { derivePostureBanner } from "@lib/posture-banner";
 import { useTranslation } from "react-i18next";
 
 /**
@@ -9,30 +10,28 @@ import { useTranslation } from "react-i18next";
  *
  * Renders nothing only when the orchestrator affirmatively reports a
  * healthy posture. Chroma-drained degraded colour (INV-CLR-016) + icon +
- * text — never colour alone (INV-CLR-011).
+ * text — never colour alone (INV-CLR-011). The posture→banner derivation is
+ * the pure `derivePostureBanner` helper (Property 32).
  */
 export function DegradedBanner() {
   const { t } = useTranslation("common");
   const posture = usePosture();
 
-  // Affirmatively healthy → no banner.
-  if (posture.isSuccess && !posture.data.degraded) return null;
   // Still loading the very first poll → nothing to assert yet.
   if (posture.isPending) return null;
 
-  const unknown = posture.isError;
-  const brownout = posture.data
-    ? Object.entries(posture.data.brownout).filter(([, level]) => level !== "NONE")
-    : [];
-  const openBreakers = posture.data
-    ? Object.entries(posture.data.breakers).filter(([, state]) => state !== "closed")
-    : [];
+  const state = derivePostureBanner({ isError: posture.isError, data: posture.data });
+  // Affirmatively healthy → no banner.
+  if (state.kind === "healthy") return null;
 
+  const unknown = state.kind === "unknown";
   const detail = unknown
     ? t("posture.unknown_detail")
     : [
-        ...brownout.map(([city, level]) => t("posture.brownout_item", { city, level })),
-        ...openBreakers.map(([name, state]) => t("posture.breaker_item", { name, state })),
+        ...state.brownout.map(([city, level]) => t("posture.brownout_item", { city, level })),
+        ...state.openBreakers.map(([name, breaker]) =>
+          t("posture.breaker_item", { name, state: breaker }),
+        ),
       ].join(" · ");
 
   return (

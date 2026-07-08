@@ -10,34 +10,16 @@ import {
 import { BrandMark } from "@ds/primitives";
 import { cn } from "@lib/cn";
 import { useEscalationStore } from "@state/escalation.store";
+import { useTranslation } from "react-i18next";
 import { NavLink, Outlet } from "react-router-dom";
 import { CommandPalette } from "./CommandPalette";
+import { PRIMARY_SURFACES } from "./primary-surfaces";
 
 // Nav grouped by the operator's loop (Sprint 18) — Monitor → Intervene →
 // Investigate → Configure — so the structure mirrors how the work actually
-// flows, not the order features were built. Routes are unchanged (muscle
-// memory preserved); only the visual grouping + order change.
-// Sprint 19 adds /operations (Standing Watch) to the Monitor group — the
-// aggregate, temporal, outcome-closing supervisory surface.
-type NavGroup = "Monitor" | "Intervene" | "Investigate" | "Configure";
-const NAV_ITEMS: ReadonlyArray<{
-  path: string;
-  label: string;
-  group: NavGroup;
-  end?: boolean;
-}> = [
-  { path: "/", label: "Mission Control", group: "Monitor", end: true },
-  { path: "/markets", label: "Live Markets", group: "Monitor" },
-  { path: "/operations", label: "Operations", group: "Monitor" },
-  { path: "/cockpit", label: "Override Cockpit", group: "Intervene" },
-  { path: "/ingress", label: "Ingress", group: "Intervene" },
-  { path: "/decisions", label: "Decision Theater", group: "Investigate" },
-  { path: "/agents", label: "Agent Council", group: "Investigate" },
-  { path: "/twin", label: "Twin Lab", group: "Investigate" },
-  { path: "/audit", label: "Audit Vault", group: "Investigate" },
-  { path: "/steering", label: "Steering", group: "Configure" },
-  { path: "/demo", label: "Demo Theater", group: "Configure" },
-];
+// flows, not the order features were built. The nav is DERIVED from the
+// `PRIMARY_SURFACES` route registry (`primary-surfaces.ts`) so the nav, the
+// command palette, and the coverage property test share one source of truth.
 
 /**
  * App shell. Top bar (brand + nav + city + operator), main outlet.
@@ -46,6 +28,7 @@ const NAV_ITEMS: ReadonlyArray<{
  * routes so KV-cache-like client-side render stays inexpensive.
  */
 export function Shell() {
+  const { t } = useTranslation("common");
   // Live count of decisions awaiting a human (I-5). Drives the Cockpit nav
   // badge so the human-in-the-loop backlog is visible from every surface.
   const pendingEscalations = useEscalationStore(
@@ -70,16 +53,16 @@ export function Shell() {
           </span>
         </div>
         <nav aria-label="Primary" className="flex flex-1 items-center gap-0.5 overflow-x-auto">
-          {NAV_ITEMS.map((item, i) => (
+          {PRIMARY_SURFACES.map((item, i) => (
             <div key={item.path} className="flex items-center">
               {/* thin divider between operator-loop groups */}
-              {i > 0 && NAV_ITEMS[i - 1]?.group !== item.group && (
+              {i > 0 && PRIMARY_SURFACES[i - 1]?.group !== item.group && (
                 <span aria-hidden className="mx-1.5 h-4 w-px bg-border" />
               )}
               <NavLink
                 to={item.path}
                 {...(item.end ? { end: item.end } : {})}
-                title={`${item.group} · ${item.label}`}
+                title={`${t(`nav.group.${item.group}`)} · ${t(item.labelKey)}`}
                 className={({ isActive }) =>
                   cn(
                     "relative whitespace-nowrap rounded px-3 py-2 text-xs font-medium transition-colors duration-fast ease-standard",
@@ -91,7 +74,7 @@ export function Shell() {
                   )
                 }
               >
-                {item.label}
+                {t(item.labelKey)}
                 {item.path === "/cockpit" && pendingEscalations > 0 && (
                   <span
                     className="ml-1.5 inline-flex min-w-4 items-center justify-center rounded-full bg-signal-danger/20 px-1 text-2xs font-semibold tabular-nums text-signal-danger"

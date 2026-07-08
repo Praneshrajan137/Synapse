@@ -10,9 +10,17 @@ import "@i18n/index";
 // ─── ProvenanceChip (FE-INV-034) ──────────────────────────────────────────
 
 describe("ProvenanceChip", () => {
-  it("renders nothing for a pre-ADR-044 proposal (no provenance)", () => {
-    const { container } = render(<ProvenanceChip provenance={null} />);
-    expect(container).toBeEmptyDOMElement();
+  it("discloses 'provenance unavailable' for a proposal with no provenance (Req 4.7)", () => {
+    render(<ProvenanceChip provenance={null} />);
+    const chip = screen.getByRole("img");
+    expect(chip).toHaveTextContent(/provenance unavailable/i);
+  });
+
+  it("discloses 'provenance unavailable' when provenance is incomplete (Req 4.7)", () => {
+    // model_version present but feature_source / confidence_basis missing.
+    render(<ProvenanceChip provenance={{ model_version: "registry-v1.2.3" }} />);
+    const chip = screen.getByRole("img");
+    expect(chip).toHaveTextContent(/provenance unavailable/i);
   });
 
   it("a degraded output is unmissable — label + drained colour class", () => {

@@ -71,6 +71,22 @@ export function Cockpit() {
   const pending = useMemo(() => entries.filter((e) => e.status === "pending"), [entries]);
   const [activeId, setActiveId] = useState<string | null>(null);
 
+  // Must-notice announcement (Req 9.3): the most-recently received pending
+  // escalation. The assertive live region re-announces whenever a new
+  // escalation arrives (distinct decision id → changed text), so a screen
+  // reader user is told an escalation needs judgement even while focus is
+  // elsewhere on the surface.
+  const newestArrival = useMemo(
+    () => pending.reduce<typeof pending[number] | null>(
+      (newest, e) => (newest === null || e.received_at > newest.received_at ? e : newest),
+      null,
+    ),
+    [pending],
+  );
+  const arrivalAnnouncement = newestArrival
+    ? `Escalation arrived: decision ${newestArrival.id.slice(0, 8)} at confidence ${newestArrival.message.confidence.toFixed(2)} needs human judgement.`
+    : "";
+
   // Keep an active id; default to the most-urgent pending entry.
   useEffect(() => {
     if (activeId && pending.some((p) => p.id === activeId)) return;
@@ -132,6 +148,9 @@ export function Cockpit() {
             {pending.length === 0
               ? "No escalations awaiting human judgement."
               : `${pending.length} escalations pending.`}
+          </output>
+          <output aria-live="assertive" data-testid="escalation-arrival" className="sr-only">
+            {arrivalAnnouncement}
           </output>
         </div>
       </header>

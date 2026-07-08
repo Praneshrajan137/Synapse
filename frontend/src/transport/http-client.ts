@@ -1,7 +1,14 @@
 import { decideRetry, sleep } from "@lib/jitter-retry";
 import { canonicalJson } from "@lib/json-canonical";
+import { log } from "@lib/log";
 import type { ZodSchema, ZodTypeAny, ZodTypeDef } from "zod";
-import { HttpError, NetworkError, RateLimitError, SchemaViolationError } from "./errors";
+import {
+  HttpError,
+  NetworkError,
+  RateLimitError,
+  SchemaViolationError,
+  TimeoutError,
+} from "./errors";
 
 // Typed HTTP client.
 // - Canonical JSON outbound (FE-INV-012 / I-8).
@@ -29,6 +36,13 @@ export interface RequestOptions<T> {
   readonly schema?: ZodSchema<T, ZodTypeDef, unknown>;
   readonly idempotent?: boolean;
   readonly schemaId?: string;
+  /**
+   * Overall wall-clock deadline (ms) for the request, spanning every retry.
+   * When the deadline elapses the in-flight fetch is aborted and a typed
+   * `TimeoutError` is thrown so callers can reject a hung run rather than wait
+   * forever (Req 7.6 — Twin Lab's ≤120s Tier-4 SLA). Omitted → no deadline.
+   */
+  readonly timeoutMs?: number;
 }
 
 const RETRYABLE_METHODS = new Set(["GET", "HEAD", "OPTIONS", "PUT", "DELETE"]);
@@ -71,16 +85,45 @@ async function request<T>(
   const token = config.getAccessToken?.();
   if (token) headers.set("Authorization", `Bearer ${token}`);
 
+  // Overall wall-clock deadline across every retry (Req 7.6). Each attempt gets
+  // its own AbortController, linked to any caller-supplied signal, plus a timer
+  // scoped to the remaining budget. A fired timer aborts the in-flight fetch
+  // and surfaces a typed TimeoutError (distinct from a caller abort).
+  const deadline = opts.timeoutMs != null ? Date.now() + opts.timeoutMs : null;
+
   let attempt = 0;
   // eslint-disable-next-line no-constant-condition
   while (true) {
+    const controller = new AbortController();
+    let timedOut = false;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+
+    const external = opts.signal;
+    const onExternalAbort = () => controller.abort();
+    if (external) {
+      if (external.aborted) controller.abort();
+      else external.addEventListener("abort", onExternalAbort, { once: true });
+    }
+
+    if (deadline != null) {
+      const remaining = deadline - Date.now();
+      if (remaining <= 0) {
+        if (external) external.removeEventListener("abort", onExternalAbort);
+        throw new TimeoutError(url, opts.timeoutMs as number);
+      }
+      timer = setTimeout(() => {
+        timedOut = true;
+        controller.abort();
+      }, remaining);
+    }
+
     try {
       const res = await fetch(url, {
         method,
         headers,
         body: bodyString ?? null,
         credentials: "include",
-        signal: opts.signal ?? null,
+        signal: controller.signal,
       });
 
       if (res.status === 401) {
@@ -130,6 +173,9 @@ async function request<T>(
       }
       return json as T;
     } catch (err) {
+      // A fired deadline surfaces as a typed TimeoutError, never as a retryable
+      // network blip — a hung run must be rejected, not retried forever.
+      if (timedOut) throw new TimeoutError(url, opts.timeoutMs as number);
       if (err instanceof HttpError || err instanceof SchemaViolationError) throw err;
       if ((err as Error)?.name === "AbortError") throw err;
       if (canRetry) {
@@ -141,6 +187,9 @@ async function request<T>(
         }
       }
       throw new NetworkError(url, err);
+    } finally {
+      if (timer) clearTimeout(timer);
+      if (external) external.removeEventListener("abort", onExternalAbort);
     }
   }
 }
@@ -179,11 +228,38 @@ function parseRetryAfterMs(value: string | null): number | null {
 function parseWithSchema<T>(schema: ZodTypeAny, raw: unknown, schemaId: string): T {
   const result = schema.safeParse(raw);
   if (!result.success) {
-    throw new SchemaViolationError(
-      schemaId,
-      result.error.issues.map((i) => ({ path: i.path, message: i.message })),
-      raw,
-    );
+    const issues = result.error.issues.map((i) => ({ path: i.path, message: i.message }));
+    // Fail-closed: emit a FIELD-WHITELISTED telemetry event and throw a typed
+    // SchemaViolationError (FE-INV-002/030, Req 1.2 / 14.2). Consumers route
+    // this to the `error` Universal_State; the unvalidated `raw` payload is
+    // NEVER rendered and NEVER forwarded in telemetry (it may carry sensitive
+    // data). Only the schema id, issue count, and the dotted field paths of
+    // each violation leave the client — no field values, no raw body.
+    emitSchemaViolationTelemetry(schemaId, issues);
+    throw new SchemaViolationError(schemaId, issues, raw);
   }
   return result.data as T;
+}
+
+/**
+ * Whitelisted schema-violation telemetry. Only these fields are forwarded:
+ * `kind`, `error`, `schemaId`, `issueCount`, and `paths` (the dotted field
+ * path of each issue). The raw payload and any field values are deliberately
+ * excluded so no unvalidated/possibly-sensitive data escapes (Req 14.2).
+ */
+function emitSchemaViolationTelemetry(
+  schemaId: string,
+  issues: ReadonlyArray<{ path: ReadonlyArray<string | number>; message: string }>,
+): void {
+  try {
+    log({
+      kind: "error",
+      error: "schema_violation",
+      schemaId,
+      issueCount: issues.length,
+      paths: issues.map((i) => i.path.join(".")),
+    });
+  } catch {
+    /* telemetry must never mask the original schema violation */
+  }
 }

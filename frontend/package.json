@@ -26,6 +26,8 @@
     "test:ui": "vitest --ui",
     "test:e2e": "playwright test",
     "test:e2e:ui": "playwright test --ui",
+    "test:visual": "playwright test --project=visual",
+    "test:visual:update": "playwright test --project=visual --update-snapshots",
     "test:demo": "playwright test --grep @demo",
     "test:a11y": "playwright test --grep @a11y",
     "storybook": "storybook dev -p 6006 --no-open",
@@ -34,9 +36,13 @@
     "domain:gen": "tsx scripts/gen-domain-zod.ts",
     "openapi:gen": "tsx scripts/gen-openapi.ts",
     "spec:check": "tsx scripts/check-fe-invariants.ts",
+    "contract:drift": "tsx spec/contract-fidelity/run.ts",
+    "effectiveness:ratchet": "tsx spec/effectiveness/run-ratchet.ts",
+    "effectiveness:real-stack-fidelity": "tsx spec/effectiveness/real-stack-fidelity.ts",
     "audit:licenses": "tsx scripts/audit-licenses.ts",
     "size": "size-limit",
     "lhci": "lhci autorun",
+    "lhci:mobile": "lhci autorun --config=lighthouserc.mobile.json",
     "mutation": "stryker run stryker.conf.json",
     "sbom": "pnpm dlx @cyclonedx/cdxgen@^10 -o sbom.cdx.json -t javascript .",
     "audit:supply": "pnpm audit --audit-level=high && node scripts/check-supply-chain.mjs"
@@ -94,6 +100,7 @@
   "devDependencies": {
     "@axe-core/playwright": "^4.10.0",
     "@biomejs/biome": "^1.9.4",
+    "@lhci/cli": "^0.14.0",
     "@playwright/test": "^1.48.0",
     "@size-limit/preset-app": "^11.1.6",
     "@storybook/addon-a11y": "^8.3.5",
@@ -162,5 +169,10 @@
     "auditConfigRationale": {
       "GHSA-5xrq-8626-4rwp": "vitest <4.1.0 — the Vitest UI dev server can serve arbitrary files when listening. Dev-only (devDependency @vitest/ui), reachable ONLY via the local `test:ui` script; never run in CI or production (CI runs `vitest run` headless). The patched range is vitest>=4.1.0, a major upgrade from our 2.x line that would break the current runner/config; tracked for a deliberate vitest 4 migration. Ignored at audit per the same dev-only-advisory policy as the `tmp` override above."
     }
+  },
+  "msw": {
+    "workerDirectory": [
+      "public"
+    ]
   }
 }

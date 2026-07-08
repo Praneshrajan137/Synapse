@@ -1,0 +1,39 @@
+{
+  "schemaVersion": 1,
+  "harnessVersion": "1.0.0",
+  "seed": 30000,
+  "rows": [
+    {
+      "job": "resolve-escalation-correctly",
+      "steps": 20,
+      "latencyMs": 15000,
+      "errorRate": 0
+    },
+    {
+      "job": "identify-degraded-agent",
+      "steps": 20,
+      "latencyMs": 15000,
+      "errorRate": 0
+    },
+    {
+      "job": "reconstruct-decision-rationale",
+      "steps": 20,
+      "latencyMs": 15000,
+      "errorRate": 0
+    },
+    {
+      "job": "adjust-steering-safely",
+      "steps": 20,
+      "latencyMs": 15000,
+      "errorRate": 0
+    },
+    {
+      "job": "catch-disruption-before-cascade",
+      "steps": 20,
+      "latencyMs": 15000,
+      "errorRate": 0
+    }
+  ],
+  "interruptionPrecision": 0.75,
+  "proxyCeiling": "Scripted_Proxy: this measurement demonstrates that an operator path EXISTS and is EFFICIENT (steps, time-to-complete, dead-ends), but it does NOT establish human comprehension. Real effectiveness requires real-user (RITE) testing with 3–5 operators."
+}

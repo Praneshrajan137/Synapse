@@ -1,4 +1,5 @@
 import type { EscalationMessage } from "@domain/escalation";
+import { normalizeViolations } from "@domain/escalation";
 import {
   AgentProposalChip,
   ConfidenceGauge,
@@ -54,6 +55,13 @@ export function EscalationCard({ message, receivedAt, pending, onCommit }: Escal
 
   const proposals = useMemo(() => message.proposals as Array<Record<string, unknown>>, [message]);
 
+  // Req 3.4/3.5: normalize once — every row gets code/message/severity (missing
+  // severity → medium) and no violation is ever dropped.
+  const violations = useMemo(
+    () => normalizeViolations(message.violations),
+    [message.violations],
+  );
+
   const paretoPoints: ParetoPoint[] = useMemo(
     () =>
       proposals.map((p, i) => {
@@ -95,7 +103,7 @@ export function EscalationCard({ message, receivedAt, pending, onCommit }: Escal
               <TierBadge tier={tier} />
             </div>
             <p className="mt-1 text-xs text-ink-muted">
-              {message.violations.length === 0 &&
+              {violations.length === 0 &&
                 (message.reason ?? "Escalated for human judgement")}
             </p>
             <p className="text-2xs text-ink-subtle">
@@ -108,32 +116,38 @@ export function EscalationCard({ message, receivedAt, pending, onCommit }: Escal
       {/* The Threshold spine — the operator always knows the cost of not acting. */}
       <ThresholdCountdown startedAtMs={startedAtMs} />
 
-      {/* FE-INV-038: every violation is rendered with its severity — never
-          collapsed to a count. The operator overriding a guardrail must see
-          exactly WHICH constraints fired and how hard. */}
-      {message.violations.length > 0 && (
+      {/* FE-INV-038 / Req 3.4-3.5: the guardrail-violations region is ALWAYS
+          rendered. When violations exist, every one is shown with its code,
+          message, and severity (missing severity → medium) — never collapsed to
+          a count. When none exist, an explicit "no violations recorded" region
+          is shown rather than omitting the region entirely. */}
+      {violations.length > 0 ? (
         <section aria-label="Guardrail violations" className="space-y-1.5">
           <h3 className="text-2xs uppercase tracking-wide text-ink-muted">
-            Guardrail violations ({message.violations.length})
+            Guardrail violations ({violations.length})
           </h3>
           <ul className="space-y-1">
-            {message.violations.map((v) => {
-              const severity = v.severity ?? "medium";
+            {violations.map((v, i) => {
               const tone =
-                severity === "critical" || severity === "high"
+                v.severity === "critical" || v.severity === "high"
                   ? "text-signal-danger"
-                  : severity === "medium"
+                  : v.severity === "medium"
                     ? "text-signal-warning"
                     : "text-ink-muted";
               return (
-                <li key={`${v.code}:${v.message}`} className="flex items-start gap-2 text-xs">
-                  <span className={`shrink-0 font-semibold uppercase ${tone}`}>{severity}</span>
+                <li key={`${v.code}:${v.message}:${i}`} className="flex items-start gap-2 text-xs">
+                  <span className={`shrink-0 font-semibold uppercase ${tone}`}>{v.severity}</span>
                   <span className="font-mono text-2xs text-ink-subtle">{v.code}</span>
                   <span className="text-ink-muted">{v.message}</span>
                 </li>
               );
             })}
           </ul>
+        </section>
+      ) : (
+        <section aria-label="Guardrail violations" className="space-y-1.5">
+          <h3 className="text-2xs uppercase tracking-wide text-ink-muted">Guardrail violations</h3>
+          <p className="text-xs text-ink-subtle">No violations recorded</p>
         </section>
       )}
 

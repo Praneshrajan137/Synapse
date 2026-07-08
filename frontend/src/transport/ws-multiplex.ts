@@ -14,6 +14,23 @@ import { FirehoseEnvelopeSchema, shapeRawEnvelope } from "./firehose-schema";
 
 export type WsState = "idle" | "connecting" | "open" | "closing" | "closed";
 
+/**
+ * Pure sequence-dedup decision (FE-INV-008/037, Req 10.6).
+ *
+ * Returns `true` iff a message carrying `seq` on a channel whose last-applied
+ * sequence is `lastSeq` should be applied. Sequences that are less than or
+ * equal to the last applied one are replays (or reordered duplicates from a
+ * post-reconnect `since_seq` catch-up) and are dropped, guaranteeing at-most-
+ * once application. `undefined` means nothing has been applied on the channel
+ * yet, so any non-negative sequence is fresh.
+ *
+ * Extracted as a standalone pure function so the at-most-once property
+ * (Property 33 / task 13.8) can exercise it directly without a live socket.
+ */
+export function isFreshSeq(lastSeq: number | undefined, seq: number): boolean {
+  return seq > (lastSeq ?? -1);
+}
+
 export interface WsMultiplexConfig {
   readonly url: () => string;
   readonly maxReconnectMs?: number;
@@ -115,8 +132,8 @@ export function createWsMultiplex(config: WsMultiplexConfig): WsMultiplex {
       if (env.kind === "heartbeat") return;
       const channel = env.kind === "envelope" ? env.topic : env.kind === "typed" ? env.type : "*";
       if (env.kind === "envelope") {
-        const prev = lastSeq.get(channel) ?? -1;
-        if (env.seq <= prev) return; // dedupe (FE-INV-008)
+        const prev = lastSeq.get(channel);
+        if (!isFreshSeq(prev, env.seq)) return; // dedupe (FE-INV-008/037)
         lastSeq.set(channel, env.seq);
       }
       emit(channel, env, raw);

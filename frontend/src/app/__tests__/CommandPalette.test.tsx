@@ -3,6 +3,9 @@ import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
 import { describe, expect, it } from "vitest";
+// i18next global bootstrap (registers the "common" namespace) — palette copy
+// resolves through the `en` catalog (Req 8.1).
+import "@i18n/index";
 
 function renderPalette() {
   return render(
@@ -53,5 +56,16 @@ describe("CommandPalette", () => {
     await screen.findByRole("combobox");
     const first = screen.getAllByRole("option")[0];
     expect(first?.getAttribute("aria-selected")).toBe("true");
+  });
+
+  it("exposes a Go-to command for every primary Surface (incl. Operations)", async () => {
+    const user = userEvent.setup();
+    renderPalette();
+    await user.keyboard("{Control>}k{/Control}");
+    const input = await screen.findByRole("combobox");
+    // Operations (Standing Watch) is a primary Surface — reachable by keyboard.
+    await user.type(input, "operations");
+    const options = screen.getAllByRole("option");
+    expect(options[0]).toHaveTextContent("Operations");
   });
 });

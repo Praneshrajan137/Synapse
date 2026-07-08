@@ -11,7 +11,7 @@ const ZNodeCounts = z
     skus: z.number().int().min(0).optional(),
     riders: z.number().int().min(0).optional(),
   })
-  .strict();
+  .passthrough();
 
 const ZSimulationMetrics = z
   .object({
@@ -20,7 +20,7 @@ const ZSimulationMetrics = z
     waste_rate: z.number().optional(),
     orders_per_hour: z.number().optional(),
   })
-  .strict()
+  .passthrough()
   .optional();
 
 export const TwinStateSchema = z
@@ -32,7 +32,7 @@ export const TwinStateSchema = z
     node_counts: ZNodeCounts.optional(),
     simulation_metrics: ZSimulationMetrics,
   })
-  .strict();
+  .passthrough();
 
 export type TwinState = z.infer<typeof TwinStateSchema>;
 
