@@ -175,7 +175,40 @@ invariants:
     assertion: "for each theme: wcag(text.primary, mix(text.primary,a_hover,surface)) >= wcag_text_normal and abs(apca) >= apca_primary_lc; same for mix(brand.base,a_selected,surface)"
     severity: high
 
-preconditions:
+  - id: "INV-CLR-019"
+    description: "atlas-console-elevation Property 20: every semantic colour token resolves to a concrete, non-empty value in EVERY Theme_Mode (light, dark, hc). hc is the [data-theme=\"hc\"] override layered over the :root/dark defaults in frontend/src/styles/tokens.css; a token not overridden by hc inherits the base value. An unresolved/empty/`initial` token fails the check naming the specific token and Theme_Mode, never substituting a raw colour literal (Req 5.2, 5.3)."
+    assertion: "for all semantic colour tokens t, for all mode in {light,dark,hc}: resolve(t, mode) is a concrete non-empty value (override-or-base cascade), never empty/initial; a miss fails naming (token, mode)"
+    severity: critical
+
+  - id: "INV-CLR-020"
+    description: "atlas-console-elevation Property 21: decision-tier lightness is strictly monotone (L(tier1) > L(tier2) > L(tier3) > L(tier4)) and the confidence diverging scale has non-decreasing OKLCH hue as confidence increases, in every theme — the ordinal (Lightness) and continuous (diverging) encodings never invert (Req 5.4)."
+    assertion: "for all themes: L(tier1) > L(tier2) > L(tier3) > L(tier4); and for all v1 <= v2 in [0,1]: hue(confidenceColor(v2)) >= hue(confidenceColor(v1))"
+    severity: critical
+
+  - id: "INV-CLR-021"
+    description: "atlas-console-elevation Property 22: WCAG 2.1 AA contrast holds for every text/component-on-surface pair in every theme (>= 4.5:1 body text, >= 3.0:1 large text and UI components) (Req 5.6)."
+    assertion: "for all contrast pairs (text,surface), for all themes: wcag(text, surface) >= wcag_text_normal (and >= wcag_ui_component)"
+    severity: critical
+
+  - id: "INV-CLR-022"
+    description: "atlas-console-elevation Property 23: absolute APCA Lc meets its emphasis-tier target (primary >= 75, secondary >= 60, tertiary >= 45) for every text-on-surface pair in every theme (Req 5.7)."
+    assertion: "for all contrast pairs (text,surface,tier), for all themes: abs(apca(text,surface)) >= apca_{tier}_lc"
+    severity: high
+
+  - id: "INV-CLR-023"
+    description: "atlas-console-elevation Property 24: all 28 unordered agent-colour pairs differ by at least the minimum pairwise deltaEOK under deuteranopia, protanopia, and tritanopia simulation in every theme (Req 5.8)."
+    assertion: "for all agent pairs (a,b), for all themes, for all cvd in {deuter,protan,trit}: deltaEOK(cvd(a),cvd(b)) >= agent_pair_min_deltaeok_cvd"
+    severity: critical
+
+  - id: "INV-CLR-024"
+    description: "atlas-console-elevation Property 25: the degraded state chroma is at/below degraded_max_chroma AND at least degraded_min_chroma_gap below the chroma of every full-saturation semantic state, in every theme (Req 5.9)."
+    assertion: "for all themes, for all full states s in {success,warning,danger,info}: C(degraded) <= degraded_max_chroma and C(degraded) <= C(s) - degraded_min_chroma_gap"
+    severity: high
+
+  - id: "INV-CLR-025"
+    description: "atlas-console-elevation Property 26: colour is never the sole channel — every confidence value maps to a textual zone label and every agent affordance carries a stable textual key plus a token reference, so colour-coded affordances always retain a non-colour (text/icon/shape) signal (Req 5.10)."
+    assertion: "for all v in [0,1]: confidenceZone(v) in {low,escalation,autonomous}; and for all agents a: a is a non-empty text key and agentVar(a) is a var(--color-agent-*) token reference"
+    severity: high
   - id: "PRE-CLR-001"
     description: "All token JSON files validate against the DTCG token schema"
     check: "jsonschema.validate(token_file, dtcg_tokens_schema) passes for every file in tokens/"

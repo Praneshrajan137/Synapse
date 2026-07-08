@@ -49,10 +49,25 @@
 
   /* scalar tokens (theme-agnostic) */
   --factor-agentstate-acting: 1;
+  --factor-agentstate-asking: 0.4;
+  --factor-agentstate-completing: 1;
+  --factor-agentstate-confident: 0.9;
   --factor-agentstate-debating: 0.8;
+  --factor-agentstate-delegating: 0.7;
   --factor-agentstate-escalated: 1;
+  --factor-agentstate-escalating: 1;
+  --factor-agentstate-failing: 1;
+  --factor-agentstate-handing-off: 0.72;
+  --factor-agentstate-idle: 0.3;
   --factor-agentstate-interrupted: 0.25;
+  --factor-agentstate-interrupting: 0.25;
+  --factor-agentstate-planning: 0.65;
+  --factor-agentstate-recovering: 0.5;
+  --factor-agentstate-searching: 0.6;
+  --factor-agentstate-streaming: 0.85;
+  --factor-agentstate-succeeding: 1;
   --factor-agentstate-thinking: 0.55;
+  --factor-agentstate-uncertain: 0.45;
   --factor-agentstate-waiting: 0.35;
   --motion-duration-arrive: 280ms;
   --motion-duration-base: 200ms;

@@ -24,6 +24,7 @@
     "culori": "^4.0.1"
   },
   "devDependencies": {
+    "fast-check": "^3.23.2",
     "vitest": "^3.0.5"
   }
 }
