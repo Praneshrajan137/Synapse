@@ -22,10 +22,12 @@ export function metricQueryKey(
   params: Readonly<Record<string, unknown>> = {},
 ): readonly [string, City, Record<string, unknown>] {
   // Drop `undefined` entries so an omitted optional param does not fork the
-  // cache key from a param explicitly set to undefined.
-  const normalized: Record<string, unknown> = {};
-  for (const key of Object.keys(params)) {
-    if (params[key] !== undefined) normalized[key] = params[key];
-  }
+  // cache key from a param explicitly set to undefined. Built via
+  // `Object.fromEntries` (define-property semantics) rather than assignment so a
+  // param literally named `__proto__` becomes a real OWN property instead of
+  // hitting the prototype setter and corrupting the key.
+  const normalized: Record<string, unknown> = Object.fromEntries(
+    Object.entries(params).filter(([, value]) => value !== undefined),
+  );
   return [scope, city, normalized];
 }
