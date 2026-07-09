@@ -48,9 +48,7 @@ export function normalizeViolations(
 ): readonly NormalizedViolation[] {
   return violations.map((violation) => {
     const code =
-      typeof violation.code === "string" && violation.code.length > 0
-        ? violation.code
-        : "UNKNOWN";
+      typeof violation.code === "string" && violation.code.length > 0 ? violation.code : "UNKNOWN";
     const message =
       typeof violation.message === "string" && violation.message.length > 0
         ? violation.message
@@ -63,9 +61,7 @@ export function normalizeViolations(
 }
 
 function isViolationSeverity(value: unknown): value is ViolationSeverity {
-  return (
-    value === "low" || value === "medium" || value === "high" || value === "critical"
-  );
+  return value === "low" || value === "medium" || value === "high" || value === "critical";
 }
 
 const ZRecommendedAction = z.record(z.unknown()).optional();

@@ -12,20 +12,15 @@
 
 import fc from "fast-check";
 import { describe, expect, it } from "vitest";
-import { classifyCoverage } from "../contract-coverage";
 import type {
   CapabilityEntitlement,
   CapabilityKind,
   ConsoleCapability,
   CoverageStatus,
 } from "../../../spec/contract-fidelity/types";
+import { classifyCoverage } from "../contract-coverage";
 
-const ALL_STATUSES: readonly CoverageStatus[] = [
-  "covered",
-  "partial",
-  "uncovered",
-  "out-of-scope",
-];
+const ALL_STATUSES: readonly CoverageStatus[] = ["covered", "partial", "uncovered", "out-of-scope"];
 
 const capabilityKindArb: fc.Arbitrary<CapabilityKind> = fc.constantFrom<CapabilityKind>(
   "http",
@@ -102,8 +97,8 @@ describe("classifyCoverage — Property 1: Coverage classification soundness", (
 //
 // Validates: Requirements 1.5, 1.6
 
-import { computeDriftFailure, diffContractFields } from "../contract-coverage";
 import type { CoverageRow } from "../../../spec/contract-fidelity/types";
+import { computeDriftFailure, diffContractFields } from "../contract-coverage";
 
 // A field-name arbitrary drawn from a small pool so schema/contract sets
 // realistically overlap rather than being almost-always disjoint.
@@ -123,11 +118,7 @@ const fieldNameArb: fc.Arbitrary<string> = fc.constantFrom(
 const fieldListArb: fc.Arbitrary<string[]> = fc.array(fieldNameArb, { maxLength: 12 });
 
 // An entitled row: status is one of the three in-scope statuses.
-const entitledStatusArb = fc.constantFrom<CoverageRow["status"]>(
-  "covered",
-  "partial",
-  "uncovered",
-);
+const entitledStatusArb = fc.constantFrom<CoverageRow["status"]>("covered", "partial", "uncovered");
 
 const coverageRowArb = (
   statusArb: fc.Arbitrary<CoverageRow["status"]>,
@@ -168,9 +159,7 @@ describe("computeDriftFailure — Property 2: Drift failure is exactly the entit
   it("returns true iff some row is uncovered or partial", () => {
     fc.assert(
       fc.property(fc.array(anyRowArb, { maxLength: 30 }), (rows) => {
-        const expected = rows.some(
-          (row) => row.status === "uncovered" || row.status === "partial",
-        );
+        const expected = rows.some((row) => row.status === "uncovered" || row.status === "partial");
         expect(computeDriftFailure(rows)).toBe(expected);
       }),
       { numRuns: 200 },

@@ -12,13 +12,13 @@
 // malformed JSON, out-of-range numeric input, a rejected sign-in), so it
 // verifies the shipped forms rather than a re-implementation.
 
-import { HttpError } from "@transport/errors";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { HttpError } from "@transport/errors";
 import fc from "fast-check";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { RejectForm } from "@surfaces/override-cockpit/RejectForm";
 import { ModifyForm } from "@surfaces/override-cockpit/ModifyForm";
+import { RejectForm } from "@surfaces/override-cockpit/RejectForm";
 import { ScenarioBuilder } from "@surfaces/twin-lab/ScenarioBuilder";
 
 // Login talks to the transport layer through `useSynapseApi`; stub it so a
@@ -30,8 +30,8 @@ vi.mock("@hooks/use-synapse-api", () => ({
 // Toasts are irrelevant here — keep them inert so no <Toaster> is required.
 vi.mock("sonner", () => ({ toast: { error: vi.fn(), success: vi.fn(), warning: vi.fn() } }));
 
-import { Login } from "@surfaces/auth/Login";
 import { useSessionStore } from "@state/session.store";
+import { Login } from "@surfaces/auth/Login";
 import { MemoryRouter } from "react-router-dom";
 
 afterEach(() => {
@@ -58,7 +58,10 @@ function expectAssociatedError(input: HTMLElement): void {
   expect(describedBy, "invalid input must reference its error via aria-describedby").toBeTruthy();
 
   const errorEl = document.getElementById(describedBy!);
-  expect(errorEl, `aria-describedby "${describedBy}" must resolve to a present element`).not.toBeNull();
+  expect(
+    errorEl,
+    `aria-describedby "${describedBy}" must resolve to a present element`,
+  ).not.toBeNull();
   expect(errorEl!.getAttribute("role")).toBe("alert");
   expect(errorEl!.textContent?.trim().length ?? 0).toBeGreaterThan(0);
 }

@@ -19,8 +19,8 @@
 // exercised end to end. The steering store runs for real with a controllable
 // audit writer. React Testing Library + Vitest.
 
-import { OversightControls } from "@ds/compounds/OversightControls";
 import type { EscalationMessage } from "@domain/escalation";
+import { OversightControls } from "@ds/compounds/OversightControls";
 import { useEscalationStore } from "@state/escalation.store";
 import {
   DEFAULT_PARETO_WEIGHTS,
@@ -90,7 +90,7 @@ describe("OversightControls — full keyboard operability (Req 3.3)", () => {
   it("exposes an aria-keyshortcut on every oversight action", () => {
     render(
       wrapper(
-        <OversightControls role="ops" decisionConfidence={0.95} decisionId={DECISION_ID} />,
+        <OversightControls operatorRole="ops" decisionConfidence={0.95} decisionId={DECISION_ID} />,
       ),
     );
 
@@ -123,7 +123,7 @@ describe("OversightControls — full keyboard operability (Req 3.3)", () => {
     submitOverrideMock.mockResolvedValue({ audit_escalation_id: 1 });
     render(
       wrapper(
-        <OversightControls role="ops" decisionConfidence={0.95} decisionId={DECISION_ID} />,
+        <OversightControls operatorRole="ops" decisionConfidence={0.95} decisionId={DECISION_ID} />,
       ),
     );
 
@@ -159,7 +159,7 @@ describe("OversightControls — full keyboard operability (Req 3.3)", () => {
     render(
       wrapper(
         <OversightControls
-          role="ops"
+          operatorRole="ops"
           decisionConfidence={0.95}
           decisionId={DECISION_ID}
           onEscalateNext={onEscalateNext}
@@ -181,7 +181,11 @@ describe("OversightControls — full keyboard operability (Req 3.3)", () => {
   it("keeps a viewer's controls keyboard-inert (shortcuts disarmed, Req 3.9)", () => {
     render(
       wrapper(
-        <OversightControls role="viewer" decisionConfidence={0.95} decisionId={DECISION_ID} />,
+        <OversightControls
+          operatorRole="viewer"
+          decisionConfidence={0.95}
+          decisionId={DECISION_ID}
+        />,
       ),
     );
     fireEvent.keyDown(document.body, { key: "a" });
@@ -204,7 +208,7 @@ describe("OversightControls — audit-row-first override (Req 3.1)", () => {
     seedPendingEscalation();
     render(
       wrapper(
-        <OversightControls role="ops" decisionConfidence={0.95} decisionId={DECISION_ID} />,
+        <OversightControls operatorRole="ops" decisionConfidence={0.95} decisionId={DECISION_ID} />,
       ),
     );
 
@@ -228,7 +232,7 @@ describe("OversightControls — audit-row-first override (Req 3.1)", () => {
     seedPendingEscalation();
     render(
       wrapper(
-        <OversightControls role="ops" decisionConfidence={0.95} decisionId={DECISION_ID} />,
+        <OversightControls operatorRole="ops" decisionConfidence={0.95} decisionId={DECISION_ID} />,
       ),
     );
 
@@ -245,7 +249,9 @@ describe("OversightControls — audit-row-first steering (Req 3.6, 3.7)", () => 
     const writer = vi.fn(async () => undefined);
     setSteeringWriter(writer);
     render(
-      wrapper(<OversightControls role="ops" decisionConfidence={0.95} steeringTarget="cost" />),
+      wrapper(
+        <OversightControls operatorRole="ops" decisionConfidence={0.95} steeringTarget="cost" />,
+      ),
     );
 
     const slider = screen.getByLabelText(/Steer/);
@@ -266,7 +272,9 @@ describe("OversightControls — audit-row-first steering (Req 3.6, 3.7)", () => 
       throw new Error("steering audit rejected");
     });
     render(
-      wrapper(<OversightControls role="ops" decisionConfidence={0.95} steeringTarget="cost" />),
+      wrapper(
+        <OversightControls operatorRole="ops" decisionConfidence={0.95} steeringTarget="cost" />,
+      ),
     );
 
     const slider = screen.getByLabelText(/Steer/);

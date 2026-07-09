@@ -6,9 +6,9 @@ import type { FreshnessAlert } from "@domain/freshness-alert";
 import type { PricingUpdate } from "@domain/pricing-update";
 import type { RoutePlan } from "@domain/route-plan";
 import type { TwinDivergenceEvent } from "@domain/twin-state";
+import { type RingBuffer, appendBounded, newBounded } from "@lib/ring-buffer";
 import type { WsState } from "@transport/ws-multiplex";
 import { create } from "zustand";
-import { appendBounded, newBounded, type RingBuffer } from "@lib/ring-buffer";
 
 // Per-channel bounded ring buffers (append-only — FE-INV-017). Switching
 // city flushes the channels (the underlying topics carry city-scoped data,

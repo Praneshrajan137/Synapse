@@ -1,6 +1,6 @@
-import { describe, expect, it } from "vitest";
+import { type ProvenanceLike, provenanceStatus } from "@ds/compounds/ProvenanceChip";
 import fc from "fast-check";
-import { provenanceStatus, type ProvenanceLike } from "@ds/compounds/ProvenanceChip";
+import { describe, expect, it } from "vitest";
 
 // Feature: atlas-console-elevation
 // Property 17: Degraded honesty marker is never suppressed

@@ -1,8 +1,13 @@
-import { Button } from "@ds/primitives";
 import type { GuardrailViolation } from "@domain/escalation";
 import { normalizeViolations } from "@domain/escalation";
+import { Button } from "@ds/primitives";
 import { cn } from "@lib/cn";
-import type { BlastRadius, ErvReason, ErvStakesField, Reversibility } from "@lib/expected-review-value";
+import type {
+  BlastRadius,
+  ErvReason,
+  ErvStakesField,
+  Reversibility,
+} from "@lib/expected-review-value";
 import {
   type FocusAction,
   type OperatorRole,
@@ -123,7 +128,7 @@ export const DEFAULT_OVERSIGHT_CAPABILITIES: readonly OversightCapability[] = [
 
 export interface OversightControlsProps {
   /** Authenticated operator role; `viewer`/`anonymous` see disabled controls (Req 3.9). */
-  readonly role: OperatorRole;
+  readonly operatorRole: OperatorRole;
   /** Confidence of the decision under review; feeds Expected_Review_Value (Req 3.2, 12.3). */
   readonly decisionConfidence: number;
   /**
@@ -212,7 +217,7 @@ const STEERING_LABEL: Record<keyof ParetoWeights, string> = {
 };
 
 export function OversightControls({
-  role,
+  operatorRole: role,
   decisionConfidence,
   decisionReversibility = null,
   decisionBlastRadius = null,
@@ -395,7 +400,9 @@ export function OversightControls({
             <span aria-hidden="true" className="font-mono">
               ⚠
             </span>
-            <span>{reviewDemandMessage(decisionReversibility, decisionBlastRadius, reviewFocus.reason)}</span>
+            <span>
+              {reviewDemandMessage(decisionReversibility, decisionBlastRadius, reviewFocus.reason)}
+            </span>
           </p>
         )}
         {/* Honest degradation (Req 12.5): the stakes fields the Backend_Contract

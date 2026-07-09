@@ -9,7 +9,7 @@
 //   • a null/empty Pareto front renders an explicit "null-front" empty state.
 
 import type { ConsensusDecision } from "@domain/consensus-decision";
-import { clampPhase, MAX_PHASE, MIN_PHASE, reconstructCouncil } from "@lib/replay";
+import { MAX_PHASE, MIN_PHASE, clampPhase, reconstructCouncil } from "@lib/replay";
 import fc from "fast-check";
 import { describe, expect, it } from "vitest";
 
@@ -62,8 +62,7 @@ describe("reconstructCouncil — Property 38: honest reconstruction", () => {
     fc.assert(
       fc.property(decisionArb, (decision) => {
         const { debate } = reconstructCouncil(decision);
-        const hasDeliberation =
-          decision.debate_rounds > 0 && decision.context_messages.length > 0;
+        const hasDeliberation = decision.debate_rounds > 0 && decision.context_messages.length > 0;
 
         if (hasDeliberation) {
           expect(debate.kind).toBe("recorded");

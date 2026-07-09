@@ -1,10 +1,10 @@
-import { describe, expect, it } from "vitest";
 import fc from "fast-check";
+import { describe, expect, it } from "vitest";
 import {
+  type Interruption,
+  SEEDED_INTERRUPTIONS,
   interruptionPrecision,
   seededInterruptionPrecision,
-  SEEDED_INTERRUPTIONS,
-  type Interruption,
 } from "../interruption-precision";
 
 // Feature: atlas-console-effectiveness
@@ -94,7 +94,9 @@ describe("Property 18: Interruption_Precision is the warranted fraction, bounded
     fc.assert(
       fc.property(fc.integer({ min: 1, max: 200 }), (n) => {
         const allWarranted: Interruption[] = Array.from({ length: n }, () => ({ warranted: true }));
-        const noneWarranted: Interruption[] = Array.from({ length: n }, () => ({ warranted: false }));
+        const noneWarranted: Interruption[] = Array.from({ length: n }, () => ({
+          warranted: false,
+        }));
         expect(interruptionPrecision(allWarranted)).toBe(1);
         expect(interruptionPrecision(noneWarranted)).toBe(0);
       }),

@@ -1,12 +1,12 @@
-import { describe, expect, it } from "vitest";
-import fc from "fast-check";
+import type { EscalationMessage } from "@domain/escalation";
 import { isFreshSeq } from "@transport/ws-multiplex";
+import fc from "fast-check";
+import { describe, expect, it } from "vitest";
 import {
+  type EscalationEntry,
   appendEscalationEntry,
   markEscalationActed,
-  type EscalationEntry,
 } from "../escalation.store";
-import type { EscalationMessage } from "@domain/escalation";
 
 // Feature: atlas-console-elevation
 // Property 33: Replayed real-time messages apply at most once

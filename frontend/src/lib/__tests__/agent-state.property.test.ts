@@ -79,10 +79,14 @@ function buildEvents(s: Scenario): CognitionEvent[] {
 describe("deriveAgentState — Property 6: derivation is honest", () => {
   it("returns `unavailable` for an empty event stream (never fabricates)", () => {
     fc.assert(
-      fc.property(agentArb, fc.integer({ min: BASE_NOW, max: BASE_NOW + 1_000_000 }), (agent, nowMs) => {
-        const result = deriveAgentState([], agent, nowMs, STALE_MS);
-        expect(result.kind).toBe("unavailable");
-      }),
+      fc.property(
+        agentArb,
+        fc.integer({ min: BASE_NOW, max: BASE_NOW + 1_000_000 }),
+        (agent, nowMs) => {
+          const result = deriveAgentState([], agent, nowMs, STALE_MS);
+          expect(result.kind).toBe("unavailable");
+        },
+      ),
       { numRuns: 200 },
     );
   });

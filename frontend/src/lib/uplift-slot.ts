@@ -64,7 +64,7 @@ export const UPLIFT_BACKEND_GAP = {
   name: "system-level-uplift-measure",
   rationale:
     "The Backend_Contract exposes no system-level uplift measure; the " +
-    "Operations uplift slot renders \"awaiting uplift measure\" and records " +
+    'Operations uplift slot renders "awaiting uplift measure" and records ' +
     "this Cross_Boundary_Dependency as a backend gap rather than fabricating a value.",
 } as const;
 

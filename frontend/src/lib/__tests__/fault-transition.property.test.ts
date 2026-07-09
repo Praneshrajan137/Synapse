@@ -1,7 +1,7 @@
-import { describe, expect, it } from "vitest";
 import fc from "fast-check";
-import { resolveFault, type FaultEvent } from "../fault-transition";
-import { type UniversalState } from "../universal-state";
+import { describe, expect, it } from "vitest";
+import { type FaultEvent, resolveFault } from "../fault-transition";
+import type { UniversalState } from "../universal-state";
 
 // Feature: atlas-console-effectiveness
 // Property 11: Fault/connectivity transition resolution is total and distinct —

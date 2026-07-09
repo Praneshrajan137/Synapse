@@ -106,15 +106,18 @@ describe("defaultFocusAction — Property 9: Sub-threshold confidence demotes Ap
 
   it("never approves a non-finite confidence", () => {
     fc.assert(
-      fc.property(fc.constantFrom(Number.NaN, Number.POSITIVE_INFINITY, Number.NEGATIVE_INFINITY), (confidence) => {
-        const action = defaultFocusAction(confidence);
-        if (confidence === Number.POSITIVE_INFINITY) {
-          // +∞ >= gate is true — approve is the correct (and safe) result.
-          expect(action).toBe("approve");
-        } else {
-          expect(action).not.toBe("approve");
-        }
-      }),
+      fc.property(
+        fc.constantFrom(Number.NaN, Number.POSITIVE_INFINITY, Number.NEGATIVE_INFINITY),
+        (confidence) => {
+          const action = defaultFocusAction(confidence);
+          if (confidence === Number.POSITIVE_INFINITY) {
+            // +∞ >= gate is true — approve is the correct (and safe) result.
+            expect(action).toBe("approve");
+          } else {
+            expect(action).not.toBe("approve");
+          }
+        },
+      ),
       { numRuns: 100 },
     );
   });
@@ -141,15 +144,11 @@ describe("defaultFocusAction — Property 9: Sub-threshold confidence demotes Ap
 describe("oversight gating — Property 10: Authorization and visibility predicate", () => {
   it("a backend gap (null endpoint) is never actionable for any role", () => {
     fc.assert(
-      fc.property(
-        roleArb,
-        capabilityArb,
-        (role, capability) => {
-          const gapped: OversightCapability = { ...capability, backingEndpoint: null };
-          expect(isBackendGap(gapped)).toBe(true);
-          expect(isCapabilityActionable(role, gapped)).toBe(false);
-        },
-      ),
+      fc.property(roleArb, capabilityArb, (role, capability) => {
+        const gapped: OversightCapability = { ...capability, backingEndpoint: null };
+        expect(isBackendGap(gapped)).toBe(true);
+        expect(isCapabilityActionable(role, gapped)).toBe(false);
+      }),
       { numRuns: 300 },
     );
   });
@@ -252,26 +251,20 @@ describe("clampSteering — Property 11: Steering values are clamped and sanitiz
 
   it("clamps a finite value above 1 down to 1", () => {
     fc.assert(
-      fc.property(
-        fc.double({ min: 1, max: Number.MAX_VALUE, noNaN: true }),
-        (x) => {
-          fc.pre(x > 1);
-          expect(clampSteering(x)).toBe(1);
-        },
-      ),
+      fc.property(fc.double({ min: 1, max: Number.MAX_VALUE, noNaN: true }), (x) => {
+        fc.pre(x > 1);
+        expect(clampSteering(x)).toBe(1);
+      }),
       { numRuns: 200 },
     );
   });
 
   it("clamps a finite value below 0 up to 0", () => {
     fc.assert(
-      fc.property(
-        fc.double({ min: -Number.MAX_VALUE, max: 0, noNaN: true }),
-        (x) => {
-          fc.pre(x < 0);
-          expect(clampSteering(x)).toBe(0);
-        },
-      ),
+      fc.property(fc.double({ min: -Number.MAX_VALUE, max: 0, noNaN: true }), (x) => {
+        fc.pre(x < 0);
+        expect(clampSteering(x)).toBe(0);
+      }),
       { numRuns: 200 },
     );
   });

@@ -23,14 +23,10 @@
 // output (its live-state dot's inline background), so it verifies the shipped
 // component, not a re-implementation.
 
-import {
-  AGENT_STATES,
-  AGENT_STATE_DESCRIPTORS,
-  type AgentState,
-} from "@domain/agent-state";
+import { AGENT_STATES, AGENT_STATE_DESCRIPTORS, type AgentState } from "@domain/agent-state";
 import type { RenderableAgentState } from "@domain/agent-state";
-import { AGENT_NAMES, agentColorVar, type AgentName } from "@lib/agent-identity";
 import { AgentStatePresenter } from "@ds/compounds/AgentStatePresenter";
+import { AGENT_NAMES, type AgentName, agentColorVar } from "@lib/agent-identity";
 import { cleanup, render } from "@testing-library/react";
 import fc from "fast-check";
 import { afterEach, describe, expect, it } from "vitest";

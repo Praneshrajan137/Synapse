@@ -1,16 +1,16 @@
-import { describe, expect, it } from "vitest";
 import fc from "fast-check";
+import { describe, expect, it } from "vitest";
 import {
-  compareScorecard,
   DEFAULT_RATCHET_TOLERANCE,
   type RatchetTolerance,
+  compareScorecard,
 } from "../effectiveness-ratchet";
 import {
-  buildScorecard,
-  JOB_ORDER,
   type EffectivenessScorecard,
+  JOB_ORDER,
   type JobToBeDone,
   type ScorecardRow,
+  buildScorecard,
 } from "../effectiveness-scorecard";
 
 // Feature: atlas-console-effectiveness
@@ -66,7 +66,10 @@ const arbIp: fc.Arbitrary<number | null> = fc.oneof(
  * beyond-tolerance regressions all occur.
  */
 const arbScorecardPair = fc
-  .uniqueArray(fc.constantFrom<JobToBeDone>(...JOB_ORDER), { minLength: 1, maxLength: JOB_ORDER.length })
+  .uniqueArray(fc.constantFrom<JobToBeDone>(...JOB_ORDER), {
+    minLength: 1,
+    maxLength: JOB_ORDER.length,
+  })
   .chain((jobs) =>
     fc.record({
       jobs: fc.constant(jobs),
@@ -142,7 +145,14 @@ function oracle(
   for (const f of fresh.rows) {
     const b = byJob.get(f.job);
     if (b === undefined) continue; // fresh-only job: skipped
-    consider(f.job, "steps", b.steps, f.steps, f.steps > b.steps, f.steps > b.steps * (1 + tol.stepsPct));
+    consider(
+      f.job,
+      "steps",
+      b.steps,
+      f.steps,
+      f.steps > b.steps,
+      f.steps > b.steps * (1 + tol.stepsPct),
+    );
     consider(
       f.job,
       "latencyMs",
@@ -318,20 +328,22 @@ describe("Property 5: the ratchet fails iff a metric regresses beyond tolerance,
 
   it("interruption_precision is neutral when either scorecard's value is null", () => {
     const arbMixedIp = arbScorecardPair.chain(({ baseline, fresh, tol }) =>
-      fc.record({
-        baseNull: fc.boolean(),
-        freshNull: fc.boolean(),
-      }).map(({ baseNull, freshNull }) => {
-        const b = buildScorecard({
-          rows: [...baseline.rows],
-          interruptionPrecision: baseNull ? null : (baseline.interruptionPrecision ?? 0.5),
-        });
-        const f = buildScorecard({
-          rows: [...fresh.rows],
-          interruptionPrecision: freshNull ? null : (fresh.interruptionPrecision ?? 0.5),
-        });
-        return { baseline: b, fresh: f, tol, atLeastOneNull: baseNull || freshNull };
-      }),
+      fc
+        .record({
+          baseNull: fc.boolean(),
+          freshNull: fc.boolean(),
+        })
+        .map(({ baseNull, freshNull }) => {
+          const b = buildScorecard({
+            rows: [...baseline.rows],
+            interruptionPrecision: baseNull ? null : (baseline.interruptionPrecision ?? 0.5),
+          });
+          const f = buildScorecard({
+            rows: [...fresh.rows],
+            interruptionPrecision: freshNull ? null : (fresh.interruptionPrecision ?? 0.5),
+          });
+          return { baseline: b, fresh: f, tol, atLeastOneNull: baseNull || freshNull };
+        }),
     );
 
     fc.assert(
@@ -340,9 +352,7 @@ describe("Property 5: the ratchet fails iff a metric regresses beyond tolerance,
         if (atLeastOneNull) {
           // No regression is ever attributed to interruption-precision, and it
           // does not block a baseline advance, when either side is null.
-          expect(
-            result.regressions.some((r) => r.metric === "interruptionPrecision"),
-          ).toBe(false);
+          expect(result.regressions.some((r) => r.metric === "interruptionPrecision")).toBe(false);
         }
       }),
       { numRuns: 100 },

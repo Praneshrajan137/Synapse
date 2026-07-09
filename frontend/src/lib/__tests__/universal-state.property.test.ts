@@ -1,9 +1,9 @@
-import { describe, expect, it } from "vitest";
 import fc from "fast-check";
+import { describe, expect, it } from "vitest";
 import {
-  resolveUniversalState,
   type UniversalState,
   type UniversalStateInput,
+  resolveUniversalState,
 } from "../universal-state";
 
 // Feature: atlas-console-elevation

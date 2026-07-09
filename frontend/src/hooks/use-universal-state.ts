@@ -1,7 +1,4 @@
-import {
-  type UniversalState,
-  resolveUniversalState,
-} from "@lib/universal-state";
+import { type UniversalState, resolveUniversalState } from "@lib/universal-state";
 import { useOnlineStatus } from "./use-online-status";
 import { usePosture } from "./use-posture";
 

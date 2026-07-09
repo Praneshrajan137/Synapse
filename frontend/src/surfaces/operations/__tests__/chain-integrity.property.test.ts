@@ -1,6 +1,6 @@
-import { describe, expect, it } from "vitest";
 import fc from "fast-check";
-import { chainIntegrity, type ChainIntegrity } from "../logic";
+import { describe, expect, it } from "vitest";
+import { type ChainIntegrity, chainIntegrity } from "../logic";
 
 // Feature: atlas-console-elevation
 // Property 19: Audit-chain integrity is an exhaustive tri-state

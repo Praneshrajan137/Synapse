@@ -1,7 +1,7 @@
 import { useSynapseApi } from "@hooks/use-synapse-api";
 import { useSessionStore } from "@state/session.store";
-import { HttpError } from "@transport/errors";
 import { renderHook } from "@testing-library/react";
+import { HttpError } from "@transport/errors";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 // Req 12.2 / FE-INV-023 — a 401 on any wrapped API call triggers a SINGLE

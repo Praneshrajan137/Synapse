@@ -77,10 +77,11 @@ export function Cockpit() {
   // reader user is told an escalation needs judgement even while focus is
   // elsewhere on the surface.
   const newestArrival = useMemo(
-    () => pending.reduce<typeof pending[number] | null>(
-      (newest, e) => (newest === null || e.received_at > newest.received_at ? e : newest),
-      null,
-    ),
+    () =>
+      pending.reduce<(typeof pending)[number] | null>(
+        (newest, e) => (newest === null || e.received_at > newest.received_at ? e : newest),
+        null,
+      ),
     [pending],
   );
   const arrivalAnnouncement = newestArrival

@@ -1,7 +1,7 @@
-import { describe, expect, it } from "vitest";
-import fc from "fast-check";
-import { derivePostureBanner } from "../posture-banner";
 import type { SystemPosture } from "@transport/synapse-api";
+import fc from "fast-check";
+import { describe, expect, it } from "vitest";
+import { derivePostureBanner } from "../posture-banner";
 
 // Feature: atlas-console-elevation
 // Property 32: Degraded posture is honest and never false-healthy
@@ -81,8 +81,7 @@ describe("Property 32: degraded posture is honest and never false-healthy", () =
     fc.assert(
       fc.property(arbPosture, (data) => {
         const banner = derivePostureBanner({ isError: false, data });
-        const hasNamedDegradation =
-          banner.brownout.length > 0 || banner.openBreakers.length > 0;
+        const hasNamedDegradation = banner.brownout.length > 0 || banner.openBreakers.length > 0;
         if (hasNamedDegradation) {
           expect(banner.kind).toBe("degraded");
         }

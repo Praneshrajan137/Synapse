@@ -10,13 +10,7 @@
 // totality and distinctness across all inputs.
 
 /** The six canonical render conditions a data-bearing Surface must define. */
-export type UniversalState =
-  | "loading"
-  | "empty"
-  | "error"
-  | "degraded"
-  | "offline"
-  | "populated";
+export type UniversalState = "loading" | "empty" | "error" | "degraded" | "offline" | "populated";
 
 export interface UniversalStateInput {
   readonly isLoading: boolean;

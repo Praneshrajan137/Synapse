@@ -1,5 +1,5 @@
-import { z } from "zod";
 import { AGENT_STATE_FACTOR } from "@lib/chromatics";
+import { z } from "zod";
 
 // Canonical Agent-State Model (Atlas Console Elevation, Req 2).
 //

@@ -47,8 +47,7 @@ export function newBounded<T>(cap: number): RingBuffer<T> {
  * immutability FE-INV-017 relied on).
  */
 export function appendBounded<T>(buf: RingBuffer<T>, item: T): RingBuffer<T> {
-  const items =
-    buf.items.length >= buf.cap ? [...buf.items.slice(1), item] : [...buf.items, item];
+  const items = buf.items.length >= buf.cap ? [...buf.items.slice(1), item] : [...buf.items, item];
   return { cap: buf.cap, items };
 }
 

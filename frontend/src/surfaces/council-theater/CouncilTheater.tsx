@@ -1,8 +1,8 @@
 import { ConsensusChoreography, PageHeader } from "@ds/compounds";
 import { useDecisionQuery } from "@hooks/use-decision";
 import { useOnlineStatus } from "@hooks/use-online-status";
-import { resolveUniversalState } from "@lib/universal-state";
 import { parseSharedPhase } from "@lib/replay";
+import { resolveUniversalState } from "@lib/universal-state";
 import { useCallback, useMemo } from "react";
 import { Link, useParams, useSearchParams } from "react-router-dom";
 
@@ -23,10 +23,7 @@ export function CouncilTheater() {
   const query = useDecisionQuery(id);
 
   const [searchParams, setSearchParams] = useSearchParams();
-  const initialPhase = useMemo(
-    () => parseSharedPhase(searchParams.get("phase")),
-    [searchParams],
-  );
+  const initialPhase = useMemo(() => parseSharedPhase(searchParams.get("phase")), [searchParams]);
 
   const onPhaseChange = useCallback(
     (phase: number) => {

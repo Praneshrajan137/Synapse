@@ -60,9 +60,7 @@ describe("whitelistTelemetryFields — Property 43: telemetry payloads are field
     fc.assert(
       fc.property(eventArb, (event) => {
         const out = whitelistTelemetryFields(event);
-        const expected = Object.keys(event).filter(
-          (k) => ALLOWED.has(k) && event[k] !== undefined,
-        );
+        const expected = Object.keys(event).filter((k) => ALLOWED.has(k) && event[k] !== undefined);
         expect(new Set(Object.keys(out))).toEqual(new Set(expected));
         // Values are passed through untouched (never fabricated) ...
         for (const k of expected) expect(out[k]).toBe(event[k]);

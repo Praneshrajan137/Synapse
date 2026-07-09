@@ -177,7 +177,13 @@ export function ScenarioBuilder({ pending, onRun }: ScenarioBuilderProps) {
         </label>
       </div>
 
-      <Button type="submit" variant="primary" size="md" disabled={pending || invalid} className="w-full">
+      <Button
+        type="submit"
+        variant="primary"
+        size="md"
+        disabled={pending || invalid}
+        className="w-full"
+      >
         {pending ? "Running Monte Carlo…" : "Run simulation"}
       </Button>
       <p className="text-2xs text-ink-subtle">

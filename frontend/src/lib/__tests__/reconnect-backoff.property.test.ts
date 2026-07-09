@@ -1,5 +1,5 @@
-import { describe, expect, it } from "vitest";
 import fc from "fast-check";
+import { describe, expect, it } from "vitest";
 import { reconnectDelayMs } from "../reconcile";
 
 // Feature: atlas-console-effectiveness

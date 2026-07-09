@@ -66,16 +66,16 @@ describe("AgentStatePresenter — honest non-live markers", () => {
   });
 
   it("renders an explicit non-colour 'not-live' marker when the stream is stale (Req 2.6)", () => {
-    render(<AgentStatePresenter state={{ kind: "not-live", sinceMs: 1_000 }} agent="supplier_trust" />);
+    render(
+      <AgentStatePresenter state={{ kind: "not-live", sinceMs: 1_000 }} agent="supplier_trust" />,
+    );
     const el = screen.getByLabelText("Supplier Trust: not-live");
     expect(screen.getByText("not-live")).toBeInTheDocument();
     expect(el.getAttribute("data-agent-state")).toBe("not-live");
   });
 
   it("never paints an identity hue for a non-live marker (never shows a frozen state as active)", () => {
-    const { container } = render(
-      <AgentStatePresenter state={{ kind: "not-live", sinceMs: 0 }} />,
-    );
+    const { container } = render(<AgentStatePresenter state={{ kind: "not-live", sinceMs: 0 }} />);
     const dot = container.querySelector("[aria-hidden='true']") as HTMLElement;
     expect(dot.style.background).toBe("");
   });

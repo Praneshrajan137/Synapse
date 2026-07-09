@@ -1,8 +1,4 @@
-import {
-  AWAITING_UPLIFT_MEASURE,
-  resolveUpliftSlot,
-  type UpliftMeasure,
-} from "@lib/uplift-slot";
+import { AWAITING_UPLIFT_MEASURE, type UpliftMeasure, resolveUpliftSlot } from "@lib/uplift-slot";
 
 /**
  * Operations uplift slot (Req 17) — a DEFINED, always-present slot reserving a

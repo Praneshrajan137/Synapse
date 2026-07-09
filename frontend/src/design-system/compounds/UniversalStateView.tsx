@@ -48,8 +48,7 @@ const DEFAULTS = {
   errorTitle: "Failed to load",
   errorDetail: "The request failed. This is not an empty result — retry to try again.",
   degradedTitle: "Running degraded",
-  degradedDetail:
-    "The system is in a degraded posture — some data may be delayed or unavailable.",
+  degradedDetail: "The system is in a degraded posture — some data may be delayed or unavailable.",
   offlineTitle: "You're offline",
   offlineDetail: "Showing nothing rather than stale data. Reconnect to resume live updates.",
 } as const;

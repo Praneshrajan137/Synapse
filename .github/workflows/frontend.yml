@@ -164,6 +164,14 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     needs: build
+    # Non-blocking on introduction: committed screenshot baselines do not exist
+    # yet and can only be generated on this Linux/Chromium runner (Playwright's
+    # toHaveScreenshot writes-then-fails on first run). The job still RUNS and
+    # uploads the `visual-regression-report` artifact; the baselines are then
+    # committed from that artifact and this flag is removed to make the gate
+    # blocking (see frontend/tests/e2e/visual/README.md). Mirrors the repo's
+    # informational-until-baselined pattern (`pnpm size || true`, ADR-039).
+    continue-on-error: true
     # Same run policy as `e2e`: PR-preview and `v*` tags only. The gate compares
     # deterministic screenshots (fixed viewport/theme/seed, disabled animation,
     # fixed fonts, masked volatile regions) against committed baselines using

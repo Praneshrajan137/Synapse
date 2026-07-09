@@ -1,5 +1,5 @@
-import { describe, expect, it } from "vitest";
 import fc from "fast-check";
+import { describe, expect, it } from "vitest";
 import { decideRetry, fullJitterDelay } from "../jitter-retry";
 
 // Feature: atlas-console-elevation
@@ -45,16 +45,22 @@ describe("Property 31: retry policy is correct across failure classes", () => {
 
   it("retries transient network errors bounded by the cap on retryable attempts", () => {
     fc.assert(
-      fc.property(arbRetryableAttempt, arbCapMs, arbBaseMs, arbRandom, (attempt, capMs, baseMs, r) => {
-        const d = decideRetry({
-          attempt,
-          isNetworkError: true,
-          options: { capMs, baseMs, maxAttempts: DEFAULT_MAX, random: () => r },
-        });
-        expect(d.retry).toBe(true);
-        expect(d.delayMs).toBeGreaterThanOrEqual(0);
-        expect(d.delayMs).toBeLessThanOrEqual(capMs);
-      }),
+      fc.property(
+        arbRetryableAttempt,
+        arbCapMs,
+        arbBaseMs,
+        arbRandom,
+        (attempt, capMs, baseMs, r) => {
+          const d = decideRetry({
+            attempt,
+            isNetworkError: true,
+            options: { capMs, baseMs, maxAttempts: DEFAULT_MAX, random: () => r },
+          });
+          expect(d.retry).toBe(true);
+          expect(d.delayMs).toBeGreaterThanOrEqual(0);
+          expect(d.delayMs).toBeLessThanOrEqual(capMs);
+        },
+      ),
       { numRuns: 300 },
     );
   });
@@ -76,9 +82,7 @@ describe("Property 31: retry policy is correct across failure classes", () => {
   });
 
   it("short-circuits (no retry) on non-429 4xx regardless of attempt", () => {
-    const arb4xxNon429 = fc
-      .integer({ min: 400, max: 499 })
-      .filter((s) => s !== 429);
+    const arb4xxNon429 = fc.integer({ min: 400, max: 499 }).filter((s) => s !== 429);
     fc.assert(
       fc.property(fc.integer({ min: 0, max: DEFAULT_MAX - 2 }), arb4xxNon429, (attempt, status) => {
         const d = decideRetry({ attempt, status, options: { maxAttempts: DEFAULT_MAX } });
@@ -113,11 +117,17 @@ describe("Property 31: retry policy is correct across failure classes", () => {
 
   it("full-jitter delay always lands within [0, cap]", () => {
     fc.assert(
-      fc.property(fc.integer({ min: 0, max: 40 }), arbCapMs, arbBaseMs, arbRandom, (attempt, capMs, baseMs, r) => {
-        const delay = fullJitterDelay(attempt, { capMs, baseMs, random: () => r });
-        expect(delay).toBeGreaterThanOrEqual(0);
-        expect(delay).toBeLessThanOrEqual(capMs);
-      }),
+      fc.property(
+        fc.integer({ min: 0, max: 40 }),
+        arbCapMs,
+        arbBaseMs,
+        arbRandom,
+        (attempt, capMs, baseMs, r) => {
+          const delay = fullJitterDelay(attempt, { capMs, baseMs, random: () => r });
+          expect(delay).toBeGreaterThanOrEqual(0);
+          expect(delay).toBeLessThanOrEqual(capMs);
+        },
+      ),
       { numRuns: 300 },
     );
   });

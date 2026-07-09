@@ -64,13 +64,7 @@ describe("TrustTrackRecord surface (Req 11)", () => {
   });
 
   it("flags a thin sample as provisional and always discloses window + as-of (Req 11.4)", () => {
-    render(
-      <TrustTrackRecord
-        nowIso={AS_OF}
-        windowLabel="Last 30 days"
-        outcomes={[outcome()]}
-      />,
-    );
+    render(<TrustTrackRecord nowIso={AS_OF} windowLabel="Last 30 days" outcomes={[outcome()]} />);
     expect(screen.getByText(/provisional/i)).toBeInTheDocument();
     expect(screen.getByText(/Last 30 days/)).toBeInTheDocument();
     expect(screen.getByText(new RegExp(AS_OF))).toBeInTheDocument();

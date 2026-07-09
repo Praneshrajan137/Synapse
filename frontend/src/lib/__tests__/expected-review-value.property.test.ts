@@ -154,10 +154,14 @@ describe("expectedReviewValue — Property 15: Stakes escalate review above the 
   });
 
   it("holds the gate boundary exactly: irreversible at 0.80 confidence still escalates", () => {
-    expect(expectedReviewValue({ confidence: GATE, reversibility: "irreversible" }).escalate).toBe(true);
+    expect(expectedReviewValue({ confidence: GATE, reversibility: "irreversible" }).escalate).toBe(
+      true,
+    );
     expect(expectedReviewValue({ confidence: GATE, blastRadius: "high" }).escalate).toBe(true);
     // A perfectly confident machine does not buy out of stakes review.
-    expect(expectedReviewValue({ confidence: 1, reversibility: "irreversible" }).escalate).toBe(true);
+    expect(expectedReviewValue({ confidence: 1, reversibility: "irreversible" }).escalate).toBe(
+      true,
+    );
     expect(expectedReviewValue({ confidence: 1, blastRadius: "high" }).escalate).toBe(true);
   });
 });
@@ -178,23 +182,28 @@ describe("expectedReviewValue — Property 15: Stakes escalate review above the 
 describe("expectedReviewValue — Property 16: Honest degradation when stakes fields are absent", () => {
   it("flags each absent stakes field and degrades iff any field is absent", () => {
     fc.assert(
-      fc.property(unitConfidenceArb, optionalReversibilityArb, optionalBlastRadiusArb, (confidence, reversibility, blastRadius) => {
-        const result = expectedReviewValue({ confidence, reversibility, blastRadius });
+      fc.property(
+        unitConfidenceArb,
+        optionalReversibilityArb,
+        optionalBlastRadiusArb,
+        (confidence, reversibility, blastRadius) => {
+          const result = expectedReviewValue({ confidence, reversibility, blastRadius });
 
-        const reversibilityAbsent = reversibility === null;
-        const blastAbsent = blastRadius === null;
+          const reversibilityAbsent = reversibility === null;
+          const blastAbsent = blastRadius === null;
 
-        // Each absent field — and only an absent field — is flagged unavailable.
-        expect(result.fieldsUnavailable.includes("reversibility")).toBe(reversibilityAbsent);
-        expect(result.fieldsUnavailable.includes("blastRadius")).toBe(blastAbsent);
+          // Each absent field — and only an absent field — is flagged unavailable.
+          expect(result.fieldsUnavailable.includes("reversibility")).toBe(reversibilityAbsent);
+          expect(result.fieldsUnavailable.includes("blastRadius")).toBe(blastAbsent);
 
-        // Degraded exactly when at least one stakes field is absent.
-        expect(result.degraded).toBe(reversibilityAbsent || blastAbsent);
+          // Degraded exactly when at least one stakes field is absent.
+          expect(result.degraded).toBe(reversibilityAbsent || blastAbsent);
 
-        // An absent field NEVER fabricates its stakes escalation reason.
-        if (reversibilityAbsent) expect(result.reason).not.toBe("irreversible");
-        if (blastAbsent) expect(result.reason).not.toBe("high-blast");
-      }),
+          // An absent field NEVER fabricates its stakes escalation reason.
+          if (reversibilityAbsent) expect(result.reason).not.toBe("irreversible");
+          if (blastAbsent) expect(result.reason).not.toBe("high-blast");
+        },
+      ),
       { numRuns: 100 },
     );
   });
@@ -230,7 +239,11 @@ describe("expectedReviewValue — Property 16: Honest degradation when stakes fi
           // Exactly one stakes field present (the escalating driver); the other absent.
           const result =
             driver === "irreversible"
-              ? expectedReviewValue({ confidence, reversibility: "irreversible", blastRadius: null })
+              ? expectedReviewValue({
+                  confidence,
+                  reversibility: "irreversible",
+                  blastRadius: null,
+                })
               : expectedReviewValue({ confidence, reversibility: null, blastRadius: "high" });
 
           // Present field still escalates on its genuine stakes…
@@ -239,7 +252,9 @@ describe("expectedReviewValue — Property 16: Honest degradation when stakes fi
 
           // …while the absent companion is honestly flagged and marks degradation.
           expect(result.degraded).toBe(true);
-          expect(result.fieldsUnavailable).toContain(driver === "irreversible" ? "blastRadius" : "reversibility");
+          expect(result.fieldsUnavailable).toContain(
+            driver === "irreversible" ? "blastRadius" : "reversibility",
+          );
         },
       ),
       { numRuns: 100 },

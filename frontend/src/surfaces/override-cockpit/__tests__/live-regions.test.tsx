@@ -46,10 +46,10 @@ vi.mock("@hooks/use-synapse-api", () => ({
 const mockPosture = vi.hoisted(() => vi.fn());
 vi.mock("@hooks/use-posture", () => ({ usePosture: mockPosture }));
 
-import { Cockpit } from "@surfaces/override-cockpit/Cockpit";
 import { DegradedBanner } from "@ds/compounds/DegradedBanner";
-import { useOverrideMutation } from "@surfaces/override-cockpit/useOverrideMutation";
 import { useEscalationStore } from "@state/escalation.store";
+import { Cockpit } from "@surfaces/override-cockpit/Cockpit";
+import { useOverrideMutation } from "@surfaces/override-cockpit/useOverrideMutation";
 
 const DECISION_ID = "11111111-1111-4111-8111-111111111111";
 

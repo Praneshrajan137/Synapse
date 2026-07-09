@@ -7,13 +7,8 @@
 //   • the result is always a subset of the input in original order — the
 //     function never fabricates a tool that was not recorded.
 
-import {
-  FULL_TOOLSET_MIN_TIER,
-  RL_TOOL_PREFIX,
-  tierOrdinal,
-  visibleTools,
-} from "@lib/replay";
 import type { Tier } from "@domain/primitives";
+import { FULL_TOOLSET_MIN_TIER, RL_TOOL_PREFIX, tierOrdinal, visibleTools } from "@lib/replay";
 import fc from "fast-check";
 import { describe, expect, it } from "vitest";
 

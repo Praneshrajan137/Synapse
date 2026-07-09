@@ -10,8 +10,8 @@
 
 import {
   DEFAULT_VIOLATION_SEVERITY,
-  VIOLATION_SEVERITIES,
   type GuardrailViolation,
+  VIOLATION_SEVERITIES,
   normalizeViolations,
 } from "@domain/escalation";
 import fc from "fast-check";
@@ -79,8 +79,7 @@ describe("normalizeViolations — Property 12: complete rendering with severity"
         const normalized = normalizeViolations(violations);
         violations.forEach((input, i) => {
           const rawSeverity = (input as { severity?: unknown }).severity;
-          const wasCanonical =
-            typeof rawSeverity === "string" && SEVERITY_SET.has(rawSeverity);
+          const wasCanonical = typeof rawSeverity === "string" && SEVERITY_SET.has(rawSeverity);
           if (!wasCanonical) {
             expect(normalized[i]!.severity).toBe(DEFAULT_VIOLATION_SEVERITY);
           } else {

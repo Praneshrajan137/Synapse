@@ -1,7 +1,7 @@
-import { describe, expect, it } from "vitest";
-import fc from "fast-check";
-import { burnSeverityWord, deriveBurnSeverity, type BurnSeverityInput } from "../logic";
 import type { SloSeverity } from "@domain/operations";
+import fc from "fast-check";
+import { describe, expect, it } from "vitest";
+import { type BurnSeverityInput, burnSeverityWord, deriveBurnSeverity } from "../logic";
 
 // Feature: atlas-console-elevation
 // Property 34: SLO burn is honest and never false-healthy

@@ -13,9 +13,9 @@
 import {
   AGENT_STATES,
   AGENT_STATE_DESCRIPTORS,
+  type AgentState,
   AgentStateSchema,
   agentStateDescriptor,
-  type AgentState,
 } from "@domain/agent-state";
 import fc from "fast-check";
 import { describe, expect, it } from "vitest";

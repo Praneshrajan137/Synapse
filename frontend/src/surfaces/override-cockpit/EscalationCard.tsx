@@ -57,10 +57,7 @@ export function EscalationCard({ message, receivedAt, pending, onCommit }: Escal
 
   // Req 3.4/3.5: normalize once — every row gets code/message/severity (missing
   // severity → medium) and no violation is ever dropped.
-  const violations = useMemo(
-    () => normalizeViolations(message.violations),
-    [message.violations],
-  );
+  const violations = useMemo(() => normalizeViolations(message.violations), [message.violations]);
 
   const paretoPoints: ParetoPoint[] = useMemo(
     () =>
@@ -103,8 +100,7 @@ export function EscalationCard({ message, receivedAt, pending, onCommit }: Escal
               <TierBadge tier={tier} />
             </div>
             <p className="mt-1 text-xs text-ink-muted">
-              {violations.length === 0 &&
-                (message.reason ?? "Escalated for human judgement")}
+              {violations.length === 0 && (message.reason ?? "Escalated for human judgement")}
             </p>
             <p className="text-2xs text-ink-subtle">
               Received {fmt.relativeTime(new Date(receivedAt).toISOString())}

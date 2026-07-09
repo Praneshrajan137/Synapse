@@ -1,11 +1,11 @@
-import { describe, expect, it } from "vitest";
 import fc from "fast-check";
+import { describe, expect, it } from "vitest";
 import {
+  NO_VALUE_MARKER,
+  PROVISIONAL_THRESHOLD,
   formatMetric,
   hasScoredEvidence,
   isProvisional,
-  NO_VALUE_MARKER,
-  PROVISIONAL_THRESHOLD,
 } from "../logic";
 
 // Feature: atlas-console-elevation

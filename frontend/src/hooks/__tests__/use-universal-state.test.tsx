@@ -47,12 +47,12 @@ describe("useUniversalState", () => {
 
   it("distinguishes empty (no data yet) from error (failed to load)", () => {
     expect(
-      renderHook(() => useUniversalState({ isLoading: false, isError: false, itemCount: 0 }))
-        .result.current,
+      renderHook(() => useUniversalState({ isLoading: false, isError: false, itemCount: 0 })).result
+        .current,
     ).toBe("empty");
     expect(
-      renderHook(() => useUniversalState({ isLoading: false, isError: true, itemCount: 0 }))
-        .result.current,
+      renderHook(() => useUniversalState({ isLoading: false, isError: true, itemCount: 0 })).result
+        .current,
     ).toBe("error");
   });
 

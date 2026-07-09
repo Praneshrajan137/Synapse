@@ -1,11 +1,11 @@
-import { describe, expect, it } from "vitest";
 import fc from "fast-check";
+import { describe, expect, it } from "vitest";
 import {
-  emptyReconcileState,
-  reconcile,
   type ReconcileState,
   type Row,
   type RowStatus,
+  emptyReconcileState,
+  reconcile,
 } from "../reconcile";
 
 // Feature: atlas-console-effectiveness
@@ -55,11 +55,7 @@ function buildState(rows: readonly Row[]): ReconcileState {
 }
 
 /** Acted-sticky reference: acted iff the pre-drop row OR any replay entry is acted. */
-function expectedStatus(
-  state: ReconcileState,
-  replay: readonly Row[],
-  seq: number,
-): RowStatus {
+function expectedStatus(state: ReconcileState, replay: readonly Row[], seq: number): RowStatus {
   const fromState = state.rows.get(seq)?.status;
   const anyActed =
     fromState === "acted" || replay.some((r) => r.seq === seq && r.status === "acted");
@@ -73,10 +69,7 @@ describe("Property 8: reconcile yields the deduplicated union with acted rows pr
         const state = buildState(preRows);
         const result = reconcile(state, replay);
 
-        const union = new Set<number>([
-          ...preRows.map((r) => r.seq),
-          ...replay.map((r) => r.seq),
-        ]);
+        const union = new Set<number>([...preRows.map((r) => r.seq), ...replay.map((r) => r.seq)]);
         const resultSeqs = new Set<number>(result.rows.keys());
 
         // No duplicates (a Set/Map cannot hold a seq twice) and no seq lost or

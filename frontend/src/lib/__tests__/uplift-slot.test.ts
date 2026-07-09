@@ -2,8 +2,8 @@ import { describe, expect, it } from "vitest";
 import {
   AWAITING_UPLIFT_MEASURE,
   UPLIFT_BACKEND_GAP,
-  resolveUpliftSlot,
   type UpliftMeasure,
+  resolveUpliftSlot,
 } from "../uplift-slot";
 
 function measure(overrides: Partial<UpliftMeasure> = {}): UpliftMeasure {

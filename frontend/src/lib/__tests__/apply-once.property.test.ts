@@ -1,6 +1,6 @@
-import { describe, expect, it } from "vitest";
 import fc from "fast-check";
-import { applyOnce, newBounded, type RingBuffer } from "../ring-buffer";
+import { describe, expect, it } from "vitest";
+import { type RingBuffer, applyOnce, newBounded } from "../ring-buffer";
 
 // Feature: atlas-console-effectiveness
 // Property 7: A message whose sequence was already applied is dropped, so no
@@ -88,24 +88,19 @@ describe("Property 7: at-most-once application under a firehose replay", () => {
 
   it("drops a message whose seq was already applied, leaving the buffer unchanged", () => {
     fc.assert(
-      fc.property(
-        arbCap,
-        fc.integer({ min: 0, max: 1000 }),
-        fc.integer(),
-        (cap, seq, tag) => {
-          const buf = newBounded<Msg>(cap);
-          const msg = { seq, tag };
-          // First application succeeds and appends.
-          const first = applyOnce(buf, new Set<number>(), msg);
-          expect(first.applied).toBe(true);
-          expect(first.buf.items).toEqual([msg]);
-          // A second message with the same seq is dropped: buffer returned unchanged.
-          const dup = { seq, tag: tag + 1 };
-          const second = applyOnce(first.buf, new Set<number>([seq]), dup);
-          expect(second.applied).toBe(false);
-          expect(second.buf).toBe(first.buf);
-        },
-      ),
+      fc.property(arbCap, fc.integer({ min: 0, max: 1000 }), fc.integer(), (cap, seq, tag) => {
+        const buf = newBounded<Msg>(cap);
+        const msg = { seq, tag };
+        // First application succeeds and appends.
+        const first = applyOnce(buf, new Set<number>(), msg);
+        expect(first.applied).toBe(true);
+        expect(first.buf.items).toEqual([msg]);
+        // A second message with the same seq is dropped: buffer returned unchanged.
+        const dup = { seq, tag: tag + 1 };
+        const second = applyOnce(first.buf, new Set<number>([seq]), dup);
+        expect(second.applied).toBe(false);
+        expect(second.buf).toBe(first.buf);
+      }),
       { numRuns: 100 },
     );
   });

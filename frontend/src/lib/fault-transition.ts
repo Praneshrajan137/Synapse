@@ -19,9 +19,9 @@
 // response) restore the healthy `populated` state.
 
 import {
-  resolveUniversalState,
   type UniversalState,
   type UniversalStateInput,
+  resolveUniversalState,
 } from "./universal-state";
 
 /**

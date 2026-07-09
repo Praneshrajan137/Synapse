@@ -1,7 +1,7 @@
-import { describe, expect, it } from "vitest";
-import fc from "fast-check";
-import { outcomeMix } from "../logic";
 import type { CalibrationBin } from "@domain/operations";
+import fc from "fast-check";
+import { describe, expect, it } from "vitest";
+import { outcomeMix } from "../logic";
 
 // Feature: atlas-console-elevation
 // Property 14: Decision outcomes partition into a tri-state

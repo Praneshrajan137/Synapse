@@ -22,8 +22,8 @@ import type { EscalationMessage } from "@domain/escalation";
 import { CouncilStrip } from "@ds/compounds/CouncilStrip";
 import { SyntheticBadge } from "@ds/compounds/SyntheticBadge";
 import { AGENT_LABEL, AGENT_NAMES, type AgentName } from "@lib/agent-identity";
-import { useFirehoseStore } from "@state/firehose.store";
 import type { EscalationEntry } from "@state/escalation.store";
+import { useFirehoseStore } from "@state/firehose.store";
 import { cleanup, render, screen, within } from "@testing-library/react";
 import fc from "fast-check";
 import { MemoryRouter } from "react-router-dom";
@@ -99,9 +99,7 @@ function renderAnimatedState(state: AnimatedState, agent: AgentName, confidence:
     case "acting-pulse": {
       // An agent contributing to a live decision pulses; the status word and
       // `data-process-state` attribute carry "acting" without the animation.
-      render(
-        <CouncilStrip states={{ [agent]: { status: "healthy", active: true } }} />,
-      );
+      render(<CouncilStrip states={{ [agent]: { status: "healthy", active: true } }} />);
       const cell = screen.getByLabelText(new RegExp(AGENT_LABEL[agent], "i"));
       // Motion channel present (token-governed animation utility)…
       const dot = cell.querySelector(`.${ANIMATION_CLASS[state]}`);
@@ -169,9 +167,7 @@ describe("Motion System — Property 27: motion is never the sole information ch
     "decision-arrival",
   );
   const agentArb: fc.Arbitrary<AgentName> = fc.constantFrom(...AGENT_NAMES);
-  const confidenceArb: fc.Arbitrary<number> = fc
-    .integer({ min: 0, max: 100 })
-    .map((n) => n / 100);
+  const confidenceArb: fc.Arbitrary<number> = fc.integer({ min: 0, max: 100 }).map((n) => n / 100);
 
   it("every animated state retains a static representation under reduced motion", () => {
     fc.assert(

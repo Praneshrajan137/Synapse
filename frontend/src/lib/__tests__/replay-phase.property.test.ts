@@ -8,7 +8,7 @@
 //   • an absent, empty, whitespace-only, or non-numeric parameter falls back to
 //     the decision's terminal phase (itself clamped defensively).
 
-import { clampPhase, MAX_PHASE, MIN_PHASE, parseReplayPhase } from "@lib/replay";
+import { MAX_PHASE, MIN_PHASE, clampPhase, parseReplayPhase } from "@lib/replay";
 import fc from "fast-check";
 import { describe, expect, it } from "vitest";
 

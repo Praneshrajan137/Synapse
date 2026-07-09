@@ -1,7 +1,7 @@
-import { describe, expect, it } from "vitest";
-import fc from "fast-check";
-import { formatConfidence } from "../logic";
 import { type ChromaticTheme, confidenceColor } from "@lib/chromatics";
+import fc from "fast-check";
+import { describe, expect, it } from "vitest";
+import { formatConfidence } from "../logic";
 
 // Feature: atlas-console-elevation
 // Property 13: Decisions carry two-decimal confidence, a gate-anchored color, and numeric text

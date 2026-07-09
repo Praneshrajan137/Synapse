@@ -16,9 +16,7 @@ import { describe, expect, it } from "vitest";
 const SAFE_FIELDS = new Set<string>(AUDIT_EXPORT_FIELDS);
 
 // Extra keys that must NEVER appear in the export (operator PII + passthrough).
-const piiKeyArb = fc
-  .string({ minLength: 1 })
-  .filter((k) => !SAFE_FIELDS.has(k));
+const piiKeyArb = fc.string({ minLength: 1 }).filter((k) => !SAFE_FIELDS.has(k));
 
 const auditRowArb: fc.Arbitrary<AuditRow> = fc
   .record({
@@ -67,7 +65,7 @@ describe("toAuditExportRow — Property 39: decision-safe fields only", () => {
     );
   });
 
-  it("copies each safe field faithfully and collapses a missing city to \"\"", () => {
+  it('copies each safe field faithfully and collapses a missing city to ""', () => {
     fc.assert(
       fc.property(auditRowArb, (row) => {
         const exported = toAuditExportRow(row);

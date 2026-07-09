@@ -1,11 +1,11 @@
 import { OperatorIdentity } from "@ds/compounds";
 import { cn } from "@lib/cn";
 import {
-  aggregateTrack,
   AWAITING_SCORED_OUTCOMES,
   DEFAULT_WINDOW_LABEL,
   MIN_SCORED,
   type ScoredOutcome,
+  aggregateTrack,
 } from "@lib/trust-track-record";
 import { useState } from "react";
 
