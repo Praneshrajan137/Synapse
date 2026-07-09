@@ -1,5 +1,6 @@
 import { Badge } from "@ds/primitives";
 import { fmt } from "@lib/formatters";
+import { chainIntegrity } from "@surfaces/operations/logic";
 import { useTranslation } from "react-i18next";
 
 interface ChainIntegrityChipProps {
@@ -23,10 +24,12 @@ interface ChainIntegrityChipProps {
 export function ChainIntegrityChip({ verified, prevHash, currentHash }: ChainIntegrityChipProps) {
   const { t } = useTranslation("common");
 
-  if (verified === null || verified === undefined) {
+  const state = chainIntegrity(verified);
+
+  if (state === "pre-chain") {
     return <Badge tone="neutral">{t("chain.legacy")}</Badge>;
   }
-  if (verified) {
+  if (state === "verified") {
     return (
       <Badge tone="success">
         <span aria-hidden>✓ </span>

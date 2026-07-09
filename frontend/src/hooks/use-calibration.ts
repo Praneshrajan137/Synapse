@@ -1,5 +1,7 @@
 import type { CalibrationResponse } from "@domain/operations";
 import type { City } from "@domain/primitives";
+import { metricQueryKey } from "@lib/query-keys";
+import { useCityStore } from "@state/city.store";
 import { useQuery } from "@tanstack/react-query";
 import { useSynapseApi } from "./use-synapse-api";
 
@@ -17,10 +19,12 @@ export interface UseCalibrationParams {
  */
 export function useCalibration(params: UseCalibrationParams = {}) {
   const api = useSynapseApi();
+  const activeCity = useCityStore((s) => s.city);
+  const city = params.city ?? activeCity;
   const windowHours = params.windowHours ?? 168;
   const includeSynthetic = params.includeSynthetic ?? false;
   return useQuery<CalibrationResponse>({
-    queryKey: ["system-calibration", windowHours, includeSynthetic, params.city ?? null],
+    queryKey: metricQueryKey("system-calibration", city, { windowHours, includeSynthetic }),
     queryFn: () =>
       api.getCalibration({
         window_hours: windowHours,

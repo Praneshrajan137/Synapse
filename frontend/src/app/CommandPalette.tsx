@@ -5,7 +5,9 @@ import { useCityStore } from "@state/city.store";
 import { useFirehoseStore } from "@state/firehose.store";
 import { applyTheme, useThemeStore } from "@state/theme.store";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router-dom";
+import { surfaceGoToCommands } from "./primary-surfaces";
 
 /**
  * CommandPalette — the keyboard-first verb surface (SENSORIUM P6; Raycast /
@@ -13,9 +15,11 @@ import { useNavigate } from "react-router-dom";
  * filter; ↑/↓ to move, Enter to run, Esc to close. Expert operators live in the
  * tool all shift — the keyboard beats the mouse.
  *
- * Commands are data-driven so new verbs are one array entry. Pure navigation +
- * local state changes today (go-to surface, switch city, set theme); decision-
- * scoped actions (override, steering) plug in here next.
+ * "Go to" commands are DERIVED from the `PRIMARY_SURFACES` route registry
+ * (`primary-surfaces.ts`) so every primary Surface is reachable by keyboard
+ * with no pointer, and coverage is mechanical (Req 8.2, Property 28). Every
+ * user-visible string resolves through the i18next `en` catalog (Req 8.1).
+ * Local-state verbs (switch city, set theme) round out the surface.
  */
 
 interface Command {
@@ -32,6 +36,7 @@ export function CommandPalette() {
   const [active, setActive] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
 
+  const { t } = useTranslation("common");
   const navigate = useNavigate();
   const setCity = useCityStore((s) => s.setCity);
   const setTheme = useThemeStore((s) => s.setTheme);
@@ -62,33 +67,24 @@ export function CommandPalette() {
       applyTheme(theme);
       setOpen(false);
     };
+
+    // "Go to" commands are derived from the primary-Surface route registry so
+    // every primary Surface has a keyboard-activatable entry by construction.
+    const goTo: Command[] = surfaceGoToCommands().map((c) => ({
+      id: c.id,
+      title: t(c.labelKey),
+      group: t(c.groupKey),
+      ...(c.keywords ? { keywords: c.keywords } : {}),
+      run: go(c.path),
+    }));
+
     return [
-      {
-        id: "go-mission",
-        title: "Mission Control",
-        group: "Go to",
-        keywords: "cortex pulse home",
-        run: go("/"),
-      },
-      {
-        id: "go-cockpit",
-        title: "Override Cockpit",
-        group: "Go to",
-        keywords: "escalation hitl threshold",
-        run: go("/cockpit"),
-      },
-      {
-        id: "go-decisions",
-        title: "Decision Theater",
-        group: "Go to",
-        keywords: "tribunal pareto replay",
-        run: go("/decisions"),
-      },
+      ...goTo,
       {
         id: "go-council",
-        title: "Council Theater (latest)",
-        group: "Go to",
-        keywords: "deliberation consensus reconstruction reasoning debate replay",
+        title: t("surface.council-theater"),
+        group: t("command.group.go-to"),
+        keywords: t("council.aria.latest"),
         run: () => {
           // Best-effort: open the most recent live decision's reconstruction;
           // fall back to the Decision Theater list when the firehose is empty.
@@ -98,72 +94,38 @@ export function CommandPalette() {
         },
       },
       {
-        id: "go-agents",
-        title: "Agent Council",
-        group: "Go to",
-        keywords: "health latency",
-        run: go("/agents"),
-      },
-      {
-        id: "go-twin",
-        title: "Twin Lab",
-        group: "Go to",
-        keywords: "projection divergence simulate",
-        run: go("/twin"),
-      },
-      {
-        id: "go-steering",
-        title: "Steering",
-        group: "Go to",
-        keywords: "weights pareto will",
-        run: go("/steering"),
-      },
-      {
-        id: "go-markets",
-        title: "Live Markets",
-        group: "Go to",
-        keywords: "pricing freshness markdown shelf-life elasticity",
-        run: go("/markets"),
-      },
-      {
-        id: "go-ingress",
-        title: "Ingress Console",
-        group: "Go to",
-        keywords: "order submit trigger decision pipeline",
-        run: go("/ingress"),
-      },
-      {
-        id: "go-audit",
-        title: "Audit Vault",
-        group: "Go to",
-        keywords: "memory compliance",
-        run: go("/audit"),
-      },
-      {
-        id: "go-demo",
-        title: "Demo Theater",
-        group: "Go to",
-        keywords: "scenario",
-        run: go("/demo"),
-      },
-      {
         id: "city-bengaluru",
-        title: "Switch city: Bengaluru",
-        group: "City",
+        title: t("command.city.bengaluru"),
+        group: t("command.group.city"),
         run: setCityCmd("bengaluru"),
       },
-      { id: "city-mumbai", title: "Switch city: Mumbai", group: "City", run: setCityCmd("mumbai") },
-      { id: "theme-dark", title: "Theme: Dark", group: "Theme", run: setThemeCmd("dark") },
-      { id: "theme-light", title: "Theme: Light", group: "Theme", run: setThemeCmd("light") },
+      {
+        id: "city-mumbai",
+        title: t("command.city.mumbai"),
+        group: t("command.group.city"),
+        run: setCityCmd("mumbai"),
+      },
+      {
+        id: "theme-dark",
+        title: t("command.theme.dark"),
+        group: t("command.group.theme"),
+        run: setThemeCmd("dark"),
+      },
+      {
+        id: "theme-light",
+        title: t("command.theme.light"),
+        group: t("command.group.theme"),
+        run: setThemeCmd("light"),
+      },
       {
         id: "theme-hc",
-        title: "Theme: High contrast",
-        group: "Theme",
+        title: t("command.theme.hc"),
+        group: t("command.group.theme"),
         keywords: "accessibility",
         run: setThemeCmd("hc"),
       },
     ];
-  }, [navigate, setCity, setTheme]);
+  }, [navigate, setCity, setTheme, t]);
 
   const filtered = useMemo(
     () => fuzzyFilter(commands, query, (c) => `${c.title} ${c.keywords ?? ""}`),
@@ -205,14 +167,14 @@ export function CommandPalette() {
           className="fixed left-1/2 top-[18%] z-50 w-[min(560px,92vw)] -translate-x-1/2 overflow-hidden rounded-lg border border-border bg-surface shadow-e4"
           aria-describedby={undefined}
         >
-          <Dialog.Title className="sr-only">Command palette</Dialog.Title>
+          <Dialog.Title className="sr-only">{t("command.title")}</Dialog.Title>
           <input
             ref={inputRef}
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             onKeyDown={onInputKeyDown}
-            placeholder="Search commands…  (Go to · City · Theme)"
-            aria-label="Command palette search"
+            placeholder={t("command.search_placeholder")}
+            aria-label={t("command.search_label")}
             role="combobox"
             aria-expanded
             aria-controls="command-palette-list"
@@ -227,12 +189,12 @@ export function CommandPalette() {
             id="command-palette-list"
             // biome-ignore lint/a11y/useSemanticElements: a combobox-popup listbox has no native HTML equivalent.
             role="listbox"
-            aria-label="Commands"
+            aria-label={t("command.list_label")}
             tabIndex={-1}
             className="max-h-[320px] overflow-auto py-1"
           >
             {filtered.length === 0 ? (
-              <p className="px-4 py-6 text-center text-xs text-ink-muted">No matching commands.</p>
+              <p className="px-4 py-6 text-center text-xs text-ink-muted">{t("command.empty")}</p>
             ) : (
               filtered.map((cmd, i) => (
                 <div
@@ -263,9 +225,9 @@ export function CommandPalette() {
             )}
           </div>
           <footer className="flex items-center gap-3 border-t border-border px-4 py-2 text-2xs text-ink-subtle">
-            <span>↑↓ navigate</span>
-            <span>⏎ run</span>
-            <span>esc close</span>
+            <span>↑↓ {t("command.hint.navigate")}</span>
+            <span>⏎ {t("command.hint.run")}</span>
+            <span>esc {t("command.hint.close")}</span>
             <span className="ml-auto font-mono">⌘K</span>
           </footer>
         </Dialog.Content>

@@ -51,7 +51,7 @@ export const ConsensusDecisionSchema = z
     execution_confirmations: z.array(z.string()).default([]),
     audit_id: ZUuid.nullable().optional(),
   })
-  .strict();
+  .passthrough();
 
 export type ConsensusDecision = z.infer<typeof ConsensusDecisionSchema>;
 export type Proposal = z.infer<typeof ZProposal>;

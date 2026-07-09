@@ -1,6 +1,8 @@
+import { SpatialErrorBoundary } from "@ds/compounds";
 import { useFirehoseStore } from "@state/firehose.store";
 import { demandHeatmapLayer, routeArcLayer, storeLayer } from "@viz/deck-gl/layers";
 import { Suspense, lazy, useMemo } from "react";
+import { MapDataTable } from "./MapDataTable";
 
 // CityMap pulls in maplibre + deck.gl + pmtiles — lazy-load it so the
 // initial bundle stays inside FE-INV-014's 180KB gz budget.
@@ -34,17 +36,27 @@ export function LivingMap({ stores }: LivingMapProps) {
   );
 
   return (
-    <Suspense
-      fallback={
-        <div
-          className="syn-card syn-skeleton flex h-[420px] items-center justify-center text-sm text-ink-muted"
-          aria-busy="true"
+    <div>
+      {/* The spatial canvas: a boundary catches a failed chunk/render (error +
+          retry, never a blank canvas — Req 7.5); Suspense covers loading. */}
+      <SpatialErrorBoundary label="living map" height={460}>
+        <Suspense
+          fallback={
+            <div
+              className="syn-card syn-skeleton flex h-[420px] items-center justify-center text-sm text-ink-muted"
+              aria-busy="true"
+            >
+              Loading map…
+            </div>
+          }
         >
-          Loading map…
-        </div>
-      }
-    >
-      <CityMap layers={layers} height={460} />
-    </Suspense>
+          <CityMap layers={layers} height={460} />
+        </Suspense>
+      </SpatialErrorBoundary>
+
+      {/* Non-spatial equivalent — keyboard/SR-reachable table of the same data
+          (Req 7.4). Rendered outside the boundary so it survives a viz failure. */}
+      <MapDataTable stores={stores} routes={routes} demand={demand} />
+    </div>
   );
 }

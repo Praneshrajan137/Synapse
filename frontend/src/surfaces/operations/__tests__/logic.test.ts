@@ -1,6 +1,6 @@
 import type { CalibrationBin } from "@domain/operations";
 import { describe, expect, it } from "vitest";
-import { confidenceSamples, outcomeMix } from "../logic";
+import { chainIntegrity, confidenceSamples, formatConfidence, outcomeMix } from "../logic";
 
 function bin(lo: number, n: number, observed: number | null): CalibrationBin {
   return { lo, hi: lo + 0.1, n, mean_confidence: lo + 0.05, observed_rate: observed };
@@ -48,5 +48,45 @@ describe("confidenceSamples (FE-INV-044 synthetic segmentation)", () => {
 
   it("includes synthetic only when asked", () => {
     expect(confidenceSamples(rows, true)).toEqual([0.9, 0.5, 0.8]);
+  });
+});
+
+describe("formatConfidence (Req 4.1/4.2 two-decimal numeric channel)", () => {
+  it("always renders exactly two decimals", () => {
+    expect(formatConfidence(0)).toBe("0.00");
+    expect(formatConfidence(1)).toBe("1.00");
+    expect(formatConfidence(0.5)).toBe("0.50");
+    expect(formatConfidence(0.7)).toBe("0.70");
+    expect(formatConfidence(0.809)).toBe("0.81");
+  });
+
+  it("matches ^[01]\\.\\d{2}$ across the range", () => {
+    const re = /^[01]\.\d{2}$/;
+    for (const x of [0, 0.005, 0.123, 0.7, 0.8, 0.999, 1]) {
+      expect(formatConfidence(x)).toMatch(re);
+    }
+  });
+
+  it("clamps out-of-range and non-finite input defensively", () => {
+    expect(formatConfidence(-0.5)).toBe("0.00");
+    expect(formatConfidence(1.5)).toBe("1.00");
+    // Non-finite input is untrustworthy → collapses to the lowest confidence.
+    expect(formatConfidence(Number.NaN)).toBe("0.00");
+    expect(formatConfidence(Number.POSITIVE_INFINITY)).toBe("0.00");
+    expect(formatConfidence(Number.NEGATIVE_INFINITY)).toBe("0.00");
+  });
+});
+
+describe("chainIntegrity (Req 4.10 / FE-INV-039 tri-state)", () => {
+  it("maps the three chain states exhaustively", () => {
+    expect(chainIntegrity(true)).toBe("verified");
+    expect(chainIntegrity(false)).toBe("altered");
+    expect(chainIntegrity(null)).toBe("pre-chain");
+    expect(chainIntegrity(undefined)).toBe("pre-chain");
+  });
+
+  it("never maps a legacy (null) row to verified", () => {
+    expect(chainIntegrity(null)).not.toBe("verified");
+    expect(chainIntegrity(undefined)).not.toBe("verified");
   });
 });

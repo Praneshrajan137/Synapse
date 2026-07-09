@@ -121,3 +121,11 @@ infrastructure/oracle/terraform/.terraform/
 *.tfstate.backup
 tfplan
 
+
+# Local scratch / experiment area — nested worktrees and loose CI drafts,
+# never part of the tracked tree.
+.gl_scratch/
+
+# Throwaway local smoke scripts and their outputs.
+_smoke.py
+_smoke_result.txt

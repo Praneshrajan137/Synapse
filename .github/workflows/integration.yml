@@ -104,3 +104,112 @@ jobs:
         with:
           name: integration-logs
           path: integration-logs.txt
+
+  real-stack-run:
+    name: Real_Stack_Run — Console fidelity (Req 5)
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    # SCHEDULE / manual ONLY — NEVER on pull_request. The Real_Stack_Run drives
+    # the real docker stack (live gateway + orchestrator + datastores), whose
+    # latency and nondeterminism must stay entirely out of the deterministic
+    # PR gate so that gate never flakes (Req 5.3, 20.3). The equivalent
+    # deterministic MSW harness runs in the PR gate (frontend.yml `e2e-harness`).
+    if: github.event_name != 'pull_request'
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9.12.0
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20.18"
+          cache: "pnpm"
+          cache-dependency-path: frontend/pnpm-lock.yaml
+      - name: Install frontend dependencies
+        working-directory: frontend
+        run: pnpm install --frozen-lockfile=false
+      - name: Install Playwright chromium
+        working-directory: frontend
+        run: pnpm exec playwright install --with-deps chromium
+
+      - name: Boot the real SYNAPSE stack (gateway + orchestrator + datastores)
+        # nginx is the gateway (routes /api → orchestrator); the frontend is
+        # served from the same origin, so PLAYWRIGHT_BASE_URL=http://localhost
+        # exercises the app against the REAL backend with NO MSW fixture served.
+        env:
+          BUILD_SHA: ${{ github.sha }}
+        run: |
+          docker compose -f docker/docker-compose.yml up -d \
+            postgres redis kafka neo4j orchestrator frontend nginx
+      - name: Wait for the stack to become healthy
+        run: |
+          echo "Waiting for orchestrator + gateway readiness..."
+          for i in $(seq 1 60); do
+            orch=$(curl -fsS http://localhost:8085/health >/dev/null 2>&1 && echo ok || echo no)
+            gw=$(curl -fsS http://localhost:80/ >/dev/null 2>&1 && echo ok || echo no)
+            if [ "$orch" = "ok" ] && [ "$gw" = "ok" ]; then
+              echo "Stack healthy (orchestrator + gateway up)."
+              exit 0
+            fi
+            sleep 5
+          done
+          echo "::error::Real stack did not become healthy in time"
+          docker compose -f docker/docker-compose.yml ps
+          exit 1
+
+      - name: Record backend build SHA (Req 5.5)
+        # The SHA the stack was built from is the traceable backend version for
+        # any fidelity divergence; also capture the orchestrator image id.
+        run: |
+          echo "BACKEND_BUILD_SHA=$(git rev-parse HEAD)" >> "$GITHUB_ENV"
+          echo "ORCHESTRATOR_IMAGE=$(docker inspect --format '{{.Image}}' synapse-orchestrator 2>/dev/null || echo unknown)" >> "$GITHUB_ENV"
+
+      - name: Task_Completion_Tests against the real stack (MSW disabled)
+        working-directory: frontend
+        # Identical JTBD suite as the PR-gate harness, but pointed at the real
+        # gateway (PLAYWRIGHT_BASE_URL) so no MSW browser worker is injected and
+        # every request hits the real backend (Req 5.1). Non-fatal here: the
+        # fidelity reporter below turns real-stack failures into a named
+        # divergence report and owns the job's pass/fail.
+        continue-on-error: true
+        env:
+          PLAYWRIGHT_BASE_URL: http://localhost
+          PLAYWRIGHT_JSON_OUTPUT_NAME: test-results/real-stack/results.json
+        run: |
+          pnpm test:e2e --project=chromium --reporter=json task-completion.jtbd
+
+      - name: Report harness-vs-real-stack fidelity divergences (Req 5.2, 5.4, 5.5)
+        working-directory: frontend
+        # Compares the committed harness baseline (jobs green under MSW) with the
+        # real-stack results and fails NON-ZERO naming any job that passes under
+        # the harness but fails against the real stack, the observed contract
+        # difference, and the MSW_Fixture(s) requiring reconciliation.
+        run: pnpm effectiveness:real-stack-fidelity
+
+      - name: Upload real-stack fidelity report + Playwright report
+        if: success() || failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: real-stack-fidelity
+          path: |
+            frontend/test-results/real-stack/fidelity-report.json
+            frontend/test-results/real-stack/fidelity-report.md
+            frontend/test-results/real-stack/results.json
+            frontend/playwright-report
+          retention-days: 14
+
+      - name: Collect stack logs on failure
+        if: failure()
+        run: docker compose -f docker/docker-compose.yml logs --no-color > real-stack-logs.txt
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: real-stack-logs
+          path: real-stack-logs.txt
+
+      - name: Tear down the stack
+        if: always()
+        run: docker compose -f docker/docker-compose.yml down -v

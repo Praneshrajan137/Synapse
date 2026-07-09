@@ -60,7 +60,7 @@ describe("EscalationCard — violations (FE-INV-038)", () => {
     expect(screen.getByLabelText("Guardrail violations")).toHaveTextContent("medium");
   });
 
-  it("no violations section when the escalation carries none", () => {
+  it("renders an explicit 'no violations recorded' region when the escalation carries none", () => {
     render(
       <EscalationCard
         message={message([])}
@@ -69,6 +69,9 @@ describe("EscalationCard — violations (FE-INV-038)", () => {
         onCommit={vi.fn()}
       />,
     );
-    expect(screen.queryByLabelText("Guardrail violations")).not.toBeInTheDocument();
+    // Req 3.5: the region is never omitted — it is present and explicitly empty.
+    const section = screen.getByLabelText("Guardrail violations");
+    expect(section).toBeInTheDocument();
+    expect(section).toHaveTextContent("No violations recorded");
   });
 });

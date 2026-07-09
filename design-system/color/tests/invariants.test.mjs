@@ -3,6 +3,7 @@
 // scripts/check-spec-coverage.mjs blocks any invariant without a test here.
 // ============================================================================
 import { describe, it, expect } from "vitest";
+import fc from "fast-check";
 import {
   TOKENS,
   THEMES,
@@ -22,7 +23,7 @@ import { deltaEOK, hueDistance, simulateCvd, CVD_TYPES } from "../build/cvd.mjs"
 import { isInGamut, toRgb } from "../build/resolve.mjs";
 import { converter } from "culori";
 import { findHexLiterals } from "../scripts/lint-hex.mjs";
-import { confidenceColor, confidenceZone, AGENTS as TS_AGENTS } from "../dist/tokens.ts";
+import { confidenceColor, confidenceZone, agentVar, AGENTS as TS_AGENTS } from "../dist/tokens.ts";
 
 const HEX_RE = /^#[0-9a-f]{6}$/;
 const parseOklchStr = (s) => {
@@ -349,6 +350,252 @@ describe("INV-CLR-018 — interaction tints never sink text below contrast", () 
         );
       }
     }
+  });
+});
+
+// ============================================================================
+// atlas-console-elevation — Property 20 (Req 5.2, 5.3).
+// Feature: atlas-console-elevation, Property 20: Every semantic token resolves
+// in every theme.
+//
+// Theme_Mode is one of {light, dark, hc}. Unlike the OKLCH dist model (which
+// carries only light/dark), the three rendered Theme_Modes are concretely
+// defined as CSS custom properties in frontend/src/styles/tokens.css:
+//   :root, [data-theme="dark"]  -> base/dark defaults
+//   [data-theme="light"]        -> light overrides (fall back to base)
+//   [data-theme="hc"]           -> high-contrast overrides (fall back to base)
+// hc only overrides a subset; every other token inherits the :root value via
+// the cascade. This block models that cascade and asserts every semantic
+// colour token resolves to a concrete, non-empty value in each Theme_Mode.
+// ============================================================================
+const THEME_MODES = ["light", "dark", "hc"];
+
+const TOKENS_CSS = (() => {
+  const cssPath = join(ROOT, "..", "..", "frontend", "src", "styles", "tokens.css");
+  let css = readFileSync(cssPath, "utf8").replace(/\/\*[\s\S]*?\*\//g, ""); // strip comments
+  const mediaIdx = css.indexOf("@media"); // drop @media blocks (motion-only overrides)
+  return mediaIdx === -1 ? css : css.slice(0, mediaIdx);
+})();
+
+const parseDecls = (body) => {
+  const out = {};
+  if (!body) return out;
+  for (const chunk of body.split(";")) {
+    const m = chunk.match(/^\s*(--[\w-]+)\s*:\s*([\s\S]+?)\s*$/);
+    if (m) out[m[1]] = m[2].replace(/\s+/g, " ").trim();
+  }
+  return out;
+};
+const blockBody = (re) => (TOKENS_CSS.match(re) || [])[1] || null;
+
+const CSS_BASE = parseDecls(blockBody(/:root,\s*\[data-theme="dark"\]\s*\{([^}]*)\}/));
+const CSS_LIGHT = parseDecls(blockBody(/\[data-theme="light"\]\s*\{([^}]*)\}/));
+const CSS_HC = parseDecls(blockBody(/\[data-theme="hc"\]\s*\{([^}]*)\}/));
+
+// Resolved cascade per Theme_Mode: overrides layered over the :root/dark base.
+const THEME_TABLE = {
+  dark: { ...CSS_BASE },
+  light: { ...CSS_BASE, ...CSS_LIGHT },
+  hc: { ...CSS_BASE, ...CSS_HC },
+};
+const resolveThemeToken = (token, theme) => THEME_TABLE[theme][token];
+
+// Semantic COLOUR roles only — exclude geometry/motion/shadow families.
+const NON_COLOR = /^--syn-(motion|ease|radius|elev|surface-highlight|card-edge|focus-ring)/;
+const isColorToken = (name) =>
+  (name.startsWith("--syn-") || name.startsWith("--gradient-")) && !NON_COLOR.test(name);
+const SEMANTIC_TOKENS = Object.keys(CSS_BASE).filter(isColorToken).sort();
+const ALL_TOKEN_THEME_PAIRS = SEMANTIC_TOKENS.flatMap((t) => THEME_MODES.map((m) => [t, m]));
+
+describe("INV-CLR-019 — every semantic token resolves in every theme (light/dark/hc)", () => {
+  it("INV-CLR-019 the token model is non-empty and the base cascade parsed", () => {
+    // Guard: a parse regression must not silently pass the property below.
+    expect(SEMANTIC_TOKENS.length, "semantic colour tokens parsed from tokens.css").toBeGreaterThan(0);
+    expect(Object.keys(CSS_HC).length, "[data-theme=hc] override block parsed").toBeGreaterThan(0);
+    expect(Object.keys(CSS_LIGHT).length, "[data-theme=light] override block parsed").toBeGreaterThan(0);
+  });
+
+  it("INV-CLR-019 every semantic colour token resolves to a concrete value in light, dark, and hc", () => {
+    fc.assert(
+      fc.property(fc.constantFrom(...SEMANTIC_TOKENS), fc.constantFrom(...THEME_MODES), (token, theme) => {
+        const value = resolveThemeToken(token, theme);
+        // A miss surfaces the token + Theme_Mode by name — never a raw literal.
+        expect(value, `Unresolved semantic token "${token}" in Theme_Mode "${theme}"`).toBeDefined();
+        expect(typeof value, `"${token}" in "${theme}" must be a string value`).toBe("string");
+        const v = String(value).trim();
+        expect(v.length, `"${token}" in "${theme}" resolves to a non-empty value`).toBeGreaterThan(0);
+        expect(
+          /^(initial|inherit|unset)$/i.test(v),
+          `"${token}" in "${theme}" must be concrete, not initial/inherit/unset`,
+        ).toBe(false);
+      }),
+      // Every (token, theme) pair runs as an explicit example (exhaustive
+      // coverage of "every token in every theme"), plus >=100 random runs.
+      { numRuns: Math.max(100, SEMANTIC_TOKENS.length * THEME_MODES.length), examples: ALL_TOKEN_THEME_PAIRS },
+    );
+  });
+});
+
+// ============================================================================
+// atlas-console-elevation — Properties 21..26. Universally-quantified
+// (fast-check, >=100 runs) restatements of the deterministic INV-CLR laws the
+// suite already checks by example, registered as fresh INV-CLR ids.
+// ============================================================================
+
+describe("INV-CLR-020 — tier lightness + confidence hue are monotonic", () => {
+  // Feature: atlas-console-elevation, Property 21: Tier lightness and confidence
+  // hue are monotonic (L(tier1)>L(tier2)>L(tier3)>L(tier4); increasing
+  // confidence -> non-decreasing OKLCH hue). Validates Req 5.4.
+  it("INV-CLR-020 tier lightness strictly decreases 1->4 in every theme", () => {
+    fc.assert(
+      fc.property(fc.constantFrom(...THEMES), fc.integer({ min: 0, max: 2 }), (theme, i) => {
+        const hi = color(`color.tier.${i + 1}`, theme).l;
+        const lo = color(`color.tier.${i + 2}`, theme).l;
+        expect(hi, `L(tier${i + 1}) > L(tier${i + 2}) (${theme})`).toBeGreaterThan(lo);
+      }),
+      { numRuns: 200 },
+    );
+  });
+
+  it("INV-CLR-020 increasing confidence never decreases the OKLCH hue coordinate", () => {
+    fc.assert(
+      fc.property(
+        fc.constantFrom(...THEMES),
+        fc.double({ min: 0, max: 1, noNaN: true }),
+        fc.double({ min: 0, max: 1, noNaN: true }),
+        (theme, a, b) => {
+          const lo = Math.min(a, b);
+          const hi = Math.max(a, b);
+          const hLo = parseOklchStr(confidenceColor(lo, theme)).h;
+          const hHi = parseOklchStr(confidenceColor(hi, theme)).h;
+          expect(hHi - hLo, `hue(${hi}) >= hue(${lo}) (${theme})`).toBeGreaterThanOrEqual(-1e-6);
+        },
+      ),
+      { numRuns: 300 },
+    );
+  });
+});
+
+describe("INV-CLR-021 — WCAG 2.1 AA contrast holds for every pair in every theme", () => {
+  // Feature: atlas-console-elevation, Property 22: WCAG AA contrast holds for
+  // every text/component-on-surface pair in every theme (>=4.5 body, >=3.0
+  // large/UI). Validates Req 5.6.
+  const PAIR_THEME = CONTRAST_PAIRS.flatMap((p) => THEMES.map((t) => [p, t]));
+  it("INV-CLR-021 every text-on-surface pair clears WCAG AA body contrast in each theme", () => {
+    fc.assert(
+      fc.property(fc.constantFrom(...CONTRAST_PAIRS), fc.constantFrom(...THEMES), ({ surface, text }, theme) => {
+        const ratio = wcag(color(text, theme), color(surface, theme));
+        expect(ratio, `${text} on ${surface} (${theme})`).toBeGreaterThanOrEqual(
+          THRESHOLDS.wcag_text_normal,
+        );
+        // Body threshold subsumes large-text/UI (3.0); assert the floor too.
+        expect(ratio, `${text} on ${surface} (${theme}) >= UI floor`).toBeGreaterThanOrEqual(
+          THRESHOLDS.wcag_ui_component,
+        );
+      }),
+      { numRuns: Math.max(100, PAIR_THEME.length), examples: PAIR_THEME },
+    );
+  });
+});
+
+describe("INV-CLR-022 — APCA Lc target per emphasis tier, every pair, every theme", () => {
+  // Feature: atlas-console-elevation, Property 23: APCA Lc target per emphasis
+  // tier (primary >=75, secondary >=60, tertiary >=45) every text pair every
+  // theme. Validates Req 5.7.
+  const TARGET = {
+    primary: THRESHOLDS.apca_primary_lc,
+    secondary: THRESHOLDS.apca_secondary_lc,
+    tertiary: THRESHOLDS.apca_tertiary_lc,
+  };
+  const PAIR_THEME = CONTRAST_PAIRS.flatMap((p) => THEMES.map((t) => [p, t]));
+  it("INV-CLR-022 every text-on-surface pair clears its APCA Lc tier in each theme", () => {
+    fc.assert(
+      fc.property(fc.constantFrom(...CONTRAST_PAIRS), fc.constantFrom(...THEMES), ({ surface, text, tier }, theme) => {
+        const lc = Math.abs(apca(color(text, theme), color(surface, theme)));
+        expect(lc, `${text} on ${surface} (${theme}, ${tier})`).toBeGreaterThanOrEqual(TARGET[tier]);
+      }),
+      { numRuns: Math.max(100, PAIR_THEME.length), examples: PAIR_THEME },
+    );
+  });
+});
+
+describe("INV-CLR-023 — agent pairs stay ΔE-OK-separated under CVD, every theme", () => {
+  // Feature: atlas-console-elevation, Property 24: All 28 agent-color pairs
+  // differ by >= min ΔE-OK under deuteranopia/protanopia/tritanopia in each
+  // theme. Validates Req 5.8.
+  const AGENT_PAIRS = [];
+  for (let i = 0; i < AGENTS.length; i++) {
+    for (let j = i + 1; j < AGENTS.length; j++) AGENT_PAIRS.push([i, j]);
+  }
+  const ALL = AGENT_PAIRS.flatMap((pair) => THEMES.flatMap((t) => CVD_TYPES.map((c) => [pair, t, c])));
+  it("INV-CLR-023 all 28 agent pairs differ by >= min ΔE-OK under each CVD, both themes", () => {
+    fc.assert(
+      fc.property(
+        fc.constantFrom(...AGENT_PAIRS),
+        fc.constantFrom(...THEMES),
+        fc.constantFrom(...CVD_TYPES),
+        ([i, j], theme, cvd) => {
+          const a = simulateCvd(color(`color.agent.${AGENTS[i]}`, theme), cvd);
+          const b = simulateCvd(color(`color.agent.${AGENTS[j]}`, theme), cvd);
+          expect(
+            deltaEOK(a, b),
+            `${AGENTS[i]}/${AGENTS[j]} (${theme}, ${cvd})`,
+          ).toBeGreaterThanOrEqual(THRESHOLDS.agent_pair_min_deltaeok_cvd);
+        },
+      ),
+      { numRuns: Math.max(100, ALL.length), examples: ALL },
+    );
+  });
+});
+
+describe("INV-CLR-024 — degraded chroma sits below every full-saturation state", () => {
+  // Feature: atlas-console-elevation, Property 25: Degraded chroma <=
+  // degraded_max_chroma AND >= degraded_min_chroma_gap below the min chroma of
+  // every full-saturation state. Validates Req 5.9.
+  const FULL_STATES = ["success", "warning", "danger", "info"];
+  it("INV-CLR-024 degraded chroma is drained below the ceiling and every full state, both themes", () => {
+    fc.assert(
+      fc.property(fc.constantFrom(...THEMES), fc.constantFrom(...FULL_STATES), (theme, state) => {
+        const degraded = color("color.state.degraded", theme).c;
+        expect(degraded, `degraded chroma ceiling (${theme})`).toBeLessThanOrEqual(
+          THRESHOLDS.degraded_max_chroma,
+        );
+        const full = color(`color.state.${state}`, theme).c;
+        expect(degraded, `degraded gap below ${state} (${theme})`).toBeLessThanOrEqual(
+          full - THRESHOLDS.degraded_min_chroma_gap,
+        );
+      }),
+      { numRuns: Math.max(100, THEMES.length * FULL_STATES.length), examples: THEMES.flatMap((t) => FULL_STATES.map((s) => [t, s])) },
+    );
+  });
+});
+
+describe("INV-CLR-025 — colour is never the sole channel (non-colour signal always present)", () => {
+  // Feature: atlas-console-elevation, Property 26: Color is never the sole
+  // channel — every color-coded affordance also carries text/icon/shape.
+  // Structural, consistent with INV-CLR-011. Validates Req 5.10.
+  const ZONES = new Set(["low", "escalation", "autonomous"]);
+  it("INV-CLR-025 every confidence value carries a textual zone label, not just colour", () => {
+    fc.assert(
+      fc.property(fc.double({ min: 0, max: 1, noNaN: true }), (v) => {
+        const zone = confidenceZone(v);
+        expect(ZONES.has(zone), `confidence ${v} -> non-colour zone label`).toBe(true);
+      }),
+      { numRuns: 200 },
+    );
+  });
+
+  it("INV-CLR-025 every agent affordance carries a stable textual key + token reference", () => {
+    fc.assert(
+      fc.property(fc.constantFrom(...TS_AGENTS), (agent) => {
+        // The agent key itself is a non-colour (text) signal; agentVar routes
+        // colour through a token, never a raw literal.
+        expect(typeof agent, `agent key is text`).toBe("string");
+        expect(agent.length, `agent key non-empty`).toBeGreaterThan(0);
+        expect(agentVar(agent), `agentVar(${agent})`).toMatch(/^var\(--color-agent-[a-z-]+\)$/);
+      }),
+      { numRuns: Math.max(100, TS_AGENTS.length), examples: TS_AGENTS.map((a) => [a]) },
+    );
   });
 });
 

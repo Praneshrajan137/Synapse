@@ -6,6 +6,8 @@ import { ConfidenceDistribution } from "./ConfidenceDistribution";
 import { EscalationPressure } from "./EscalationPressure";
 import { SloBurnBoard } from "./SloBurnBoard";
 import { SystemTrustStrip } from "./SystemTrustStrip";
+import { TrustTrackRecord } from "./TrustTrackRecord";
+import { UpliftSlot } from "./UpliftSlot";
 
 /**
  * Operations — Standing Watch (ADR-047).
@@ -38,6 +40,11 @@ export function Operations() {
       <div className="grid gap-4 lg:grid-cols-2">
         <CalibrationPanel city={city} />
         <ConfidenceDistribution city={city} />
+      </div>
+
+      <div className="grid gap-4 lg:grid-cols-2">
+        <TrustTrackRecord />
+        <UpliftSlot />
       </div>
     </section>
   );

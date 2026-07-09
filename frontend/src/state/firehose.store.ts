@@ -6,24 +6,22 @@ import type { FreshnessAlert } from "@domain/freshness-alert";
 import type { PricingUpdate } from "@domain/pricing-update";
 import type { RoutePlan } from "@domain/route-plan";
 import type { TwinDivergenceEvent } from "@domain/twin-state";
+import { type RingBuffer, appendBounded, newBounded } from "@lib/ring-buffer";
 import type { WsState } from "@transport/ws-multiplex";
 import { create } from "zustand";
 
 // Per-channel bounded ring buffers (append-only — FE-INV-017). Switching
 // city flushes the channels (the underlying topics carry city-scoped data,
 // so cross-city remnants would be misleading).
+//
+// The bounded-buffer model (`newBounded`/`appendBounded`, runtime caps 50–500)
+// was lifted verbatim into the shared, property-testable `@lib/ring-buffer`
+// module (design "E. lib — ring-buffer + firehose stress", Req 6) without
+// changing the caps below; the store now consumes it. `Bounded` is kept as a
+// local alias of `RingBuffer` so downstream `s.decisions.items` reads and the
+// firehose-store tests are unchanged.
 
-interface Bounded<T> {
-  readonly cap: number;
-  readonly items: ReadonlyArray<T>;
-}
-
-const newBounded = <T>(cap: number): Bounded<T> => ({ cap, items: [] });
-
-function appendBounded<T>(b: Bounded<T>, value: T): Bounded<T> {
-  const items = b.items.length >= b.cap ? [...b.items.slice(1), value] : [...b.items, value];
-  return { cap: b.cap, items };
-}
+type Bounded<T> = RingBuffer<T>;
 
 interface FirehoseState {
   decisions: Bounded<LiveDecision>;

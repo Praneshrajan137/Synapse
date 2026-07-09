@@ -1,5 +1,6 @@
 import type { SloResponse, SloTier } from "@domain/operations";
 import { cn } from "@lib/cn";
+import { burnSeverityWord, deriveBurnSeverity } from "./logic";
 
 const TIER_ORDER = ["tier_1", "tier_2", "tier_3", "tier_4"] as const;
 const TIER_LABEL: Record<string, string> = {
@@ -24,22 +25,30 @@ const SEVERITY_BAR: Record<string, string> = {
   critical: "bg-signal-danger",
   unknown: "bg-border",
 };
-const SEVERITY_WORD: Record<string, string> = {
-  ok: "healthy",
-  warning: "burning",
-  critical: "critical",
-  unknown: "burn unknown",
-};
 
 function fmtBurn(v: number | null): string {
   return v === null ? "—" : `${v.toFixed(1)}×`;
 }
 
-export function BurnGauge({ tier, data }: { tier: string; data: SloTier }) {
+export function BurnGauge({
+  tier,
+  data,
+  sourceUnknown = false,
+}: {
+  tier: string;
+  data: SloTier;
+  sourceUnknown?: boolean;
+}) {
   const fast = data.windows.fast.burn_rate;
   const slow = data.windows.slow.burn_rate;
-  const sev = data.severity;
-  const pct = fast === null ? 0 : Math.min(1, Math.max(0, fast / FULL_SCALE));
+  // Never trust the reported severity blind: a null window or an unreachable
+  // source collapses to "unknown", never a healthy bar or a fabricated 0
+  // (FE-INV-042, Req 10.9).
+  const sev = deriveBurnSeverity({ fast, slow, reported: data.severity, sourceUnknown });
+  const word = burnSeverityWord(sev);
+  // Drain the track entirely when the burn is unknown so we never paint a
+  // partial bar off a number we don't actually have.
+  const pct = sev === "unknown" || fast === null ? 0 : Math.min(1, Math.max(0, fast / FULL_SCALE));
 
   return (
     <div className="syn-card px-4 py-3">
@@ -48,7 +57,7 @@ export function BurnGauge({ tier, data }: { tier: string; data: SloTier }) {
           {TIER_LABEL[tier] ?? tier}
         </span>
         <span className={cn("text-2xs font-medium uppercase tracking-wide", SEVERITY_TEXT[sev])}>
-          {SEVERITY_WORD[sev]}
+          {word}
         </span>
       </div>
       <div className="mt-1 text-2xs text-ink-subtle">
@@ -59,7 +68,7 @@ export function BurnGauge({ tier, data }: { tier: string; data: SloTier }) {
       <div
         className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-surface"
         role="img"
-        aria-label={`${TIER_LABEL[tier] ?? tier} ${SEVERITY_WORD[sev]}; fast burn ${fmtBurn(fast)}, slow burn ${fmtBurn(slow)}`}
+        aria-label={`${TIER_LABEL[tier] ?? tier} ${word}; fast burn ${fmtBurn(fast)}, slow burn ${fmtBurn(slow)}`}
       >
         <div
           className={cn("h-full rounded-full transition-[width] duration-fast", SEVERITY_BAR[sev])}
@@ -105,7 +114,12 @@ export function SloBurnBoard({ data, isError }: SloBurnBoardProps) {
       </div>
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         {TIER_ORDER.map((tier) => (
-          <BurnGauge key={tier} tier={tier} data={tiers[tier] ?? unknownTier()} />
+          <BurnGauge
+            key={tier}
+            tier={tier}
+            data={tiers[tier] ?? unknownTier()}
+            sourceUnknown={sourceUnknown}
+          />
         ))}
       </div>
     </section>

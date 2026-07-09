@@ -93,15 +93,30 @@
     }
   },
   "factor": {
-    "$description": "Agent process-state grammar (ADR-044): identity hue is FROZEN (INV-CLR-012); what an agent is DOING is encoded as chroma rationing — a scalar factor applied to the identity colour's chroma (the rationedAgentColor pattern). Strictly monotone with cognitive activity (INV-CLR-017): an interrupted agent is nearly achromatic, an acting agent burns at full identity. escalated stays at full chroma and composes with the danger ring + urgent pulse (a composition rule, not a colour); recovered is a motion event, not a colour.",
+    "$description": "Agent process-state grammar (ADR-044): identity hue is FROZEN (INV-CLR-012); what an agent is DOING is encoded as chroma rationing — a scalar factor applied to the identity colour's chroma (the rationedAgentColor pattern). Strictly monotone with cognitive activity (INV-CLR-017): an interrupted agent is nearly achromatic, an acting agent burns at full identity. escalated stays at full chroma and composes with the danger ring + urgent pulse (a composition rule, not a colour). The Atlas Console Elevation canonical Agent-State Model (Req 2.7, INV-CLR-017) extends this grammar to every observable lifecycle state; each factor is authored HERE (never invented in TS), and every factor is strictly > 0 so identity hue is never chroma-drained to neutral gray — including the interrupting/failing states (interrupting floor = 0.25).",
     "agentstate": {
       "$type": "number",
       "interrupted": { "$value": 0.25 },
+      "interrupting": { "$value": 0.25 },
+      "idle": { "$value": 0.3 },
       "waiting": { "$value": 0.35 },
+      "asking": { "$value": 0.4 },
+      "uncertain": { "$value": 0.45 },
+      "recovering": { "$value": 0.5 },
       "thinking": { "$value": 0.55 },
+      "searching": { "$value": 0.6 },
+      "planning": { "$value": 0.65 },
+      "delegating": { "$value": 0.7 },
+      "handing-off": { "$value": 0.72 },
       "debating": { "$value": 0.8 },
+      "streaming": { "$value": 0.85 },
+      "confident": { "$value": 0.9 },
       "acting": { "$value": 1 },
-      "escalated": { "$value": 1 }
+      "escalating": { "$value": 1 },
+      "escalated": { "$value": 1 },
+      "failing": { "$value": 1 },
+      "succeeding": { "$value": 1 },
+      "completing": { "$value": 1 }
     }
   },
   "radius": {

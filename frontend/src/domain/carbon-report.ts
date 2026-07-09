@@ -9,7 +9,7 @@ const ZWastePrediction = z
     survival_probability: ZConfidence.optional(),
     recommended_action: z.string().optional(),
   })
-  .strict()
+  .passthrough()
   .optional();
 
 export const CarbonReportSchema = z
@@ -23,6 +23,6 @@ export const CarbonReportSchema = z
     pareto_weight: z.number().min(0).max(1).optional(),
     timestamp: ZIsoTimestamp,
   })
-  .strict();
+  .passthrough();
 
 export type CarbonReport = z.infer<typeof CarbonReportSchema>;

@@ -34,6 +34,16 @@ export class SchemaViolationError extends Error {
   }
 }
 
+export class TimeoutError extends Error {
+  override readonly name = "TimeoutError";
+  constructor(
+    readonly url: string,
+    readonly timeoutMs: number,
+  ) {
+    super(`Request timed out after ${timeoutMs}ms (${url})`);
+  }
+}
+
 export class RateLimitError extends HttpError {
   override readonly name = "RateLimitError";
   constructor(

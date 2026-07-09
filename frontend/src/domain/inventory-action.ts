@@ -13,6 +13,6 @@ export const InventoryActionSchema = z
     reorder_point: z.number().min(0),
     confidence: ZConfidence,
   })
-  .strict();
+  .passthrough();
 
 export type InventoryAction = z.infer<typeof InventoryActionSchema>;

@@ -15,12 +15,13 @@ import {
 import { Badge } from "@ds/primitives";
 import { useDecisionQuery } from "@hooks/use-decision";
 import { useFirehose } from "@hooks/use-firehose";
+import { useOnlineStatus } from "@hooks/use-online-status";
 import { fmt } from "@lib/formatters";
-import { phaseName, replayDecision } from "@lib/replay";
+import { clampPhase, parseReplayPhase, phaseName, replayDecision } from "@lib/replay";
+import { resolveUniversalState } from "@lib/universal-state";
 import * as Slider from "@radix-ui/react-slider";
 import { useCallback, useMemo } from "react";
 import { Link, useParams, useSearchParams } from "react-router-dom";
-import { z } from "zod";
 
 export function DecisionDetail() {
   const { id } = useParams<{ id: string }>();
@@ -31,6 +32,9 @@ export function DecisionDetail() {
 
   const decision = query.data?.decision;
   const raw = query.data?.raw;
+
+  // Offline signal for the universal-state resolver (Req 10.7).
+  const offline = useOnlineStatus();
 
   // Live twin-divergence feed for the trust caveat next to confidence —
   // confidence numbers rest on the twin's world-model (I-12).
@@ -43,15 +47,14 @@ export function DecisionDetail() {
   // `replace: true` so the back button doesn't accumulate one entry
   // per slider tick.
   const [searchParams, setSearchParams] = useSearchParams();
-  const phaseParsed = useMemo(
-    () => z.coerce.number().int().min(1).max(5).safeParse(searchParams.get("phase")),
-    [searchParams],
+  const phase = useMemo(
+    () => parseReplayPhase(searchParams.get("phase"), decision?.phase_reached ?? 1),
+    [searchParams, decision?.phase_reached],
   );
-  const phase = phaseParsed.success ? phaseParsed.data : (decision?.phase_reached ?? 1);
 
   const setPhase = useCallback(
     (next: number) => {
-      const clamped = Math.max(1, Math.min(5, Math.floor(next)));
+      const clamped = clampPhase(next);
       setSearchParams(
         (prev) => {
           const params = new URLSearchParams(prev);
@@ -100,9 +103,23 @@ export function DecisionDetail() {
     return <p className="text-sm text-ink-muted">Loading decision…</p>;
   }
   if (query.isError || !decision || !slice) {
+    // Distinguish an offline session ("can't reach it right now") from a genuine
+    // load failure / missing record ("failed to load"), never a silent blank
+    // (Req 10.7, 10.8). Degraded posture is announced by the global banner.
+    const unavailableState = resolveUniversalState({
+      isLoading: false,
+      isError: query.isError,
+      isOffline: offline,
+      isDegraded: false,
+      itemCount: decision && slice ? 1 : 0,
+    });
+    const detail =
+      unavailableState === "offline"
+        ? "You're offline — reconnect to load this decision."
+        : `Decision unavailable: ${(query.error as Error | undefined)?.message ?? "not found"}`;
     return (
       <div role="alert" className="text-sm text-confidence-risk">
-        Decision unavailable: {(query.error as Error | undefined)?.message ?? "not found"}
+        {detail}
         <div className="mt-2">
           <Link to="/decisions" className="text-2xs text-accent underline">
             Back to Decision Theater

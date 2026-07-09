@@ -10,7 +10,7 @@ const ZAnomalyScores = z
     gnn_structural: z.number(),
     ensemble_weighted: z.number(),
   })
-  .strict();
+  .passthrough();
 
 const ZMonteCarloImpact = z
   .object({
@@ -18,7 +18,7 @@ const ZMonteCarloImpact = z
     expected_kpi_degradation_pct: z.number().optional(),
     p95_degradation_pct: z.number().optional(),
   })
-  .strict()
+  .passthrough()
   .optional();
 
 export const DisruptionAlertSchema = z
@@ -35,6 +35,6 @@ export const DisruptionAlertSchema = z
     timestamp: ZIsoTimestamp,
     confidence: ZConfidence,
   })
-  .strict();
+  .passthrough();
 
 export type DisruptionAlert = z.infer<typeof DisruptionAlertSchema>;

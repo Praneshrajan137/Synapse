@@ -1,0 +1,440 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "SYNAPSE API Gateway (checked-in contract snapshot)",
+    "version": "1.0.0-snapshot",
+    "description": "Offline fallback for the Contract Fidelity Suite. Used when the live gateway /openapi.json is unreachable (CI, local, air-gapped). Enumerates the success-response body of every HTTP capability the Atlas Console is entitled to consume (api/routers/*), with top-level fields mirroring the backend contract as of ADR-047. Regenerate from the live gateway with `pnpm openapi:gen` when the backend evolves."
+  },
+  "paths": {
+    "/health": {
+      "get": {
+        "operationId": "gateway_health",
+        "responses": {
+          "200": {
+            "description": "Liveness probe.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": { "status": { "type": "string" }, "service": { "type": "string" } },
+                  "required": ["status", "service"]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/ready": {
+      "get": {
+        "operationId": "gateway_ready",
+        "responses": {
+          "200": {
+            "description": "Readiness probe.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": { "status": { "type": "string" }, "orchestrator": { "type": "string" } },
+                  "required": ["status", "orchestrator"]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/agents": {
+      "get": {
+        "operationId": "list_agents",
+        "responses": {
+          "200": {
+            "description": "Agent health + metric overlay.",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/AgentHealthResponse" } } }
+          }
+        }
+      }
+    },
+    "/api/v1/auth/login": {
+      "post": {
+        "operationId": "login",
+        "responses": {
+          "200": {
+            "description": "Access token issue.",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/LoginResponse" } } }
+          }
+        }
+      }
+    },
+    "/api/v1/auth/refresh": {
+      "post": {
+        "operationId": "refresh",
+        "responses": {
+          "200": {
+            "description": "Access token refresh.",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/RefreshResponse" } } }
+          }
+        }
+      }
+    },
+    "/api/v1/auth/logout": {
+      "post": {
+        "operationId": "logout",
+        "responses": { "204": { "description": "Session revoked (no body)." } }
+      }
+    },
+    "/api/v1/auth/.well-known/jwks.json": {
+      "get": {
+        "operationId": "jwks",
+        "responses": {
+          "200": {
+            "description": "JSON Web Key Set.",
+            "content": {
+              "application/json": {
+                "schema": { "type": "object", "properties": { "keys": { "type": "array" } }, "required": ["keys"] }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/decisions/recent": {
+      "get": {
+        "operationId": "list_recent_decisions",
+        "responses": {
+          "200": {
+            "description": "Recent audit rows.",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/AuditListResponse" } } }
+          }
+        }
+      }
+    },
+    "/api/v1/decisions/{decision_id}": {
+      "get": {
+        "operationId": "get_decision",
+        "responses": {
+          "200": {
+            "description": "Full decision detail.",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/DecisionDetailResponse" } } }
+          }
+        }
+      }
+    },
+    "/api/v1/decisions/{decision_id}/override": {
+      "post": {
+        "operationId": "submit_override",
+        "responses": {
+          "200": {
+            "description": "Override acknowledgement (audit-row-first).",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/OverrideResponse" } } }
+          }
+        }
+      }
+    },
+    "/api/v1/escalations/analytics": {
+      "get": {
+        "operationId": "get_escalation_analytics",
+        "responses": {
+          "200": {
+            "description": "Escalation pressure analytics.",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/EscalationAnalytics" } } }
+          }
+        }
+      }
+    },
+    "/api/v1/orders": {
+      "post": {
+        "operationId": "submit_order",
+        "responses": {
+          "202": {
+            "description": "Order accepted (outbox-backed).",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/OrderAck" } } }
+          }
+        }
+      }
+    },
+    "/api/v1/steering": {
+      "post": {
+        "operationId": "submit_steering",
+        "responses": {
+          "200": {
+            "description": "Steering write acknowledgement.",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/SteeringResponse" } } }
+          }
+        }
+      }
+    },
+    "/api/v1/system/posture": {
+      "get": {
+        "operationId": "get_system_posture",
+        "responses": {
+          "200": {
+            "description": "Brownout + breaker posture.",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/SystemPosture" } } }
+          }
+        }
+      }
+    },
+    "/api/v1/system/slo": {
+      "get": {
+        "operationId": "get_slo",
+        "responses": {
+          "200": {
+            "description": "SLO burn (multi-window).",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/SloResponse" } } }
+          }
+        }
+      }
+    },
+    "/api/v1/system/calibration": {
+      "get": {
+        "operationId": "get_calibration",
+        "responses": {
+          "200": {
+            "description": "Confidence calibration.",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/CalibrationResponse" } } }
+          }
+        }
+      }
+    },
+    "/api/v1/telemetry": {
+      "post": {
+        "operationId": "ingest_telemetry",
+        "responses": { "202": { "description": "Beacon accepted (no body)." } }
+      }
+    },
+    "/api/v1/topology": {
+      "get": {
+        "operationId": "get_topology",
+        "responses": {
+          "200": {
+            "description": "Supply-network topology for a city.",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/TopologyResponse" } } }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "AgentHealthResponse": {
+        "type": "object",
+        "properties": { "agents": { "type": "object" }, "count": { "type": "integer" } },
+        "required": ["agents", "count"]
+      },
+      "LoginResponse": {
+        "type": "object",
+        "properties": {
+          "access_token": { "type": "string" },
+          "token_type": { "type": "string" },
+          "expires_in": { "type": "integer" },
+          "role": { "type": "string" },
+          "operator_token_ref": { "type": "string" }
+        },
+        "required": ["access_token", "token_type", "expires_in", "role", "operator_token_ref"]
+      },
+      "RefreshResponse": {
+        "type": "object",
+        "properties": {
+          "access_token": { "type": "string" },
+          "token_type": { "type": "string" },
+          "expires_in": { "type": "integer" },
+          "role": { "type": "string" }
+        },
+        "required": ["access_token", "token_type", "expires_in", "role"]
+      },
+      "AuditRow": {
+        "type": "object",
+        "properties": {
+          "audit_id": { "type": "string" },
+          "decision_id": { "type": "string" },
+          "tier": { "type": "string" },
+          "phase_reached": { "type": "integer" },
+          "confidence": { "type": "number" },
+          "escalated": { "type": "boolean" },
+          "city": { "type": "string" },
+          "selected_action": { "type": "object" },
+          "pareto_weights": { "type": "object" },
+          "proposals": { "type": "array" },
+          "human_override": { "type": "object" },
+          "operator_token_ref": { "type": "string" },
+          "debate_rounds": { "type": "integer" },
+          "context_messages": { "type": "array" },
+          "execution_confirmations": { "type": "array" },
+          "audit_trace": { "type": "array" },
+          "created_at": { "type": "string" },
+          "degraded": { "type": "boolean" },
+          "is_synthetic": { "type": "boolean" }
+        },
+        "required": ["audit_id", "decision_id", "tier", "phase_reached", "confidence", "escalated", "created_at"]
+      },
+      "AuditListResponse": {
+        "type": "object",
+        "properties": {
+          "decisions": { "type": "array", "items": { "$ref": "#/components/schemas/AuditRow" } },
+          "count": { "type": "integer" }
+        },
+        "required": ["decisions", "count"]
+      },
+      "DecisionDetailResponse": {
+        "type": "object",
+        "properties": {
+          "audit_id": { "type": "string" },
+          "decision_id": { "type": "string" },
+          "tier": { "type": "string" },
+          "phase_reached": { "type": "integer" },
+          "confidence": { "type": "number" },
+          "escalated": { "type": "boolean" },
+          "city": { "type": "string" },
+          "proposals": {},
+          "selected_action": {},
+          "pareto_weights": {},
+          "human_override": {},
+          "audit_trace": {},
+          "created_at": { "type": "string" },
+          "escalations": { "type": "array" },
+          "debate_rounds": { "type": "integer" },
+          "pareto_front": { "type": "array" },
+          "execution_confirmations": { "type": "array" },
+          "context_messages": { "type": "array" },
+          "outcome": { "type": "object" },
+          "prev_hash": { "type": "string" },
+          "current_hash": { "type": "string" },
+          "chain_verified": { "type": "boolean" },
+          "degraded": { "type": "boolean" },
+          "is_synthetic": { "type": "boolean" }
+        },
+        "required": [
+          "audit_id",
+          "decision_id",
+          "tier",
+          "phase_reached",
+          "confidence",
+          "escalated",
+          "proposals",
+          "selected_action",
+          "pareto_weights",
+          "audit_trace"
+        ]
+      },
+      "OverrideResponse": {
+        "type": "object",
+        "properties": {
+          "audit_escalation_id": { "type": "integer" },
+          "decision_id": { "type": "string" },
+          "action": { "type": "string" },
+          "operator_token_ref": { "type": "string" },
+          "override_at": { "type": "string" },
+          "orchestrator_notified": { "type": "boolean" }
+        },
+        "required": [
+          "audit_escalation_id",
+          "decision_id",
+          "action",
+          "operator_token_ref",
+          "override_at",
+          "orchestrator_notified"
+        ]
+      },
+      "EscalationAnalytics": {
+        "type": "object",
+        "properties": {
+          "window_hours": { "type": "integer" },
+          "city": { "type": "string" },
+          "total": { "type": "integer" },
+          "overridden": { "type": "integer" },
+          "pending": { "type": "integer" },
+          "override_actions": { "type": "object" },
+          "resolution_time_ms": { "type": "object" },
+          "top_reasons": { "type": "array" },
+          "ts": { "type": "number" }
+        },
+        "required": [
+          "window_hours",
+          "city",
+          "total",
+          "overridden",
+          "pending",
+          "override_actions",
+          "resolution_time_ms",
+          "top_reasons",
+          "ts"
+        ]
+      },
+      "OrderAck": {
+        "type": "object",
+        "properties": {
+          "status": { "type": "string" },
+          "order_id": { "type": "string" },
+          "outbox_id": { "type": "string" }
+        },
+        "required": ["status", "order_id", "outbox_id"]
+      },
+      "SteeringResponse": {
+        "type": "object",
+        "properties": {
+          "steering_id": { "type": "string" },
+          "operator_token_ref": { "type": "string" },
+          "action": { "type": "string" },
+          "target": { "type": "string" },
+          "value": { "type": "number" },
+          "created_at": { "type": "string" }
+        },
+        "required": ["steering_id", "operator_token_ref", "action", "target", "value", "created_at"]
+      },
+      "SystemPosture": {
+        "type": "object",
+        "properties": {
+          "brownout": { "type": "object" },
+          "breakers": { "type": "object" },
+          "degraded": { "type": "boolean" }
+        },
+        "required": ["degraded"]
+      },
+      "SloResponse": {
+        "type": "object",
+        "properties": {
+          "tiers": { "type": "object" },
+          "ts": { "type": "number" },
+          "source": { "type": "string" }
+        },
+        "required": ["tiers", "ts", "source"]
+      },
+      "CalibrationResponse": {
+        "type": "object",
+        "properties": {
+          "window_hours": { "type": "integer" },
+          "include_synthetic": { "type": "boolean" },
+          "city": { "type": "string" },
+          "n_total": { "type": "integer" },
+          "n_scored": { "type": "integer" },
+          "n_unknown": { "type": "integer" },
+          "brier_score": { "type": "number" },
+          "bins": { "type": "array" },
+          "as_of": { "type": "string" }
+        },
+        "required": [
+          "window_hours",
+          "include_synthetic",
+          "city",
+          "n_total",
+          "n_scored",
+          "n_unknown",
+          "brier_score",
+          "bins",
+          "as_of"
+        ]
+      },
+      "TopologyResponse": {
+        "type": "object",
+        "properties": {
+          "city": { "type": "string" },
+          "nodes": { "type": "array" },
+          "edges": { "type": "array" },
+          "generated_at": { "type": "string" }
+        },
+        "required": ["city", "nodes", "edges", "generated_at"]
+      }
+    }
+  }
+}

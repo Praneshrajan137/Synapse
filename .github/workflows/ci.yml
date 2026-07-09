@@ -272,7 +272,11 @@ jobs:
         run: cd design-system/color && npm ci --no-audit --no-fund
       - name: Dependency licence audit (I-1)
         run: node design-system/color/scripts/license-audit.mjs
-      - name: Build tokens + SDD/TDD/BDD suite (7 layers, 14 INV-CLR)
+      - name: Build tokens + SDD/TDD/BDD suite (INV-CLR incl. atlas-console 019–025)
+        # `npm run verify` = build + spec:coverage + vitest. spec:coverage
+        # hard-fails if any INV-CLR/MR-CLR id in color-system.spec.yml lacks a
+        # test, so the atlas-console-elevation INV-CLR-019..025 properties are
+        # gated here, not just present.
         run: cd design-system/color && npm run verify
       - name: Build determinism — dist matches a fresh build (INV-CLR-010)
         run: git diff --exit-code design-system/color/dist/

@@ -2,6 +2,7 @@ import type { City } from "@domain/primitives";
 import { OutcomeBand } from "@ds/compounds";
 import { useSynapseApi } from "@hooks/use-synapse-api";
 import { cn } from "@lib/cn";
+import { metricQueryKey } from "@lib/query-keys";
 import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
 import { confidenceSamples } from "./logic";
@@ -22,7 +23,7 @@ export function ConfidenceDistribution({ city }: { city: City }) {
   const [includeSynthetic, setIncludeSynthetic] = useState(false);
 
   const q = useQuery({
-    queryKey: ["recent-for-confidence", city],
+    queryKey: metricQueryKey("recent-for-confidence", city, { includeSynthetic }),
     queryFn: () => api.listRecentDecisions({ limit: 200, city }),
     refetchInterval: 30_000,
     retry: false,

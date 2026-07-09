@@ -128,6 +128,21 @@ export const TopologyResponseSchema = z
   .passthrough();
 export type TopologyResponse = z.infer<typeof TopologyResponseSchema>;
 
+// ─── Steering (mirror api/routers/steering.py write-ack) ──────────────────
+// Named export (schemaId "SteeringResponse") so the Contract Fidelity Suite
+// can introspect it in the domain schema registry. Consumed by submitSteering.
+export const SteeringResponseSchema = z
+  .object({
+    steering_id: z.string(),
+    operator_token_ref: z.string(),
+    action: z.string(),
+    target: z.string().nullable(),
+    value: z.number().nullable(),
+    created_at: z.string(),
+  })
+  .passthrough();
+export type SteeringResponse = z.infer<typeof SteeringResponseSchema>;
+
 // Hand-rolled typed client for the BE endpoints the FE consumes today.
 // Lives alongside (and will eventually be superseded by) the OpenAPI-codegen
 // client in `openapi.gen.ts` once gateway publishes /openapi.json.
@@ -139,6 +154,12 @@ export interface SynapseApiDeps {
   readonly getAccessToken?: (() => string | null) | undefined;
   readonly onAuthExpired?: (() => Promise<void> | void) | undefined;
 }
+
+// The hard upper bound for a Twin Lab Monte Carlo run before the FE rejects it
+// as hung with a typed TimeoutError — the Tier-4 Decision_Tier SLA ceiling
+// (Req 7.6 / FE-INV-026). A healthy 1000-scenario run completes far inside this
+// (INV-TW-004 targets ~10s); this bound only catches a genuinely stuck run.
+export const TWIN_SIMULATE_TIMEOUT_MS = 120_000;
 
 export function createSynapseApi(deps: SynapseApiDeps) {
   const gateway = createHttpClient({
@@ -233,6 +254,7 @@ export function createSynapseApi(deps: SynapseApiDeps) {
         idempotent: true,
         schema: TwinStateSchema,
         schemaId: "TwinState",
+        timeoutMs: TWIN_SIMULATE_TIMEOUT_MS,
       }),
 
     // ─── Auth (P1) ─────────────────────────────────────────────────────
@@ -341,16 +363,7 @@ export function createSynapseApi(deps: SynapseApiDeps) {
     }> =>
       gateway.post("/api/v1/steering", body, {
         idempotent: Boolean(body.idempotency_key),
-        schema: z
-          .object({
-            steering_id: z.string(),
-            operator_token_ref: z.string(),
-            action: z.string(),
-            target: z.string().nullable(),
-            value: z.number().nullable(),
-            created_at: z.string(),
-          })
-          .passthrough(),
+        schema: SteeringResponseSchema,
         schemaId: "SteeringResponse",
       }),
 

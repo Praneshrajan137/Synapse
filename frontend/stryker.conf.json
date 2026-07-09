@@ -1,6 +1,6 @@
 {
   "$schema": "https://raw.githubusercontent.com/stryker-mutator/stryker-js/master/packages/core/schema/stryker-schema.json",
-  "_comment": "SYNAPSE Console — mutation gate per CLAUDE.md: <15% survival on rewards-adjacent (>=85% killed), <10% on guardrails (>=90% killed). Targets the load-bearing TS paths: canonical JSON (I-13), full-jitter retry (FE-INV-006/ADR-016), HTTP client (FE-INV-002, 012), WebSocket multiplex (FE-INV-008), replay determinism (FE-INV-028), confidence (FE-INV-005), auth refresh, and override-state stores. UI components are tested via Storybook a11y + visual regression, not mutation.",
+  "_comment": "SYNAPSE Console — mutation gate per CLAUDE.md: <15% survival on rewards-adjacent (>=85% killed), <10% on guardrails (>=90% killed). Targets the load-bearing TS paths: canonical JSON (I-13), full-jitter retry (FE-INV-006/ADR-016), HTTP client (FE-INV-002, 012), WebSocket multiplex (FE-INV-008), replay determinism (FE-INV-028), confidence (FE-INV-005), auth refresh, override-state stores, and the atlas-console-elevation critical pure modules (contract-coverage, agent-state domain+derivation, universal-state, posture-banner, oversight — FE-INV-032/049..052, Req 15.5). UI components are tested via Storybook a11y + visual regression, not mutation.",
   "packageManager": "pnpm",
   "reporters": ["clear-text", "html", "json"],
   "plugins": [
@@ -25,7 +25,19 @@
     "src/transport/auth-refresh.ts",
     "src/state/escalation.store.ts",
     "src/state/firehose.store.ts",
-    "src/surfaces/operations/logic.ts"
+    "src/surfaces/operations/logic.ts",
+    "src/lib/contract-coverage.ts",
+    "src/domain/agent-state.ts",
+    "src/lib/agent-state.ts",
+    "src/lib/universal-state.ts",
+    "src/lib/posture-banner.ts",
+    "src/lib/oversight.ts",
+    "src/lib/effectiveness-ratchet.ts",
+    "src/lib/ring-buffer.ts",
+    "src/lib/reconcile.ts",
+    "src/lib/expected-review-value.ts",
+    "src/lib/interruption-precision.ts",
+    "src/lib/trust-track-record.ts"
   ],
   "_thresholds_comment": "Sprint 13 §Phase 4.1: break bumped 26 -> 50 after json-canonical.ts hit 96.30% kill rate (8 new survivor-killing tests in `src/lib/__tests__/json-canonical.test.ts`, verified locally 2026-05-29). 50 is the user's Sprint-13 target. Next ratchet step (50 -> 70 -> 85) requires test coverage on the remaining mutate files (jitter-retry, replay, confidence, http-client, ws-multiplex, firehose, auth-refresh, escalation.store, firehose.store). The 85 destination matches CLAUDE.md mutation rule (<15% survival = >=85% killed). Each PR that adds tests bumps `break` upward via the same operator step as the coverage ratchet; PRs that lower it bounce in review. Never set back to null.",
   "thresholds": {

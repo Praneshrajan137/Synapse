@@ -2,7 +2,7 @@ import { Button } from "@ds/primitives";
 import { useSynapseApi } from "@hooks/use-synapse-api";
 import { type Role, useSessionStore } from "@state/session.store";
 import { HttpError } from "@transport/errors";
-import { type FormEvent, useState } from "react";
+import { type FormEvent, useId, useState } from "react";
 import { Navigate, useLocation, useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 
@@ -30,6 +30,10 @@ export function Login() {
   const [operatorId, setOperatorId] = useState("ops@synapse.local");
   const [password, setPassword] = useState("");
   const [pending, setPending] = useState(false);
+  // Sign-in errors are associated with the credential inputs (Req 9.7) so
+  // assistive tech conveys the failure, in addition to the transient toast.
+  const [error, setError] = useState<string | null>(null);
+  const errorId = useId();
 
   if (currentRole !== "anonymous") {
     return <Navigate to={DEFAULT_ROUTES[currentRole]} replace />;
@@ -38,6 +42,7 @@ export function Login() {
   async function onSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setPending(true);
+    setError(null);
     try {
       const res = await api.login({ operator_id: operatorId, password });
       setAuth(res.role as Role, res.access_token, res.operator_token_ref, res.expires_in);
@@ -50,6 +55,7 @@ export function Login() {
           : err instanceof Error
             ? err.message
             : "Login failed";
+      setError(message);
       toast.error(message);
     } finally {
       setPending(false);
@@ -78,7 +84,9 @@ export function Login() {
             autoComplete="username"
             value={operatorId}
             onChange={(e) => setOperatorId(e.target.value)}
-            className="mt-1 h-10 w-full rounded-md border border-border bg-surface px-3 text-sm text-ink focus-visible:shadow-focus focus-visible:outline-none"
+            aria-invalid={error !== null}
+            aria-describedby={error ? errorId : undefined}
+            className="mt-1 h-10 w-full rounded-md border border-border bg-surface px-3 text-sm text-ink focus-visible:shadow-focus focus-visible:outline-none aria-[invalid=true]:border-signal-danger"
           />
         </label>
         <label className="block text-sm">
@@ -89,9 +97,16 @@ export function Login() {
             autoComplete="current-password"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
-            className="mt-1 h-10 w-full rounded-md border border-border bg-surface px-3 text-sm text-ink focus-visible:shadow-focus focus-visible:outline-none"
+            aria-invalid={error !== null}
+            aria-describedby={error ? errorId : undefined}
+            className="mt-1 h-10 w-full rounded-md border border-border bg-surface px-3 text-sm text-ink focus-visible:shadow-focus focus-visible:outline-none aria-[invalid=true]:border-signal-danger"
           />
         </label>
+        {error && (
+          <div id={errorId} role="alert" className="text-xs text-confidence-risk">
+            {error}
+          </div>
+        )}
         <Button type="submit" variant="primary" size="lg" disabled={pending} className="w-full">
           {pending ? "Signing in…" : "Sign in"}
         </Button>

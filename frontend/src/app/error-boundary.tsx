@@ -1,4 +1,5 @@
 import { Button } from "@ds/primitives/Button";
+import { log } from "@lib/log";
 import { Component, type ErrorInfo, type PropsWithChildren, type ReactNode } from "react";
 
 interface State {
@@ -15,27 +16,18 @@ export class ErrorBoundary extends Component<PropsWithChildren, State> {
 
   override componentDidCatch(error: Error, info: ErrorInfo): void {
     this.setState({ info });
-    // Telemetry — best-effort, no PII, no third-party SaaS (I-1).
-    if (typeof fetch === "function") {
-      const endpoint = import.meta.env.VITE_TELEMETRY_ENDPOINT;
-      if (endpoint) {
-        void fetch(endpoint, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          credentials: "include",
-          body: JSON.stringify({
-            kind: "error",
-            name: error.name,
-            message: error.message,
-            stack: error.stack?.slice(0, 4_000),
-            component_stack: info.componentStack?.slice(0, 2_000),
-            ts: new Date().toISOString(),
-          }),
-        }).catch(() => {
-          /* swallow telemetry failures */
-        });
-      }
-    }
+    // Record the render-boundary error as a FIELD-WHITELISTED telemetry event
+    // via the batched log() helper (FE-INV-030, Req 14.2/14.3). log() strips
+    // everything outside the allow-list and ships via navigator.sendBeacon —
+    // no PII, no third-party SaaS (I-1), no blocking fetch on the crash path.
+    log({
+      kind: "error",
+      error: "render_boundary",
+      name: error.name,
+      message: error.message,
+      stack: error.stack?.slice(0, 4_000),
+      component_stack: info.componentStack?.slice(0, 2_000) ?? undefined,
+    });
   }
 
   override render(): ReactNode {

@@ -165,11 +165,21 @@ export function AgentDetail() {
             </li>
           )}
           {lastDecisions.map((d) => (
-            <li key={d.decision_id} className="flex items-center gap-3 px-3 py-2 text-xs">
-              <span className="font-mono text-ink-muted">{fmt.shortId(d.decision_id)}</span>
-              <TierBadge tier={d.tier} />
-              <ConfidenceChip value={d.confidence} />
-              <span className="ml-auto text-ink-subtle">{fmt.relativeTime(d.timestamp)}</span>
+            // FE-INV-004 / Req 4.1: every rendered decision carries Tier +
+            // Confidence AND a single-activation route to its audit row. The
+            // whole row is one anchor, so one pointer click OR one keyboard
+            // activation opens the decision detail (the audit-anchored replay).
+            <li key={d.decision_id}>
+              <Link
+                to={`/decisions/${d.decision_id}`}
+                aria-label={`Open audit detail for decision ${fmt.shortId(d.decision_id)}`}
+                className="flex items-center gap-3 px-3 py-2 text-xs transition-colors duration-fast hover:bg-surface-raised/60 focus-visible:outline-none focus-visible:shadow-focus"
+              >
+                <span className="font-mono text-ink-muted">{fmt.shortId(d.decision_id)}</span>
+                <TierBadge tier={d.tier} />
+                <ConfidenceChip value={d.confidence} />
+                <span className="ml-auto text-ink-subtle">{fmt.relativeTime(d.timestamp)}</span>
+              </Link>
             </li>
           ))}
         </ul>

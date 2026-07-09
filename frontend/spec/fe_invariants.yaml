@@ -323,13 +323,23 @@ invariants:
     mirrors: ADR-009, INV-TW-004
     description: >
       The Twin Lab POST /simulate flow surfaces 1000-scenario Monte Carlo
-      runs without UI degradation. The FE shows progress and rejects
-      hung runs with a typed timeout.
+      runs without UI degradation. The FE shows progress (elapsed vs SLA)
+      and rejects a hung run with a typed TimeoutError once the ≤120s
+      Tier-4 SLA ceiling elapses (a healthy run finishes far inside it,
+      ~10s per INV-TW-004). Every spatial surface also exposes a
+      keyboard/SR-reachable non-spatial equivalent and an error-with-retry
+      state (never a blank canvas) — Req 7.4/7.5/7.6.
     implementations:
       - frontend/src/surfaces/twin-lab/TwinLab.tsx
       - frontend/src/surfaces/twin-lab/ScenarioBuilder.tsx
+      - frontend/src/surfaces/twin-lab/SimulationProgress.tsx
+      - frontend/src/surfaces/twin-lab/SupplyNetworkTable.tsx
+      - frontend/src/surfaces/mission-control/MapDataTable.tsx
+      - frontend/src/design-system/compounds/SpatialErrorBoundary.tsx
+      - frontend/src/transport/http-client.ts
     tests:
       - frontend/src/lib/__tests__/replay.test.ts
+      - frontend/src/transport/__tests__/http-client.test.ts
     status: enforced
 
   - id: FE-INV-027
@@ -418,19 +428,34 @@ invariants:
     mirrors: ADR-015
     description: >
       Stryker mutation testing on json-canonical, jitter-retry, replay,
-      escalation.store, firehose.store. Nightly CI gate.
+      escalation.store, firehose.store, plus the atlas-console-elevation
+      critical pure modules — contract-coverage, agent-state (domain + lib
+      derivation), universal-state, posture-banner, oversight, and the
+      operations trust-calibration logic. Nightly CI gate (Req 15.5).
     implementations:
       - frontend/src/lib/json-canonical.ts
       - frontend/src/lib/jitter-retry.ts
       - frontend/src/lib/replay.ts
       - frontend/src/state/escalation.store.ts
       - frontend/src/state/firehose.store.ts
+      - frontend/src/lib/contract-coverage.ts
+      - frontend/src/lib/agent-state.ts
+      - frontend/src/lib/universal-state.ts
+      - frontend/src/lib/posture-banner.ts
+      - frontend/src/lib/oversight.ts
+      - frontend/src/surfaces/operations/logic.ts
     tests:
       - frontend/src/lib/__tests__/json-canonical.test.ts
       - frontend/src/lib/__tests__/jitter-retry.test.ts
       - frontend/src/lib/__tests__/replay.test.ts
       - frontend/src/state/__tests__/escalation-store.test.ts
       - frontend/src/state/__tests__/firehose-store.test.ts
+      - frontend/src/lib/__tests__/contract-coverage.property.test.ts
+      - frontend/src/lib/__tests__/agent-state.property.test.ts
+      - frontend/src/lib/__tests__/universal-state.property.test.ts
+      - frontend/src/lib/__tests__/posture-banner.property.test.ts
+      - frontend/src/lib/__tests__/oversight.property.test.ts
+      - frontend/src/surfaces/operations/__tests__/logic.test.ts
     status: enforced
 
   - id: FE-INV-021
@@ -625,12 +650,19 @@ invariants:
       attribute, the synthetic badge keeps its dashed ring + label, pending
       escalations read from sort order + the queue count. Motion explains
       causality and urgency-as-frequency (urgent = half the ambient breath)
-      but a frozen frame loses nothing.
+      but a frozen frame loses nothing. All timing AND easing route through
+      --syn-motion-* / --syn-ease-* tokens (no ad-hoc durations or easings in
+      component or config source), so reduced motion zeroes every duration
+      (including the acting pulse and skeleton shimmer). The no-animate
+      exclusion set — prose being read (.syn-prose / [data-reading]) and the
+      keyboard focus target (:focus-visible) — is declared and honoured in
+      global.css so those elements never animate regardless of preference.
     implementations:
       - frontend/src/design-system/compounds/CouncilStrip.tsx
       - frontend/src/design-system/compounds/SyntheticBadge.tsx
       - frontend/src/surfaces/override-cockpit/EscalationQueue.tsx
       - frontend/src/styles/tokens.css
+      - frontend/src/styles/global.css
       - frontend/tailwind.config.ts
     tests:
       - frontend/src/design-system/compounds/__tests__/MotionGrammar.test.tsx
@@ -791,4 +823,462 @@ invariants:
       - frontend/src/lib/__tests__/cognition.test.ts
       - frontend/src/domain/__tests__/cognition-event.test.ts
       - frontend/src/design-system/compounds/__tests__/CouncilStrip.test.tsx
+    status: enforced
+
+  - id: FE-INV-049
+    title: Contract fidelity — every entitled backend capability is covered or the check fails
+    mirrors: Req 1, ADR-040, FE-INV-002
+    description: >
+      The Contract Fidelity Suite (frontend/spec/contract-fidelity) compares the
+      Console's typed client + domain Zod schemas against the entitlement
+      manifest and the backend contract, and classifies every entitled
+      capability with exactly one CoverageStatus via the pure `classifyCoverage`
+      (covered / partial / uncovered / out-of-scope). `computeDriftFailure`
+      fails the drift report iff some ENTITLED row is uncovered or partial — an
+      out-of-scope (entitled=false) capability is never counted as a gap.
+      `diffContractFields` reports missing-field drift (contract − schema) and
+      over-strict drift (schema-required − contract) as true set differences.
+      All classifiers are referentially transparent (no I/O), so drift is
+      machine-checked in CI rather than surviving on inspection.
+    implementations:
+      - frontend/src/lib/contract-coverage.ts
+      - frontend/spec/contract-fidelity/types.ts
+      - frontend/spec/contract-fidelity/entitlements.ts
+      - frontend/spec/contract-fidelity/channels.ts
+      - frontend/spec/contract-fidelity/introspect.ts
+      - frontend/spec/contract-fidelity/run.ts
+    tests:
+      - frontend/src/lib/__tests__/contract-coverage.property.test.ts
+    status: enforced
+
+  - id: FE-INV-050
+    title: Canonical Agent-State Model is closed, honestly derived, and never colour-only
+    mirrors: Req 2, ADR-051, INV-CLR-017, FE-INV-048
+    description: >
+      The Console renders agency through one canonical, enumerated AgentState
+      union (frontend/src/domain/agent-state.ts). AgentStateSchema parses a
+      string iff it is a member of AGENT_STATES, and every state the AUX layer
+      produces is a member of that set (no fabricated states). `deriveAgentState`
+      (frontend/src/lib/agent-state.ts) returns a live state only when a backing
+      cognition event exists within the staleness window, returns not-live when
+      the newest backing event is stale, and never invents an active state for an
+      agent with no backing event. Every AgentState descriptor carries a
+      non-colour channel — a non-empty text label, a glyph, and a
+      `data-agent-state` attribute — plus a chroma factor strictly greater than
+      zero, and state transitions preserve the agent's FROZEN identity hue
+      (chroma-only change), so an agent's state never masquerades as a different
+      agent (INV-CLR-017). AgentStatePresenter renders these descriptors.
+    implementations:
+      - frontend/src/domain/agent-state.ts
+      - frontend/src/lib/agent-state.ts
+      - frontend/src/design-system/compounds/AgentStatePresenter.tsx
+    tests:
+      - frontend/src/domain/__tests__/agent-state.property.test.ts
+      - frontend/src/lib/__tests__/agent-state.property.test.ts
+      - frontend/src/design-system/compounds/__tests__/AgentStatePresenter.test.tsx
+    status: enforced
+
+  - id: FE-INV-051
+    title: Universal-state resolution is total and posture is never false-healthy
+    mirrors: Req 10, FE-INV-035
+    description: >
+      Every data-bearing surface resolves through the pure `resolveUniversalState`
+      (frontend/src/lib/universal-state.ts), which returns exactly one of six
+      states — loading, empty, error, degraded, offline, populated — under a
+      fixed priority order, with empty / error / offline mutually distinct so a
+      blank screen or a false-healthy render is impossible. The
+      use-universal-state hook and UniversalStateView bind that resolver to React
+      and render a distinct view per state (never a silent blank). The related
+      `derivePostureBanner` (frontend/src/lib/posture-banner.ts) is pure and
+      total: a posture-fetch failure maps to "unknown" (NEVER healthy), and any
+      brownout shedding or open dependency breaker maps to "degraded" naming what
+      is degraded — mirroring the DegradedBanner honesty rule (FE-INV-035).
+    implementations:
+      - frontend/src/lib/universal-state.ts
+      - frontend/src/lib/posture-banner.ts
+      - frontend/src/hooks/use-universal-state.ts
+      - frontend/src/design-system/compounds/UniversalStateView.tsx
+    tests:
+      - frontend/src/lib/__tests__/universal-state.property.test.ts
+      - frontend/src/lib/__tests__/posture-banner.property.test.ts
+      - frontend/src/hooks/__tests__/use-universal-state.test.tsx
+      - frontend/src/design-system/compounds/__tests__/UniversalStateView.test.tsx
+    status: enforced
+
+  - id: FE-INV-052
+    title: Oversight authority is role-gated, backend-honest, and disabled-not-hidden
+    mirrors: Req 3, I-5, FE-INV-003, FE-INV-007, FE-INV-021, FE-INV-022, FE-INV-033
+    description: >
+      The operator-authority surface (OversightControls) is governed by three
+      pure predicates in frontend/src/lib/oversight.ts. `isCapabilityActionable`
+      is true iff the capability has a backing backend endpoint AND the operator's
+      role is within its required-role set — a null endpoint is a backend gap and
+      is never actionable regardless of role; an out-of-scope action is rendered
+      present-but-disabled with a communicated restriction (isCapabilityVisible
+      is always true), never hidden and never silently allowed. `defaultFocusAction`
+      demotes default focus away from Approve to a corrective action below the
+      0.80 autonomy gate (mirrors CONFIDENCE_GATE.high, FE-INV-007), and
+      `clampSteering` sanitizes any number into [0, 1] with non-finite input
+      collapsing to 0 (FE-INV-033). The controls reuse the audit-row-first
+      override mutation (FE-INV-003/021) and keyboard shortcuts (FE-INV-022).
+    implementations:
+      - frontend/src/lib/oversight.ts
+      - frontend/src/design-system/compounds/OversightControls.tsx
+    tests:
+      - frontend/src/lib/__tests__/oversight.property.test.ts
+      - frontend/src/design-system/compounds/__tests__/OversightControls.test.tsx
+    status: enforced
+
+  - id: FE-INV-053
+    title: The command palette reaches every primary Surface by keyboard
+    mirrors: Req 8, STRIDE, FE-INV-022
+    description: >
+      frontend/src/app/primary-surfaces.ts is the single, named source of truth
+      for the Console's primary Surfaces. `surfaceGoToCommands` is a pure, total
+      map over PRIMARY_SURFACES, so every primary Surface is guaranteed a
+      keyboard-activatable "Go to" command in the CommandPalette that navigates
+      to it without a pointer. Adding a primary Surface is one array entry and the
+      nav link, the palette command, and the coverage guarantee follow
+      automatically; a property test asserts every registry entry has a palette
+      command.
+    implementations:
+      - frontend/src/app/primary-surfaces.ts
+      - frontend/src/app/CommandPalette.tsx
+    tests:
+      - frontend/src/app/__tests__/primary-surfaces.property.test.ts
+      - frontend/src/app/__tests__/CommandPalette.test.tsx
+    status: enforced
+
+  - id: FE-INV-054
+    title: Effectiveness_Harness runs MSW in-browser with zero live-network egress
+    mirrors: Req 1, FE-INV-001
+    description: >
+      The Effectiveness_Harness runs Mock Service Worker as a browser service
+      worker inside the Playwright-controlled browser and intercepts every
+      Backend_Contract HTTP path so no request reaches a live endpoint during a
+      harness-mode test (Req 1.1, 1.5). For a fixed seed the harness produces
+      byte-identical fixture responses and identical stream ordering so the PR
+      gate is deterministic (Req 1.3). An intercepted path with no registered
+      fixture rejects the request with an UnhandledFixtureError naming the path
+      rather than returning an empty/default body (Req 1.6).
+    implementations:
+      - frontend/spec/effectiveness/browser-worker.ts
+      - frontend/spec/effectiveness/handlers.ts
+    tests:
+      - frontend/spec/effectiveness/__tests__/unhandled-path.property.test.ts
+      - frontend/spec/effectiveness/__tests__/harness-determinism.property.test.ts
+    status: enforced
+
+  - id: FE-INV-055
+    title: MSW fixtures are schema-bound to the same Domain_Schema the app validates against
+    mirrors: Req 2, FE-INV-002, FE-INV-049
+    description: >
+      Every MSW_Fixture derives its shape from a Domain_Schema in the shared
+      DOMAIN_SCHEMA_REGISTRY and is validated against that same schema at
+      build/setup time; a fixture that fails validation fails fast and names the
+      offending fixture and schema (Req 2.1–2.3). A capability with no schema is
+      marked schema-less and surfaced as such in the harness report rather than
+      treated as schema-bound (Req 2.4), and a schema-violating payload can be
+      emitted on demand to exercise the schema-violation transition (Req 2.5).
+    implementations:
+      - frontend/spec/effectiveness/fixture-factory.ts
+      - frontend/spec/effectiveness/schema-registry.ts
+    tests:
+      - frontend/spec/effectiveness/__tests__/fixture-factory.property.test.ts
+      - frontend/spec/effectiveness/__tests__/schema-less.property.test.ts
+    status: enforced
+
+  - id: FE-INV-056
+    title: Operator Jobs-To-Be-Done reach the correct terminal outcome via Task_Completion_Tests
+    mirrors: Req 3, FE-INV-003
+    description: >
+      The harness enumerates the named Jobs-To-Be-Done (resolve an escalation,
+      identify which agent degraded and why, reconstruct a decision's rationale,
+      adjust steering safely, catch a disruption before it cascades) and each is
+      driven by a Task_Completion_Test that records steps, time-to-complete, and
+      error/dead-end rate (Req 3.1, 3.2). A test asserts the operator reaches the
+      correct terminal outcome and fails on a wrong/unreachable outcome or a
+      dead-end (Req 3.3, 3.4); the escalation job verifies the audit row commits
+      before the decision is marked acted (Req 3.5). Every measurement is
+      reported as a Scripted_Proxy (Req 3.6).
+    implementations:
+      - frontend/spec/effectiveness/scenarios/index.ts
+      - frontend/spec/effectiveness/scenarios/resolve-escalation.ts
+      - frontend/spec/effectiveness/scenarios/identify-degraded-agent.ts
+      - frontend/spec/effectiveness/scenarios/reconstruct-rationale.ts
+      - frontend/spec/effectiveness/scenarios/adjust-steering.ts
+      - frontend/spec/effectiveness/scenarios/catch-disruption.ts
+    tests:
+      - frontend/tests/e2e/task-completion.jtbd.spec.ts
+    status: enforced
+
+  - id: FE-INV-057
+    title: Effectiveness_Scorecard is versioned and the Effectiveness_Ratchet gates regressions
+    mirrors: Req 4, ADR-015
+    description: >
+      The Task_Completion_Tests emit a versioned, committed Effectiveness_Scorecard
+      recording per-job steps, latency, and error/dead-end rate plus the seed and
+      harness version (Req 4.1, 4.2, 4.6). The Effectiveness_Ratchet is a pure,
+      I/O-free comparator: it fails with a non-zero status and names the regressed
+      job and metric when any metric regresses beyond the explicitly-defined
+      tolerance relative to the committed baseline, and permits a monotonic
+      baseline advance when every metric improved or held (Req 4.3, 4.4, 4.5).
+    implementations:
+      - frontend/src/lib/effectiveness-ratchet.ts
+      - frontend/src/lib/effectiveness-scorecard.ts
+    tests:
+      - frontend/src/lib/__tests__/effectiveness-ratchet.property.test.ts
+    status: enforced
+
+  - id: FE-INV-058
+    title: Nightly Real_Stack_Run checks harness fidelity against the real backend
+    mirrors: Req 5, FE-INV-054
+    description: >
+      The Real_Stack_Run executes the same Task_Completion_Test suite against the
+      real SYNAPSE docker stack on a nightly schedule, isolated from the
+      deterministic PR gate so real-stack latency/nondeterminism never make the PR
+      gate flaky (Req 5.1, 5.3). It reports any test that passes under the harness
+      but fails against the real stack — naming the job, the observed contract
+      difference, and the fixture requiring reconciliation — and records the
+      backend build SHA it ran against so a divergence is traceable (Req 5.2, 5.4,
+      5.5).
+    implementations:
+      - frontend/spec/effectiveness/real-stack-fidelity.ts
+      - .github/workflows/integration.yml
+    tests:
+      - .github/workflows/integration.yml
+    status: enforced
+
+  - id: FE-INV-059
+    title: Firehose stream retains messages in a bounded Ring_Buffer applied at-most-once
+    mirrors: Req 6, FE-INV-017, FE-INV-008
+    description: >
+      Under a sustained firehose Resilience_Scenario the Atlas_Console retains
+      streamed messages in a bounded Ring_Buffer whose length never exceeds its
+      cap regardless of how many messages arrive (Req 6.2), and it applies each
+      sequence at-most-once — a message whose seq was already applied is dropped
+      and never applied twice (Req 6.3, 6.5). The shared, property-tested
+      ring-buffer module lifts the existing per-channel bounded buffer without
+      changing runtime caps.
+    implementations:
+      - frontend/src/lib/ring-buffer.ts
+    tests:
+      - frontend/src/lib/__tests__/ring-buffer.property.test.ts
+      - frontend/src/lib/__tests__/apply-once.property.test.ts
+    status: enforced
+
+  - id: FE-INV-060
+    title: Reconnect replay reconciles without duplicates and never reverts an acted decision
+    mirrors: Req 7, FE-INV-008
+    description: >
+      On reconnect the Atlas_Console requests replay from its last applied
+      sequence (since_seq) and reconciles the replay burst without duplicate rows;
+      a replayed message referencing an already-acted decision keeps that decision
+      acted and never reverts it to pending (Req 7.1, 7.2). The reconciled row set
+      equals the deduplicated union of pre-drop and replayed state with no
+      duplicate, lost, or reverted rows (Req 7.4), and reconnection uses bounded
+      Full-Jitter backoff (Req 7.3).
+    implementations:
+      - frontend/src/lib/reconcile.ts
+    tests:
+      - frontend/src/lib/__tests__/reconcile.property.test.ts
+      - frontend/src/lib/__tests__/reconnect-backoff.property.test.ts
+    status: enforced
+
+  - id: FE-INV-061
+    title: Every backend fault transition resolves to the correct distinct Universal_State
+    mirrors: Req 8, FE-INV-051, FE-INV-035
+    description: >
+      The pure resolveFault router maps every fault/connectivity event — 503,
+      schema-violation, 401 storm, WebSocket flap, offline↔online — to exactly one
+      distinct Universal_State via the inherited resolveUniversalState; a fault
+      never resolves to `populated` (no false-healthy render) and never latches on
+      a prior state when transitions are chained (Req 8.1, 8.2, 8.4, 8.5, 8.6).
+    implementations:
+      - frontend/src/lib/fault-transition.ts
+    tests:
+      - frontend/src/lib/__tests__/fault-transition.property.test.ts
+    status: enforced
+
+  - id: FE-INV-062
+    title: Dense tables virtualize at scale with a bounded mounted-row count
+    mirrors: Req 9, FE-INV-010
+    description: >
+      With a seeded dataset of 10,000+ rows the Audit Vault (and Decision Theater)
+      render with row virtualization actually engaged: the pure computeWindow
+      keeps the mounted node count bounded (≤ ceil(viewportPx/rowHeightPx) +
+      2·overscan) and far below the total row count, independent of totalRows (Req
+      9.1). The full seeded row set is reachable by scrolling — no fixed 200-row
+      cap hides rows — and index i maps to datum i so a scrolled-in row aligns to
+      its fixture (Req 9.3, 9.4).
+    implementations:
+      - frontend/src/lib/virtual-window.ts
+      - frontend/src/surfaces/audit-vault/AuditVault.tsx
+    tests:
+      - frontend/src/lib/__tests__/virtual-window.property.test.ts
+    status: enforced
+
+  - id: FE-INV-063
+    title: Spatial surfaces initialize WebGL and encode chromatics correctly in a real browser
+    mirrors: Req 10, INV-CLR-017, FE-INV-025
+    description: >
+      In the Playwright browser a Spatial_Visualization initializes its WebGL
+      context and renders without throwing (a WebGL smoke check), and encodes
+      agent/tier/confidence data with the same Chromatic_Token encoding as the
+      rest of the Console, verified against resolved token values in a real
+      browser rather than jsdom (Req 10.1, 10.2). A WebGL init failure renders the
+      error Universal_State with a retry affordance (never a blank canvas) and a
+      keyboard/SR-reachable non-spatial equivalent is provided (Req 10.3, 10.4).
+    implementations:
+      - frontend/src/surfaces/mission-control/LivingMap.tsx
+      - frontend/src/surfaces/twin-lab/SupplyNetworkGraph.tsx
+      - frontend/src/design-system/compounds/SpatialErrorBoundary.tsx
+    tests:
+      - frontend/tests/e2e/spatial-visualization.spec.ts
+    status: enforced
+
+  - id: FE-INV-064
+    title: Trust_Track_Record is tri-state honest and never fabricates outcomes
+    mirrors: Req 11, ADR-047, FE-INV-041
+    description: >
+      The Trust_Track_Record aggregates the authenticated operator's past
+      judgments and realized outcomes over a window, rendering confirmed,
+      diverged, and unknown as three distinct states — `unknown` is never folded
+      into confirmed (Req 11.2, 11.3). It discloses its sample size, window, and
+      "as of" timestamp, flags a thin sample as provisional, renders "awaiting
+      scored outcomes" when none exist rather than a fabricated/zeroed record, and
+      excludes Synthetic decisions by default behind a labelled toggle (Req 11.4,
+      11.5, 11.6).
+    implementations:
+      - frontend/src/lib/trust-track-record.ts
+      - frontend/src/surfaces/operations/TrustTrackRecord.tsx
+    tests:
+      - frontend/src/lib/__tests__/trust-track-record.property.test.ts
+    status: enforced
+
+  - id: FE-INV-065
+    title: Expected_Review_Value ranks review need by stakes and degrades honestly
+    mirrors: Req 12, FE-INV-007, FE-INV-052
+    description: >
+      The Atlas_Console computes Expected_Review_Value as f(confidence,
+      reversibility, blast_radius) and ranks a decision's need for human review by
+      that value rather than confidence alone; an irreversible or high-blast
+      decision escalates even at or above the 0.80 autonomy gate, and default
+      override focus is derived from ERV (Req 12.1, 12.2, 12.3). When the contract
+      omits reversibility/blast_radius (a Cross_Boundary_Dependency) ERV falls
+      back to confidence-only, flags the fields unavailable, and records the gap
+      rather than fabricating a value (Req 12.5, 12.6).
+    implementations:
+      - frontend/src/lib/expected-review-value.ts
+    tests:
+      - frontend/src/lib/__tests__/expected-review-value.property.test.ts
+    status: enforced
+
+  - id: FE-INV-066
+    title: Interruption_Precision is computed as the North-Star metric and gated by the ratchet
+    mirrors: Req 13, FE-INV-057
+    description: >
+      Interruption_Precision — warranted interruptions ÷ total interruptions over
+      the window — is computed over the seeded scenarios and recorded in the
+      Effectiveness_Scorecard as the primary (North-Star) metric; total === 0
+      yields null rather than a fabricated value (Req 13.1, 13.2, 13.4). The
+      Effectiveness_Ratchet fails and names Interruption_Precision when it
+      regresses below its committed baseline beyond tolerance (Req 13.3), and the
+      harness states it is a Scripted_Proxy requiring real-operator validation
+      (Req 13.5).
+    implementations:
+      - frontend/src/lib/interruption-precision.ts
+    tests:
+      - frontend/src/lib/__tests__/interruption-precision.property.test.ts
+    status: enforced
+
+  - id: FE-INV-067
+    title: Visual_Regression_Gate diffs deterministic screenshots against a committed baseline
+    mirrors: Req 14, FE-INV-001
+    description: >
+      The Visual_Regression_Gate captures deterministic screenshots of key
+      Surfaces/stories under fixed viewport, theme, and seed (fixed fonts,
+      disabled animation, masked volatile regions) and fails the check identifying
+      the changed Surface when a screenshot differs from its committed baseline
+      beyond the defined threshold (Req 14.1, 14.2, 14.3). It covers at least one
+      Surface per theme-sensitive mode (light, dark, hc), permits an approved
+      baseline advance, and uses only $0-cost / OSS tooling (Req 14.4, 14.5,
+      14.6).
+    implementations:
+      - frontend/tests/e2e/visual/visual-regression.spec.ts
+      - frontend/playwright.config.ts
+    tests:
+      - frontend/tests/e2e/visual/visual-regression.spec.ts
+    status: enforced
+
+  - id: FE-INV-068
+    title: Assistive-technology and Mobile_Reality flows prove non-visual and constrained-device operability
+    mirrors: Req 15, FE-INV-011, FE-INV-010
+    description: >
+      An Assistive_Tech_Flow scripts a screen-reader walkthrough of resolving a
+      live escalation in the Override Cockpit, asserting the operator can perceive
+      the escalation, its violations, and the action outcome non-visually via an
+      appropriate live region (Req 15.1, 15.2). Key Surfaces pass under the
+      Mobile_Reality_Profile (360px, touch, throttled 3G) with all primary
+      Jobs-To-Be-Done reachable and within the Web_Vitals_Budget, and Lighthouse
+      CI is extended to a mobile profile that fails below its budget (Req 15.3,
+      15.4, 15.5); the scripted-proxy ceiling is stated (Req 15.6).
+    implementations:
+      - frontend/tests/e2e/a11y/assistive-tech-flow.spec.ts
+      - frontend/tests/e2e/mobile-reality.spec.ts
+      - frontend/lighthouserc.mobile.json
+    tests:
+      - frontend/tests/e2e/a11y/assistive-tech-flow.spec.ts
+      - frontend/tests/e2e/mobile-reality.spec.ts
+    status: enforced
+
+  - id: FE-INV-069
+    title: Contract-drift gate closes — every schema-less capability is classified, never left red
+    mirrors: Req 16, FE-INV-049, FE-INV-002
+    description: >
+      The Contract_Fidelity_Suite resolves each schema-less Backend_Contract
+      capability to exactly one of two classifications — "no-body/open-shape ⇒
+      covered" or "tracked-partial" (with a named rationale) — so the drift gate
+      reaches green for the entitled surface rather than staying permanently red
+      (Req 16.1–16.4). A new schema-less capability that is neither classified nor
+      entitled-out-of-scope fails the suite and is named so the classification
+      decision is forced rather than silently absorbed (Req 16.5).
+    implementations:
+      - frontend/spec/contract-fidelity/schema-less.ts
+    tests:
+      - frontend/spec/contract-fidelity/__tests__/schema-less.property.test.ts
+    status: enforced
+
+  - id: FE-INV-070
+    title: Operations uplift slot renders honestly and never fabricates an uplift value
+    mirrors: Req 17, FE-INV-035, FE-INV-043
+    description: >
+      The Operations Surface reserves a defined slot for a system-level uplift
+      display. When the Backend_Contract exposes an uplift measure the pure
+      resolveUpliftSlot renders it with sample size, window, and "as of" timestamp
+      (Req 17.1, 17.2); when no measure is provided (a Cross_Boundary_Dependency)
+      the slot renders "awaiting uplift measure" and records the missing
+      capability as a backend gap rather than hiding the slot or fabricating a
+      value (Req 17.3, 17.4).
+    implementations:
+      - frontend/src/lib/uplift-slot.ts
+      - frontend/src/surfaces/operations/UpliftSlot.tsx
+    tests:
+      - frontend/src/lib/__tests__/uplift-slot.test.ts
+    status: enforced
+
+  - id: FE-INV-071
+    title: No legacy JavaScript remains under src/theme
+    mirrors: Req 19, FE-INV-013
+    description: >
+      The legacy `src/theme/*.js` files (`agents.js`, `useTheme.js`) are audited
+      as dead (no live import path) and removed, so `src/theme/` contains no `.js`
+      file and the tree passes `tsc --noEmit` under strict settings (Req 19.2,
+      19.4). The guarantee is the absence itself; a vitest guard recursively walks
+      `src/theme/` and fails if any `.js`/`.jsx` file ever reappears, making the
+      retirement mechanically enforced rather than asserted by inspection.
+    implementations:
+      - frontend/src/theme/__tests__/no-legacy-js.test.ts
+    tests:
+      - frontend/src/theme/__tests__/no-legacy-js.test.ts
     status: enforced
