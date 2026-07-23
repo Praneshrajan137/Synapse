@@ -1,0 +1,38 @@
+# uplift/metric_contract.yaml
+#
+# Pre-registered, version-controlled Metric_Contract artifact (R3.6, R3.9).
+#
+# This artifact declares — BEFORE any result is produced — the primary KPI(s) and
+# their improvement directions, the effect-size measure, the significance test and
+# its significance level (alpha), the per-KPI Minimum_Detectable_Effect (MDE), and
+# the deterministic decision rule that maps (effect size, significance, MDE) to
+# exactly one outcome. It is read by the Uplift_Harness rather than embedded ad hoc
+# in analysis code, so the result cannot be produced by metric-shopping after the
+# fact. Any change to this file must be committed to version control before results
+# generated under the new contract are reported (R3.9).
+version: 1
+
+# Primary KPI(s): a non-empty subset of the KpiVector fields used to judge whether
+# SYNAPSE wins, each with its improvement direction (R3.1).
+#   higher -> a higher value is better (Direction.HIGHER_IS_BETTER)
+#   lower  -> a lower value is better  (Direction.LOWER_IS_BETTER)
+primary_kpis:
+  fill_rate: higher
+
+# Effect-size measure: Cohen's d plus relative percentage change (R3.2).
+effect_size: cohens_d+rel_pct
+
+# Significance test applied to the per-scenario KPI distributions (R3.3).
+significance_test: mann_whitney_u
+
+# Numeric significance level in the open interval (0, 1) (R3.3).
+alpha: 0.05
+
+# Minimum_Detectable_Effect per primary KPI, expressed as a Cohen's d effect-size
+# value, fixed before any result is produced (R3.4).
+mde:
+  fill_rate: 0.2
+
+# Deterministic decision rule mapping (effect size, significance, MDE) to exactly
+# one outcome (R3.5). Applied exactly as declared by the harness (R3.7).
+decision_rule: significant_and_favorable_and_meets_mde

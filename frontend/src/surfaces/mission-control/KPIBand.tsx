@@ -1,26 +1,44 @@
 import { KPITile } from "@ds/compounds";
+import { useAutonomy } from "@hooks/use-autonomy";
+import { deriveAutonomyView } from "@lib/autonomy";
 import { fmt } from "@lib/formatters";
 import { useFirehoseStore } from "@state/firehose.store";
 import { useMemo } from "react";
+import { useTranslation } from "react-i18next";
 
 /**
- * KPI band derived from the firehose store. These are an HONEST live-window
- * view — counts/means over the last N events actually received on this client's
- * socket, NOT server-aggregated rates. (Real rate/SLO metrics await a typed BE
- * `metric` channel; until then we label the window explicitly rather than imply
- * authority — ADR-044 honesty.)
+ * KPI band with an HONEST split between two data classes (ADR-044/053):
+ *
+ *  - AUTHORITATIVE server counters, from `GET /api/v1/system/autonomy`: the
+ *    SensorLoop's cumulative self-initiated decisions and perceptions. These
+ *    are real server-side totals, not a client sample.
+ *  - LIVE-WINDOW proxies, from this client's firehose ring buffers: counts and
+ *    means over the last N events actually received on THIS socket. Labelled
+ *    explicitly so they never imply a server-aggregated rate.
+ *
+ * Mixing the two without saying which is which is the exact over-claim the
+ * honesty channel forbids — so the caption names each class.
  */
 const WINDOW = 60;
 
 export function KPIBand() {
+  const { t } = useTranslation("common");
   const decisions = useFirehoseStore((s) => s.decisions.items);
   const routes = useFirehoseStore((s) => s.routes.items);
   const disruptions = useFirehoseStore((s) => s.disruptions.items);
 
+  const autonomyQuery = useAutonomy();
+  const autonomy = deriveAutonomyView({
+    data: autonomyQuery.data,
+    isError: autonomyQuery.isError,
+    isPending: autonomyQuery.isPending,
+  });
+  const selfInitiated = autonomy.kind === "ready" ? autonomy.decisionsTriggered : null;
+  const perceptions = autonomy.kind === "ready" ? autonomy.polls : null;
+
   const tiles = useMemo(() => {
     const recentDecisions = decisions.slice(-WINDOW);
     const recentRoutes = routes.slice(-WINDOW);
-    const ordersPerMin = recentDecisions.length;
     const avgDeliveryMin =
       recentRoutes.length === 0
         ? null
@@ -30,13 +48,26 @@ export function KPIBand() {
         ? null
         : recentDecisions.reduce((acc, d) => acc + d.confidence, 0) / recentDecisions.length;
     const escalations = recentDecisions.filter((d) => d.escalated).length;
-    const activeDisruptions = disruptions.length;
 
     return [
+      // ── Authoritative (server counters) ──────────────────────────────────
+      {
+        key: "self_initiated",
+        label: t("autonomy.self_initiated"),
+        value: selfInitiated === null ? "—" : fmt.compact(selfInitiated),
+        tone: "neutral" as const,
+      },
+      {
+        key: "perceptions",
+        label: t("autonomy.polls"),
+        value: perceptions === null ? "—" : fmt.compact(perceptions),
+        tone: "neutral" as const,
+      },
+      // ── Live window (this client's firehose) ─────────────────────────────
       {
         key: "orders_min",
         label: "Decisions (live)",
-        value: fmt.compact(ordersPerMin),
+        value: fmt.compact(recentDecisions.length),
         tone: "neutral" as const,
       },
       {
@@ -49,8 +80,6 @@ export function KPIBand() {
         key: "confidence",
         label: "Avg confidence (live)",
         value: confidenceAvg !== null ? `${(confidenceAvg * 100).toFixed(0)}%` : "—",
-        // Quiet by default (P3): healthy = neutral; colour only when the gate
-        // is at risk. The Pulse above already carries the live confidence temp.
         tone:
           confidenceAvg !== null
             ? confidenceAvg >= 0.9
@@ -69,28 +98,23 @@ export function KPIBand() {
       {
         key: "disruptions",
         label: "Recent disruptions",
-        value: fmt.compact(activeDisruptions),
-        tone: activeDisruptions === 0 ? ("neutral" as const) : ("risk" as const),
-      },
-      {
-        key: "routes",
-        label: "Routes (live)",
-        value: fmt.compact(routes.length),
-        tone: "neutral" as const,
+        value: fmt.compact(disruptions.length),
+        tone: disruptions.length === 0 ? ("neutral" as const) : ("risk" as const),
       },
     ];
-  }, [decisions, routes, disruptions]);
+  }, [decisions, routes, disruptions, selfInitiated, perceptions, t]);
 
   return (
     <div className="space-y-1.5">
-      <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
-        {tiles.map((t) => (
-          <KPITile key={t.key} label={t.label} value={t.value} tone={t.tone} />
+      <div className="grid grid-cols-2 gap-3 md:grid-cols-4 xl:grid-cols-7">
+        {tiles.map((tile) => (
+          <KPITile key={tile.key} label={tile.label} value={tile.value} tone={tile.tone} />
         ))}
       </div>
       <p className="text-2xs text-ink-subtle">
-        Live window — counts &amp; means over the last {WINDOW} firehose events on this client, not
-        server-aggregated rates.
+        Self-initiated &amp; perceptions are authoritative server counters (cumulative). The rest
+        are a live window — counts &amp; means over the last {WINDOW} firehose events on this
+        client, not server-aggregated rates.
       </p>
     </div>
   );

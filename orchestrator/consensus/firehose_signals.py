@@ -23,12 +23,18 @@ Best-effort (I-7): a missing producer or a produce error never breaks consensus.
 from __future__ import annotations
 
 from collections.abc import Callable, Iterable
+from datetime import UTC, datetime
 from typing import Any
 
 import structlog
 from synapse_common.models import AgentName, AgentProposal
 
 logger = structlog.get_logger(__name__)
+
+# The live per-agent telemetry topic (topic 17). Registered in
+# infrastructure/kafka/topics.json with api_firehose as a consumer, but had NO
+# producer until ADR-053 — the FE `metric` channel was open-shape and dead.
+METRICS_TOPIC = "synapse.metrics.agent"
 
 # Extract the inner domain dicts the FE expects from an agent's proposal payload.
 Extractor = Callable[[dict[str, Any]], Iterable[dict[str, Any]]]
@@ -86,6 +92,45 @@ def emit_agent_signals(producer: Any, proposals: Iterable[AgentProposal]) -> int
                 "agent_signal_emit_failed",
                 agent=str(proposal.agent_name),
                 topic=topic,
+                error=str(exc),
+            )
+    return produced
+
+
+def emit_agent_metrics(producer: Any, proposals: Iterable[AgentProposal]) -> int:
+    """Event-source one live telemetry event per proposal onto ``synapse.metrics.agent``.
+
+    ADR-053: this closes the dead ``metric`` firehose channel by giving it a real
+    producer. Each event is genuine measured data captured as consensus collects
+    the proposal — agent, decision, tier, confidence, and whether that proposal's
+    provenance ran an I-7 fallback. The payload matches
+    ``proto/domain/agent_metric.schema.json`` (the FE validates it .strict()).
+
+    Best-effort (I-7): a None/missing/broken producer never blocks or fails the
+    decision. Returns the number of events produced.
+    """
+    if producer is None:
+        return 0
+    produced = 0
+    for proposal in proposals:
+        prov = proposal.provenance
+        metric: dict[str, Any] = {
+            "agent_name": str(proposal.agent_name),
+            "decision_id": str(proposal.decision_id),
+            "tier": str(proposal.tier.value),
+            "confidence": proposal.confidence,
+            "degraded": bool(prov is not None and prov.degraded),
+            "ts": datetime.now(UTC).isoformat(),
+        }
+        if prov is not None:
+            metric["confidence_basis"] = str(prov.confidence_basis.value)
+        try:
+            producer.produce(METRICS_TOPIC, metric, key=str(proposal.decision_id))
+            produced += 1
+        except Exception as exc:  # noqa: BLE001 — telemetry is best-effort (I-7)
+            logger.warning(
+                "agent_metric_emit_failed",
+                agent=str(proposal.agent_name),
                 error=str(exc),
             )
     return produced

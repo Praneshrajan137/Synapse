@@ -1,7 +1,7 @@
 # ============================================================================
 # SYNAPSE Makefile — Development Automation
 # ============================================================================
-.PHONY: help up down test lint typecheck verify-infra seed generate-spec-tests fuzz mutate clean chaos-test load-test security-test dragonfly-eval sprint5-verify verify-services doctor verify-claims verify-claims-json verify-intelligence verify-agency feast-build feast-up
+.PHONY: help up down test lint typecheck verify-infra seed generate-spec-tests fuzz mutate clean chaos-test load-test security-test dragonfly-eval sprint5-verify verify-services doctor verify-claims verify-claims-json verify-intelligence verify-agency feast-build feast-up prove-uplift prove-uplift-full
 
 SHELL := /bin/bash
 COMPOSE := docker compose -f docker/docker-compose.yml --env-file docker/.env
@@ -37,6 +37,12 @@ verify-intelligence: ## Substance-completion gates (ADR-042): training/checkpoin
 	@python -m scripts.audit.serving_truth --check
 	@python -m scripts.audit.calibration_truth --check
 	@python -m scripts.audit.confidence_basis_truth --check
+
+prove-uplift: ## One-command $0 synthetic-seed reproduction of the decision-integrity uplift proof (reduced-cost smoke; R7.1)
+	@python -m uplift.cli
+
+prove-uplift-full: ## Fully-powered uplift proof (n>=1000 per arm, drives the real twin — slow; R7.1)
+	@python -m uplift.cli --full
 
 verify-slos: ## Regenerate burn-rate rules from SLO YAMLs and verify metric_truth (WS-7)
 	@python -m scripts.observability.slo_to_rules --check

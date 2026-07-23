@@ -1,3 +1,4 @@
+import type { AgentMetric } from "@domain/agent-metric";
 import type { CognitionEvent } from "@domain/cognition-event";
 import type { LiveDecision } from "@domain/decision-envelope";
 import type { DemandForecast } from "@domain/demand-forecast";
@@ -33,6 +34,9 @@ interface FirehoseState {
   freshness: Bounded<FreshnessAlert>;
   // ADR-051: live cognition phase events (the council's FSM transitions).
   cognition: Bounded<CognitionEvent>;
+  // ADR-053: live per-agent telemetry (the `metric` channel's first real
+  // producer). Feeds the KPI band's per-agent activity/latency-adjacent view.
+  metric: Bounded<AgentMetric>;
   // Live WS state of the currently-mounted firehose, lifted here so the
   // Shell-level attention beacon can alarm on a dropped feed without owning a
   // second socket. Surfaces reset it to "idle" on unmount (no phantom offline).
@@ -47,6 +51,7 @@ interface FirehoseState {
   appendPricing(p: PricingUpdate, seq: number): void;
   appendFreshness(f: FreshnessAlert, seq: number): void;
   appendCognition(c: CognitionEvent, seq: number): void;
+  appendMetric(m: AgentMetric, seq: number): void;
   flushAll(): void;
 }
 
@@ -59,6 +64,7 @@ export const useFirehoseStore = create<FirehoseState>((set) => ({
   pricing: newBounded(200),
   freshness: newBounded(200),
   cognition: newBounded(200),
+  metric: newBounded(200),
   connection: "idle",
   setConnection(state) {
     set({ connection: state });
@@ -106,6 +112,12 @@ export const useFirehoseStore = create<FirehoseState>((set) => ({
       lastSeq: { ...s.lastSeq, cognition: seq },
     }));
   },
+  appendMetric(m, seq) {
+    set((s) => ({
+      metric: appendBounded(s.metric, m),
+      lastSeq: { ...s.lastSeq, metric: seq },
+    }));
+  },
   flushAll() {
     set({
       decisions: newBounded(200),
@@ -116,6 +128,7 @@ export const useFirehoseStore = create<FirehoseState>((set) => ({
       pricing: newBounded(200),
       freshness: newBounded(200),
       cognition: newBounded(200),
+      metric: newBounded(200),
       lastSeq: {},
     });
   },

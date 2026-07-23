@@ -310,6 +310,21 @@ async def status_posture() -> dict[str, Any]:
     return compute_posture()
 
 
+@app.get("/api/v1/status/autonomy")
+async def status_autonomy() -> dict[str, Any]:
+    """ADR-053: the SensorLoop's self-initiation record.
+
+    Reports whether the autonomous perceive→decide loop is running and how many
+    decisions it has convened on its own initiative. The gateway proxies this
+    (joined with the twin's live world_state) at ``GET /api/v1/system/autonomy``
+    so the operator UI can show the loop is alive with real counters. Degrades
+    honestly (I-7): a never-started loop reports ``running=false``, not silence.
+    """
+    if _sensor_loop is None:
+        return {"running": False, "cities": [], "polls": 0, "decisions_triggered": 0}
+    return _sensor_loop.status()
+
+
 @app.get("/metrics")
 async def metrics() -> Response:
     from prometheus_client import CONTENT_TYPE_LATEST, generate_latest

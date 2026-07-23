@@ -129,3 +129,6 @@ tfplan
 # Throwaway local smoke scripts and their outputs.
 _smoke.py
 _smoke_result.txt
+
+# Snowflake Cortex local tool state / plans (not project source)
+.snowflake/

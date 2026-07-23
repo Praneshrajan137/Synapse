@@ -1,0 +1,21 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "AgentMetric",
+  "description": "Live per-agent telemetry event (ADR-053), event-sourced onto synapse.metrics.agent by orchestrator/consensus/firehose_signals.emit_agent_metrics as consensus collects proposals. One event per proposal per decision. Real measured data at collection time — never a fabricated rate.",
+  "type": "object",
+  "required": ["agent_name", "decision_id", "tier", "confidence", "degraded", "ts"],
+  "properties": {
+    "agent_name": {"type": "string"},
+    "decision_id": {"type": "string", "format": "uuid"},
+    "city": {"type": ["string", "null"]},
+    "tier": {"type": "string", "enum": ["tier_1", "tier_2", "tier_3", "tier_4"]},
+    "confidence": {"type": "number", "minimum": 0, "maximum": 1},
+    "degraded": {"type": "boolean", "description": "The proposal's provenance ran an I-7 fallback."},
+    "confidence_basis": {
+      "type": "string",
+      "description": "How the confidence was derived (synapse_common.provenance.ConfidenceBasis)."
+    },
+    "ts": {"type": "string", "format": "date-time"}
+  },
+  "additionalProperties": false
+}

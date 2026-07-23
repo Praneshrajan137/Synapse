@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { ZConfidence, ZTier, ZUuid } from "./primitives";
+import { ZConfidence, ZInitiator, ZTier, ZUuid } from "./primitives";
 
 /**
  * The LIVE decision envelope on the firehose `decision` channel — the lean
@@ -17,6 +17,9 @@ import { ZConfidence, ZTier, ZUuid } from "./primitives";
  *   degraded     — ANY input proposal ran a fallback path (ADR-040).
  *   is_synthetic — traffic-generator decision (order_id "synthetic-" rule,
  *                  owned by packages/synapse_common/synthetic.py).
+ *   initiator    — ADR-053 three-way origin (autonomous/synthetic/operator).
+ *                  Defaults to "operator" so pre-ADR-053 envelopes classify as
+ *                  real human decisions, never fabricated autonomy.
  *   agents       — lean per-agent summary (name + confidence + degraded);
  *                  the full proposals stay in the audit row.
  */
@@ -44,6 +47,7 @@ export const DecisionEnvelopeSchema = z
     timestamp: z.string().optional(),
     degraded: z.boolean().default(false),
     is_synthetic: z.boolean().default(false),
+    initiator: ZInitiator.default("operator"),
     agents: z.array(DecisionAgentSummarySchema).default([]),
   })
   .passthrough();

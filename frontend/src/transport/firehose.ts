@@ -1,3 +1,4 @@
+import { type AgentMetric, AgentMetricSchema } from "@domain/agent-metric";
 import { type CognitionEvent, CognitionEventSchema } from "@domain/cognition-event";
 import { type DecisionEnvelope, DecisionEnvelopeSchema } from "@domain/decision-envelope";
 import { type DemandForecast, DemandForecastSchema } from "@domain/demand-forecast";
@@ -41,7 +42,7 @@ interface ChannelPayloadMap {
   pricing: PricingUpdate;
   escalation: EscalationMessage;
   cognition: CognitionEvent;
-  metric: Record<string, unknown>;
+  metric: AgentMetric;
 }
 
 const SCHEMAS = {
@@ -57,7 +58,9 @@ const SCHEMAS = {
   pricing: PricingUpdateSchema,
   escalation: EscalationMessageSchema,
   cognition: CognitionEventSchema,
-  metric: null,
+  // ADR-053: was `null` (open-shape/dead) — now a real producer emits this,
+  // so it validates against the agent-metric schema like every other channel.
+  metric: AgentMetricSchema,
 } as const;
 
 export interface FirehoseClient {
@@ -98,16 +101,10 @@ export function createFirehose(opts: CreateFirehoseOptions): FirehoseClient {
       return mux.on(channel, (rawEnvelope) => {
         const envelope = rawEnvelope as { seq?: number; ts?: string; payload?: unknown };
         if (typeof envelope.seq !== "number" || typeof envelope.ts !== "string") return;
-        const schema = SCHEMAS[channel];
-        if (!schema) {
-          // metric channel is open-shape; pass through as-is.
-          listener((envelope.payload ?? {}) as ChannelPayloadMap[typeof channel], {
-            seq: envelope.seq,
-            ts: envelope.ts,
-          });
-          return;
-        }
-        const parsed = schema.safeParse(envelope.payload);
+        // Every channel now has a Zod schema (ADR-053 gave `metric` a real
+        // producer + payload contract) — validate before dispatching so a
+        // poison message never reaches app code.
+        const parsed = SCHEMAS[channel].safeParse(envelope.payload);
         if (!parsed.success) {
           // eslint-disable-next-line no-console
           console.warn(`firehose_${channel}_rejected`, parsed.error.issues);

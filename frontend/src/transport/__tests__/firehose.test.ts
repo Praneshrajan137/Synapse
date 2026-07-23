@@ -57,7 +57,8 @@ afterEach(() => {
 });
 
 // FE-INV-002 + FE-INV-008: firehose subscribers receive only typed payloads
-// from validated envelopes; open metric events remain pass-through.
+// from validated envelopes. ADR-053 gave the `metric` channel a real producer +
+// schema, so it now validates like every other channel (no more open-shape).
 describe("createFirehose", () => {
   it("constructs the firehose URL with topics, city, host, and since_seq", () => {
     installWebSocket();
@@ -74,8 +75,9 @@ describe("createFirehose", () => {
     );
   });
 
-  it("passes metric payloads through with envelope metadata", () => {
+  it("validates typed metric payloads (ADR-053) and rejects malformed ones", () => {
     installWebSocket();
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
     const firehose = createFirehose({
       host: "api.synapse.test",
       topics: ["metric"],
@@ -85,17 +87,31 @@ describe("createFirehose", () => {
     firehose.on("metric", listener);
     sockets[0]?.open();
 
+    const metric = {
+      agent_name: "demand_prophet",
+      decision_id: "11111111-1111-4111-8111-111111111111",
+      tier: "tier_2",
+      confidence: 0.83,
+      degraded: false,
+      ts: "2026-06-06T00:00:00.000Z",
+    };
     sockets[0]?.message({
       topic: "metric",
       seq: 3,
       ts: "2026-06-06T00:00:00.000Z",
+      payload: metric,
+    });
+    // Old open-shape payload ({name,value}) is no longer valid — rejected.
+    sockets[0]?.message({
+      topic: "metric",
+      seq: 4,
+      ts: "2026-06-06T00:00:00.000Z",
       payload: { name: "tier_route_ms", value: 41 },
     });
 
-    expect(listener).toHaveBeenCalledWith(
-      { name: "tier_route_ms", value: 41 },
-      { seq: 3, ts: "2026-06-06T00:00:00.000Z" },
-    );
+    expect(listener).toHaveBeenCalledTimes(1);
+    expect(listener).toHaveBeenCalledWith(metric, { seq: 3, ts: "2026-06-06T00:00:00.000Z" });
+    expect(warn).toHaveBeenCalledOnce();
   });
 
   it("validates typed demand payloads and rejects malformed ones", () => {
