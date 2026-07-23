@@ -1599,6 +1599,197 @@ def check_agency_loop() -> CheckResult:
 
 
 # ---------------------------------------------------------------------------
+# C58: Decision initiator is typed + autonomous is NEVER mislabeled synthetic
+# ---------------------------------------------------------------------------
+@register("C58", "Decision initiator typed (autonomous != synthetic)")
+def check_initiator_truth() -> CheckResult:
+    """ADR-053. The three-way origin (autonomous/synthetic/operator) is:
+      * single-owned in synapse_common.synthetic (both prefixes live there),
+      * carried additively by the decisions API (/recent + /{id}) and the
+        firehose decision envelope (audit logger),
+      * and — the load-bearing honesty guarantee — an ``auto-`` decision is
+        NEVER classified synthetic.
+    """
+    try:
+        from synapse_common.synthetic import (
+            AUTONOMOUS_ORDER_PREFIX,
+            initiator_of_order_id,
+            is_synthetic_order_id,
+        )
+    except ImportError as exc:
+        return CheckResult("C58", "Initiator truth", "SKIP", f"synthetic import failed: {exc}")
+
+    auto_id = AUTONOMOUS_ORDER_PREFIX + "bengaluru-reorder_point-1"
+    if is_synthetic_order_id(auto_id) or initiator_of_order_id(auto_id) != "autonomous":
+        return CheckResult(
+            "C58", "Initiator truth", "FAIL", "autonomous order misclassified (synthetic/operator)"
+        )
+    if initiator_of_order_id("synthetic-1-1") != "synthetic":
+        return CheckResult("C58", "Initiator truth", "FAIL", "synthetic prefix not classified")
+    if initiator_of_order_id("ORD-1") != "operator":
+        return CheckResult("C58", "Initiator truth", "FAIL", "operator default broken")
+
+    decisions = (ROOT / "api" / "routers" / "decisions.py").read_text(encoding="utf-8")
+    logger_py = (ROOT / "orchestrator" / "audit" / "logger.py").read_text(encoding="utf-8")
+    wired = (
+        '"initiator"' in decisions
+        and "AUTONOMOUS_ORDER_PREFIX" in decisions
+        and '"initiator"' in logger_py
+        and "initiator_of_decision" in logger_py
+    )
+    if not wired:
+        return CheckResult(
+            "C58", "Initiator truth", "FAIL", "initiator not wired into decisions API + firehose"
+        )
+    return CheckResult(
+        "C58", "Initiator truth", "PASS", "three-way origin single-owned; autonomous never synthetic"
+    )
+
+
+# ---------------------------------------------------------------------------
+# C59: Autonomy endpoint exists (VIEWER) + the metric channel has a producer
+# ---------------------------------------------------------------------------
+@register("C59", "Autonomy endpoint + live metric producer exist")
+def check_autonomy_visibility() -> CheckResult:
+    """ADR-053. The autonomous loop is observable through the gateway:
+      * GET /api/v1/system/autonomy joins twin world_state + SensorLoop status,
+        VIEWER-gated (never direct-to-twin from the browser),
+      * the orchestrator exposes /api/v1/status/autonomy (sensor counters),
+      * synapse.metrics.agent finally has a REAL producer (emit_agent_metrics),
+      * both new proto schemas exist (I-3).
+    """
+    system_py = (ROOT / "api" / "routers" / "system.py").read_text(encoding="utf-8")
+    serve_py = (ROOT / "orchestrator" / "inference" / "serve.py").read_text(encoding="utf-8")
+    signals = (ROOT / "orchestrator" / "consensus" / "firehose_signals.py").read_text(encoding="utf-8")
+    protocol = (ROOT / "orchestrator" / "consensus" / "protocol.py").read_text(encoding="utf-8")
+
+    gateway_ok = (
+        '"/autonomy"' in system_py
+        and "CurrentOperator" in system_py
+        and "/world/state" in system_py
+        and "/api/v1/status/autonomy" in system_py
+    )
+    orch_ok = "/api/v1/status/autonomy" in serve_py
+    producer_ok = (
+        "def emit_agent_metrics" in signals
+        and "synapse.metrics.agent" in signals
+        and "emit_agent_metrics(" in protocol
+    )
+    schemas_ok = (ROOT / "proto" / "domain" / "world_state.schema.json").exists() and (
+        ROOT / "proto" / "domain" / "agent_metric.schema.json"
+    ).exists()
+
+    missing = [
+        name
+        for name, ok in (
+            ("gateway /autonomy proxy", gateway_ok),
+            ("orchestrator status/autonomy", orch_ok),
+            ("metric producer", producer_ok),
+            ("proto schemas", schemas_ok),
+        )
+        if not ok
+    ]
+    if missing:
+        return CheckResult("C59", "Autonomy visibility", "FAIL", "missing: " + ", ".join(missing))
+    return CheckResult(
+        "C59", "Autonomy visibility", "PASS", "world+sensor proxy, metric producer, proto schemas present"
+    )
+
+
+# ---------------------------------------------------------------------------
+# C60: Consensus decisions beat the baseline uplift floor (ADR-042 ratchet)
+# ---------------------------------------------------------------------------
+@register("C60", "Consensus decisions beat the uplift floor")
+def check_uplift_truth() -> CheckResult:
+    """ADR-042. The other honesty gates prove SYNAPSE is honest/trained/
+    calibrated/auditable; C60 proves it is *intelligent* — that the four-tier
+    consensus actually beats a transparent baseline policy on business KPIs.
+    ``scripts/audit/uplift_truth`` is the ratchet that fails on any regression
+    below ``UPLIFT_FLOOR``.
+
+    Mirrors the ``uplift_truth --check`` exit mapping (0 pass / 1 regression /
+    2 unavailable): measured uplift >= floor -> PASS, < floor -> FAIL, and an
+    UNAVAILABLE measurement -> SKIP (a SKIP is not a PASS). The measured uplift
+    lives in a result artifact written by ``python -m uplift.cli`` (task 14.1);
+    verify_claims runs on a fresh clone without it, so absence is a SKIP, not a
+    spurious FAIL — exactly how C38/C40 treat missing training artifacts.
+    """
+    try:
+        from scripts.audit.uplift_truth import UPLIFT_FLOOR, read_measured_uplift
+    except ImportError as exc:
+        return CheckResult("C60", "Uplift truth", "SKIP", f"uplift_truth import failed: {exc}")
+    measured = read_measured_uplift()
+    if measured is None:
+        return CheckResult(
+            "C60",
+            "Uplift truth",
+            "SKIP",
+            f"measured uplift unavailable (run `python -m uplift.cli`); floor {UPLIFT_FLOOR}",
+        )
+    if measured < UPLIFT_FLOOR:
+        return CheckResult(
+            "C60",
+            "Uplift truth",
+            "FAIL",
+            f"measured uplift {measured} < floor {UPLIFT_FLOOR} — regression",
+        )
+    return CheckResult(
+        "C60",
+        "Uplift truth",
+        "PASS",
+        f"measured uplift {measured} >= floor {UPLIFT_FLOOR}",
+    )
+
+
+# ---------------------------------------------------------------------------
+# C61: Oracle auditor — no reintroduced docstring-body mismatch (R8.6 ratchet)
+# ---------------------------------------------------------------------------
+@register("C61", "Oracle auditor: no reintroduced docstring-body mismatch")
+def check_oracle_truth() -> CheckResult:
+    """R8. ``tests/oracle/`` is SYNAPSE's "Layer 6": each test compares an
+    agent claim to a Digital-Twin simulation. Several docstrings promise a
+    measurable bound the body never asserts — the latent lie the oracle auditor
+    (``scripts/audit/oracle_truth``) exposes by AST-walking each test.
+
+    C61 is a BASELINE-ALLOWLIST RATCHET, not a green-at-zero gate. Four
+    docstring-body mismatches predate this spec (task 13.3 repaired only the
+    pricing oracle); wiring a strict zero-gate would fail CI on debt outside
+    this spec's scope. So this row PASSES while the current mismatches are a
+    SUBSET of ``KNOWN_BASELINE`` and FAILS the moment a NON-allowlisted (new or
+    reintroduced) mismatch appears — satisfying R8.6 ("a reintroduced
+    docstring-body mismatch fails CI"). The raw ``oracle_truth --check`` stays
+    strict (R8.4); only this surfaced row tolerates the known baseline.
+    """
+    try:
+        from scripts.audit.oracle_truth import (
+            KNOWN_BASELINE,
+            all_mismatches,
+            collect,
+            unresolved_mismatches,
+        )
+    except ImportError as exc:
+        return CheckResult("C61", "Oracle truth", "SKIP", f"oracle_truth import failed: {exc}")
+
+    mismatches = all_mismatches(collect())
+    unresolved = unresolved_mismatches(mismatches, KNOWN_BASELINE)
+    if unresolved:
+        ids = ", ".join(sorted(m.node_id for m in unresolved))
+        return CheckResult(
+            "C61",
+            "Oracle truth",
+            "FAIL",
+            f"{len(unresolved)} reintroduced/new docstring-body mismatch(es): {ids}",
+        )
+    return CheckResult(
+        "C61",
+        "Oracle truth",
+        "PASS",
+        f"{len(mismatches)} mismatch(es), all within known baseline "
+        f"({len(KNOWN_BASELINE)} pre-existing) — none reintroduced",
+    )
+
+
+# ---------------------------------------------------------------------------
 # Main entry
 # ---------------------------------------------------------------------------
 def run(as_json: bool = False) -> int:

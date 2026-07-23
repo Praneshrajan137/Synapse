@@ -39,7 +39,7 @@ from synapse_common.models import (
 )
 from synapse_common.schemas import SchemaValidationError, validate_agent_payload
 
-from orchestrator.consensus.firehose_signals import emit_agent_signals
+from orchestrator.consensus.firehose_signals import emit_agent_metrics, emit_agent_signals
 from orchestrator.consensus.models import ConflictReport, TierClassification
 from orchestrator.consensus.pareto import (
     BindingSelection,
@@ -419,6 +419,9 @@ class ConsensusProtocol:
         # Best-effort (I-7) — never blocks consensus. (Coexists with the ADR-051
         # cognition phase events above.)
         emit_agent_signals(self._kafka, proposals)
+        # ADR-053: live per-agent telemetry onto synapse.metrics.agent (the
+        # `metric` firehose channel's producer). Best-effort (I-7).
+        emit_agent_metrics(self._kafka, proposals)
         return proposals
 
     async def _request_proposal(

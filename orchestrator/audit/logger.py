@@ -115,7 +115,7 @@ class AuditLogger:
             # the audit row and the outbox row (atomic; ties Kafka delivery to
             # audit-row existence — ADR-026).
             from synapse_common.outbox import enqueue as _outbox_enqueue
-            from synapse_common.synthetic import is_synthetic_decision
+            from synapse_common.synthetic import initiator_of_decision, is_synthetic_decision
 
             await _outbox_enqueue(
                 session,
@@ -140,6 +140,11 @@ class AuditLogger:
                         for p in decision.proposals
                     ),
                     "is_synthetic": is_synthetic_decision(decision.context_messages),
+                    # ADR-053: the decision's true initiator. An ``auto-`` order
+                    # is autonomously self-initiated by the SensorLoop (perceive
+                    # → decide with no human, no ticker) — the live feed must
+                    # tell that apart from operator-injected and demo traffic.
+                    "initiator": initiator_of_decision(decision.context_messages),
                     # Lean per-agent summary (NOT the full proposals — those
                     # carry whole forecast arrays). Drives the CouncilStrip /
                     # CortexBanner per-agent activity lights and the per-agent

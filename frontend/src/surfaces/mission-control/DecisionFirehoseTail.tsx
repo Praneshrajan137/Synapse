@@ -1,4 +1,4 @@
-import { ConfidenceChip, SyntheticBadge, TierBadge } from "@ds/compounds";
+import { ConfidenceChip, InitiatorBadge, TierBadge } from "@ds/compounds";
 import { fmt } from "@lib/formatters";
 import { useFirehoseStore } from "@state/firehose.store";
 import { useTranslation } from "react-i18next";
@@ -11,8 +11,10 @@ import { Link } from "react-router-dom";
  * Decision Theater.
  *
  * ADR-044 honesty: a degraded decision (any input proposal on a fallback
- * path) carries the drained warning marker; a traffic-generator decision
- * carries the SyntheticBadge — demo pulses never masquerade as commerce.
+ * path) carries the drained warning marker. ADR-053: the InitiatorBadge marks
+ * an autonomously self-initiated decision (the SensorLoop acting on its own)
+ * and a demo pulse — operator-injected decisions stay unbadged (the common
+ * case), so the badge draws the eye to what is NOT a human's doing.
  */
 export function DecisionFirehoseTail() {
   const { t } = useTranslation("common");
@@ -49,7 +51,7 @@ export function DecisionFirehoseTail() {
                   ▲
                 </span>
               )}
-              {d.is_synthetic && <SyntheticBadge />}
+              {d.initiator !== "operator" && <InitiatorBadge initiator={d.initiator} />}
               {d.escalated && <span className="text-confidence-warn">esc.</span>}
               <span className="ml-auto text-ink-subtle">{fmt.relativeTime(d.timestamp)}</span>
             </Link>

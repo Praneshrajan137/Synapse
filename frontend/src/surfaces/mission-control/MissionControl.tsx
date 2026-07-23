@@ -1,6 +1,7 @@
 import { ConnectionPill, PageHeader, SystemTrustTile } from "@ds/compounds";
 import { useFirehose } from "@hooks/use-firehose";
 import { Link } from "react-router-dom";
+import { AutonomyStrip } from "../autonomy/AutonomyStrip";
 import { CortexBanner } from "./CortexBanner";
 import { DecisionFirehoseTail } from "./DecisionFirehoseTail";
 import { DisruptionBanner } from "./DisruptionBanner";
@@ -45,6 +46,10 @@ export function MissionControl() {
       />
 
       <SystemTrustTile />
+
+      {/* ADR-053: the autonomy headline — is the perceive→decide loop alive,
+          and how many decisions has the system convened on its own? */}
+      <AutonomyStrip className="px-1" />
 
       <DisruptionBanner />
 

@@ -334,6 +334,8 @@ async def test_outbox_payload_carries_honesty_fields_false_case() -> None:
     outbox_row = factory.recorders[-1].added_rows[1]
     assert outbox_row.payload["degraded"] is False
     assert outbox_row.payload["is_synthetic"] is False
+    # ADR-053: initiator key must EXIST and default to operator (no auto-/synthetic- tag).
+    assert outbox_row.payload["initiator"] == "operator"
 
 
 @pytest.mark.asyncio
@@ -421,6 +423,20 @@ async def test_outbox_payload_is_synthetic_for_traffic_generator_order() -> None
     await logger.log_decision(_make_decision_with(order_id="synthetic-1718000000-3"))
     outbox_row = factory.recorders[-1].added_rows[1]
     assert outbox_row.payload["is_synthetic"] is True
+    assert outbox_row.payload["initiator"] == "synthetic"
+
+
+@pytest.mark.asyncio
+async def test_outbox_payload_initiator_autonomous_for_sensor_order() -> None:
+    """ADR-053: a SensorLoop-minted ``auto-`` order is autonomous, NOT synthetic
+    — the live feed's whole point is telling self-initiated decisions apart from
+    demo pulses."""
+    factory = _session_factory_returning(scalar_value=None)
+    logger = AuditLogger(factory)
+    await logger.log_decision(_make_decision_with(order_id="auto-bengaluru-reorder_point-4"))
+    payload = factory.recorders[-1].added_rows[1].payload
+    assert payload["initiator"] == "autonomous"
+    assert payload["is_synthetic"] is False
 
 
 @pytest.mark.asyncio

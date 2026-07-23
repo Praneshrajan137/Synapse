@@ -126,4 +126,27 @@ describe("rankAttention", () => {
     expect(items[0]?.kind).toBe("degradation");
     expect(items[0]?.severity).toBe("medium");
   });
+
+  // ADR-053 — the autonomous loop degrading is itself an operator signal.
+  it("raises a stalled/unreachable world as a high autonomy signal routed to the twin", () => {
+    const items = rankAttention(baseInput({ autonomyStalledCities: ["bengaluru"] }));
+    expect(items[0]?.kind).toBe("autonomy");
+    expect(items[0]?.severity).toBe("high");
+    expect(items[0]?.route).toBe("/twin");
+    expect(items[0]?.count).toBe(1);
+  });
+
+  it("raises 'autonomy unknown' (medium) when the read fails — never silent", () => {
+    const items = rankAttention(baseInput({ autonomyUnknown: true }));
+    expect(items[0]?.kind).toBe("autonomy");
+    expect(items[0]?.severity).toBe("medium");
+  });
+
+  it("ranks a pending escalation above a stalled autonomous world", () => {
+    const items = rankAttention(
+      baseInput({ escalations: [escalation("a")], autonomyStalledCities: ["mumbai"] }),
+    );
+    expect(items[0]?.kind).toBe("escalation");
+    expect(items.some((i) => i.kind === "autonomy")).toBe(true);
+  });
 });

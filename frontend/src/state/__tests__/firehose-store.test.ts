@@ -16,6 +16,7 @@ function makeDecision(id: string, confidence = 0.85): LiveDecision {
     escalated: false,
     degraded: false,
     is_synthetic: false,
+    initiator: "operator",
     agents: [],
   };
 }

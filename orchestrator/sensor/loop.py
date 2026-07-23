@@ -104,6 +104,22 @@ class SensorLoop:
     def running(self) -> bool:
         return self._running
 
+    def status(self) -> dict[str, object]:
+        """Observability snapshot for the autonomy endpoint (ADR-053).
+
+        Additive to the counters read by tests + the agency_truth gate; exposes
+        the loop's self-initiation record so the operator UI can say "the system
+        is acting on its own" with real numbers, not a boolean guess.
+        """
+        return {
+            "running": self._running,
+            "cities": list(self._cities),
+            "poll_interval_s": self._poll_interval_s,
+            "reorder_point": self._reorder_point,
+            "polls": self.polls,
+            "decisions_triggered": self.decisions_triggered,
+        }
+
     async def start(self) -> None:
         if self._running:
             return

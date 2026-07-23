@@ -15,8 +15,14 @@ from typing import Any
 from uuid import uuid4
 
 from synapse_common.models import AgentName, AgentProposal, DecisionTier
+from synapse_common.provenance import ConfidenceBasis, Provenance
 
-from orchestrator.consensus.firehose_signals import SIGNAL_CHANNELS, emit_agent_signals
+from orchestrator.consensus.firehose_signals import (
+    METRICS_TOPIC,
+    SIGNAL_CHANNELS,
+    emit_agent_metrics,
+    emit_agent_signals,
+)
 
 
 class _FakeProducer:
@@ -131,3 +137,51 @@ def test_registry_maps_only_verified_channels() -> None:
         AgentName.PRICING_ORACLE: "synapse.pricing.update",
         AgentName.FRESHNESS_GUARDIAN: "synapse.freshness.alert",
     }
+
+
+# ── ADR-053: live per-agent telemetry producer (the `metric` channel) ─────────
+
+
+def test_metrics_none_producer_is_noop() -> None:
+    assert emit_agent_metrics(None, [_proposal(AgentName.DEMAND_PROPHET, {})]) == 0
+
+
+def test_metrics_emits_one_event_per_proposal_to_metrics_topic() -> None:
+    prod = _FakeProducer()
+    props = [
+        _proposal(AgentName.DEMAND_PROPHET, {}),
+        _proposal(AgentName.ROUTING_NAVIGATOR, {}),
+    ]
+    n = emit_agent_metrics(prod, props)
+    assert n == 2
+    assert [c[0] for c in prod.calls] == [METRICS_TOPIC, METRICS_TOPIC]
+    payload = prod.calls[0][1]
+    # Matches proto/domain/agent_metric.schema.json required fields.
+    assert set(payload) >= {"agent_name", "decision_id", "tier", "confidence", "degraded", "ts"}
+    assert payload["agent_name"] == "demand_prophet"
+    assert payload["tier"] == "tier_2"
+    assert prod.calls[0][2] == str(props[0].decision_id)
+
+
+def test_metrics_degraded_reflects_provenance() -> None:
+    prod = _FakeProducer()
+    prop = AgentProposal(
+        agent_name=AgentName.ROUTING_NAVIGATOR,
+        decision_id=uuid4(),
+        utility_score=0.4,
+        confidence=0.5,
+        justification_trace=["fallback"],
+        payload={},
+        tier=DecisionTier.TIER_1,
+        provenance=Provenance.degraded_fallback(),
+    )
+    emit_agent_metrics(prod, [prop])
+    payload = prod.calls[0][1]
+    assert payload["degraded"] is True
+    assert payload["confidence_basis"] == ConfidenceBasis.FALLBACK_FLOOR.value
+
+
+def test_metrics_produce_error_is_swallowed() -> None:
+    prod = _FakeProducer(raise_on=METRICS_TOPIC)
+    # Best-effort (I-7): telemetry never blocks or fails a decision.
+    assert emit_agent_metrics(prod, [_proposal(AgentName.DEMAND_PROPHET, {})]) == 0

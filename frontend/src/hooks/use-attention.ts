@@ -1,7 +1,9 @@
+import { deriveAutonomyView } from "@lib/autonomy";
 import { type AttentionItem, rankAttention, useAttentionAck } from "@state/attention.store";
 import { useEscalationStore } from "@state/escalation.store";
 import { useFirehoseStore } from "@state/firehose.store";
 import { useMemo } from "react";
+import { useAutonomy } from "./use-autonomy";
 import { usePosture } from "./use-posture";
 
 export interface UseAttentionResult {
@@ -29,6 +31,15 @@ export function useAttention(): UseAttentionResult {
   const acknowledged = useAttentionAck((s) => s.acknowledged);
   const acknowledge = useAttentionAck((s) => s.acknowledge);
   const posture = usePosture();
+  const autonomyQuery = useAutonomy();
+  const autonomy = deriveAutonomyView({
+    data: autonomyQuery.data,
+    isError: autonomyQuery.isError,
+    isPending: autonomyQuery.isPending,
+  });
+  const autonomyUnknown = autonomy.kind === "unknown";
+  // Stable primitive for the memo dep (the derived array is a fresh ref each render).
+  const stalledKey = autonomy.kind === "ready" ? [...autonomy.stalledCities].sort().join(",") : "";
 
   const items = useMemo(
     () =>
@@ -40,8 +51,20 @@ export function useAttention(): UseAttentionResult {
         twin,
         connection,
         acknowledged,
+        autonomyStalledCities: stalledKey ? stalledKey.split(",") : [],
+        autonomyUnknown,
       }),
-    [escalations, posture.data, posture.isError, disruptions, twin, connection, acknowledged],
+    [
+      escalations,
+      posture.data,
+      posture.isError,
+      disruptions,
+      twin,
+      connection,
+      acknowledged,
+      stalledKey,
+      autonomyUnknown,
+    ],
   );
 
   return {

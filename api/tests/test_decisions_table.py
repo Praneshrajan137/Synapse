@@ -71,8 +71,19 @@ def test_detail_selects_every_anatomy_column() -> None:
 
 def test_detail_response_carries_computed_honesty_fields() -> None:
     src = _source()
-    for key in ('"chain_verified"', '"degraded"', '"is_synthetic"'):
-        assert key in src, f"detail response lost ADR-044 computed field: {key}"
+    for key in ('"chain_verified"', '"degraded"', '"is_synthetic"', '"initiator"'):
+        assert key in src, f"detail response lost ADR-044/053 computed field: {key}"
+
+
+def test_recent_computes_initiator_via_both_prefixes() -> None:
+    """ADR-053: /recent derives initiator from BOTH the synthetic and autonomous
+    prefixes (single-owned in synapse_common), and autonomous wins so a
+    self-initiated decision is never reported synthetic."""
+    src = _source()
+    assert "AUTONOMOUS_ORDER_PREFIX" in src
+    assert '"initiator"' in src
+    assert '"autonomous"' in src
+    assert "'auto-" not in src.replace("AUTONOMOUS_ORDER_PREFIX", "")
 
 
 def test_recent_computes_honesty_flags_in_sql() -> None:
