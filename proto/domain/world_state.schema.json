@@ -1,0 +1,26 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "WorldState",
+  "description": "The perceive snapshot of a per-city standing world (ADR-052). Mirrors packages/synapse_common/world/models.py::WorldState. is_synthetic is ALWAYS true — the world is a simulation; clock_advancing=false means the world is degraded (I-7).",
+  "type": "object",
+  "required": ["city", "sim_time_min", "clock_advancing", "is_synthetic", "as_of"],
+  "properties": {
+    "city": {"type": "string"},
+    "sim_time_min": {"type": "number", "minimum": 0},
+    "inventory": {
+      "type": "object",
+      "description": "Per-SKU stock level.",
+      "additionalProperties": {"type": "number"}
+    },
+    "pending_orders": {"type": "integer", "minimum": 0},
+    "fill_rate": {"type": "number", "minimum": 0, "maximum": 1},
+    "spoilage_rate": {"type": "number", "minimum": 0, "maximum": 1},
+    "avg_delivery_min": {"type": "number", "minimum": 0},
+    "restocks_triggered": {"type": "integer", "minimum": 0},
+    "demand_rate": {"type": "number", "minimum": 0, "description": "Poisson lambda, orders/min."},
+    "clock_advancing": {"type": "boolean", "description": "false => the world clock is stalled (degraded, I-7)."},
+    "is_synthetic": {"type": "boolean", "description": "Always true — the world is a simulation."},
+    "as_of": {"type": "string", "format": "date-time"}
+  },
+  "additionalProperties": false
+}

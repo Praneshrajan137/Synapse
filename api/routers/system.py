@@ -14,6 +14,7 @@ sub-millisecond in-process read is honest engineering (ADR-044 D4).
 from __future__ import annotations
 
 import os
+from datetime import UTC, datetime
 from typing import Annotated, Any
 
 import httpx
@@ -27,6 +28,15 @@ logger = structlog.get_logger(__name__)
 router = APIRouter()
 
 ORCHESTRATOR_URL = os.environ.get("SYNAPSE_ORCHESTRATOR_URL", "http://orchestrator:8085")
+TWIN_URL = os.environ.get("SYNAPSE_TWIN_URL", "http://digital-twin:8009")
+# Mirror TW_WORLD_CITIES (digital_twin/inference/serve.py) — the set of cities
+# with a standing world. A city with no world resolves to null, not a fabricated
+# healthy state.
+WORLD_CITIES = [
+    c.strip()
+    for c in os.environ.get("SYNAPSE_WORLD_CITIES", "bengaluru,mumbai").split(",")
+    if c.strip()
+]
 
 
 @router.get("/posture")
@@ -49,6 +59,74 @@ async def system_posture(
         raise HTTPException(status_code=resp.status_code, detail=resp.text)
     payload: dict[str, Any] = resp.json()
     return payload
+
+
+@router.get("/autonomy")
+async def system_autonomy(
+    op: Annotated[OperatorContext, Depends(CurrentOperator)],
+    city: str | None = None,
+) -> dict[str, Any]:
+    """ADR-053: the autonomous perceive→decide→act loop, made observable (VIEWER).
+
+    Joins two live reads server-side so the browser hits ONE JWT/CORS-guarded
+    gateway endpoint (never the twin/orchestrator directly):
+
+      * ``sensor`` — the orchestrator SensorLoop's self-initiation record
+        (running + decisions_triggered + polls). Its ``decisions_triggered``
+        is the honest headline: "the system has acted on its own N times".
+      * ``worlds`` — the twin's live per-city ``world_state`` snapshot
+        (inventory, fill_rate, spoilage_rate, demand λ, clock_advancing).
+
+    Honest degradation (I-7): an unreachable sensor or a missing/stalled world
+    resolves to ``null`` for that part with ``degraded=true`` — never a
+    fabricated healthy reading. A 503 is reserved for the case where NOTHING is
+    reachable, so the FE can distinguish "partly degraded" from "blind".
+    """
+    cities = [city] if city else WORLD_CITIES
+    degraded = False
+
+    sensor: dict[str, Any] | None = None
+    try:
+        async with httpx.AsyncClient(timeout=5.0) as client:
+            r = await client.get(f"{ORCHESTRATOR_URL}/api/v1/status/autonomy")
+        if r.status_code == 200:
+            sensor = r.json()
+        else:
+            degraded = True
+    except httpx.HTTPError as exc:
+        logger.warning("autonomy_sensor_unreachable", error=str(exc))
+        degraded = True
+
+    worlds: dict[str, Any | None] = {}
+    async with httpx.AsyncClient(timeout=5.0) as client:
+        for c in cities:
+            try:
+                r = await client.get(f"{TWIN_URL}/world/state", params={"city": c})
+                if r.status_code == 200:
+                    state = r.json()
+                    worlds[c] = state
+                    # A stalled sim clock is a degraded world (I-7 contract on
+                    # WorldState.clock_advancing) — surface it, don't hide it.
+                    if not state.get("clock_advancing", True):
+                        degraded = True
+                else:
+                    worlds[c] = None
+                    degraded = True
+            except httpx.HTTPError as exc:
+                logger.warning("autonomy_world_unreachable", city=c, error=str(exc))
+                worlds[c] = None
+                degraded = True
+
+    if sensor is None and not any(worlds.values()):
+        # Nothing is reachable — the operator is blind, not "healthy".
+        raise HTTPException(status_code=503, detail="autonomy sources unreachable")
+
+    return {
+        "sensor": sensor,
+        "worlds": worlds,
+        "degraded": degraded,
+        "as_of": datetime.now(UTC).isoformat(),
+    }
 
 
 # ─────────────────────────────────────────────────────────────────────────────

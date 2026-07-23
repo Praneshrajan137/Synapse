@@ -1,4 +1,10 @@
-import { ConfidenceChip, PageHeader, TierBadge, UniversalStateRow } from "@ds/compounds";
+import {
+  ConfidenceChip,
+  InitiatorBadge,
+  PageHeader,
+  TierBadge,
+  UniversalStateRow,
+} from "@ds/compounds";
 import { Badge } from "@ds/primitives";
 import { useSynapseApi } from "@hooks/use-synapse-api";
 import { useUniversalState } from "@hooks/use-universal-state";
@@ -98,6 +104,7 @@ export function DecisionTheater() {
             <tr>
               <th className="px-3 py-2">Time</th>
               <th className="px-3 py-2">Decision</th>
+              <th className="px-3 py-2">Origin</th>
               <th className="px-3 py-2">Tier</th>
               <th className="px-3 py-2">Phase</th>
               <th className="px-3 py-2">Confidence</th>
@@ -109,7 +116,7 @@ export function DecisionTheater() {
             {state !== "populated" ? (
               <UniversalStateRow
                 state={state}
-                colSpan={7}
+                colSpan={8}
                 labels={{
                   emptyTitle: "No decisions yet",
                   emptyDetail: "Recorded decisions will appear here as the council acts.",
@@ -119,7 +126,7 @@ export function DecisionTheater() {
               />
             ) : filtered.length === 0 ? (
               <tr>
-                <td colSpan={7} className="px-3 py-8 text-center text-ink-muted">
+                <td colSpan={8} className="px-3 py-8 text-center text-ink-muted">
                   No decisions match the current filters.
                 </td>
               </tr>
@@ -127,7 +134,7 @@ export function DecisionTheater() {
               <>
                 {paddingTop > 0 && (
                   <tr>
-                    <td colSpan={7} style={{ height: paddingTop, padding: 0, border: 0 }} />
+                    <td colSpan={8} style={{ height: paddingTop, padding: 0, border: 0 }} />
                   </tr>
                 )}
                 {virtualRows.map((vr) => {
@@ -145,6 +152,9 @@ export function DecisionTheater() {
                       </td>
                       <td className="px-3 py-2 font-mono text-2xs text-ink">
                         {fmt.shortId(row.decision_id)}
+                      </td>
+                      <td className="px-3 py-2">
+                        <InitiatorBadge initiator={row.initiator ?? "operator"} />
                       </td>
                       <td className="px-3 py-2">
                         <TierBadge tier={row.tier} />
@@ -175,7 +185,7 @@ export function DecisionTheater() {
                 })}
                 {paddingBottom > 0 && (
                   <tr>
-                    <td colSpan={7} style={{ height: paddingBottom, padding: 0, border: 0 }} />
+                    <td colSpan={8} style={{ height: paddingBottom, padding: 0, border: 0 }} />
                   </tr>
                 )}
               </>

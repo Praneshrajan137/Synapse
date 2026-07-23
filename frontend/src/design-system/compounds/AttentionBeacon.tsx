@@ -22,6 +22,7 @@ const KIND_GLYPH: Record<AttentionItem["kind"], string> = {
   escalation: "▲",
   connection: "○",
   degradation: "◆",
+  autonomy: "⟳",
   disruption: "✦",
   divergence: "≈",
 };

@@ -2,13 +2,13 @@ import {
   AgentProposalChip,
   ChainIntegrityChip,
   ConfidenceChip,
+  InitiatorBadge,
   ParetoFrontier,
   ParetoParallel,
   type ParetoPoint,
   ProvenanceChip,
   type ProvenanceLike,
   ReasoningTimeline,
-  SyntheticBadge,
   TierBadge,
   TwinDivergenceCaveat,
 } from "@ds/compounds";
@@ -143,7 +143,14 @@ export function DecisionDetail() {
           <ConfidenceChip value={decision.confidence} />
           <TwinDivergenceCaveat />
           {decision.escalated_to_human && <Badge tone="warning">Escalated</Badge>}
-          {raw?.is_synthetic && <SyntheticBadge />}
+          {(() => {
+            // ADR-053: prefer the typed initiator; fall back to is_synthetic
+            // for a pre-053 gateway. Operator (the default) stays unbadged.
+            const initiator =
+              raw?.initiator ??
+              (raw?.is_synthetic ? ("synthetic" as const) : ("operator" as const));
+            return initiator === "operator" ? null : <InitiatorBadge initiator={initiator} />;
+          })()}
           <ChainIntegrityChip
             verified={raw?.chain_verified}
             prevHash={raw?.prev_hash}

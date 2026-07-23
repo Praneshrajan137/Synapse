@@ -31,6 +31,7 @@ export function useFirehose({ topics }: UseFirehoseOptions): UseFirehoseResult {
     pricing: s.appendPricing,
     freshness: s.appendFreshness,
     cognition: s.appendCognition,
+    metric: s.appendMetric,
   }));
   const appendEscalation = useEscalationStore((s) => s.append);
   const lastSeq = useFirehoseStore((s) => s.lastSeq);
@@ -92,6 +93,12 @@ export function useFirehose({ topics }: UseFirehoseOptions): UseFirehoseResult {
       // ADR-051: live council cognition (FSM phase transitions) → the CouncilStrip
       // shows the agents thinking/debating in real time, derived from real events.
       offs.push(client.on("cognition", (c, env) => append.cognition(c, env.seq)));
+    }
+    if (topics.includes("metric")) {
+      // ADR-053: live per-agent telemetry — the `metric` channel finally has a
+      // real producer (emit_agent_metrics), so the KPI band can read real
+      // measured confidence/degraded per agent instead of only buffer proxies.
+      offs.push(client.on("metric", (m, env) => append.metric(m, env.seq)));
     }
 
     return () => {

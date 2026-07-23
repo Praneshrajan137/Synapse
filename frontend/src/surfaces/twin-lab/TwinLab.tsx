@@ -13,7 +13,9 @@ import { useFirehoseStore } from "@state/firehose.store";
 import { useMutation } from "@tanstack/react-query";
 import { TimeoutError } from "@transport/errors";
 import { Suspense, lazy, useMemo, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
+import { AutonomyPanel } from "../autonomy/AutonomyPanel";
 import { DivergenceMeter } from "./DivergenceMeter";
 import { NodeInspector } from "./NodeInspector";
 import { ScenarioBuilder, type ScenarioRequest } from "./ScenarioBuilder";
@@ -33,6 +35,7 @@ const SupplyNetworkGraph = lazy(() =>
  * digital twin's /simulate endpoint.
  */
 export function TwinLab() {
+  const { t } = useTranslation("common");
   const api = useSynapseApi();
   const topology = useTopology();
   const [result, setResult] = useState<TwinState | null>(null);
@@ -96,6 +99,13 @@ export function TwinLab() {
           <DivergenceTrace series={divergenceSeries} className="syn-card p-3" />
         )}
       </div>
+
+      {/* ADR-053: the autonomous loop lives with the twin — the world it
+          perceives and acts on is the twin's standing WorldRuntime. */}
+      <section className="space-y-2">
+        <h2 className="text-sm font-semibold text-ink">{t("autonomy.title")}</h2>
+        <AutonomyPanel />
+      </section>
 
       <div className="grid gap-4 lg:grid-cols-[1fr_320px]">
         <div>

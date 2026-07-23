@@ -19,6 +19,17 @@ const posture = vi.hoisted(() => ({
 }));
 vi.mock("@hooks/use-posture", () => ({ usePosture: () => posture.current }));
 
+// ADR-053: useAttention now folds in the autonomy read — mock it healthy so
+// these tests exercise only the signal under test (autonomy has its own suite).
+const autonomy = vi.hoisted(() => ({
+  current: {
+    data: { sensor: null, worlds: {}, degraded: false, as_of: "" },
+    isError: false,
+    isPending: false,
+  },
+}));
+vi.mock("@hooks/use-autonomy", () => ({ useAutonomy: () => autonomy.current }));
+
 function LocationProbe() {
   return <div data-testid="loc">{useLocation().pathname}</div>;
 }
@@ -44,6 +55,11 @@ describe("AttentionBeacon", () => {
     posture.current = {
       data: { degraded: false, breakers: {}, brownout: {} } as SystemPosture,
       isError: false,
+    };
+    autonomy.current = {
+      data: { sensor: null, worlds: {}, degraded: false, as_of: "" },
+      isError: false,
+      isPending: false,
     };
   });
   afterEach(() => vi.clearAllMocks());

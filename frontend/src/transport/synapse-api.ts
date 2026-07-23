@@ -1,5 +1,6 @@
 import { type AgentHealthResponse, AgentHealthResponseSchema } from "@domain/agent-health";
 import { type AuditListResponse, AuditListResponseSchema } from "@domain/audit-row";
+import { type AutonomyResponse, AutonomyResponseSchema } from "@domain/autonomy";
 import { type ConsensusDecision, ConsensusDecisionSchema } from "@domain/consensus-decision";
 import {
   type CalibrationResponse,
@@ -85,6 +86,9 @@ export const DecisionDetailResponseSchema = z
     chain_verified: z.boolean().nullable().optional(),
     degraded: z.boolean().optional(),
     is_synthetic: z.boolean().optional(),
+    // ADR-053: three-way origin (autonomous/synthetic/operator). Optional so
+    // the client keeps validating against pre-053 gateways (additive contract).
+    initiator: z.enum(["autonomous", "synthetic", "operator"]).optional(),
   })
   .passthrough();
 export type DecisionDetailResponse = z.infer<typeof DecisionDetailResponseSchema>;
@@ -315,6 +319,18 @@ export function createSynapseApi(deps: SynapseApiDeps) {
       gateway.get("/api/v1/system/posture", {
         schema: SystemPostureSchema,
         schemaId: "SystemPosture",
+      }),
+
+    // ─── Autonomy Spine (ADR-053) ─────────────────────────────────────
+    // The perceive→decide→act loop, made observable: the twin's live per-city
+    // world_state joined with the SensorLoop's self-initiation counters. VIEWER.
+    // Polled (~10-15s) like posture; a fetch failure renders "autonomy unknown"
+    // and a stalled world clock renders degraded — never a healthy lie.
+    getAutonomy: (params: { city?: City } = {}): Promise<AutonomyResponse> =>
+      gateway.get("/api/v1/system/autonomy", {
+        query: params,
+        schema: AutonomyResponseSchema,
+        schemaId: "AutonomyResponse",
       }),
 
     // ─── Operations / Standing Watch (ADR-047) ────────────────────────

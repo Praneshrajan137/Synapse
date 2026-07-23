@@ -24,6 +24,7 @@ export type AttentionKind =
   | "escalation"
   | "connection"
   | "degradation"
+  | "autonomy"
   | "disruption"
   | "divergence";
 
@@ -57,9 +58,12 @@ const SEVERITY_RANK: Record<AttentionSeverity, number> = {
 };
 // Tie-break at equal severity: the human-in-the-loop item always wins.
 const KIND_PRIORITY: Record<AttentionKind, number> = {
-  escalation: 5,
-  connection: 4,
-  degradation: 3,
+  escalation: 6,
+  connection: 5,
+  degradation: 4,
+  // A stalled autonomous world is a degradation of the system's core capability
+  // (it can no longer perceive/act) — ranked just under general degradation.
+  autonomy: 3,
   disruption: 2,
   divergence: 1,
 };
@@ -72,6 +76,11 @@ export interface AttentionInput {
   readonly twin: ReadonlyArray<TwinDivergenceEvent>;
   readonly connection: WsState;
   readonly acknowledged: Readonly<Record<string, number>>;
+  // ADR-053: cities whose standing world has stalled/unreachable (the
+  // autonomous loop cannot perceive/act there). Optional — absent means the
+  // autonomy read was healthy or not yet available.
+  readonly autonomyStalledCities?: ReadonlyArray<string>;
+  readonly autonomyUnknown?: boolean;
 }
 
 function escalationSeverity(e: EscalationEntry): AttentionSeverity {
@@ -185,6 +194,35 @@ export function rankAttention(input: AttentionInput): AttentionItem[] {
       detail: disruption.disruption_type ?? "supply-chain anomaly",
       count: 1,
       route: "/",
+      actionable: false,
+    });
+  }
+
+  // 4b) Autonomy loop degraded — a standing world stalled/unreachable, so the
+  // system can no longer perceive+act autonomously there (ADR-053).
+  const stalled = input.autonomyStalledCities ?? [];
+  if (stalled.length > 0) {
+    items.push({
+      key: `auto:stalled:${[...stalled].sort().join(",")}`,
+      kind: "autonomy",
+      severity: "high",
+      title: `Autonomous world stalled · ${stalled.length}`,
+      detail: `The standing world has stalled or is unreachable (${[...stalled]
+        .sort()
+        .join(", ")}) — the loop cannot perceive or act there.`,
+      count: stalled.length,
+      route: "/twin",
+      actionable: false,
+    });
+  } else if (input.autonomyUnknown) {
+    items.push({
+      key: "auto:unknown",
+      kind: "autonomy",
+      severity: "medium",
+      title: "Autonomy unknown",
+      detail: "Cannot reach the autonomy endpoint — the loop is not observable right now.",
+      count: 1,
+      route: "/twin",
       actionable: false,
     });
   }

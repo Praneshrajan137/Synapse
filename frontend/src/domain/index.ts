@@ -18,3 +18,6 @@ export * from "./escalation";
 export * from "./audit-row";
 export * from "./agent-health";
 export * from "./agent-state";
+export * from "./world-state";
+export * from "./autonomy";
+export * from "./agent-metric";

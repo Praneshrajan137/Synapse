@@ -1282,3 +1282,70 @@ invariants:
     tests:
       - frontend/src/theme/__tests__/no-legacy-js.test.ts
     status: enforced
+
+  - id: FE-INV-072
+    title: Decision initiator is a typed tri-state; autonomous is never rendered as synthetic
+    mirrors: ADR-053, I-3
+    description: >
+      A decision's origin (autonomous / synthetic / operator) is a typed field
+      (ZInitiator), not a regex over an order_id. The InitiatorBadge renders an
+      autonomous decision distinctly from a demo pulse — a non-colour signal
+      (label + glyph + border, INV-CLR-011) — and uses the brand/accent token
+      for autonomous, never the violet synthetic token. Conflating "the system
+      decided on its own" with "staged traffic" is the exact lie this prevents.
+    implementations:
+      - frontend/src/domain/primitives.ts
+      - frontend/src/design-system/compounds/InitiatorBadge.tsx
+    tests:
+      - frontend/src/design-system/compounds/__tests__/InitiatorBadge.test.tsx
+      - frontend/src/domain/__tests__/decision-envelope.test.ts
+    status: enforced
+
+  - id: FE-INV-073
+    title: A stalled or unreachable world renders degraded, never healthy vitals
+    mirrors: ADR-053, I-7
+    description: >
+      deriveAutonomyView maps a world with clock_advancing=false to "stalled"
+      and a null world to "unreachable" — never live vitals — and every live
+      world is flagged synthetic (it is a simulation, not commerce). WorldVitals
+      renders the degraded/synthetic states explicitly rather than fabricating a
+      healthy snapshot.
+    implementations:
+      - frontend/src/lib/autonomy.ts
+      - frontend/src/surfaces/autonomy/WorldVitals.tsx
+    tests:
+      - frontend/src/lib/__tests__/autonomy.test.ts
+    status: enforced
+
+  - id: FE-INV-074
+    title: The autonomy read degrades honestly and a stalled world raises an attention signal
+    mirrors: ADR-053, I-5, I-7
+    description: >
+      A failed autonomy read is "unknown" (the loop is not observable) — never a
+      healthy autonomous system — and a stalled/unreachable world is folded into
+      the ranked attention spine as a high-severity "autonomy" signal (an
+      "autonomy unknown" medium signal when the read fails), so the operator is
+      never silently blind to the loop degrading.
+    implementations:
+      - frontend/src/hooks/use-autonomy.ts
+      - frontend/src/state/attention.store.ts
+      - frontend/src/hooks/use-attention.ts
+    tests:
+      - frontend/src/lib/__tests__/autonomy.test.ts
+      - frontend/src/state/__tests__/attention.store.test.ts
+    status: enforced
+
+  - id: FE-INV-075
+    title: The metric firehose channel is typed; malformed metric payloads are rejected
+    mirrors: ADR-053, FE-INV-008
+    description: >
+      The `metric` channel (topic 17, given a real producer by ADR-053) is no
+      longer open-shape passthrough: it validates against AgentMetricSchema like
+      every other channel, so a poison / legacy-shaped metric payload is rejected
+      before it reaches app code.
+    implementations:
+      - frontend/src/domain/agent-metric.ts
+      - frontend/src/transport/firehose.ts
+    tests:
+      - frontend/src/transport/__tests__/firehose.test.ts
+    status: enforced

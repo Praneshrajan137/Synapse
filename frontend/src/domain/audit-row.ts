@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { ZCity, ZConfidence, ZIsoTimestamp, ZTier, ZUuid } from "./primitives";
+import { ZCity, ZConfidence, ZInitiator, ZIsoTimestamp, ZTier, ZUuid } from "./primitives";
 
 // Shape of a row from GET /api/v1/decisions/recent (api/routers/decisions.py:32-62).
 // Audit immutability per I-4 — read-only on the FE.
@@ -26,6 +26,9 @@ export const AuditRowSchema = z
     // ADR-044 honesty fields (additive — optional for pre-044 gateways).
     degraded: z.boolean().optional(),
     is_synthetic: z.boolean().optional(),
+    // ADR-053: three-way origin. Optional for pre-053 gateways; the UI treats
+    // a missing value as "operator" (the honest default).
+    initiator: ZInitiator.optional(),
   })
   .passthrough();
 

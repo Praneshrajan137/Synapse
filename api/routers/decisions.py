@@ -124,13 +124,13 @@ def recent_decisions(
     if city is not None and city not in {"bengaluru", "mumbai"}:
         raise HTTPException(status_code=422, detail="invalid city")
     try:
-        from synapse_common.synthetic import SYNTHETIC_ORDER_PREFIX
+        from synapse_common.synthetic import AUTONOMOUS_ORDER_PREFIX, SYNTHETIC_ORDER_PREFIX
 
         conn = _connect()
         try:
             with conn.cursor() as cur:
                 where = ["1=1"]
-                params: list[Any] = [SYNTHETIC_ORDER_PREFIX]
+                params: list[Any] = [SYNTHETIC_ORDER_PREFIX, AUTONOMOUS_ORDER_PREFIX]
                 if tier is not None:
                     where.append("tier = %s")
                     params.append(tier)
@@ -157,13 +157,20 @@ def recent_decisions(
                     #                  (prefix rule owned by
                     #                  synapse_common.synthetic, passed as a
                     #                  jsonpath var — single source of truth).
+                    #   initiator    — ADR-053: the three-way origin. An
+                    #                  ``auto-`` order_id is an autonomously
+                    #                  self-initiated decision (SensorLoop),
+                    #                  NOT synthetic; anything else is operator.
                     "SELECT id AS audit_id, decision_id, tier, phase_reached, "
                     "       confidence, escalated, city, created_at, "
                     "       COALESCE(jsonb_path_exists(proposals, "
                     "         '$[*].provenance.degraded ? (@ == true)'), false) AS degraded, "
                     "       COALESCE(jsonb_path_exists(context_messages, "
                     "         '$[*].content.request.order_id ? (@ starts with $prefix)', "
-                    "         jsonb_build_object('prefix', %s::text)), false) AS is_synthetic "
+                    "         jsonb_build_object('prefix', %s::text)), false) AS is_synthetic, "
+                    "       COALESCE(jsonb_path_exists(context_messages, "
+                    "         '$[*].content.request.order_id ? (@ starts with $prefix)', "
+                    "         jsonb_build_object('prefix', %s::text)), false) AS is_autonomous "
                     "FROM audit_consensus "
                     f"WHERE {' AND '.join(where)} "
                     "ORDER BY created_at DESC LIMIT %s",
@@ -181,6 +188,15 @@ def recent_decisions(
                         "created_at": r[7].isoformat() if r[7] else None,
                         "degraded": bool(r[8]),
                         "is_synthetic": bool(r[9]),
+                        # Autonomous takes precedence; the prefixes are disjoint
+                        # so this mirrors synthetic.initiator_of_order_id exactly.
+                        "initiator": (
+                            "autonomous"
+                            if bool(r[10])
+                            else "synthetic"
+                            if bool(r[9])
+                            else "operator"
+                        ),
                     }
                     for r in cur.fetchall()
                 ]
@@ -290,7 +306,7 @@ def get_decision(
     current_hash: str | None = row[19]
 
     from synapse_common.audit_chain import verify_row_hash
-    from synapse_common.synthetic import is_synthetic_decision
+    from synapse_common.synthetic import initiator_of_decision, is_synthetic_decision
 
     degraded = any(
         isinstance(p, dict)
@@ -342,6 +358,9 @@ def get_decision(
         "chain_verified": chain_verified,
         "degraded": degraded,
         "is_synthetic": is_synthetic_decision(context_messages),
+        # ADR-053: three-way origin — an ``auto-`` decision self-initiated by
+        # the SensorLoop is autonomous, never synthetic.
+        "initiator": initiator_of_decision(context_messages),
     }
 
 
