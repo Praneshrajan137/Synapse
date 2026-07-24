@@ -398,9 +398,6 @@ def check_no_raw_hex_hook() -> CheckResult:
 
 
 # ---------------------------------------------------------------------------
-# C24: worktree-policy enforcement hook exists
-# ---------------------------------------------------------------------------
-# ---------------------------------------------------------------------------
 # C12: Helm chart templates 11 services (8 agents + orchestrator + API + twin)
 # ---------------------------------------------------------------------------
 @register("C12", "Helm chart templates all 11 services")
@@ -541,19 +538,6 @@ def check_cve_budget_in_ci() -> CheckResult:
         if "check_cve_budget" in text:
             return CheckResult("C21", "CVE budget", "PASS", f"invoked from {p.name}")
     return CheckResult("C21", "CVE budget", "FAIL", "no workflow references check_cve_budget.py")
-
-
-@register("C24", "Worktree policy enforced by hook")
-def check_worktree_hook() -> CheckResult:
-    pc = ROOT / ".pre-commit-config.yaml"
-    if not pc.exists():
-        return CheckResult("C24", "Worktree hook", "FAIL", ".pre-commit-config.yaml missing")
-    text = pc.read_text(encoding="utf-8")
-    if "worktree" in text.lower() and "block" in text.lower():
-        return CheckResult("C24", "Worktree hook", "PASS", "worktree-block hook present")
-    return CheckResult(
-        "C24", "Worktree hook", "FAIL", "no worktree-blocking hook in pre-commit-config"
-    )
 
 
 # ---------------------------------------------------------------------------

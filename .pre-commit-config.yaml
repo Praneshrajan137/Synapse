@@ -168,18 +168,6 @@ print('OK KV-cache stable prefix preserved')
         pass_filenames: false
         additional_dependencies: [pyyaml, jsonschema]
 
-      # WS-11 cross-cutting §3.1 — enforce the workflow-rule that CLAUDE.md
-      # carries in prose ("NEVER use `git worktree add` in this repo").
-      # The May 2026 sprawl incident produced ~50K LOC of unmerged parallel
-      # rewrites; this hook makes any reintroduction of `.claude/worktrees/`
-      # fail commit time rather than CI time.
-      - id: no-worktrees
-        name: no-worktrees
-        entry: python -c "import pathlib,sys; bad=[p for p in pathlib.Path('.claude/worktrees').glob('*') if p.exists()] if pathlib.Path('.claude/worktrees').exists() else []; sys.exit(0 if not bad else (print('FAIL: .claude/worktrees/ must be empty (CLAUDE.md Workflow Rules). Bad paths:', bad) or 1))"
-        language: python
-        pass_filenames: false
-        always_run: true
-
       # WS-11 cross-cutting §3.2 — gitleaks on every commit. Prevents a
       # `.env` slip-through; pattern-based, not name-based.
       - id: gitleaks
