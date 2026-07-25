@@ -180,6 +180,60 @@ jobs:
           name: coverage-report
           path: coverage.xml
 
+  uplift-verify:
+    name: Uplift Harness + Verification Properties (tests/)
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    needs: quality-gates
+    # The `tests/` tree was gated by NO workflow: the quality-gates unit step runs
+    # `packages/tests agents orchestrator digital_twin api` and every other workflow
+    # targets a single subdirectory (tests/integration, tests/oracle,
+    # tests/compliance, tests/security). So the uplift harness suite and the
+    # verification-gate suite executed nowhere in CI. This job closes that hole.
+    #
+    # It is also the ONLY place the expensive property tests are allowed to run:
+    # per `.kiro/steering/local-compute-budget.md` (I-0) the dev laptop runs
+    # `HYPOTHESIS_PROFILE=dev pytest -m "not slow"`, and the real example budget is
+    # spent here on Linux runners.
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+      - name: Install dependencies
+        # The consensus arm assembles all eight real agent A2A handlers plus the
+        # twin handler, so this job needs the same dependency closure as the
+        # unit-test job: agent requirements (incl. the sprint-3 bundle that carries
+        # simpy) and the orchestrator stack.
+        run: |
+          pip install -r packages/requirements.txt -r packages/requirements-dev.txt
+          pip install -e packages/
+          pip install -r orchestrator/requirements.txt
+          pip install jsonschema pyyaml
+          for req in agents/*/requirements.txt; do pip install -r "$req"; done
+          pip install simpy sse-starlette
+          pip install -r agents/requirements-sprint3.txt
+          pip install "starlette>=0.37.2,<0.38.0"
+      - name: Property + unit tests (fast — full 500-example budget)
+        # Pure/synthetic properties: no twin, no consensus network, so the full
+        # `ci` budget is cheap here.
+        env:
+          HYPOTHESIS_PROFILE: ci
+        run: |
+          pytest tests/uplift tests/verify -m "not slow" -v --tb=short
+      - name: Property + regression tests (slow — 100-example budget)
+        # Every example of these drives the real SimPy twin, the real four-tier
+        # ConsensusProtocol, or the CLI end-to-end. `heavy` = 100 examples, the
+        # minimum the spec obligations require; 500 would push this job past an
+        # hour. Also carries the 623-test regression floor and the invariant-suite
+        # collection checks (task 11.1).
+        env:
+          HYPOTHESIS_PROFILE: heavy
+        run: |
+          pytest tests/uplift tests/verify -m "slow" -v --tb=short
+
   sprint6-verify:
     name: Sprint 6 Multi-City Verification
     runs-on: ubuntu-latest

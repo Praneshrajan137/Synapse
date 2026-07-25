@@ -32,9 +32,20 @@ seven steps apply to every agent that follows the pattern — substitute the age
    calibrated model.
 5. **Upload** both files to HF Hub (checkpoint + serving sidecar).
 6. **Record the result.** Copy the printed JSON entry into
-   `infrastructure/ml/published_checkpoints.json` (replacing `__placeholder__`) and copy
-   the same numbers into the "Operator step" section of
-   `docs/quality_gates/flagship-slice-evidence.md`. Commit both.
+   `infrastructure/ml/published_checkpoints.json` (deleting the `__placeholder__`
+   object) and copy the same numbers into the "Operator step" section of
+   `docs/quality_gates/flagship-slice-evidence.md`. Validate the record before
+   committing — it is network-free, so it runs anywhere:
+
+   ```bash
+   python -m scripts.audit.published_checkpoint_truth --validate-registry --check
+   ```
+
+   It checks every required key (`repo`, `sha`, `coverage_p90`, `final_crps`,
+   `trained_at`, `rows`) and rejects an implausible value (non-`owner/name` repo,
+   non-hex sha, `coverage_p90 < 0.85`, negative CRPS, undated `trained_at`,
+   non-positive `rows`). A still-unpublished placeholder reports `placeholder`, not a
+   pass. Commit both files.
 7. **Wire serving.** Set `DP_HF_REPO=<HF_REPO>` on the demand_prophet serving container
    (`docker-compose*.yml` env / Helm values). `ModelRegistry._resolve_checkpoint_path`
    downloads `{name}.pt` + `.serving.json` and `load_serving_model` restores the fitted

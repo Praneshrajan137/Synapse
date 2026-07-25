@@ -21,7 +21,9 @@ Honesty matters more than ambition. Here is the state of the repository at a gla
 | Tests | Backend coverage floor 80%, mutation floor enforced (Stryker `break: 50`, ratcheting), Hypothesis property fuzz on consensus invariants, golden-trace tier-routing gate at 80%, KV-cache hit-rate gate at 0.70. |
 | Documentation | Every "Sprint X" line above maps to a real artefact you can `cat`. The handful that are aspirational are tagged in `docs/state/CURRENT.md` so you can find them. |
 
-Run `make verify-claims` for the live truth. Today it reports **16 PASS / 3 FAIL / 0 SKIP**.
+Run `make verify-claims` for the live truth. Today it reports **49 PASS / 0 FAIL / 0 PARTIAL / 4 SKIP / 53 TOTAL**.
+
+Every registered check lands in exactly one of those four status categories, so the counts always sum to the total — no check is silently dropped. A skip is not a pass: today's four are the training-artifact and published-model rows (C38, C40, C45, C46), which only an operator run can verify. That headline line is itself pinned — the C56 `doc-truth` gate executes the suite at evaluation time and fails CI naming each drifted category if any count above stops matching.
 
 ## Quickstart — three deployment targets
 

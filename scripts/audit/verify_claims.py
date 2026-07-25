@@ -30,6 +30,16 @@ class CheckResult:
     detail: str
 
 
+# R8.7: the four emitted status categories. Every registered check lands in
+# exactly one of them, so the four counts sum to TOTAL == len(_CHECKS) and no
+# check can be silently omitted from the headline the README is pinned to.
+STATUSES: tuple[str, ...] = ("PASS", "FAIL", "PARTIAL", "SKIP")
+
+
+class StatusPartitionError(RuntimeError):
+    """The emitted counts do not partition the registered checks (R8.7)."""
+
+
 _CHECKS: list[tuple[str, str, Callable[[], CheckResult]]] = []
 
 
@@ -1776,12 +1786,69 @@ def check_oracle_truth() -> CheckResult:
 # ---------------------------------------------------------------------------
 # Main entry
 # ---------------------------------------------------------------------------
+def _run_check(cid: str, title: str, fn: Callable[[], CheckResult]) -> CheckResult:
+    """Execute one registered check and coerce its outcome into a valid status.
+
+    R8.7 totality: a check that raises, returns the wrong type, or reports a
+    status outside ``STATUSES`` must still occupy exactly one emitted category.
+    All three cases become an explicit FAIL naming the defect, so a broken
+    check surfaces loudly instead of aborting the run or vanishing from the
+    counts (which would let the pinned headline overstate reality).
+    """
+    try:
+        result = fn()
+    except Exception as exc:  # noqa: BLE001 - a crashing check is a FAIL, not an omission
+        return CheckResult(cid, title, "FAIL", f"check raised {type(exc).__name__}: {exc}")
+    if not isinstance(result, CheckResult):
+        return CheckResult(
+            cid, title, "FAIL", f"check returned {type(result).__name__}, expected CheckResult"
+        )
+    if result.status not in STATUSES:
+        return CheckResult(
+            result.cid or cid,
+            result.title or title,
+            "FAIL",
+            f"check reported unknown status {result.status!r} "
+            f"(expected one of {', '.join(STATUSES)}); detail was: {result.detail}",
+        )
+    return result
+
+
+def collect_results() -> list[CheckResult]:
+    """Run every registered check exactly once, in registration order."""
+    results = [_run_check(cid, title, fn) for cid, title, fn in _CHECKS]
+    if len(results) != len(_CHECKS):
+        raise StatusPartitionError(
+            f"{len(results)} result(s) for {len(_CHECKS)} registered check(s)"
+        )
+    return results
+
+
+def status_counts(results: list[CheckResult]) -> dict[str, int]:
+    """Partition results into the four emitted categories (R8.7).
+
+    Raises ``StatusPartitionError`` when the four counts do not sum to the
+    number of results — the arithmetic guarantee behind the reported TOTAL.
+    """
+    counts = {status: 0 for status in STATUSES}
+    for r in results:
+        if r.status not in counts:
+            raise StatusPartitionError(f"{r.cid}: status {r.status!r} outside {STATUSES}")
+        counts[r.status] += 1
+    if sum(counts.values()) != len(results):
+        raise StatusPartitionError(
+            f"counts {counts} sum to {sum(counts.values())}, expected {len(results)}"
+        )
+    return counts
+
+
 def run(as_json: bool = False) -> int:
-    results = [fn() for _cid, _title, fn in _CHECKS]
-    pass_n = sum(1 for r in results if r.status == "PASS")
-    fail_n = sum(1 for r in results if r.status == "FAIL")
-    partial_n = sum(1 for r in results if r.status == "PARTIAL")
-    skip_n = sum(1 for r in results if r.status == "SKIP")
+    results = collect_results()
+    counts = status_counts(results)
+    pass_n = counts["PASS"]
+    fail_n = counts["FAIL"]
+    partial_n = counts["PARTIAL"]
+    skip_n = counts["SKIP"]
 
     if as_json:
         payload = {

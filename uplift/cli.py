@@ -60,7 +60,7 @@ from uplift.baselines import (
     Par_Level_Reorder,
     Static_Pricing,
 )
-from uplift.consensus_arm import ConsensusArm, ConsensusArmUnavailable
+from uplift.consensus_arm import ConsensusArmUnavailable, build_consensus_arm
 from uplift.contract import MetricContractError, load_contract
 from uplift.harness import (
     DEFAULT_CONSENSUS_ARM,
@@ -128,18 +128,21 @@ class _UnavailableConsensusArm:
 
 
 def _build_consensus_arm() -> DecisionPolicy:
-    """Return the consensus arm, degrading to the honest-failure stub when unavailable.
+    """Assemble the real in-process consensus arm, degrading honestly when unavailable.
 
-    Constructing the real in-process consensus arm requires an injected protocol and
-    transport that a plain environment does not provide, so this attempt is expected to
-    fail there; any failure is caught and surfaced as :class:`_UnavailableConsensusArm`
-    so the harness records failed consensus runs rather than crashing (R7.6, R2.7).
+    Calls :func:`~uplift.consensus_arm.build_consensus_arm`, which stands up the eight
+    real agent ``handle_request`` handlers plus the twin handler behind an in-process
+    A2A transport and a real :class:`ConsensusProtocol`, so the harness measures
+    SYNAPSE's actual four-tier consensus with no socket opened and no paid service
+    (R1.1, R1.2, R7.6). Standing that network up is not possible in every environment;
+    any assembly failure (:class:`ConsensusArmUnavailable` or otherwise) is caught and
+    surfaced as :class:`_UnavailableConsensusArm` so the affected consensus runs are
+    recorded as *failed* runs and the result is marked incomplete, rather than the CLI
+    crashing or a decision being fabricated (R1.5, R7.5, R2.7).
     """
     try:
-        # No in-process protocol/transport is wired in a plain environment; this raises
-        # ConsensusArmUnavailable, which we translate into the honest-failure stub.
-        return ConsensusArm(transport=None)  # type: ignore[arg-type]
-    except Exception as exc:  # noqa: BLE001 — any construction failure ⇒ honest stub
+        return build_consensus_arm()
+    except Exception as exc:  # noqa: BLE001 — any assembly failure ⇒ honest stub
         return _UnavailableConsensusArm(
             f"consensus arm unavailable in this environment: "
             f"{type(exc).__name__}: {exc}"

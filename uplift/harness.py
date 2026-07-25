@@ -733,6 +733,29 @@ def _pooled_samples(
     return samples
 
 
+def _pair_is_incomplete(
+    harness_result: HarnessResult, scenario_name: str, arm: str
+) -> bool:
+    """True if the ``(scenario, arm)`` pair did not complete *every* replicate.
+
+    A pair is incomplete when it recorded no runs at all, at least one **failed**
+    replicate (a *partial* pair — some but not all replicates completed), or no
+    completed replicate at all.
+
+    R2.4 (zero completed replicates) and R2.5 (some but not all replicates completed —
+    at least one failed replicate) are the same predicate here: in both cases the pair's
+    surviving completed samples are not a trustworthy measurement of that arm on that
+    scenario, so the pair must never be credited to SYNAPSE and resolves to
+    ``TIE_INCONCLUSIVE`` while the run is marked incomplete (design C5).
+    """
+    runs = harness_result.runs_by_pair.get((scenario_name, arm), [])
+    if not runs:
+        return True
+    if any(run.failed for run in runs):
+        return True
+    return not harness_result.completed_runs(scenario_name, arm)
+
+
 def _run_is_incomplete(
     harness_result: HarnessResult,
     scenario_names: Sequence[str],
@@ -745,16 +768,11 @@ def _run_is_incomplete(
     failed run, no run at all, or no completed run — i.e. an arm could not complete
     that scenario.
     """
-    for scenario_name in scenario_names:
-        for arm in (consensus_arm, *baseline_arms):
-            runs = harness_result.runs_by_pair.get((scenario_name, arm), [])
-            if not runs:
-                return True
-            if any(run.failed for run in runs):
-                return True
-            if not harness_result.completed_runs(scenario_name, arm):
-                return True
-    return False
+    return any(
+        _pair_is_incomplete(harness_result, scenario_name, arm)
+        for scenario_name in scenario_names
+        for arm in (consensus_arm, *baseline_arms)
+    )
 
 
 def _headline_uplift(
@@ -817,16 +835,27 @@ def assemble_uplift_result(
     )
 
     # R4.3 / R4.4: classify every (scenario, primary KPI) pair exactly once, with no
-    # outcome-based filtering. R4.7: an affected pair (an arm with no completed samples
-    # for that scenario) is never credited to SYNAPSE — it resolves to TIE_INCONCLUSIVE.
+    # outcome-based filtering.
+    #
+    # R2.4 / R2.5 / R4.7 (design C5): a pair is *affected* when the consensus arm or any
+    # pooled baseline arm did not complete every replicate for that scenario — zero
+    # completed replicates (R2.4) **or** some-but-not-all replicates completed, i.e. at
+    # least one failed replicate (R2.5). An affected pair is never credited to SYNAPSE:
+    # it resolves to TIE_INCONCLUSIVE and marks the run incomplete, rather than being
+    # classified over the surviving completed samples (which could otherwise report
+    # SYNAPSE_WINS off a partial, self-selected sample).
     per_scenario: dict[tuple[str, str], Outcome] = {}
     for scenario_name in scenario_names:
+        affected = any(
+            _pair_is_incomplete(harness_result, scenario_name, arm)
+            for arm in (consensus_arm, *baseline_arms)
+        )
         for kpi in primary_kpis:
             consensus = harness_result.kpi_samples(scenario_name, consensus_arm, kpi)
             baseline = _pooled_samples(
                 harness_result, baseline_arms, [scenario_name], kpi
             )
-            if not consensus or not baseline:
+            if affected or not consensus or not baseline:
                 per_scenario[(scenario_name, kpi)] = Outcome.TIE_INCONCLUSIVE
                 incomplete = True
             else:

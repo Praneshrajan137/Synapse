@@ -1,3 +1,21 @@
 {
-  "__placeholder__": "No production checkpoint has been published yet. After running docs/runbooks/train-and-publish-checkpoint.md (free-GPU full train -> HF Hub), replace this object with one entry per published model, keyed by the serving name, e.g.: { \"demand_prophet_hgt_tft\": { \"repo\": \"Praneshrajan15/synapse-demand-prophet\", \"sha\": \"<checkpoint_sha7>\", \"coverage_p90\": 0.9x, \"final_crps\": 0.x, \"trained_at\": \"2026-06-..\", \"rows\": 1125000 } }. The C43 gate (scripts/audit/published_checkpoint_truth.py) then verifies the published sidecar matches this record."
+  "__placeholder__": {
+    "status": "unpublished",
+    "reason": "No production checkpoint has been published yet. This file states that honestly rather than recording a model that does not exist.",
+    "runbook": "docs/runbooks/train-and-publish-checkpoint.md",
+    "how_to_record": "After the free-GPU full train + HF Hub upload, delete this __placeholder__ object and replace it with one entry per published model, keyed by the serving name, using the JSON the notebook prints at step 5.",
+    "required_keys": ["repo", "sha", "coverage_p90", "final_crps", "trained_at", "rows"],
+    "entry_shape_do_not_commit_as_truth": {
+      "demand_prophet_hgt_tft": {
+        "repo": "<hf_owner>/<hf_repo>",
+        "sha": "<checkpoint_sha7>",
+        "coverage_p90": "<held-out coverage, >= 0.85>",
+        "final_crps": "<final validation CRPS>",
+        "trained_at": "<YYYY-MM-DDTHH:MM:SSZ>",
+        "rows": "<training rows, e.g. 1125000>"
+      }
+    },
+    "validate": "python -m scripts.audit.published_checkpoint_truth --validate-registry --check",
+    "verify": "DP_HF_REPO=<hf_owner>/<hf_repo> python -m scripts.audit.published_checkpoint_truth --check   # C43 cross-checks the published sidecar against this record"
+  }
 }

@@ -11,10 +11,22 @@ Property 13: The harness applies the contract rule exactly as declared.
     adjudication logic of its own; it re-uses the pre-registered contract rule verbatim.
 
 Validates: Requirements 3.7
+
+The same behavior is pinned, over a wider input space (pooled multi-arm baselines,
+multi-scenario grids, mixed failed replicates, and mutated contract variants), by
+``test_verbatim_contract_classification_property.py`` — core-purpose-uplift Property 9,
+Requirements 2.7.
+
+Timing note: the assertions here are exact-equality checks on a deterministic function,
+so this test can only fail on a real classification mismatch. ``deadline=None`` and the
+suppressed ``too_slow`` health check remove the only observed source of intermittent
+failure — Hypothesis' wall-clock timing guards firing on a transient stall (a slow
+example is recorded in ``.hypothesis`` and can then replay as a flake), which says
+nothing about the property.
 """
 from __future__ import annotations
 
-from hypothesis import given, settings
+from hypothesis import HealthCheck, given, settings
 from hypothesis import strategies as st
 
 from uplift.contract import load_contract
@@ -90,7 +102,7 @@ _fill_rates = st.lists(
 )
 
 
-@settings(max_examples=150)
+@settings(max_examples=150, deadline=None, suppress_health_check=[HealthCheck.too_slow])
 @given(consensus_fill_rates=_fill_rates, baseline_fill_rates=_fill_rates)
 def test_harness_applies_contract_rule_exactly(
     consensus_fill_rates: list[float], baseline_fill_rates: list[float]
