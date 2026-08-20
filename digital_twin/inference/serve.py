@@ -23,6 +23,7 @@ from pydantic import BaseModel, Field
 from synapse_common.a2a_sdk import A2ARequest, A2AResponse, AgentCard
 from synapse_common.metrics import TWIN_SIMULATION_LATENCY, TWIN_SIMULATION_TOTAL
 from synapse_common.world.models import WorldAction
+from synapse_common.world.source import DEMAND_TOPIC, ExternalFeedSource
 
 from digital_twin.config import TwinConfig
 from digital_twin.simulation.what_if import ScenarioSpec, WhatIfEngine, WhatIfResult
@@ -37,6 +38,8 @@ from digital_twin.world import (
 if TYPE_CHECKING:
     from collections.abc import AsyncIterator
 
+    from synapse_common.world.source import WorldSource
+
 # ADR-052: the standing world clock. Per-city WorldRuntimes advance on their own so the
 # system perceives + acts continuously, not only when POSTed. All env-tunable.
 WORLD_ENABLED = os.environ.get("TW_WORLD_ENABLED", "1") not in ("0", "false", "False")
@@ -45,6 +48,13 @@ WORLD_CITIES = [
 ]
 WORLD_STEP_HOURS = float(os.environ.get("TW_WORLD_STEP_HOURS", "1.0"))
 WORLD_REAL_SECONDS = float(os.environ.get("TW_WORLD_REAL_SECONDS_PER_STEP", "5.0"))
+# purpose-achievement-audit R4.1/R4.2 (design E5.3): which WorldSource drives the world.
+# "sim" (the default) keeps the seeded generator and reports is_synthetic = true; "external"
+# drains `synapse.orders.demand` and reports is_synthetic = false. Opt-in on purpose - the
+# external feed needs brokers, so the default deployment must not silently degrade to a
+# world with no demand. Selecting "external" without a reachable broker is an honest
+# degraded world (zero arrivals), never a seeded one (R4.5).
+WORLD_SOURCE_KIND = os.environ.get("TW_WORLD_SOURCE", "sim").strip().lower()
 
 logger = structlog.get_logger(__name__)
 
@@ -63,6 +73,23 @@ AGENT_CARD = AgentCard(
 )
 
 
+def _world_source(city: str) -> WorldSource | None:
+    """The configured ``WorldSource`` for ``city``, or ``None`` for the seeded default.
+
+    ``None`` (not a constructed ``SimWorldSource``) is returned for the sim case because
+    ``WorldRuntime`` builds the seeded source from the simulation's own SKU catalog, which
+    only exists after the sim boots. Any value other than ``external`` is the seeded
+    default; an unrecognised value is logged rather than silently treated as external, so a
+    typo can never promote a world to claiming real demand.
+    """
+    if WORLD_SOURCE_KIND == "external":
+        logger.info("world_source_selected", city=city, kind="external", topic=DEMAND_TOPIC)
+        return ExternalFeedSource(city=city)
+    if WORLD_SOURCE_KIND not in ("", "sim", "seeded"):
+        logger.warning("world_source_unrecognised", city=city, requested=WORLD_SOURCE_KIND)
+    return None
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     global _config, _engine
@@ -77,6 +104,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
             try:
                 runtime = WorldRuntime(
                     city=city,
+                    source=_world_source(city),
                     step_hours=WORLD_STEP_HOURS,
                     real_seconds_per_step=WORLD_REAL_SECONDS,
                 )

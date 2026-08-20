@@ -8,13 +8,16 @@ from __future__ import annotations
 
 import dataclasses
 import random
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import numpy as np
 import simpy
 import structlog
 
 from digital_twin.config import TwinConfig
+
+if TYPE_CHECKING:  # pragma: no cover - typing only
+    from collections.abc import Mapping
 
 logger = structlog.get_logger(__name__)
 
@@ -318,7 +321,11 @@ class SupplyChainSimulation:
                     self._freshness[sku] = 1.0
                     logger.debug("spoilage", sku=sku)
 
-    def start(self, external_demand: bool = False) -> SupplyChainSimulation:
+    def start(
+        self,
+        external_demand: bool = False,
+        initial_inventory: Mapping[str, float] | None = None,
+    ) -> SupplyChainSimulation:
         """Create one persistent SimPy env + processes and reset accumulators.
 
         Unlike the old run()-per-call shape, the env survives across advance()
@@ -329,10 +336,21 @@ class SupplyChainSimulation:
         process so demand comes only from ``inject_orders()`` — the path a pluggable
         ``WorldSource`` uses to drive the world. The default (False) is the
         historical self-generating behaviour the existing tests depend on.
+
+        ``initial_inventory`` (purpose-achievement-audit R4.9) is the opening stock the
+        caller's world source supplied. Omitting it keeps the historical literal
+        ``{sku_i: 100.0 for i in range(10)}``, which stays correct for a *seeded* world:
+        there the opening stock is a declared component of the scenario. It must NOT be
+        substituted when a non-seeded source supplies nothing — ``WorldRuntime`` passes an
+        empty mapping in that case, so the world starts genuinely empty and perceives as
+        degraded rather than reporting invented stock as if a real store had reported it.
         """
         self._metrics = SimulationMetrics()
-        self._inventory = {f"sku_{i}": 100.0 for i in range(10)}
-        self._freshness = {f"sku_{i}": 1.0 for i in range(10)}
+        if initial_inventory is None:
+            self._inventory = {f"sku_{i}": 100.0 for i in range(10)}
+        else:
+            self._inventory = {sku: float(level) for sku, level in initial_inventory.items()}
+        self._freshness = {sku: 1.0 for sku in self._inventory}
         self._order_seq = 0
         env = self._init_env()
         if not external_demand:

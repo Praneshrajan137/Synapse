@@ -39,20 +39,36 @@ runs are excluded from aggregation and the remaining scenarios continue. Complet
 failed counts always sum to the number of attempts (Property 9).
 
 Result assembly, adversarial classification, the all-wins self-scrutiny warning, and the
-fidelity-co-located report are **task 10.1** and extend this same module — the
-:class:`HarnessResult` intentionally retains the per-``(scenario, arm)`` runs and
-aggregates 10.1 needs to assemble the :class:`~uplift.interfaces.UpliftResult`.
+fidelity-co-located report extend this same module — the :class:`HarnessResult`
+intentionally retains the per-``(scenario, arm)`` runs and aggregates needed to assemble
+the :class:`~uplift.interfaces.UpliftResult`.
+
+**Run provenance and the persisted artifact.** :class:`UpliftProvenance` records the
+arms, replicates-per-arm, source revision, run identifier, seed set, and write instant
+for a run; :class:`UpliftArtifact` is the Pydantic model the C60 gate evaluates, written
+through :meth:`UpliftArtifact.write` with the repo-canonical
+``json.dumps(obj, sort_keys=True, separators=(',',':'))`` serialisation so two runs of
+the same seed set are byte-comparable. :func:`canonical_arm_aggregates` is the
+byte-comparable arm-KPI surface that guarantee is stated over, and
+:attr:`UpliftArtifact.unavailable_reasons` names every reason an artifact is not a
+completed powered proof rather than letting a gate read a headline number out of an
+incomplete run.
 """
 from __future__ import annotations
 
 import dataclasses
+import hashlib
+import json
 import math
-from concurrent.futures import ProcessPoolExecutor, as_completed
+import os
+from concurrent.futures import ProcessPoolExecutor
+from datetime import datetime, timezone
 from pathlib import Path
-from typing import Callable, Iterable, Sequence
+from typing import Any, Callable, Final, Iterable, Sequence
 
 import numpy as np
 import structlog
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from digital_twin.config import TwinConfig
 from digital_twin.simulation.engine import SupplyChainSimulation
@@ -79,6 +95,7 @@ from uplift.kpi import (
     KpiExtractor,
 )
 from uplift.persistence import save_runs
+from uplift.uplift_floor import MIN_POWERED_REPLICATES, PoweredProof
 
 logger = structlog.get_logger(__name__)
 
@@ -373,8 +390,18 @@ def aggregate_arm(arm_name: str, runs: Sequence[ScenarioRun]) -> ArmResult:
     deviation (population std, ``ddof=0``, matching ``MonteCarloRunner``) are computed
     over exactly the completed runs (Property 10). ``completed`` + ``failed`` always
     sum to ``len(runs)`` — the number of attempts (Property 9).
+
+    **Order-independent by construction (R2.5).** The completed runs are sorted by seed
+    before aggregation. ``numpy`` sums in list order and floating-point pairwise
+    summation is *not* order-invariant, so aggregating in arrival order would make the
+    KPI mean/std depend on worker scheduling — two processes replaying the identical
+    seed set could then differ in the low bits and the arm aggregates would not be
+    byte-comparable. Sorting by seed removes that dependence entirely.
     """
-    completed = [r for r in runs if not r.failed and r.kpis is not None]
+    completed = sorted(
+        (r for r in runs if not r.failed and r.kpis is not None),
+        key=lambda run: (run.seed, run.arm),
+    )
     failed_count = len(runs) - len(completed)
 
     kpi_mean: dict[str, float] = {}
@@ -654,8 +681,11 @@ class UpliftHarness:
                 )
                 for seed in seeds
             ]
-            for future in as_completed(futures):
-                runs.append(future.result())
+            # Collected in *submission* (i.e. seed) order rather than completion order,
+            # so the recorded run sequence — and therefore the persisted runs file and
+            # the arm aggregates derived from it — does not depend on worker scheduling
+            # (R2.5 byte-comparability). Every future is awaited either way.
+            runs.extend(future.result() for future in futures)
         return runs
 
     def _run_sequential(
@@ -985,20 +1015,505 @@ def build_uplift_report(
     )
 
 
+# ---------------------------------------------------------------------------
+# Run provenance + the canonical result artifact
+# (purpose-achievement-audit task 10.1 — distinct from the "task 10.1" of the earlier
+#  core-purpose-uplift spec referenced by the result-assembly section above)
+#
+# R2.3  a completed powered run writes an artifact carrying ``incomplete: false``, a
+#       finite numeric ``headline_uplift``, a numeric ``kl_divergence``, a boolean
+#       ``within_fidelity_bound``, the replicates-per-arm count, and a provenance
+#       record naming the run identifier, the source revision, the seed set, and the
+#       arm identifiers.
+# R2.5  two runs of the same seed set produce byte-identical arm KPI aggregates.
+# R2.8  the gate can compare a stored provenance record against the run it performed.
+#
+# ADR-054 D5 note. Uplift measured *before* and *after* the dispatch choke point
+# (tasks 8.5 / 8.7) is not comparable: the choke point changes what the system
+# dispatches, so it changes the KPIs the consensus arm produces. ``revision`` is the
+# field that carries that discontinuity — an artifact whose ``revision`` predates the
+# choke-point commit is evidence about a different decision apparatus, and the powered
+# baseline must be re-measured after 8.5/8.7 rather than compared across the boundary.
+# ---------------------------------------------------------------------------
+
+#: The honest sentinel recorded when the source revision or run identifier cannot be
+#: resolved from the environment. The repository already uses ``"unknown"`` this way
+#: (``scripts/deploy/verify_live.py`` treats ``""``/``"dev"``/``"unknown"`` as "not a
+#: CD build"): we record that the attribution is unknown rather than inventing one
+#: (I-7). An artifact carrying this sentinel can never satisfy R2.8's provenance
+#: match, so it is structurally inadmissible as proof — see
+#: :attr:`UpliftProvenance.is_attributed`.
+UNATTRIBUTED: Final[str] = "unknown"
+
+#: Environment variables consulted for the source revision, in priority order.
+_REVISION_ENV_KEYS: Final[tuple[str, ...]] = ("SYNAPSE_REVISION", "GITHUB_SHA")
+
+#: Environment variables consulted for the run identifier, in priority order.
+_RUN_ID_ENV_KEYS: Final[tuple[str, ...]] = ("SYNAPSE_RUN_ID", "GITHUB_RUN_ID")
+
+
+def canonical_json(payload: object) -> str:
+    """Canonical JSON: sorted keys, tight separators — the repo-wide convention.
+
+    ``json.dumps(obj, sort_keys=True, separators=(',',':'))`` is the serialisation
+    every persisted SYNAPSE payload uses (``orchestrator/audit/models.py``,
+    ``packages/synapse_common/audit_chain.py``). Key order and whitespace are the two
+    ways an otherwise identical payload can differ byte-wise; fixing both is what makes
+    two runs of the same seed set byte-comparable (R2.5) instead of merely equal after
+    parsing.
+    """
+    return json.dumps(payload, sort_keys=True, separators=(",", ":"))
+
+
+def _digest(text: str) -> str:
+    return hashlib.sha256(text.encode("utf-8")).hexdigest()
+
+
+def _utc_now() -> str:
+    """ISO-8601 UTC to the second, ``Z``-suffixed (matches ``coverage_ratchet``)."""
+    return (
+        datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
+    )
+
+
+def _from_env(keys: Sequence[str]) -> str | None:
+    for key in keys:
+        value = os.environ.get(key, "").strip()
+        if value:
+            return value
+    return None
+
+
+class UpliftProvenance(BaseModel):
+    """Who ran what, on which revision, over which seeds (R2.3, R2.8).
+
+    Attributes:
+        arms: The arm identifiers compared, sorted so the record is canonical.
+        replicates_per_arm: Replicates each arm ran (power evidence, INV-TW-002).
+        revision: The source revision the harness ran at, or :data:`UNATTRIBUTED`.
+        run_id: The run the measurement was taken in, or :data:`UNATTRIBUTED`.
+        seeds: The scenario base seed *set*, sorted and de-duplicated. The full
+            replicate seed sequence is reconstructible from this set: replicate ``i``
+            of every arm uses :func:`replicate_seed(base, i)`, which depends on nothing
+            else (the attribution guarantee), so recording the base seeds plus
+            ``replicates_per_arm`` fixes every seed the run used.
+        written_at: ISO-8601 UTC instant the artifact was written.
+    """
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    arms: tuple[str, ...]
+    replicates_per_arm: int = Field(ge=0)
+    revision: str = Field(min_length=1)
+    run_id: str = Field(min_length=1)
+    seeds: tuple[int, ...]
+    written_at: str = Field(min_length=1)
+
+    @field_validator("arms")
+    @classmethod
+    def _canonical_arms(cls, value: tuple[str, ...]) -> tuple[str, ...]:
+        """Sort the arm identifiers; the consensus arm is identified by name, never
+        by position, so ordering carries no information and sorting removes a way two
+        otherwise identical runs could serialise differently (R2.5)."""
+        return tuple(sorted(value))
+
+    @field_validator("seeds")
+    @classmethod
+    def _canonical_seed_set(cls, value: tuple[int, ...]) -> tuple[int, ...]:
+        """Normalise to a sorted, de-duplicated *set* — R2.5/R2.8 compare seed sets."""
+        return tuple(sorted(set(value)))
+
+    @property
+    def is_attributed(self) -> bool:
+        """True iff both the revision and the run identifier were actually resolved.
+
+        An unattributed record is honest (it says so) but can never match the run
+        performed in an evaluating job, so R2.8 rejects it.
+        """
+        return self.revision != UNATTRIBUTED and self.run_id != UNATTRIBUTED
+
+    def matches(self, other: "UpliftProvenance") -> bool:
+        """True iff the revision, seed set, and arm identifiers agree (R2.8).
+
+        Both records must be attributed: two ``"unknown"`` revisions are not an
+        agreement, they are two absences of evidence.
+        """
+        return (
+            self.is_attributed
+            and other.is_attributed
+            and self.revision == other.revision
+            and self.seeds == other.seeds
+            and self.arms == other.arms
+        )
+
+    def to_canonical_json(self) -> str:
+        """Canonical serialisation of this record."""
+        return canonical_json(self.model_dump(mode="json"))
+
+
+def resolve_provenance(
+    *,
+    arms: Sequence[str],
+    replicates_per_arm: int,
+    seeds: Sequence[int],
+    revision: str | None = None,
+    run_id: str | None = None,
+    written_at: str | None = None,
+) -> UpliftProvenance:
+    """Build an :class:`UpliftProvenance`, recording absence rather than inventing it.
+
+    ``revision`` falls back to ``$SYNAPSE_REVISION`` then ``$GITHUB_SHA``; ``run_id``
+    to ``$SYNAPSE_RUN_ID`` then ``$GITHUB_RUN_ID``. When neither resolves, the field is
+    recorded as :data:`UNATTRIBUTED` — the artifact then truthfully states that it
+    cannot be attributed to a revision or a run, and R2.8 rejects it as proof, which is
+    the honest outcome for a run taken outside a CI job (I-7).
+    """
+    return UpliftProvenance(
+        arms=tuple(arms),
+        replicates_per_arm=replicates_per_arm,
+        revision=(revision or "").strip() or _from_env(_REVISION_ENV_KEYS) or UNATTRIBUTED,
+        run_id=(run_id or "").strip() or _from_env(_RUN_ID_ENV_KEYS) or UNATTRIBUTED,
+        seeds=tuple(seeds),
+        written_at=(written_at or "").strip() or _utc_now(),
+    )
+
+
+class ArmAggregate(BaseModel):
+    """One ``(scenario, arm)`` KPI aggregate as persisted in the artifact (R2.5).
+
+    This is the byte-comparable surface: every field is derived from the seeded twin
+    runs, so two processes replaying the same seed set produce identical values, and
+    :func:`canonical_arm_aggregates` serialises them identically.
+    """
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    scenario: str
+    arm: str
+    completed: int = Field(ge=0)
+    failed: int = Field(ge=0)
+    kpi_mean: dict[str, float]
+    kpi_std: dict[str, float]
+
+    @field_validator("kpi_mean", "kpi_std")
+    @classmethod
+    def _finite_kpis(cls, value: dict[str, float]) -> dict[str, float]:
+        for kpi, number in value.items():
+            if not math.isfinite(number):
+                raise ValueError(f"KPI aggregate {kpi!r} is not finite: {number!r}")
+        return value
+
+    def to_canonical_json(self) -> str:
+        """Canonical serialisation of this aggregate."""
+        return canonical_json(self.model_dump(mode="json"))
+
+
+def arm_aggregates(harness_result: HarnessResult) -> tuple[ArmAggregate, ...]:
+    """Project a run's per-``(scenario, arm)`` aggregates, sorted canonically (R2.5)."""
+    return tuple(
+        ArmAggregate(
+            scenario=scenario,
+            arm=arm,
+            completed=aggregate.completed,
+            failed=aggregate.failed,
+            kpi_mean=dict(aggregate.kpi_mean),
+            kpi_std=dict(aggregate.kpi_std),
+        )
+        for (scenario, arm), aggregate in sorted(
+            harness_result.arm_results.items(), key=lambda item: item[0]
+        )
+    )
+
+
+def canonical_arm_aggregates(aggregates: Sequence[ArmAggregate]) -> str:
+    """Canonical serialisation of the arm KPI aggregates alone (R2.5).
+
+    This is the string R2.5 compares: it excludes ``run_id`` and ``written_at``, the
+    only two artifact fields that legitimately differ between two runs of the same seed
+    set. Two OS processes replaying the same seeds must produce this string byte for
+    byte — which is what task 10.6's cross-process property test asserts.
+    """
+    ordered = sorted(aggregates, key=lambda aggregate: (aggregate.scenario, aggregate.arm))
+    return canonical_json([aggregate.model_dump(mode="json") for aggregate in ordered])
+
+
+def arm_aggregates_digest(aggregates: Sequence[ArmAggregate]) -> str:
+    """SHA-256 over :func:`canonical_arm_aggregates` — a one-line equality check."""
+    return _digest(canonical_arm_aggregates(aggregates))
+
+
+class ArtifactFidelity(BaseModel):
+    """The fidelity block co-located with the headline number (R2.3, R5.2/R5.6).
+
+    ``kl_divergence`` and ``within_fidelity_bound`` are ``None`` when fidelity was
+    unavailable. R2.3 requires a *numeric* ``kl_divergence`` and a *boolean*
+    ``within_fidelity_bound`` for a completed powered run; the nullable types are what
+    keep an incomplete run honest instead of fabricating a measurement (I-7), and
+    :attr:`UpliftArtifact.unavailable_reasons` names the absence.
+    """
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    kl_divergence: float | None
+    threshold: float
+    confidence: str
+    within_fidelity_bound: bool | None
+    fidelity_bound_statement: str
+
+    @field_validator("kl_divergence", "threshold")
+    @classmethod
+    def _finite(cls, value: float | None) -> float | None:
+        if value is not None and not math.isfinite(value):
+            raise ValueError(f"fidelity value must be finite, got {value!r}")
+        return value
+
+
+class UpliftArtifact(BaseModel):
+    """The persisted uplift result the C60 gate evaluates (R2.3).
+
+    Construction enforces what R2.3 requires *of the artifact's shape*: a finite
+    numeric ``headline_uplift``, a boolean ``incomplete``, the replicates-per-arm count
+    agreeing with the provenance record, and an arm-aggregate digest that matches the
+    aggregates it is stored beside. What it deliberately does **not** enforce is that
+    the run was complete, powered, and within the fidelity bound — an artifact must be
+    able to state honestly that it was not (I-7). :attr:`is_proof_grade` and
+    :attr:`unavailable_reasons` are the predicates over that, and task 10.3's
+    ``admit()`` is their gate-side caller.
+    """
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    headline_uplift: float
+    primary_kpi: str
+    noise_tolerance_pp: float
+    incomplete: bool
+    all_wins_warning: bool
+    #: Mirrored from ``provenance.replicates_per_arm`` at the top level because that is
+    #: where ``PoweredProof.from_payload`` looks (``uplift_floor._REPLICATE_KEYS``).
+    replicates_per_arm: int = Field(ge=0)
+    fidelity: ArtifactFidelity
+    provenance: UpliftProvenance
+    arm_aggregates: tuple[ArmAggregate, ...] = ()
+    arm_aggregates_digest: str = ""
+
+    @model_validator(mode="before")
+    @classmethod
+    def _derive_digest(cls, data: Any) -> Any:  # noqa: ANN401 — pydantic pre-validator
+        """Fill an absent aggregate digest so callers cannot store an unstated one."""
+        if not isinstance(data, dict) or data.get("arm_aggregates_digest"):
+            return data
+        raw = data.get("arm_aggregates") or ()
+        try:
+            parsed = tuple(
+                item if isinstance(item, ArmAggregate) else ArmAggregate.model_validate(item)
+                for item in raw
+            )
+        except Exception:  # noqa: BLE001 — let the field validators report the real error
+            return data
+        return {**data, "arm_aggregates_digest": arm_aggregates_digest(parsed)}
+
+    @model_validator(mode="after")
+    def _internally_consistent(self) -> "UpliftArtifact":
+        if not math.isfinite(self.headline_uplift):
+            raise ValueError(
+                f"headline_uplift must be finite (R2.3), got {self.headline_uplift!r}"
+            )
+        if not math.isfinite(self.noise_tolerance_pp):
+            raise ValueError(
+                f"noise_tolerance_pp must be finite, got {self.noise_tolerance_pp!r}"
+            )
+        if self.replicates_per_arm != self.provenance.replicates_per_arm:
+            raise ValueError(
+                f"replicates_per_arm {self.replicates_per_arm} disagrees with the "
+                f"provenance record's {self.provenance.replicates_per_arm}"
+            )
+        expected = arm_aggregates_digest(self.arm_aggregates)
+        if self.arm_aggregates_digest != expected:
+            raise ValueError(
+                f"arm_aggregates_digest {self.arm_aggregates_digest!r} does not match "
+                f"the stored aggregates (recomputed {expected!r})"
+            )
+        return self
+
+    # -- honest classification (I-7) ----------------------------------------
+    @property
+    def unavailable_reasons(self) -> tuple[str, ...]:
+        """Every reason this artifact is not a completed, powered, in-bound proof.
+
+        Empty iff :attr:`is_proof_grade`. Task 10.3's gate prints these verbatim so an
+        ``EXIT_UNAVAILABLE`` always names why the measurement was treated as
+        unavailable (R2.1, R2.2).
+        """
+        reasons: list[str] = []
+        if self.incomplete:
+            reasons.append(
+                "run is incomplete: at least one (scenario, arm) pair did not complete "
+                "every replicate"
+            )
+        if self.replicates_per_arm < MIN_POWERED_REPLICATES:
+            reasons.append(
+                f"under-powered: {self.replicates_per_arm} replicates per arm recorded, "
+                f"{MIN_POWERED_REPLICATES} required (INV-TW-002)"
+            )
+        if self.fidelity.kl_divergence is None:
+            reasons.append("twin fidelity unavailable: no kl_divergence was recorded")
+        if self.fidelity.within_fidelity_bound is not True:
+            reasons.append(
+                f"not within the twin fidelity bound: within_fidelity_bound="
+                f"{self.fidelity.within_fidelity_bound!r}"
+            )
+        if not self.provenance.is_attributed:
+            reasons.append(
+                f"unattributed run: revision={self.provenance.revision!r}, "
+                f"run_id={self.provenance.run_id!r}"
+            )
+        return tuple(reasons)
+
+    @property
+    def is_proof_grade(self) -> bool:
+        """True iff this artifact satisfies every R2.3 condition for a powered proof."""
+        return not self.unavailable_reasons
+
+    # -- serialisation (the pure round-trip surface task 10.2 tests) --------
+    def to_payload(self) -> dict[str, Any]:
+        """The plain JSON-able mapping this artifact serialises to.
+
+        This is exactly what :meth:`uplift.uplift_floor.PoweredProof.from_payload`
+        consumes: ``headline_uplift``, ``incomplete``, a top-level
+        ``replicates_per_arm``, and ``fidelity.within_fidelity_bound``.
+        """
+        payload: dict[str, Any] = self.model_dump(mode="json")
+        return payload
+
+    def to_canonical_json(self) -> str:
+        """Canonical serialisation — sorted keys, tight separators (R2.5).
+
+        Byte-stable for a fixed value, so two artifacts are equal iff their canonical
+        strings are equal. The only fields that legitimately differ between two runs of
+        the same seed set are ``provenance.run_id`` and ``provenance.written_at``;
+        compare :func:`canonical_arm_aggregates` (or
+        :attr:`arm_aggregates_digest`) when those must be excluded.
+        """
+        return canonical_json(self.to_payload())
+
+    @classmethod
+    def from_canonical_json(cls, text: str) -> "UpliftArtifact":
+        """Parse an artifact from JSON text. Inverse of :meth:`to_canonical_json`.
+
+        ``from_canonical_json(a.to_canonical_json()) == a`` and the round trip is
+        idempotent at the byte level:
+        ``from_canonical_json(s).to_canonical_json() == s`` for any canonical ``s``
+        this class produced (Property 14).
+        """
+        return cls.model_validate(json.loads(text))
+
+    def as_powered_proof(self) -> PoweredProof | None:
+        """Build the :class:`~uplift.uplift_floor.PoweredProof` for this artifact.
+
+        Delegates to :meth:`PoweredProof.from_payload` over :meth:`to_payload` so the
+        harness and the gate read the artifact through one implementation. Returns
+        ``None`` only when the payload cannot evidence its own power at all; a powered
+        proof that is merely *unproven* is returned and rejected downstream by
+        :func:`~uplift.uplift_floor.is_proven_uplift`.
+        """
+        return PoweredProof.from_payload(self.to_payload())
+
+    def write(self, path: str | Path) -> Path:
+        """Write the canonical serialisation to ``path`` and return it.
+
+        The file bytes are exactly :meth:`to_canonical_json` — no indentation and no
+        trailing newline — so two runs of the same seed set at the same revision
+        produce byte-identical files, and a diff of two artifacts is a diff of their
+        measurements rather than of their formatting.
+        """
+        target = Path(path)
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text(self.to_canonical_json(), encoding="utf-8")
+        logger.info(
+            "uplift_artifact_written",
+            path=str(target),
+            headline_uplift=self.headline_uplift,
+            incomplete=self.incomplete,
+            replicates_per_arm=self.replicates_per_arm,
+            revision=self.provenance.revision,
+            run_id=self.provenance.run_id,
+            arm_aggregates_digest=self.arm_aggregates_digest,
+            proof_grade=self.is_proof_grade,
+        )
+        return target
+
+    @classmethod
+    def read(cls, path: str | Path) -> "UpliftArtifact":
+        """Read an artifact from ``path`` (``encoding='utf-8'``, E-S13-07)."""
+        return cls.from_canonical_json(Path(path).read_text(encoding="utf-8"))
+
+
+def build_uplift_artifact(
+    result: UpliftResult,
+    report: UpliftReport,
+    provenance: UpliftProvenance,
+    *,
+    noise_tolerance_pp: float,
+    harness_result: HarnessResult | None = None,
+) -> UpliftArtifact:
+    """Assemble the persisted :class:`UpliftArtifact` for a completed run (R2.3).
+
+    ``provenance`` supplies the replicates-per-arm count, so the artifact's top-level
+    ``replicates_per_arm`` and its provenance record can never disagree.
+    ``noise_tolerance_pp`` is passed in rather than imported so this module keeps a
+    single source of truth for that committed constant (it lives in
+    :data:`uplift.cli.NOISE_TOLERANCE_PP`). When ``harness_result`` is supplied the
+    per-``(scenario, arm)`` KPI aggregates are recorded and digested, giving R2.5 its
+    byte-comparable surface; without it the aggregates are empty and the artifact
+    carries the digest of an empty set rather than an unstated one.
+    """
+    fidelity = result.fidelity
+    aggregates = arm_aggregates(harness_result) if harness_result is not None else ()
+    return UpliftArtifact(
+        headline_uplift=float(result.headline_uplift),
+        primary_kpi=report.primary_kpi,
+        noise_tolerance_pp=float(noise_tolerance_pp),
+        incomplete=bool(result.incomplete),
+        all_wins_warning=bool(result.all_wins_warning),
+        replicates_per_arm=provenance.replicates_per_arm,
+        fidelity=ArtifactFidelity(
+            kl_divergence=fidelity.kl_divergence,
+            threshold=fidelity.threshold,
+            confidence=fidelity.confidence,
+            within_fidelity_bound=report.within_fidelity_bound,
+            fidelity_bound_statement=fidelity.fidelity_bound_statement,
+        ),
+        provenance=provenance,
+        arm_aggregates=aggregates,
+        arm_aggregates_digest=arm_aggregates_digest(aggregates),
+    )
+
+
 __all__ = [
     "DEFAULT_CONSENSUS_ARM",
     "EXIT_NO_COMPLETED_RUN",
     "EXIT_SUCCESS",
     "KPI_FIELDS",
+    "UNATTRIBUTED",
+    "ArmAggregate",
+    "ArtifactFidelity",
     "HarnessResult",
     "LoopConfig",
+    "UpliftArtifact",
     "UpliftHarness",
+    "UpliftProvenance",
     "UpliftReport",
     "aggregate_arm",
+    "arm_aggregates",
+    "arm_aggregates_digest",
     "assemble_uplift_result",
+    "build_uplift_artifact",
     "build_uplift_report",
+    "canonical_arm_aggregates",
+    "canonical_json",
     "completed_run_count",
     "replicate_seed",
+    "resolve_provenance",
     "run_closed_loop",
     "uplift_exit_code",
 ]
