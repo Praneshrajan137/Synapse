@@ -98,6 +98,12 @@ dump.rdb
 # checkpoints here. CI-produced and consumed by checkpoint/calibration truth
 # gates; never committed (production checkpoints live in the MLflow registry).
 artifacts/
+# C60 uplift evidence (purpose-achievement-audit R2.8, AD-9/CF-4). Named
+# explicitly, not just covered by `artifacts/`, because scripts/audit/uplift_truth.py
+# reads this declaration: an in-repo artifact that no ignore rule covers is treated
+# as read from version control and rejected. A committed measurement is not evidence
+# of a run -- the artifact must be regenerated in the job that evaluates the gate.
+artifacts/uplift/result.json
 mlruns/
 *.pt
 *.ckpt

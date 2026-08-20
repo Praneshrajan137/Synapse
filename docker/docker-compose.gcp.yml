@@ -107,7 +107,7 @@ services:
     ports: ["5432:5432"]
     volumes:
       - postgres_data:/var/lib/postgresql/data
-      # Sequenced 01-10 so docker-entrypoint-initdb.d applies them in order. This
+      # Sequenced 01-11 so docker-entrypoint-initdb.d applies them in order. This
       # ordering is the single source of truth, mirrored in scripts/db/migrate.sh
       # (the runner that applies them to an already-initialised live volume, since
       # initdb.d only fires on an empty datadir). Source: orchestrator/audit/
@@ -131,6 +131,10 @@ services:
       # Sprint 19 (ADR-047): append-only decision_outcomes fact stream. Fully
       # idempotent + I-4 self-test.
       - ../infrastructure/postgres/08_sprint19_outcomes.sql:/docker-entrypoint-initdb.d/10_sprint19_outcomes.sql:ro
+      # purpose-achievement-audit (AD-10 / CF-1): append-only
+      # decision_data_provenance stream, keyed by decision_id. Fully idempotent
+      # + I-4 self-test. make_canonical_row is untouched (E-S9-02).
+      - ../infrastructure/postgres/09_decision_data_provenance.sql:/docker-entrypoint-initdb.d/11_decision_data_provenance.sql:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-synapse} -d ${POSTGRES_DB:-synapse_audit}"]
       interval: 10s
@@ -496,6 +500,60 @@ services:
     deploy:
       resources:
         limits: { cpus: "0.1", memory: 192M }
+
+  # purpose-achievement-audit R4.7 (task 10.14): the DEPLOYED consumer of the
+  # orders ingress topic. Real operator orders have reached
+  # `synapse.orders.demand` since ADR-029 (api/routers/orders.py) and NOTHING
+  # turned them into features — the audit's R4 finding, and the reason the
+  # autonomy loop had only ever run on the twin's own seeded simulation. This
+  # service is `data_fabric/feast/stream_materialization.py`: it drains the
+  # topic, gates each row through data_fabric.etl.quality_gates (late/malformed
+  # rows are quarantined, not dropped), maintains 1m/5m rolling demand windows
+  # and pushes them to the Feast online store.
+  # REUSES the demand-prophet image with a command override — it already carries
+  # pandas/numpy (data_fabric.etl) and confluent-kafka (synapse_common), so
+  # there is no `build:`, no new CD-matrix image, no new AR pull and no new
+  # dependency (ADR-039 / C26 / C27 / C49 safe), exactly the sidecar pattern
+  # traffic-generator and outcome-scorer already use.
+  # HEALTHCHECK (C50) overrides the image's uvicorn probe with a heartbeat-file
+  # freshness check, because this container runs a loop and not a server. It
+  # asserts the loop is ALIVE — deliberately NOT that it is undegraded: no image
+  # in the CD matrix installs the `feast` SDK today, so every pass reports
+  # `feast_sdk_unavailable`, and an unreachable broker reports
+  # `broker_unreachable`. Both still write the heartbeat, so a degraded-but-
+  # running consumer stays visibly running (I-7) and C47 reports honest
+  # container truth instead of a crash loop. The reason travels in the heartbeat
+  # payload and the structured log, so "healthy" is never readable as
+  # "materializing".
+  stream-materialization:
+    image: ${SYNAPSE_AR_REPO_URL}/demand-prophet:${SYNAPSE_VERSION:-latest}
+    pull_policy: always
+    container_name: synapse-stream-materialization
+    command: ["python", "-m", "data_fabric.feast.stream_materialization"]
+    environment:
+      <<: *common-env
+      STREAM_MATERIALIZATION_TOPICS: synapse.orders.demand
+      STREAM_MATERIALIZATION_GROUP_ID: synapse-stream-materializer
+      STREAM_MATERIALIZATION_PASS_INTERVAL_SECONDS: "5"
+      STREAM_MATERIALIZATION_POLL_TIMEOUT_SECONDS: "1"
+      STREAM_MATERIALIZATION_MAX_RECORDS_PER_PASS: "500"
+      # Lateness budget: rows older than this are quarantined rather than
+      # poisoning a rolling window or overwriting the online cache.
+      STREAM_MATERIALIZATION_LATENESS_BUDGET_SECONDS: "300"
+      STREAM_MATERIALIZATION_HEARTBEAT_FILE: /tmp/stream-materialization-heartbeat
+    <<: *extra-hosts
+    depends_on:
+      kafka: { condition: service_healthy }
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import os,sys,time; p='/tmp/stream-materialization-heartbeat'; sys.exit(0 if os.path.exists(p) and time.time()-os.path.getmtime(p) < 300 else 1)\" || exit 1"]
+      interval: 60s
+      timeout: 10s
+      retries: 3
+      start_period: 120s
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits: { cpus: "0.25", memory: 384M }
 
   # ── Frontend ─────────────────────────────────────────────────────────────
   # The `VITE_BUILD_SHA` build-arg is set by cd-gcp.yml at IMAGE BUILD TIME (in

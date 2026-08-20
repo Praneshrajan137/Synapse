@@ -32,6 +32,39 @@ Usage::
 
     # JSON for CI ingestion
     python scripts/coverage_per_package.py --xml coverage.xml --floors ... --json
+
+    # Non-vacuity enforcement (R7.2 / R7.9)
+    python scripts/coverage_per_package.py --xml coverage.xml --floors ... \\
+        --require-measured-floors
+
+Floor provenance (``--require-measured-floors``)
+------------------------------------------------
+A floor of ``0.0`` gates nothing, so under ``--require-measured-floors`` the
+gate reads two provenance fields the ratchet writes (see
+``scripts/coverage_ratchet.py``) alongside each floor::
+
+  packages/<path>:
+    line: 0.0
+    measured_at: null          # or an ISO-8601 UTC timestamp
+    source_run: null           # or the run that measured it, e.g. gh-run-123
+
+The mapping is:
+
+* ``line: 0.0`` **with** a recorded ``measured_at`` -> ``VACUOUS``, which FAILs
+  naming the package. Something measured it and the floor was still left at
+  zero (R7.2).
+* ``line: 0.0`` with ``measured_at: null`` (or the key absent) -> reported
+  ``SKIP-UNMEASURED`` naming the package. Nothing has measured it yet, so there
+  is no honest floor to enforce. Per I-7 a SKIP is never a PASS.
+* any other floor -> the ordinary measured comparison; below the floor FAILs
+  naming the package, its measured value, and its recorded floor (R7.1).
+
+The ordering this implements is CF-3 in the design: one ``ci.yml::quality-gates``
+run on ``main`` publishes ``coverage.xml``, the operator runs
+``scripts/coverage_ratchet.py --apply`` (which records ``measured_at`` +
+``source_run``), and only then does the non-vacuity gate become registrable.
+Until that happens the flag reports SKIP for every unmeasured package rather
+than claiming a pass it cannot back.
 """
 
 from __future__ import annotations
@@ -41,11 +74,24 @@ import json
 import sys
 import xml.etree.ElementTree as ET
 from dataclasses import asdict, dataclass
+from datetime import date, datetime
 from pathlib import Path
+from typing import Final
 
 import yaml
 
 ROOT = Path(__file__).resolve().parents[1]
+
+# Status vocabulary. PASS / FAIL / UNMEASURED predate --require-measured-floors
+# and keep their meaning; VACUOUS and SKIP-UNMEASURED are the floor-provenance
+# verdicts (R7.2, R7.9). Only FAILING_STATUSES change the exit code, and
+# SKIP-UNMEASURED is deliberately not among them and is never a PASS (I-7).
+STATUS_PASS: Final[str] = "PASS"
+STATUS_FAIL: Final[str] = "FAIL"
+STATUS_UNMEASURED: Final[str] = "UNMEASURED"
+STATUS_VACUOUS: Final[str] = "VACUOUS"
+STATUS_SKIP_UNMEASURED: Final[str] = "SKIP-UNMEASURED"
+FAILING_STATUSES: Final[frozenset[str]] = frozenset({STATUS_FAIL, STATUS_VACUOUS})
 
 
 @dataclass
@@ -58,7 +104,10 @@ class PackageResult:
     statements_total: int
     branches_covered: int
     branches_total: int
-    status: str  # PASS | FAIL | UNMEASURED
+    status: str  # PASS | FAIL | UNMEASURED | VACUOUS | SKIP-UNMEASURED
+    measured_at: str | None = None
+    source_run: str | None = None
+    detail: str = ""
 
     @property
     def gap_to_target(self) -> float:
@@ -155,7 +204,70 @@ def _combined_pct(lc: int, lt: int, bc: int, bt: int) -> float:
     return 100.0 * num / den
 
 
-def evaluate(xml_path: Path, floors_path: Path) -> list[PackageResult]:
+def _provenance_field(raw: object) -> str | None:
+    """Normalise a `measured_at` / `source_run` value to a string or None.
+
+    PyYAML resolves an unquoted `2026-05-29` to a `datetime.date` and an
+    unquoted ISO timestamp to a `datetime`, so a floors file written by hand and
+    one written by the ratchet must both read the same way. An empty or
+    whitespace-only string is treated as absent -- a blank field records no
+    measurement, and pretending otherwise would invert the R7.2 verdict.
+    """
+    if raw is None:
+        return None
+    if isinstance(raw, str):
+        return raw.strip() or None
+    if isinstance(raw, (datetime, date)):
+        return raw.isoformat()
+    return str(raw)
+
+
+def _measured_verdict(
+    pct: float, floor: float, lines_total: int, branches_total: int
+) -> tuple[str, str]:
+    """The ordinary measured-vs-floor comparison (R7.1)."""
+    if lines_total == 0 and branches_total == 0:
+        return STATUS_UNMEASURED, "the coverage report carried no measurable lines"
+    if pct + 1e-9 >= floor:
+        return STATUS_PASS, ""
+    return STATUS_FAIL, f"measured {pct:.2f}% is below the recorded floor {floor:.1f}%"
+
+
+def _floor_verdict(measured_at: str | None, source_run: str | None) -> tuple[str, str]:
+    """The provenance verdict for a zero floor (R7.2, R7.9).
+
+    A zero floor with a recorded measurement is vacuous: a run measured the
+    package and the floor was still left at zero, so the gate asserts nothing.
+    A zero floor with no recorded measurement has never been measured; that is a
+    SKIP naming the package, never a PASS.
+    """
+    if measured_at is None:
+        return (
+            STATUS_SKIP_UNMEASURED,
+            "zero floor with no recorded measurement; no run has measured this "
+            "package yet, so there is no floor to enforce (SKIP is not a PASS)",
+        )
+    attribution = f" by {source_run}" if source_run else " by an unrecorded run"
+    return (
+        STATUS_VACUOUS,
+        f"zero floor recorded as measured at {measured_at}{attribution}; a "
+        "measured package must carry a floor above zero",
+    )
+
+
+def evaluate(
+    xml_path: Path,
+    floors_path: Path,
+    *,
+    require_measured_floors: bool = False,
+) -> list[PackageResult]:
+    """Evaluate every gated package in *floors_path* against *xml_path*.
+
+    With ``require_measured_floors`` the zero-floor provenance rules above are
+    applied. Without it the behaviour is exactly what it was before task 4.1, so
+    the existing `ci.yml` step is unchanged until the ordering in CF-3 allows the
+    non-vacuity gate to be registered.
+    """
     tree = ET.parse(xml_path)
     root = tree.getroot()
     floors_doc = yaml.safe_load(floors_path.read_text(encoding="utf-8"))
@@ -163,15 +275,15 @@ def evaluate(xml_path: Path, floors_path: Path) -> list[PackageResult]:
     for pkg_path, cfg in floors_doc.get("packages", {}).items():
         floor = float(cfg.get("line", 0.0))
         target = float(cfg.get("target", floors_doc.get("target", 84.0)))
+        measured_at = _provenance_field(cfg.get("measured_at"))
+        source_run = _provenance_field(cfg.get("source_run"))
         classes = _classes_under(root, pkg_path)
         lc, lt, bc, bt = _aggregate(classes)
         pct = _combined_pct(lc, lt, bc, bt)
-        if lt == 0 and bt == 0:
-            status = "UNMEASURED"
-        elif pct + 1e-9 >= floor:
-            status = "PASS"
+        if require_measured_floors and floor == 0.0:
+            status, detail = _floor_verdict(measured_at, source_run)
         else:
-            status = "FAIL"
+            status, detail = _measured_verdict(pct, floor, lt, bt)
         out.append(
             PackageResult(
                 package=pkg_path,
@@ -183,37 +295,73 @@ def evaluate(xml_path: Path, floors_path: Path) -> list[PackageResult]:
                 branches_covered=bc,
                 branches_total=bt,
                 status=status,
+                measured_at=measured_at,
+                source_run=source_run,
+                detail=detail,
             )
         )
     return out
 
 
+_MARKERS: Final[dict[str, str]] = {
+    STATUS_PASS: "[PASS]",
+    STATUS_FAIL: "[FAIL]",
+    STATUS_UNMEASURED: "[----]",
+    STATUS_VACUOUS: "[FAIL]",
+    STATUS_SKIP_UNMEASURED: "[SKIP]",
+}
+
+
 def _print_text(results: list[PackageResult], *, threshold_target: float) -> None:
     print(f"SYNAPSE per-package coverage gate -- target {threshold_target:.1f}%")
-    print(f"  {'Package':<30} {'Floor':>7} {'Measured':>9} {'Status':>10} {'Gap->target':>12}")
-    print(f"  {'-' * 30} {'-' * 7:>7} {'-' * 9:>9} {'-' * 10:>10} {'-' * 11:>11}")
+    print(f"  {'Package':<30} {'Floor':>7} {'Measured':>9} {'Status':>16} {'Gap->target':>12}")
+    print(f"  {'-' * 30} {'-' * 7:>7} {'-' * 9:>9} {'-' * 16:>16} {'-' * 11:>11}")
     for r in results:
         print(
             f"  {r.package:<30} {r.floor:>6.1f}% {r.measured_combined_pct:>8.2f}% "
-            f"{r.status:>10} {r.gap_to_target:>10.1f}%"
+            f"{r.status:>16} {r.gap_to_target:>10.1f}%"
         )
-    passing = sum(1 for r in results if r.status == "PASS")
-    failing = sum(1 for r in results if r.status == "FAIL")
-    unmeasured = sum(1 for r in results if r.status == "UNMEASURED")
+    passing = sum(1 for r in results if r.status == STATUS_PASS)
+    failing = sum(1 for r in results if r.status == STATUS_FAIL)
+    unmeasured = sum(1 for r in results if r.status == STATUS_UNMEASURED)
+    vacuous = [r for r in results if r.status == STATUS_VACUOUS]
+    skipped = [r for r in results if r.status == STATUS_SKIP_UNMEASURED]
     print(
-        f"\n  Summary: PASS={passing} FAIL={failing} UNMEASURED={unmeasured} TOTAL={len(results)}"
+        f"\n  Summary: PASS={passing} FAIL={failing} UNMEASURED={unmeasured} "
+        f"VACUOUS={len(vacuous)} SKIP-UNMEASURED={len(skipped)} TOTAL={len(results)}"
     )
+    _print_findings(results)
+    if skipped:
+        print(
+            "\n  SKIP-UNMEASURED is not a PASS. These packages are unproven until one "
+            "CI run measures\n  them and `scripts/coverage_ratchet.py --apply` records "
+            "the measured floor (CF-3)."
+        )
+
+
+def _print_findings(results: list[PackageResult]) -> None:
+    """Name every package that did not pass, with the reason (R7.1, R7.2, R7.9)."""
+    findings = [r for r in results if r.status != STATUS_PASS]
+    if not findings:
+        return
+    print("")
+    for r in findings:
+        detail = f" -- {r.detail}" if r.detail else ""
+        print(f"  {r.status}: {r.package} (floor {r.floor:.1f}%){detail}")
 
 
 def _print_markdown(results: list[PackageResult]) -> None:
     print("| Package | Floor | Measured | Status | Gap to 84% |")
     print("| --- | ---: | ---: | :---: | ---: |")
     for r in results:
-        marker = {"PASS": "[PASS]", "FAIL": "[FAIL]", "UNMEASURED": "[----]"}[r.status]
+        marker = _MARKERS[r.status]
         print(
             f"| `{r.package}` | {r.floor:.1f}% | **{r.measured_combined_pct:.2f}%** "
             f"| {marker} | {r.gap_to_target:.1f}% |"
         )
+    for r in results:
+        if r.status in (STATUS_VACUOUS, STATUS_SKIP_UNMEASURED):
+            print(f"\n- **{r.status}** `{r.package}` -- {r.detail}")
 
 
 def main() -> int:
@@ -232,6 +380,15 @@ def main() -> int:
         action="store_true",
         help="UNMEASURED packages do not fail the gate (default: do not fail)",
     )
+    parser.add_argument(
+        "--require-measured-floors",
+        action="store_true",
+        help=(
+            "Enforce floor non-vacuity (R7.2): a gated package whose floor is 0.0 "
+            "with a recorded measured_at FAILs naming it; one with measured_at null "
+            "is reported SKIP-UNMEASURED naming it, never PASS"
+        ),
+    )
     args = parser.parse_args()
 
     if not args.xml.is_file():
@@ -241,13 +398,25 @@ def main() -> int:
         print(f"ERROR: floors YAML not found at {args.floors}", file=sys.stderr)
         return 2
 
-    results = evaluate(args.xml, args.floors)
+    results = evaluate(
+        args.xml, args.floors, require_measured_floors=args.require_measured_floors
+    )
     target_pct = float(yaml.safe_load(args.floors.read_text(encoding="utf-8")).get("target", 84.0))
 
     if args.json:
         print(
             json.dumps(
-                {"target": target_pct, "packages": [asdict(r) for r in results]},
+                {
+                    "target": target_pct,
+                    "require_measured_floors": bool(args.require_measured_floors),
+                    "packages": [asdict(r) for r in results],
+                    "vacuous_floors": sorted(
+                        r.package for r in results if r.status == STATUS_VACUOUS
+                    ),
+                    "unmeasured_floors": sorted(
+                        r.package for r in results if r.status == STATUS_SKIP_UNMEASURED
+                    ),
+                },
                 indent=2,
                 sort_keys=True,
             )
@@ -257,7 +426,7 @@ def main() -> int:
     else:
         _print_text(results, threshold_target=target_pct)
 
-    failing = any(r.status == "FAIL" for r in results)
+    failing = any(r.status in FAILING_STATUSES for r in results)
     return 1 if failing else 0
 
 
