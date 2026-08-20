@@ -19,10 +19,15 @@ import asyncio
 import contextlib
 import os
 import time
-from typing import Any, Protocol, runtime_checkable
+from typing import TYPE_CHECKING, Any, Protocol, runtime_checkable
 
 import structlog
 from synapse_common.a2a_sdk import send_a2a_request
+
+from orchestrator.audit.data_provenance import build_provenance, record_provenance
+
+if TYPE_CHECKING:  # pragma: no cover - typing only
+    from orchestrator.audit.models import DecisionDataProvenance
 
 logger = structlog.get_logger(__name__)
 
@@ -42,6 +47,18 @@ class ConsensusRunner(Protocol):
     """The minimal slice of ConsensusProtocol the sensor drives."""
 
     async def run_consensus(self, decision_request: dict[str, Any]) -> Any: ...
+
+
+@runtime_checkable
+class ProvenanceRecorder(Protocol):
+    """Files where a decision's input state came from (R4.4).
+
+    A protocol, so the production Postgres writer, an in-memory recorder in a test, and
+    "nothing wired yet" are the same shape to this loop. Returns whether the row landed;
+    the loop logs a miss rather than assuming one.
+    """
+
+    def __call__(self, row: DecisionDataProvenance) -> bool: ...
 
 
 class A2AWorldClient:
@@ -82,6 +99,7 @@ class SensorLoop:
         debounce_s: float = 120.0,
         heartbeat_idle_polls: int = 30,
         store_id: str = DEFAULT_STORE_ID,
+        provenance_recorder: ProvenanceRecorder | None = None,
     ) -> None:
         self._protocol = protocol
         self._world = world_client
@@ -91,14 +109,20 @@ class SensorLoop:
         self._debounce_s = debounce_s
         self._heartbeat_idle_polls = heartbeat_idle_polls
         self._store_id = store_id
+        self._provenance_recorder: ProvenanceRecorder = provenance_recorder or record_provenance
         self._running = False
         self._task: asyncio.Task[None] | None = None
         self._last_fired: dict[str, float] = {}
+        # The most recent perceived state per city, kept so a fired decision can record the
+        # provenance of the state it was convened from (R4.4) — including the heartbeat,
+        # which fires from the last thing the loop actually saw.
+        self._last_state: dict[str, dict[str, Any]] = {}
         self._idle_polls = 0
         self._seq = 0
         # Observability counters (read by tests + the agency_truth gate).
         self.decisions_triggered = 0
         self.polls = 0
+        self.provenance_recorded = 0
 
     @property
     def running(self) -> bool:
@@ -118,6 +142,10 @@ class SensorLoop:
             "reorder_point": self._reorder_point,
             "polls": self.polls,
             "decisions_triggered": self.decisions_triggered,
+            # Decisions whose input provenance actually landed in the append-only table.
+            # Reported separately from `decisions_triggered` so a filing gap is visible
+            # rather than implied (I-7).
+            "provenance_recorded": self.provenance_recorded,
         }
 
     async def start(self) -> None:
@@ -153,6 +181,7 @@ class SensorLoop:
             self.polls += 1
             if state is None:
                 continue  # honest degradation: idle this city, keep polling the rest
+            self._last_state[city] = state
             for trig in self._detect(city, state):
                 any_trigger = True
                 if self._should_fire(trig["key"]) and await self._fire(city, trig):
@@ -211,8 +240,9 @@ class SensorLoop:
     async def _fire(self, city: str, trig: dict[str, Any]) -> bool:
         request = self._build_request(city, trig)
         try:
-            await self._protocol.run_consensus(request)
+            decision = await self._protocol.run_consensus(request)
             self.decisions_triggered += 1
+            await self._record_input_provenance(city, decision)
             logger.info(
                 "sensor_triggered_decision",
                 city=city,
@@ -225,6 +255,41 @@ class SensorLoop:
                 "sensor_decision_failed", city=city, trigger=trig["trigger"], error=str(exc)
             )
             return False
+
+    async def _record_input_provenance(self, city: str, decision: Any) -> None:
+        """File where this decision's input state came from (R4.4, AD-10).
+
+        Best-effort and never load-bearing on the decision: the decision has already been
+        made and audited by the time this runs, and a database that cannot be reached must
+        not turn a real decision into a failure (I-7). What it must not do is *claim* a
+        filing that did not happen, which is why the counter only advances on a confirmed
+        row and a miss is logged at warning level.
+
+        The write is pushed to a worker thread because the writer is psycopg2 (synchronous);
+        blocking the event loop here would stall every other city's perception.
+        """
+        state = self._last_state.get(city)
+        if state is None:
+            return
+        row = build_provenance(decision_id=getattr(decision, "decision_id", None), state=state)
+        if row is None:
+            return  # build_provenance logged why; no row is the honest outcome
+        try:
+            landed = await asyncio.to_thread(self._provenance_recorder, row)
+        except Exception as exc:  # noqa: BLE001 — a filing failure never fails a decision
+            logger.warning(
+                "sensor_provenance_record_failed", decision_id=str(row.decision_id), error=str(exc)
+            )
+            return
+        if landed:
+            self.provenance_recorded += 1
+            return
+        logger.warning(
+            "sensor_provenance_not_recorded",
+            decision_id=str(row.decision_id),
+            source_class=row.source_class,
+            is_synthetic=row.is_synthetic,
+        )
 
     def _build_request(self, city: str, trig: dict[str, Any]) -> dict[str, Any]:
         self._seq += 1

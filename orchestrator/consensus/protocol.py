@@ -8,6 +8,21 @@ Phase 4 (EXECUTING):    Dispatch per-agent actions, log audit, guardrails.
 Phase 5 (LEARNING):     Meta-RL weight update, semantic cache update.
 
 Tier 1-2 fast path (80 % of decisions): Phase 1 -> Phase 4 -> Phase 5.
+
+Every tier reaches Phase 4 through one ratification choke point,
+``_ratify_and_dispatch`` (ADR-054 D1): guardrails (I-6), the confidence floor
+(I-5) and the audit append (I-4) apply on Tier 1 and Tier 2 exactly as they do on
+Tier 3 and Tier 4. The Fast_Path used to call ``_phase_execute`` directly and was
+therefore evaluated by neither the guardrail engine nor the HITL gate.
+
+Three verdicts are consequential rather than decorative (ADR-054 D3, R13.4/R13.5/R13.8):
+the Tier-4 twin's ``TwinVerdict`` withholds dispatch or escalates when its measured
+disagreement exceeds the bound committed in
+``infrastructure/quality/twin-verdict-bounds.yaml`` (never a literal here) while an
+unavailable twin still degrades honestly and vetoes nothing (I-7); the recorded
+``pareto_front`` is the set selection ran over, with the ratified action asserted a
+member; and a debate round that changed no proposal value and no selection is stamped
+advisory instead of being counted as though it moved the decision.
 """
 
 from __future__ import annotations
@@ -17,11 +32,15 @@ import json
 import os
 import time
 from datetime import UTC, datetime
-from typing import TYPE_CHECKING, Any
+from enum import StrEnum
+from pathlib import Path
+from typing import TYPE_CHECKING, Any, Final
 from uuid import UUID, uuid4
 
 import deal
 import structlog
+import yaml
+from pydantic import BaseModel, ConfigDict, Field
 from synapse_common.a2a_sdk import send_a2a_request
 from synapse_common.metrics import (
     CONSENSUS_DEBATE_ROUNDS,
@@ -42,10 +61,14 @@ from synapse_common.schemas import SchemaValidationError, validate_agent_payload
 from orchestrator.consensus.firehose_signals import emit_agent_metrics, emit_agent_signals
 from orchestrator.consensus.models import ConflictReport, TierClassification
 from orchestrator.consensus.pareto import (
+    FRONT_INDEX_KEY,
     BindingSelection,
+    SelectionFront,
+    build_selection_front,
     run_pareto_arbitration,
     select_binding_action,
 )
+from orchestrator.guardrails.rules import execute_consensus, satisfies_confidence_floor
 from orchestrator.state_machine import OrchestratorStateMachine
 
 if TYPE_CHECKING:
@@ -125,6 +148,337 @@ TWIN_ENDPOINT = "http://digital-twin:8009"
 # matched to the deployment's compute instead of a hardcoded 1000-scenario run.
 TWIN_SCENARIOS = int(os.environ.get("SYNAPSE_TWIN_SCENARIOS", "1000"))
 
+REPO_ROOT: Final[Path] = Path(__file__).resolve().parents[2]
+#: The committed Tier-4 disagreement bound (ADR-054 D3, AD-13). The bound is read
+#: from here and is never a literal in this module.
+TWIN_BOUNDS_PATH: Final[Path] = REPO_ROOT / "infrastructure" / "quality" / "twin-verdict-bounds.yaml"
+
+
+class TwinVerdictConfigurationError(RuntimeError):
+    """The committed Tier-4 twin bound is missing, malformed, or lies about I-7.
+
+    Raised by :func:`load_twin_verdict_bounds`. Deliberately fail-closed: a
+    deployment that declares a Tier-4 veto and cannot read its own bound must
+    refuse to dispatch rather than skip the veto silently. A declared enforcement
+    that does not enforce is the defect class ADR-054 exists to remove, so the
+    honest failure mode is loud (I-7), and it mirrors task 8.3's
+    ``GuardrailConfigurationError``.
+    """
+
+
+class SelectionIntegrityError(RuntimeError):
+    """The ratified action is not a member of the recorded Pareto front (R13.5).
+
+    A programming error, not a runtime condition: selection and the recorded front
+    are both derived from one proposal list by pure functions, so a mismatch means
+    the two have drifted. Raised rather than logged, because a decision whose
+    recorded front does not contain the action it ratified is an audit record that
+    misdescribes what happened - and it propagates out of ``run_consensus``, so
+    nothing dispatches.
+    """
+
+
+class TwinAvailability(StrEnum):
+    """Whether the Tier-4 twin produced a verdict at all (I-7).
+
+    The values are the exact strings the pre-ADR-054 implementation stamped into
+    ``audit_trace``, so the audit vocabulary is unchanged by this ADR - what
+    changes is that the verdict now has a consequence.
+    """
+
+    VERIFIED = "twin_verified"
+    UNAVAILABLE = "twin_unavailable"
+
+
+class TwinExceedAction(StrEnum):
+    """The recorded operator choice from ADR-054 D3's disjunction.
+
+    D3 says a disagreement beyond the bound "withholds dispatch **or**
+    escalates". Both are fail-closed - ``execution_confirmations`` stays empty
+    either way - and which one applies is committed configuration, not a literal.
+    """
+
+    ESCALATE = "escalate"
+    WITHHOLD = "withhold"
+
+
+class TwinDisagreementBounds(BaseModel):
+    """The committed Tier-4 disagreement bound (``twin-verdict-bounds.yaml``)."""
+
+    model_config = ConfigDict(frozen=True)
+
+    max_relative_disagreement: float
+    relative_floor: float
+    action_on_exceed: TwinExceedAction
+    measured: bool
+
+
+def load_twin_verdict_bounds(path: Path | None = None) -> TwinDisagreementBounds:
+    """Load the committed Tier-4 bound (``encoding='utf-8'`` per E-S13-07).
+
+    Reads ``infrastructure/quality/twin-verdict-bounds.yaml`` (AD-13). The file is
+    read per Tier-4 verification rather than cached at import, so a reviewed bound
+    edit takes effect without a process restart and a test can point the loader at
+    its own file; one small YAML read sits comfortably inside the Tier-4 120s SLA.
+
+    ``unavailable_action`` and ``not_comparable_action`` are both validated to read
+    ``no_veto``: I-7 is pinned by the loader, not merely described in a comment, so
+    the file cannot be edited into a configuration where a dead twin - or a twin
+    that shares no KPI key with the consensus prediction - becomes a global Tier-4
+    kill switch.
+
+    Raises:
+        TwinVerdictConfigurationError: the file is absent, unparseable, missing a
+            key, or declares a veto on unavailability or on no comparison.
+    """
+    source = path if path is not None else TWIN_BOUNDS_PATH
+    try:
+        payload: Any = yaml.safe_load(source.read_text(encoding="utf-8"))
+        section: Any = payload["tier4_disagreement"]
+        for key in ("unavailable_action", "not_comparable_action"):
+            declared = str(section[key])
+            if declared != "no_veto":
+                raise TwinVerdictConfigurationError(
+                    f"{source}: {key}={declared!r} is not permitted; absence of a "
+                    "verdict is not a negative verdict (I-7, ADR-054 D3)"
+                )
+        return TwinDisagreementBounds(
+            max_relative_disagreement=float(section["max_relative_disagreement"]),
+            relative_floor=float(section["relative_floor"]),
+            action_on_exceed=TwinExceedAction(str(section["action_on_exceed"])),
+            measured=bool(section["measured"]),
+        )
+    except TwinVerdictConfigurationError:
+        raise
+    except Exception as exc:
+        raise TwinVerdictConfigurationError(f"{source}: unreadable Tier-4 bound: {exc}") from exc
+
+
+def _numeric(value: Any) -> float | None:
+    """Coerce a KPI value to a float, or ``None`` when it is not a number.
+
+    ``bool`` is rejected explicitly: it is an ``int`` subclass, and comparing a
+    flag against a Monte-Carlo mean would manufacture a disagreement.
+    """
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        return None
+    numeric = float(value)
+    if numeric != numeric or numeric in (float("inf"), float("-inf")):  # NaN / inf
+        return None
+    return numeric
+
+
+def numeric_map(mapping: dict[str, Any]) -> dict[str, float]:
+    """The numeric entries of ``mapping``, key-sorted, non-numerics dropped.
+
+    Used to record the consensus prediction and the twin's KPI means as evidence
+    without coercing a non-numeric field into a number it never was.
+    """
+    numeric: dict[str, float] = {}
+    for key in sorted(mapping):
+        value = _numeric(mapping[key])
+        if value is not None:
+            numeric[key] = value
+    return numeric
+
+
+def measure_twin_disagreement(
+    consensus_prediction: dict[str, Any],
+    twin_kpis: dict[str, Any],
+    *,
+    relative_floor: float,
+) -> tuple[float | None, tuple[str, ...]]:
+    """Measure the twin's disagreement with the consensus prediction (R13.4).
+
+    Compares only the keys the consensus **itself** predicted: the numeric keys
+    present in both the selected action and the twin's ``kpi_means``. Nothing is
+    invented for a key the consensus never claimed, so the metric never fabricates
+    a prediction in order to have something to disagree with (I-7).
+
+    The metric is the maximum relative deviation over those keys::
+
+        max_k |twin_k - consensus_k| / max(|consensus_k|, relative_floor)
+
+    A maximum, so one contradicted KPI cannot be averaged away by agreeing ones;
+    relative, so one committed bound spans KPI scales from ``spoilage_rate`` to
+    ``orders_created``; floored, so a near-zero consensus value cannot report an
+    infinite disagreement.
+
+    Returns:
+        ``(disagreement, compared_keys)``. ``disagreement`` is ``None`` when no key
+        is comparable - which is *not* a disagreement and never a veto (ADR-054 D3,
+        ``not_comparable_action``).
+
+    Pure: no I/O and no state, so the bound comparison is unit- and
+    property-testable without the protocol or the twin.
+    """
+    compared: list[str] = []
+    deviations: list[float] = []
+
+    for key in sorted(consensus_prediction):
+        predicted = _numeric(consensus_prediction[key])
+        simulated = _numeric(twin_kpis.get(key))
+        if predicted is None or simulated is None:
+            continue
+        compared.append(key)
+        deviations.append(abs(simulated - predicted) / max(abs(predicted), relative_floor))
+
+    if not deviations:
+        return None, ()
+    return max(deviations), tuple(compared)
+
+
+class TwinVerdict(BaseModel):
+    """The Tier-4 twin's verdict on a selected action (ADR-054 D3, R13.4).
+
+    Frozen: this is **evidence**. The ratification choke point reads it to decide
+    whether to dispatch, and the audit row records it; neither may edit the
+    verdict it is judging.
+
+    Before ADR-054 the twin's answer reached ``audit_trace`` and nothing else -
+    the twin was consulted at the most consequential tier and could not object.
+    A verdict whose ``exceeds_bound`` is true now withholds dispatch or escalates.
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    availability: TwinAvailability
+    #: The committed bound in force when this verdict was measured.
+    bound: float
+    action_on_exceed: TwinExceedAction
+    #: ``None`` when the twin was unavailable, or available with no comparable KPI.
+    #: Absence of a measurement is never treated as a negative verdict (I-7).
+    disagreement: float | None = None
+    compared_kpis: tuple[str, ...] = ()
+    consensus_kpis: dict[str, float] = Field(default_factory=dict)
+    twin_kpis: dict[str, float] = Field(default_factory=dict)
+    n_scenarios: int | None = None
+    error: str | None = None
+    #: True when the committed bound was set from an observed disagreement
+    #: distribution. False means the bound is honestly wide (ADR-054 ratchet).
+    bound_measured: bool = False
+
+    @property
+    def available(self) -> bool:
+        """Whether the twin answered at all."""
+        return self.availability is TwinAvailability.VERIFIED
+
+    @property
+    def comparable(self) -> bool:
+        """Whether a disagreement could be measured against a consensus prediction."""
+        return self.disagreement is not None
+
+    @property
+    def exceeds_bound(self) -> bool:
+        """Whether this verdict vetoes dispatch (R13.4).
+
+        False whenever no disagreement was measured. An unreachable or slow twin,
+        and a twin that shares no KPI key with the consensus prediction, both
+        degrade honestly and veto nothing: absence of a verdict is not a negative
+        verdict, and a dead twin must not become a global Tier-4 kill switch
+        (I-7, ADR-054 D3).
+        """
+        return self.disagreement is not None and self.disagreement > self.bound
+
+    def as_context(self) -> dict[str, Any]:
+        """The append-only record of this verdict (I-14).
+
+        Floats are rounded to the fixed audit precision so a replayed decision
+        produces byte-identical context and trace entries (R2.1/R2.3).
+        """
+        return {
+            "verdict": self.availability.value,
+            "available": self.available,
+            "comparable": self.comparable,
+            "disagreement": (
+                None
+                if self.disagreement is None
+                else round(self.disagreement, _AUDIT_FLOAT_PRECISION)
+            ),
+            "bound": round(self.bound, _AUDIT_FLOAT_PRECISION),
+            "bound_measured": self.bound_measured,
+            "exceeds_bound": self.exceeds_bound,
+            "action_on_exceed": self.action_on_exceed.value,
+            "compared_kpis": list(self.compared_kpis),
+            "consensus_kpis": _round_floats(self.consensus_kpis),
+            "twin_kpis": _round_floats(self.twin_kpis),
+            "n_scenarios": self.n_scenarios,
+            "error": self.error,
+        }
+
+    def veto_reason(self) -> str:
+        """The reason string recorded when this verdict withholds dispatch (R13.4).
+
+        ASCII only, and it names both measured numbers so the audit row and the
+        escalation payload say *why* the twin objected rather than that it did.
+        Returns ``""`` when this verdict vetoes nothing.
+        """
+        if self.disagreement is None or not self.exceeds_bound:
+            return ""
+        return (
+            f"twin_disagreement:{round(self.disagreement, _AUDIT_FLOAT_PRECISION)}"
+            f">bound:{round(self.bound, _AUDIT_FLOAT_PRECISION)}"
+            f" on {','.join(self.compared_kpis)}"
+        )
+
+    def trace_lines(self) -> list[str]:
+        """The ``audit_trace`` entries for this verdict.
+
+        ``twin=<availability>`` is unchanged from the pre-ADR-054 stamp - the
+        audit vocabulary does not move - and the disagreement, the bound, and the
+        consequence are recorded beside it. R13.4 forbids recording the
+        disagreement in ``audit_trace`` *alone*, not recording it there at all.
+        """
+        lines = [f"twin={self.availability.value}"]
+        if self.disagreement is None:
+            lines.append("twin_disagreement=not_comparable")
+            return lines
+        lines.append(f"twin_disagreement={round(self.disagreement, _AUDIT_FLOAT_PRECISION)}")
+        lines.append(f"twin_bound={round(self.bound, _AUDIT_FLOAT_PRECISION)}")
+        if self.exceeds_bound:
+            lines.append(f"twin_veto={self.action_on_exceed.value}")
+        return lines
+
+
+class DebateRoundChange(BaseModel):
+    """Whether one debate round changed any proposal value (R13.8).
+
+    Frozen: it is a record of what a completed round did, written once by
+    ``_phase_debate`` and read by ``_record_debate_consequence``.
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    round_number: int
+    values_changed: bool
+    revised_agents: tuple[str, ...] = ()
+
+
+def changed_proposal_values(
+    before: list[AgentProposal],
+    after: list[AgentProposal],
+) -> tuple[str, ...]:
+    """The agents whose payload or utility a concession round actually changed (R13.8).
+
+    Compares **values**, not the ``status`` an agent reported: a ``"revised"``
+    response that returns a byte-identical payload and the same utility changed
+    nothing, and R13.8 asks whether the round changed a proposal *value*. Pure, so
+    the advisory rule is decidable without the protocol.
+
+    A length mismatch cannot arise from ``_run_concession_round`` (it emits one
+    proposal per input) but is reported as "everything changed" rather than
+    silently zipped short, because a shortened round is not an unchanged round.
+    """
+    if len(before) != len(after):
+        return tuple(str(p.agent_name) for p in after)
+    changed: list[str] = []
+    for prior, revised in zip(before, after, strict=True):
+        if prior.payload != revised.payload or float(prior.utility_score) != float(
+            revised.utility_score
+        ):
+            changed.append(str(revised.agent_name))
+    return tuple(changed)
+
 
 class ConsensusProtocol:
     """Five-phase multi-agent consensus engine."""
@@ -165,6 +519,10 @@ class ConsensusProtocol:
 
         self._context_messages: list[ContextMessage] = []
         self._tool_call_count: int = 0
+        # R13.8: one record per completed debate round, saying whether that round
+        # changed any proposal value. Read once selection is known, so a round that
+        # moved nothing is stamped advisory rather than recorded as consequential.
+        self._debate_rounds_log: list[DebateRoundChange] = []
 
     # ── Context management (I-14: append-only) ─────────────────────────
 
@@ -299,7 +657,9 @@ class ConsensusProtocol:
             pareto_weights=self._meta_rl.get_weights(self._system_state()),
             fast_best=fast_best,
         )
-        decision = await self._phase_execute(decision)
+        # ADR-054 D1/D2: the fast path ratifies through the same choke point as the
+        # full path, so I-5 and I-6 are not decided by the tier router (R5.1, R5.7).
+        decision = await self._ratify_and_dispatch(decision, tier=tier)
         await self._phase_learn(decision)
         return decision
 
@@ -312,6 +672,10 @@ class ConsensusProtocol:
         classification: TierClassification,
     ) -> ConsensusDecision:
         proposals = await self._phase_collect(request, tier)
+        # R13.8: kept so the debate's consequence is decidable - the same knee
+        # weights applied to the pre-debate and post-debate proposals answer
+        # "did the debate change the selection?" without guessing.
+        pre_debate = list(proposals)
 
         debate_rounds = 0
         conflict = self._detect_conflicts(proposals)
@@ -343,14 +707,25 @@ class ConsensusProtocol:
                 },
             )
         )
+
+        # R13.8: stamp every round that changed no proposal value and no selection
+        # advisory. Done before the decision is built so the mark is inside the
+        # decision's own append-only context.
+        advisory_rounds = self._record_debate_consequence(
+            pre_debate=pre_debate,
+            post_debate=proposals,
+            weights=weights,
+            selection=selection,
+        )
+
         decision = self._build_decision(
             proposals=proposals,
             tier=tier,
             phase_reached=4,
             pareto_weights=weights,
-            pareto_front=pareto_result["pareto_front"],
             debate_rounds=debate_rounds,
             selection=selection,
+            advisory_rounds=advisory_rounds,
         )
 
         # ADR-043/C7: record whether the decision rested on any degraded agent input
@@ -360,18 +735,241 @@ class ConsensusProtocol:
         # C7: at the top tier the selected action is verified against the digital
         # twin's Monte-Carlo what-if before execution — the twin is no longer dead
         # code at Tier 4. Degrades honestly if the twin is unreachable (I-7).
+        # ADR-054 D3: the verdict travels to the choke point, where a disagreement
+        # beyond the committed bound withholds dispatch or escalates (R13.4). It is
+        # no longer stamped into `audit_trace` and then dropped.
+        twin_verdict: TwinVerdict | None = None
         if tier == DecisionTier.TIER_4:
-            decision = await self._phase_twin_verify(decision)
+            decision, twin_verdict = await self._phase_twin_verify(decision)
 
-        passed, violations = self._guardrails.validate_decision(decision)
-        if not passed:
-            HITL_ESCALATIONS_TOTAL.labels(reason="guardrail_violation").inc()
-            decision = await self._hitl.escalate(decision, violations)
-        else:
-            decision = await self._phase_execute(decision)
+        decision = await self._ratify_and_dispatch(
+            decision,
+            tier=tier,
+            twin_verdict=twin_verdict,
+        )
 
         await self._phase_learn(decision)
         return decision
+
+    # ── Dispatch ratification choke point (ADR-054 D1) ──────────────────
+
+    async def _ratify_and_dispatch(
+        self,
+        decision: ConsensusDecision,
+        *,
+        tier: DecisionTier,
+        twin_verdict: TwinVerdict | None = None,
+    ) -> ConsensusDecision:
+        """The single path from a built decision to a dispatched action.
+
+        Every tier traverses this method, so I-5 (confidence-gated execution) and
+        I-6 (hard guardrails cannot be overridden) are properties of the running
+        system rather than properties of one route. Recorded in ADR-054 (D1/D2):
+        ``_fast_path`` used to reach ``_phase_execute`` directly and was therefore
+        evaluated by neither the guardrail engine nor the HITL gate, which made the
+        tier router the thing that decided whether I-5 applied (R5.1, R5.2, R5.7).
+
+        This is the only caller of
+        :meth:`~orchestrator.guardrails.rules.GuardrailEngine.validate_decision`,
+        :meth:`~orchestrator.hitl.escalation.HITLEscalation.escalate`,
+        :func:`~orchestrator.guardrails.rules.execute_consensus` - which puts that
+        function's ``@deal.pre`` (I-5) / ``@deal.post`` (I-4) contract on the
+        production path instead of leaving it reachable only from tests (R13.7) -
+        and :meth:`_phase_execute`.
+
+        Order of operations (ADR-054 D1, amended by task 12.1a):
+
+        1. ``validate_decision``, on Tier 1 and Tier 2 as well as Tier 3/4.
+        2. Snapshot the boundary in force and re-check the I-5 dispatch precondition
+           through :func:`~orchestrator.guardrails.rules.satisfies_confidence_floor` -
+           the same predicate ``execute_consensus``'s ``@deal.pre`` uses - so that
+           precondition is decided *before* anything is appended.
+        3. Apply the twin verdict (see ``twin_verdict``).
+        4. Not passed -> ``escalate``, which awaits a human future and dispatches
+           nothing, then record the withheld dispatch. A twin veto configured as
+           ``withhold`` records the withheld dispatch without queueing a human.
+        5. Passed -> append the audit row, ``execute_consensus``, ``_phase_execute``.
+
+        A BLOCK violation or a sub-threshold confidence therefore withholds dispatch
+        on every tier and leaves ``execution_confirmations`` empty (R5.1, R5.2). The
+        audit append precedes ``execute_consensus`` because that function's
+        ``@deal.post`` asserts ``audit_id is not None``: under I-4 the decision is on
+        the audit trail *before* the world is mutated. ``_phase_execute`` reuses the
+        id, so exactly one row is appended per decision, and the canonical row is
+        byte-for-byte what it was before this change (``make_canonical_row`` is not
+        touched - I-4 is byte-pinned).
+
+        Step 2 is why the contract's floor is a *parameter* rather than a literal. The
+        precondition used to hardcode ``0.7`` while ADR-054 D4 / R5.4 made the boundary
+        reloadable, so a reload below ``0.7`` let a decision in ``[threshold, 0.7)``
+        pass ``validate_decision`` and then trip ``PreContractError`` at step 5 - after
+        the append. Failing closed was right; failing *after* an irretractable row was
+        not, and a crash is not one of I-7's honest outcomes. The boundary is now read
+        once for both checks, so the two cannot disagree and no contract fires after an
+        append.
+
+        Args:
+            decision: the built decision awaiting ratification.
+            tier: the routed tier, recorded with the ratification outcome.
+            twin_verdict: the Tier-4 twin's verdict, or ``None`` on a tier that
+                consults no twin. A verdict whose measured disagreement exceeds the
+                **committed** bound (``infrastructure/quality/twin-verdict-bounds.yaml``,
+                AD-13 - never a literal here) withholds dispatch: it escalates when
+                the file declares ``action_on_exceed: escalate`` and records the
+                withheld dispatch with no human queued when it declares
+                ``withhold``. Both leave ``execution_confirmations`` empty.
+                An unavailable twin, and a twin with no comparable KPI, veto
+                **nothing** - ``TwinVerdict.exceeds_bound`` is false whenever no
+                disagreement was measured, so a twin outage cannot become a global
+                Tier-4 kill switch (I-7, ADR-054 D3).
+        """
+        passed, violations = self._guardrails.validate_decision(decision)
+
+        # Task 12.1a. The boundary in force is read **once**, before anything is
+        # appended, and this one snapshot judges both the pre-flight here and
+        # `execute_consensus`'s @deal.pre below. Reading it twice would leave the window
+        # this repair closes: a reload landing between the two reads made the contract
+        # raise `PreContractError` *after* the audit row was appended, and an
+        # append-only row cannot be retracted (I-4) - the operator saw a crash plus a
+        # permanent row describing a dispatch that never happened. A decision below the
+        # floor is a recorded withhold with a stated reason (I-7), never an exception
+        # out of this method.
+        confidence_floor = self._guardrails.confidence_threshold
+        if passed and not satisfies_confidence_floor(
+            decision,
+            confidence_floor=confidence_floor,
+        ):
+            passed = False
+            # A new list, not an append: `violations` belongs to the engine's verdict.
+            violations = [
+                *violations,
+                f"Confidence {decision.confidence:.3f} below the dispatch floor "
+                f"{confidence_floor} in force, and no human was escalated (I-5)",
+            ]
+
+        # ADR-054 D3. The bound lives in the verdict because `_phase_twin_verify`
+        # read it from committed configuration; nothing here supplies a number.
+        reasons = list(violations)
+        twin_veto = False
+        if twin_verdict is not None and twin_verdict.exceeds_bound:
+            twin_veto = True
+            reasons.append(twin_verdict.veto_reason())
+            logger.warning(
+                "twin_veto_applied",
+                decision_id=str(decision.decision_id),
+                tier=tier.value,
+                disagreement=twin_verdict.disagreement,
+                bound=twin_verdict.bound,
+                bound_measured=twin_verdict.bound_measured,
+                action=twin_verdict.action_on_exceed.value,
+            )
+
+        self._append_context(
+            ContextMessage(
+                source="orchestrator",
+                content={
+                    "type": "dispatch_ratification",
+                    "tier": tier.value,
+                    "confidence": decision.confidence,
+                    "passed": passed,
+                    "violations": list(violations),
+                    # True unconditionally from task 8.7 on: the veto is in force at
+                    # this choke point. `twin_verdict` is null on a tier that
+                    # consults no twin, which is an absent verdict and not a veto.
+                    "twin_verdict_enforced": True,
+                    "twin_verdict": None if twin_verdict is None else twin_verdict.as_context(),
+                    "twin_veto": twin_veto,
+                    "reasons": reasons,
+                },
+            )
+        )
+
+        if not passed or twin_veto:
+            # A guardrail failure always queues a human (unchanged). A twin veto
+            # queues one only when the committed `action_on_exceed` says so; the
+            # `withhold` setting records the withheld dispatch with no human.
+            escalates = (
+                not passed
+                or twin_verdict is None
+                or twin_verdict.action_on_exceed is TwinExceedAction.ESCALATE
+            )
+            reason = "guardrail_violation" if not passed else "twin_disagreement"
+            logger.warning(
+                "dispatch_withheld",
+                decision_id=str(decision.decision_id),
+                tier=tier.value,
+                confidence=decision.confidence,
+                reason=reason,
+                reasons=reasons,
+                twin_veto=twin_veto,
+                escalated=escalates,
+            )
+            if escalates:
+                HITL_ESCALATIONS_TOTAL.labels(reason=reason).inc()
+                withheld = await self._hitl.escalate(decision, reasons)
+            else:
+                withheld = decision
+            return await self._record_withheld_dispatch(withheld, reasons, reason=reason)
+
+        # I-4 first: the row exists before the action does. The id it returns is what
+        # satisfies `execute_consensus`'s @deal.post, and `_phase_execute` reuses it.
+        # The @deal.pre is handed the same floor the pre-flight above already applied, so
+        # it cannot fail here by construction - it is a backstop against a future route
+        # that reaches this line without ratifying, not a live crash risk.
+        audit_id = await self._audit.log_decision(decision)
+        ratified = execute_consensus(
+            decision.model_copy(update={"audit_id": audit_id}),
+            confidence_floor=confidence_floor,
+        )
+        return await self._phase_execute(ratified)
+
+    async def _record_withheld_dispatch(
+        self,
+        decision: ConsensusDecision,
+        violations: list[str],
+        *,
+        reason: str = "guardrail_violation",
+    ) -> ConsensusDecision:
+        """Append the audit row for a decision whose dispatch was withheld.
+
+        ``escalate`` awaits a human future and dispatches nothing - unchanged, and it
+        is what makes ADR-054 D2 fail-closed rather than fail-open - so the row says
+        exactly that: ``escalated`` is true (set by the escalator, never asserted
+        here) and ``execution_confirmations`` is empty (R5.1, R5.2). Nothing is
+        executed after a human approves either.
+
+        The empty list is load-bearing beyond this method: the HITL timeout record
+        derives ``dispatched`` from ``execution_confirmations``, so a fabricated
+        confirmation here would make that record claim an action nobody took.
+
+        Args:
+            decision: the decision whose dispatch was withheld, already escalated
+                when a human was queued.
+            violations: every reason dispatch was withheld - guardrail violations
+                and, on Tier 4, the twin's veto reason (R13.4).
+            reason: which gate withheld it, recorded as ``withheld_by=`` so a reader
+                can tell a guardrail BLOCK from a twin disagreement without parsing
+                the reason strings.
+        """
+        withheld = decision.model_copy(
+            update={
+                "execution_confirmations": [],
+                "context_messages": list(self._context_messages),
+                "audit_trace": [
+                    *decision.audit_trace,
+                    "dispatch=withheld",
+                    f"withheld_by={reason}",
+                    f"violations={len(violations)}",
+                ],
+            },
+        )
+        audit_id = await self._audit.log_decision(withheld)
+        return withheld.model_copy(
+            update={
+                "audit_id": audit_id,
+                "audit_trace": [*withheld.audit_trace, f"audit_id={audit_id}"],
+            },
+        )
 
     # ── Phase 1: Proposal collection ────────────────────────────────────
 
@@ -503,7 +1101,21 @@ class ConsensusProtocol:
             # `"revised"` response whose payload re-validates schema-side;
             # otherwise retain the prior proposal. Concession is LLM-independent
             # (R4.2) so it runs whether or not an LLM model mediates this round.
-            proposals = await self._run_concession_round(proposals, tier, round_num)
+            before_round = proposals
+            proposals = await self._run_concession_round(before_round, tier, round_num)
+
+            # R13.8: record what this round actually changed. A round whose agents
+            # all maintained their position - or "revised" to the identical payload
+            # and utility - changed no proposal value, and once selection is known
+            # `_record_debate_consequence` stamps it advisory.
+            revised_agents = changed_proposal_values(before_round, proposals)
+            self._debate_rounds_log.append(
+                DebateRoundChange(
+                    round_number=round_num,
+                    values_changed=bool(revised_agents),
+                    revised_agents=revised_agents,
+                )
+            )
 
             # R3.4: stop once the (possibly revised) proposals converge.
             if self._check_convergence(proposals):
@@ -705,6 +1317,74 @@ class ConsensusProtocol:
             "schema_valid": True,
         }
 
+    def _record_debate_consequence(
+        self,
+        *,
+        pre_debate: list[AgentProposal],
+        post_debate: list[AgentProposal],
+        weights: dict[str, float],
+        selection: BindingSelection,
+    ) -> tuple[int, ...]:
+        """Mark every debate round that changed no value and no selection advisory (R13.8).
+
+        The audit finding this closes is that the debate analysis was "recorded,
+        ignored": rounds were counted on the decision whether or not they moved
+        anything, so ``debate_rounds=3`` read as three consequential rounds. R13.8
+        requires the *recorded analysis* to say which rounds were advisory.
+
+        Two decidable questions, no proxies:
+
+        * **Did the round change a proposal value?** ``changed_proposal_values``
+          compares payloads and utilities before and after the concession round.
+        * **Did the debate change the selection?** ``select_binding_action`` is pure,
+          so applying the **same** knee weights to the pre-debate proposals answers
+          it exactly. It is not re-derived from a utility argmax, which would be a
+          different selection rule than the one that ratified the action.
+
+        The mark is a **new** append-only context message, never an edit of the
+        already-recorded ``debate_round`` analysis (I-14). Returns the advisory round
+        numbers so ``_build_decision`` can stamp them into ``audit_trace`` too.
+        """
+        if not self._debate_rounds_log:
+            return ()
+
+        prior_selection = select_binding_action(pre_debate, weights)
+        selection_changed = (
+            prior_selection.selected_agent != selection.selected_agent
+            or prior_selection.selected_index != selection.selected_index
+        )
+
+        rounds: list[dict[str, Any]] = []
+        advisory: list[int] = []
+        for record in self._debate_rounds_log:
+            is_advisory = not record.values_changed and not selection_changed
+            if is_advisory:
+                advisory.append(record.round_number)
+            rounds.append(
+                {
+                    "round": record.round_number,
+                    "values_changed": record.values_changed,
+                    "revised_agents": list(record.revised_agents),
+                    "selection_changed": selection_changed,
+                    "advisory": is_advisory,
+                }
+            )
+
+        self._append_context(
+            ContextMessage(
+                source="orchestrator",
+                content={
+                    "type": "debate_consequence",
+                    "selection_changed": selection_changed,
+                    "selected_before": prior_selection.selected_agent,
+                    "selected_after": selection.selected_agent,
+                    "rounds": rounds,
+                    "advisory_rounds": advisory,
+                },
+            )
+        )
+        return tuple(advisory)
+
     # ── Phase 3: Pareto arbitration ─────────────────────────────────────
 
     async def _phase_arbitrate(
@@ -718,22 +1398,62 @@ class ConsensusProtocol:
         self._append_context(
             ContextMessage(
                 source="orchestrator",
-                content={"type": "pareto_result", "knee_index": result["knee_index"]},
+                content={
+                    "type": "pareto_result",
+                    "knee_index": result["knee_index"],
+                    # R13.5: NSGA-II optimises over **weight vectors**, so this front
+                    # is a front of candidate weightings - selection never ran over
+                    # it, and recording it as the decision's `pareto_front` claimed a
+                    # set the ratified action was not chosen from. It is kept here as
+                    # arbitration evidence; the decision records the set selection
+                    # actually ran over (`build_selection_front`).
+                    "front_over": "weight_vectors",
+                    "n_solutions": result["n_solutions"],
+                },
             )
         )
         return result
 
     # ── C7: Tier-4 digital-twin verification ────────────────────────────
 
-    async def _phase_twin_verify(self, decision: ConsensusDecision) -> ConsensusDecision:
+    async def _phase_twin_verify(
+        self,
+        decision: ConsensusDecision,
+        *,
+        bounds: TwinDisagreementBounds | None = None,
+    ) -> tuple[ConsensusDecision, TwinVerdict]:
         """Verify the selected action against the digital twin's Monte-Carlo what-if.
 
-        Records the twin's predicted KPI distribution into the append-only context
-        and audit trace (I-14) so an operator sees the simulated outcome of the
-        decision before it executes. An unreachable twin degrades to an honest
-        ``twin_unavailable`` note and never blocks the decision (I-7).
+        Returns the decision with the verdict recorded **and the**
+        :class:`TwinVerdict` **itself**, which ``_ratify_and_dispatch`` reads
+        (ADR-054 D3). Before this change the method returned only a decision whose
+        ``audit_trace`` had gained ``twin=twin_verified``: the twin was consulted at
+        the tier where a wrong action costs the most and had no way to object
+        (purpose-achievement-audit R13.4). The predicted KPI distribution is still
+        recorded into the append-only context and trace (I-14) so an operator sees
+        the simulated outcome before the action executes.
+
+        An unreachable or slow twin still degrades to an honest ``twin_unavailable``
+        verdict, and that verdict vetoes nothing (I-7): ``exceeds_bound`` is false
+        whenever no disagreement was measured, so a twin outage does not become a
+        Tier-4 outage. What *does* veto is a measured disagreement beyond the
+        committed bound.
+
+        Args:
+            decision: the built decision whose selected action is being verified.
+            bounds: the committed bound to judge against. ``None`` reads
+                ``infrastructure/quality/twin-verdict-bounds.yaml`` (AD-13); the
+                parameter exists so a caller can supply a bound explicitly rather
+                than as a literal here.
+
+        Raises:
+            TwinVerdictConfigurationError: the committed bound cannot be read. This
+                is fail-closed on purpose - a deployment that declares a veto and
+                cannot read its own bound must not dispatch as though the veto had
+                been evaluated.
         """
-        note: dict[str, Any]
+        limits = bounds if bounds is not None else load_twin_verdict_bounds()
+        verdict: TwinVerdict
         try:
             resp = await send_a2a_request(
                 target_url=TWIN_ENDPOINT,
@@ -750,19 +1470,56 @@ class ConsensusProtocol:
             if resp.error:
                 raise RuntimeError(resp.error)
             mc = resp.result or {}
-            note = {
-                "type": "twin_verification",
-                "verdict": "twin_verified",
-                "n_scenarios": mc.get("n_scenarios"),
-                "kpi_means": mc.get("kpi_means", {}),
-            }
+            raw_kpis = mc.get("kpi_means") or {}
+            twin_kpis = numeric_map(raw_kpis if isinstance(raw_kpis, dict) else {})
+            consensus_kpis = numeric_map(decision.selected_action)
+            disagreement, compared = measure_twin_disagreement(
+                consensus_kpis,
+                twin_kpis,
+                relative_floor=limits.relative_floor,
+            )
+            n_scenarios = _numeric(mc.get("n_scenarios"))
+            verdict = TwinVerdict(
+                availability=TwinAvailability.VERIFIED,
+                bound=limits.max_relative_disagreement,
+                action_on_exceed=limits.action_on_exceed,
+                bound_measured=limits.measured,
+                disagreement=disagreement,
+                compared_kpis=compared,
+                consensus_kpis=consensus_kpis,
+                twin_kpis=twin_kpis,
+                n_scenarios=None if n_scenarios is None else int(n_scenarios),
+            )
         except Exception as exc:  # noqa: BLE001 — an unreachable twin degrades (I-7)
             logger.warning("twin_verification_unavailable", error=str(exc))
-            note = {"type": "twin_verification", "verdict": "twin_unavailable", "error": str(exc)}
+            verdict = TwinVerdict(
+                availability=TwinAvailability.UNAVAILABLE,
+                bound=limits.max_relative_disagreement,
+                action_on_exceed=limits.action_on_exceed,
+                bound_measured=limits.measured,
+                error=str(exc),
+            )
 
+        if verdict.exceeds_bound:
+            logger.warning(
+                "twin_disagreement_exceeds_bound",
+                decision_id=str(decision.decision_id),
+                disagreement=verdict.disagreement,
+                bound=verdict.bound,
+                compared_kpis=list(verdict.compared_kpis),
+                action=verdict.action_on_exceed.value,
+            )
+
+        note: dict[str, Any] = {"type": "twin_verification", **verdict.as_context()}
+        # The pre-ADR-054 note carried `kpi_means`; keep the key so existing audit
+        # readers and the console keep resolving it.
+        note["kpi_means"] = _round_floats(verdict.twin_kpis)
         self._append_context(ContextMessage(source="digital_twin", content=note))
-        return decision.model_copy(
-            update={"audit_trace": [*decision.audit_trace, f"twin={note['verdict']}"]},
+        return (
+            decision.model_copy(
+                update={"audit_trace": [*decision.audit_trace, *verdict.trace_lines()]},
+            ),
+            verdict,
         )
 
     def _record_input_provenance(self, proposals: list[AgentProposal]) -> None:
@@ -830,7 +1587,16 @@ class ConsensusProtocol:
             except Exception as exc:
                 confirmations.append(f"error:{exc}")
 
-        audit_id = await self._audit.log_decision(decision)
+        # ADR-054 D1: `_ratify_and_dispatch` appends the audit row before the I-4
+        # postcondition on `execute_consensus` is checked, so a ratified decision
+        # already carries its id. Re-logging would put a second row on the chain for
+        # one decision; reuse it instead. A caller that supplies no id still gets the
+        # append, so this phase remains usable on its own.
+        audit_id = (
+            decision.audit_id
+            if decision.audit_id is not None
+            else await self._audit.log_decision(decision)
+        )
         self._fsm.transition("execution_complete")
 
         return decision.model_copy(
@@ -930,13 +1696,40 @@ class ConsensusProtocol:
         tier: DecisionTier,
         phase_reached: int,
         pareto_weights: dict[str, float],
-        pareto_front: list[dict[str, float]] | None = None,
         debate_rounds: int = 0,
         *,
         selection: BindingSelection | None = None,
         fast_best: AgentProposal | None = None,
+        advisory_rounds: tuple[int, ...] = (),
     ) -> ConsensusDecision:
+        """Build the decision, recording the set selection ran over (R13.5, R13.8).
+
+        The recorded ``pareto_front`` is derived **only** from ``build_selection_front``
+        and only when ``selection`` is not ``None``: it is one row per evaluated
+        candidate, carrying that candidate's index and the knee-weighted score
+        selection scored it with. There is no parameter by which a caller can record
+        some other front, which is how R13.5's "the recorded front SHALL be the set
+        the ratified action was selected from" is made unrepresentable rather than
+        merely intended. The NSGA-II front over weight vectors - what this field used
+        to hold - is recorded as arbitration evidence in the append-only context by
+        ``_phase_arbitrate``.
+
+        The fast path records no front (``None``): Tier 1/2 selects by a raw
+        ``utility_score`` argmax over the proposals (R1.6) and runs no Pareto
+        arbitration, so there is no front to claim.
+
+        Args:
+            advisory_rounds: debate rounds that changed no proposal value and no
+                selection, from ``_record_debate_consequence``. Stamped into
+                ``audit_trace`` beside the round count so the count cannot read as
+                three consequential rounds when none of them moved anything (R13.8).
+
+        Raises:
+            SelectionIntegrityError: selection ratified a proposal that is not a
+                member of the recorded front (R13.5).
+        """
         audit_trace = [f"tier={tier.value}", f"phase={phase_reached}"]
+        recorded_front: list[dict[str, float]] | None = None
 
         if selection is not None:
             # Binding Pareto-knee selection drives the full-path action (R1.1/R1.2).
@@ -950,6 +1743,12 @@ class ConsensusProtocol:
             selected_action = chosen.payload if chosen is not None else {}
             confidence = chosen.confidence if chosen is not None else 0.0
 
+            # R13.5: the recorded front is the set selection ran over, and the
+            # ratified action is asserted to be a member of it.
+            front = build_selection_front(proposals, selection)
+            self._assert_ratified_front_member(front, selection, ratified=chosen is not None)
+            recorded_front = [dict(row) for row in front.members]
+
             # Append-only binding-arbitration audit (I-14, R2.2/R2.5): the knee
             # weight vector, every evaluated candidate's weighted score, the
             # selected identity, any exclusions, and the deterministic tie-break.
@@ -962,11 +1761,21 @@ class ConsensusProtocol:
                 audit_trace.append(f"binding_excluded={_canonical_json(selection.excluded_agents)}")
             if selection.tie_break_applied:
                 audit_trace.append(f"tie_break={selection.tie_break_reason}")
+            # R13.5: membership is decidable from the row alone - the front size and
+            # the ratified member's index into it are both on the trace.
+            audit_trace.append(f"selection_front_size={len(front.members)}")
+            if front.ratified_member_index is not None:
+                audit_trace.append(f"selection_front_member={front.ratified_member_index}")
         else:
             # Fast path (Tier 1/2) retains raw `utility_score` argmax selection,
             # supplied by the caller as `fast_best` (R1.6).
             selected_action = fast_best.payload if fast_best is not None else {}
             confidence = fast_best.confidence if fast_best is not None else 0.0
+
+        # R13.8: a round count is not a claim of consequence. Advisory rounds are
+        # named, so `debate_rounds=3` with `debate_advisory=[1,2,3]` reads honestly.
+        if debate_rounds:
+            audit_trace.append(f"debate_advisory={_canonical_json(list(advisory_rounds))}")
 
         return ConsensusDecision(
             decision_id=self._decision_id or uuid4(),
@@ -978,9 +1787,50 @@ class ConsensusProtocol:
             audit_trace=audit_trace,
             phase_reached=phase_reached,
             debate_rounds=debate_rounds,
-            pareto_front=pareto_front,
+            pareto_front=recorded_front,
             context_messages=list(self._context_messages),
         )
+
+    @staticmethod
+    def _assert_ratified_front_member(
+        front: SelectionFront,
+        selection: BindingSelection,
+        *,
+        ratified: bool,
+    ) -> None:
+        """Assert the ratified action is a member of the recorded front (R13.5).
+
+        Raised, not logged: selection and the front are both pure projections of one
+        proposal list, so a mismatch is drift between the two rather than a runtime
+        condition. It propagates out of ``run_consensus``, so a decision whose
+        recorded front misdescribes what it selected from never dispatches and never
+        reaches the audit chain.
+
+        ``ratified`` is false when selection found no eligible candidate; there is
+        then no ratified action to be a member of anything, the front is empty, and
+        the decision carries the honest empty action ``{}`` (R1.5, I-7).
+        """
+        if not ratified:
+            if front.ratified_member_index is not None:
+                raise SelectionIntegrityError(
+                    "recorded front names a ratified member "
+                    f"({front.ratified_member_index}) but selection ratified nothing"
+                )
+            return
+        if front.ratified_member_index is None:
+            raise SelectionIntegrityError(
+                f"ratified action (proposal index {selection.selected_index}, agent "
+                f"{selection.selected_agent}) is not a member of the recorded front of "
+                f"{len(front.members)} candidate(s) (R13.5)"
+            )
+        member = front.members[front.ratified_member_index]
+        recorded_index = int(member[FRONT_INDEX_KEY])
+        if recorded_index != selection.selected_index:
+            raise SelectionIntegrityError(
+                f"recorded front member {front.ratified_member_index} carries candidate "
+                f"index {recorded_index}, but selection ratified proposal index "
+                f"{selection.selected_index} (R13.5)"
+            )
 
     def _system_state(self) -> dict[str, Any]:
         return {
@@ -992,6 +1842,7 @@ class ConsensusProtocol:
     def _reset(self) -> None:
         self._context_messages = []
         self._tool_call_count = 0
+        self._debate_rounds_log = []
         self._decision_id = None
         self._city = None
         self._fsm.reset()

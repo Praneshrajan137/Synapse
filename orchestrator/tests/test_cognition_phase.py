@@ -25,7 +25,13 @@ def _protocol(kafka: Any = None) -> ConsensusProtocol:
     return ConsensusProtocol(
         config=cfg,
         tier_router=MagicMock(),
-        guardrails=MagicMock(),
+        # ADR-054 D1: every tier now ratifies through `_ratify_and_dispatch`, so a
+        # protocol that reaches dispatch needs a guardrail verdict to unpack. Task
+        # 12.1a: it also reads the boundary in force, so the double states one - `0.0`,
+        # imposing no floor, which is what its `(True, [])` verdict already says.
+        guardrails=MagicMock(
+            **{"validate_decision.return_value": (True, []), "confidence_threshold": 0.0},
+        ),
         audit_logger=MagicMock(),
         hitl_escalation=MagicMock(),
         context_builder=MagicMock(),
