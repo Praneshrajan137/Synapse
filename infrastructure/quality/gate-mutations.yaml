@@ -1,0 +1,521 @@
+# SYNAPSE -- Declared falsifications for the Check_Registry (AD-4; R1.2, R9.5, R12.3, R12.7)
+#
+# Every registered check declares at least one mutation that MUST make it FAIL.
+# `scripts/audit/gate_fault_injection.py` (task 5.1) copies the real tree to a
+# temp dir, applies one operator, and runs the gate as a SUBPROCESS. It never
+# monkeypatches a gate's evaluator -- that is the exact anti-pattern this file
+# exists to retire (`test_agency_truth_gate.py:313-322`).
+#
+# A registered check with no declared operator here is reported in the
+# `reporting_tool` set and is EXCLUDED from PASS-eligibility. That exclusion is
+# the honest label, not a pass: absence of a falsification is absence of proof
+# (I-7). `reporting_tools:` below is the explicit, reviewed form of that state.
+#
+# Read contract: `encoding='utf-8'` on every read (E-S13-07).
+# Validated against: infrastructure/quality/schemas/gate-mutations.schema.json
+#
+# Operator vocabulary (schema-enforced):
+#   set_yaml_path         -- write `value` at `path` in a YAML file
+#   set_json_path         -- write `value` at `path` in a JSON file
+#   replace_regex         -- replace `pattern` with `replacement` in a text file
+#   replace_function_body -- replace the body of `target` (file.py::Class.func)
+#   create_file           -- write `body` to a new path
+#   delete_file           -- remove `target`
+#
+# `expect` is always "gate exits non-zero naming the mutated subject". A mutation
+# the gate survives is a gate that does not gate.
+
+version: 1
+
+gates:
+  # -------------------------------------------------------------------------
+  C16:
+    title: "Stryker break threshold >= verified floor"
+    operators:
+      - id: lower-stryker-break
+        operator: set_json_path
+        target: frontend/stryker.conf.json
+        path: "$.thresholds.break"
+        value: 10
+        expect_names: ["thresholds.break", "10"]
+        note: >-
+          10 is below STRYKER_BREAK_MIN (20), so the hard-floor branch must
+          fire. This is the ONLY mutation declared for C16, so it is the only
+          C16 probe the sweep runs.
+
+          ATTRIBUTION, corrected in task 5.1. An earlier form of this note
+          recorded a survivor shape at 26 -- the ratchet constant
+          STRYKER_BREAK_NOW is frozen at 26 while the shipped config is 50,
+          audit finding R7.8, tracked in ratchets.json -- directly beside the
+          declared operator, which reads as though C16's DECLARED falsification
+          survives. It does not: nobody declared a mutation to 26, so the sweep
+          never probes that shape and no sweep outcome can be attributed to it.
+          R7.8 is a real finding about the ratchet constant, and is why C70 reads
+          INDETERMINATE below; it is not a survivor of this operator. The one
+          DECLARED operator disclosed as a survivor today is C28's
+          `zero-a-floor`, recorded on its own entry.
+
+  # -------------------------------------------------------------------------
+  C28:
+    title: "Per-package coverage floors enforced"
+    operators:
+      - id: zero-a-floor
+        operator: set_yaml_path
+        target: infrastructure/quality/coverage-floors.yaml
+        path: "packages['packages/synapse_common'].line"
+        value: 0.0
+        expect_names: ["packages/synapse_common"]
+        note: >-
+          Falsifies C28 only once `coverage_per_package.py
+          --require-measured-floors` lands (task 4.1). Before that, C28 asserts
+          floors >= 0 and a 0.0 floor satisfies it -- which is precisely the
+          "gate runs, asserts nothing" finding in R7.2.
+
+  # -------------------------------------------------------------------------
+  C44:
+    title: "Module liveness: total classification + named baseline + projections"
+    operators:
+      - id: add-an-orphan-module
+        operator: create_file
+        target: orchestrator/_fault_injection_orphan.py
+        body: |
+          """Orphan module planted by gate_fault_injection (never imported)."""
+
+
+          def unreachable() -> None:
+              return None
+        expect_names: ["orchestrator/_fault_injection_orphan.py"]
+        note: >-
+          The planted module is DEAD and is not named in
+          infrastructure/quality/dead-modules.yaml, so it is a new orphan over the
+          named baseline (R13.1) and C44's FAIL detail names its path.
+
+          Reads INDETERMINATE while C44's R13.7 projection is red -- a gate that is
+          already red proves nothing by staying red. That clears when task 10.3
+          wires uplift.uplift_floor.is_proven_uplift / ratchet_to_measured and task
+          8.5's _ratify_and_dispatch calls
+          orchestrator.guardrails.rules.execute_consensus. Honest label, not an
+          exemption.
+      - id: unparse-a-seam-marker
+        operator: create_file
+        target: orchestrator/_fault_injection_bad_seam.py
+        body: |
+          """Orphan carrying a seam marker the strict form rejects (R13.2)."""
+
+          # synapse: seam(reason=, adr=ADR-XX)
+
+
+          def unreachable() -> None:
+              return None
+        expect_names:
+          ["orchestrator/_fault_injection_bad_seam.py", "seam"]
+        note: >-
+          R13.2: the ONLY exemption is a well-formed in-source marker. An empty
+          reason and a malformed ADR id must exempt nothing -- the module stays DEAD
+          and the malformed marker is itself named. Falsifies the claim that the
+          marker is parsed rather than merely grepped for.
+
+  # -------------------------------------------------------------------------
+  C56:
+    title: "Docs match mechanical reality (no narrative drift)"
+    operators:
+      - id: drift-the-spec-threshold
+        operator: replace_regex
+        target: CLAUDE.md
+        pattern: 'CI gate `--threshold 99`'
+        replacement: 'CI gate `--threshold 12`'
+        expect_names: ["spec-coverage-threshold", "99", "12"]
+      - id: drift-the-kv-cache-floor
+        operator: replace_regex
+        target: infrastructure/quality/replay-floors.yaml
+        pattern: 'value: 0\.70'
+        replacement: 'value: 0.10'
+        expect_names: ["kv-cache-floor", "0.70", "0.10"]
+
+  # -------------------------------------------------------------------------
+  C57:
+    title: "Agentic loop is real (perceive->decide->act->learn)"
+    operators:
+      - id: neutralise-one-actuator
+        operator: replace_function_body
+        target: "agents/inventory_sentinel/a2a/handler.py::InventorySentinelA2AHandler.execute"
+        body: 'return {"status": "executed", "kafka_published": True}'
+        expect_names: ["inventory_sentinel"]
+        note: >-
+          The canonical AD-4 example: a handler that reports success and changes
+          nothing must be classified INERT and named. The AST pre-filter alone
+          cannot see this, which is why the verdict moves to the observed world
+          delta in task 5.3.
+
+  # -------------------------------------------------------------------------
+  C60:
+    title: "Consensus decisions beat the uplift floor"
+    operators:
+      - id: untrack-the-evidence-path
+        operator: replace_regex
+        target: .gitignore
+        pattern: 'artifacts/'
+        replacement: 'disabled_artifacts_rule/'
+        expect_names: ["artifacts/uplift/result.json", "version control"]
+        note: >-
+          R2.8: neutralising every ignore rule that covers the C60 evidence path
+          puts `artifacts/uplift/result.json` back under version control, which is
+          the precondition for committing a measurement again. The gate must FAIL
+          naming the path.
+
+          This is the only C60 operator applicable in this sweep. Task 10.3 removed
+          the committed artifact and made C60 trigger-aware (AD-9, CF-4): outside
+          the job that ran the harness the check reports SKIP, so it is not
+          PASS-eligible there and no mutation of an artifact can change its status.
+          The two admissibility operators that used to live here
+          (`set_json_path $.incomplete = true` and `$.replicates_per_arm = 5`)
+          required a committed artifact, so their falsification obligation moves to
+          the generating job: `.github/workflows/uplift.yml` (task 10.5) runs the
+          harness and then `uplift_truth --check --require-fresh-run`, the only
+          context in which C60 can pass and therefore the only context in which it
+          can be falsified. Recording that here rather than leaving an inapplicable
+          target keeps the declaration honest (I-7) instead of manufacturing a probe
+          that proves nothing.
+
+  # -------------------------------------------------------------------------
+  C61:
+    title: "Oracle auditor: no reintroduced docstring-body mismatch"
+    operators:
+      - id: shrink-the-allowlist-subject
+        operator: replace_regex
+        target: tests/oracle/test_pricing_impact_oracle.py
+        pattern: 'TOLERANCE = 0\.20'
+        replacement: 'TOLERANCE = 0.99'
+        expect_names: ["tolerance", "unconstraining"]
+        note: >-
+          R12.7: a tolerance no perturbation can breach must be reported as
+          unconstraining. LIVE as of task 5.5: `oracle_truth` derives
+          oracle-layer membership and compares every declared tolerance bound
+          against `tolerance_ceiling` in
+          infrastructure/quality/oracle-layers.yaml (0.50). 0.99 is above the
+          ceiling, so C61 FAILs naming the test, the constant, and the word
+          "unconstraining". Committed tolerances are 0.20 (metamorphic) and 0.15
+          (the Layer 6 pricing oracle), both well inside the ceiling, so the
+          baseline run passes.
+
+  # -------------------------------------------------------------------------
+  # C65-C72: the gates task 12.1 registered, each with its falsification.
+  #
+  # `expect_names` is matched against ONE line: `gate_fault_injection` spawns
+  # `--run-check <cid>` inside the mutated copy, and that runner prints exactly
+  # `[STATUS] <cid> <title>: <detail>`. So every expected name must appear in the
+  # REGISTRY ROW's detail, not merely somewhere in the gate CLI's report. Two rows
+  # (C65, C66) whose gate reason is only `rule=count` were widened in task 12.1 to
+  # carry their leading findings for exactly this reason -- a non-zero exit that
+  # names nothing does not satisfy a declaration.
+  #
+  # Baseline honesty. `falsifies()` reports `indeterminate` when the gate does not
+  # pass on the UNMUTATED copy, because a check that is already red proves nothing
+  # by staying red. Four of these rows are non-passing today for reasons this
+  # feature recorded deliberately, and each note below says which and what clears
+  # it. `indeterminate` is never a pass and never PASS-eligible (I-7); it is
+  # recorded here rather than papered over with an operator chosen to look green.
+  # -------------------------------------------------------------------------
+  C65:
+    title: "Required-check declaration resolves to real jobs"
+    operators:
+      - id: rename-a-declared-required-job
+        operator: set_yaml_path
+        target: infrastructure/quality/required-checks.yaml
+        path: "required[0].job"
+        value: truth-gates-renamed-by-fault-injection
+        expect_names: ["job-unresolved", "truth-gates-renamed-by-fault-injection"]
+        note: >-
+          R14.2's whole point: branch protection waits on a check NAME, so a
+          declaration that names a job the tree does not define leaves a merge
+          blocked forever on a check that never reports. The gate must FAIL naming
+          the unresolvable job rather than reporting a declaration it could not
+          resolve. Targets `required[0]`, the `truth-gates` entry, which is the
+          most load-bearing row in the declaration.
+
+  C66:
+    title: "Named audit commands resolve to a real module, script, or entry point"
+    operators:
+      - id: unresolvable-registry-gate-module
+        operator: replace_regex
+        target: .github/workflows/truth-gates.yml
+        pattern: 'python -m scripts\.audit\.registry_gate --check'
+        replacement: 'python -m scripts.audit.registry_gate_absent --check'
+        expect_names: ["unresolvable-command", "scripts.audit.registry_gate_absent"]
+        note: >-
+          R6.14 verbatim, applied to the most consequential site in the tree: the
+          blocking Check_Registry step of `truth-gates`. A `python -m` module that
+          does not exist is a step that cannot run reported as a gate that does,
+          and `-m` on an absent module exits non-zero for the WRONG reason -- the
+          run looks like a gate failure while nothing was checked. The gate must
+          FAIL naming the workflow, the step and the unresolvable module.
+
+  C68:
+    title: "World-feed provenance: the declared source class matches the code"
+    operators:
+      - id: hollow-out-the-external-feed
+        operator: replace_function_body
+        target: "packages/synapse_common/world/source.py::ExternalFeedSource.poll_arrivals"
+        body: "return []"
+        expect_names:
+          [
+            "declaration_contradicts_body",
+            "ExternalFeedSource",
+            "packages/synapse_common/world/source.py",
+          ]
+        note: >-
+          The canonical R4.8 shape and the exact defect ADR-050 was written for: a
+          class whose name, docstring and `provenance()` all promise an external
+          feed while its body returns an unconditionally empty arrival list. The
+          declaration still says EXTERNAL, so a gate that read only the
+          declaration -- or only the class name -- would survive this untouched.
+          The signature and decorators survive the mutation on purpose: the point
+          is an implementation that still LOOKS right, which is what a
+          substring-matching gate cannot see.
+
+  C69:
+    title: "Completed task records resolve to landed work, not a placeholder"
+    operators:
+      - id: remove-the-record-the-scanner-was-written-against
+        operator: delete_file
+        target: .kiro/specs/core-purpose-uplift/tasks.md
+        expect_names: ["core-purpose-uplift task 9", "must_resolve"]
+        note: >-
+          Falsifies the ANTI-VACUITY clause, which is the clause a claim scanner
+          actually loses: a scan that has stopped seeing the record it was written
+          against silently reports nothing, and reporting nothing is the failure
+          mode this whole feature exists to retire. `task_claims.must_resolve`
+          declares `core-purpose-uplift` 9 and 9.1, so removing the spec must
+          report UNAVAILABLE naming the record and the policy key, never PASS.
+
+          Deliberately NOT a mutation of the main clause, and deliberately not the
+          one that would look best: the main clause's falsification is already
+          LIVE in this tree. C69 FAILs today because `core-purpose-uplift` tasks 9
+          and 9.1 are `[x]` against an unchanged `__placeholder__` -- a real
+          finding is stronger evidence that a gate bites than any injected one.
+
+          Reads INDETERMINATE until that claim is retracted or the checkpoint is
+          genuinely published, because the harness refuses to attribute anything
+          to a mutation of an already-red gate. Honest label, not an exemption
+          (I-7), and chosen so it stays applicable after the repair: a regex on
+          the `[x]` marker would rot the moment the claim is retracted.
+
+  C70:
+    title: "Ratcheted thresholds never regress and agree with what they guard"
+    operators:
+      - id: raise-the-chain-walk-survival-ceiling
+        operator: replace_regex
+        target: .github/workflows/mutation.yml
+        pattern: '--threshold 10 --label "audit/chain-walk"'
+        replacement: '--threshold 40 --label "audit/chain-walk"'
+        expect_names: ["mutation-survival:audit-chain-walk", "40"]
+        note: >-
+          The regression the ratchet exists to catch, in the exact form task 12.2
+          warned about: a survival ceiling quietly raised from 10 to 40. Direction
+          is `down`, so a HIGHER committed value is the regression; the gate must
+          FAIL naming the ratchet id and both numbers. Targeted at the
+          `audit/chain-walk` ceiling on purpose -- it was the entry `ratchets.json`
+          was missing, so this operator and that entry are each other's proof.
+
+          Reads INDETERMINATE while C70 is red for the pre-existing R7.8 hole
+          (`STRYKER_BREAK_NOW = 26` against a shipped `thresholds.break: 50`).
+          That clears when the constant and the shipped config are reconciled;
+          until then the gate's redness is a real finding, not a defect.
+
+  C71:
+    title: "Replayed KV-cache and tier-routing metrics meet their committed floors"
+    operators:
+      - id: raise-the-tier-routing-floor-past-the-measurement
+        operator: set_yaml_path
+        target: infrastructure/quality/replay-floors.yaml
+        path: "floors.tier_routing_accuracy.value"
+        value: 1.01
+        expect_names: ["tier_routing_accuracy", "1.01"]
+        note: >-
+          Proves the comparison is live: the gate must measure the replay and
+          compare it against the COMMITTED floor, so a floor the measurement
+          cannot meet has to FAIL naming the metric and the floor. A gate that
+          reported a stored verdict, or that never read the floors file, would
+          survive this untouched.
+
+          Why 1.01 and not a plausible number: the replay classifies 200/200
+          golden traces into their expected tier, so the measurement is exactly
+          1.0 and NO floor at or below 1.0 can breach it. The operator therefore
+          asserts the comparison rather than a realistic regression; the realistic
+          regression is a change to `TierRouter`, which is not expressible as a
+          declared operator without a body that could raise instead of misclassify
+          (an exception reads `unavailable`, which would prove nothing).
+
+          Reads INDETERMINATE off a live Ollama: the KV-cache gauge has no samples
+          there, so C71's aggregate row is SKIP on the unmutated copy. A sweep in
+          a job with the cache gauge populated gives a real probe.
+
+  C72:
+    title: "Every gate declares a mutation that falsifies it"
+    operators:
+      - id: drift-the-declared-gate-count
+        operator: set_yaml_path
+        target: infrastructure/quality/gate-mutations.yaml
+        path: "completeness.declared_gates"
+        value: 3
+        expect_names: ["completeness-count-drift", "(completeness)"]
+        note: >-
+          This file is the subject, so it is also the mutation target: AD-4 asks
+          that a hand edit to the declaration be detectable by the declaration's
+          own consumer. A recorded count that disagrees with the `gates:` block
+          must FAIL naming the drift, so nobody can shrink the recorded obligation
+          without the gate saying so.
+
+          STRUCTURALLY INDETERMINATE, and recorded as such rather than dropped.
+          C72's registry row can never report PASS outside `--sweep` -- by design,
+          because an unprobed declaration has falsified nothing -- so the harness's
+          baseline run of C72 never passes and no probe of C72 can attribute
+          anything to the mutation. The declaration is still the useful half: it
+          records what MUST falsify this gate, and
+          `--sweep --gate C72 --no-baseline` runs it by hand for diagnosis. It
+          contributes no PASS in any mode.
+
+# ---------------------------------------------------------------------------
+# Reporting tools: registered checks for which no falsifying mutation can be
+# written. These are EXCLUDED from the PASS-eligible set. This list is the
+# honest label the audit asks for -- it is not an exemption and it never
+# contributes a PASS.
+# ---------------------------------------------------------------------------
+reporting_tools:
+  - check: C67
+    reason: >-
+      The subject is not in this tree. C67 judges published anchor files against a
+      freshness bound, and both halves of its verdict are functions of wall-clock
+      time and of an artifact `.github/workflows/publish-audit-anchor.yml` writes
+      at run time. No committed file can be a fresh anchor, so no committed
+      mutation can construct either the passing state the harness needs as a
+      baseline or the failing state a falsification has to produce.
+    note: >-
+      Not a statement about difficulty. The gate's FAIL branch requires a fresh,
+      readable anchor to exist ALONGSIDE a defective one, and freshness is decided
+      by comparing `anchored_at` to now -- a static fixture is stale the day after
+      it is written. Its non-passing branches (no anchor, stale anchor) are already
+      `unavailable`, so a mutation that produced one of them would turn a SKIP into
+      a SKIP: a decorative operator, which is worse than none, because it converts
+      an undeclared gap into false assurance (I-7). The real proof of C67 is
+      empirical and belongs to the publishing workflow: an anchor published there,
+      read back within the committed bound, is the only context in which this gate
+      can pass and therefore the only one in which it can be falsified.
+
+# ---------------------------------------------------------------------------
+# Coverage obligation.
+#
+# 14 of the 64 registered checks declare an operator, plus one reporting tool.
+# AD-4 requires EVERY registered check to carry one, so the remaining 49 are
+# UNDECLARED: `gate_fault_injection` names them and excludes them from
+# PASS-eligibility, which is the honest label and never a pass (I-7). That
+# shortfall is pre-existing debt from C1..C61 -- turning it into a hard FAIL would
+# make C72 permanently red over fifty rows nobody in this feature touched, and a
+# gate born red for someone else's debt asserts nothing new.
+#
+# What task 12.1 discharged is its own half: every check it registered (C66..C72)
+# carries a declared falsification or a reviewed reporting-tool entry, and so does
+# C65, the eighth name on 12.1's list, which task 2.17 had already registered.
+# ---------------------------------------------------------------------------
+completeness:
+  # MUST equal the number of keys under `gates:`. Re-measured in task 12.1: the 7
+  # original entries (C16, C28, C44, C56, C57, C60, C61) plus C65, C66, C68, C69,
+  # C70, C71, C72. C67 is a reporting tool, not a gate entry, so it is not counted
+  # here.
+  declared_gates: 14
+  # Re-measured at task 12.1: 64 `@register(` decorators in
+  # scripts/audit/verify_claims.py (ids run to C72; the numbering is sparse). It was
+  # 53 at the commit that introduced this file, when ids ran to C61.
+  registry_size_at_authoring: 64
+  enforced_by: >-
+    C72 (scripts/audit/gate_fault_injection.py) -- it names every undeclared
+    registered check and excludes it from PASS-eligibility on every run, and FAILs
+    on a declared id that no @register call declares or on a declared_gates count
+    that disagrees with `gates:`. Task 12.1 closed this feature's own gates; the
+    C1..C61 shortfall is recorded above, not exempted.
+
+# ---------------------------------------------------------------------------
+# Sweep cost budget -- a pinned arithmetic claim, not a hope (AD-22; R1.11).
+#
+# The cost is DERIVED FROM THIS DECLARATION, never measured. A complete sweep
+# spawns one unmutated baseline run per declared gate, plus one run per declared
+# operator:
+#
+#   baselines = completeness.declared_gates      = 14
+#   operators = sum of len(gates[*].operators)   = 16  (C44 and C56 declare two)
+#   gate subprocesses                            = 30
+#
+# The invariant every consumer must be able to re-derive:
+#
+#   (baselines + operators) * per_subprocess_timeout_s + install_budget_s
+#     <= job_timeout_minutes * 60
+#
+# At the counts above: 30 * 90 + 420 = 3120 <= 3600. Those counts are the worked
+# example only. `scripts/audit/sweep_budget_truth.py` re-derives BOTH from the
+# `gates:` block above on every run rather than trusting this comment, so a
+# fifteenth declaring gate -- or a second operator on an existing one -- cannot
+# make the budget silently stop fitting. AD-13 applied to a schedule: the number
+# is committed, read rather than inlined, and pinned.
+#
+# WHY 90 AND NOT THE 900 DEFAULT, STATED HONESTLY (I-7).
+# `scripts/audit/gate_fault_injection.py::DEFAULT_TIMEOUT_S` is 900.0. At 900 the
+# worst case the committed bounds admit is 30 * 900 = 27000s against a 3600s job:
+# an order of magnitude over, so the committed bounds contradicted each other and
+# the inequality above had no satisfying assignment.
+#
+# Lowering 900 to 90 is a reduction from a bound nobody measured to a bound
+# nobody measured. NO duration has ever been measured for these gates. The sweep
+# copies the tree and spawns gate subprocesses, a category-2/3 workload under
+# I-0, so it runs on Linux CI runners only and never on the Windows dev box
+# (precedent E-S13-05: `mutmut` was validated on CI runners and never locally).
+# 90 is therefore NOT claimed to be sufficient, typical, validated, or measured.
+# It is the bound that makes the arithmetic close.
+#
+# What makes that acceptable rather than dishonest is the consequence, and the
+# consequence is the substantive half of this block. A gate that cannot answer
+# inside the bound reports `indeterminate` NAMING THE TIMEOUT as the cause
+# (R1.5). `indeterminate` is non-passing and is never PASS-eligible, so a bound
+# that is too small SURFACES as a visible non-pass attributable to this number.
+# It never silently truncates the sweep, never reads as a falsification, and
+# never reads as a pass. The first gating run is the measurement.
+#
+# If a real gate needs more, the repair is to raise `per_subprocess_timeout_s`
+# and re-derive the inequality. That may then fail, at which point AD-22 records
+# the escalation -- `--shard K/N` over the sorted declared-operator list plus an
+# aggregator -- and records its cost: a matrix produces dynamic status-check
+# names, and an aggregator without `if: always()` does not run when a shard
+# fails, while a skipped job reports its required status check as satisfied. That
+# is a weaker requiredness guarantee traded for a fitting budget, and it is an
+# operator decision, not one taken here.
+#
+# `DEFAULT_TIMEOUT_S` is left unchanged, so R1.11's citation of it stays valid
+# for the non-sweep paths (`--gate`, `--operator`, single-probe diagnosis).
+# ---------------------------------------------------------------------------
+sweep_budget:
+  # Wall-clock bound on ONE gate subprocess, passed as `--timeout` under
+  # `--sweep`. Read from here rather than from DEFAULT_TIMEOUT_S so the bound the
+  # job runs under is the bound the inequality was checked against.
+  per_subprocess_timeout_s: 90
+  # Allowance for everything the job does that is not a gate subprocess:
+  # checkout and the dependency install. Also unmeasured -- an allowance, not an
+  # observation. The sweep needs the same dependency closure as `truth-gates`,
+  # because several registered checks import an optional dependency inside a
+  # try/except and report SKIP when it is absent, and a thinner environment turns
+  # a probeable baseline into an indeterminate one.
+  install_budget_s: 420
+  # MUST equal `timeout-minutes` on the job that runs the sweep
+  # (`.github/workflows/truth-gates.yml::falsification-sweep`, task 5.6). It is
+  # separate from `truth-gates`, whose 25-minute budget is sized for stdlib
+  # gates, not for 30 subprocesses each running a real gate.
+  job_timeout_minutes: 60
+  # The obligation in one line, so a reader does not have to reconstruct it from
+  # the comment above.
+  invariant: >-
+    (baselines + operators) * per_subprocess_timeout_s + install_budget_s <=
+    job_timeout_minutes * 60
+  # Where the two counts come from. Recorded as pointers so the check reads its
+  # terms out of this file instead of hardcoding a count or parsing prose -- the
+  # counts are facts about the `gates:` block, and this budget must follow them.
+  derivation:
+    baselines_from: completeness.declared_gates
+    operators_from: gates.*.operators

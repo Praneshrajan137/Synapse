@@ -1,0 +1,457 @@
+# SYNAPSE -- Declared-blocking workflow steps (E1.5; R1.8, R6.13, R8.9, R11.3)
+#
+# `scripts/audit/workflow_shape_truth.py` (task 2.10) reads `steps:` as the set
+# of steps that MUST propagate their exit status. A step listed here that carries
+# a discarding construct (`|| true`, `|| echo`, `; exit 0`,
+# `continue-on-error: true`) FAILs, naming the file and the step.
+#
+# The converse rule is a NAME rule, not a list rule: a non-propagating step that
+# is NOT listed here must carry `ADVISORY` or `informational` in its step name
+# (R11.3), matched case-insensitively -- and for a JOB-scoped `continue-on-error`
+# the marker is read from the job's display name instead, because the job is what
+# carries the construct. This header used to count the labels ci.yml carried; the
+# count moved twice while that sentence stood still, so it names the rule and
+# leaves the tally to the gate (R4.10).
+#
+# Read contract: `encoding='utf-8'` on every read (E-S13-07).
+#
+# Entries were verified by reading the workflow files at the commit that
+# introduced this file. That sentence used to continue "the three R8.9 frontend
+# entries do NOT propagate", which task 11.2 made false when it removed both
+# `|| true`s -- the note beside those entries records the discharge, and this
+# header contradicted it. Corrected by decision-quality-proof task 3.3 rather than
+# left standing: a header that lags the body is the same hand-maintained-mirror
+# defect this file exists to remove, one level up.
+#
+# No propagation claim is restated here at all, deliberately. Every entry's shape
+# is re-derived from the workflow tree by `workflow_shape_truth` on every run, so a
+# summary in this header can only ever be a second, staler copy of a fact the gate
+# already reports. The per-entry notes below record WHY a step is declared; whether
+# it propagates today is the gate's answer, not this file's.
+#
+# Schema read by the gate: `workflow`, `job`, and either `step_names` (a list) or
+# `all_steps: true` (the whole job), plus optional `match` (`normalized` default /
+# `exact`) and `requirement`. A declaration that resolves to no step in the tree
+# FAILs -- a rename cannot silently empty the blocking set.
+
+version: 1
+
+steps:
+  - workflow: .github/workflows/ci.yml
+    job: quality-gates
+    step_names:
+      - "Ruff lint"
+      - "Ruff format check"
+      - "MyPy strict type check (packages - blocking)"
+      - "MyPy strict type check (orchestrator - blocking)"
+      - "Schema validation"
+      - "Spec validation"
+      - "No paid API imports (I-1 - BLOCKING)"
+      - "Reward isolation check (I-2)"
+      - "Substance gap gate (Plan v2 ADR-040 - no synthetic shortcuts)"
+      - "Intelligence gates - static (ADR-042 C37/C39/C41, AST-only)"
+      - "Narrative-truth gate (docs match mechanical reality - C56)"
+      - "Unit tests (all gated trees, branch coverage on)"
+      - "Per-package coverage floor (Sprint 13 Phase 2)"
+      - "Spec coverage (Sprint 13 Phase 5)"
+      # Promoted out of `unlabelled_discarding_steps` by decision-quality-proof task 3.3,
+      # in the same change that made the step propagate. It had TWO defects, and the
+      # second hid the first: the selection `agents/*/contracts/` matched no file pytest
+      # collects (those directories hold `*_contract.py` modules; the tests are in
+      # `agents/*/tests/test_contracts.py`), so pytest exited 5 on every run, and the
+      # `|| echo "No contract tests yet (Sprint 2)"` rendered that permanent exit 5 as a
+      # green step with reassuring prose. The path is corrected and the swallow is gone.
+      #
+      # BOTH halves were necessary, and this is the half a declaration cannot express: a
+      # step that propagates but selects nothing is still not a gate. Propagation only
+      # makes an empty selection VISIBLE -- pytest's exit 5 ("no tests collected", which is
+      # also what `-m contract` deselecting everything produces) is non-zero, so with the
+      # `|| echo` gone it reddens the job instead of printing prose. The corrected
+      # selection was checked against the filesystem, not assumed: five files exist at
+      # `agents/*/tests/test_contracts.py`, each applies the `contract` marker, and
+      # `contract` is registered in pyproject.toml so `--strict-markers` accepts it. The
+      # run itself is CI's to report; nothing local establishes it (I-7).
+      #
+      # Declared here rather than left to the R11.3 name rule alone, for the reason this
+      # section exists: the name rule is evadable by renaming the step to carry
+      # `informational`, a declaration is not. The step name is unchanged, so this entry
+      # resolves against the tree today; a rename would FAIL as `blocking-unresolved`,
+      # which is the intended behaviour.
+      - "Contract tests"
+    match: normalized
+    note: >-
+      `match: normalized` means the comparison folds the em-dash / en-dash and
+      section-sign characters the workflow uses into ASCII before comparing, so
+      this file stays ASCII-only without weakening the match. The workflow is the
+      source of truth for the literal text.
+
+  - workflow: .github/workflows/ci.yml
+    job: uplift-verify
+    step_names:
+      - "Property + unit tests (fast - full 500-example budget)"
+      - "Property + regression tests (slow - 100-example budget)"
+    match: normalized
+
+  - workflow: .github/workflows/cd-gcp.yml
+    job: deploy-to-vm
+    step_names:
+      - "Verify deploy truth (containers)"
+      - "Verify deploy truth (external)"
+      - "Audit-chain integrity (Sprint 9 verifier)"
+    match: exact
+    note: >-
+      CLAUDE.md states "Every cd-gcp deploy ends with two BLOCKING verify steps
+      (`--on-vm --probe-decision` and `--external --expect-sha`) ... NEVER make
+      these steps warn-only", and C47 enforces their presence. The two steps run
+      `verify_live.py --on-vm --probe-decision` (cd-gcp.yml:515) and
+      `verify_live.py --external --expect-sha` (cd-gcp.yml:531); a rename that
+      breaks the exact match here FAILs the shape check, which is the intended
+      behaviour -- the declaration is the contract, not the label.
+      The third step is the chain verifier, promoted out of `pending:` by task 7.3:
+      `orchestrator/audit/cli.py` now exists, the migration boundary is committed in
+      `infrastructure/quality/audit-chain-bounds.yaml`, and the step's `|| echo` is
+      gone (CF-6, R6.13). Declaring it here is what makes a future re-swallow FAIL by
+      declaration rather than only by the chain-verifier name rule.
+
+  # -------------------------------------------------------------------------
+  # Promoted out of `pending:` by task 12.5, which is the change that makes this
+  # declaration match the tree task 2.17 landed. BOTH fields of the pending entry
+  # were stale, not just its status: it recorded
+  # `workflow: .github/workflows/ci.yml`, and the job lives in its own file.
+  # CF-2's "split the triggers" is only expressible by splitting the FILE --
+  # `paths-ignore` sits under `on.push` and a job has no `paths:` key -- so
+  # `truth-gates.yml` carries no path filter while `ci.yml` keeps its own.
+  #
+  # `all_steps: true` rather than a name list, which is the wider claim and the one
+  # the pending entry made ("(all steps -- registry_gate, doc_truth, ...)"). The
+  # step names were read back from `.github/workflows/truth-gates.yml` rather than
+  # copied from that entry; the job holds TEN steps, not the seven the entry's
+  # prose implied. Seven are the gates -- `registry_gate --check`, `doc_truth
+  # --check`, `readme_gen --check`, `ledger_gen --check`, `gate_surface --check`,
+  # `workflow_shape_truth --check`, `required_checks_truth --check` -- and three
+  # are the environment (`actions/checkout@v4`, `actions/setup-python@v5`,
+  # `Install dependencies`).
+  # Declaring the environment steps blocking is deliberate: several registered
+  # checks report SKIP when an optional import is missing, so a swallowed
+  # `pip install` failure would turn PASSes into SKIPs and change the counts
+  # `doc_truth` pins -- the dependency closure is load-bearing, which is why that
+  # step's own comment says so. `all_steps` also cannot be evaded by renaming a
+  # step, and it covers any gate added to the job later.
+  #
+  # Every one of the ten propagates today: no `continue-on-error`, no `|| true`,
+  # no `|| echo`, no `; exit 0`. `workflow_shape_truth` re-derives that from the
+  # file on every run; this entry is what makes a future re-swallow FAIL by
+  # DECLARATION rather than only by the R11.3 name rule, which a step renamed to
+  # carry `informational` would have excused.
+  #
+  # ORDERED PAIR (decision-quality-proof task 4.3, AD-21). `readme_gen --check` was
+  # added by that task and its position relative to `doc_truth --check` is
+  # load-bearing, not cosmetic: `doc_truth --check --emit-nested-json PATH` performs
+  # the ONE nested `verify_claims` execution (the one whose recursion guard makes C56
+  # self-exclude) and writes its payload; `readme_gen --check --counts-json PATH`
+  # projects README.md's generated region from that same payload. Reordering them, or
+  # dropping either flag, makes `readme_gen` spawn a second 900s suite inside a job
+  # whose `timeout-minutes: 25` was sized for one registry pass. `step_order` below
+  # records the dependency in the same commit as the step names, because
+  # `all_steps: true` does not name steps and therefore cannot express it; the gate
+  # reads only `workflow`, `job`, `step_names`, `all_steps`, `match` and
+  # `requirement`, so this key is a declaration for readers and reviewers, NOT a
+  # mechanically enforced ordering. The mechanical enforcement is that `readme_gen`
+  # reports a non-passing `unavailable` when the payload it was pointed at is absent
+  # or unreadable -- an out-of-order pair fails rather than silently re-executing.
+  - workflow: .github/workflows/truth-gates.yml
+    job: truth-gates
+    all_steps: true
+    requirement: "R1.1, R1.2, R1.5, R1.8"
+    step_order:
+      - step: "Narrative-truth gate (R1.4, R1.6, R7.5, R7.10, R11.4, R11.8, C56)"
+        role: producer
+        emits: "$RUNNER_TEMP/nested-verify-claims.json (verify_claims --json, nested)"
+      - step: "README headline is a projection, not a transcription (R4.4, R4.5, R4.8, R4.11)"
+        role: consumer
+        consumes: "$RUNNER_TEMP/nested-verify-claims.json"
+        requirement: "R4.4, R4.5, R4.8, R4.11"
+
+  # -------------------------------------------------------------------------
+  # R8.9 declares three frontend sites blocking BY REQUIREMENT: the
+  # `Task_Completion_Tests + Resilience_Scenarios` step of `e2e-harness`, and
+  # every step of `e2e` and `effectiveness-ratchet`.
+  #
+  # DISCHARGED by task 11.2. Both `|| true`s are gone: the `e2e` step now runs
+  # `pnpm test:e2e --project=chromium` and the harness step now runs
+  # `pnpm test:e2e:harness` against the e2e-mode build (`pnpm build:e2e`), each
+  # exiting with the status of the command it runs. The `effectiveness-ratchet`
+  # job gained a blocking `pnpm effectiveness:baseline` step (R8.10). The
+  # declarations stay here permanently: they are what makes a future re-swallow
+  # FAIL by declaration rather than only by the R11.3 name rule -- which the old
+  # `e2e` step's `informational` label would have excused.
+  #
+  # The `e2e` job is expected RED until its backendless-preview flakiness is
+  # fixed; that is the honest state of a suite that cannot currently pass, not a
+  # reason to discard the status again (I-7).
+  # -------------------------------------------------------------------------
+  - workflow: .github/workflows/frontend.yml
+    job: e2e-harness
+    step_names:
+      - "Task_Completion_Tests + Resilience_Scenarios (seeded, no live network)"
+    match: exact
+    requirement: R8.9
+
+  - workflow: .github/workflows/frontend.yml
+    job: e2e
+    all_steps: true
+    requirement: R8.9
+
+  - workflow: .github/workflows/frontend.yml
+    job: effectiveness-ratchet
+    all_steps: true
+    requirement: R8.9
+
+  # -------------------------------------------------------------------------
+  # NOT YET DECLARED, AND THE REASON IS MECHANICAL, NOT A JUDGEMENT (task 3.3).
+  #
+  # The two frontend TypeScript gates -- `frontend.yml` `quality`::"TypeScript strict"
+  # (R2.2, R2.3) and `spec-typecheck`::"TypeScript strict (spec/ + tests/)" (R2.4, R2.5,
+  # R2.15) -- SHOULD be declared here, and task 2.2 asked for it. Both propagate in the
+  # tree today: no `continue-on-error` at step scope, none on `quality:` or
+  # `spec-typecheck:` either (a job-scoped setting is read as discarding for every step in
+  # the job by `_continue_on_error_construct`), and each `run:` is a single top-level
+  # command with no `&&`/`||`/`;` list, so `final_list_element` returns it unchanged. The
+  # case for declaring them is this file's standing one: the R11.3 name rule is satisfied
+  # by renaming a step to carry `informational`, a declaration is not -- it FAILs as
+  # `blocking-unresolved`. And the weight is real: nine of frontend.yml's fourteen jobs
+  # are downstream of `pnpm typecheck`, so a swallowed type error would report the whole
+  # console-effectiveness spine as passing while it was never checked (R2.11, I-7).
+  #
+  # What blocks it is a coupling, not a doubt. `scripts/audit/gate_surface.py` renders the
+  # declared-blocking anchor table of `docs/state/GATE_SURFACE.md` from THIS section, and
+  # that document is generated: adding an entry moves its "N declared-blocking entries"
+  # line and adds a row per trigger, which makes `gate_surface --check` (C63) FAIL until
+  # `--write` is re-run -- and C63's status is inside the counts `doc_truth` and
+  # `readme_gen` pin, so the drift cascades into C56 and the README headline. The repair
+  # order is fixed and stated in `truth-gates.yml`: `gate_surface --write`, then
+  # `ledger_gen --write`, then `readme_gen --write`, IN THE SAME CHANGE. Hand-editing the
+  # count to match is the one thing that is never allowed (I-7).
+  #
+  # So the declaration and the regeneration are one commit, and task 3.3 could not run the
+  # generators (I-0 authoring-only batch). Adding the entries alone would have turned a
+  # green generated document red to record a fact this comment records at no cost.
+  #
+  # DISCHARGE: paste the two entries below into this section and run the three generators
+  # in the order above, in that same change. The strings are quoted byte-for-byte from
+  # `.github/workflows/frontend.yml`; `match: exact` because neither name carries a dash or
+  # section character, so normalisation would buy nothing and an exact match makes a rename
+  # loud.
+  #
+  #   - workflow: .github/workflows/frontend.yml
+  #     job: quality
+  #     step_names:
+  #       - "TypeScript strict"
+  #     match: exact
+  #     requirement: "R2.2, R2.3"
+  #
+  #   - workflow: .github/workflows/frontend.yml
+  #     job: spec-typecheck
+  #     step_names:
+  #       - "TypeScript strict (spec/ + tests/)"
+  #     match: exact
+  #     requirement: "R2.4, R2.5, R2.15"
+  #
+  # `spec-typecheck` is expected RED on its first run -- those trees have never been
+  # compiled. That prediction licenses nothing (R2.15), and the declaration above is what
+  # makes `continue-on-error` on it a FAIL by declaration rather than a quiet relabel.
+  # -------------------------------------------------------------------------
+  # Declared by task 12.1 over the step task 12.4 added. 12.4 left the decision
+  # open and recommended it; the decision is YES, for one reason:
+  #
+  # This step is R3.2's ONLY executed proof anywhere. The test it runs
+  # (tests/integration/test_published_entry_serving_resolution.py) is
+  # `skipif(not SYNAPSE_SMOKE_RUN)` and needs the checkpoint only `training-smoke`
+  # produces, so on every pull request, in `quality-gates`, and on a dev box it is a
+  # silent `s`. It propagates today -- no `continue-on-error`, no `|| true` -- so no
+  # gate objects, which is exactly the state this file exists to make non-silent: if
+  # someone later appended `|| true`, NOTHING in `steps:` would have failed, and only
+  # the R11.3 name rule would have caught it. That rule is evadable by renaming the
+  # step to carry `informational`, which is the precedent recorded above for the old
+  # `e2e` step and for the cd-gcp verify steps. A declaration is not evadable by a
+  # rename: it FAILs as `blocking-unresolved` instead.
+  #
+  # `step_names` rather than `all_steps: true`, deliberately. The job's coverage step
+  # is an honest advisory (`continue-on-error: true`, recorded under
+  # `unlabelled_discarding_steps` below), and `all_steps` would declare it blocking
+  # and turn a reviewed advisory into a FAIL by declaration. The narrow claim is the
+  # true one: this step, and no other in the job, must propagate.
+  #
+  # `match: exact`: the name carries no dash or section character, so normalisation
+  # would buy nothing, and an exact match makes a rename fail loudly. The step name
+  # is the source of truth and is quoted here byte-for-byte from ci.yml.
+  - workflow: .github/workflows/ci.yml
+    job: training-smoke
+    step_names:
+      - "R3.2 serving-resolution proof (recorded entry resolves, BLOCKING)"
+    match: exact
+    requirement: "R3.2"
+
+# ---------------------------------------------------------------------------
+# Steps declared blocking ONLY after their remediation lands.
+#
+# `workflow_shape_truth` does NOT read this section: listing a discarding step
+# here does not make it pass and does not make it blocking. It records the
+# obligation and the task that discharges it, so the entry is not lost between
+# now and then. CF-6 is the governing decision for the two chain-verify sites:
+# they become blocking after the migration-boundary constant is committed (done:
+# infrastructure/quality/audit-chain-bounds.yaml) AND one deploy produces a
+# green walk.
+# ---------------------------------------------------------------------------
+# Task 7.3 discharged both chain-verify entries that stood here:
+#
+#   - cd-gcp.yml::deploy-to-vm "Audit-chain integrity (Sprint 9 verifier)" dropped its
+#     `|| echo 'WARN: audit verify returned non-zero ...'` and is now declared in
+#     `steps:` above.
+#   - Makefile::deploy-gcp-verify "Audit chain integrity (Sprint 9)" dropped all three
+#     of its discarding constructs (the leading `-`, the `|| echo "... not available
+#     yet"`, and the `| tail -10`, which reported tail's status). It is deliberately NOT
+#     moved into `steps:`: that section resolves declarations against workflow steps in
+#     `.github/workflows/`, and a `workflow: Makefile` entry would resolve to no step
+#     and FAIL. The Makefile recipe line is policed by
+#     `scripts/audit/command_path_truth.py` (R6.14), which reads the Makefile directly
+#     and reports both an unresolvable command and a discarded exit status.
+#
+# `python -m orchestrator.audit.cli verify` now resolves: `orchestrator/audit/cli.py`
+# exists (design E4.2) over the pure walker in `orchestrator/audit/chain_walk.py`.
+# CF-6's remaining half is empirical, not structural: the first blocking deploy is the
+# run that produces the green walk, and `confirmed_by_green_walk` in
+# `audit-chain-bounds.yaml` is flipped by that deploy rather than by hand. A red first
+# walk is answered by fixing the chain or correcting the committed boundary under
+# review -- never by restoring a swallow.
+# Task 2.17 created the `truth-gates` job and task 12.5 promoted its entry into
+# `steps:` above as `all_steps: true`. The entry that stood here read
+# `workflow: .github/workflows/ci.yml` with `current_construct: "job does not exist
+# yet"`; both fields were false once 2.17 landed -- the job exists, and it exists in
+# `.github/workflows/truth-gates.yml`. It is recorded as promoted rather than deleted
+# silently, because a hand-maintained mirror that lags the tree is the defect this
+# file exists to make mechanical: until the promotion, the only thing standing between
+# a `|| true` on the registry gate and a green run was the R11.3 name rule.
+pending:
+  # -------------------------------------------------------------------------
+  # Recorded by decision-quality-proof task 3.2 (R4.1, R4.13). The step was renamed to
+  # carry ADVISORY in the same change, so it no longer FAILs the R11.3 name rule -- but
+  # the label is a statement about propagation, never a statement that a leaked secret
+  # is tolerable, and this section is what keeps those two apart.
+  #
+  # CF-6's shape exactly, and the same reason it is not flipped by hand: the
+  # precondition is EMPIRICAL, not structural. gitleaks-action@v2 exits non-zero on any
+  # finding in whatever commit range it is handed, and the range here is whatever
+  # `actions/checkout@v4` fetched at its default `fetch-depth: 1`. Whether this
+  # repository's history yields a clean run cannot be established by reading the
+  # workflow (I-0 forbids finding out locally, and the workflow is schedule-driven).
+  # Flipping it blind would either block dependency PRs on pre-existing history or be
+  # reverted at the first red run, and a gate that gets reverted is decoration.
+  #
+  # Discharge procedure, in one commit: after one clean run of the `security` job on the
+  # Monday schedule, delete `continue-on-error: true`, drop `(ADVISORY - not yet
+  # blocking)` from the step name, and move this entry into `steps:` above. The name and
+  # the declaration must move together -- `steps:` resolves declarations by string, so a
+  # rename without the declaration FAILs as `blocking-unresolved`, which is this file's
+  # standing lesson.
+  - workflow: .github/workflows/security.yml
+    job: security
+    step_name: "Secret detection via gitleaks (ADVISORY - not yet blocking)"
+    current_construct: "continue-on-error: true"
+    requirement: "R11.3"
+    discharged_by: >-
+      One clean run of the `security` job on its Monday schedule, after which
+      `continue-on-error` is deleted and this entry moves into `steps:`. A red first run
+      is answered by removing the secret or scoping the gitleaks config under review --
+      never by keeping `continue-on-error` and deleting this entry.
+
+# ---------------------------------------------------------------------------
+# Non-propagating steps whose names carry NO advisory marker (R11.3 violations).
+#
+# Recorded for attribution only. This is NOT an allowlist and NOT an exemption:
+# workflow_shape_truth applies the R11.3 name rule to every non-propagating step
+# and will FAIL on these until they are renamed or made to propagate.
+# ---------------------------------------------------------------------------
+# DISCHARGED IN FULL by decision-quality-proof task 3 (R4.1, R4.2, R4.3, R4.10, R4.12,
+# R4.13). Every entry that stood here is gone because the step it named was fixed, not
+# because the record was dropped. Kept as an empty list with the disposition of each
+# entry below, because this file's standing lesson is that a hand-maintained mirror
+# which lags the tree is the defect it exists to make mechanical.
+#
+# The four entries and what happened to each:
+#
+#   1. ci.yml::quality-gates "Contract tests" -- PROPAGATES NOW, and is declared in
+#      `steps:` above. The recorded remediation offered "rename to ADVISORY, or
+#      propagate", and reading the tree settled it: the selection
+#      `agents/*/contracts/` matched nothing pytest collects (those directories hold
+#      `*_contract.py` MODULES; the tests are `agents/*/tests/test_contracts.py`), so
+#      the step exited 5 on every run since Sprint 2 and the `|| echo` rendered that as
+#      green with the prose "No contract tests yet (Sprint 2)". The recorded phrase
+#      "swallows a real contract-test failure and a collection error identically" was
+#      right about the mechanism and generous about the state: it was only ever the
+#      collection error. Labelling that ADVISORY would have preserved a dead step.
+#
+#   2. frontend.yml::build "Size budget" -- RENAMED to
+#      "Size budget (informational in P0; gated in P2)", which is exactly the recorded
+#      remediation: the word was already in the trailing shell comment, where no gate can
+#      read it. `|| true` deliberately unchanged; promoting the size budget to a gate is
+#      the P0->P2 plan's decision, not a side effect of a naming fix.
+#
+#   3. ci.yml::training-smoke "Measure per-package coverage under full ML stack (binds
+#      the 0.0 floors)" -- RENAMED to carry ADVISORY, verbatim as recorded.
+#      `continue-on-error: true` and the `|| true` on coverage_per_package.py both stay:
+#      a step whose purpose is to REVEAL a number cannot also be the gate on that
+#      number, and the blocking per-package floor check is the separate `quality-gates`
+#      step declared in `steps:` above.
+#
+#   4. frontend.yml::e2e-visual "Generate + commit Linux baselines if none are committed
+#      yet" -- ENTRY WAS OVER-STATING; removed without touching the workflow. The
+#      step's `|| true` sits on `pnpm test:visual:update` INSIDE an `if` block, and the
+#      script's last effective line is `fi`, a block terminator -- which
+#      `terminal_discarding_construct` already excludes, because a block terminator is
+#      not the step's own exit status. The step therefore classifies as PROPAGATING and
+#      never was a finding. purpose-achievement-audit task 12.1 already recorded the
+#      correction ("`frontend.yml::e2e-visual` does NOT fail `workflow_shape_truth` ...
+#      12.2 inferred the failure from reading rather than running") but left the entry
+#      standing, so the record over-stated the debt by one. Removing it is what makes
+#      the count re-derivable.
+#
+# The steps that were recorded NOWHERE also got their marker in this change and are worth
+# naming here so the next reader does not have to diff: `sprint6-e2e-oracle.yml`'s three
+# best-effort steps and `terraform-validate.yml`'s tflint step were labelled,
+# `security.yml`'s gitleaks step was labelled AND recorded under `pending:` above because
+# making it blocking has an empirical precondition, and `cd-gcp.yml`
+# `deploy-to-vm`::"Pull + restart stack" was NOT touched at all: it was a false positive
+# in the gate, fixed in `scripts/audit/workflow_shape_truth.py::final_list_element`
+# (R4.12). Attaching an advisory marker to a deploy step whose final command does decide
+# its exit status would have been a false label (I-7), and this file is the wrong place
+# to record a defect that lives in the checker.
+#
+# ---------------------------------------------------------------------------
+# NO TOTAL IS ASSERTED HERE, DELIBERATELY (R4.10). Recorded because it is the whole
+# lesson of this task.
+#
+# The implementation plan said: "The ledger row reads `unlabelled-advisory=10`; static
+# re-derivation yields 9 across 6 files. The residual is not reproducible by reading. Do
+# not invent it -- let the corrected gate report the count." Two independent static
+# censuses agreed on 9 across 6 files. Both were wrong, and so is any fixed number
+# written down here: the count is a function of the tree and the reading, and BOTH moved
+# during this task. Writing a total into this file would recreate exactly the
+# hand-maintained-mirror defect the section above exists to remove, so the number lives
+# in the gate's output and nowhere else.
+#
+# What IS mechanically re-derivable, and was checked by running the corrected gate over
+# the committed (pre-task) workflow tree rather than by reading it: the step no static
+# census caught is `cd-gcp.yml` `deploy-to-vm`::"Stop VM after scheduled weekly run",
+# whose `|| echo "::warning::stop returned non-zero ..."` was missed because it sits ~170
+# lines below the step everyone was looking at in that file, and the file had already
+# yielded its finding. It is now labelled at the step scope, and the reason it is
+# labelled rather than made blocking is on the step itself -- the non-zero it swallows is
+# the benign already-STOPPING race, not a failure.
+#
+# So the instruction not to invent a residual was the load-bearing one. Re-deriving a
+# count by reading is exactly how the count was wrong to begin with; the gate is the only
+# instrument that can answer its own question. Which is R1's thesis, arrived at from the
+# other direction.
+# ---------------------------------------------------------------------------
+unlabelled_discarding_steps: []

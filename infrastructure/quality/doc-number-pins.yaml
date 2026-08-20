@@ -1,0 +1,275 @@
+# SYNAPSE -- Declarative document-number pins (AD-3; R7.5, R7.8, R7.10, R11.8, R14.3)
+#
+# `scripts/audit/doc_truth.py` reads this table instead of carrying one bespoke
+# claim function per number (task 2.5). Adding a pin is a data edit, which is
+# what makes Requirement 7's eight-number sweep affordable and R7.5/R7.10 total
+# rather than per-number.
+#
+# Read contract: `encoding='utf-8'` on every read (E-S13-07).
+#
+# Row shape:
+#   id         str  -- stable identifier, also the ClaimResult name
+#   kind       str  -- threshold | flag | blocking-gate | required-job
+#   required   bool -- a required pin that cannot be evaluated makes doc_truth
+#                      report UNAVAILABLE; an `ok` sibling never masks it (R1.6)
+#   document   str  -- repo-relative path of the governance document
+#   anchor     str  -- Python regex with a named group `value`, matched against
+#                      the document text. MUST match exactly one line.
+#   source     str  -- the mechanical source of truth
+#   extractor  str  -- yaml_path:<dotted> | json_path:<jsonpath> | regex:<pattern>
+#   compare    str  -- numeric | string | count
+#   scale      str  -- identity | percent_of_fraction (doc states 80, source 0.80)
+#
+# A pin whose document value and source value differ FAILs naming both sides.
+# Extraction is a pure regex/yaml/json read, hence idempotent -- which is what
+# design Property 5's round-trip clause asserts.
+#
+# Extractor semantics (scripts/audit/doc_truth.py, task 2.5). Every extractor
+# yields an ORDERED SET of raw source strings -- raw, so a failure detail can
+# quote the source byte-for-byte (`0.70`, not `0.7`):
+#   yaml_path:<dotted>   walks the YAML node tree; a `[]` segment fans out over a
+#                        sequence (`required[].job` -> every declared job name)
+#   json_path:$.<dotted> the same walk over a JSON document
+#   regex:<pattern>      every match of the pattern; the named group `value` when
+#                        present, else group 1, else the whole match
+#
+# Comparison semantics -- driven by `compare` ALONE, never by `kind`, so a pin's
+# verdict is readable from its own row:
+#   numeric  the documented value equals the single extracted value after `scale`
+#   string   the documented value is a member of the extracted set
+#   count    the documented value (digits, or an English number word such as
+#            `two`, since governance prose spells small counts) equals the number
+#            of DISTINCT extracted values. An empty extraction is the honest count
+#            `0` and FAILs against a non-zero claim -- it is never an unavailable.
+#
+# `kind` classifies which mechanical source family a pin resolves against and is
+# reported with the verdict: threshold/flag -> a config or workflow value;
+# blocking-gate -> the generated docs/state/GATE_SURFACE.md record (R11.8);
+# required-job -> infrastructure/quality/required-checks.yaml (R14.3).
+
+version: 1
+
+pins:
+  # -------------------------------------------------------------------------
+  # Coverage target (CLAUDE.md Testing Rules)
+  # -------------------------------------------------------------------------
+  - id: coverage-target
+    kind: threshold
+    required: true
+    document: CLAUDE.md
+    anchor: 'target \*\*(?P<value>[\d.]+)% line\+branch'
+    source: infrastructure/quality/coverage-floors.yaml
+    extractor: 'yaml_path:target'
+    compare: numeric
+    scale: identity
+
+  # -------------------------------------------------------------------------
+  # Spec-coverage threshold -- the one number the audit found genuinely pinned.
+  # Migrated verbatim from doc_truth.py::_claim_spec_threshold (task 2.5).
+  # -------------------------------------------------------------------------
+  - id: spec-coverage-threshold
+    kind: threshold
+    required: true
+    document: CLAUDE.md
+    anchor: 'CI gate `--threshold (?P<value>\d+)`'
+    source: .github/workflows/ci.yml
+    extractor: 'regex:check_spec_coverage\.py --threshold (?P<value>\d+)'
+    compare: numeric
+    scale: identity
+
+  # -------------------------------------------------------------------------
+  # Frontend Stryker break -- KNOWN DRIFT, see `drift:` below. R7.8.
+  # -------------------------------------------------------------------------
+  - id: stryker-break
+    kind: threshold
+    required: true
+    document: CLAUDE.md
+    anchor: 'Frontend Stryker `break: (?P<value>\d+)`'
+    source: frontend/stryker.conf.json
+    extractor: 'json_path:$.thresholds.break'
+    compare: numeric
+    scale: identity
+
+  # -------------------------------------------------------------------------
+  # Mutation survival ceilings (CLAUDE.md Testing Rules -> mutation.yml)
+  # -------------------------------------------------------------------------
+  - id: mutation-survival-rewards
+    kind: threshold
+    required: true
+    document: CLAUDE.md
+    anchor: 'Mutation survival: <(?P<value>\d+)% rewards'
+    source: .github/workflows/mutation.yml
+    extractor: 'regex:--threshold (?P<value>\d+) --label "rewards/'
+    compare: numeric
+    scale: identity
+
+  - id: mutation-survival-guardrails
+    kind: threshold
+    required: true
+    document: CLAUDE.md
+    anchor: 'Mutation survival: <\d+% rewards, <(?P<value>\d+)% guardrails/audit'
+    source: .github/workflows/mutation.yml
+    extractor: 'regex:--threshold (?P<value>\d+) --label "guardrails"'
+    compare: numeric
+    scale: identity
+
+  # -------------------------------------------------------------------------
+  # Replay floors -- the two numbers with no gate at all before this feature.
+  # Anchors are scoped to the Sprint-9 phrasing ("floor (gate added") so they
+  # cannot match the superseded Sprint-8 line "KV-cache 0.65 floor".
+  # -------------------------------------------------------------------------
+  - id: kv-cache-floor
+    kind: threshold
+    required: true
+    document: CLAUDE.md
+    anchor: 'KV-cache (?P<value>[\d.]+) floor \(gate added'
+    source: infrastructure/quality/replay-floors.yaml
+    extractor: 'yaml_path:floors.kv_cache_hit_rate.value'
+    compare: numeric
+    scale: identity
+
+  - id: tier-routing-floor
+    kind: threshold
+    required: true
+    document: CLAUDE.md
+    anchor: 'tier-routing (?P<value>\d+)% floor \(gate added'
+    source: infrastructure/quality/replay-floors.yaml
+    extractor: 'yaml_path:floors.tier_routing_accuracy.value'
+    compare: numeric
+    scale: percent_of_fraction
+
+  # -------------------------------------------------------------------------
+  # Flag pin (R7.10) -- KNOWN DRIFT, see `drift:` below.
+  # -------------------------------------------------------------------------
+  - id: cov-fail-under
+    kind: flag
+    required: true
+    document: docs/state/CURRENT.md
+    anchor: 'enforces `--cov-fail-under=(?P<value>\d+)`'
+    source: .github/workflows/ci.yml
+    extractor: 'regex:--cov-fail-under=(?P<value>\d+)'
+    compare: numeric
+    scale: identity
+
+  # -------------------------------------------------------------------------
+  # Blocking-gate pin (R11.8) -- activated by task 2.5 now that task 2.12 has
+  # generated docs/state/GATE_SURFACE.md.
+  #
+  # The extractor deliberately does NOT read the `Propagates` column. That column
+  # reports reachability and propagation JOINTLY by design, so these two steps
+  # render `CONDITIONAL` on `tag:v*` and `NOT EXECUTED` elsewhere: the deploy job
+  # is weekly / tag / dispatch only (CLAUDE.md's own deploy-cadence bullet), so no
+  # trigger can ever render `yes` for them. A pin reading that column could only
+  # be satisfied by weakening the generated record, which is forbidden.
+  #
+  # It resolves instead against the `Declared-blocking anchors` section, whose Step
+  # cells are annotated with the command each step runs for exactly this purpose.
+  # `verify_live.py` appears in a Step cell ONLY in that section, so requiring it
+  # scopes the match without parsing section headings; requiring `declared blocking`
+  # in the Note cell keeps the blocking declaration itself load-bearing. Six rows
+  # match (two steps x three triggers); the two DISTINCT step names are the count
+  # the CLAUDE.md line claims.
+  #
+  # Known tension, recorded not resolved: R11.8's literal clause asks the generated
+  # record to show a governance-declared blocking gate propagating on `push:main`.
+  # These steps cannot, by the deliberate weekly cadence. That gap is enforced by
+  # blocking-steps.yaml + workflow_shape_truth (the steps must not become
+  # warn-only) rather than by this pin.
+  - id: cd-gcp-blocking-verify-steps
+    kind: blocking-gate
+    required: true
+    document: CLAUDE.md
+    anchor: 'ends with (?P<value>two) BLOCKING verify steps'
+    source: docs/state/GATE_SURFACE.md
+    extractor: 'regex:\| (?P<value>Verify deploy truth [^|]*verify_live\.py[^|]*) \| [^|]* \| declared blocking'
+    compare: count
+    scale: identity
+
+# ---------------------------------------------------------------------------
+# Pins whose resolution source does not exist yet.
+#
+# These are NOT evaluated by doc_truth. Listing them here keeps the AD-3 shape
+# recorded without standing up a pin whose verdict would describe a decision
+# nobody has taken yet. They move into `pins:` in the task named by
+# `activates_after`, which is a pure data edit: task 2.5 implements all four
+# kinds and all three extractor families, so no code change is needed to
+# activate one.
+#
+# `cd-gcp-blocking-verify-steps` graduated into `pins:` above when task 2.12
+# generated docs/state/GATE_SURFACE.md; its drafted `| yes |` extractor is
+# recorded in that entry's comment as the shape that could not resolve.
+#
+# This section is a work record, NOT a suppression: nothing reads it as a pass.
+# ---------------------------------------------------------------------------
+pending_pins:
+  # `activates_after` CORRECTED by task 12.5. It read "task 2.17", and 2.17 has
+  # landed -- so the next reader would have activated a pin that FAILs. The premise
+  # moved; the conclusion did not.
+  #
+  # 2.17 added `push: branches: [main]` to mutation.yml (R11.5), which closes the
+  # merge-commit hole: a regression on a gated target now fails the merge commit's
+  # run. It does NOT make the job eligible to be a required status check, because
+  # eligibility is decided by the `pull_request` trigger and that is still
+  # path-filtered -- a PR touching no mutation target never produces the check, so a
+  # required status would wait forever. required-checks.yaml's `ineligible:` entry for
+  # `mutation-fast` records exactly this and says so in its own detail.
+  #
+  # Activated today the pin resolves and FAILs: `yaml_path:required[].job` yields
+  # `[truth-gates, quality-gates, uplift-verify]` and `compare: string` asks whether
+  # `mutation-fast` is a member. It is not. That FAIL would convert a documented,
+  # attributable gap into an unattributable red gate, which is the trade this whole
+  # section exists to avoid.
+  #
+  # The alternative was rephrasing the claim this pin guards -- CLAUDE.md's "Python
+  # `mutmut` is PR-gated on changed ... via `mutation-fast` job (C30)". Not taken.
+  # The sentence is defensible at the level it speaks about: the job runs on pull
+  # requests and its exit status propagates, so its red run is a real signal. The gap
+  # is R14's boundary finding -- a red run blocks a merge only through branch
+  # protection, which is not in this tree. Rewording governance prose to dissolve a
+  # recorded gap is the same class of operator decision as promoting the job, and it
+  # would move the anchor this pin is written against. Left recorded in two files
+  # rather than argued away (I-7).
+  - id: mutation-fast-required-job
+    kind: required-job
+    required: true
+    document: CLAUDE.md
+    anchor: 'via `(?P<value>mutation-fast)` job \(C30\)'
+    source: infrastructure/quality/required-checks.yaml
+    extractor: 'yaml_path:required[].job'
+    compare: string
+    scale: identity
+    activates_after: >-
+      an operator decision that makes `mutation-fast` eligible AND promotes it into
+      `required:` -- concretely, widening `mutation.yml`'s `pull_request` trigger
+      beyond its path filter (or adding a no-op reporting path for a PR touching no
+      mutation target), then declaring the job in
+      infrastructure/quality/required-checks.yaml. This is NOT a task in this
+      feature: the declaration records the gap with its reasoning, and closing it is
+      a policy change rather than an audit finding.
+
+# ---------------------------------------------------------------------------
+# Known drift at the commit that introduced this file.
+#
+# Recorded so the pin failures are attributable, NOT to excuse them. doc_truth
+# does not read this section and does not skip these pins: they FAIL until the
+# document or the configuration is corrected in the task named below.
+# ---------------------------------------------------------------------------
+drift:
+  - pin: stryker-break
+    document_value: 26
+    source_value: 50
+    detail: >-
+      CLAUDE.md says `break: 26`; frontend/stryker.conf.json ships 50 (bumped
+      2026-05-29 after json-canonical.ts reached 96.30% kill rate). The C16
+      ratchet constant `STRYKER_BREAK_NOW = 26` (verify_claims.py:357) is also
+      below the shipped value, so a regression 50 -> 26 currently PASSES. This is
+      audit finding R7.8; ratchets.json records the same pair.
+    remediation: "task 12.1 -- update CLAUDE.md and the ratchet constant to the shipped 50"
+
+  # RESOLVED in task 2.8 (ledger_gen). docs/state/CURRENT.md row C15 stated
+  # `--cov-fail-under=64` against a ci.yml that ships `--cov-fail-under=0` -- the
+  # number described a workflow step Sprint 13 removed when the per-package floors
+  # (row C28) superseded the aggregate gate (audit finding R7.10). The row now
+  # states the shipped `0` and says why it is inert, so the `cov-fail-under` pin
+  # resolves rather than failing. Kept as a note, not an entry: `drift:` records
+  # drift that is still live.

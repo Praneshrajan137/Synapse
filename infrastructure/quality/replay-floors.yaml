@@ -1,0 +1,47 @@
+# SYNAPSE -- Golden-trace replay floors (purpose-achievement-audit R7.6, R7.7)
+#
+# The two numbers CLAUDE.md has stated since Sprint 9 with NO gate anywhere in
+# `scripts/**` or `.github/workflows/**` (audit Requirement 7, rows "KV-cache
+# 0.70" and "tier-routing 80%"). Committing them here makes them machine-read,
+# so `scripts/audit/replay_metrics.py` (task 4.5) can measure against them and
+# `doc-number-pins.yaml` can pin the CLAUDE.md prose to this file (AD-3, AD-13).
+#
+# Read contract: every consumer loads this file with `encoding='utf-8'`
+# (E-S13-07). Values are fractions in [0, 1], never percentages.
+#
+# I-7: a floor with no measurement is NOT a pass. `replay_metrics.py` reports
+# unavailable (never PASS) when the traces or the replay harness are missing.
+
+version: 1
+
+# Provenance of the measurement these floors are compared against.
+replay:
+  generator: tests/eval/generate_traces.py
+  traces_dir: tests/eval/golden_traces
+  trace_count: 200          # asserted by generate_traces.py: sum(TIER_MIX.values()) == 200
+  seed: "0xCAFEBABE"        # generate_traces.py::SEED -- deterministic, so --check catches drift
+  runs_in: .github/workflows/ci.yml::quality-gates
+
+floors:
+  kv_cache_hit_rate:
+    value: 0.70
+    unit: fraction
+    documented_in: CLAUDE.md
+    documented_as: "KV-cache 0.70 floor (gate added in Sprint 11/WS-9)"
+    direction: at-or-above
+    note: >-
+      Sprint 8 recorded 0.65; Sprint 9 raised it to 0.70. The Sprint-11 gate the
+      prose promises was never written -- that is audit finding R7.6. Ratcheted
+      via ratchets.json id `replay-floor:kv-cache`.
+
+  tier_routing_accuracy:
+    value: 0.80
+    unit: fraction
+    documented_in: CLAUDE.md
+    documented_as: "tier-routing 80% floor (gate added in Sprint 11/WS-9)"
+    direction: at-or-above
+    note: >-
+      Documented as a percentage (80%) in prose and stored as a fraction here;
+      the pin in doc-number-pins.yaml carries the `percent_of_fraction` scale so
+      the two representations compare without a second source of truth.
+      Ratcheted via ratchets.json id `replay-floor:tier-routing`.

@@ -1,0 +1,195 @@
+# SYNAPSE -- Published-checkpoint truth policy
+# (purpose-achievement-audit R3.1, R3.3, R3.4, R3.6, R3.7, R3.9; design E5.2, AD-13)
+#
+# Every number, floor, tolerance, and claim pattern the two published-checkpoint
+# gates compare against lives here, not as a literal in the gate. AD-13: "every new
+# threshold is a committed, pinned constant", so this design cannot itself introduce
+# an ungated number.
+#
+# Read contract: `encoding='utf-8'` on every read (E-S13-07).
+# Validated against: infrastructure/quality/schemas/checkpoint-truth.schema.json
+#                    (draft-07; the dialect keyword is deliberately omitted from the
+#                    schema so nothing is fetched over the network -- the consumer
+#                    selects jsonschema.Draft7Validator explicitly).
+#
+# Consumers:
+#   scripts/audit/published_checkpoint_truth.py -- classification, coverage floor,
+#     sha pin, final_crps recompute, local-substitution refusal (task 10.8)
+#   scripts/audit/task_claim_truth.py           -- task-record claim scan (task 10.8)
+#
+# I-7 honest degradation: an unreadable policy, an unfetchable artifact, or a
+# recorded number that cannot be recomputed is UNAVAILABLE (exit 2), never a PASS.
+# I-1 zero cost: `source.zero_cost` must stay true. A source declared non-zero-cost
+# is refused outright -- the gate never reaches for a paid model host.
+
+version: 1
+
+# The serving-resolved model name (ModelRegistry base_name; the checkpoint and its
+# sidecar are written and published under it).
+serving_name: demand_prophet_hgt_tft
+
+# The committed record the operator lands after the free-GPU train + publication.
+registry_file: infrastructure/ml/published_checkpoints.json
+
+# ---------------------------------------------------------------------------
+# The declared zero-cost serving source (R3.6, R3.7)
+# ---------------------------------------------------------------------------
+# The artifact the gate judges must come from HERE and nowhere else. The CI smoke
+# job writes a locally built checkpoint into `local_candidate_dir`, and
+# `ModelRegistry._resolve_checkpoint_path` prefers that local file over the remote
+# (packages/synapse_common/model_registry.py:194-199). A gate that resolved through
+# ModelRegistry would therefore certify a *smoke* artifact as the published model.
+# So this gate fetches the remote sidecar directly and, when the recorded sha cannot
+# be fetched, reports UNAVAILABLE while naming the local candidate it REFUSED.
+source:
+  kind: hf_hub
+  zero_cost: true
+  # Enablement/override only. The repo the gate actually fetches is the one the
+  # committed registry entry records, so a landed record cannot go unverified by
+  # leaving an environment variable unset.
+  env_var: DP_HF_REPO
+  sidecar_filename: "{name}.serving.json"
+  checkpoint_filename: "{name}.pt"
+  # MUST stay false. A `true` here is itself a FAIL (clause `policy`): substituting
+  # a locally built checkpoint for a published one is the exact evidence swap R3.7
+  # forbids, so the flag exists to be pinned, not to be flipped.
+  allow_local_substitution: false
+  local_candidate_dir: artifacts/checkpoints
+  note: >-
+    agents/demand_prophet/training/train.py writes artifacts/checkpoints/<name>.pt
+    plus <name>.serving.json; the ci.yml training-smoke job produces exactly that
+    pair with smoke=true. Refusing it is the point of R3.7.
+
+# ---------------------------------------------------------------------------
+# Three-way absent / smoke / real classification (R3.1, R3.4)
+# ---------------------------------------------------------------------------
+# A smoke artifact must never be reported as a real one, and an absent artifact
+# must never be reported as either. The markers below are what the classifier
+# reads; a fetched artifact matching neither is `indeterminate` (UNAVAILABLE), not
+# silently promoted to real.
+classification:
+  smoke:
+    # Set true by agents/demand_prophet/training/train.py for a smoke run.
+    sidecar_flag: smoke
+    # train.py writes version="{'smoke' if smoke else 'full'}_{sha7}".
+    version_prefixes: ["smoke_", "smoke"]
+  real:
+    version_prefixes: ["full_", "full"]
+
+# ---------------------------------------------------------------------------
+# Floors (R3.3)
+# ---------------------------------------------------------------------------
+# The comparison must report BOTH the measured value and the floor, so a reader
+# never has to open the gate source to learn what it compared against.
+floors:
+  coverage_p90:
+    value: 0.85
+    unit: fraction
+    direction: at-or-above
+    invariant: INV-DP-002
+    # Dotted read path inside the published serving sidecar.
+    sidecar_path: calibrator.last_coverage_p90
+    registry_key: coverage_p90
+    documented_in: agents/demand_prophet/training/conformal.py
+    note: >-
+      INV-DP-002: a nominal 90% conformal interval must achieve >= 85% empirical
+      held-out coverage. Previously the literal COVERAGE_FLOOR = 0.85 in
+      scripts/audit/published_checkpoint_truth.py; moved here under AD-13. An
+      absent measurement is reported with measured=null against this floor and is
+      never a pass.
+
+# ---------------------------------------------------------------------------
+# Tolerances (R3.9)
+# ---------------------------------------------------------------------------
+tolerances:
+  final_crps:
+    absolute: 0.05
+    relative: 0.10
+    min_samples: 32
+    method: mean_pinball_over_quantile_levels_then_horizons
+    quantile_levels: [0.1, 0.5, 0.9]
+    sidecar_block: heldout
+    registry_key: final_crps
+    note: >-
+      A recorded number nobody recomputed is not evidence. The gate recomputes
+      final_crps from the published sidecar's held-out predictions using the same
+      definition the training loss uses -- mean pinball loss over the quantile
+      levels, then the mean over horizons
+      (agents/demand_prophet/training/rewards.py::crps_loss and
+      training/train.py::_batch_loss) -- and compares against the recorded value
+      with an allowance of max(absolute, relative * |recorded|). The allowance is
+      wide because the recorded value is a training-time epoch mean over batches
+      while the recompute is a single pass over the held-out set; it is tight
+      enough that an invented or stale number does not survive. A sidecar carrying
+      no `heldout` block cannot be recomputed and is UNAVAILABLE, never a pass --
+      publishing the block is a runbook step (docs/runbooks/train-and-publish-
+      checkpoint.md step 5).
+      Required `heldout` shape, canonical JSON, all lists the same length:
+        {"heldout": {"quantile_levels": [0.1, 0.5, 0.9],
+                     "horizons": {"1h": {"predictions": [[lo, mid, hi], ...],
+                                         "actuals": [y, ...]}}}}
+      A flat single-horizon form ({"heldout": {"predictions": [...],
+      "actuals": [...]}}) is accepted and reported under the horizon name "*".
+
+# ---------------------------------------------------------------------------
+# Task-record claim scan (R3.6)
+# ---------------------------------------------------------------------------
+# The check that would have caught `core-purpose-uplift` task 9.1 being marked
+# complete against an unchanged __placeholder__. A CHECKED task record whose text
+# asserts a landed registry entry FAILs, naming the record, while the registry
+# holds no validated non-placeholder entry.
+task_claims:
+  specs_dir: .kiro/specs
+  tasks_filename: tasks.md
+
+  # A record is a claim when it matches at least one pattern AND mentions at least
+  # one subject marker. Both halves are required so a task that merely discusses
+  # the gate (this spec's own task 10.8) is not swept up. Matching is
+  # case-insensitive; the pattern is applied to the record's title plus its
+  # sub-bullets joined with newlines.
+  assertion_patterns:
+    - id: replace-placeholder
+      pattern: 'replace\s+the\s+\W{0,2}__placeholder__\W{0,2}\s*entry'
+      description: >-
+        "Replace the `__placeholder__` entry in
+        infrastructure/ml/published_checkpoints.json" -- core-purpose-uplift 9.1.
+    - id: write-real-registry-entry
+      pattern: 'write\s+the\s+real\s+\W{0,2}\w+\W{0,2}\s+registry\s+entry'
+      description: >-
+        "Write the real `demand_prophet_hgt_tft` registry entry (repo, sha, ...)".
+    - id: lands-registry-entry
+      pattern: '\blands?\s+the\s+(?:resulting\s+)?registry\s+entry'
+      description: >-
+        "this task lands the resulting registry entry" -- a completion assertion
+        even when the surrounding note calls the training an operator step.
+    - id: populates-checkpoint-registry
+      pattern: 'populat\w+\s+(?:and\s+\w+\s+)?the\s+(?:\w+\s+)?checkpoint\s+registry'
+      description: >-
+        "Populate and verify the flagship checkpoint registry" -- the parent record.
+
+  subject_markers:
+    - published_checkpoints.json
+    - __placeholder__
+    - demand_prophet_hgt_tft
+    - checkpoint registry
+
+  # Anti-vacuity (the audit's own lesson: a gate that matches nothing reports
+  # nothing). Each record below must still be resolvable by spec + task id. If one
+  # disappears, the gate is UNAVAILABLE naming it -- a scanner that has stopped
+  # seeing the record it was written against is not a passing scanner. A record
+  # that is resolvable but no longer CHECKED is reported `pending`, not a failure.
+  must_resolve:
+    - spec: core-purpose-uplift
+      task_id: "9"
+      requirement: "3.6"
+      note: >-
+        "Populate and verify the flagship checkpoint registry", marked [x] while
+        infrastructure/ml/published_checkpoints.json still holds only
+        __placeholder__ (audit Requirement 3).
+    - spec: core-purpose-uplift
+      task_id: "9.1"
+      requirement: "3.6"
+      note: >-
+        "Replace the __placeholder__ entry ... Write the real
+        demand_prophet_hgt_tft registry entry", marked [x] against an unchanged
+        placeholder file. This is the finding R3.6 exists to make mechanical.

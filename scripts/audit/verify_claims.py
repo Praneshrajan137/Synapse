@@ -5,6 +5,9 @@ Each check is one function decorated with ``@register``. Workstreams in
 land. The script exits with code 1 if any check FAILS, 0 otherwise.
 
 Run with ``make verify-claims`` or ``python -m scripts.audit.verify_claims``.
+``--check`` delegates to ``scripts.audit.registry_gate`` for the gate verdict
+(exit ``0`` pass / ``1`` fail / ``2`` unavailable), so a CI step and this script
+never disagree about what the registry decided.
 
 The check IDs (C1..C25) match the rows in ``docs/state/CURRENT.md``.
 """
@@ -34,6 +37,33 @@ class CheckResult:
 # exactly one of them, so the four counts sum to TOTAL == len(_CHECKS) and no
 # check can be silently omitted from the headline the README is pinned to.
 STATUSES: tuple[str, ...] = ("PASS", "FAIL", "PARTIAL", "SKIP")
+
+
+# The gate vocabulary the E1/E4/E5 gate modules report, mapped onto the four emitted
+# registry statuses (purpose-achievement-audit task 12.1).
+#
+# Two vocabularies are folded in on purpose. The older probes (`runtime_substance`,
+# `published_checkpoint_truth`, `doc_truth`, `topic_service_truth`) report
+# ``ok``/``fail``/``skip``; the gates added by this feature report
+# ``pass``/``fail``/``unavailable`` and, in ``ratchet_truth`` and
+# ``published_checkpoint_truth.assess``, a FOURTH state (``skip`` alongside
+# ``unavailable``). The three-key mapping those rows used could not express the fourth
+# state and would ``KeyError`` on it -- coerced to FAIL by :func:`_run_check`, so never
+# silent, but a mapping defect reported as a gate defect.
+#
+# **Both non-passing states map to SKIP, and neither may ever map to PASS.** A gate that
+# could not read its inputs (``unavailable``) and a gate whose subject is absent
+# (``skip``) have each established nothing; SKIP is excluded from the published PASS
+# count (R2.9) and a SKIP is not a PASS (I-7). A verdict outside this vocabulary raises
+# ``KeyError``, which ``_run_check`` coerces to FAIL naming the check -- an unknown
+# verdict is a defect, not a pass.
+GATE_STATUS: dict[str, str] = {
+    "pass": "PASS",
+    "ok": "PASS",
+    "fail": "FAIL",
+    "skip": "SKIP",
+    "unavailable": "SKIP",
+}
 
 
 class StatusPartitionError(RuntimeError):
@@ -353,9 +383,18 @@ def check_coverage_floor() -> CheckResult:
 # C16: Stryker break threshold enforced
 # ---------------------------------------------------------------------------
 # Stryker ratchet: same pattern as coverage. Verified current floor 26.
-STRYKER_BREAK_MIN = 20   # never let it drop below this
-STRYKER_BREAK_NOW = 26   # verified mutation score floor (PR #10 CI: 26.12%)
-STRYKER_TARGET = 85      # CLAUDE.md target (<15% survival)
+STRYKER_BREAK_MIN = 20  # never let it drop below this
+# Mirrors `frontend/stryker.conf.json`'s shipped `thresholds.break`. Sprint 13 Phase 4.1
+# bumped the config 26 -> 50 (json-canonical.ts reached a 96.30% kill rate) and this
+# mirror was never moved with it, which C70 reports as "a gate comparing against the
+# constant cannot catch a regression to it": frozen at 26, the check accepted any config
+# value >= 26, so a silent regression from the shipped 50 down to 26 would have passed.
+# Raising the mirror to the value the config already ships STRENGTHENS the gate - it is
+# not a ratchet raise, because the enforced floor is `stryker.conf.json` and that is
+# unchanged. Next destinations stay 70 -> 85 (CLAUDE.md: <15% survival = >=85% killed);
+# move this line in the same commit as the config, never ahead of it.
+STRYKER_BREAK_NOW = 50
+STRYKER_TARGET = 85  # CLAUDE.md target (<15% survival)
 
 
 @register("C16", "Stryker break threshold >= verified floor")
@@ -634,9 +673,7 @@ def check_gcp_compose_pulls_images() -> CheckResult:
             problems.append(f"{svc_name}: image '{image}' does not match AR pattern")
             continue
         if m.group("name") != ar_image:
-            problems.append(
-                f"{svc_name}: image name '{m.group('name')}' != expected '{ar_image}'"
-            )
+            problems.append(f"{svc_name}: image name '{m.group('name')}' != expected '{ar_image}'")
 
     if problems:
         return CheckResult(
@@ -677,9 +714,7 @@ def check_verify_images_covers_matrix() -> CheckResult:
     vs_text = vs.read_text(encoding="utf-8")
     m = re.search(r"IMAGES=\(([^)]+)\)", vs_text, re.DOTALL)
     if not m:
-        return CheckResult(
-            "C27", "verify_images coverage", "FAIL", "IMAGES=(...) array not found"
-        )
+        return CheckResult("C27", "verify_images coverage", "FAIL", "IMAGES=(...) array not found")
     listed = {
         line.strip().strip("\"'")
         for line in m.group(1).splitlines()
@@ -719,11 +754,15 @@ def check_per_package_coverage() -> CheckResult:
     floors = ROOT / "infrastructure" / "quality" / "coverage-floors.yaml"
     ci = ROOT / ".github" / "workflows" / "ci.yml"
     if not script.is_file():
-        return CheckResult("C28", "Per-package coverage", "FAIL", "scripts/coverage_per_package.py missing")
+        return CheckResult(
+            "C28", "Per-package coverage", "FAIL", "scripts/coverage_per_package.py missing"
+        )
     if not floors.is_file():
         return CheckResult("C28", "Per-package coverage", "FAIL", "coverage-floors.yaml missing")
     if not ci.is_file() or "coverage_per_package.py" not in ci.read_text(encoding="utf-8"):
-        return CheckResult("C28", "Per-package coverage", "FAIL", "ci.yml does not invoke the script")
+        return CheckResult(
+            "C28", "Per-package coverage", "FAIL", "ci.yml does not invoke the script"
+        )
     try:
         import yaml as _yaml  # local import; PyYAML is a dev dep
     except ImportError:
@@ -733,17 +772,23 @@ def check_per_package_coverage() -> CheckResult:
     expected_count = 10  # synapse_common + orchestrator + 8 agents
     if len(pkgs) < expected_count:
         return CheckResult(
-            "C28", "Per-package coverage", "FAIL",
+            "C28",
+            "Per-package coverage",
+            "FAIL",
             f"floors YAML has {len(pkgs)} packages, expected >={expected_count}",
         )
     bad = [p for p, cfg in pkgs.items() if float(cfg.get("line", -1)) < 0]
     if bad:
         return CheckResult(
-            "C28", "Per-package coverage", "FAIL",
+            "C28",
+            "Per-package coverage",
+            "FAIL",
             f"negative line floor in: {bad}",
         )
     return CheckResult(
-        "C28", "Per-package coverage", "PASS",
+        "C28",
+        "Per-package coverage",
+        "PASS",
         f"{len(pkgs)} packages gated; script wired into ci.yml",
     )
 
@@ -763,12 +808,17 @@ def check_branch_coverage() -> CheckResult:
     # `branch = true` on its own line before the next [...] section header.
     section = re.search(
         r"\[tool\.coverage\.run\]\n((?:(?!^\[)[\s\S])*)",
-        text, re.MULTILINE,
+        text,
+        re.MULTILINE,
     )
-    if section and re.search(r"^\s*branch\s*=\s*true\b", section.group(1), re.IGNORECASE | re.MULTILINE):
+    if section and re.search(
+        r"^\s*branch\s*=\s*true\b", section.group(1), re.IGNORECASE | re.MULTILINE
+    ):
         return CheckResult("C29", "Branch coverage", "PASS", "branch = true in [tool.coverage.run]")
     return CheckResult(
-        "C29", "Branch coverage", "FAIL",
+        "C29",
+        "Branch coverage",
+        "FAIL",
         "branch = true not set under [tool.coverage.run] in pyproject.toml",
     )
 
@@ -793,15 +843,21 @@ def check_python_mutmut_pr_gated() -> CheckResult:
         # Does any job in this workflow trigger on pull_request AND mention
         # one of the gated mutation targets?
         has_pr = re.search(r"pull_request\s*:", text)
-        targets_re = r"agents/.*?/training/rewards\.py|guardrails/rules\.py|audit/(hash_chain|logger)\.py"
+        targets_re = (
+            r"agents/.*?/training/rewards\.py|guardrails/rules\.py|audit/(hash_chain|logger)\.py"
+        )
         has_target = re.search(targets_re, text)
         if has_pr and has_target:
             return CheckResult(
-                "C30", "mutmut PR gate", "PASS",
+                "C30",
+                "mutmut PR gate",
+                "PASS",
                 f"PR-trigger + Python mutation target found in {wf.name}",
             )
     return CheckResult(
-        "C30", "mutmut PR gate", "FAIL",
+        "C30",
+        "mutmut PR gate",
+        "FAIL",
         "no workflow runs mutmut on pull_request for rewards/audit/guardrail targets "
         "(Sprint 13 Phase 4.2 follow-up — current setup is Sunday cron only)",
     )
@@ -825,17 +881,23 @@ def check_spec_coverage_in_ci() -> CheckResult:
     m = re.search(r"check_spec_coverage\.py.*?--threshold\s+(\d+)", text, re.DOTALL)
     if not m:
         return CheckResult(
-            "C31", "Spec coverage", "FAIL",
+            "C31",
+            "Spec coverage",
+            "FAIL",
             "check_spec_coverage.py not invoked with --threshold in ci.yml",
         )
     threshold = int(m.group(1))
     if threshold < 10:
         return CheckResult(
-            "C31", "Spec coverage", "FAIL",
+            "C31",
+            "Spec coverage",
+            "FAIL",
             f"--threshold {threshold} below hard floor 10",
         )
     return CheckResult(
-        "C31", "Spec coverage", "PASS",
+        "C31",
+        "Spec coverage",
+        "PASS",
         f"--threshold {threshold} (ratchet target: 50 -> 100)",
     )
 
@@ -855,17 +917,23 @@ def check_training_omit_narrowed() -> CheckResult:
     # The broad omit pattern, if present, is a regression.
     if re.search(r'"\*/training/\*"', text):
         return CheckResult(
-            "C32", "Training omit", "FAIL",
+            "C32",
+            "Training omit",
+            "FAIL",
             "broad `*/training/*` omit pattern present — re-hides rewards.py from coverage",
         )
     # Affirmative check: at least the narrow patterns are present (loop, train_*).
     if re.search(r'"\*/training/loop\.py"', text):
         return CheckResult(
-            "C32", "Training omit", "PASS",
+            "C32",
+            "Training omit",
+            "PASS",
             "narrow training-loop omit pattern present; rewards.py is measurable",
         )
     return CheckResult(
-        "C32", "Training omit", "PARTIAL",
+        "C32",
+        "Training omit",
+        "PARTIAL",
         "broad pattern absent but narrow loop pattern not present either",
     )
 
@@ -928,7 +996,9 @@ def check_i12_wired() -> CheckResult:
     feeds = "update_live_state" in sync_t and "divergence_monitor" in sync_t
     if emits and feeds:
         return CheckResult(
-            "C34", "I-12 wired", "PASS",
+            "C34",
+            "I-12 wired",
+            "PASS",
             "monitor emits synapse_digital_twin_kl_divergence; kafka_sync feeds live state",
         )
     missing = []
@@ -953,8 +1023,7 @@ def check_api_auth() -> CheckResult:
     dec_t = dec.read_text(encoding="utf-8")
     # All three decisions handlers must carry an auth dependency.
     auth_on_reads = (
-        dec_t.count("Depends(CurrentOperator)") >= 2
-        and "Depends(RequireRole(Role.OPS))" in dec_t
+        dec_t.count("Depends(CurrentOperator)") >= 2 and "Depends(RequireRole(Role.OPS))" in dec_t
     )
     # No embedded DB credential anywhere under api/ (decisions, main, steering, …).
     api_dir = ROOT / "api"
@@ -962,7 +1031,9 @@ def check_api_auth() -> CheckResult:
     no_secret = not leaks
     if auth_on_reads and no_secret:
         return CheckResult(
-            "C35", "API auth", "PASS",
+            "C35",
+            "API auth",
+            "PASS",
             "read+trigger endpoints gated by JWT; no embedded DB credential",
         )
     problems = []
@@ -988,11 +1059,15 @@ def check_honesty_contract() -> CheckResult:
     missing_adrs = [a.name for a in adrs if not a.is_file()]
     if missing_mods or missing_adrs:
         return CheckResult(
-            "C36", "Honesty contract", "FAIL",
+            "C36",
+            "Honesty contract",
+            "FAIL",
             f"missing modules={missing_mods} adrs={missing_adrs}",
         )
     return CheckResult(
-        "C36", "Honesty contract", "PASS",
+        "C36",
+        "Honesty contract",
+        "PASS",
         "FeatureProvider/ModelRegistry/Provenance/RuntimeValidator + ADR-040/041 present",
     )
 
@@ -1011,7 +1086,9 @@ def check_training_truth() -> CheckResult:
     reports = collect()
     total = sum(len(r.violations) for r in reports)
     real = sum(1 for r in reports if r.has_real_step)
-    detail = f"{real}/{len(reports)} real gradient loops; {total} violation(s) (baseline {BASELINE})"
+    detail = (
+        f"{real}/{len(reports)} real gradient loops; {total} violation(s) (baseline {BASELINE})"
+    )
     if total > BASELINE:
         return CheckResult("C37", "Training truth", "FAIL", detail + " — regression")
     return CheckResult("C37", "Training truth", "PASS", detail)
@@ -1022,17 +1099,25 @@ def check_checkpoint_truth() -> CheckResult:
     try:
         from scripts.audit.checkpoint_truth import collect
     except ImportError as exc:
-        return CheckResult("C38", "Checkpoint truth", "SKIP", f"checkpoint_truth import failed: {exc}")
+        return CheckResult(
+            "C38", "Checkpoint truth", "SKIP", f"checkpoint_truth import failed: {exc}"
+        )
     report, any_artifact = collect()
-    failures = [r for r in report.results if r.status in {"missing_file", "sha_mismatch", "no_checkpoint"}]
+    failures = [
+        r for r in report.results if r.status in {"missing_file", "sha_mismatch", "no_checkpoint"}
+    ]
     # verify_claims runs outside the smoke job (no training artifacts), so SKIP when
     # none are present — the CI training-smoke job enforces C38 via the standalone
     # `checkpoint_truth --check` with SYNAPSE_SMOKE_RUN=1. _ = CHECKPOINT_AGENTS.
     if not any_artifact:
-        return CheckResult("C38", "Checkpoint truth", "SKIP", "no training artifacts (run the smoke job)")
+        return CheckResult(
+            "C38", "Checkpoint truth", "SKIP", "no training artifacts (run the smoke job)"
+        )
     if failures:
         return CheckResult("C38", "Checkpoint truth", "FAIL", f"{len(failures)} bad checkpoint(s)")
-    return CheckResult("C38", "Checkpoint truth", "PASS", f"{len(report.results)} checkpoint(s) verified")
+    return CheckResult(
+        "C38", "Checkpoint truth", "PASS", f"{len(report.results)} checkpoint(s) verified"
+    )
 
 
 @register("C39", "Serving loads models via ModelRegistry (ratchet)")
@@ -1045,7 +1130,9 @@ def check_serving_truth() -> CheckResult:
     wired = sum(1 for r in reports if r.wired)
     unwired = sum(1 for r in reports if r.exists and not r.wired)
     regressions = sum(len(r.violations) for r in reports)
-    detail = f"{wired}/{len(reports)} agents load a real model (baseline unwired {BASELINE_UNWIRED})"
+    detail = (
+        f"{wired}/{len(reports)} agents load a real model (baseline unwired {BASELINE_UNWIRED})"
+    )
     if unwired > BASELINE_UNWIRED or regressions > 0:
         return CheckResult("C39", "Serving truth", "FAIL", detail + " — regression")
     return CheckResult("C39", "Serving truth", "PASS", detail)
@@ -1056,14 +1143,22 @@ def check_calibration_truth() -> CheckResult:
     try:
         from scripts.audit.calibration_truth import collect
     except ImportError as exc:
-        return CheckResult("C40", "Calibration truth", "SKIP", f"calibration_truth import failed: {exc}")
+        return CheckResult(
+            "C40", "Calibration truth", "SKIP", f"calibration_truth import failed: {exc}"
+        )
     report, any_artifact = collect()
     failures = [r for r in report.results if r.status in {"below_floor", "no_metric"}]
     if not any_artifact:
-        return CheckResult("C40", "Calibration truth", "SKIP", "no training artifacts (run the smoke job)")
+        return CheckResult(
+            "C40", "Calibration truth", "SKIP", "no training artifacts (run the smoke job)"
+        )
     if failures:
-        return CheckResult("C40", "Calibration truth", "FAIL", f"{len(failures)} under-covered model(s)")
-    return CheckResult("C40", "Calibration truth", "PASS", f"{len(report.results)} model(s) calibrated")
+        return CheckResult(
+            "C40", "Calibration truth", "FAIL", f"{len(failures)} under-covered model(s)"
+        )
+    return CheckResult(
+        "C40", "Calibration truth", "PASS", f"{len(report.results)} model(s) calibrated"
+    )
 
 
 @register("C41", "Declared confidence_basis matches computed basis (ratchet)")
@@ -1071,7 +1166,9 @@ def check_confidence_basis_truth() -> CheckResult:
     try:
         from scripts.audit.confidence_basis_truth import BASELINE, collect
     except ImportError as exc:
-        return CheckResult("C41", "Confidence basis", "SKIP", f"confidence_basis_truth import failed: {exc}")
+        return CheckResult(
+            "C41", "Confidence basis", "SKIP", f"confidence_basis_truth import failed: {exc}"
+        )
     reports = collect()
     total = sum(len(r.violations) for r in reports)
     detail = f"{total} stamp/computation mismatch(es) (baseline {BASELINE})"
@@ -1092,9 +1189,11 @@ def check_runtime_substance() -> CheckResult:
     try:
         from scripts.audit.runtime_substance import evaluate
     except ImportError as exc:
-        return CheckResult("C45", "Runtime substance", "SKIP", f"runtime_substance import failed: {exc}")
+        return CheckResult(
+            "C45", "Runtime substance", "SKIP", f"runtime_substance import failed: {exc}"
+        )
     probe = evaluate()
-    status = {"ok": "PASS", "fail": "FAIL", "skip": "SKIP"}[probe.status]
+    status = GATE_STATUS[probe.status]
     return CheckResult("C45", "Runtime substance", status, probe.detail)
 
 
@@ -1135,12 +1234,16 @@ def check_orchestrator_twin_wired() -> CheckResult:
     missing_calls = required_defs - called
     if missing_defs or missing_calls or not has_endpoint:
         return CheckResult(
-            "C7", "Orchestrator twin", "FAIL",
+            "C7",
+            "Orchestrator twin",
+            "FAIL",
             f"missing defs={sorted(missing_defs)} calls={sorted(missing_calls)} "
             f"endpoint={has_endpoint}",
         )
     return CheckResult(
-        "C7", "Orchestrator twin", "PASS",
+        "C7",
+        "Orchestrator twin",
+        "PASS",
         "Tier-4 twin verify + input-provenance recording wired (defined + called)",
     )
 
@@ -1149,20 +1252,27 @@ def check_orchestrator_twin_wired() -> CheckResult:
 def check_published_checkpoint() -> CheckResult:
     """Authenticity counterpart to C42 (ADR-043, Phase 1).
 
-    C42 proves the serving *code path* is real on the CI smoke checkpoint. C43
+    C42 proves the serving *code path* is real on the CI smoke checkpoint. C46
     proves an operator actually published a genuine, non-smoke, adequately
     calibrated checkpoint to the $0 serving source (HF Hub) and recorded it.
     SKIPs when DP_HF_REPO is unset or the registry is still a placeholder — never
     fabricates a pass; FAILs only on a smoke/under-covered/drifted published model.
+
+    Every branch reports ``cid="C46"``: this SKIP branch previously returned
+    ``"C43"``, so an unavailable published-checkpoint probe landed on another
+    check's row and left C46 with no result (R10.5, design AD-14).
     """
     try:
         from scripts.audit.published_checkpoint_truth import evaluate as _eval_pub
     except ImportError as exc:
         return CheckResult(
-            "C43", "Published checkpoint", "SKIP", f"published_checkpoint_truth import failed: {exc}"
+            "C46",
+            "Published checkpoint",
+            "SKIP",
+            f"published_checkpoint_truth import failed: {exc}",
         )
     probe = _eval_pub()
-    status = {"ok": "PASS", "fail": "FAIL", "skip": "SKIP"}[probe.status]
+    status = GATE_STATUS[probe.status]
     return CheckResult("C46", "Published checkpoint", status, probe.detail)
 
 
@@ -1187,7 +1297,12 @@ def check_audit_read_write_table_match() -> CheckResult:
     m = re.search(r'AuditConsensusRow.*?__tablename__\s*=\s*"([^"]+)"', mtext, re.DOTALL)
     write_table = m.group(1) if m else None
     if write_table is None:
-        return CheckResult("C42", "Read/write table match", "FAIL", "could not resolve AuditConsensusRow.__tablename__")
+        return CheckResult(
+            "C42",
+            "Read/write table match",
+            "FAIL",
+            "could not resolve AuditConsensusRow.__tablename__",
+        )
 
     read_tables = set(re.findall(r"FROM\s+(audit_\w+)", dtext))
     decision_reads = {t for t in read_tables if t in {"audit_decisions", "audit_consensus"}}
@@ -1228,9 +1343,14 @@ def check_agents_serve_a2a() -> CheckResult:
     if not agents_dir.is_dir():
         return CheckResult("C43", "Agents serve /a2a", "SKIP", "agents/ missing")
     expected = [
-        "demand_prophet", "routing_navigator", "inventory_sentinel",
-        "freshness_guardian", "pricing_oracle", "disruption_shield",
-        "supplier_trust", "sustainability_agent",
+        "demand_prophet",
+        "routing_navigator",
+        "inventory_sentinel",
+        "freshness_guardian",
+        "pricing_oracle",
+        "disruption_shield",
+        "supplier_trust",
+        "sustainability_agent",
     ]
     missing: list[str] = []
     for name in expected:
@@ -1243,39 +1363,76 @@ def check_agents_serve_a2a() -> CheckResult:
             missing.append(name)
     if missing:
         return CheckResult(
-            "C43", "Agents serve /a2a", "FAIL",
+            "C43",
+            "Agents serve /a2a",
+            "FAIL",
             f"{len(missing)} agent(s) missing POST /a2a: {', '.join(missing)}",
         )
     return CheckResult(
-        "C43", "Agents serve /a2a", "PASS",
+        "C43",
+        "Agents serve /a2a",
+        "PASS",
         f"all {len(expected)} agents mount POST /a2a (orchestrator consensus reachable)",
     )
 
 
 # ---------------------------------------------------------------------------
-# C44: no dead Python modules (orphaned code can't silently accumulate)
+# C44: module liveness — total classification, named baseline, dormant projections
 # ---------------------------------------------------------------------------
-@register("C44", "No dead Python modules (module-liveness)")
+@register("C44", "Module liveness: total classification + named baseline + projections")
 def check_no_dead_modules() -> CheckResult:
-    """Owner concern: "most of the code is there but not used". The
-    module-liveness analyzer builds an import graph from the live
-    docker-compose entrypoints and flags modules that are neither reachable,
-    referenced by make/CI, nor tests. Baseline ratcheted to 0 after the sweep
-    (3 routers wired, 6 orphans removed). A new orphan fails CI.
+    """Owner concern: "most of the code is there but not used" (R13).
+
+    ``scripts/audit/module_liveness.py`` builds an import graph from the live
+    docker-compose entrypoints and classifies every first-party Python module into
+    exactly one of five classes — ALIVE / TOOLING / TEST / SEAM_EXEMPT / DEAD — with
+    totality checked rather than assumed (R13.1). The only exemption from DEAD is an
+    in-source ``# synapse: seam(reason=..., adr=ADR-0NN)`` marker (R13.2), so the
+    justification travels with the code. The baseline is the *named* list in
+    ``infrastructure/quality/dead-modules.yaml`` and ``DEAD_BASELINE`` is derived from
+    it as ``len(dormant)`` (R13.9) — that file is not a suppression list: a name in it
+    fixes the count a FAIL is measured against, it never turns a FAIL into a PASS.
+
+    Two projections ride along. R13.7 — a symbol encoding an invariant pre/postcondition
+    that only tests invoke — FAILs naming the symbol and the invariant. R13.3 — a
+    property test whose target no non-test module imports — is *reported* as validating a
+    model (the criterion's verb is "SHALL be reported"), so it never moves the status.
+
+    Expect a FAIL here while ``synapse_common.contracts.validate_audit_insertion`` has no
+    production caller. ``orchestrator.guardrails.rules.execute_consensus`` already passes
+    — task 8.5's ``_ratify_and_dispatch`` calls it — and so do
+    ``uplift.uplift_floor.is_proven_uplift`` / ``ratchet_to_measured``, which task 10.3
+    wired into ``uplift_truth.verdict`` / ``uplift_truth.admit_floor_raise``. That
+    remaining FAIL is the requirement working. Note it also makes C44's declared
+    fault-injection operators read
+    *indeterminate* until they clear: a gate that is already red proves nothing by
+    staying red, and that is the honest label, not an exemption.
     """
     try:
-        from scripts.audit.module_liveness import DEAD_BASELINE, classify
+        from scripts.audit.module_liveness import Outcome, evaluate
     except ImportError as exc:
-        return CheckResult("C44", "No dead modules", "SKIP", f"module_liveness import failed: {exc}")
-    dead = classify()["DEAD"]
-    n = len(dead)
-    if n > DEAD_BASELINE:
-        names = ", ".join(rel for rel, _ in dead[:5])
         return CheckResult(
-            "C44", "No dead modules", "FAIL",
-            f"{n} dead module(s) > baseline {DEAD_BASELINE}: {names}{'…' if n > 5 else ''}",
+            "C44", "Module liveness", "SKIP", f"module_liveness import failed: {exc}"
         )
-    return CheckResult("C44", "No dead modules", "PASS", f"{n} dead module(s) (baseline {DEAD_BASELINE})")
+
+    report = evaluate()
+    if report.outcome is Outcome.UNAVAILABLE:
+        # I-7: a classification that is not total, or a baseline that cannot be read,
+        # has no verdict to give. Absence of proof is not a pass.
+        return CheckResult("C44", "Module liveness", "SKIP", report.detail)
+    if report.outcome is Outcome.FAIL:
+        return CheckResult("C44", "Module liveness", "FAIL", report.detail)
+    return CheckResult(
+        "C44",
+        "Module liveness",
+        "PASS",
+        f"{report.total_modules} module(s) over 5 classes "
+        f"(ALIVE {report.counts.get('ALIVE', 0)} / TOOLING {report.counts.get('TOOLING', 0)} / "
+        f"TEST {report.counts.get('TEST', 0)} / SEAM_EXEMPT {report.counts.get('SEAM_EXEMPT', 0)} "
+        f"/ DEAD {report.counts.get('DEAD', 0)}); dead <= named baseline "
+        f"{report.dead_baseline}; {len(report.model_projections)} model-validating "
+        f"projection(s) reported; every invariant symbol on a production path",
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -1308,9 +1465,7 @@ def check_deploy_truth_gated() -> CheckResult:
         if want not in text
     ]
     if missing:
-        return CheckResult(
-            "C47", "Deploy truth gated", "FAIL", f"cd-gcp.yml missing: {missing}"
-        )
+        return CheckResult("C47", "Deploy truth gated", "FAIL", f"cd-gcp.yml missing: {missing}")
     return CheckResult(
         "C47",
         "Deploy truth gated",
@@ -1333,16 +1488,10 @@ def check_image_smoke_covers_matrix() -> CheckResult:
         return CheckResult("C49", "Import smoke coverage", "FAIL", "cd-gcp.yml missing")
     text = cd.read_text(encoding="utf-8")
     if "Import smoke" not in text or "importlib.import_module" not in text:
-        return CheckResult(
-            "C49", "Import smoke coverage", "FAIL", "import-smoke step missing"
-        )
-    rows = re.findall(
-        r"image:\s*([A-Za-z0-9-]+),.*?entry:\s*([A-Za-z0-9_.]+|\"\")", text
-    )
+        return CheckResult("C49", "Import smoke coverage", "FAIL", "import-smoke step missing")
+    rows = re.findall(r"image:\s*([A-Za-z0-9-]+),.*?entry:\s*([A-Za-z0-9_.]+|\"\")", text)
     if not rows:
-        return CheckResult(
-            "C49", "Import smoke coverage", "FAIL", "no matrix entry fields parsed"
-        )
+        return CheckResult("C49", "Import smoke coverage", "FAIL", "no matrix entry fields parsed")
     no_entry = sorted(img for img, entry in rows if entry in ('""', "") and img != "frontend")
     if no_entry:
         return CheckResult(
@@ -1391,8 +1540,7 @@ def check_compose_health_complete() -> CheckResult:
         if name == "api":
             candidates.insert(0, ROOT / "api" / "Dockerfile")
         if not any(
-            c.is_file() and "HEALTHCHECK" in c.read_text(encoding="utf-8")
-            for c in candidates
+            c.is_file() and "HEALTHCHECK" in c.read_text(encoding="utf-8") for c in candidates
         ):
             unchecked.append(name)
     if unchecked:
@@ -1562,16 +1710,21 @@ def check_doc_truth() -> CheckResult:
     """Phase 0 narrative-truth gate — the one new gate worth adding.
 
     Pins the load-bearing numbers/cadence claims in CLAUDE.md + workflow headers
-    to their mechanical source (the spec-coverage --threshold, the deploy
-    cadence) and FAILs on drift — closing the root cause of the biggest risk in
-    this repo: the narrative silently diverging from what the gates enforce.
+    to their mechanical source (the declarative `doc-number-pins.yaml` table, the
+    deploy cadence, the README headline counts) and FAILs on drift — closing the
+    root cause of the biggest risk in this repo: the narrative silently diverging
+    from what the gates enforce.
+
+    `unavailable` maps to SKIP, never PASS: since task 2.5 the aggregate reports
+    `unavailable` whenever a *required* claim could not be evaluated, and an `ok`
+    sibling no longer supplies a passing verdict for it (R1.6, I-7).
     """
     try:
         from scripts.audit.doc_truth import evaluate as _eval_doc
     except ImportError as exc:
         return CheckResult("C56", "Doc truth", "SKIP", f"doc_truth import failed: {exc}")
     probe = _eval_doc()
-    status = {"ok": "PASS", "fail": "FAIL", "skip": "SKIP"}[probe.status]
+    status = GATE_STATUS[probe.status]
     return CheckResult("C56", "Doc truth", status, probe.detail)
 
 
@@ -1598,11 +1751,11 @@ def check_agency_loop() -> CheckResult:
 @register("C58", "Decision initiator typed (autonomous != synthetic)")
 def check_initiator_truth() -> CheckResult:
     """ADR-053. The three-way origin (autonomous/synthetic/operator) is:
-      * single-owned in synapse_common.synthetic (both prefixes live there),
-      * carried additively by the decisions API (/recent + /{id}) and the
-        firehose decision envelope (audit logger),
-      * and — the load-bearing honesty guarantee — an ``auto-`` decision is
-        NEVER classified synthetic.
+    * single-owned in synapse_common.synthetic (both prefixes live there),
+    * carried additively by the decisions API (/recent + /{id}) and the
+      firehose decision envelope (audit logger),
+    * and — the load-bearing honesty guarantee — an ``auto-`` decision is
+      NEVER classified synthetic.
     """
     try:
         from synapse_common.synthetic import (
@@ -1636,7 +1789,10 @@ def check_initiator_truth() -> CheckResult:
             "C58", "Initiator truth", "FAIL", "initiator not wired into decisions API + firehose"
         )
     return CheckResult(
-        "C58", "Initiator truth", "PASS", "three-way origin single-owned; autonomous never synthetic"
+        "C58",
+        "Initiator truth",
+        "PASS",
+        "three-way origin single-owned; autonomous never synthetic",
     )
 
 
@@ -1646,15 +1802,17 @@ def check_initiator_truth() -> CheckResult:
 @register("C59", "Autonomy endpoint + live metric producer exist")
 def check_autonomy_visibility() -> CheckResult:
     """ADR-053. The autonomous loop is observable through the gateway:
-      * GET /api/v1/system/autonomy joins twin world_state + SensorLoop status,
-        VIEWER-gated (never direct-to-twin from the browser),
-      * the orchestrator exposes /api/v1/status/autonomy (sensor counters),
-      * synapse.metrics.agent finally has a REAL producer (emit_agent_metrics),
-      * both new proto schemas exist (I-3).
+    * GET /api/v1/system/autonomy joins twin world_state + SensorLoop status,
+      VIEWER-gated (never direct-to-twin from the browser),
+    * the orchestrator exposes /api/v1/status/autonomy (sensor counters),
+    * synapse.metrics.agent finally has a REAL producer (emit_agent_metrics),
+    * both new proto schemas exist (I-3).
     """
     system_py = (ROOT / "api" / "routers" / "system.py").read_text(encoding="utf-8")
     serve_py = (ROOT / "orchestrator" / "inference" / "serve.py").read_text(encoding="utf-8")
-    signals = (ROOT / "orchestrator" / "consensus" / "firehose_signals.py").read_text(encoding="utf-8")
+    signals = (ROOT / "orchestrator" / "consensus" / "firehose_signals.py").read_text(
+        encoding="utf-8"
+    )
     protocol = (ROOT / "orchestrator" / "consensus" / "protocol.py").read_text(encoding="utf-8")
 
     gateway_ok = (
@@ -1686,7 +1844,10 @@ def check_autonomy_visibility() -> CheckResult:
     if missing:
         return CheckResult("C59", "Autonomy visibility", "FAIL", "missing: " + ", ".join(missing))
     return CheckResult(
-        "C59", "Autonomy visibility", "PASS", "world+sensor proxy, metric producer, proto schemas present"
+        "C59",
+        "Autonomy visibility",
+        "PASS",
+        "world+sensor proxy, metric producer, proto schemas present",
     )
 
 
@@ -1698,41 +1859,38 @@ def check_uplift_truth() -> CheckResult:
     """ADR-042. The other honesty gates prove SYNAPSE is honest/trained/
     calibrated/auditable; C60 proves it is *intelligent* — that the four-tier
     consensus actually beats a transparent baseline policy on business KPIs.
-    ``scripts/audit/uplift_truth`` is the ratchet that fails on any regression
-    below ``UPLIFT_FLOOR``.
 
-    Mirrors the ``uplift_truth --check`` exit mapping (0 pass / 1 regression /
-    2 unavailable): measured uplift >= floor -> PASS, < floor -> FAIL, and an
-    UNAVAILABLE measurement -> SKIP (a SKIP is not a PASS). The measured uplift
-    lives in a result artifact written by ``python -m uplift.cli`` (task 14.1);
-    verify_claims runs on a fresh clone without it, so absence is a SKIP, not a
-    spurious FAIL — exactly how C38/C40 treat missing training artifacts.
+    **Trigger-aware (AD-9, CF-4).** R2.7 requires the harness to be regenerated in
+    the job that evaluates the gate and R2.8 forbids evaluating an artifact read
+    from version control, so C60 returns PASS/FAIL only in the job that produced
+    its evidence in this run and SKIP everywhere else. Under R2.9 that SKIP is
+    excluded from the published PASS count — absence of proof is not a pass (I-7).
+
+    The status comes from ``uplift_truth.registry_status`` so the registry row and
+    the ``--check`` exit code are one implementation. Previously this check read a
+    single ``headline_uplift`` field and reported PASS on an artifact that
+    self-declared ``incomplete: true`` with fidelity ``unknown``; the verdict now
+    derives from ``uplift.uplift_floor.is_proven_uplift`` via
+    ``uplift_truth.admit``/``verdict`` (purpose-achievement-audit R2).
     """
     try:
-        from scripts.audit.uplift_truth import UPLIFT_FLOOR, read_measured_uplift
+        from scripts.audit.uplift_truth import (
+            EXIT_UNAVAILABLE,
+            admit,
+            registry_status,
+            resolve_run_context,
+            verdict,
+        )
     except ImportError as exc:
         return CheckResult("C60", "Uplift truth", "SKIP", f"uplift_truth import failed: {exc}")
-    measured = read_measured_uplift()
-    if measured is None:
-        return CheckResult(
-            "C60",
-            "Uplift truth",
-            "SKIP",
-            f"measured uplift unavailable (run `python -m uplift.cli`); floor {UPLIFT_FLOOR}",
-        )
-    if measured < UPLIFT_FLOOR:
-        return CheckResult(
-            "C60",
-            "Uplift truth",
-            "FAIL",
-            f"measured uplift {measured} < floor {UPLIFT_FLOOR} — regression",
-        )
-    return CheckResult(
-        "C60",
-        "Uplift truth",
-        "PASS",
-        f"measured uplift {measured} >= floor {UPLIFT_FLOOR}",
-    )
+
+    # `verify_claims` is never the generating job: the powered run lives in the
+    # scheduled `uplift.yml`, which calls the gate directly with --require-fresh-run.
+    context = resolve_run_context(generating_job=False)
+    admission = admit(run=context)
+    code = verdict(admission.proof) if admission.admitted else EXIT_UNAVAILABLE
+    status, detail = registry_status(admission, code)
+    return CheckResult("C60", "Uplift truth", status, detail)
 
 
 # ---------------------------------------------------------------------------
@@ -1753,12 +1911,24 @@ def check_oracle_truth() -> CheckResult:
     reintroduced) mismatch appears — satisfying R8.6 ("a reintroduced
     docstring-body mismatch fails CI"). The raw ``oracle_truth --check`` stays
     strict (R8.4); only this surfaced row tolerates the known baseline.
+
+    R12 (purpose-achievement-audit task 5.5) adds the second half. The same row
+    now also carries the **derived** oracle-layer membership verdict: a test
+    registered in the Oracle layer that does not import and invoke the subject it
+    names, or whose reference value is not independent of the implementation it
+    judges, FAILs naming that test (R12.1, R12.2, R12.6); so does a test whose
+    *title* claims the layer while the derivation refuses it. A tolerance bound at
+    or above the committed ceiling is reported unconstraining (R12.7). The
+    allowlist that carries the pre-existing exceptions is itself validated: an
+    entry without both a dated rationale and a stated removal condition is a FAIL
+    (R12.5), and it excuses nothing while it is malformed.
     """
     try:
         from scripts.audit.oracle_truth import (
             KNOWN_BASELINE,
             all_mismatches,
             collect,
+            evaluate_membership,
             unresolved_mismatches,
         )
     except ImportError as exc:
@@ -1774,12 +1944,565 @@ def check_oracle_truth() -> CheckResult:
             "FAIL",
             f"{len(unresolved)} reintroduced/new docstring-body mismatch(es): {ids}",
         )
+
+    membership = evaluate_membership()
+    if membership.verdict == "unavailable":
+        # I-7: a derivation that could not run has established nothing. SKIP is
+        # not a PASS, and the registry gate treats an all-SKIP run as non-passing.
+        return CheckResult(
+            "C61",
+            "Oracle truth",
+            "SKIP",
+            f"oracle-layer membership could not be derived: {membership.reason}",
+        )
+    if membership.unresolved:
+        details = "; ".join(
+            f"{finding.rule} ({finding.requirement}): {finding.detail}"
+            for finding in membership.unresolved
+        )
+        return CheckResult(
+            "C61",
+            "Oracle truth",
+            "FAIL",
+            f"{len(membership.unresolved)} unresolved oracle-layer finding(s): {details}",
+        )
     return CheckResult(
         "C61",
         "Oracle truth",
         "PASS",
         f"{len(mismatches)} mismatch(es), all within known baseline "
-        f"({len(KNOWN_BASELINE)} pre-existing) — none reintroduced",
+        f"({len(KNOWN_BASELINE)} pre-existing) — none reintroduced; "
+        f"{len(membership.oracle_members)} test(s) earn Oracle-layer membership "
+        f"({len(membership.findings)} allowlisted finding(s), each dated with a "
+        "removal condition)",
+    )
+
+
+# ---------------------------------------------------------------------------
+# C62: a topic recorded with real consumers has a deployed consuming service
+# ---------------------------------------------------------------------------
+@register("C62", "Recorded topic consumers resolve to a deployed service")
+def check_topic_service_truth() -> CheckResult:
+    """R4.7 (purpose-achievement-audit task 10.14). Two legs, one row.
+
+    ``scripts/audit/topic_consumer_truth.py`` was reachable from ``Makefile:22``
+    and from nothing else — no workflow, no registry row — so the
+    ``consumers`` vs ``consumers_planned`` distinction it enforces could not fail
+    anything. This row registers it, and ``topic_service_truth`` adds the leg R4.7
+    actually asks for: a topic recorded with real consumers must resolve to a
+    service in the deployed compose file, because a subscribe call site in a module
+    nothing deploys is code, not a consumer.
+
+    ``unavailable`` maps to SKIP, never PASS: an unreadable compose file or a
+    sub-check that could not run establishes nothing about the deployed stack (I-7).
+    The exempt declared absences are named in the detail, so the PASS cannot be read
+    as proof about bindings this gate does not prove.
+    """
+    try:
+        from scripts.audit.topic_service_truth import evaluate as _eval_topic_services
+    except ImportError as exc:
+        return CheckResult(
+            "C62", "Topic service truth", "SKIP", f"topic_service_truth import failed: {exc}"
+        )
+    probe = _eval_topic_services()
+    status = GATE_STATUS[probe.status]
+    return CheckResult("C62", "Topic service truth", status, probe.detail)
+
+
+# ---------------------------------------------------------------------------
+# C63-C65: the enforcement spine's own gates, registered so they can bite
+# ---------------------------------------------------------------------------
+# purpose-achievement-audit task 2.17. RC-1's finding was that the verification
+# apparatus had no consequence attached; these three rows attach it to the three
+# spine gates that CAN be registered, and `.github/workflows/truth-gates.yml`
+# attaches it to all six by running each as a blocking step.
+#
+# THREE OF THE SIX SPINE GATES ARE DELIBERATELY NOT REGISTERED HERE, and the reason
+# is mechanical rather than a matter of taste:
+#
+#   * `registry_gate`  IS this registry's driver. `registry_gate.evaluate()` calls
+#     `collect_results()`, so a row for it would re-enter the registry from inside
+#     the registry -- unbounded recursion, not a check. Its enforcement path is the
+#     workflow step, which is the whole point of task 2.17.
+#   * `ledger_gen`     projects `docs/state/CURRENT.md` from one `RegistryVerdict`,
+#     which it obtains by calling `registry_gate.evaluate()`. Same recursion. Its
+#     enforcement path is `ledger_gen --check` in truth-gates. (`doc_truth` executes
+#     the suite too, but as a SUBPROCESS behind the `SYNAPSE_DOC_TRUTH_NESTED` guard,
+#     which bounds it at depth 1; nothing equivalent exists for an in-process call.)
+#   * `doc_truth`      is already registered, as C56.
+#
+# `unavailable` maps to SKIP in all three rows, never to PASS: a gate that could not
+# read its own inputs has established nothing (I-7), and a SKIP is excluded from the
+# published PASS count (R2.9).
+
+
+@register("C63", "Gate-surface record is generated from the workflow tree")
+def check_gate_surface_truth() -> CheckResult:
+    """R11.1, R11.2, R11.7, R11.9 (purpose-achievement-audit task 2.12, registered 2.17).
+
+    R11's finding was that the aggregate blocking surface of CI is stated nowhere: a
+    reader summing CLAUDE.md's gate inventory substantially overestimates what a merge
+    to `main` actually runs. `docs/state/GATE_SURFACE.md` is the generated statement,
+    and this row is what stops it from drifting: the record is re-projected from the
+    parsed workflow files and compared byte-for-byte against the committed copy, so a
+    trigger change that stops a gate executing on `push:main` FAILs unless the record
+    is regenerated in the same change (R11.2).
+
+    Deliberately duplicated with the `gate_surface --check` step in
+    `truth-gates.yml`. The step is the enforcement path that exists even when the
+    registry cannot run; the row is what puts the same fact inside the honesty meter
+    the README headline is pinned to. They cannot disagree -- both call the same
+    projection.
+    """
+    try:
+        from scripts.audit.gate_surface import (
+            SURFACE_DOC,
+            collect_record,
+            render_document,
+        )
+    except ImportError as exc:
+        return CheckResult(
+            "C63", "Gate surface truth", "SKIP", f"gate_surface import failed: {exc}"
+        )
+    record = collect_record()
+    if record.workflow_count == 0 or record.step_count == 0:
+        return CheckResult(
+            "C63",
+            "Gate surface truth",
+            "SKIP",
+            "no workflow step could be parsed, so no surface record could be projected",
+        )
+    if not SURFACE_DOC.is_file():
+        return CheckResult(
+            "C63",
+            "Gate surface truth",
+            "FAIL",
+            f"no committed record at {SURFACE_DOC.relative_to(ROOT).as_posix()}; "
+            "run `python -m scripts.audit.gate_surface --write`",
+        )
+    existing = SURFACE_DOC.read_text(encoding="utf-8")
+    if existing != render_document(record, existing):
+        return CheckResult(
+            "C63",
+            "Gate surface truth",
+            "FAIL",
+            f"{SURFACE_DOC.relative_to(ROOT).as_posix()} differs from the parsed "
+            f"workflow tree ({record.workflow_count} workflow(s), {record.job_count} "
+            f"job(s), {record.step_count} step(s)); regenerate it in the same change "
+            "(R11.2, R11.7) -- `python -m scripts.audit.gate_surface --check` prints the diff",
+        )
+    return CheckResult(
+        "C63",
+        "Gate surface truth",
+        "PASS",
+        f"{len(record.rows)} surface row(s) match the parsed tree "
+        f"({record.workflow_count} workflow(s), {record.step_count} step(s))",
+    )
+
+
+@register("C64", "Declared-blocking workflow steps propagate their exit status")
+def check_workflow_shape_truth() -> CheckResult:
+    """R1.8, R6.13, R8.9, R11.3 (purpose-achievement-audit task 2.10, registered 2.17).
+
+    The audit found `|| true`, `|| echo`, and `continue-on-error: true` on steps that
+    governance documents call blocking -- including the deploy-time audit verifier and
+    the frontend step the workflow itself calls "the REAL effectiveness signal". This
+    row makes the shape of the workflow tree mechanical: a step declared in
+    `infrastructure/quality/blocking-steps.yaml` that carries a discarding construct
+    FAILs naming the file and the step, and a non-propagating step that is NOT declared
+    must say `ADVISORY`/`informational` in its own name.
+
+    Expected FAIL on landing, and honestly so: `blocking-steps.yaml` declares the three
+    R8.9 frontend entries that still carry `|| true`, precisely so the gate reports the
+    unremediated state until task 11.x drops them. That is an honest red gate, not an
+    exemption.
+    """
+    try:
+        from scripts.audit.workflow_shape_truth import evaluate as _eval_shape
+    except ImportError as exc:
+        return CheckResult(
+            "C64", "Workflow shape truth", "SKIP", f"workflow_shape_truth import failed: {exc}"
+        )
+    report = _eval_shape()
+    status = GATE_STATUS[report.verdict]
+    return CheckResult("C64", "Workflow shape truth", status, report.reason)
+
+
+@register("C65", "Required-check declaration resolves to real jobs")
+def check_required_checks_truth() -> CheckResult:
+    """R14.1, R14.2 (purpose-achievement-audit task 2.14, registered 2.17).
+
+    R14 is a boundary, not a divergence: whether a red run BLOCKS a merge lives in
+    GitHub branch-protection settings that are not in this tree, so every "blocking"
+    claim rests on a fact this repository could not check. `required-checks.yaml` is the
+    in-repo half, and this row keeps it resolvable: every declared job must exist in
+    the workflow it names, under the exact display string branch protection matches, so
+    a rename or removal FAILs naming the job rather than leaving branch protection
+    waiting on a check that never reports.
+
+    Scope, stated so the PASS cannot be over-read: this is IN-REPO consistency only. It
+    makes no claim about the live configuration -- only a run of
+    `.github/workflows/required-checks-reconcile.yml` can, and until one happens the
+    declaration's own `reconciliation.status` reads `unverified` (R14.5, R14.6).
+    """
+    try:
+        from scripts.audit.required_checks_truth import evaluate as _eval_required
+    except ImportError as exc:
+        return CheckResult(
+            "C65",
+            "Required checks truth",
+            "SKIP",
+            f"required_checks_truth import failed: {exc}",
+        )
+    report = _eval_required()
+    # `report.reason` is `rule=count` on a failure, which names no subject. AD-4's
+    # contract is "exits non-zero NAMING the mutated subject", and this row is the only
+    # output `gate_fault_injection` sees (it spawns `--run-check C65` and reads one
+    # line), so the leading findings are carried through. Without them a declared
+    # falsification could only expect the rule name, and a gate that fails without
+    # saying which job failed cannot be acted on.
+    named = "; ".join(
+        f"{finding.rule} at {finding.workflow}::{finding.job} ({finding.section}): {finding.detail}"
+        for finding in report.findings[:2]
+    )
+    more = "" if len(report.findings) <= 2 else f" (+{len(report.findings) - 2} more)"
+    detail = f"{report.reason}; {named}{more}" if report.findings else report.reason
+    return CheckResult("C65", "Required checks truth", GATE_STATUS[report.verdict], detail)
+
+
+# ---------------------------------------------------------------------------
+# C66-C72: the remaining audit gates, registered so they can bite
+# ---------------------------------------------------------------------------
+# purpose-achievement-audit task 12.1. Seven gates existed under `scripts/audit/` with
+# a CLI and a property test each, and with NO row here -- so `make verify-claims` could
+# not report them and `registry_gate` could not fail on them. That is RC-1's finding in
+# its purest form: a gate reachable only by hand is not enforcement.
+#
+# The ids continue the registry's sparse numbering from C65. **The task's own NOTE said
+# to start at C63; that NOTE predates tasks 10.14 and 2.17.** C62 is
+# `check_topic_service_truth` and C63/C64/C65 are the three spine gates, so the first
+# free id is C66. `required_checks_truth`, the eighth name on 12.1's list, was ALREADY
+# registered as C65 by task 2.17 and is deliberately not registered a second time -- two
+# rows executing one gate would double-count it in every published total.
+#
+# Every row maps its gate's verdict through :data:`GATE_STATUS`, so `unavailable` and
+# `skip` both become SKIP and neither can become PASS (I-7, R2.9).
+#
+# `registry_gate`, `ledger_gen` and `doc_truth`'s in-process twin remain unregistered for
+# the recursion reason recorded above C63. `gate_fault_injection` is different and IS
+# registerable: it reads `verify_claims._CHECKS` for the id list only and never executes
+# a check, so registering it introduces no re-entry.
+
+
+@register("C66", "Named audit commands resolve to a real module, script, or entry point")
+def check_command_path_truth() -> CheckResult:
+    """R6.14 (purpose-achievement-audit task 2.16, registered 12.1).
+
+    The finding was a governance document naming a verification command that resolves to
+    nothing -- a step that cannot run reported as a gate that does. This row resolves
+    every command named by an audit-verification step in `.github/workflows/**` and in
+    the `Makefile` against the tree: a `python -m` module that does not exist, a console
+    script with no entry point, and a script path that is not a file each FAIL naming the
+    source, the step, and the unresolvable command. The second rule is the exit-status
+    rule: such a step must not discard the status of the command it names.
+
+    An input naming no audit-verification step at all reports `unavailable` -> SKIP, not
+    PASS: a resolution gate with nothing to resolve has proved nothing (I-7).
+    """
+    try:
+        from scripts.audit.command_path_truth import evaluate as _eval_commands
+    except ImportError as exc:
+        return CheckResult(
+            "C66", "Command path truth", "SKIP", f"command_path_truth import failed: {exc}"
+        )
+    report = _eval_commands()
+    unresolved = sum(1 for command in report.commands if not command.resolves)
+    # Same reason as C65: the gate's own `reason` is `rule=count`, and R6.14's finding is
+    # only actionable when the source, the step and the unresolvable command are named.
+    named = "; ".join(
+        f"{finding.rule} at {finding.source}::{finding.scope} step "
+        f"'{finding.step_name}': {finding.subject} -- {finding.detail}"
+        for finding in report.findings[:2]
+    )
+    more = "" if len(report.findings) <= 2 else f" (+{len(report.findings) - 2} more)"
+    return CheckResult(
+        "C66",
+        "Command path truth",
+        GATE_STATUS[report.verdict],
+        f"{len(report.commands)} named command(s), {unresolved} unresolved; {report.reason}"
+        + (f"; {named}{more}" if report.findings else ""),
+    )
+
+
+@register("C67", "Audit-chain anchors are fresh enough to verify the chain externally")
+def check_anchor_truth() -> CheckResult:
+    """R6.11, R6.12 (purpose-achievement-audit task 7.4, registered 12.1).
+
+    An external anchor is what lets a third party check the hash chain without trusting
+    this repository, and the freshness bound is what stops a years-old commitment being
+    read as a current one. `chain_status` is carried into the detail on purpose: it has
+    exactly two values, `anchored` and `unverifiable`, and NEITHER of them is
+    `verified` -- walking the chain against the anchored head is a separate job. A PASS
+    here means "a fresh commitment exists to walk against", never "the chain is intact".
+
+    No anchor, and an anchor staler than the committed bound, are both `unavailable` ->
+    SKIP. That is the honest reading: whatever else is green, an unanchored chain is not
+    verifiable from outside, and calling that a pass would be the exact over-claim R6.11
+    exists to prevent. Locally the anchor directory is normally empty, so this row reads
+    SKIP off the dev box; the publisher is
+    `.github/workflows/publish-audit-anchor.yml`.
+    """
+    try:
+        from scripts.audit.anchor_truth import SettingsUnavailableError
+        from scripts.audit.anchor_truth import evaluate as _eval_anchors
+    except ImportError as exc:
+        return CheckResult("C67", "Anchor truth", "SKIP", f"anchor_truth import failed: {exc}")
+    try:
+        report = _eval_anchors()
+    except SettingsUnavailableError as exc:
+        return CheckResult(
+            "C67",
+            "Anchor truth",
+            "SKIP",
+            f"the committed anchor settings could not be read, so no bound was applied: {exc}",
+        )
+    return CheckResult(
+        "C67",
+        "Anchor truth",
+        GATE_STATUS[report.verdict],
+        f"chain={report.chain_status}, {len(report.anchors)} anchor file(s); {report.reason}",
+    )
+
+
+@register("C68", "World-feed provenance: the declared source class matches the code")
+def check_feed_provenance() -> CheckResult:
+    """R4.8 (purpose-achievement-audit task 5.7 / ADR-050, registered 12.1).
+
+    The finding was a `WorldSource` whose name and docstring promise an external feed
+    while its body returns a seeded draw or an empty list. This row classifies every
+    production implementation from its own body and FAILs when the derived class
+    contradicts the declared one, when a declared class is outside the three the audit
+    schema permits, or when a candidate file could not be parsed at all.
+
+    Scope, stated so the PASS cannot be over-read. This gate settles the STATIC half:
+    whether a feed-capable implementation exists and whether every implementation's
+    declaration matches its body. It makes NO claim that the loop actually ran on
+    external data -- that evidence is `decision_data_provenance` rows carrying
+    `source_class = 'EXTERNAL'` (AD-10), which only a job with the database in front of
+    it can count, so `external_decisions` is zero in this row by construction and
+    `externally_driven` is therefore reported as `no`. "Nobody measured it" is the honest
+    reading, not a failure and never a pass (I-7).
+
+    Composed from `collect()` rather than a module-level `evaluate()`, because
+    `feed_provenance` exposes no report object; the CLI's own `--check` rule (non-zero
+    iff there is a violation) is reproduced here exactly.
+    """
+    try:
+        from scripts.audit.feed_provenance import (
+            DECLARABLE,
+            UNCLASSIFIED,
+            collect,
+            external_implementation_present,
+        )
+    except ImportError as exc:
+        return CheckResult(
+            "C68", "Feed provenance", "SKIP", f"feed_provenance import failed: {exc}"
+        )
+    reports, scan_errors = collect()
+    violations = [v for report in reports for v in report.violations] + scan_errors
+    if not reports:
+        return CheckResult(
+            "C68",
+            "Feed provenance",
+            "SKIP",
+            "no WorldSource implementation was classified, so no declaration was checked; "
+            "absence of a scan is not a pass (I-7)",
+        )
+    if violations:
+        named = "; ".join(f"{v.file}:{v.line} {v.kind}: {v.detail}" for v in violations[:4])
+        more = "" if len(violations) <= 4 else f" (+{len(violations) - 4} more)"
+        return CheckResult(
+            "C68",
+            "Feed provenance",
+            "FAIL",
+            f"{len(violations)} provenance violation(s) over "
+            f"{len(reports)} implementation(s): {named}{more}",
+        )
+    counts = {
+        cls: sum(1 for report in reports if report.derived == cls)
+        for cls in (*DECLARABLE, UNCLASSIFIED)
+    }
+    summary = ", ".join(f"{cls}={counts[cls]}" for cls in (*DECLARABLE, UNCLASSIFIED))
+    capable = external_implementation_present(reports)
+    return CheckResult(
+        "C68",
+        "Feed provenance",
+        "PASS",
+        f"{len(reports)} implementation(s) classified ({summary}); external feed capability: "
+        f"{'present' if capable else 'absent'}. This row asserts declaration-vs-body "
+        "agreement only -- whether the loop RAN on external data is counted from "
+        "decision_data_provenance by a job with the database, and is not claimed here",
+    )
+
+
+@register("C69", "Completed task records resolve to landed work, not a placeholder")
+def check_task_claim_truth() -> CheckResult:
+    """R3.6 (purpose-achievement-audit task 10.8, registered 12.1).
+
+    R3.6's finding was a spec task marked `[x]` for publishing a checkpoint while the
+    serving registry still held `__placeholder__` -- a completion claim with nothing
+    behind it. This row makes that mechanical: a checked task whose committed subject is
+    still absent FAILs naming the spec, the task id, and the subject it claims.
+
+    **Expected FAIL on landing, and deliberately not softened (I-7).**
+    `core-purpose-uplift` tasks 9 and 9.1 are `[x]` against an unchanged
+    `__placeholder__`, so this row reddens the registry the moment it is registered. That
+    is R3.6's finding becoming a gate, which is what this feature is for -- not a gate
+    defect, and not something to allowlist. It clears when the claim is retracted or the
+    checkpoint is genuinely published.
+
+    An unreadable specs root or policy reports `unavailable` -> SKIP, never PASS: no scan
+    is not a clean scan.
+    """
+    try:
+        from scripts.audit.task_claim_truth import evaluate as _eval_claims
+    except ImportError as exc:
+        return CheckResult(
+            "C69", "Task claim truth", "SKIP", f"task_claim_truth import failed: {exc}"
+        )
+    report = _eval_claims()
+    return CheckResult(
+        "C69",
+        "Task claim truth",
+        GATE_STATUS[report.outcome.value],
+        f"{report.records_scanned} task record(s) over {len(report.specs_scanned)} spec(s), "
+        f"registry={report.registry_state}; {report.detail}",
+    )
+
+
+@register("C70", "Ratcheted thresholds never regress and agree with what they guard")
+def check_ratchet_truth() -> CheckResult:
+    """R7.4, R7.8, R2.10 (purpose-achievement-audit task 4.3, registered 12.1).
+
+    Two clauses over `infrastructure/quality/ratchets.json`. MONOTONICITY: a committed
+    threshold on the wrong side of its recorded bound FAILs naming both values, so a
+    quietly loosened floor stops a merge instead of stopping nothing. CONFIG AGREEMENT: a
+    ratchet constant that sits below the configuration it claims to guard cannot catch a
+    regression to itself, so the disagreement is itself a failure.
+
+    **Expected FAIL on landing.** The live example is the one the audit found: the
+    frontend ships `thresholds.break: 50` while `STRYKER_BREAK_NOW` here is frozen at 26,
+    so a regression 50 -> 26 passes C16 today. `ratchets.json` records that as
+    `agrees_with_shipped: false`, and recording it does not excuse it. Repairing the
+    constant needs a coordinated change across `CLAUDE.md`, `doc-number-pins.yaml` and
+    `tests/verify/test_ratchet_monotonicity_property.py` (whose docstring names 12.1 as
+    the repair point and whose assertions pin the hole), so it is reported rather than
+    half-done -- an honest red gate, not an exemption.
+
+    A row with no measurement behind it reports `skip`, and the aggregate orders
+    FAIL > UNAVAILABLE > SKIP > PASS so an absent measurement can never mask a
+    regression. Both `skip` and `unavailable` map to SKIP here; neither is a pass.
+    """
+    try:
+        from scripts.audit.ratchet_truth import evaluate as _eval_ratchets
+    except ImportError as exc:
+        return CheckResult("C70", "Ratchet truth", "SKIP", f"ratchet_truth import failed: {exc}")
+    report = _eval_ratchets()
+    failing = [row for row in report.ratchets if row.outcome.value == "fail"]
+    unmeasured = sum(1 for row in report.ratchets if row.outcome.value == "skip")
+    if failing:
+        named = "; ".join(row.detail for row in failing[:3])
+        more = "" if len(failing) <= 3 else f" (+{len(failing) - 3} more)"
+        detail = f"{len(failing)} of {len(report.ratchets)} ratchet(s) breached: {named}{more}"
+    else:
+        detail = (
+            f"{len(report.ratchets)} ratchet(s) hold their recorded bounds; "
+            f"{unmeasured} carry no measurement, so they are declared values only "
+            "(SKIP, never PASS)"
+        )
+    return CheckResult("C70", "Ratchet truth", GATE_STATUS[report.outcome.value], detail)
+
+
+@register("C71", "Replayed KV-cache and tier-routing metrics meet their committed floors")
+def check_replay_metrics() -> CheckResult:
+    """R7.6, R7.7 (purpose-achievement-audit task 4.5, registered 12.1).
+
+    Two numbers CLAUDE.md has stated since Sprint 9 with no gate anywhere: the KV-cache
+    0.70 floor and the tier-routing 80% floor. This row measures both against
+    `infrastructure/quality/replay-floors.yaml` by replaying the committed golden traces
+    through the real `TierRouter` and reading the real cache gauge.
+
+    A measured breach outranks an unavailability, so an absent measurement can never mask
+    a real floor regression; and an unavailability outranks a pass, so absence of proof is
+    never a pass (I-7). Off a live Ollama the cache gauge carries no samples, so this row
+    reads SKIP rather than reporting a zero -- "no hit rate was measured" is not "the hit
+    rate is 0.0", and either of those read as a PASS would be a fabricated measurement.
+    Trace-count or seed drift against the generator is also `unavailable`, not a pass:
+    a replay over the wrong traces measures the wrong thing.
+    """
+    try:
+        from scripts.audit.replay_metrics import evaluate as _eval_replay
+    except ImportError as exc:
+        return CheckResult("C71", "Replay metrics", "SKIP", f"replay_metrics import failed: {exc}")
+    report = _eval_replay()
+    parts = [
+        f"{metric.metric}="
+        + ("unmeasured" if metric.measured is None else f"{metric.measured:.4f}")
+        + (" (no floor read)" if metric.floor is None else f" vs floor {metric.floor:.2f}")
+        + f" [{metric.outcome.value}]: {metric.detail}"
+        for metric in report.metrics
+    ]
+    found = 0 if report.traces_found is None else report.traces_found
+    return CheckResult(
+        "C71",
+        "Replay metrics",
+        GATE_STATUS[report.outcome.value],
+        f"{found} golden trace(s) from {report.traces_dir or '(unresolved)'}; " + "; ".join(parts),
+    )
+
+
+@register("C72", "Every gate declares a mutation that falsifies it")
+def check_gate_fault_injection() -> CheckResult:
+    """R1.2, R9.5, R12.3, R12.7 (purpose-achievement-audit task 5.1, registered 12.1).
+
+    AD-4's requirement is that a gate prove it can fail. `gate-mutations.yaml` declares,
+    per check, a mutation that MUST make that check exit non-zero naming the mutated
+    subject. This row validates the declaration against its schema and against this
+    registry: a declared id that no `@register` call declares FAILs, and a
+    `completeness.declared_gates` count that disagrees with the `gates:` block FAILs --
+    so a hand edit to the declaration is itself detectable.
+
+    Registered with `probe=False`, which is the only form allowed to run here. The sweep
+    copies the whole tree and spawns one subprocess per gate plus one per operator; that
+    is a CI workload (`ci.yml::uplift-verify`), never a laptop one (I-0). Unprobed, the
+    gate's own verdict is `unavailable` -> SKIP, which is the honest label: the
+    declaration is valid but nothing was falsified, and absence of proof is not a pass.
+    This row therefore reports SKIP in a normal run and FAIL on a declaration defect. It
+    can never report PASS outside a `--sweep`, and that asymmetry is deliberate.
+
+    Undeclared registered checks are excluded from PASS-eligibility and named in the
+    report; they do not FAIL here. Turning that shortfall into a hard failure would make
+    the row permanently red over roughly fifty pre-existing rows -- a gate born red for
+    someone else's debt asserts nothing new. The exclusion is the honest label AD-4 asks
+    for, and it is recorded, not hidden.
+    """
+    try:
+        from scripts.audit.gate_fault_injection import evaluate as _eval_injection
+    except ImportError as exc:
+        return CheckResult(
+            "C72",
+            "Gate fault injection",
+            "SKIP",
+            f"gate_fault_injection import failed: {exc}",
+        )
+    report = _eval_injection(probe=False)
+    return CheckResult(
+        "C72",
+        "Gate fault injection",
+        GATE_STATUS[report.verdict],
+        f"{len(report.declared_ids)} of {len(report.registered_ids)} registered check(s) "
+        f"declare a falsification, {len(report.undeclared_ids)} undeclared and excluded "
+        f"from PASS-eligibility; {report.reason}",
     )
 
 
@@ -1794,6 +2517,15 @@ def _run_check(cid: str, title: str, fn: Callable[[], CheckResult]) -> CheckResu
     All three cases become an explicit FAIL naming the defect, so a broken
     check surfaces loudly instead of aborting the run or vanishing from the
     counts (which would let the pinned headline overstate reality).
+
+    R10.5 / design AD-14: reported identity is coerced, not trusted. A result
+    whose ``cid`` differs from the identifier it was registered under is coerced
+    to FAIL naming *both* ids, and is emitted under the registered id. C46's SKIP
+    branch returning ``cid="C43"`` is exactly this defect: a check reporting under
+    another check's number silently moves a status onto a row it does not own, and
+    leaves the registered row with no result at all. The guard runs after the
+    status coercion and over its output, so a result carrying both defects is
+    still reported under the id that was registered.
     """
     try:
         result = fn()
@@ -1804,12 +2536,21 @@ def _run_check(cid: str, title: str, fn: Callable[[], CheckResult]) -> CheckResu
             cid, title, "FAIL", f"check returned {type(result).__name__}, expected CheckResult"
         )
     if result.status not in STATUSES:
-        return CheckResult(
+        result = CheckResult(
             result.cid or cid,
             result.title or title,
             "FAIL",
             f"check reported unknown status {result.status!r} "
             f"(expected one of {', '.join(STATUSES)}); detail was: {result.detail}",
+        )
+    if result.cid != cid:
+        return CheckResult(
+            cid,
+            title,
+            "FAIL",
+            f"check registered as {cid} reported under {result.cid!r}: a check must "
+            f"report the identifier it is registered under; the reported "
+            f"{result.status} was: {result.detail}",
         )
     return result
 
@@ -1842,7 +2583,22 @@ def status_counts(results: list[CheckResult]) -> dict[str, int]:
     return counts
 
 
-def run(as_json: bool = False) -> int:
+def run(as_json: bool = False, check: bool = False) -> int:
+    """Execute every registered check and report.
+
+    Default mode is the historical report: exit ``1`` if any check FAILed, else
+    ``0``. ``check=True`` delegates to ``scripts.audit.registry_gate.run`` so the
+    gate verdict has exactly one implementation (design E1.2) - identity of the
+    executed set, the all-SKIP case, and the ``2`` (unavailable) exit code all come
+    from there rather than being reimplemented here.
+    """
+    if check:
+        # Imported inside the function on purpose: ``registry_gate`` imports this
+        # module at its top level, so a module-scope import here would be circular.
+        from scripts.audit import registry_gate
+
+        return registry_gate.run(as_json=as_json, check=True)
+
     results = collect_results()
     counts = status_counts(results)
     pass_n = counts["PASS"]
@@ -1887,4 +2643,4 @@ def run(as_json: bool = False) -> int:
 
 
 if __name__ == "__main__":
-    sys.exit(run(as_json="--json" in sys.argv))
+    sys.exit(run(as_json="--json" in sys.argv, check="--check" in sys.argv))

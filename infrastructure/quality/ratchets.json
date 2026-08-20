@@ -1,0 +1,439 @@
+{
+  "$comment": [
+    "SYNAPSE -- highest-ever committed value for every ratcheted threshold (E1.8; R2.10, R7.4, R7.8).",
+    "",
+    "scripts/audit/ratchet_truth.py (task 4.3) reads this file with encoding='utf-8' (E-S13-07) and enforces two clauses:",
+    "  1. MONOTONICITY (R7.4): a committed value on the wrong side of `bound` FAILs naming the threshold id, the",
+    "     recorded bound (previous), and the committed value (proposed). `direction: up` means bound is the",
+    "     highest-ever committed value and a lower commit is a regression; `direction: down` means bound is the",
+    "     lowest-ever committed value (a ceiling that only tightens) and a higher commit is a regression.",
+    "  2. CONFIG AGREEMENT (R7.8): `guard_constant.value` must equal `shipped.value`. A ratchet constant that sits",
+    "     below the configuration it claims to guard lets a real regression PASS -- that is the Stryker 26-vs-50",
+    "     hole this file makes visible. `agrees_with_shipped: false` records the hole; it does not excuse it.",
+    "",
+    "I-7: `measured_at: null` with `status: unmeasured` means NO measurement exists. It is never a pass, and a",
+    "fabricated number is never substituted for it (CF-3). Only a run that measured the value may write",
+    "`measured_at` + `source_run`.",
+    "",
+    "Seeded entirely from values already committed in the repo. Nothing here was invented; every entry names its",
+    "source file and, where one exists, the symbol that guards it."
+  ],
+  "version": 1,
+  "ratchets": {
+    "coverage-floor:packages/synapse_common": {
+      "kind": "coverage-floor",
+      "direction": "up",
+      "bound": 83.5,
+      "unit": "percent-line-and-branch",
+      "shipped": {
+        "file": "infrastructure/quality/coverage-floors.yaml",
+        "extractor": "yaml_path:packages['packages/synapse_common'].line",
+        "value": 83.5
+      },
+      "guard_constant": null,
+      "agrees_with_shipped": true,
+      "status": "measured",
+      "measured_at": "2026-05-29",
+      "source_run": null,
+      "source": "docs/state/coverage-baseline-2026-05-29.md",
+      "note": "Measured 84.54% on 2026-05-29; floor ratcheted 60.5 -> 75.5 -> 83.5. source_run is null because the pre-task-4.1 ratchet script recorded no run id."
+    },
+    "coverage-floor:orchestrator": {
+      "kind": "coverage-floor",
+      "direction": "up",
+      "bound": 30.0,
+      "unit": "percent-line-and-branch",
+      "shipped": {
+        "file": "infrastructure/quality/coverage-floors.yaml",
+        "extractor": "yaml_path:packages['orchestrator'].line",
+        "value": 30.0
+      },
+      "guard_constant": null,
+      "agrees_with_shipped": true,
+      "status": "measured",
+      "measured_at": "2026-05-29",
+      "source_run": null,
+      "source": "docs/state/coverage-baseline-2026-05-29.md",
+      "measurement_scope": "local-subset",
+      "note": "Measured 30.11% locally with 3 tests excluded (missing pymoo/sse-starlette). The CI number will be higher; the floor is the honest lower bound until a full run measures it."
+    },
+    "coverage-floor:agents/supplier_trust": {
+      "kind": "coverage-floor",
+      "direction": "up",
+      "bound": 3.0,
+      "unit": "percent-line-and-branch",
+      "shipped": {
+        "file": "infrastructure/quality/coverage-floors.yaml",
+        "extractor": "yaml_path:packages['agents/supplier_trust'].line",
+        "value": 3.0
+      },
+      "guard_constant": null,
+      "agrees_with_shipped": true,
+      "status": "measured",
+      "measured_at": "2026-05-29",
+      "source_run": null,
+      "source": "docs/state/coverage-baseline-2026-05-29.md",
+      "measurement_scope": "local-subset",
+      "note": "Measured 3.69% locally with 4 collection errors (torch_geometric missing)."
+    },
+    "coverage-floor:agents/demand_prophet": {
+      "kind": "coverage-floor",
+      "direction": "up",
+      "bound": 0.0,
+      "unit": "percent-line-and-branch",
+      "shipped": {
+        "file": "infrastructure/quality/coverage-floors.yaml",
+        "extractor": "yaml_path:packages['agents/demand_prophet'].line",
+        "value": 0.0
+      },
+      "guard_constant": null,
+      "agrees_with_shipped": true,
+      "status": "unmeasured",
+      "measured_at": null,
+      "source_run": null,
+      "note": "CI-MUST-MEASURE (torch absent on the dev box). SKIP - unmeasured until ci.yml::quality-gates seeds it (CF-3); never PASS."
+    },
+    "coverage-floor:agents/disruption_shield": {
+      "kind": "coverage-floor",
+      "direction": "up",
+      "bound": 0.0,
+      "unit": "percent-line-and-branch",
+      "shipped": {
+        "file": "infrastructure/quality/coverage-floors.yaml",
+        "extractor": "yaml_path:packages['agents/disruption_shield'].line",
+        "value": 0.0
+      },
+      "guard_constant": null,
+      "agrees_with_shipped": true,
+      "status": "unmeasured",
+      "measured_at": null,
+      "source_run": null,
+      "note": "CI-MUST-MEASURE (torch absent on the dev box). SKIP - unmeasured until ci.yml::quality-gates seeds it (CF-3)."
+    },
+    "coverage-floor:agents/freshness_guardian": {
+      "kind": "coverage-floor",
+      "direction": "up",
+      "bound": 0.0,
+      "unit": "percent-line-and-branch",
+      "shipped": {
+        "file": "infrastructure/quality/coverage-floors.yaml",
+        "extractor": "yaml_path:packages['agents/freshness_guardian'].line",
+        "value": 0.0
+      },
+      "guard_constant": null,
+      "agrees_with_shipped": true,
+      "status": "unmeasured",
+      "measured_at": null,
+      "source_run": null,
+      "note": "CI-MUST-MEASURE (torch + lifelines absent on the dev box)."
+    },
+    "coverage-floor:agents/inventory_sentinel": {
+      "kind": "coverage-floor",
+      "direction": "up",
+      "bound": 0.0,
+      "unit": "percent-line-and-branch",
+      "shipped": {
+        "file": "infrastructure/quality/coverage-floors.yaml",
+        "extractor": "yaml_path:packages['agents/inventory_sentinel'].line",
+        "value": 0.0
+      },
+      "guard_constant": null,
+      "agrees_with_shipped": true,
+      "status": "unmeasured",
+      "measured_at": null,
+      "source_run": null,
+      "note": "CI-MUST-MEASURE (torch absent on the dev box)."
+    },
+    "coverage-floor:agents/pricing_oracle": {
+      "kind": "coverage-floor",
+      "direction": "up",
+      "bound": 0.0,
+      "unit": "percent-line-and-branch",
+      "shipped": {
+        "file": "infrastructure/quality/coverage-floors.yaml",
+        "extractor": "yaml_path:packages['agents/pricing_oracle'].line",
+        "value": 0.0
+      },
+      "guard_constant": null,
+      "agrees_with_shipped": true,
+      "status": "unmeasured",
+      "measured_at": null,
+      "source_run": null,
+      "note": "CI-MUST-MEASURE (torch absent on the dev box)."
+    },
+    "coverage-floor:agents/routing_navigator": {
+      "kind": "coverage-floor",
+      "direction": "up",
+      "bound": 0.0,
+      "unit": "percent-line-and-branch",
+      "shipped": {
+        "file": "infrastructure/quality/coverage-floors.yaml",
+        "extractor": "yaml_path:packages['agents/routing_navigator'].line",
+        "value": 0.0
+      },
+      "guard_constant": null,
+      "agrees_with_shipped": true,
+      "status": "unmeasured",
+      "measured_at": null,
+      "source_run": null,
+      "note": "CI-MUST-MEASURE (torch + ortools absent on the dev box)."
+    },
+    "coverage-floor:agents/sustainability_agent": {
+      "kind": "coverage-floor",
+      "direction": "up",
+      "bound": 0.0,
+      "unit": "percent-line-and-branch",
+      "shipped": {
+        "file": "infrastructure/quality/coverage-floors.yaml",
+        "extractor": "yaml_path:packages['agents/sustainability_agent'].line",
+        "value": 0.0
+      },
+      "guard_constant": null,
+      "agrees_with_shipped": true,
+      "status": "unmeasured",
+      "measured_at": null,
+      "source_run": null,
+      "note": "CI-MUST-MEASURE (torch absent on the dev box)."
+    },
+    "coverage-floor:digital_twin": {
+      "kind": "coverage-floor",
+      "direction": "up",
+      "bound": 0.0,
+      "unit": "percent-line-and-branch",
+      "shipped": {
+        "file": "infrastructure/quality/coverage-floors.yaml",
+        "extractor": "yaml_path:packages['digital_twin'].line",
+        "value": 0.0
+      },
+      "guard_constant": null,
+      "agrees_with_shipped": true,
+      "status": "unmeasured",
+      "measured_at": null,
+      "source_run": null,
+      "note": "CI-MUST-MEASURE (simpy absent on the Windows dev box)."
+    },
+    "coverage-floor:api": {
+      "kind": "coverage-floor",
+      "direction": "up",
+      "bound": 0.0,
+      "unit": "percent-line-and-branch",
+      "shipped": {
+        "file": "infrastructure/quality/coverage-floors.yaml",
+        "extractor": "yaml_path:packages['api'].line",
+        "value": 0.0
+      },
+      "guard_constant": null,
+      "agrees_with_shipped": true,
+      "status": "unmeasured",
+      "measured_at": null,
+      "source_run": null,
+      "note": "CI-MUST-MEASURE. Floor binds on the first CI run."
+    },
+    "stryker-break": {
+      "kind": "mutation-score-floor",
+      "direction": "up",
+      "bound": 50,
+      "unit": "percent-killed",
+      "shipped": {
+        "file": "frontend/stryker.conf.json",
+        "extractor": "json_path:$.thresholds.break",
+        "value": 50
+      },
+      "guard_constant": {
+        "file": "scripts/audit/verify_claims.py",
+        "symbol": "STRYKER_BREAK_NOW",
+        "value": 50
+      },
+      "hard_floor": {
+        "file": "scripts/audit/verify_claims.py",
+        "symbol": "STRYKER_BREAK_MIN",
+        "value": 20
+      },
+      "agrees_with_shipped": true,
+      "status": "measured",
+      "measured_at": "2026-05-29",
+      "source_run": null,
+      "note": "R7.8 hole CLOSED by task 12.1. The config shipped 50 from Sprint 13 Phase 4.1 (json-canonical.ts reached a 96.30% kill rate) while THREE mirrors of that number stayed at 26: verify_claims.py::STRYKER_BREAK_NOW, CLAUDE.md:46, and this entry's guard_constant.value. Frozen at 26 the gate accepted any config value >= 26, so a silent regression from the shipped 50 down to 26 PASSED C16 -- a gate comparing against a stale mirror cannot catch a regression to it. All three now read 50, which STRENGTHENS the gate rather than raising a ratchet: the enforced floor is frontend/stryker.conf.json and it is unchanged. hard_floor STRYKER_BREAK_MIN stays 20 (the never-below-this bound, deliberately not moved with the ratchet). Next destinations 70 -> 85 per CLAUDE.md's <15%-survival rule; move all three mirrors in the same commit as the config, never ahead of it."
+    },
+    "mutation-survival:rewards": {
+      "kind": "mutation-survival-ceiling",
+      "direction": "down",
+      "bound": 15,
+      "unit": "percent-survived",
+      "shipped": {
+        "file": ".github/workflows/mutation.yml",
+        "extractor": "regex:--threshold (?P<value>\\d+) --label \"rewards/",
+        "value": 15
+      },
+      "guard_constant": null,
+      "agrees_with_shipped": true,
+      "status": "measured",
+      "measured_at": null,
+      "source_run": null,
+      "note": "A ceiling: survival must stay at or below it, so the ratchet direction is DOWN and raising the number is the regression. measured_at is null because mutation.yml runs on a schedule and no survival measurement is committed in-repo (CI-only workload, I-0)."
+    },
+    "mutation-survival:guardrails": {
+      "kind": "mutation-survival-ceiling",
+      "direction": "down",
+      "bound": 10,
+      "unit": "percent-survived",
+      "shipped": {
+        "file": ".github/workflows/mutation.yml",
+        "extractor": "regex:--threshold (?P<value>\\d+) --label \"guardrails\"",
+        "value": 10
+      },
+      "guard_constant": null,
+      "agrees_with_shipped": true,
+      "status": "measured",
+      "measured_at": null,
+      "source_run": null,
+      "note": "Pinned to CLAUDE.md by doc-number-pins.yaml (`mutation-survival-guardrails`)."
+    },
+    "mutation-survival:audit": {
+      "kind": "mutation-survival-ceiling",
+      "direction": "down",
+      "bound": 10,
+      "unit": "percent-survived",
+      "shipped": {
+        "file": ".github/workflows/mutation.yml",
+        "extractor": "regex:--threshold (?P<value>\\d+) --label \"audit\"",
+        "value": 10
+      },
+      "guard_constant": null,
+      "agrees_with_shipped": true,
+      "status": "measured",
+      "measured_at": null,
+      "source_run": null,
+      "note": "CLAUDE.md states the rewards/guardrails/audit trio as \"<15% rewards, <10% guardrails/audit\"; the audit leg shares the guardrails number and is recorded separately so a divergence between the two labels is visible."
+    },
+    "mutation-survival:audit-chain-walk": {
+      "kind": "mutation-survival-ceiling",
+      "direction": "down",
+      "bound": 10,
+      "unit": "percent-survived",
+      "shipped": {
+        "file": ".github/workflows/mutation.yml",
+        "extractor": "regex:--threshold (?P<value>\\d+) --label \"audit/chain-walk\"",
+        "value": 10
+      },
+      "guard_constant": null,
+      "agrees_with_shipped": true,
+      "status": "measured",
+      "measured_at": null,
+      "source_run": null,
+      "note": "Task 12.2 added orchestrator/audit/chain_walk.py to mutation.yml under the <10% audit ceiling and deliberately did NOT author this entry: agrees_with_shipped is validated by RUNNING the extractor, and an unverified regex would be a guess with a gate attached (I-7). Authored and verified here in task 12.1 -- `ratchet_truth --check` resolves the extractor against the shipped workflow and reports this row SKIP (declared, unmeasured) rather than UNAVAILABLE (unreadable). The label is `audit/chain-walk`, not `audit`: the sibling `mutation-survival:audit` extracts with `--label \"audit\"` including the closing quote, so the two regexes each match exactly one site. Without this row ratchet_truth enforced nothing on the new ceiling -- it enforces the entries present, not the converse, so the shipped 10 could later be raised to 40 without failing. measured_at is null for the same reason as its siblings: mutation.yml runs on a schedule and commits no survival measurement (CI-only workload, I-0)."
+    },
+    "replay-floor:kv-cache": {
+      "kind": "replay-floor",
+      "direction": "up",
+      "bound": 0.7,
+      "unit": "fraction",
+      "shipped": {
+        "file": "infrastructure/quality/replay-floors.yaml",
+        "extractor": "yaml_path:floors.kv_cache_hit_rate.value",
+        "value": 0.7
+      },
+      "guard_constant": null,
+      "agrees_with_shipped": true,
+      "status": "unmeasured",
+      "measured_at": null,
+      "source_run": null,
+      "note": "R7.6: documented in CLAUDE.md since Sprint 9 with no gate anywhere. Raised 0.65 -> 0.70 in Sprint 9; 0.70 is therefore the highest-ever committed value. scripts/audit/replay_metrics.py (task 4.5) supplies the first measurement; until then this is a declared floor with no measurement behind it."
+    },
+    "replay-floor:tier-routing": {
+      "kind": "replay-floor",
+      "direction": "up",
+      "bound": 0.8,
+      "unit": "fraction",
+      "shipped": {
+        "file": "infrastructure/quality/replay-floors.yaml",
+        "extractor": "yaml_path:floors.tier_routing_accuracy.value",
+        "value": 0.8
+      },
+      "guard_constant": null,
+      "agrees_with_shipped": true,
+      "status": "unmeasured",
+      "measured_at": null,
+      "source_run": null,
+      "note": "R7.7: same shape as the KV-cache floor. Documented as 80% in prose, stored as a fraction here; doc-number-pins.yaml carries the percent_of_fraction scale."
+    },
+    "uplift-floor": {
+      "kind": "uplift-floor",
+      "direction": "up",
+      "bound": 0.0,
+      "unit": "percentage-points",
+      "shipped": {
+        "file": "uplift/uplift_floor.py",
+        "extractor": "regex:^UPLIFT_FLOOR: float = (?P<value>[\\d.]+)$",
+        "value": 0.0
+      },
+      "guard_constant": {
+        "file": "tests/uplift/test_uplift_floor_data_gate.py",
+        "symbol": "test_uplift_floor_is_pinned_at_zero",
+        "value": 0.0
+      },
+      "agrees_with_shipped": true,
+      "status": "unmeasured",
+      "measured_at": null,
+      "source_run": null,
+      "data_gated": true,
+      "admission": "uplift.uplift_floor.ratchet_to_measured against a PoweredProof from an artifact regenerated in the same job",
+      "note": "R2.10: a raise above 0.0 is admissible ONLY through ratchet_to_measured with a same-run PoweredProof (>= MIN_POWERED_REPLICATES = 1000). The committed artifact self-declares incomplete: true with fidelity unknown, so no measurement backs this floor -- status stays unmeasured, and 0.0 < 0.0 being false is a tautological PASS, not evidence (R2.1-R2.4)."
+    },
+    "uplift-noise-tolerance": {
+      "kind": "uplift-noise-tolerance",
+      "direction": "down",
+      "bound": 1.0,
+      "unit": "percentage-points",
+      "shipped": {
+        "file": "uplift/cli.py",
+        "extractor": "regex:^NOISE_TOLERANCE_PP: float = (?P<value>[\\d.]+)$",
+        "value": 1.0
+      },
+      "guard_constant": null,
+      "agrees_with_shipped": true,
+      "status": "unmeasured",
+      "measured_at": null,
+      "source_run": null,
+      "note": "R2.6 negative control. The band a null measurement must fall inside: with the Consensus_Arm replaced by a copy of the Baseline_Arm the two arms are identical, so the headline uplift must sit within this many percentage points of zero. A ceiling, so the ratchet direction is DOWN and widening it is the regression -- widening is exactly how a real null-uplift failure would be made to pass. Read by tests/uplift/test_uplift_null_arm_property.py (Property 16), which must never hardcode it; the live value is uplift/cli.py::NOISE_TOLERANCE_PP and this row binds the two together (R7.8 config agreement). status is unmeasured because 1.0 pp is a DECLARED reproduction tolerance, not a measured noise distribution: measuring one means a MIN_POWERED_REPLICATES (1000) run of identical arms, which is .github/workflows/uplift.yml's job and is forbidden on the dev box (I-0). A small-replicate run cannot bound the noise, so no measured_at is invented for it (I-7)."
+    },
+    "dead-modules-baseline": {
+      "kind": "liveness-baseline",
+      "direction": "down",
+      "bound": 0,
+      "unit": "count",
+      "shipped": {
+        "file": "infrastructure/quality/dead-modules.yaml",
+        "extractor": "yaml_path:baseline",
+        "value": 0
+      },
+      "guard_constant": null,
+      "agrees_with_shipped": true,
+      "status": "measured",
+      "measured_at": null,
+      "source_run": null,
+      "note": "A ceiling on the DEAD set: 0 after the liveness sweep (3 routers wired, 6 orphans removed), so any new orphan is a regression. Task 8.11 landed R13.9's named baseline: infrastructure/quality/dead-modules.yaml is now the sole source and scripts/audit/module_liveness.py::DEAD_BASELINE is derived from it as len(dormant). guard_constant is therefore null -- there is no longer an independent in-code constant to disagree with the shipped value, so recording one would assert a fact the tree contradicts (R7.8 has nothing left to catch here, which is the point). measured_at is null because no committed run record names the sweep."
+    },
+    "actuation-stub-ceiling": {
+      "kind": "actuation-ceiling",
+      "direction": "down",
+      "bound": 0,
+      "unit": "count",
+      "shipped": {
+        "file": "scripts/audit/agency_truth.py",
+        "extractor": "regex:^DEFAULT_MAX_STUBS = (?P<value>\\d+)$",
+        "value": 0
+      },
+      "guard_constant": {
+        "file": "scripts/audit/agency_truth.py",
+        "symbol": "DEFAULT_MAX_STUBS",
+        "value": 0
+      },
+      "agrees_with_shipped": true,
+      "status": "measured",
+      "measured_at": null,
+      "source_run": null,
+      "note": "Count of agents whose execute() is still the status-dict-only {\"kafka_published\": True} stub. 0 after the broaden-to-8 work (ADR-052), so a regression to the stub shape fails the gate. The ACTUATING agent count is deliberately NOT ratcheted here: today it is an AST inference, and task 5.3 replaces it with an observed world delta (R9.1-R9.4). Ratcheting an inferred count would pin the inference, not the behaviour."
+    }
+  }
+}
