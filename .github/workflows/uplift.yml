@@ -1,0 +1,138 @@
+# SYNAPSE uplift proof -- the generating job for C60 (spec purpose-achievement-audit,
+# task 10.5; design AD-9 / CF-4; requirement R2.7).
+#
+# The audit's single most load-bearing finding (R2) was that the C60 gate reported PASS
+# against a COMMITTED artifact carrying `{"headline_uplift": 0.0, "incomplete": true,
+# "fidelity": {"within_fidelity_bound": null}}`, and that no workflow anywhere ever ran
+# the harness that writes it. This workflow is the missing half: it RUNS the powered
+# counterfactual experiment and then asks the gate for a verdict.
+#
+# ONE JOB, ON PURPOSE (AD-9, CF-4, R2.7/R2.8).
+# Evidence generation and verdict share a single job so the artifact and the check
+# cannot come from different revisions or different runs. `scripts/audit/uplift_truth.py`
+# enforces that structurally rather than trusting this file:
+#
+#   * `--require-fresh-run` is the caller declaring "I ran the harness in this run".
+#     Without it `admit()` returns the `skip` outcome, and R2.9 excludes a SKIP from the
+#     published PASS count. A SKIP is not a PASS (I-7).
+#   * The artifact's provenance record (`revision`, `run_id`) is compared against this
+#     job's `GITHUB_SHA` / `GITHUB_RUN_ID`, both of which GitHub sets for us. A stale or
+#     foreign artifact is inadmissible even if it is glowing.
+#   * `artifacts/uplift/result.json` is git-ignored (task 10.3 removed it from version
+#     control). An in-repo evidence path that no ignore rule covers is treated as read
+#     from version control and rejected outright, so the evidence is uploaded as a
+#     workflow artifact below and never committed.
+#
+# NO DISCARDING CONSTRUCTS ANYWHERE IN THIS FILE (I-7, R1.8).
+# No `|| true`, no `|| echo`, no `; exit 0`, no `continue-on-error`. Every gate step
+# exits with the exit code of the command it runs. A harness that cannot run is a
+# NON-PASSING result, never a skipped-and-green one:
+#
+#   * the harness step fails            -> the verdict step does not run, the job is red;
+#   * the consensus arm cannot be stood up in this environment -> the CLI records every
+#     consensus run as a failed run and marks the result `incomplete: true`, and the gate
+#     exits 2 (EXIT_UNAVAILABLE) on it, so the job is red;
+#   * the run exceeds `timeout-minutes`  -> the job is red.
+#
+# In none of those cases does the repository get to claim a proven uplift.
+#
+# NEVER RUN LOCALLY (I-0, `.kiro/steering/local-compute-budget.md`).
+# A fully-powered proof is 4 adversarial scenarios x 5 arms x 1000 replicates per arm,
+# each replicate a closed loop over the real SimPy twin. That is the single most
+# expensive workload in this repository and `MIN_SCENARIOS`-scale runs are forbidden on
+# the development laptop. This workflow exists precisely to hold that workload. Its
+# wall-clock cost has therefore never been measured locally; if a run proves not to fit
+# inside the hosted-runner job limit, the escalation path is the GCP runner (cd-gcp.yml,
+# ADR-036 window) -- not a reduced `--smoke` run dressed up as a proof.
+name: SYNAPSE Uplift Proof
+
+on:
+  schedule:
+    # Nightly, 03:00 UTC (08:30 IST). Deliberately clear of the Sunday 02:00 UTC
+    # mutation sweep (mutation.yml) and the Monday 07:00 UTC reconciliation read, so the
+    # three long jobs do not contend for the runner queue.
+    - cron: "0 3 * * *"
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+concurrency:
+  # Never two powered runs at once: they would write the same artifact path and each
+  # would be evaluating evidence the other was overwriting. `cancel-in-progress: false`
+  # because a run this expensive should finish and report rather than be discarded --
+  # and an abandoned run reports nothing, which is not a pass either.
+  group: uplift-proof
+  cancel-in-progress: false
+
+env:
+  PYTHONPATH: "."
+
+jobs:
+  uplift-proof:
+    name: Powered uplift harness + C60 verdict (one job -- shared run)
+    runs-on: ubuntu-latest
+    # Just inside the hosted-runner job ceiling. A timeout is a failed job, which is the
+    # honest outcome for a measurement that did not complete (I-7); it is not a partial
+    # result the gate may read.
+    timeout-minutes: 350
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+
+      - name: Install dependencies
+        # Same dependency closure as ci.yml::uplift-verify, and for the same reason:
+        # `uplift.consensus_arm.build_consensus_arm` assembles all eight real agent A2A
+        # handlers plus the twin handler behind an in-process transport and a real
+        # ConsensusProtocol. A missing agent dependency does not crash the run -- it
+        # degrades the consensus arm to the honest-failure stub, which marks the result
+        # incomplete and makes the gate exit 2. Installing the full closure is what keeps
+        # a dependency gap from being reported as "no uplift measurable".
+        run: |
+          pip install -r packages/requirements.txt -r packages/requirements-dev.txt
+          pip install -e packages/
+          pip install -r orchestrator/requirements.txt
+          pip install jsonschema pyyaml
+          for req in agents/*/requirements.txt; do pip install -r "$req"; done
+          pip install simpy sse-starlette
+          pip install -r agents/requirements-sprint3.txt
+          pip install "starlette>=0.37.2,<0.38.0"
+
+      - name: Run the powered uplift harness (writes the C60 evidence)
+        # `--full` pins replicates per arm to
+        # `digital_twin.simulation.monte_carlo.MIN_SCENARIOS` (1000), which is the same
+        # number the gate independently enforces as
+        # `uplift.uplift_floor.MIN_POWERED_REPLICATES`. The literal is NOT restated here:
+        # a hardcoded count in the workflow is exactly the doc-vs-gate drift R7 reports,
+        # and a count that silently fell below the floor would make every run
+        # inadmissible. `--output` is the CLI's real flag for the artifact path and points
+        # at the canonical location `scripts/audit/uplift_truth.RESULT_ARTIFACT` reads.
+        run: python -m uplift.cli --full --output artifacts/uplift/result.json
+
+      - name: C60 uplift gate -- verdict from THIS run's evidence
+        # Exit 0 proven (is_proven_uplift holds against UPLIFT_FLOOR) / 1 regression
+        # (a powered, complete, in-bound measurement below the floor) / 2 unavailable
+        # (everything else, including an incomplete or under-powered run and any
+        # fidelity that is not demonstrably within bound). Only exit 0 is a pass.
+        run: python -m scripts.audit.uplift_truth --check --require-fresh-run
+
+      - name: Upload the uplift evidence
+        # `if: always()` so a red run keeps its evidence -- an incomplete or
+        # out-of-fidelity artifact is precisely the artifact worth reading. This does not
+        # discard any exit status: the two gate steps above already decided the job's
+        # conclusion. `if-no-files-found: warn` because a missing artifact means the
+        # harness never got that far, and the harness step has already failed the job for
+        # that reason; failing the upload too would only bury the real cause.
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: uplift-result
+          path: artifacts/uplift/result.json
+          if-no-files-found: warn
+          retention-days: 90

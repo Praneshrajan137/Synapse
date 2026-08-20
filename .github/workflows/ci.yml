@@ -136,6 +136,17 @@ jobs:
         # (spec-coverage --threshold, deploy cadence) so the narrative cannot
         # silently drift from what the gates enforce. Pure stdlib (regex).
         run: python -m scripts.audit.doc_truth --check
+      - name: Golden-trace replay metrics (R7.6/R7.7 — KV-cache + tier routing)
+        # The two numbers CLAUDE.md has stated since Sprint 9 with NO gate anywhere:
+        # KV-cache hit rate 0.70 and tier-routing accuracy 0.80. Both floors are read
+        # from infrastructure/quality/replay-floors.yaml (never hardcoded) and measured
+        # by replaying the 200 golden traces (seed 0xCAFEBABE) through the existing
+        # tests/eval harness. Exit 1 below floor, exit 2 when a metric has no
+        # measurement behind it — an unavailable is never a pass (I-7). Replaying 200
+        # traces is a CI workload; I-0 keeps it off the development laptop.
+        run: |
+          python -m scripts.audit.replay_metrics --check \
+            --out build/audit/replay-metrics.json
       - name: Unit tests (all gated trees, branch coverage on)
         # Sprint 13 §Phase 1.3 + 2 / Plan v2 §Phase 4: single pytest run across
         # packages/tests, agents/, orchestrator/, digital_twin/, api/ with branch
@@ -145,8 +156,33 @@ jobs:
         # UPWARD only (operator step: scripts/coverage_ratchet.py).
         # data_fabric/ + ml_pipelines/ (heavy feast/ortools/pymoo deps) remain a
         # documented follow-up ratchet; ml_pipelines/ab_test runs in sprint6-verify.
+        #
+        # purpose-achievement-audit task 12.2 -- `-m "not slow"` added. The hole it
+        # closes: this step had NO marker filter and NO HYPOTHESIS_PROFILE, so every
+        # `@pytest.mark.slow` module under `orchestrator/` and `digital_twin/` ran
+        # HERE, at the root conftest's `default` budget of 500 examples, driving the
+        # real four-tier ConsensusProtocol and the real SimPy twin inside a
+        # 15-minute lint job. A `slow` marker only keeps a test out of a job that
+        # SELECTS on it; carrying the marker did nothing here. The three modules that
+        # were executing unmarked-selected:
+        #   orchestrator/tests/consensus/test_confidence_gate_universality_property.py (Property 22)
+        #   orchestrator/tests/consensus/test_selection_and_twin_consequence_property.py (Property 26, module-level pytestmark)
+        #   digital_twin/tests/test_simulation.py (INV-TW-002, 1000 scenarios)
+        # All three now run in `uplift-verify`'s slow step at HYPOTHESIS_PROFILE=heavy
+        # (100 examples) on a Linux runner, which is where the example budget is
+        # meant to be spent (I-0). Nothing became unselected: see that step's path
+        # list, which gained `orchestrator/tests/consensus` and `digital_twin/tests`
+        # in the same change.
+        #
+        # HONEST CAVEAT, unverified here: coverage measured by THIS step no longer
+        # includes those modules' contribution. `orchestrator`'s committed floor is
+        # 30.0 and was seeded from a measurement in which protocol.py was 0%, so
+        # there should be headroom -- but the first CI run is the first real signal.
+        # If the per-package floor step goes red, the fix is to re-measure and
+        # ratchet, NEVER to lower a floor (coverage-floors.yaml: floors never
+        # decrease) and never to put the slow modules back into a 500-example run.
         run: |
-          pytest packages/tests agents orchestrator digital_twin api -v --tb=short \
+          pytest packages/tests agents orchestrator digital_twin api -m "not slow" -v --tb=short \
             --cov=packages/synapse_common --cov=agents --cov=orchestrator \
             --cov=digital_twin --cov=api \
             --cov-branch \
@@ -172,8 +208,53 @@ jobs:
         run: |
           python scripts/check_spec_coverage.py --threshold 99 --per-agent
       - name: Contract tests
+        # decision-quality-proof task 3.3 (R11.3, R4.1). MADE BLOCKING rather than
+        # labelled advisory, because the recorded remediation's own words were "the step
+        # currently swallows a real contract-test failure and a collection error
+        # identically" (infrastructure/quality/blocking-steps.yaml) -- and reading the
+        # tree shows it was always the second, never the first.
+        #
+        # The old command was `pytest agents/*/contracts/ -m contract ... 2>/dev/null ||
+        # echo "No contract tests yet (Sprint 2)"`. Two separate defects, one hiding the
+        # other:
+        #
+        #   1. WRONG PATH. `agents/*/contracts/` holds the consumer-driven contract
+        #      MODULES (`inventory_sentinel_contract.py`, `demand_prophet_contract.py`,
+        #      ...). None matches pytest's default `python_files` patterns, so the
+        #      selection collected ZERO tests and pytest exited 5 -- on every run since
+        #      Sprint 2. The contract TESTS live in `agents/*/tests/test_contracts.py`
+        #      (five of them: disruption_shield, freshness_guardian, pricing_oracle,
+        #      supplier_trust, sustainability_agent), each carrying the `contract` marker
+        #      registered in pyproject.toml.
+        #   2. THE SWALLOW HID IT. `|| echo` turned that permanent exit 5 into a green
+        #      step whose log said "No contract tests yet (Sprint 2)" -- prose that read
+        #      as a deliberate not-yet rather than as a broken path. A step that cannot
+        #      pass on its own merits and never fails is not a gate (I-7).
+        #
+        # EXIT 5 IS A FAILURE HERE, AND THAT IS THE POINT. Propagation was only half the
+        # fix: a step that propagates but selects nothing is still not a gate, it just
+        # makes the empty selection VISIBLE. pytest's exit 5 ("no tests collected", which
+        # is also what `-m contract` deselecting everything produces) is non-zero, so with
+        # the `|| echo` gone -- and with no `continue-on-error` on this step or on
+        # `quality-gates` -- an empty selection reddens the job instead of printing
+        # reassurance. An unexpanded glob is louder still: a path pytest cannot find is a
+        # usage error. The five files named above were read off the filesystem rather than
+        # assumed, and the marker they carry is registered in pyproject.toml so
+        # `--strict-markers` accepts it. The RUN is CI's to report; nothing local
+        # establishes it (I-7).
+        #
+        # This cannot newly redden CI: all five files are already collected and already
+        # blocking via "Unit tests (all gated trees, branch coverage on)" above, which
+        # runs `pytest packages/tests agents ... -m "not slow"` over the same `agents`
+        # tree, and none of them carries a `slow` marker. So this step re-asserts an
+        # already-green selection; what it adds is that the contract layer is named and
+        # provably selected instead of silently absent. If it goes red, the unit-test step
+        # above is red for the same reason.
+        #
+        # `-m contract` is kept so the step means what its name says: Layer 3
+        # consumer-driven contracts, not everything that happens to live in those files.
         run: |
-          pytest agents/*/contracts/ -m contract -v --tb=short 2>/dev/null || echo "No contract tests yet (Sprint 2)"
+          pytest agents/*/tests/test_contracts.py -m contract -v --tb=short
       - name: Upload coverage
         uses: actions/upload-artifact@v4
         with:
@@ -183,7 +264,14 @@ jobs:
   uplift-verify:
     name: Uplift Harness + Verification Properties (tests/)
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    # 45 -> 60 (task 12.2): the slow step now also collects
+    # `orchestrator/tests/consensus` (Properties 22 and 26, the real four-tier
+    # protocol) and `digital_twin/tests` (INV-TW-002's 1000-scenario run). Both were
+    # previously executing inside the 15-minute `quality-gates` job at the `default`
+    # 500-example budget, so at `heavy`'s 100 the added work is strictly cheaper than
+    # what already fitted there -- but this job was already the longest one and the
+    # headroom was thin, so the bound moves with the load rather than after a timeout.
+    timeout-minutes: 60
     needs: quality-gates
     # The `tests/` tree was gated by NO workflow: the quality-gates unit step runs
     # `packages/tests agents orchestrator digital_twin api` and every other workflow
@@ -218,7 +306,10 @@ jobs:
           pip install "starlette>=0.37.2,<0.38.0"
       - name: Property + unit tests (fast — full 500-example budget)
         # Pure/synthetic properties: no twin, no consensus network, so the full
-        # `ci` budget is cheap here.
+        # `ci` budget is cheap here. Scope is deliberately `tests/` only: the
+        # non-slow tests under `orchestrator/` and `digital_twin/` are already run
+        # by `quality-gates`, and running them twice would double the wall clock
+        # without adding a single new assertion.
         env:
           HYPOTHESIS_PROFILE: ci
         run: |
@@ -229,10 +320,36 @@ jobs:
         # minimum the spec obligations require; 500 would push this job past an
         # hour. Also carries the 623-test regression floor and the invariant-suite
         # collection checks (task 11.1).
+        #
+        # purpose-achievement-audit task 12.2 -- the path list gained
+        # `orchestrator/tests/consensus` and `digital_twin/tests`. Before that it
+        # was `tests/uplift tests/verify` only, so this "the slow properties run
+        # here" step never COLLECTED Properties 22 and 26 at all: they live under
+        # `orchestrator/tests/consensus/` and were therefore silently executing in
+        # `quality-gates` at 500 examples instead (see that step's comment).
+        #
+        # `-m "slow"` is a selector, not a path filter: adding these two directories
+        # collects only their slow-marked tests, so nothing cheap is duplicated out
+        # of `quality-gates`.
+        #
+        # The six slow properties this step owns, by design number:
+        #   15 tests/uplift/test_uplift_harness_cross_process_determinism_property.py
+        #   16 tests/uplift/test_uplift_null_arm_property.py
+        #   22 orchestrator/tests/consensus/test_confidence_gate_universality_property.py
+        #   26 orchestrator/tests/consensus/test_selection_and_twin_consequence_property.py
+        #   29 tests/verify/test_nonsynthetic_ingestion_replay_property.py
+        #   30 tests/verify/test_actuation_classification_property.py
+        # plus tests/verify/test_declared_falsification_property.py (the subprocess
+        # fault-injection probe), tests/uplift/test_preserved_baseline_regression.py
+        # (the 623-test floor + collection checks), and
+        # digital_twin/tests/test_simulation.py (INV-TW-002's 1000-scenario run,
+        # which `-m "not slow"` in `quality-gates` would otherwise leave selected by
+        # NO job -- adding the path here is what keeps it executed).
         env:
           HYPOTHESIS_PROFILE: heavy
         run: |
-          pytest tests/uplift tests/verify -m "slow" -v --tb=short
+          pytest tests/uplift tests/verify orchestrator/tests/consensus digital_twin/tests \
+            -m "slow" -v --tb=short
 
   sprint6-verify:
     name: Sprint 6 Multi-City Verification
@@ -392,16 +509,111 @@ jobs:
         env:
           SYNAPSE_SMOKE_RUN: "1"
         run: python -m scripts.audit.runtime_substance --check
-      - name: Measure per-package coverage under full ML stack (binds the 0.0 floors)
+      - name: R3.2 serving-resolution proof (recorded entry resolves, BLOCKING)
+        # purpose-achievement-audit task 12.4. This step is R3.2's ONLY executed proof.
+        #
+        # tests/integration/test_published_entry_serving_resolution.py is
+        # `skipif(not SYNAPSE_SMOKE_RUN)`: it needs the serving checkpoint plus its
+        # sidecar, which only this job produces (the smoke-train step above). So on
+        # every pull request, in quality-gates, and on the dev laptop under I-0 it is
+        # a silent `s`, and a SKIP is not a PASS (I-7) - until this step existed, R3.2
+        # had no executed proof anywhere in CI while every run stayed green. With
+        # SYNAPSE_SMOKE_RUN set the module stops skipping and asserts its own
+        # prerequisites instead: an absent checkpoint or an absent torch FAILs here,
+        # because inside this job both must be present.
+        #
+        # Placement is deliberate. AFTER the C42 gate: smoke-train + C38/C40/C42 have
+        # already produced and validated artifacts/checkpoints/demand_prophet_hgt_tft.pt
+        # and its .serving.json, so there is a real artifact to resolve. BEFORE the
+        # coverage step below: that step carries `continue-on-error: true` and a
+        # `|| true`, and this proof must never end up inside a block that discards its
+        # exit status. No `continue-on-error` and no `|| true` here - propagating is
+        # the entire point of the step.
+        #
+        # Environment: SYNAPSE_SMOKE_RUN=1 is what flips the module from skip to
+        # assert; PYTHONPATH=. resolves `scripts.audit.published_checkpoint_truth` and
+        # `agents.demand_prophet.*` (pyproject's `pythonpath = ["."]` already does this
+        # under pytest - it is kept so the line is runnable verbatim by hand). Nothing
+        # further is required: DP_HF_REPO stays unset so the $0 source resolves the
+        # local artifact, and the committed registry is still `__placeholder__`, which
+        # is the branch the test asserts (smoke-artifact resolution, R3.8 - a green run
+        # here is NOT evidence that a checkpoint is published). The dependency closure
+        # is already satisfied by this job: torch (CPU wheel above) plus fastapi,
+        # pydantic-settings and mlflow from agents/demand_prophet/requirements.txt.
+        # That last group is the delta over C42: C42 constructs `ModelRegistry` itself,
+        # while this test imports the FastAPI serving module and calls the same
+        # `serve._build_model_registry` the app lifespan calls, so it also pays for an
+        # MlflowClient against the unreachable default tracking URI - bounded to ~3s by
+        # the timeout serve.py sets, after which resolution falls through to the
+        # checkpoint path (I-7).
+        #
+        # PULL-REQUEST REACH - decided, not overlooked. This job is
+        # `if: main || develop || sprint-*`, so R3.2 is proven POST-MERGE only and
+        # cannot block the pull request that breaks it. That is the same structural gap
+        # R14 records for branch protection, and it is accepted here deliberately: the
+        # proof needs a trained checkpoint, and producing one on every PR is exactly
+        # the category-4 workload I-0 and this whole feature keep off the PR path. What
+        # would close it without paying that cost is a committed fixture checkpoint, or
+        # a lighter smoke artifact a PR job could resolve; neither exists today, so
+        # post-merge-blocking is the honest position rather than a `continue-on-error`
+        # that would make the question disappear. When this fails on main, the run is
+        # red and the merge that broke it is named.
+        run: SYNAPSE_SMOKE_RUN=1 PYTHONPATH=. pytest tests/integration/test_published_entry_serving_resolution.py -q --tb=short
+      - name: Measure per-package coverage under full ML stack (ADVISORY - binds the 0.0 floors)
+        # decision-quality-proof task 3.3 (R11.3). Renamed to carry ADVISORY, which is
+        # the remediation `infrastructure/quality/blocking-steps.yaml` recorded for this
+        # step verbatim. Nothing else changed: `continue-on-error: true` and the `|| true`
+        # on coverage_per_package.py both stay, because they are correct here and the
+        # first line of the comment below has always said why. The defect was only that
+        # the honesty lived in a comment, where the shape gate cannot read it, while the
+        # step name claimed nothing -- so a reader of the run log, and
+        # `workflow_shape_truth`, both had to guess.
+        #
+        # NOT made blocking. The gating per-package floor check is the separate
+        # "Per-package coverage floor" step in `quality-gates`, declared in
+        # `blocking-steps.yaml::steps`. This step MEASURES under the full ML stack so an
+        # operator can bind the 0.0 floors with scripts/coverage_ratchet.py; a measurement
+        # whose purpose is to reveal a number cannot also be the gate on that number
+        # without pinning whatever it first happened to measure.
+        #
         # Informational: surfaces the REAL per-package coverage for orchestrator +
         # the 8 agents + digital_twin + data_fabric + ml_pipelines (torch/ortools/
         # pymoo importable here, unlike quality-gates). The operator then runs
         # scripts/coverage_ratchet.py --apply in a follow-up PR to lock the measured
         # floors. Never auto-commits. data_fabric/ml_pipelines are measured here
         # (informational) before being promoted into the gating step as tests land.
+        #
+        # purpose-achievement-audit task 12.4 -- `-m "not slow"` added, closing the
+        # residual half of task 12.2's slow-routing fix. 12.2 filtered quality-gates
+        # and routed the slow modules into `uplift-verify` at HYPOTHESIS_PROFILE=heavy
+        # (100), but was told not to touch this job, so three slow-marked modules were
+        # still executing HERE at the root conftest's `default` budget of 500 examples
+        # on main/develop/sprint-*:
+        #   orchestrator/tests/consensus/test_confidence_gate_universality_property.py (Property 22)
+        #   orchestrator/tests/consensus/test_selection_and_twin_consequence_property.py (Property 26, module pytestmark)
+        #   digital_twin/tests/test_simulation.py (INV-TW-002, a 1000-scenario run)
+        # This step gates nothing, but that made it a second full run of the real
+        # four-tier ConsensusProtocol and the real SimPy twin at five times the budget
+        # the job that owns them uses. All three keep exactly one selecting job:
+        # `uplift-verify`'s slow step. No HYPOTHESIS_PROFILE is set, matching
+        # quality-gates: what remains selected here is non-slow by the marker
+        # convention, so `default` is the right budget for it.
+        #
+        # MEASUREMENT CHANGED - read before running scripts/coverage_ratchet.py --apply.
+        # Excluding those three modules removes their contribution, so the `orchestrator`
+        # and `digital_twin` numbers this step reports are LOWER than any earlier run of
+        # it: orchestrator loses the real-protocol paths Properties 22/26 drove, and
+        # digital_twin loses the simulation-engine paths INV-TW-002's 1000-scenario test
+        # drove (its floor is still 0.0 / CI-MUST-MEASURE, so the first bound floor will
+        # be bound from the new, smaller measurement). That is the intended trade: a
+        # floor bound from a 500-example run of the real protocol and the real twin is a
+        # floor nobody should ever reproduce, and coverage-floors.yaml says floors never
+        # decrease - so binding an unreproducible high number would pin it permanently.
+        # If those packages need their slow-path coverage counted, measure it where the
+        # slow tests actually run (`uplift-verify`), never by putting them back here.
         continue-on-error: true
         run: |
-          pytest packages/tests agents orchestrator digital_twin api ml_pipelines --tb=short -q \
+          pytest packages/tests agents orchestrator digital_twin api ml_pipelines -m "not slow" --tb=short -q \
             --cov=packages/synapse_common --cov=agents --cov=orchestrator \
             --cov=digital_twin --cov=api --cov=data_fabric --cov=ml_pipelines --cov-branch \
             --cov-report=xml:coverage-full.xml --cov-fail-under=0
