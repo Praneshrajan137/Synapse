@@ -1,12 +1,13 @@
 import type { DemandForecast } from "@domain/demand-forecast";
 import type { FreshnessAlert } from "@domain/freshness-alert";
 import type { PricingUpdate } from "@domain/pricing-update";
-import { ConfidenceChip, ConnectionPill, PageHeader } from "@ds/compounds";
+import { ConfidenceChip, ConnectionPill, DataPathNotice, PageHeader } from "@ds/compounds";
 import { Badge } from "@ds/primitives";
 import { useFirehose } from "@hooks/use-firehose";
 import { cn } from "@lib/cn";
 import { fmt } from "@lib/formatters";
 import { useFirehoseStore } from "@state/firehose.store";
+import { surfaceDataPath } from "../data-paths";
 
 /**
  * Live Markets — viewer surface streaming the Pricing Oracle's price moves and
@@ -17,6 +18,19 @@ import { useFirehoseStore } from "@state/firehose.store";
  * an update is `is_essential` and at/over the cap we render the multiplier with
  * a "(cap)" marker and surface `essential_cap_enforced` as a lock badge — the
  * guardrail is visible to the operator, not buried in the payload.
+ *
+ * R3.5, and the honest limit of it on this surface. This is the console's main
+ * view of the FLAGSHIP agent's output (Demand Prophet forecasts), and while no
+ * checkpoint is published that pipeline reports `degraded=true` in its
+ * provenance. These three firehose payloads carry no provenance block at all -
+ * `DemandForecastSchema`, `PricingUpdateSchema` and `FreshnessAlertSchema` have
+ * no `degraded` and no `is_synthetic` field - so the console CANNOT render the
+ * flag: it does not arrive. Under I-7 the answer is not to omit the question but
+ * to state that it is unanswerable here, which is what the "read state unknown"
+ * notice does. Absence of a degradation flag is not evidence of a live model.
+ * The gap is upstream, in `proto/domain/{demand_forecast,pricing_update,
+ * freshness_alert}.schema.json`; closing it turns these notices affirmative with
+ * no change to this surface.
  */
 
 /** Newest-first view: firehose buffers are append-ordered (FE-INV-017). */
@@ -170,6 +184,16 @@ export function LiveMarkets() {
   const freshnessRows = newestFirst(freshness);
   const demandRows = newestFirst(demand);
 
+  // Both signals are `null` because these payloads carry neither. The resolver
+  // is fail-closed, so that resolves to "read state unknown" and never to
+  // "live" - which is the whole point: the flagship agent's degradation cannot
+  // be shown from a payload that does not carry it, and pretending otherwise
+  // would render a degraded model's output as a healthy one.
+  const streamPath = surfaceDataPath("live-markets.agent-streams", {
+    degraded: null,
+    synthetic: null,
+  });
+
   return (
     <section className="space-y-4">
       <PageHeader
@@ -177,6 +201,8 @@ export function LiveMarkets() {
         subtitle="Streams the Pricing Oracle's price moves, the Freshness Guardian's shelf-life alerts, and the Demand Prophet's multi-horizon forecasts in real time off the firehose."
         status={<ConnectionPill state={state} />}
       />
+
+      <DataPathNotice state={streamPath} className="syn-card px-3 py-2" />
 
       <div className="grid gap-4 lg:grid-cols-2">
         <section className="syn-card overflow-hidden" aria-label="Recent pricing updates">

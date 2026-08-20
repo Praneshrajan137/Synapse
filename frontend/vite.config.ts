@@ -1,4 +1,4 @@
-import { defineConfig, loadEnv } from "vite";
+import { defineConfig, loadEnv, type Plugin } from "vite";
 import react from "@vitejs/plugin-react";
 import path from "node:path";
 
@@ -8,13 +8,49 @@ import path from "node:path";
 // /ws -> orchestrator (8085 WS). Production traffic is fronted by nginx
 // (infrastructure/nginx/nginx.conf), so this proxy is dev-only.
 
+/** The e2e-only harness entry (AD-12). Never referenced outside `e2e` mode. */
+const E2E_HARNESS_ENTRY = "/spec/effectiveness/e2e-entry.ts";
+
+/**
+ * Effectiveness_Harness Rollup input split (AD-12).
+ *
+ * In `e2e` mode only, this injects a module script for the harness entry into
+ * `index.html` BEFORE the html is parsed for inputs (`order: "pre"`), so Rollup
+ * treats it as a second entry and emits it as its own chunk. The production
+ * build never runs this hook, so `spec/effectiveness/harness.ts` is not in the
+ * production module graph at all and `window.__atlasHarness` cannot reach
+ * `dist/` — which is what `scripts/audit/workflow_shape_truth.py`'s
+ * production-bundle assertion checks.
+ *
+ * The e2e build also writes to `dist-e2e/`, never `dist/`, so a harness build
+ * left on a developer's machine cannot make that assertion fail.
+ */
+function e2eHarnessEntry(): Plugin {
+  return {
+    name: "synapse:e2e-harness-entry",
+    enforce: "pre",
+    transformIndexHtml: {
+      order: "pre",
+      handler: () => [
+        {
+          tag: "script",
+          attrs: { type: "module", src: E2E_HARNESS_ENTRY },
+          injectTo: "head-prepend" as const,
+        },
+      ],
+    },
+  };
+}
+
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), "VITE_");
   const orchestratorTarget = env.VITE_ORCHESTRATOR_URL ?? "http://localhost:8085";
   const orchestratorWs = orchestratorTarget.replace(/^http/, "ws");
+  // `e2e` is the harness build mode (`pnpm build:e2e` / `pnpm preview:e2e`).
+  const isE2eHarness = mode === "e2e";
 
   return {
-    plugins: [react()],
+    plugins: [react(), ...(isE2eHarness ? [e2eHarnessEntry()] : [])],
     resolve: {
       alias: {
         "@": path.resolve(__dirname, "./src"),
@@ -44,6 +80,9 @@ export default defineConfig(({ mode }) => {
       strictPort: true,
     },
     build: {
+      // AD-12: the harness build is a SEPARATE output tree. `dist/` stays the
+      // shipped bundle the production-bundle assertion scans.
+      outDir: isE2eHarness ? "dist-e2e" : "dist",
       target: "es2022",
       sourcemap: true,
       cssCodeSplit: true,

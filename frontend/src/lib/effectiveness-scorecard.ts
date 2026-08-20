@@ -10,8 +10,10 @@
  *     task 3.2) emit a fresh `scorecard.json` per run, recording — per
  *     Job_To_Be_Done — the measured steps, time-to-complete (`latencyMs`), and
  *     error/dead-end rate, plus the run `seed` and `harnessVersion` for
- *     reproducibility (Req 4.1, 4.6) and a reserved `interruptionPrecision`
- *     field filled by the North-Star metric in task 15 (Req 13.2, 13.4).
+ *     reproducibility (Req 4.1, 4.6) and the North-Star `interruptionPrecision`
+ *     (Req 13.2, 13.4), which reaches the artifact only through
+ *     {@link buildMeasuredScorecard} -- the computed outcome of a run's own
+ *     interruption ledger, never a number an author supplies (R8.5, task 11.5).
  *
  *   • The Effectiveness_Ratchet (`@lib/effectiveness-ratchet`, task 4.2 — a
  *     SEPARATE task) consumes this exact shape to compare a fresh scorecard
@@ -31,6 +33,12 @@
 
 import { z } from "zod";
 
+// TYPE-ONLY, and it must stay that way. `@lib/interruption-precision` imports
+// SCRIPTED_PROXY_CEILING from this module as a VALUE, so a value import in this
+// direction would close a runtime cycle and evaluate that constant in its
+// temporal dead zone. `verbatimModuleSyntax` erases this line entirely, so the
+// two modules share a type and no module-evaluation order (R8.5, task 11.5).
+import type { ComputedInterruptionPrecision } from "@lib/interruption-precision";
 import { canonicalJson } from "@lib/json-canonical";
 
 /**
@@ -130,9 +138,15 @@ export interface EffectivenessScorecard {
   /** One measured row per Job_To_Be_Done, sorted by {@link JOB_ORDER}. */
   readonly rows: readonly ScorecardRow[];
   /**
-   * The North-Star Interruption_Precision over the run (Req 13.2, 13.4).
-   * Reserved: `null` until task 15 wires the metric, so the field is present
-   * and comparable from the first committed baseline onward.
+   * The North-Star Interruption_Precision over the run (Req 13.2, 13.4; R8.5).
+   *
+   * A ratio in `[0, 1]` on the wire, because the artifact crosses a JSON
+   * boundary. `null` means no value was computed -- the honest state when a run
+   * raised no interruption or when its ledger did not verify (I-7), NOT a
+   * placeholder for "not implemented yet". The measured emitter is
+   * {@link buildMeasuredScorecard}, which takes the computed outcome rather than
+   * a number, so this field's only measured source is a run's own sealed
+   * interruption ledger (`@lib/interruption-precision`).
    */
   readonly interruptionPrecision: number | null;
   /** The Scripted_Proxy honest ceiling ({@link SCRIPTED_PROXY_CEILING}). */
@@ -152,6 +166,15 @@ const ScorecardRowSchema = z
     steps: z.number().finite().nonnegative(),
     latencyMs: z.number().finite().nonnegative(),
     errorRate: z.number().finite().min(0).max(1),
+    // R8.10 (task 11.7): the COMMITTED baseline stamps every row with the run
+    // that produced it. Tolerated here as optional so this loader keeps reading a
+    // stamped baseline -- `spec/effectiveness/run-ratchet.ts` parses the baseline
+    // through `parseScorecard`, and a `.strict()` row would report a measured,
+    // stamped baseline as malformed the day one lands. The stamps are REQUIRED and
+    // validated only where they are load-bearing: `@lib/effectiveness-baseline`.
+    harnessVersion: z.string().nullable().optional(),
+    seed: z.number().nullable().optional(),
+    capturedAt: z.string().nullable().optional(),
   })
   .strict();
 
@@ -174,7 +197,17 @@ export interface BuildScorecardOptions {
   readonly seed?: number;
   /** Defaults to {@link EFFECTIVENESS_HARNESS_VERSION}. */
   readonly harnessVersion?: string;
-  /** Defaults to `null` (reserved for task 15). */
+  /**
+   * A ratio already carried by an artifact, for re-emission
+   * ({@link serializeScorecard}) and for generated ratchet fixtures. Defaults to
+   * `null`.
+   *
+   * NOT the measured path: a measuring emitter calls
+   * {@link buildMeasuredScorecard}, which takes a computed outcome and so cannot
+   * be handed a number. Anything reaching this field is a number whose derivation
+   * this module cannot see, and R8.5's falsifiers are what judge it -- two seeds
+   * measuring the same value is `unresponsive` however plausible the number is.
+   */
   readonly interruptionPrecision?: number | null;
 }
 
@@ -199,6 +232,51 @@ export function buildScorecard(opts: BuildScorecardOptions): EffectivenessScorec
     interruptionPrecision: opts.interruptionPrecision ?? null,
     proxyCeiling: SCRIPTED_PROXY_CEILING,
   };
+}
+
+/** Options for {@link buildMeasuredScorecard}. */
+export interface BuildMeasuredScorecardOptions {
+  /** The rows measured by the same run that produced {@link precision}. */
+  readonly rows: readonly ScorecardRow[];
+  /**
+   * The outcome of `computeInterruptionPrecision` over that run's sealed
+   * interruption ledger, narrowed to `computed` (by `requireComputedOutcome` or
+   * by an explicit status check). It is a branded type: no file can author one.
+   */
+  readonly precision: ComputedInterruptionPrecision;
+}
+
+/**
+ * The measured emitter: builds a scorecard whose `interruptionPrecision` is
+ * `warranted / total` over one run's own collected interruptions (R8.5).
+ *
+ * Takes the computed OUTCOME, never a ratio, which is why this signature is the
+ * scorecard's measured ingress:
+ *
+ *   * a number is a type error here, so a hand-authored value cannot be emitted
+ *     as a measurement even when it happens to equal one;
+ *   * `ComputedInterruptionPrecision` is branded by a symbol private to
+ *     `@lib/interruption-precision`, so the outcome cannot be authored either --
+ *     only `computeInterruptionPrecision` produces one, and only after the
+ *     ledger's witness and per-record provenance verify;
+ *   * an `indeterminate` outcome does not narrow to this type, so a run that
+ *     raised no interruption or whose ledger did not verify cannot be emitted as
+ *     a number at all: the caller throws and the effectiveness job fails, rather
+ *     than writing the `null` the ratchet would skip (R8.2, I-7).
+ *
+ * `seed` and `harnessVersion` are read from `precision.run` rather than accepted,
+ * so the stamps on the artifact are the measuring run's own and cannot disagree
+ * with the interruptions they are supposed to describe (Req 4.6).
+ */
+export function buildMeasuredScorecard(
+  opts: BuildMeasuredScorecardOptions,
+): EffectivenessScorecard {
+  return buildScorecard({
+    rows: opts.rows,
+    seed: opts.precision.run.seed,
+    harnessVersion: opts.precision.run.harnessVersion,
+    interruptionPrecision: opts.precision.value,
+  });
 }
 
 /**

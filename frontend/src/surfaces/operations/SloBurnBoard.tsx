@@ -1,5 +1,7 @@
 import type { SloResponse, SloTier } from "@domain/operations";
+import { DataPathNotice } from "@ds/compounds";
 import { cn } from "@lib/cn";
+import { surfaceDataPath } from "../data-paths";
 import { burnSeverityWord, deriveBurnSeverity } from "./logic";
 
 const TIER_ORDER = ["tier_1", "tier_2", "tier_3", "tier_4"] as const;
@@ -104,6 +106,15 @@ export function SloBurnBoard({ data, isError }: SloBurnBoardProps) {
   const tiers = data?.tiers ?? {};
   const sourceUnknown = isError || data?.source === "unknown";
 
+  // R3.5. The per-tier gauges were already honest (a null window drains to
+  // "burn unknown"); what was missing was the panel-level statement of WHY -
+  // an operator saw four unknown tiers with no declaration that the read itself
+  // is the degraded thing.
+  const dataPath = surfaceDataPath("operations.slo-burn", {
+    degraded: isError ? true : data === undefined ? null : data.source === "unknown" ? true : false,
+    synthetic: null,
+  });
+
   return (
     <section className="space-y-2" aria-label="SLO burn by tier">
       <div className="flex items-center justify-between">
@@ -112,6 +123,7 @@ export function SloBurnBoard({ data, isError }: SloBurnBoardProps) {
           {sourceUnknown ? "source: unknown" : "multi-window (1h / 6h)"}
         </span>
       </div>
+      <DataPathNotice state={dataPath} />
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         {TIER_ORDER.map((tier) => (
           <BurnGauge

@@ -459,8 +459,14 @@ describe("Property 36: A baseline is a measurement, not a ceiling", () => {
       }),
     );
 
-    // Nothing above can pass vacuously: all four defects were actually generated. With a
-    // uniform draw over four values, 100 runs miss one with probability (3/4)^100.
+    // Nothing above can pass vacuously: all four defects were actually generated. This file
+    // states no run budget (R3.3): the count is inherited from `fc.configureGlobal` in
+    // `frontend/src/test/setup.ts`, so this guard's strength is a function of the active
+    // profile rather than of a fixed 100. Over a uniform draw of four values, n runs miss at
+    // least one with probability at most 4*(3/4)^n -- about 0.22 at the local `dev` budget of
+    // 10, and below 1e-11 from 100 upward. A local miss is therefore a statement about the
+    // budget and not about the generator, and it is recorded here rather than hidden by
+    // pinning the count back in place (I-7).
     expect([...observed].sort()).toEqual([...ALL_DEFECTS].sort());
   });
 

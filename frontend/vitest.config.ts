@@ -25,6 +25,14 @@ export default defineConfig({
     globals: true,
     setupFiles: ["./src/test/setup.ts"],
     css: false,
+    // FE-INV attestation evidence (R8.7). `frontend/spec/check_fe_invariants.py`
+    // gates the registry on EXECUTED, non-skipped assertions, so it needs the
+    // machine-readable run record — file existence proves nothing. The path sits
+    // under `artifacts/` (gitignored, and NOT under Playwright's `outputDir`,
+    // which Playwright wipes at the start of every run) so a later e2e run
+    // cannot delete this report.
+    reporters: ["default", "json"],
+    outputFile: { json: "artifacts/test-reports/vitest.json" },
     include: [
       "src/**/*.{test,spec}.{ts,tsx}",
       "spec/effectiveness/__tests__/**/*.{test,spec}.{ts,tsx}",

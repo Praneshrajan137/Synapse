@@ -1,4 +1,6 @@
+import { DataPathNotice } from "@ds/compounds";
 import { AWAITING_UPLIFT_MEASURE, type UpliftMeasure, resolveUpliftSlot } from "@lib/uplift-slot";
+import { surfaceDataPath } from "../data-paths";
 
 /**
  * Operations uplift slot (Req 17) — a DEFINED, always-present slot reserving a
@@ -13,9 +15,17 @@ import { AWAITING_UPLIFT_MEASURE, type UpliftMeasure, resolveUpliftSlot } from "
  *
  * The measure is passed in (default `null`) because no backend endpoint exposes
  * one yet; wiring a hook later needs no change to this slot.
+ *
+ * R13.6: "awaiting uplift measure" says the value is missing; it does not say
+ * that no endpoint exists to deliver it. The registered data path
+ * (`operations.uplift`, `endpoint: null`) states that, so "awaiting" is not
+ * mistaken for "a measurement is in flight". This matters more here than
+ * anywhere else on the console: uplift is the one number the system exists to
+ * produce, and its absence must not read as a pending refresh.
  */
 export function UpliftSlot({ measure = null }: { readonly measure?: UpliftMeasure | null }) {
   const slot = resolveUpliftSlot(measure);
+  const dataPath = surfaceDataPath("operations.uplift", { degraded: null, synthetic: null });
 
   return (
     <section className="syn-card space-y-3 p-4" aria-label="System-level uplift">
@@ -25,6 +35,8 @@ export function UpliftSlot({ measure = null }: { readonly measure?: UpliftMeasur
           {slot.kind === "present" ? "measured" : "awaiting"}
         </span>
       </div>
+
+      <DataPathNotice state={dataPath} />
 
       {slot.kind === "awaiting" ? (
         <p className="text-xs text-ink-subtle">{AWAITING_UPLIFT_MEASURE}</p>

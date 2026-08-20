@@ -19,17 +19,24 @@ import { expect, test } from "@playwright/test";
  *     message set (no lost, no double-counted rows).
  *
  * The harness stream driver (`spec/effectiveness/stream-driver.ts`, task 2.2)
- * and MSW browser worker (task 2.1) expose a documented global to drive a
- * seeded scenario in-browser:
+ * and MSW browser worker (task 2.1) are composed by
+ * `spec/effectiveness/harness.ts` (task 11.1) behind a documented global:
  *
  *   interface AtlasHarness {
  *     driveResilience(scenarioId: string): Promise<void>; // resolves when the burst has drained
  *   }
  *   declare global { interface Window { __atlasHarness?: AtlasHarness } }
  *
- * Until that global is wired the test skips cleanly rather than failing (the
- * same graceful-skip convention as the other harness-dependent e2e specs), so
- * this spec is committed and ready the moment the stream driver lands.
+ * The global exists only in the e2e-mode build (AD-12), so this suite runs as
+ * `pnpm build:e2e && pnpm test:e2e:harness`. A missing harness FAILS the test
+ * rather than skipping it (I-7).
+ *
+ * NOTE (verified 11.1): `[data-stream-row]` is the only DOM contract in this
+ * suite that no surface under `frontend/src/` renders yet (grepped: 0 hits;
+ * `DecisionFirehoseTail` marks up its rows without it). The INP and channel-cap
+ * assertions are real, but the row-identity/order and dedup assertions are
+ * VACUOUS at zero rows until the attribute lands. That is a rendering-side gap,
+ * not a harness gap, and it is recorded here rather than hidden.
  */
 
 // Mirrors `WEB_VITALS_BUDGET.inpMs` and the firehose channel caps from the
@@ -66,13 +73,16 @@ test.describe("Resilience — firehose stress", () => {
     }
     await expect(page.locator("main")).toBeVisible();
 
-    // The harness stream driver must be present to drive the seeded firehose.
+    // The harness stream driver is REQUIRED to drive the seeded firehose (task
+    // 11.1): its absence fails this test rather than skipping it (I-7).
     const harnessReady = await page.evaluate(
       () => typeof (window as unknown as { __atlasHarness?: unknown }).__atlasHarness === "object",
     );
-    if (!harnessReady) {
-      test.skip(true, "firehose harness stream driver not wired yet (tasks 2.1/2.2)");
-    }
+    expect(
+      harnessReady,
+      "window.__atlasHarness is absent: run the harness suite against the e2e-mode build " +
+        "(pnpm build:e2e && pnpm test:e2e:harness)",
+    ).toBe(true);
 
     // Snapshot the identity + order of the currently-rendered rows so we can
     // assert already-rendered content is not reordered by the burst (Req 6.4).
