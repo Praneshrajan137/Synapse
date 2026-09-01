@@ -174,13 +174,30 @@ wins; it promises the answer will be believable either way.
 
 ## Session 1r handoff — regenerate this section each session
 
-**Session 1r was a protocol revision plus one pre-registration. No spec task was completed.**
-Derive the state with `spec_ledger_census`; at the time of writing it reported 132 leaf tasks,
-53 done, 3 authored-pending-discharge, 76 open — 70 authorable and 6 CI-gated.
+**Session 1r was a protocol revision plus one pre-registration, and it is committed.** Three commits
+on `feat/decision-quality-proof`, PR **#84** open against `main`: `1f4f7d1` (E4a/E2a/E2b + the
+margin rule, 42 files), `dd5cd8c` (the protocol re-cut, 5 files), `e0944cb` (a flaky-generator fix).
+Derive the state with `spec_ledger_census`; at the time of writing: 132 leaf tasks, 53 done, 3
+authored-pending-discharge, 76 open — 70 authorable and 6 CI-gated.
 
-**The next thing in the plan is checkpoint A, which is an operator action, not an authoring
-session.** Tasks 6, 10.4 and 11 discharge there. Do not author task 12 until task 11's verdict is
-recorded and is not `material`. Session 2 is then eleven tasks: 12.1–12.4 and 13.1–13.7.
+**Your first act is NOT task 12.** The order is: make the `uplift.yml` dispatch affordable, repair
+the discharge failure below, complete checkpoint A, read task 11's verdict, and only then author
+E2c. If the verdict is `material`, **stop and re-cut R5** — that is a success of the method, not a
+failure of the plan. Session 2 is then eleven tasks: 12.1–12.4 and 13.1–13.7.
+
+### The one finding that most changes what you do next
+
+**Task 1.2's discharge arrived on PR #84 and it is RED.** `Lint • Typecheck • Unit` fails on Biome,
+and one of its two findings is `frontend/src/test/setup.ts`'s `organizeImports` — the import block
+task 1.2 added. That is precisely why 1.2 and 1.5 were marked `[~]` rather than `[x]`: no local run
+and no gate had ever judged them, and an `[x]` would have hidden this. **Repair it and they become
+`[x]`.** The other Biome finding (`noNonNullAssertion` at
+`frontend/src/app/__tests__/primary-surfaces.property.test.ts:33`) arrived in PR #77 and is on
+`main` — not yours. Note `biome check ./src` never scans `spec/`, so four of the five declared
+console property files are unlinted by that job.
+
+`HANDOFF.md` carries the full six-way CI decomposition: 3 predicted, 1 session-1 discharge failure,
+2 pre-existing on `main`, 1 unclassified (`pnpm audit` reads a live advisory database).
 
 ### What session 1r changed, and why
 
@@ -231,17 +248,25 @@ recorded and is not `material`. Session 2 is then eleven tasks: 12.1–12.4 and 
 
 ### Verified vs merely authored — session 1r
 
-**Executed and green:** `test_spec_ledger_census.py` 16 passed; `test_materiality_margin_rule.py`
-13 passed; `test_regret_totality_property.py` 16 still passing after the margin reader was wired
-into `_measure` (29 together). `ruff` clean on all four touched/new files. `mypy --strict` reports
-no error in any line written this session. The five other cheap gates at their claimed exit codes
-(0, 0 with 14/14 pins, 0, 2, 0).
+**Executed and green:** `test_spec_ledger_census.py` 16, `test_materiality_margin_rule.py` 13,
+`test_regret_totality_property.py` 17 (46 together). `ruff` clean on every touched file.
+`mypy --strict` reports no error in any line written this session. Cheap gates at their claimed
+exit codes: `workflow_shape_truth` 0, `pin_extractor_truth` 0 (14/14), `sweep_budget_truth` 0,
+`dataset_licence_truth` 2 (honest SKIP), `spec_ledger_census` 0.
 
 **Red, honestly:** `task_claim_truth --check` exits **1** on `core-purpose-uplift` tasks 9 and 9.1
 — pre-existing, another spec's ledger, not repaired here.
 
-**NOT executed:** everything session 1 listed as unexecuted is still unexecuted — all TypeScript,
-`digital_twin/tests/test_env_response.py` (module-skipped, `gymnasium` absent), and
+**NOT executed:** `digital_twin/tests/test_env_response.py` (module-skipped, `gymnasium` absent);
 `tests/uplift/test_aggregation_integrity_property.py::test_aggregation_integrity_under_failures`
-which **fails** on pre-existing float fragility. CI has never run this branch; checkpoint A is its
-first exposure. See `HANDOFF.md` for the full ledger and the expected-red list.
+which **fails** on pre-existing float fragility; and the four slow-marked E2c properties session 2
+will author, which the local sweep deselects by design.
+
+**A lesson worth carrying.** A flaky property passed twice at `HYPOTHESIS_PROFILE=dev` and failed on
+the third run, because `dev` draws only **10 examples**. Its "excluding" interval was built from an
+absolute width, so at `width >= excess` the lower bound landed on the margin and the test asserted
+`material` for an interval that excludes nothing — `classify_regret` was right to refuse it, since
+`low > margin` is strict because a closed interval whose endpoint sits on the margin *contains* it.
+Fixed the precondition, not the assertion, and did not touch the subject (R2.10); re-verified at
+`heavy`, 17 passed. **A `dev`-profile green is ten examples of evidence, not a proof.** Re-verify
+anything load-bearing at `heavy` on a single scoped file before you claim it.

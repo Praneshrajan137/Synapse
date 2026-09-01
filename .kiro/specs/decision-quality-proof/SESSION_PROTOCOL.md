@@ -113,18 +113,25 @@ workflow, read the output, record the verdict. Zero local compute, so I-0 is una
 
 Discharges tasks **6**, **10.4**, **11**.
 
-1. Push the branch. This is its **first CI exposure**; every gate on it runs for the first time.
-   Expect the reds `HANDOFF.md` lists as honest, and repair none of them by weakening.
-2. Read `truth-gates.yml::falsification-sweep`'s survivor list. **Bring it to the user before
-   fixing anything** — a gate proven not to enforce means every number it reported is
+**Steps 1-2 are already done: the branch is pushed and PR #84 is open, and CI has run.** What
+remains is reading the sweep, dispatching the measurement, and recording the verdict.
+
+0. **First, make the dispatch affordable.** `uplift.yml` declares `workflow_dispatch: {}` with no
+   inputs and holds two jobs — `uplift-proof` (`timeout-minutes: 350`) and `twin-regret`. A bare
+   dispatch runs **both**, spending ~350 minutes of runner time on a job checkpoint A does not need
+   and which cannot produce an admissible artifact yet. Add a `workflow_dispatch.inputs.job`
+   selector with an `if:` guard per job first.
+1. Read `truth-gates.yml::falsification-sweep`'s survivor list on PR #84. **Bring it to the user
+   before fixing anything** — a gate proven not to enforce means every number it reported is
    unsupported. Never weaken a mutation to clear a survivor. That discharges task 6.
-3. Dispatch `uplift.yml::twin-regret`. Read the reported regret and its interval.
-4. Commit the materiality margin per task 10.4 — **the rule is already committed and enforced;
-   instantiate only the value from it** (`service_points * 0.01 * weights.unmet_service`), record
-   the measured headroom it was checked against, and pin the derived value. The run's own output
-   reports `margin_rule`, `margin_rule_derives` and `comparator_headroom` so the number is read
-   off the rule rather than chosen. That discharges 10.4.
-5. Read task 11's verdict against the table below and record it in `tasks.md` with evidence.
+2. Dispatch `twin-regret`:
+   `gh workflow run uplift.yml --ref feat/decision-quality-proof`. Read the reported regret, its
+   interval, and `comparator_headroom`.
+3. Instantiate the margin per task 10.4 — **the rule is already committed and enforced; take only
+   the value from it** (`service_points * 0.01 * weights.unmet_service`), record the measured
+   headroom it was checked against, and pin the derived value. The run reports `margin_rule`,
+   `margin_rule_derives` and `comparator_headroom` for exactly this. That discharges 10.4.
+4. Read task 11's verdict against the table below and record it in `tasks.md` with evidence.
 
 **Task 11's verdict is four-valued, and the fourth value is the state the tree is in today.**
 
@@ -321,3 +328,4 @@ And **disk outranks all four.** Session 1 opened with eight tasks implemented an
 |---|---|---|---|
 | 1 | 2026-09-01 | Front-load (3 blockers, HANDOFF.md); reconciled 5.3–5.10; tasks 7.1–7.5, 8.1–8.4, 9.1–9.12, 10.1–10.3, 10.5, 10.6 | Overran ten deliberately: the session began with a ledger reconciliation (8 tasks already on disk, unticked) that was discovery rather than authoring. Found and fixed 3 real defects: `_apply_cold_start` deleting the catalogue, a missing JSON-Schema format checker, and a stale `stryker-break` drift record. Established this protocol at the end. |
 | 1r | 2026-09-01 | **Protocol revision + the margin rule. No spec task completed.** Added `scripts/audit/spec_ledger_census.py` + 16 tests. Re-cut the batch plan around checkpoints A–D. Introduced the `[~]` mark; reconciled 1.2 and 1.5 from `[x]`. Landed ADR-055 **D2.5** and task 10.4's *first half* — the enforced materiality-margin rule, pin (C75 now 14/14), `direction: down` ratchet, + 13 tests. | Reconciliation and pre-registration, not authoring — session 1's row is left as written. Found: tasks 11 and 14 fired after the work they gate; task 11's `unavailable` state was absent from the verdict table; the two sensitivity flips were unassigned; task 12.1 still declared the path Conflict A rejected; task 24.1's gate ids were stale by two (C75 is highest, C76 next free); task 7.2's declared module name never landed. Fixed the census's rejection of dotfile-rooted paths and an ASCII-only violation in its own output. Sweep executed: census 0, `workflow_shape_truth` 0, `pin_extractor_truth` 0 (14/14), `sweep_budget_truth` 0, `dataset_licence_truth` 2 (honest SKIP), `task_claim_truth` **1** on pre-existing `core-purpose-uplift` claims — recorded, not repaired. |
+| 1r-close | 2026-09-01 | **Committed, pushed, PR #84 opened.** Three commits: `1f4f7d1` E4a/E2a/E2b + margin rule (42 files), `dd5cd8c` the protocol re-cut (5 files), `e0944cb` a flaky-generator fix (1 file). | Two blockers surfaced at the commit gate. **(1)** `.gitignore`'s bare `data/` matched a directory named `data` at any depth, silently ignoring `infrastructure/data/dataset-licences.yaml` and its schema — so task 7.1 was ticked while its deliverable could not reach CI, and C74's honest SKIP would have been indistinguishable from a file-missing SKIP on CI. Anchored to `/data/`, blast radius verified as exactly those two paths before staging. **(2)** Session 1 was entirely uncommitted and interleaved with 1r across eight shared files, so the planned three-commit split would have produced commit messages that misdescribed their own diffs; re-split by what must land together instead. A flaky property surfaced on the pre-push re-verify and was fixed at the precondition. **First CI run then reclassified the expected-red list: 3 predicted, 1 session-1 discharge failure (task 1.2's Biome `organizeImports` — the `[~]` mark working), 2 pre-existing on `main`, 1 unclassified.** |

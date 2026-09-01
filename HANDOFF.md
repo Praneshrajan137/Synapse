@@ -1,15 +1,20 @@
 # HANDOFF — decision-quality-proof
 
-**State at end of session 1r (2026-09-01).** Derive the counts, never read them:
+**State at end of session 1r (2026-09-01). Committed, pushed, and on PR #84.** Derive the counts,
+never read them:
 
 ```powershell
-python -m scripts.audit.spec_ledger_census --files --next 10
+python -m scripts.audit.spec_ledger_census --files --next 11
 ```
 
 At the time of writing that reported **132 leaf tasks: 53 done, 3 authored-pending-discharge, 76
 open** — 70 authorable and 6 CI-gated. Parent tasks 2, 3, 4, 5, 7, 8, 9 complete; **tasks 1 and 10
 are not** — 1.2, 1.5 and 10.4 are `[~]`. E0 is authored, E1/E4a/E2a are closed, E2b is authored
 with its margin rule landed and its margin value owed at checkpoint A.
+
+**Three commits, on `feat/decision-quality-proof`, PR #84 open against `main`:**
+`1f4f7d1` E4a/E2a/E2b + the margin rule (42 files) · `dd5cd8c` the protocol re-cut (5 files) ·
+`e0944cb` the excluding-interval generator fix (1 file).
 
 > **The next thing in the plan is checkpoint A, and it is an operator action, not an authoring
 > session.** Tasks 6, 10.4 and 11 discharge there. **Do not author task 12** until task 11's
@@ -270,6 +275,15 @@ the other 11 are pre-existing in `uplift/fidelity.py`, `uplift/contract.py`, `up
   FAILS.** Falsifying example has `arm=''`, `seed=0`, hypothesis-built `KpiVector`s — never
   executes the twin, compares float dicts with `==`. **Diagnosed as pre-existing float fragility;
   with no before/after run that is a diagnosis, not evidence.**
+- **A second flaky property was found and fixed in this session, and the way it was found matters.**
+  `test_material_requires_the_interval_to_exclude_the_margin` passed twice and then failed on the
+  pre-push re-verify, because `HYPOTHESIS_PROFILE=dev` draws only 10 examples per run. Its
+  "excluding" interval was built from an *absolute* width, so at `width >= excess` the lower bound
+  landed on or below the margin and the test asserted `material` for an interval that excludes
+  nothing. `classify_regret` was right to refuse it: `low > margin` is strict because a closed
+  interval whose endpoint sits on the margin **contains** it. **Fixed the precondition, not the
+  assertion, and did not touch the subject** (R2.10). Verified at `HYPOTHESIS_PROFILE=heavy`, 17
+  passed. **Lesson: a `dev`-profile green is 10 examples of evidence. It is not a proof.**
 - **`tests/uplift/test_comparator_restock_disabled_property.py` — 7 tests, all deselected
   locally.** They are slow-marked because they drive the twin, so `-m "not slow"` skips them and
   I-0 forbids running them here. They read `comparator.restock_threshold` and `POLICY_PATH.name`,
@@ -324,21 +338,61 @@ the other 11 are pre-existing in `uplift/fidelity.py`, `uplift/contract.py`, `up
   reason, matching the `schema_registry.py` / `invariants.py` / `training_contract.py` precedent.
   Proven: `ruff --isolated --select N818` exits 1 naming line 139; with the ignore, exit 0.
 
-### Expected reds on first CI — honest, and not to be "fixed" by weakening
+### Observed on first CI — PR #84, run 2026-09-01. No longer predictions.
 
-- `frontend.yml::spec-typecheck` — predicted red by `tsconfig.spec.json`'s own header. **A
-  prediction is not a dispensation (R2.15):** repair types, never `continue-on-error`, never
-  narrow the project's `include`.
-- C28's `zero-a-floor` — a **disclosed survivor** until
-  `coverage_per_package.py --require-measured-floors` lands. A defect against C28, not the sweep.
-- C67 — will read SKIP on Linux CI too; `infrastructure/audit_anchors` does not exist. **Not
-  another C44.** Do not spend a pass expecting a platform change to flip it.
-- At most **8 of 14** declared checks are probeable by the sweep — `falsifies()` reports
-  `indeterminate` when a gate does not pass on the unmutated copy, because a check already red
-  proves nothing by staying red. **Bring the survivor list to the user before fixing anything, and
-  never weaken a mutation to clear a survivor.**
-- `gate-mutations.yaml`'s recorded survivor shape for C16 at line 26 is **misattributed** — nobody
-  declared that mutation.
+The branch is pushed (`e0944cb`) and PR **#84** is open against `main`. CI has run. **Six jobs
+failed, and they decompose into four different kinds — read the kind before touching anything.**
+
+**Predicted, and correct (3).**
+
+- **`TypeScript strict — spec/ + tests/`** (`frontend.yml::spec-typecheck`) — predicted red by
+  `tsconfig.spec.json`'s own header. **A prediction is not a dispensation (R2.15):** repair types,
+  never `continue-on-error`, never narrow the project's `include`.
+- **`Falsification Sweep (declared gate mutations)`** — at most 8 of 14 declared checks are
+  probeable, because `falsifies()` reports `indeterminate` when a gate does not pass on the
+  unmutated copy. **Read the survivor list before fixing anything, and never weaken a mutation to
+  clear a survivor.** This is task 6's subject and discharges it.
+- **`Truth Gates (enforcement spine)`** — the `verify_claims` spine, including C67's SKIP.
+
+**Session 1's own discharge, and it failed (1). This is the `[~]` mark earning its place.**
+
+- **`Lint • Typecheck • Unit` fails on Biome**, and one of its two findings is
+  `frontend/src/test/setup.ts`'s `organizeImports` — **the import block task 1.2 added**. Tasks 1.2
+  and 1.5 were marked `[~]` precisely because no local run or gate had ever judged them; the
+  discharge has now arrived and it is red. The third ledger state predicted this exactly, where an
+  `[x]` would have hidden it. **Repairing it is what turns 1.2 and 1.5 into `[x]`.**
+
+**Pre-existing on `main`, not this branch's (2).**
+
+- The other Biome finding, `lint/style/noNonNullAssertion` at
+  `frontend/src/app/__tests__/primary-surfaces.property.test.ts:33` (`matches[0]!`), arrived in
+  PR **#77** and is on `main` today. Note `biome check ./src` never scans `spec/`, so four of the
+  five declared console property files are not linted by this job at all.
+- **`Audit-chain tamper detection against Postgres`** — `main`'s own `SYNAPSE Integration` run
+  concluded **failure** on 2026-09-01, so this is not introduced here.
+
+**Unclassified (1) — do not assume.**
+
+- **`Supply-chain audit (pnpm audit + lockfile HTTPS/host check)`.** `pnpm audit` reads a live
+  advisory database, so it can turn red without any code change. `main`'s last Security Scan was
+  green on 2026-08-31. **Diagnose before repairing; that is a diagnosis, not evidence.**
+
+**Also still true, and unchanged by this run:** C28's `zero-a-floor` is a disclosed survivor until
+`coverage_per_package.py --require-measured-floors` lands; `gate-mutations.yaml`'s recorded
+survivor shape for C16 at line 26 is **misattributed**; C67 reads SKIP on Linux too because
+`infrastructure/audit_anchors` does not exist — **not another C44**.
+
+### Checkpoint A's cost, discovered while preparing its command
+
+`uplift.yml` declares `workflow_dispatch: {}` with **no inputs**, and holds **two** jobs:
+`uplift-proof` (`timeout-minutes: 350`) and `twin-regret`. A bare dispatch therefore runs **both**,
+spending up to ~350 minutes of runner time on a job checkpoint A does not need — and `uplift-proof`
+cannot produce an admissible artifact yet anyway, so the spend buys nothing.
+
+**Recommended first act of the next session:** add a `workflow_dispatch.inputs.job` selector with
+an `if:` guard on each job, so `twin-regret` can be dispatched alone. Small, and it makes checkpoint
+A cheap and repeatable rather than a once-per-six-hours event. Declare any new step in
+`blocking-steps.yaml` in the same commit.
 - **`task_claim_truth` is red, and the red belongs to another spec.** Executed 2026-09-01: 563
   records across 7 specs, exit **1**, naming `core-purpose-uplift` tasks **9** and **9.1** — both
   `[x]` while `infrastructure/ml/published_checkpoints.json` holds only `__placeholder__`. Exactly
