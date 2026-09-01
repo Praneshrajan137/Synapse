@@ -547,6 +547,28 @@ tests in the interim, and that is a stated sequencing gap, not an omission.
 - [ ] 6. Checkpoint — review the sweep's survivor list
   - discharge: truth-gates.yml::falsification-sweep
   - Ensure all tests pass, ask the user if questions arise.
+  - **THE LIST IS IN. Measured on PR #84, run `33513528766`, sha `77df3ef`. Still `[ ]` because the
+    review is the operator's, not the agent's.**
+    ```
+    Checks:    REGISTERED=67 DECLARED=14 FALSIFIED=6 PASS_ELIGIBLE=6 EXCLUDED=53
+    Operators: DECLARED=16 PROBED=16 UNPROVEN=0
+    ```
+    - **Exactly one survivor, and it is the disclosed one.** `C28/zero-a-floor` — "gate exited 0
+      under the declared mutation: it does not gate this property". **No undisclosed survivor**, so
+      no number reported elsewhere in the repo is invalidated by this run.
+    - **Six gates proven to bite:** C16 `lower-stryker-break`, C57 `neutralise-one-actuator`,
+      C61 `shrink-the-allowlist-subject`, C65 `rename-a-declared-required-job`,
+      C66 `unresolvable-registry-gate-module`, C68 `hollow-out-the-external-feed`.
+    - **`UNPROVEN=0`** — every declared operator was probed. That is R1.16's obligation discharged,
+      and it is the clause this task's own success criterion names.
+    - **Eight indeterminate, every one for the declared reason** (the gate does not pass on its
+      unmutated baseline, so its exit 1 under mutation attributes nothing): C44 x2, C56 x2, C60,
+      C69, C70, C71, C72.
+  - **The prediction below said 8 probeable. The actual is 7, and the missing one is C56 — because
+    the README headline drift makes C56's own baseline red.** So session 1's unregenerated README did
+    not merely fail a gate: it **removed a gate from the falsification measurement**. That is a
+    stronger reason to run `readme_gen --write` than the red tick was, and it is recorded in
+    `HANDOFF.md`'s owed list rather than acted on unilaterally.
   - **Expect red, and read the red correctly.** The honest expectation stated before the run:
     at most **8 of 14** declared checks are probeable on this tree (C16, C28, C56, C57, C61,
     C65, C66, C68 have `PASS` baselines; C44 and C69 are `FAIL`; C60, C70, C71, C72 are

@@ -15,13 +15,15 @@ session-2 row. Parent tasks 2, 3, 4, 5, 7, 8, 9 complete; **tasks 1 and 10 are n
 and its margin value owed at checkpoint A.
 
 > **Session 2p was pre-batch repair, not an authoring batch.** It made checkpoint A affordable, made
-> checkpoint A's verdict *admissible*, and repaired two discharge failures PR #84 exposed — one of
-> which nothing had recorded. **No session-2 task was started.** The next thing in the plan is still
-> checkpoint A, and it is an operator action.
+> checkpoint A's verdict *admissible*, and repaired the discharge failures PR #84 exposed. **No
+> session-2 task was started.** The next thing in the plan is still checkpoint A, and it is an
+> operator action.
 >
-> **Three commits on `feat/decision-quality-proof`, pushed to PR #84:** `85774e1` the interval +
-> the dispatch selector + the gate-surface regeneration (6 files), `d67f1c7` the Biome repair
-> (3 files), `<this commit>` the ledger. The branch is now **14 commits ahead of `main`.**
+> **Four commits on `feat/decision-quality-proof`, pushed to PR #84:** `85774e1` the interval + the
+> dispatch selector + the gate-surface regeneration, `d67f1c7` the first Biome repair, `77df3ef` the
+> ledger, `98b37d9` the lint/format gates this branch had left red — **found by verifying the CI run
+> rather than by trusting the previous session's claims.** The branch is **15 commits ahead of
+> `main`.**
 >
 > The working agreement is `.kiro/specs/decision-quality-proof/SESSION_PROTOCOL.md`.
 > The prompt to paste in a new session is
@@ -36,27 +38,35 @@ as it *is*, not as a diff against how it was.
 
 **All of it is operator work. There is no authoring owed before checkpoint A.**
 
-1. **Read `truth-gates.yml::falsification-sweep`'s survivor list on PR #84 and bring it to the user
-   before fixing anything.** That discharges task 6. Never weaken a mutation to clear a survivor.
-2. **Read whether C63 went green** on this push. That is the deferred verification of the
-   gate-surface repair — see "The escalation that was declined, and why that was the cheaper truth"
-   below. If C63, C56 or the README headline are red, the prediction was wrong and the run names the
-   drift.
-3. **Dispatch the regret measurement alone** — now possible, and this is what session 2p's
-   `uplift.yml` change bought:
+1. **The survivor list is IN HAND and is below — take it to the user, then decide what to fix.**
+   Exactly one survivor, `C28/zero-a-floor`, and it is the disclosed one. `UNPROVEN=0`. **Task 6 is
+   deliberately not ticked** until that review happens.
+2. **Read whether `98b37d9` turned `Lint • Typecheck • Unit` and Ruff green.** Both were verified
+   locally at CI's exact commands, but a local pass is not the job's verdict. Expect `SYNAPSE CI` to
+   fail **further down** now, at step 8 `mypy --strict orchestrator/` (78 pre-existing errors) —
+   which still leaves `uplift-verify` skipped.
+3. **Decide the `readme_gen` escalation, which is no longer speculative.** C56 is red, the counts
+   *did* move (PASS 53 -> 54), and the drift **removed C56 from the falsification measurement**. The
+   repair order is `gate_surface --write` (done), then `ledger_gen --write`, then
+   `readme_gen --write` — the last two ~15 min of full-core CPU each. Never repair a count by hand.
+4. **Dispatch the regret measurement alone** — what session 2p's `uplift.yml` change bought:
    ```powershell
    gh workflow run uplift.yml --ref feat/decision-quality-proof --field job=twin-regret
    ```
    Then read `regret`, `interval_low`/`interval_high`, `comparator_headroom`, `margin_rule`,
    `margin_rule_derives` and `interval_excludes_rule_margin` from
    `artifacts/uplift/twin-regret.json`.
-4. **Instantiate `materiality_margin.value` from the committed rule** (`service_points * 0.01 *
+5. **Instantiate `materiality_margin.value` from the committed rule** (`service_points * 0.01 *
    weights.unmet_service`), record the headroom it was checked against, and pin the derived value.
    `policy.py::materiality_margin` will refuse a value the rule does not produce — that is intended.
    Discharges task 10.4.
-5. **Record task 11's verdict** against `SESSION_PROTOCOL.md`'s four-value table, with evidence.
+6. **Record task 11's verdict** against `SESSION_PROTOCOL.md`'s four-value table, with evidence.
    Then branch: `material` -> stop and re-cut R5; `inconclusive` -> session 2's eleven tasks;
    `unavailable` -> the measurement did not happen, say so.
+
+**The one thing that would most change this spec's position is not on that list, because it is not
+ours to decide:** `uplift-verify` cannot run until `mypy --strict orchestrator/`'s 78 errors are
+cleared, and **Properties 38-60 have never executed in CI.** See failure 4 below.
 
 ---
 
@@ -512,45 +522,122 @@ churn diff across 40 untouched files and change nothing about the gate. It also 
 run is only admissible evidence per-file, on LF files — which is why `setup.ts`, `fc-budget.ts` and
 `SloBurnBoard.tsx` (all LF, all verified individually) count and a whole-tree exit code does not.
 
-### Observed on PR #84's first CI run, as now corrected
+### Observed on PR #84, run for `77df3ef`. Verified job-by-job, not inferred.
 
-Six jobs failed. The decomposition this file previously carried was wrong in two places, and the
-corrections both move work **into** this spec's scope:
+**Eight workflows ran: three green, four red, one cancelled.** Green: `Terraform Validate`,
+`SYNAPSE Security Scan`, `SYNAPSE Policy Gate`. Cancelled: `SYNAPSE Mutation Testing` at 45m28s, as
+on every push (precedent E-S13-05). **Two of the four failures falsified claims this session had
+made.**
 
-**This spec's own discharge failures (2, was 1).**
+**1. `SYNAPSE Truth Gates` — C63 PASSED. The gate-surface repair worked.**
 
-- **`Lint • Typecheck • Unit`** — four error-level Biome findings, **all** from commit `5db5eb1`.
-  Repaired. Two steps of that job now verified locally, one not.
-- **`Truth Gates (enforcement spine)`** — carries **C63's gate-surface drift**, from tasks 5.6 and
-  10.3. Repaired. This was previously filed as "predicted red", which concealed it.
+Proven by comparing the two runs' registry verdicts rather than by reading one:
 
-**Predicted, and correct (2).**
+| | previous push `24a1a8a` | this push `77df3ef` |
+|---|---|---|
+| registry failures | C44, C56, **C63**, C69 | C44, C56, C69 |
+| PASS | 53 | **54** |
 
-- **`TypeScript strict — spec/ + tests/`** (`frontend.yml::spec-typecheck`) — predicted red by
-  `tsconfig.spec.json`'s own header. **A prediction is not a dispensation (R2.15):** repair types,
-  never `continue-on-error`, never narrow the project's `include`.
-- **`Falsification Sweep (declared gate mutations)`** — at most 8 of 14 declared checks are
-  probeable, because `falsifies()` reports `indeterminate` when a gate does not pass on the
-  unmutated copy. **Read the survivor list before fixing anything.** Task 6's subject.
+**But the prediction that justified skipping the escalation was half wrong, and the wrong half
+matters.** "Restoring PASS restores agreement rather than moving a count" — the count *did* move,
+53 to 54. What saves the conclusion is that **C56 was already failing on the previous push for the
+same reason**: `README.md`'s generated headline claims `PASS 51 / FAIL 3 / SKIP 10 / TOTAL 64` while
+the suite reports `54 / 2 / 11 / 67`. That drift is exactly session 1's three registrations (C73,
+C74, C75) never regenerated into the README. **So C56 is not this session's — but the counts do move,
+and `readme_gen --write` is genuinely owed. That is now measured, not predicted.**
 
-**Pre-existing on `main`, not this branch's (1).**
+**And the step nominated as the verifier never ran.** Step 9, `Gate-surface record matches the parsed
+workflow tree`, was **skipped** because step 5 (`Check_Registry gate`) failed first. "Let CI answer
+it" worked only by luck: step 5 runs the whole registry, so its verdict line carried C63's status
+anyway. **A deferred verification pointed at a step that is itself gated is not a deferred
+verification.** Point the next one at the registry verdict line.
 
-- **`Audit-chain tamper detection against Postgres`** — `main`'s own `SYNAPSE Integration` run
-  concluded failure on 2026-09-01.
+**2. `Falsification Sweep` — THE SURVIVOR LIST. This is task 6's deliverable.**
 
-**Unclassified (1) — do not assume.**
+```
+Checks:    REGISTERED=67 DECLARED=14 FALSIFIED=6 PASS_ELIGIBLE=6 EXCLUDED=53
+Operators: DECLARED=16 PROBED=16 UNPROVEN=0
+```
 
-- **`Supply-chain audit (pnpm audit + lockfile HTTPS/host check)`.** `pnpm audit` reads a live
-  advisory database, so it can turn red without any code change. **Diagnose before repairing.**
+- **Exactly one survivor, and it is the disclosed one.** `C28/zero-a-floor` — "gate exited 0 under
+  the declared mutation: it does not gate this property". Recorded in `gate-mutations.yaml`,
+  expected, and a defect against C28 rather than against the sweep. **No undisclosed survivor.**
+- **Six gates proven to bite:** C16 `lower-stryker-break`, C57 `neutralise-one-actuator`,
+  C61 `shrink-the-allowlist-subject`, C65 `rename-a-declared-required-job`,
+  C66 `unresolvable-registry-gate-module`, C68 `hollow-out-the-external-feed`.
+- **`UNPROVEN=0`** — every declared operator was probed. R1.16's obligation is discharged.
+- **Eight indeterminate, every one because the gate does not pass on its unmutated baseline:**
+  C44 x2, C56 x2, C60, C69, C70, C71, C72.
+- **Task 6 predicted 8 probeable. The actual is 7, and the missing one is C56 — because the README
+  drift makes C56's own baseline red.** So the unregenerated README did not merely fail a gate, it
+  **removed a gate from the falsification measurement.** That is the sharpest argument available for
+  running the generators: doc drift costs measurement power, not just a red tick.
 
-**Also still true:** C28's `zero-a-floor` is a disclosed survivor until
-`coverage_per_package.py --require-measured-floors` lands; `gate-mutations.yaml`'s recorded
-survivor shape for C16 at line 26 is **misattributed**; C67 reads SKIP on Linux too because
-`infrastructure/audit_anchors` does not exist. `task_claim_truth` is red on
-`core-purpose-uplift` tasks 9 and 9.1 — **another spec's ledger**, and it will bite this spec at
-task 20.3, already a *detected pending* claim at `tasks.md:2050`.
+**Task 6 is NOT ticked.** The list goes to the user before anything is fixed, because a gate proven
+not to enforce means every number it reported is unsupported.
 
----
+**3. `SYNAPSE Frontend CI` — `Lint • Typecheck • Unit` was still red, and session 2p's claim was
+wrong.** CI reported `Found 3 errors. Found 80 warnings.` The claim "zero error-level findings" came
+from an over-generalisation: 40 local `needs to be formatted` errors, **one** file proven to be a
+`core.autocrlf` artifact, and that proof extended to all 40. Three were real and CRLF noise masked
+them — `DataPathNotice.tsx`, `surfaces/data-paths.ts`, `lib/interruption-precision.ts`, all from
+`5db5eb1`. Repaired in `98b37d9`.
+
+**Now proven mechanically rather than argued:** `biome format --write ./src` reports "Fixed 40 files"
+while `git diff` shows exactly **3** changed, because git normalises line endings under autocrlf. The
+37 are line-ending-only; the 3 are the ones CI named. `biome check ./src` now exits **0**, and with
+the tree LF that result is directly comparable to CI's for the first time.
+
+Still red there, both out of scope: `TypeScript strict — spec/ + tests/` (predicted; R2.15 — a
+prediction is not a dispensation) and `Supply-chain audit` (`pnpm audit` reads a live advisory
+database; diagnose before repairing).
+
+**4. `SYNAPSE CI` — the finding that matters most.**
+
+`Lint + Type Check + Unit Tests` failed at **step 5**, `ruff check packages/synapse_common/ agents/
+orchestrator/`, on two findings from `e000258` — this branch, not main:
+`orchestrator/consensus/protocol.py:154:101 E501 (101 > 100)` and
+`orchestrator/tests/consensus/test_dispatch_choke_point.py:23:8 TC003`. Both repaired in `98b37d9`,
+with step 6's `ruff format --check`, which had never run and would also have failed, on 10 files —
+every one of them `e000258`'s too.
+
+**One 101-character line was gating 18 steps and 3 jobs, across two consecutive pushes, and nothing
+recorded it.** Steps 6 through 23 all skipped: `mypy --strict` x3, the **I-1 no-paid-API check**, the
+**I-2 reward isolation check**, the **C56 narrative-truth gate**, the unit tests, the coverage
+floors. Plus `sprint6-verify`, `training-smoke`, and **`uplift-verify` — where every property test
+this spec has written is supposed to run. Properties 38 through 60 have never executed in CI on this
+branch.** A gate that reports nothing is indistinguishable from a gate that passes (I-7), and this is
+that failure at the scale of a whole workflow.
+
+**The repair advances the chain; it does not clear it.** `uplift-verify` needs `quality-gates` to
+*succeed*, and step 8, `mypy --strict orchestrator/`, reports **78 errors in 32 files** — 21 of them
+the single pattern `Missing named argument "confidence_threshold" for "OrchestratorConfig"`, plus 24
+`arg-type` and 7 `unused-ignore`. Measured locally at CI's exact scope; the count is unchanged by
+this session's edits and neither edited line adds one.
+
+**That debt must NOT be cleared by giving `confidence_threshold` a default.**
+`GuardrailEngine(confidence_threshold=config.confidence_threshold)` consumes it, so a silent default
+would substitute an unreviewed number for a committed one on the **I-5 confidence gate** — precisely
+what `policy.py` refuses to do, and what this spec exists to stop. It is `e000258`'s owner's call.
+
+**5. `SYNAPSE Integration`** — only `Audit-chain tamper detection against Postgres` fails, and
+`main`'s own run fails the same way. Pre-existing, as recorded.
+
+**Two workflow-level facts worth holding.** `main`'s `SYNAPSE Frontend CI` is **green**, so nothing
+pre-existing blocks that job — the three format errors were ours by elimination as well as by blame.
+`main`'s `SYNAPSE CI` is **red**, so that workflow was already failing before this branch; this branch
+adds its own findings on top of whatever main's are.
+
+**Also still true:** C67 reads SKIP because `infrastructure/audit_anchors` does not exist;
+`gate-mutations.yaml`'s recorded survivor shape for C16 at line 26 is **misattributed**;
+`task_claim_truth` is red on `core-purpose-uplift` tasks 9 and 9.1 — another spec's ledger — and will
+bite this spec at task 20.3.
+
+**One environment trap found while reading the runs: the local clock is ~2h45m ahead of the commit
+timestamps git and GitHub agree on.** Both put `77df3ef` at `13:27:28Z`; `Get-Date` reported
+`16:12Z`. Any reasoning that compares "now" against a run's `created_at` will be wrong. **Identify a
+run by `head_commit.message`, never by timestamp** — that is how these runs were confirmed to belong
+to this push.
 
 ## Environment notes
 
