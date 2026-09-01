@@ -34,6 +34,7 @@ plan's own guard working, not a defect in it.
 from __future__ import annotations
 
 import dataclasses
+import math
 import statistics
 from typing import Final, Literal
 
@@ -297,6 +298,15 @@ def classify_regret(
     ``margin=None`` means R5.2's deferral is still in force -- the margin may only be committed
     after task 10.3 measures the distribution. That yields ``unavailable`` rather than a
     comparison against an invented threshold.
+
+    ``interval=None`` means the caller has no dispersion to offer, and ``material`` then rests
+    on the point estimate alone. **That path is deliberately unreachable from the measurement
+    CLI:** ``_measure`` estimates the interval (design E3.1) and reports ``unavailable`` when it
+    cannot, precisely because ``material`` is the verdict that falsifies Finding 4 and stops
+    this spec. The argument stays optional because this function is also exercised over
+    generated inputs where no sample exists to resample, and because R5.3 -- unlike R5.13 --
+    does not itself require an interval. **A new production caller that omits it reopens the
+    hole**; supply the interval or report unavailable, never fall back.
     """
     low, high = interval if interval is not None else (None, None)
 
@@ -393,6 +403,13 @@ def _measure(replicates: int, hours: float) -> dict[str, object]:
         materiality_margin_rule,
     )
     from uplift.foresight import run_two_pass
+    from uplift.interval import (
+        INTERVAL_SEED,
+        IntervalUnavailableError,
+        contract_alpha,
+        paired_difference_interval,
+        resamples_for,
+    )
 
     objective = load_objective()
     threshold = comparator_restock_threshold()
@@ -438,13 +455,81 @@ def _measure(replicates: int, hours: float) -> dict[str, object]:
     # committed margin is checked against: a margin at or above it is unfalsifiable.
     headroom = mean_baseline - mean_foresight
 
+    # THE INTERVAL, AND WHY IT IS NOT OPTIONAL HERE (design E3.1, R6.13, R7.14).
+    #
+    # `classify_regret` reaches `material` on `regret >= margin` alone when `interval is None`,
+    # and `material` is the verdict that FALSIFIES Finding 4 and stops this spec (R5.3, task
+    # 11). Its own docstring, and `SESSION_PROTOCOL.md`'s checkpoint-A table, both define
+    # `material` as the margin being at or below the regret WITH THE INTERVAL EXCLUDING IT.
+    # Supplying the interval is what makes those two statements true of the run that decides.
+    # R5.3 does not itself demand an interval -- R5.13 does, for the non-stationary twin -- so
+    # this is a stricter standard than the criterion requires, adopted deliberately and
+    # recorded rather than assumed.
+    #
+    # `alpha` is READ from the committed Metric_Contract; "95%" is `1 - alpha` and appears
+    # nowhere as a literal (AD-13). The resample count is derived from that alpha.
+    alpha = contract_alpha()
+    resamples = resamples_for(alpha)
+    try:
+        interval = paired_difference_interval(
+            baseline_costs,
+            foresight_costs,
+            alpha=alpha,
+            resamples=resamples,
+            seed=INTERVAL_SEED,
+        )
+    except IntervalUnavailableError as error:
+        # A measurement whose dispersion could not be estimated is reported unavailable, and
+        # `main` exits 2 on it, which fails the job. It is NOT downgraded to a point-estimate
+        # verdict: falling back would restore exactly the hole this block closes, and would do
+        # it silently on the one run whose verdict can end the spec (I-7).
+        return {
+            "status": "unavailable",
+            "reason": (
+                f"measured regret {measured:.6g} over {len(baseline_costs)} usable replicate(s) "
+                f"but no admissible interval could be estimated: {error}. The regret is "
+                "reported and JUDGED BY NOTHING: `material` requires an interval excluding the "
+                "margin, and a point estimate with no dispersion must not be read as one"
+            ),
+            "replicates_usable": len(baseline_costs),
+            "replicates_unusable": len(unusable),
+            "unusable_seeds": unusable,
+            "regret": measured,
+            "comparator_headroom": headroom,
+        }
+
+    # The interval's own point estimate is PINNED against the objective's, not trusted to
+    # agree with it (task 15.1's "`point` equals `headline_uplift` and is pinned against it,
+    # not computed twice"). `fmean(a) - fmean(b)` and `fmean(a_i - b_i)` are the same quantity
+    # by algebra and not necessarily the same float, so the comparison is a closeness test; a
+    # real disagreement means the two sides are not measuring the same contrast, and that is
+    # reported rather than averaged over.
+    if not math.isclose(interval.point, measured, rel_tol=1e-9, abs_tol=1e-12):
+        return {
+            "status": "unavailable",
+            "reason": (
+                f"the interval's point estimate {interval.point!r} disagrees with the "
+                f"objective's regret {measured!r}. These are the same contrast computed two "
+                "ways, so a disagreement means the paired difference and the difference of "
+                "means are not over the same replicate set. Nothing is judged on it"
+            ),
+            "replicates_usable": len(baseline_costs),
+            "replicates_unusable": len(unusable),
+            "unusable_seeds": unusable,
+            "regret": measured,
+            "comparator_headroom": headroom,
+            "interval_point": interval.point,
+        }
+
     # `margin` is READ, not hardcoded. It is `None` until task 10.4 instantiates it, which
     # yields `unavailable` -- the honest verdict for the first run (R5.2). The RULE, however,
     # is required and is reported here, so checkpoint A's operator can see the value the rule
     # produces beside the measurement rather than choosing a number to suit it (ADR-055 D2.5).
     rule = materiality_margin_rule()
     margin = materiality_margin(measured_headroom=headroom)
-    verdict = classify_regret(measured, objective=objective, margin=margin)
+    verdict = classify_regret(
+        measured, objective=objective, margin=margin, interval=interval.bounds
+    )
     return {
         "status": "measured",
         "replicates_usable": len(baseline_costs),
@@ -456,10 +541,22 @@ def _measure(replicates: int, hours: float) -> dict[str, object]:
         "mean_foresight_cost": mean_foresight,
         "comparator_headroom": headroom,
         "regret": measured,
+        "interval": interval.describe(),
+        "interval_low": interval.low,
+        "interval_high": interval.high,
+        "interval_point": interval.point,
+        "interval_alpha": interval.alpha,
+        "interval_method": interval.method,
+        "interval_resamples": interval.resamples,
+        "interval_seed": interval.seed,
         "margin_committed": margin,
         "margin_rule": rule.describe(),
         "margin_rule_derives": rule.derived,
         "margin_rule_below_headroom": rule.derived < headroom,
+        # Reported beside the verdict because it is the clause a reader most needs and the
+        # verdict alone does not show: whether THIS interval would have licensed `material` at
+        # the value the rule derives, independently of whether that value is committed yet.
+        "interval_excludes_rule_margin": interval.excludes(rule.derived),
         "verdict": verdict.verdict,
         "reason": verdict.reason,
         "insensitive_kpis": [item.term for item in objective.insensitive],

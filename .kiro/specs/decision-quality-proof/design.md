@@ -1274,9 +1274,46 @@ def headline_interval(
 ```
 
 A paired bootstrap over replicate-aligned samples, stdlib `random.Random(seed)` only (I-1),
-sorting the resample statistics so the result is invariant to input order for a fixed seed.
-`alpha` comes from `uplift/metric_contract.yaml`'s committed `0.05`; "95%" is `1 - alpha`
-and appears nowhere as a literal.
+sorting **the paired differences before resampling** so the result is invariant to input order
+for a fixed seed, and sorting the resample statistics afterwards so the percentile is well
+defined. `alpha` comes from `uplift/metric_contract.yaml`'s committed `0.05`; "95%" is
+`1 - alpha` and appears nowhere as a literal.
+
+**Corrected while implementing (session 2p). The original text said sorting the resample
+*statistics* delivers input-order invariance. It does not**, and the difference matters because
+order-invariance is one of Property 60's three declared clauses. The seeded index stream is
+fixed, so permuting the inputs changes which values each resample draws, and therefore changes
+the statistics themselves — sorted or not. Two sorts are needed and they do different jobs:
+sorting the *differences* before resampling is what makes the result a function of the multiset
+rather than of the sequence; sorting the *statistics* after is what makes the percentile
+extraction well defined. This is the same argument `uplift/harness.py` already makes when it
+sorts by seed before aggregating, so worker scheduling cannot move the low bits.
+
+**Two further deviations from the signature above, both forced and both recorded rather than
+absorbed.**
+
+1. **The return type is `uplift.interval.Interval`, not `ArtifactInterval`.** That model lives
+   in `uplift/harness.py` (task 15.1), and importing the harness here would drag the twin, the
+   arm machinery and numpy into `uplift/regret.py`'s import path — which that module
+   deliberately keeps light, importing the engine only inside `_measure`. So `Interval` is the
+   *computation* form carrying exactly the seven fields `ArtifactInterval` declares, and
+   `ArtifactInterval` is the *serialisation* form, constructed from `Interval.as_dict()`. The
+   field names are pinned to each other by a test rather than by intention.
+2. **`alpha` is read from `uplift/metric_contract.yaml` with `yaml`, not through**
+   `uplift.contract.load_contract`. `contract.py` imports `scipy` at module scope, and `scipy`
+   is in neither `packages/requirements.txt` nor `packages/requirements-dev.txt` — it reaches
+   `ci.yml::uplift-verify` transitively through `agents/*/requirements.txt`, which
+   `uplift.yml::twin-regret` does not install. Routing one float through the validating reader
+   would make the regret measurement fail at import inside the job that exists to run it. The
+   two readers are held together by a test that asserts they return the same number and that
+   runs where `scipy` is present.
+
+**Landed early, out of session 3, and why.** Checkpoint A's task 11 reads a verdict from
+`uplift/regret.py::classify_regret`, whose `material` branch is satisfied by `regret >= margin`
+alone when no interval is supplied — and `material` falsifies Finding 4 and stops the spec.
+R5.3 permits that; `RegretVerdict`'s docstring and `SESSION_PROTOCOL.md`'s checkpoint-A table
+do not. The estimator came forward so the run that can end the spec is judged on an interval.
+Task 15.2's remaining half — the `assemble_uplift_result` call site — still waits on 15.1.
 
 #### E3.2 `uplift/oracle_arm.py` (NEW) — the positive control's arm (R6.2-R6.4)
 
@@ -1700,11 +1737,12 @@ conflating them is how one gets weakened to satisfy another.
    `arm_aggregates_digest` covers only that string. AD-15's interval is outside the digest,
    so the interval cannot break this — and AD-15 is *shaped* that way for this reason.
 2. **Replayability of the interval itself.** `ArtifactInterval` carries its `seed` and
-   `resamples`, and `headline_interval` sorts its resample statistics, so the interval is a
-   pure function of `(samples, alpha, resamples, seed)` and is invariant to input order for
-   a fixed seed. Without the recorded seed an interval could not be re-derived from a
-   committed artifact, and R7.17's round trip would be checking a number nobody could
-   reproduce.
+   `resamples`, and `headline_interval` sorts the paired differences before resampling and the
+   resample statistics after, so the interval is a pure function of
+   `(samples, alpha, resamples, seed)` and is invariant to input order for a fixed seed.
+   (E3.1 records the correction: sorting only the statistics gives the second property and not
+   the first.) Without the recorded seed an interval could not be re-derived from a committed
+   artifact, and R7.17's round trip would be checking a number nobody could reproduce.
 3. **Substream independence in the twin** (AD-18). This is the new one and it is the
    enabling condition for E2c. Today one `np.random.default_rng(seed)` feeds all five
    processes plus the SKU choice, so the realised demand path is a function of the global

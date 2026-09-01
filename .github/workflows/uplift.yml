@@ -52,7 +52,31 @@ on:
     # mutation sweep (mutation.yml) and the Monday 07:00 UTC reconciliation read, so the
     # three long jobs do not contend for the runner queue.
     - cron: "0 3 * * *"
-  workflow_dispatch: {}
+  workflow_dispatch:
+    # A JOB SELECTOR, BECAUSE A BARE DISPATCH IS NOT AFFORDABLE (decision-quality-proof
+    # checkpoint A). This block used to be `workflow_dispatch: {}`, and with two jobs in the
+    # file a bare dispatch ran BOTH -- spending up to ~350 minutes of runner time on
+    # `uplift-proof` for an operator who wanted `twin-regret`, and `uplift-proof` cannot
+    # produce an admissible artifact until E3/E5 anyway, so the spend bought nothing.
+    #
+    # Checkpoint A dispatches `twin-regret` alone. It is a decision gate that can end the
+    # spec, so it has to be cheap enough to re-run when a measurement needs repeating; a
+    # once-per-six-hours event is not a gate anybody will exercise twice.
+    #
+    # `default: both` is deliberate: it preserves the previous behaviour exactly, so nothing
+    # that dispatched this workflow before now does something different, and the `schedule`
+    # trigger is unaffected regardless (see each job's `if:`, which short-circuits on
+    # `github.event_name`).
+    inputs:
+      job:
+        description: "Which job to run. 'both' is the previous behaviour and the schedule's."
+        required: false
+        default: both
+        type: choice
+        options:
+          - both
+          - uplift-proof
+          - twin-regret
 
 permissions:
   contents: read
@@ -62,6 +86,15 @@ concurrency:
   # would be evaluating evidence the other was overwriting. `cancel-in-progress: false`
   # because a run this expensive should finish and report rather than be discarded --
   # and an abandoned run reports nothing, which is not a pass either.
+  #
+  # LEFT AT WORKFLOW SCOPE ON PURPOSE, and the consequence is recorded rather than removed.
+  # Because the group covers the whole workflow, a `twin-regret` dispatch that lands while a
+  # scheduled run is in flight QUEUES behind it rather than running beside it. Moving the
+  # group to job scope would let them run concurrently, but it would also stop being one
+  # group for two dispatches of `uplift-proof` under different input values -- and the
+  # guarantee this key exists for is "never two powered runs at once", which is worth more
+  # than saving an operator a wait. The nightly window is 03:00 UTC; outside it a dispatch
+  # starts immediately.
   group: uplift-proof
   cancel-in-progress: false
 
@@ -72,6 +105,16 @@ jobs:
   uplift-proof:
     name: Powered uplift harness + C60 verdict (one job -- shared run)
     runs-on: ubuntu-latest
+    # SELECTED BY THE DISPATCH INPUT, NEVER SKIPPED ON A SCHEDULE. The first disjunct is what
+    # keeps the nightly run untouched: on `schedule` there are no inputs at all, so a guard
+    # written only against `inputs.job` would silently disable the scheduled proof -- a job
+    # that stops running is indistinguishable from a job that passes, which is the failure
+    # I-7 exists to prevent. This is a SELECTOR and not a `continue-on-error`: when the job
+    # runs, every step's exit status still gates it.
+    if: >-
+      github.event_name != 'workflow_dispatch'
+      || inputs.job == 'both'
+      || inputs.job == 'uplift-proof'
     # Just inside the hosted-runner job ceiling. A timeout is a failed job, which is the
     # honest outcome for a measurement that did not complete (I-7); it is not a partial
     # result the gate may read.
@@ -165,9 +208,25 @@ jobs:
   # nothing. Task 10.4 reads this report and commits the margin; only SUBSEQUENT runs are
   # judged against it. A job that judged a run against a threshold committed after that run
   # is the exact defect R5.2 names.
+  #
+  # AND IT NOW REPORTS AN INTERVAL, WHICH IS WHAT MAKES THE NEXT RUN'S VERDICT ADMISSIBLE.
+  # `uplift/regret.py::_measure` estimates a paired percentile bootstrap over the per-seed
+  # costs (`uplift/interval.py`, design E3.1) at `1 - alpha` from the committed
+  # Metric_Contract, and passes it to `classify_regret`. Without it, `material` -- the verdict
+  # that FALSIFIES Finding 4 and stops the spec -- was reachable on a bare point estimate,
+  # because `classify_regret` treats an absent interval as "no interval clause to satisfy".
+  # A measurement whose dispersion cannot be estimated now reports `status: unavailable` and
+  # exits 2, which fails this job; it is never downgraded to a point-estimate verdict.
   twin-regret:
     name: E2b twin regret vs perfect foresight (measure, do not judge)
     runs-on: ubuntu-latest
+    # Same selector shape as `uplift-proof`, same reason for the leading disjunct: the
+    # scheduled run must keep running both jobs. This is the job checkpoint A dispatches
+    # alone, with `--field job=twin-regret`.
+    if: >-
+      github.event_name != 'workflow_dispatch'
+      || inputs.job == 'both'
+      || inputs.job == 'twin-regret'
     # Well under the ceiling: this measurement is far cheaper than the powered proof, and
     # sizing it honestly leaves the difference visible rather than reserving budget nobody
     # uses. A timeout is a failed job, which is the honest outcome for an incomplete

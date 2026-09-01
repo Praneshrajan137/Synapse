@@ -34,13 +34,13 @@ the same pair.
 
 ## Summary
 
-Parsed 17 workflow file(s), 52 job(s), 357 step(s).
+Parsed 17 workflow file(s), 54 job(s), 370 step(s).
 
 | Trigger | Jobs executing | Jobs conditional | Jobs NOT EXECUTED | Steps blocking | Steps advisory | Steps conditional |
 |---|---|---|---|---|---|---|
-| push:main | 3 | 22 | 27 | 24 | 0 | 142 |
-| pull_request | 10 | 22 | 20 | 65 | 4 | 140 |
-| tag:v* | 3 | 3 | 46 | 18 | 0 | 29 |
+| push:main | 4 | 22 | 28 | 31 | 0 | 142 |
+| pull_request | 11 | 22 | 21 | 72 | 4 | 140 |
+| tag:v* | 3 | 3 | 48 | 18 | 0 | 29 |
 
 ## Job selection
 
@@ -99,7 +99,9 @@ Why each job runs, does not run, or runs conditionally under each trigger. `need
 | push:main | .github/workflows/sprint6-e2e-oracle.yml::sprint6-e2e | NOT EXECUTED | workflow on: has no push trigger |
 | push:main | .github/workflows/terraform-validate.yml::validate | CONDITIONAL | path-filtered (paths: infrastructure/gcp/terraform/**, infrastructure/oracle/terraform/**) |
 | push:main | .github/workflows/truth-gates.yml::truth-gates | EXECUTES | - |
+| push:main | .github/workflows/truth-gates.yml::falsification-sweep | EXECUTES | - |
 | push:main | .github/workflows/uplift.yml::uplift-proof | NOT EXECUTED | workflow on: has no push trigger |
+| push:main | .github/workflows/uplift.yml::twin-regret | NOT EXECUTED | workflow on: has no push trigger |
 | pull_request | .github/workflows/cd-gcp.yml::build-push-sign | NOT EXECUTED | workflow on: has no pull_request trigger |
 | pull_request | .github/workflows/cd-gcp.yml::deploy-to-vm | NOT EXECUTED | workflow on: has no pull_request trigger |
 | pull_request | .github/workflows/cd-gcp.yml::alert-on-failure | NOT EXECUTED | workflow on: has no pull_request trigger |
@@ -151,7 +153,9 @@ Why each job runs, does not run, or runs conditionally under each trigger. `need
 | pull_request | .github/workflows/sprint6-e2e-oracle.yml::sprint6-e2e | NOT EXECUTED | workflow on: has no pull_request trigger |
 | pull_request | .github/workflows/terraform-validate.yml::validate | CONDITIONAL | path-filtered (paths: infrastructure/gcp/terraform/**, infrastructure/oracle/terraform/**, .github/workflows/terraform-validate.yml) |
 | pull_request | .github/workflows/truth-gates.yml::truth-gates | EXECUTES | - |
+| pull_request | .github/workflows/truth-gates.yml::falsification-sweep | EXECUTES | - |
 | pull_request | .github/workflows/uplift.yml::uplift-proof | NOT EXECUTED | workflow on: has no pull_request trigger |
+| pull_request | .github/workflows/uplift.yml::twin-regret | NOT EXECUTED | workflow on: has no pull_request trigger |
 | tag:v* | .github/workflows/cd-gcp.yml::build-push-sign | CONDITIONAL | path-filtered (paths-ignore: **.md, docs/**, plans/**, notebooks/**) |
 | tag:v* | .github/workflows/cd-gcp.yml::deploy-to-vm | CONDITIONAL | path-filtered (paths-ignore: **.md, docs/**, plans/**, notebooks/**); needs 'build-push-sign', which is conditional |
 | tag:v* | .github/workflows/cd-gcp.yml::alert-on-failure | CONDITIONAL | path-filtered (paths-ignore: **.md, docs/**, plans/**, notebooks/**); if: outcome-dependent (failure()); needs 'build-push-sign', which is conditional; needs 'deploy-to-vm', which is conditional |
@@ -203,7 +207,9 @@ Why each job runs, does not run, or runs conditionally under each trigger. `need
 | tag:v* | .github/workflows/sprint6-e2e-oracle.yml::sprint6-e2e | NOT EXECUTED | workflow on: has no push trigger |
 | tag:v* | .github/workflows/terraform-validate.yml::validate | NOT EXECUTED | on: push is branch-scoped (no tags: filter), so a tag push is excluded |
 | tag:v* | .github/workflows/truth-gates.yml::truth-gates | NOT EXECUTED | on: push is branch-scoped (no tags: filter), so a tag push is excluded |
+| tag:v* | .github/workflows/truth-gates.yml::falsification-sweep | NOT EXECUTED | on: push is branch-scoped (no tags: filter), so a tag push is excluded |
 | tag:v* | .github/workflows/uplift.yml::uplift-proof | NOT EXECUTED | workflow on: has no push trigger |
+| tag:v* | .github/workflows/uplift.yml::twin-regret | NOT EXECUTED | workflow on: has no push trigger |
 
 ## Surface
 
@@ -401,7 +407,15 @@ Why each job runs, does not run, or runs conditionally under each trigger. `need
 | push:main | .github/workflows/truth-gates.yml::truth-gates | Gate-surface record matches the parsed workflow tree (R11.1, R11.2, R11.7, R11.9) | yes | blocking |
 | push:main | .github/workflows/truth-gates.yml::truth-gates | Declared-blocking steps propagate their exit status (R1.8, R6.13, R8.9, R11.3) | yes | blocking |
 | push:main | .github/workflows/truth-gates.yml::truth-gates | Required-check declaration resolves to real jobs (R14.1, R14.2) | yes | blocking |
+| push:main | .github/workflows/truth-gates.yml::truth-gates | Sweep cost budget is an arithmetic claim that holds (R1.11 - BLOCKING) | yes | blocking |
+| push:main | .github/workflows/truth-gates.yml::falsification-sweep | uses: actions/checkout@v4 | yes | blocking |
+| push:main | .github/workflows/truth-gates.yml::falsification-sweep | Set up Python 3.11 | yes | blocking |
+| push:main | .github/workflows/truth-gates.yml::falsification-sweep | Install dependencies | yes | blocking |
+| push:main | .github/workflows/truth-gates.yml::falsification-sweep | Probe every declared mutation operator (R1.1-R1.16 - BLOCKING) | yes | blocking |
+| push:main | .github/workflows/truth-gates.yml::falsification-sweep | C72 row projects the counts of the run that produced them (R1.12) | yes | blocking |
+| push:main | .github/workflows/truth-gates.yml::falsification-sweep | Upload the sweep report | yes | blocking |
 | push:main | .github/workflows/uplift.yml::uplift-proof | - | NOT EXECUTED | workflow on: has no push trigger |
+| push:main | .github/workflows/uplift.yml::twin-regret | - | NOT EXECUTED | workflow on: has no push trigger |
 | pull_request | .github/workflows/cd-gcp.yml::build-push-sign | - | NOT EXECUTED | workflow on: has no pull_request trigger |
 | pull_request | .github/workflows/cd-gcp.yml::deploy-to-vm | - | NOT EXECUTED | workflow on: has no pull_request trigger |
 | pull_request | .github/workflows/cd-gcp.yml::alert-on-failure | - | NOT EXECUTED | workflow on: has no pull_request trigger |
@@ -630,7 +644,15 @@ Why each job runs, does not run, or runs conditionally under each trigger. `need
 | pull_request | .github/workflows/truth-gates.yml::truth-gates | Gate-surface record matches the parsed workflow tree (R11.1, R11.2, R11.7, R11.9) | yes | blocking |
 | pull_request | .github/workflows/truth-gates.yml::truth-gates | Declared-blocking steps propagate their exit status (R1.8, R6.13, R8.9, R11.3) | yes | blocking |
 | pull_request | .github/workflows/truth-gates.yml::truth-gates | Required-check declaration resolves to real jobs (R14.1, R14.2) | yes | blocking |
+| pull_request | .github/workflows/truth-gates.yml::truth-gates | Sweep cost budget is an arithmetic claim that holds (R1.11 - BLOCKING) | yes | blocking |
+| pull_request | .github/workflows/truth-gates.yml::falsification-sweep | uses: actions/checkout@v4 | yes | blocking |
+| pull_request | .github/workflows/truth-gates.yml::falsification-sweep | Set up Python 3.11 | yes | blocking |
+| pull_request | .github/workflows/truth-gates.yml::falsification-sweep | Install dependencies | yes | blocking |
+| pull_request | .github/workflows/truth-gates.yml::falsification-sweep | Probe every declared mutation operator (R1.1-R1.16 - BLOCKING) | yes | blocking |
+| pull_request | .github/workflows/truth-gates.yml::falsification-sweep | C72 row projects the counts of the run that produced them (R1.12) | yes | blocking |
+| pull_request | .github/workflows/truth-gates.yml::falsification-sweep | Upload the sweep report | yes | blocking |
 | pull_request | .github/workflows/uplift.yml::uplift-proof | - | NOT EXECUTED | workflow on: has no pull_request trigger |
+| pull_request | .github/workflows/uplift.yml::twin-regret | - | NOT EXECUTED | workflow on: has no pull_request trigger |
 | tag:v* | .github/workflows/cd-gcp.yml::build-push-sign | uses: actions/checkout@v4 | CONDITIONAL | conditional - blocking |
 | tag:v* | .github/workflows/cd-gcp.yml::build-push-sign | Set up Docker Buildx | CONDITIONAL | conditional - blocking |
 | tag:v* | .github/workflows/cd-gcp.yml::build-push-sign | Authenticate to GCP via Workload Identity Federation | CONDITIONAL | conditional - blocking |
@@ -723,11 +745,13 @@ Why each job runs, does not run, or runs conditionally under each trigger. `need
 | tag:v* | .github/workflows/sprint6-e2e-oracle.yml::sprint6-e2e | - | NOT EXECUTED | workflow on: has no push trigger |
 | tag:v* | .github/workflows/terraform-validate.yml::validate | - | NOT EXECUTED | on: push is branch-scoped (no tags: filter), so a tag push is excluded |
 | tag:v* | .github/workflows/truth-gates.yml::truth-gates | - | NOT EXECUTED | on: push is branch-scoped (no tags: filter), so a tag push is excluded |
+| tag:v* | .github/workflows/truth-gates.yml::falsification-sweep | - | NOT EXECUTED | on: push is branch-scoped (no tags: filter), so a tag push is excluded |
 | tag:v* | .github/workflows/uplift.yml::uplift-proof | - | NOT EXECUTED | workflow on: has no push trigger |
+| tag:v* | .github/workflows/uplift.yml::twin-regret | - | NOT EXECUTED | workflow on: has no push trigger |
 
 ## Declared-blocking anchors (R11.8)
 
-Every step `infrastructure/quality/blocking-steps.yaml` declares blocking, annotated with the command it runs so a governance claim can be pinned to a row. Source: 8 declared-blocking entries from infrastructure/quality/blocking-steps.yaml.
+Every step `infrastructure/quality/blocking-steps.yaml` declares blocking, annotated with the command it runs so a governance claim can be pinned to a row. Source: 10 declared-blocking entries from infrastructure/quality/blocking-steps.yaml.
 
 | Trigger | Job | Step | Propagates | Note |
 |---|---|---|---|---|
@@ -781,6 +805,13 @@ Every step `infrastructure/quality/blocking-steps.yaml` declares blocking, annot
 | push:main | .github/workflows/truth-gates.yml::truth-gates | Gate-surface record matches the parsed workflow tree (R11.1, R11.2, R11.7, R11.9) [scripts.audit.gate_surface] | yes | declared blocking (R1.1, R1.2, R1.5, R1.8) |
 | push:main | .github/workflows/truth-gates.yml::truth-gates | Declared-blocking steps propagate their exit status (R1.8, R6.13, R8.9, R11.3) [scripts.audit.workflow_shape_truth] | yes | declared blocking (R1.1, R1.2, R1.5, R1.8) |
 | push:main | .github/workflows/truth-gates.yml::truth-gates | Required-check declaration resolves to real jobs (R14.1, R14.2) [scripts.audit.required_checks_truth] | yes | declared blocking (R1.1, R1.2, R1.5, R1.8) |
+| push:main | .github/workflows/truth-gates.yml::truth-gates | Sweep cost budget is an arithmetic claim that holds (R1.11 - BLOCKING) [scripts.audit.sweep_budget_truth] | yes | declared blocking (R1.1, R1.2, R1.5, R1.8) |
+| push:main | .github/workflows/truth-gates.yml::falsification-sweep | uses: actions/checkout@v4 | yes | declared blocking (R1.1, R1.2, R1.11, R1.12, R1.13, R1.14) |
+| push:main | .github/workflows/truth-gates.yml::falsification-sweep | Set up Python 3.11 | yes | declared blocking (R1.1, R1.2, R1.11, R1.12, R1.13, R1.14) |
+| push:main | .github/workflows/truth-gates.yml::falsification-sweep | Install dependencies | yes | declared blocking (R1.1, R1.2, R1.11, R1.12, R1.13, R1.14) |
+| push:main | .github/workflows/truth-gates.yml::falsification-sweep | Probe every declared mutation operator (R1.1-R1.16 - BLOCKING) [scripts.audit.gate_fault_injection] | yes | declared blocking (R1.1, R1.2, R1.11, R1.12, R1.13, R1.14) |
+| push:main | .github/workflows/truth-gates.yml::falsification-sweep | C72 row projects the counts of the run that produced them (R1.12) [scripts.audit.gate_fault_injection] | yes | declared blocking (R1.1, R1.2, R1.11, R1.12, R1.13, R1.14) |
+| push:main | .github/workflows/truth-gates.yml::falsification-sweep | Upload the sweep report | yes | declared blocking (R1.1, R1.2, R1.11, R1.12, R1.13, R1.14) |
 | pull_request | .github/workflows/cd-gcp.yml::deploy-to-vm | Verify deploy truth (containers) [scripts/deploy/verify_live.py] | NOT EXECUTED | declared blocking (R1.8) - workflow on: has no pull_request trigger |
 | pull_request | .github/workflows/cd-gcp.yml::deploy-to-vm | Verify deploy truth (external) [github.sh scripts/deploy/verify_live.py] | NOT EXECUTED | declared blocking (R1.8) - workflow on: has no pull_request trigger |
 | pull_request | .github/workflows/cd-gcp.yml::deploy-to-vm | Audit-chain integrity (Sprint 9 verifier) [orchestrator.audit.cli] | NOT EXECUTED | declared blocking (R1.8) - workflow on: has no pull_request trigger |
@@ -831,6 +862,13 @@ Every step `infrastructure/quality/blocking-steps.yaml` declares blocking, annot
 | pull_request | .github/workflows/truth-gates.yml::truth-gates | Gate-surface record matches the parsed workflow tree (R11.1, R11.2, R11.7, R11.9) [scripts.audit.gate_surface] | yes | declared blocking (R1.1, R1.2, R1.5, R1.8) |
 | pull_request | .github/workflows/truth-gates.yml::truth-gates | Declared-blocking steps propagate their exit status (R1.8, R6.13, R8.9, R11.3) [scripts.audit.workflow_shape_truth] | yes | declared blocking (R1.1, R1.2, R1.5, R1.8) |
 | pull_request | .github/workflows/truth-gates.yml::truth-gates | Required-check declaration resolves to real jobs (R14.1, R14.2) [scripts.audit.required_checks_truth] | yes | declared blocking (R1.1, R1.2, R1.5, R1.8) |
+| pull_request | .github/workflows/truth-gates.yml::truth-gates | Sweep cost budget is an arithmetic claim that holds (R1.11 - BLOCKING) [scripts.audit.sweep_budget_truth] | yes | declared blocking (R1.1, R1.2, R1.5, R1.8) |
+| pull_request | .github/workflows/truth-gates.yml::falsification-sweep | uses: actions/checkout@v4 | yes | declared blocking (R1.1, R1.2, R1.11, R1.12, R1.13, R1.14) |
+| pull_request | .github/workflows/truth-gates.yml::falsification-sweep | Set up Python 3.11 | yes | declared blocking (R1.1, R1.2, R1.11, R1.12, R1.13, R1.14) |
+| pull_request | .github/workflows/truth-gates.yml::falsification-sweep | Install dependencies | yes | declared blocking (R1.1, R1.2, R1.11, R1.12, R1.13, R1.14) |
+| pull_request | .github/workflows/truth-gates.yml::falsification-sweep | Probe every declared mutation operator (R1.1-R1.16 - BLOCKING) [scripts.audit.gate_fault_injection] | yes | declared blocking (R1.1, R1.2, R1.11, R1.12, R1.13, R1.14) |
+| pull_request | .github/workflows/truth-gates.yml::falsification-sweep | C72 row projects the counts of the run that produced them (R1.12) [scripts.audit.gate_fault_injection] | yes | declared blocking (R1.1, R1.2, R1.11, R1.12, R1.13, R1.14) |
+| pull_request | .github/workflows/truth-gates.yml::falsification-sweep | Upload the sweep report | yes | declared blocking (R1.1, R1.2, R1.11, R1.12, R1.13, R1.14) |
 | tag:v* | .github/workflows/cd-gcp.yml::deploy-to-vm | Verify deploy truth (containers) [scripts/deploy/verify_live.py] | CONDITIONAL | declared blocking (R1.8) - conditional (path-filtered (paths-ignore: **.md, docs/**, plans/**, notebooks/**); needs 'build-push-sign', which is conditional) |
 | tag:v* | .github/workflows/cd-gcp.yml::deploy-to-vm | Verify deploy truth (external) [github.sh scripts/deploy/verify_live.py] | CONDITIONAL | declared blocking (R1.8) - conditional (path-filtered (paths-ignore: **.md, docs/**, plans/**, notebooks/**); needs 'build-push-sign', which is conditional) |
 | tag:v* | .github/workflows/cd-gcp.yml::deploy-to-vm | Audit-chain integrity (Sprint 9 verifier) [orchestrator.audit.cli] | CONDITIONAL | declared blocking (R1.8) - conditional (path-filtered (paths-ignore: **.md, docs/**, plans/**, notebooks/**); needs 'build-push-sign', which is conditional) |
@@ -881,4 +919,11 @@ Every step `infrastructure/quality/blocking-steps.yaml` declares blocking, annot
 | tag:v* | .github/workflows/truth-gates.yml::truth-gates | Gate-surface record matches the parsed workflow tree (R11.1, R11.2, R11.7, R11.9) [scripts.audit.gate_surface] | NOT EXECUTED | declared blocking (R1.1, R1.2, R1.5, R1.8) - on: push is branch-scoped (no tags: filter), so a tag push is excluded |
 | tag:v* | .github/workflows/truth-gates.yml::truth-gates | Declared-blocking steps propagate their exit status (R1.8, R6.13, R8.9, R11.3) [scripts.audit.workflow_shape_truth] | NOT EXECUTED | declared blocking (R1.1, R1.2, R1.5, R1.8) - on: push is branch-scoped (no tags: filter), so a tag push is excluded |
 | tag:v* | .github/workflows/truth-gates.yml::truth-gates | Required-check declaration resolves to real jobs (R14.1, R14.2) [scripts.audit.required_checks_truth] | NOT EXECUTED | declared blocking (R1.1, R1.2, R1.5, R1.8) - on: push is branch-scoped (no tags: filter), so a tag push is excluded |
+| tag:v* | .github/workflows/truth-gates.yml::truth-gates | Sweep cost budget is an arithmetic claim that holds (R1.11 - BLOCKING) [scripts.audit.sweep_budget_truth] | NOT EXECUTED | declared blocking (R1.1, R1.2, R1.5, R1.8) - on: push is branch-scoped (no tags: filter), so a tag push is excluded |
+| tag:v* | .github/workflows/truth-gates.yml::falsification-sweep | uses: actions/checkout@v4 | NOT EXECUTED | declared blocking (R1.1, R1.2, R1.11, R1.12, R1.13, R1.14) - on: push is branch-scoped (no tags: filter), so a tag push is excluded |
+| tag:v* | .github/workflows/truth-gates.yml::falsification-sweep | Set up Python 3.11 | NOT EXECUTED | declared blocking (R1.1, R1.2, R1.11, R1.12, R1.13, R1.14) - on: push is branch-scoped (no tags: filter), so a tag push is excluded |
+| tag:v* | .github/workflows/truth-gates.yml::falsification-sweep | Install dependencies | NOT EXECUTED | declared blocking (R1.1, R1.2, R1.11, R1.12, R1.13, R1.14) - on: push is branch-scoped (no tags: filter), so a tag push is excluded |
+| tag:v* | .github/workflows/truth-gates.yml::falsification-sweep | Probe every declared mutation operator (R1.1-R1.16 - BLOCKING) [scripts.audit.gate_fault_injection] | NOT EXECUTED | declared blocking (R1.1, R1.2, R1.11, R1.12, R1.13, R1.14) - on: push is branch-scoped (no tags: filter), so a tag push is excluded |
+| tag:v* | .github/workflows/truth-gates.yml::falsification-sweep | C72 row projects the counts of the run that produced them (R1.12) [scripts.audit.gate_fault_injection] | NOT EXECUTED | declared blocking (R1.1, R1.2, R1.11, R1.12, R1.13, R1.14) - on: push is branch-scoped (no tags: filter), so a tag push is excluded |
+| tag:v* | .github/workflows/truth-gates.yml::falsification-sweep | Upload the sweep report | NOT EXECUTED | declared blocking (R1.1, R1.2, R1.11, R1.12, R1.13, R1.14) - on: push is branch-scoped (no tags: filter), so a tag push is excluded |
 <!-- generated:end -->
