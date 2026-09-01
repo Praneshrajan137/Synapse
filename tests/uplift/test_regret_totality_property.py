@@ -247,10 +247,22 @@ def test_no_committed_margin_judges_nothing(regret: float) -> None:
 @given(
     margin=st.floats(min_value=1.0, max_value=100.0),
     excess=st.floats(min_value=0.1, max_value=50.0),
-    width=st.floats(min_value=0.01, max_value=0.5),
+    # A FRACTION of the excess, not an absolute width. This is the precondition the first
+    # version of this test got wrong: with an absolute width in [0.01, 0.5] and an excess
+    # that can be as small as 0.1, `point - width` could land ON or BELOW the margin, so the
+    # interval named `excluding` did not always exclude anything. The test then asserted
+    # `material` for an interval whose lower bound touched the margin, and `classify_regret`
+    # correctly refused. Deriving the width from the excess makes `low > margin` structural
+    # rather than something a filter has to rescue.
+    #
+    # Fixed by correcting the PRECONDITION, not by relaxing the assertion and not by
+    # loosening `classify_regret`'s strict `low > margin` (R2.10). The strictness is the
+    # point: a closed interval whose endpoint sits on the margin CONTAINS the margin, and
+    # task 11 requires the interval to exclude it.
+    width_fraction=st.floats(min_value=0.01, max_value=0.99),
 )
 def test_material_requires_the_interval_to_exclude_the_margin(
-    margin: float, excess: float, width: float
+    margin: float, excess: float, width_fraction: float
 ) -> None:
     """A point estimate above the margin is not enough; the interval must exclude it.
 
@@ -258,7 +270,9 @@ def test_material_requires_the_interval_to_exclude_the_margin(
     Finding 4 on the strength of noise.
     """
     point = margin + excess
+    width = excess * width_fraction
     objective = _objective()
+    assert point - width > margin, "the generator must produce a genuinely excluding interval"
 
     excluding = classify_regret(
         point, objective=objective, margin=margin, interval=(point - width, point + width)
@@ -272,6 +286,25 @@ def test_material_requires_the_interval_to_exclude_the_margin(
     assert straddling.verdict != "material", (
         "an interval containing the margin cannot falsify Finding 4 on the point estimate alone"
     )
+
+
+@given(margin=st.floats(min_value=1.0, max_value=100.0), excess=st.floats(0.1, 50.0))
+def test_an_interval_whose_lower_bound_equals_the_margin_is_not_material(
+    margin: float, excess: float
+) -> None:
+    """The boundary the generator above used to hit by accident, now pinned on purpose.
+
+    ``low == margin`` means the closed interval **contains** the margin, so it does not
+    exclude it and cannot falsify Finding 4. This is the difference between reporting a
+    falsification and reporting noise, so it is worth its own case rather than living as an
+    accident of a generator's range.
+    """
+    point = margin + excess
+    verdict = classify_regret(
+        point, objective=_objective(), margin=margin, interval=(margin, point + excess)
+    )
+    assert verdict.verdict != "material"
+    assert not verdict.falsifies_finding_4
 
 
 @given(regret=_REGRETS, margin=st.floats(min_value=0.0, max_value=1e5))
