@@ -36,9 +36,15 @@ it *is*, not as a diff against how it was.
 
 ## What is owed right now, in order
 
-**Two independent tracks. Either may go first — verified, not assumed:** `uplift.yml`'s jobs
-`uplift-proof` and `twin-regret` both carry `needs: NONE`, so checkpoint A does not wait on
-`quality-gates`. `ci.yml::uplift-verify` does (`needs: quality-gates`), which is why track B exists.
+**Two tracks, and they are NOT freely orderable. Corrected in session 2r-pre; 2q's closing summary
+got this wrong.** `uplift.yml`'s jobs `uplift-proof` and `twin-regret` both carry `needs: NONE`, so
+checkpoint A does not wait on `quality-gates`, and `ci.yml::uplift-verify` does (`needs:
+quality-gates`) — which is why track B exists. **But `needs:` describes CI triggering and says
+nothing about the generated documents, which is where the two tracks are coupled.** Any change to
+`doc-number-pins.yaml` changes `doc_truth`'s claim set, which can move C56, whose status sits inside
+the PASS/FAIL/SKIP counts `ledger_gen` and `readme_gen` project. **So track A's margin commit must
+land before track B's regeneration** — reversed, the regenerated `CURRENT.md` and `README.md` are
+stale within the hour and the ~45-minute dispatch is spent twice.
 
 ### Track A — checkpoint A, operator work, unchanged except for finding 16
 
@@ -49,14 +55,19 @@ it *is*, not as a diff against how it was.
    Read `regret`, `interval_low`/`interval_high`, `comparator_headroom`, `margin_rule`,
    `margin_rule_derives`, `margin_rule_below_headroom` and `interval_excludes_rule_margin` from
    `artifacts/uplift/twin-regret.json`.
-2. **If the headroom moved materially, amend ADR-055 D2.5's `bracketing.upper` FIRST.** It states
-   `11.79 - 2.93 = 8.86`, measured at a different replicate count, and `bracketing` is **not
-   pinned** — nothing gates it. D2.5's own amendment rule is that an amendment lands *before* the
-   run judged against the amended text, which means before dispatch 2.
+2. **One ADR-055 D2.5 amendment, one commit, one amendment-log line, covering BOTH owed amendments.**
+   It must state the derived value as a literal on **exactly one line** — that is what the parked pin
+   anchors to (finding 20) — **and** correct `bracketing.upper` if the measured headroom moved from
+   `11.79 - 2.93 = 8.86`, which is prose and is **not pinned**, so nothing gates it. D2.5's own rule
+   is that an amendment "lands **before** the run judged against the amended text", which puts this
+   before dispatch 2. One revision, one log line, not two.
 3. **Commit `materiality_margin.value` from the rule** (`service_points * 0.01 *
-   weights.unmet_service` = `5.0 * 0.01 * 8.0` = `0.40`) plus its `doc-number-pins.yaml` entry, in
-   the same commit. `policy.py::materiality_margin` will refuse a value the rule does not produce —
-   that is intended. Discharges **10.4**.
+   weights.unmet_service` = `5.0 * 0.01 * 8.0` = `0.40`) and **graduate the parked pin** —
+   `materiality-margin-derived-value` moves from `pending_pins:` into `pins:`, a pure data move once
+   the amendment above has landed. **Do not author a fresh pin; read finding 20 first.**
+   `policy.py::materiality_margin` will refuse a value the rule does not produce — that is intended.
+   **No second `ratchets.json` entry is owed**: the derived value moves only when `service_points`
+   moves, and that input already carries `direction: down`. Discharges **10.4**.
 4. **Dispatch a second time.** This is finding 16 and it is not optional. Discharges **11**.
 5. **Record task 11's verdict** against `SESSION_PROTOCOL.md`'s four-value table, then branch:
    `material` → **STOP**, Finding 4 falsified, re-cut R5 (R5.3, R5.4), report it plainly as a
@@ -66,17 +77,26 @@ it *is*, not as a diff against how it was.
 
 ### Track B — session 2r, the adopted debt, and it should precede session 2
 
-6. **Dispatch the regeneration job and commit its artifact.**
+**Its two halves are NOT interchangeable in order.** The orchestrator work touches no generated
+document and may start any time. The regeneration must come **after** track A's margin commit.
+
+6. **Clear the remaining 56 `mypy --strict orchestrator/` errors** (tasks 27.2 → 27.3 → 27.4, in that
+   order — `unused-ignore` last, because `warn_unused_ignores = true` means the earlier repairs move
+   that count in both directions), then confirm `uplift-verify` **executes** — ran, not skipped, not
+   silent (27.5). That is what makes Properties 38–60 real rather than local, and it touches no
+   generated document, so it is safe to run in parallel with track A.
+7. **LAST: dispatch the regeneration job and commit its artifact.**
    ```powershell
    gh workflow run regenerate-truth-docs.yml --ref feat/decision-quality-proof
    ```
    Download `regenerated-truth-docs`, read the diff the run printed, commit `docs/state/CURRENT.md`
    and `README.md`. Discharges **26.2** and **26.3**. Confirm **two** things, not one: C56 goes PASS,
    **and** the falsification sweep's probeable set returns to **8** — that second one is the
-   measurement power the drift cost.
-7. **Clear the remaining 56 `mypy --strict orchestrator/` errors** (tasks 27.2 → 27.3 → 27.4, in that
-   order), then confirm `uplift-verify` **executes** (27.5). That is what makes Properties 38–60
-   real rather than local.
+   measurement power the drift cost. Read the registry verdict line, not one step's conclusion.
+
+   **It goes last because it projects a snapshot.** Track A's margin commit adds a pin, which moves
+   `doc_truth`'s claim set and can move C56 — so a regeneration committed before it is stale
+   immediately. Sequenced this way, one dispatch suffices instead of two.
 
 ---
 
@@ -398,6 +418,47 @@ spec); `GATE_SURFACE.md` stale on two of this spec's own jobs; three unrecorded 
     closed and has no "dispatch-only" member, so honouring the instruction would have meant amending a
     schema for a job that is not a check.
 
+**Session 2r-pre.**
+
+20. **Task 10.4's owed pin had nowhere to anchor, and standing it up as instructed would have made
+    C56 non-passing — silently, and reported by the wrong gate.** Found by reading, after 2q closed
+    and before checkpoint A step 3 was executed. Task 10.4 and `doc-number-pins.yaml`'s own note both
+    say to add the derived-margin pin "in the same commit as the value". A pin is a triple — document
+    anchor, mechanical source, extractor — and the **document** side does not exist: a repo-wide grep
+    puts the derived literal in exactly three places, none pinnable. `SESSION_PROTOCOL.md`, whose own
+    rule is "there is no count in this document, and there should never be one again";
+    **`HANDOFF.md`, which is overwritten every session** by protocol, so a pin anchored here dies at
+    the next close; and the `note` prose inside `ratchets.json`'s
+    `materiality-margin-service-points` entry, which is JSON, not a document. **ADR-055 D2.5 — the
+    document the sibling pin anchors to — deliberately stops at `service_points * 0.08` and states no
+    derived literal.**
+
+    **The mechanism, stated correctly, because the first reading of it was wrong.**
+    `doc_truth.documented_value` requires the anchor to match **exactly one line**; zero matches
+    raises `_Unresolvable`, whose docstring is *"Always becomes a `skip`, never a pass"* — a **skip,
+    not a fail**. Because the pin is `required: true`, that skip is non-maskable: doc_truth's own
+    module docstring records R1.4/R1.6 — *"If a required claim cannot be evaluated ... the aggregate
+    verdict is `unavailable`, and no number of `ok` siblings can supply a passing verdict."* So **C56
+    would go SKIP, and a SKIP is not a PASS (I-7).** That is not milder than a FAIL for this purpose:
+    the falsification sweep reports `indeterminate` for any gate that does not PASS on its unmutated
+    baseline, so C56 leaves the probeable set either way — the exact measurement loss task 26 exists
+    to recover.
+
+    **And C75 would have reported green throughout.** `pin_extractor_truth`'s docstring: it runs
+    every declared extractor against its declared source *"unconditionally, independent of whether
+    the document anchor matched."* It probes the source side only. 15 of 15 would resolve while C56
+    was silent, and a reader would have concluded the regeneration had failed.
+
+    **Resolved with the mechanism this file already has, not with a new anchor invented today.** The
+    pin is drafted and parked in `pending_pins:`, which that section's header states is *"NOT
+    evaluated by doc_truth"*. Precedent is `mutation-fast-required-job`, parked because standing it up
+    *"would convert a documented, attributable gap into an unattributable red gate, which is the
+    trade this whole section exists to avoid."* This case is the mirror — source null, anchor absent.
+    Its `activates_after` names task 10.4 and **both** conditions: the value non-null, and D2.5
+    stating the literal on exactly one line. **`required: false` was available and rejected** — it
+    would have let the pin stand today without touching C56, but a pin that cannot fail is not a pin,
+    and downgrading a claim to make it safe is the assertion-weakening R2.10 forbids.
+
 ---
 
 ## Decisions taken — surfaced, then decided. Do not re-litigate.
@@ -422,6 +483,8 @@ spec); `GATE_SURFACE.md` stale on two of this spec's own jobs; three unrecorded 
 | **Conflict G (2q)** | **A dispatch-only job owes no `required-checks.yaml` entry.** The schema enum is closed against it. |
 | **Regeneration (2q)** | **A CI job that uploads an artifact, not a local `--write` and not an auto-commit.** Review is the point. |
 | **Batch order (2q)** | **Session 2r precedes session 2**, because session 2 would author four more properties against a job that has never run. |
+| **Conflict H (2r-pre)** | **The derived-margin pin is PARKED in `pending_pins:`, not landed in `pins:`.** Task 10.4 and this pin table both instruct "same commit as the value"; obeyed literally that stands up a pin whose document anchor matches nothing, which makes C56 SKIP while C75 reports 15/15 green. `required: false` was rejected — a pin that cannot fail is not a pin. It graduates when the value is non-null **and** D2.5 states the literal. |
+| **Track coupling (2r-pre)** | **Track A and Track B are independent in CI triggering only.** `needs: NONE` says nothing about the generated documents: a `doc-number-pins.yaml` change can move C56, whose status is inside the counts both generators project. **The regeneration goes last.** |
 
 ---
 

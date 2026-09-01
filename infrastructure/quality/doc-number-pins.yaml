@@ -254,6 +254,13 @@ pins:
   # `regret_objective.materiality_margin.value` is still `null` and a pin against a
   # null extracts nothing while comparing green -- the `None == None` hole C75 exists
   # to close. Task 10.4 adds that pin in the same commit as the value.
+  #
+  # THAT PIN IS DRAFTED AND PARKED, not merely deferred: see
+  # `materiality-margin-derived-value` under `pending_pins:` below. It cannot stand
+  # here yet for a SECOND reason beyond the null source, found in session 2r-pre and
+  # recorded in that entry's comment -- ADR-055 D2.5 does not yet state the derived
+  # value as a literal, so the pin has no document line to anchor to. Read both
+  # entries together; neither is complete without the other.
   - id: materiality-margin-service-points
     kind: threshold
     required: true
@@ -325,6 +332,85 @@ pending_pins:
       infrastructure/quality/required-checks.yaml. This is NOT a task in this
       feature: the declaration records the gap with its reasoning, and closing it is
       a policy change rather than an audit finding.
+
+  # DRAFTED AND PARKED IN SESSION 2r-pre (finding 20). Task 10.4's own instruction --
+  # and the note above `materiality-margin-service-points` in `pins:` -- says to add
+  # this pin "in the same commit as the value". Doing that literally, today, would
+  # stand up a pin that CANNOT RESOLVE, and the gate that would report it is not the
+  # one a reader would expect.
+  #
+  # THE DEFECT. A pin is a triple: document anchor, mechanical source, extractor. The
+  # source side is fine once the value lands. The DOCUMENT side has nothing to match.
+  # A repo-wide grep for the derived value finds it in exactly three places, and none
+  # is pinnable:
+  #   * SESSION_PROTOCOL.md -- whose own rule is "There is no count in this document,
+  #     and there should never be one again". Anchoring here contradicts its purpose.
+  #   * HANDOFF.md -- OVERWRITTEN every session by protocol. A pin anchored there dies
+  #     at the next close.
+  #   * this file's sibling ratchets.json, inside the `note` prose of the
+  #     `materiality-margin-service-points` entry -- a JSON note, not a document.
+  # ADR-055 D2.5, which the sibling pin above anchors to, deliberately stops at "one
+  # service point costs `0.08` objective units, so the margin is `service_points *
+  # 0.08`". It states no derived literal.
+  #
+  # WHICH GATE REPORTS IT, AND WHY THAT MATTERS. `doc_truth.documented_value` requires
+  # the anchor to match EXACTLY ONE LINE; zero matches raises `_Unresolvable`, whose
+  # docstring is "Always becomes a `skip`, never a pass". Because this pin is
+  # `required: true`, that skip is NOT absorbable: doc_truth's own module docstring
+  # records the non-maskable rule (R1.4, R1.6) -- "If a required claim cannot be
+  # evaluated ... the aggregate verdict is `unavailable`, and no number of `ok`
+  # siblings can supply a passing verdict". So C56 would go SKIP -- not FAIL -- and a
+  # SKIP is not a PASS (I-7).
+  #
+  # `pin_extractor_truth` (C75) would report GREEN throughout. Its docstring says it
+  # runs every declared extractor against its declared source "unconditionally,
+  # independent of whether the document anchor matched". It probes the source side
+  # only, so 15 of 15 would resolve while C56 was silent. A reader would see C56
+  # non-passing after a regeneration and conclude the regeneration had failed.
+  #
+  # AND IT WOULD UNDO THE REPAIR IT SITS BESIDE. C56's status is inside the PASS /
+  # FAIL / SKIP counts that `ledger_gen` and `readme_gen` project, so standing this
+  # pin up after task 26's regeneration commits would immediately re-stale
+  # docs/state/CURRENT.md and README.md. That is why task 26's regeneration is
+  # sequenced AFTER the margin lands, not before.
+  #
+  # THE ALTERNATIVE THAT WAS AVAILABLE AND REJECTED: `required: false`. A non-required
+  # claim's skip does not force `unavailable`, so the pin could stand here today
+  # without touching C56. It is not taken. This pin guards the threshold that decides
+  # whether Finding 4 is falsified; a pin that cannot fail is not a pin, and
+  # downgrading a claim to make it safe is exactly the assertion-weakening R2.10
+  # forbids. Parking a correct pin is honest; landing a toothless one is not.
+  - id: materiality-margin-derived-value
+    kind: threshold
+    required: true
+    document: docs/adr/ADR-055-twin-decision-relevance.md
+    # THE ANCHOR MUST BE DISTINCTIVE, and this is a real trap rather than a style note.
+    # D2.5 already contains the rule's own code-block line,
+    #   materiality_margin = service_points * 0.01 * weight(1 - fill_rate)
+    # so a naive anchor of `materiality_margin = (?P<value>[\d.]+)` is safe ONLY
+    # because `service_points` does not match `[\d.]+`. That is luck, not design, and
+    # the exactly-one-line contract means a second matching line is as fatal as none.
+    # The `derives` verb below is what makes the match unambiguous, so the amendment
+    # must write the value in a sentence using it, on ONE line.
+    anchor: 'derives `materiality_margin = (?P<value>[\d.]+)`'
+    source: digital_twin/simulation/policy.yaml
+    extractor: 'yaml_path:regret_objective.materiality_margin.value'
+    compare: numeric
+    scale: identity
+    activates_after: >-
+      task 10.4, at checkpoint A, and BOTH conditions must hold before this entry
+      moves into `pins:` -- moving it while either is unmet is the defect described
+      above. (a) `regret_objective.materiality_margin.value` in
+      digital_twin/simulation/policy.yaml is non-null, instantiated from the committed
+      rule and accepted by `policy.py::materiality_margin`, which re-derives it and
+      refuses a value the rule does not produce. (b) ADR-055 D2.5 states the derived
+      value as a literal on EXACTLY ONE line matching the anchor above, landed as a
+      D2.5 amendment with its own amendment-log line -- and, per D2.5's own rule that
+      "any future amendment ... lands before the run judged against the amended text",
+      landed BEFORE the second twin-regret dispatch rather than after it. No
+      additional ratchets.json entry is owed: the derived value has no independent
+      degree of freedom, moving only when `service_points` moves, and that input
+      already carries `direction: down`.
 
 # ---------------------------------------------------------------------------
 # Known drift at the commit that introduced this file.

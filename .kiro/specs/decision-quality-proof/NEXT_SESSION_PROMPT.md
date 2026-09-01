@@ -437,27 +437,64 @@ Derived by reading `policy.py`, `regret.py` and `uplift.yml`; **not executed**.
   `for seed in range(replicates)` — seeds `0..199`, fixed — and the interval's seed is committed, so
   identical arguments give identical numbers. No metric-shopping surface.
 
-**The order:** dispatch 1 measures → *if the headroom moved materially, amend ADR-055 D2.5's
-`bracketing.upper` first, because it is prose and is not pinned* → commit the margin value plus its
-pin (discharges 10.4) → dispatch 2 (discharges 11).
+**The order:** dispatch 1 measures → **ONE ADR-055 D2.5 amendment, one amendment-log line, covering
+both owed amendments together** → commit the margin value and **graduate the parked pin** (discharges
+10.4) → dispatch 2 (discharges 11).
 
-### Two independent tracks. Either may go first — verified, not assumed.
+### FINDING 20 — the pin task 10.4 owes is already drafted, and it is PARKED. Do not just add it.
+
+Task 10.4 and `doc-number-pins.yaml` both say to add the derived-margin pin "in the same commit as
+the value". **Obeyed literally, that lands a pin whose document anchor matches nothing.** The derived
+literal exists in only three places and none is pinnable: `SESSION_PROTOCOL.md` (whose own rule is
+that it carries no counts), **`HANDOFF.md` (overwritten every session)**, and a `note` field inside
+`ratchets.json`. **ADR-055 D2.5 states no derived literal** — it stops at `service_points * 0.08`.
+
+**What would happen, and which gate would say so.** `doc_truth.documented_value` needs the anchor to
+match **exactly one line**; zero matches raises `_Unresolvable`, which is *"always a `skip`, never a
+pass"* — a **skip, not a fail**. The pin is `required: true`, and that skip is non-maskable (R1.4,
+R1.6): *"the aggregate verdict is `unavailable`, and no number of `ok` siblings can supply a passing
+verdict."* **C56 goes SKIP, and a SKIP is not a PASS.** Meanwhile `pin_extractor_truth` reports
+**15/15 green**, because it probes source extractors *"unconditionally, independent of whether the
+document anchor matched."* The failure would look like the regeneration hadn't worked.
+
+**So the pin is drafted and parked** as `materiality-margin-derived-value` under `pending_pins:`,
+which that section does not evaluate. Its `activates_after` names **both** graduation conditions:
+the value non-null, **and** D2.5 stating the literal on exactly one line matching the anchor
+`` derives `materiality_margin = (?P<value>[\d.]+)` ``. Graduating it is then a pure data move.
+
+**Two things the amendment must get right.** It is **one** amendment covering the derived literal
+*and* `bracketing.upper` if the headroom moved from `11.79 - 2.93 = 8.86` — one revision, one log
+line, not two. And it must land **before dispatch 2**, per D2.5's own rule that an amendment "lands
+before the run judged against the amended text". **No second `ratchets.json` entry is owed:** the
+derived value moves only when `service_points` moves, and that input already carries
+`direction: down`; inventing one would be fabrication.
+
+### Two tracks, and their order is FIXED. Corrected in 2r-pre — 2q's summary got this wrong.
 
 `uplift.yml`'s jobs both carry `needs: NONE`, so **checkpoint A does not wait on `quality-gates`.**
-`ci.yml::uplift-verify` does.
+`ci.yml::uplift-verify` does. **That is CI triggering, and it is the whole of what `needs:` tells
+you.** The tracks are coupled through the *generated documents*: any change to
+`doc-number-pins.yaml` changes `doc_truth`'s claim set, which can move C56, whose status sits inside
+the PASS/FAIL/SKIP counts `ledger_gen` and `readme_gen` project.
+
+**So track A's margin commit lands BEFORE track B's regeneration.** Reversed, the regenerated
+`CURRENT.md` and `README.md` go stale the moment the margin lands, and the ~45-minute dispatch is
+spent twice. **Do not read `needs: NONE` as licence to run these in any order.**
 
 **Track A — checkpoint A.** Items 4, 5, 6 of STEP 3, with finding 16 applied.
 
 **Track B — session 2r, and it should precede session 2.** Six tasks:
-`26.2 26.3 27.2 27.3 27.4 27.5`.
+`26.2 26.3 27.2 27.3 27.4 27.5`. **Its two halves are not interchangeable in order.**
 
-1. `gh workflow run regenerate-truth-docs.yml --ref feat/decision-quality-proof`, download
+1. **First, and safe in parallel with track A:** clear the remaining 56 orchestrator errors —
+   **27.2 (24 `arg-type`) → 27.3 (26 across eight codes) → 27.4 (`unused-ignore` last, because
+   `warn_unused_ignores` means the earlier repairs move that count in both directions)** — then
+   confirm `uplift-verify` **executed**, not skipped (27.5). This touches no generated document.
+2. **LAST:** `gh workflow run regenerate-truth-docs.yml --ref feat/decision-quality-proof`, download
    `regenerated-truth-docs`, read the diff, commit `docs/state/CURRENT.md` and `README.md`.
    **Confirm two things, not one:** C56 goes PASS, **and** the falsification sweep's probeable set
-   returns to **8**. The second is the measurement power the drift cost.
-2. Clear the remaining 56 orchestrator errors — **27.2 (24 `arg-type`) → 27.3 (26 across eight codes)
-   → 27.4 (`unused-ignore` last, because `warn_unused_ignores` means the earlier repairs move that
-   count in both directions)** — then confirm `uplift-verify` **executes** (27.5).
+   returns to **8**. The second is the measurement power the drift cost. It goes last because it
+   projects a snapshot that track A's margin commit would invalidate.
 
 **Why 2r precedes session 2.** Session 2 authors eleven tasks, and **four of them (12.2, 12.4, 13.2,
 13.4) produce `@pytest.mark.slow` properties whose declared discharge is `ci.yml::uplift-verify`** —
