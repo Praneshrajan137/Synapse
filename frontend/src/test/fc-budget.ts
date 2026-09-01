@@ -95,9 +95,7 @@ export function resolveBudget(requested: string | undefined | null): BudgetResol
     // unreachable; it exists because `noUncheckedIndexedAccess` makes the lookup
     // `number | undefined` and an unchecked `!` would be an assertion, not a check.
     if (fallback === undefined) {
-      throw new Error(
-        `fc budget table is missing its fallback profile '${FALLBACK_PROFILE}'`,
-      );
+      throw new Error(`fc budget table is missing its fallback profile '${FALLBACK_PROFILE}'`);
     }
     return { requested: raw, profile: FALLBACK_PROFILE, numRuns: fallback, recognised: false };
   }
@@ -158,7 +156,7 @@ export function budgetAttestation(
  * total function and losing the environment must degrade to `dev`, not to a crash.
  */
 export function activeBudget(): BudgetResolution {
-  const env = (globalThis as { process?: { env?: Record<string, string | undefined> } })
-    .process?.env;
-  return resolveBudget(env?.["HYPOTHESIS_PROFILE"]);
+  const env = (globalThis as { process?: { env?: Record<string, string | undefined> } }).process
+    ?.env;
+  return resolveBudget(env?.HYPOTHESIS_PROFILE);
 }

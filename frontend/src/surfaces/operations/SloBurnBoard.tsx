@@ -111,7 +111,7 @@ export function SloBurnBoard({ data, isError }: SloBurnBoardProps) {
   // an operator saw four unknown tiers with no declaration that the read itself
   // is the degraded thing.
   const dataPath = surfaceDataPath("operations.slo-burn", {
-    degraded: isError ? true : data === undefined ? null : data.source === "unknown" ? true : false,
+    degraded: isError ? true : data === undefined ? null : data.source === "unknown",
     synthetic: null,
   });
 

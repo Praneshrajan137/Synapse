@@ -3,10 +3,10 @@ import { cleanup } from "@testing-library/react";
 import fc from "fast-check";
 import { afterAll, afterEach, beforeAll, beforeEach, expect, vi } from "vitest";
 import {
-  activeBudget,
-  budgetAttestation,
   FAST_CHECK_IMPLICIT_NUM_RUNS,
   FC_BUDGET_META_KEY,
+  activeBudget,
+  budgetAttestation,
 } from "./fc-budget";
 import { server } from "./msw-server";
 
