@@ -537,11 +537,36 @@ tests in the interim, and that is a stated sequencing gap, not an omission.
     - Locus: `ci.yml::uplift-verify` fast step.
     - _Requirements: 1.12_
 
-- [ ] 6. Checkpoint — review the sweep's survivor list
+- [x] 6. Checkpoint — review the sweep's survivor list
   - discharge: truth-gates.yml::falsification-sweep
   - Ensure all tests pass, ask the user if questions arise.
-  - **THE LIST IS IN. Measured on PR #84, run `33513528766`, sha `77df3ef`. Still `[ ]` because the
-    review is the operator's, not the agent's.**
+  - **REVIEWED AND ACCEPTED BY THE OPERATOR, session 2q. This closes E1.** The list below was
+    measured by the declared discharge job and the review it was waiting on has happened, so the
+    mark is earned rather than asserted. The operator's disposition, recorded verbatim rather than
+    paraphrased: *"the disclosed survivor is not a finding against the sweep; C28's real repair
+    waits on `coverage_per_package.py --require-measured-floors`, which is not this spec's."*
+    - **No mutation was weakened, and none may be.** The survivor stands recorded as a survivor.
+      The repair belongs to C28's owner and lands when `--require-measured-floors` does; until
+      then C28 is a gate proven not to enforce its own floor property, and that fact is now
+      readable in this ledger rather than only in a CI log.
+    - **What the acceptance rests on, stated so it can be checked:** `UNPROVEN=0` — the clause this
+      task's success criterion actually names — and **no undisclosed survivor**. Those two together
+      are what make the sweep's own numbers supportable. Had either failed, acceptance would have
+      been unavailable regardless of the survivor count.
+    - **What it does NOT license.** The sweep is not green and E1's completion criterion never
+      asked it to be: "E1 is complete when the sweep's exit status gates a job and every
+      non-`falsified` outcome is attributed to a check and an operator — **not** when the sweep is
+      green." Both hold. `truth-gates.yml::falsification-sweep` stays red on PR #84 and that red is
+      attributed, disclosed and expected.
+    - **The 7-not-8 shortfall is the argument the operator acted on separately.** C56's red baseline
+      removed C56 from the probeable set, so the drift cost measurement power and not just a tick.
+      That is now parent task **26**'s subject: a `workflow_dispatch` CI job regenerates
+      `CURRENT.md` and the README headline on a runner and uploads them, because CI runs the
+      generators with `--check` and cannot repair what it detects (I-0 escalation step 1).
+    - **Still recorded and still unrepaired:** `gate-mutations.yaml`'s survivor shape for C16 at
+      line `26` is **misattributed** — nobody declared that mutation, and C16's declared operator
+      sets `$.thresholds.break` to `10` and must fire. Ticking this task does not absorb that.
+  - **THE LIST, as measured on PR #84, run `33513528766`, sha `77df3ef`.**
     ```
     Checks:    REGISTERED=67 DECLARED=14 FALSIFIED=6 PASS_ELIGIBLE=6 EXCLUDED=53
     Operators: DECLARED=16 PROBED=16 UNPROVEN=0
@@ -2490,6 +2515,206 @@ data and scored against an external benchmark has no demonstrable value.
     half's 8.2/10.4/12.x/13.x has a `ratchets.json` entry whose extractor was verified **by
     running it**; and the ledger, the gate surface and the README are projections of one
     execution rather than three transcriptions.
+
+### Phase 6 — adopted debt. Registered in session 2q, sequenced BEFORE session 2.
+
+> **Both parents carry work this spec did not author and has now adopted, with the operator's
+> explicit decision on each.** Their identifiers are last because renumbering would break
+> `task_claim_truth`, this file's own cross-references and other specs' citations. **Their
+> execution order is not their id order** — precedent is checkpoints A–D, which fire before the
+> work they gate. `SESSION_PROTOCOL.md`'s batch table places **session 2r** before session 2 and
+> states why.
+
+- [ ] 26. Regenerate the projected documents — the repair half of the three generators
+  - **Adopted by operator decision in session 2q**, from the two options put to them: run the
+    generators locally (~30 minutes of full-core CPU, category 3/4 under I-0) or add a CI job that
+    runs them on a runner and uploads the result. The second was chosen.
+  - **The drift is NOT this spec's authorship.** `README.md`'s generated headline claims
+    `PASS 51 / FAIL 3 / SKIP 10 / TOTAL 64` while the suite reported `54 / 2 / 11 / 67` at sha
+    `77df3ef`. That gap is session 1's three registrations (C73, C74, C75) never regenerated into
+    the README. It is nevertheless **measured as owed rather than predicted**, and the argument is
+    not the red tick: C56's red baseline made C56 itself unprobeable, so the falsification sweep
+    probed **7** checks instead of 8. **Doc drift removed a gate from the measurement.**
+  - **Why CI could not already fix this, verified by reading `truth-gates.yml`.** That workflow
+    runs `readme_gen --check`, `ledger_gen --check` and `gate_surface --check`. All three DETECT;
+    none REPAIRS. So "let CI answer it" — which was the right call for C63 in session 2p — is
+    structurally unavailable here, and the only `--write` path was a developer's machine.
+  - **Repair order is fixed and is the one `truth-gates.yml`'s own header states:**
+    `gate_surface --write` (landed session 2p, re-run session 2q for the new job) →
+    `ledger_gen --write` → `readme_gen --write`. Registration and wiring first, generation last.
+  - **Never repair a count by hand (I-7).** `blocking-steps.yaml` says so in those words. The job
+    exists so the number is projected, and the human step is *review*, not transcription.
+  - _Requirements: 4.4, 4.5, 4.8, 4.11, 10.1, 10.7, 11.7_
+
+  - [~] 26.1 Author the dispatch-only regeneration job and land its couplings
+    - discharge: regenerate-truth-docs.yml::regenerate (first dispatch, 26.2) for the job itself;
+      ci.yml::uplift-verify fast step for the closure-parity property
+    - **Landed and locally verified in session 2q. `[~]` and not `[x]` because the workflow has
+      never executed** — a job that has never run is exactly the shape I-7 names, where reporting
+      nothing is indistinguishable from passing.
+    - Files: `.github/workflows/regenerate-truth-docs.yml` (new),
+      `infrastructure/quality/blocking-steps.yaml`, `docs/state/GATE_SURFACE.md`,
+      `tests/verify/test_regeneration_closure_parity.py` (new)
+    - `workflow_dispatch` only, `permissions: contents: read`, `timeout-minutes: 45` derived from
+      `truth-gates`' own 25 rather than picked. It **commits nothing**: it writes the documents,
+      prints the diff to its log and uploads them for a human to commit. An auto-commit variant was
+      rejected — it would let a machine write generated counts into the tree with no reviewer, and
+      hand-maintained counts drifting is the entire reason these documents are generated.
+    - **The install closure is copied verbatim from `truth-gates.yml::truth-gates` and pinned by a
+      test rather than extracted into a shared script.** Extracting it would edit the steps of a
+      **required** status-check workflow to save a copy. The closure is load-bearing: several
+      registered checks report SKIP when an optional import is missing, so a thinner environment
+      turns a PASS into a SKIP, moves the counts, and the job would then **write the wrong numbers
+      into the documents it exists to correct** — a failure that looks like a success.
+    - **`readme_gen --write` runs without `--counts-json`, deliberately.** The flag does not change
+      *which* counts are used: without it `readme_gen` calls `doc_truth.nested_suite_counts`
+      itself, through the same function the gate calls, so the nested-execution semantics that make
+      C56 self-exclude hold either way. It is purely a cost saving, and earning it here would mean
+      pairing with `doc_truth --check` — a step **expected** to exit non-zero while C44 and C69 are
+      red — so the only way through would be a `continue-on-error` inside a truth-gates-adjacent
+      workflow. One extra registry execution is the accepted cost; a discarding construct is not.
+    - **`gate_surface --check` is the job's first step and a hard gate**, not a courtesy:
+      regenerating on top of a stale gate surface produces an artifact that is stale the moment it
+      is written, because C63's status sits inside the counts `doc_truth` and `readme_gen` pin.
+    - **Both halves of the fourth same-commit coupling landed together**, and the coupling was
+      observed firing rather than assumed: `gate_surface --check` went non-zero on the new job
+      (17→18 workflow files, 54→55 jobs, 370→378 steps) and back to 0 after `--write` (536 surface
+      rows). `workflow_shape_truth --check` resolves the new declaration and reports 11 blocking
+      entries, up from 10.
+    - **No `required-checks.yaml` entry is owed, and this was checked rather than assumed.**
+      `required_checks_truth` validates that *declared* jobs resolve, not that the file is
+      complete; `required-checks.schema.json::ineligibleEntry` constrains `reason` to a closed
+      six-value enum with `additionalProperties: false` and none of the six describes
+      "dispatch-only". Declaring it would mean amending a schema enum — the third same-commit
+      coupling — for a job that produces no status check on any pull request. Eight existing
+      workflows carry no entry either.
+    - _Requirements: 4.4, 4.5, 4.8, 4.11, 10.1, 10.7, 11.7_
+
+  - [ ] 26.2 Dispatch the job and review the regenerated diff
+    - discharge: regenerate-truth-docs.yml::regenerate
+    - `gh workflow run regenerate-truth-docs.yml --ref feat/decision-quality-proof`, then download
+      the `regenerated-truth-docs` artifact and read the diff the run printed.
+    - **Operator action.** The review is the point: the artifact is a proposal, and a reader must
+      confirm the counts moved for the reason expected before any of it is committed.
+    - Confirm the job's own first step passed — a red `gate_surface --check` means the dispatching
+      commit missed the fourth coupling and the artifact must not be used.
+    - _Requirements: 4.4, 4.5, 10.1, 11.7_
+
+  - [ ] 26.3 Commit the regenerated documents and confirm C56 returns to PASS
+    - discharge: truth-gates.yml::truth-gates
+    - Files: `docs/state/CURRENT.md`, `README.md`
+    - **Two things must be confirmed, not one.** C56 goes PASS on the next `truth-gates` run; and
+      the falsification sweep's probeable set returns to **8**, because C56 regains a passing
+      baseline. The second is the measurement power the drift cost, and it is the reason this
+      parent exists rather than the tick.
+    - Read the registry verdict line for the count, not a single step's conclusion — session 2p's
+      lesson that a deferred verification aimed at a gated step is not a deferred verification.
+    - _Requirements: 4.4, 4.5, 4.8, 4.11, 10.1, 10.7_
+
+- [ ] 27. `mypy --strict orchestrator/` — the debt that gates every property this spec has written
+  - **Adopted into scope by explicit operator decision in session 2q**, from three options: file it
+    against its author, take it as a named batch, or split it. The batch was chosen.
+  - **This is the single largest obstacle in the tree, and the reason is structural.**
+    `ci.yml::uplift-verify` declares `needs: quality-gates`; `quality-gates` fails at step 8,
+    `mypy --strict orchestrator/`; so **Properties 38–60 have never executed in CI on this branch.**
+    Every property this spec has authored is local evidence only until this parent closes.
+  - **Measured baseline, session 2q, at CI's exact command:** 78 errors in 32 files, decomposing as
+    `call-arg` 21, `arg-type` 24, `unused-ignore` 7, `type-arg` 5, `no-any-return` 5,
+    `no-untyped-def` 4, `import-untyped` 4, `attr-defined` 2, `union-attr` 2,
+    `comparison-overlap` 2, `method-assign` 1, `assignment` 1. All 78 originate from commit
+    `e000258`; none is on `main`.
+  - **Determine ownership mechanically before filing any of the remainder as pre-existing.** Two
+    findings have already been misfiled as `main`'s and turned out to be this branch's.
+      ```powershell
+      git log -1 --format='%h' -- <file>
+      git merge-base --is-ancestor <sha> main     # exit 1 => NOT on main => this branch's
+      gh run list --branch main --workflow '<name>' --limit 3
+      ```
+  - **FORBIDDEN REPAIRS, and each names what it would destroy.** No error may be cleared by giving
+    an argument a default, by widening a type to `Any`, by adding a `# type: ignore`, or by
+    narrowing mypy's scope. The first substitutes an unreviewed value for a committed one; the
+    second and third make the checker agree by asking it less; the fourth deletes the gate. If an
+    error is genuinely a tooling artifact, the repair must be at the *declaration* that misleads
+    the checker — 27.1 is the worked example — never at the call sites that report it.
+  - **`warn_unused_ignores = true`, so removing an error can create one.** Expect that and read it
+    as progress, not regression. It is why 27.4 is sequenced last.
+  - _Requirements: —  (adopted debt; no requirement in this spec declares it)_
+
+  - [~] 27.1 Make the committed `confidence_threshold` default visible to the type checker
+    - discharge: ci.yml::quality-gates step 8 (the error count it reports at CI's own scope)
+    - **Landed and locally measured in session 2q: one line, 22 errors cleared, no runtime change.**
+      `orchestrator/config.py` declared `Field(0.7, ge=0.0)` — default passed **positionally**.
+      This project configures no `pydantic.mypy` plugin, so mypy reads the field through pydantic
+      v2's PEP-681 `dataclass_transform`, which recognises a field-specifier default only as
+      `default=`. The reviewed default was therefore invisible to the checker and the field was
+      synthesised as a **required** keyword argument.
+    - Files: `orchestrator/config.py`,
+      `orchestrator/tests/test_orchestrator_config_confidence_default.py` (new)
+    - **Why the obvious repair was the wrong one, and this is the whole point of the task.**
+      Clearing 21 `call-arg` errors by passing a value at each call site would have injected 21
+      unreviewed numbers onto the **I-5 confidence gate**, because
+      `GuardrailEngine(confidence_threshold=config.confidence_threshold)` consumes it and
+      `thresholds.py` records that the boundary is injected a single time at
+      `inference/serve.py`. **Three of the 21 sites are production**, not tests
+      (`inference/serve.py` ×2, `audit/cli.py`). The reviewed default already existed.
+    - **Measured 78 → 56, and the prediction was 57.** Exactly two codes moved and both to zero:
+      `call-arg` 21→0 and `assignment` 1→0. Every other code is **identical**, and no new code
+      appeared. The unpredicted 22nd is `orchestrator/guardrails/thresholds.py:118`, which assigns
+      the **class object** into a `Callable[[], OrchestratorConfig]` slot — not a zero-argument
+      callable while `__init__` was believed to require the argument. Same root cause, in the
+      module that reads the I-5 boundary, and its own docstring already declared the class callable
+      with no arguments. `thresholds.py` now reports zero errors. It is also one of the errors
+      `HANDOFF.md` recorded as blocking `pre-commit install`, and it was never a stub-gap error.
+    - **What is claimed and what is not.** The claim is the *delta* and the disappearance of the two
+      codes, which are inference results independent of installed stubs. The **absolute** CI count
+      may differ from 56: the local environment has no `types-PyYAML`, so four `import-untyped`
+      errors here may not correspond one-to-one with CI's. Step 8 still **fails** — 56 > 0 — so
+      `uplift-verify` remains skipped and nothing this spec wrote has run in CI yet.
+    - Five regression tests pin what the field's own comment declares: the default is present with
+      no argument passed; it agrees with `DEFAULT_CONFIDENCE_FLOOR` (mechanising a claim
+      `rules.py` previously made only in prose); `ge=0.0` refuses `-1.0`; the bound is inclusive
+      rather than strict; and no `le` ceiling was introduced, so a boundary above `1.0` remains
+      available as an operator kill switch.
+    - _Requirements: —_
+
+  - [ ] 27.2 Diagnose and repair the 24 `arg-type` errors, per error rather than per pattern
+    - **The largest remaining group, and it must not be treated as one pattern.** 27.1's group was
+      genuinely uniform — all 21 were one declaration's artifact — and reading that as licence to
+      batch-fix these would be exactly the over-generalisation that cost session 2p three real
+      Biome findings. Classify each before repairing any.
+    - Expect the repair to move the `unused-ignore` count in both directions; 27.4 absorbs that.
+    - _Requirements: —_
+
+  - [ ] 27.3 Repair the remaining 26 errors across eight codes
+    - `type-arg` 5, `no-any-return` 5, `no-untyped-def` 4, `import-untyped` 4, `attr-defined` 2,
+      `union-attr` 2, `comparison-overlap` 2, `method-assign` 1.
+    - **`import-untyped` may not be repairable here, and that must be recorded rather than
+      suppressed.** `types-PyYAML` is deliberately not installed — `HANDOFF.md` records that
+      installing it unmasks real pre-existing errors elsewhere that then block commits to files
+      which do not contain them. If these four are that gap, the honest outcome is a recorded
+      deferral naming the reason, not a `# type: ignore`.
+    - `comparison-overlap` is worth reading closely rather than silencing: a comparison mypy proves
+      can never be true is usually a real defect, not a typing nuisance.
+    - _Requirements: —_
+
+  - [ ] 27.4 Clear the `unused-ignore` errors LAST, once the others have stopped moving
+    - **Sequenced last on purpose.** `warn_unused_ignores = true`, so every repair in 27.1–27.3
+      can both remove an ignore's justification and create a new unused one. Clearing them first
+      would mean clearing them twice, and the second pass would look like a regression.
+    - A `# type: ignore` that is genuinely unused is deleted, never re-narrowed to keep it alive.
+    - _Requirements: —_
+
+  - [ ] 27.5 Confirm step 8 passes and that `uplift-verify` actually executes
+    - discharge: ci.yml::uplift-verify
+    - **This is the payoff, and it is the only thing that discharges it.** Confirm `quality-gates`
+      reaches its end, then confirm `uplift-verify` **ran** — not that it was skipped, and not that
+      it reported nothing. Then read Properties 38–60's first CI execution.
+    - **Read what got skipped behind the failure, not only what failed**, if it still fails:
+      `gh api .../jobs` and list every step whose conclusion is `skipped`. One 101-character line
+      once gated 18 steps and 3 jobs across two pushes with nothing recording it.
+    - Until this leaf is `[x]`, every `HANDOFF.md` must continue to state that this spec's property
+      surface is local evidence only.
+    - _Requirements: —_
 
 ## Notes
 

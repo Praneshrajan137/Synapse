@@ -391,64 +391,123 @@ it promises the answer will be believable either way.
 
 ---
 
-## Session 2p handoff — regenerate this section each session
 
-**Session 2p was pre-batch repair, committed, pushed and CI-verified.** Six commits on
-`feat/decision-quality-proof`, branch **17 ahead of `main`**: `85774e1` the interval + the dispatch
-selector + the gate-surface regeneration · `d67f1c7` the first Biome repair · `77df3ef` the ledger ·
-`98b37d9` the lint/format gates this branch had left red · `85ed97a` the verified CI record and the
-survivor list · `67541af` tasks 1.2/1.5 discharged.
+## Session 2q handoff — regenerate this section each session
 
-**No session-2 task was started, and that was correct** — checkpoint A is still the next thing.
+### This section OVERRIDES STEP 3 above. Read it before acting on that list.
 
-**Census at close: 132 leaf tasks, 56 done, 1 authored-pending-discharge, 75 open** (69 authorable,
-6 CI-gated). `--next 11` returns exactly `12.1 12.2 12.3 12.4 13.1 13.2 13.3 13.4 13.5 13.6 13.7`.
-**The only remaining `[~]` is task 10.4**, which discharges at checkpoint A.
+**Items 1, 2 and 3 of STEP 3 are discharged.** Do not re-ask them; the operator answered all three in
+session 2q and the answers are landed.
 
-### What it changed
-
-- **The interval.** `uplift/interval.py` (design E3.1, task 15.2's estimator half, landed early): a
-  paired percentile bootstrap at `1 - alpha` from the committed Metric_Contract, stdlib `random` only,
-  refusing rather than widening when it fails to bracket its point estimate. `_measure` passes it to
-  `classify_regret`, whose logic is **unchanged**. **This is what makes checkpoint A's verdict
-  admissible.** Task **15.3** is `[x]` (Property 60, 20 tests, green at `dev` and `heavy`); task
-  **15.2** is deliberately still `[ ]`.
-- **The dispatch selector.** `uplift.yml` gained `workflow_dispatch.inputs.job` with an `if:` guard per
-  job, so `twin-regret` runs without spending `uplift-proof`'s ~350 runner-minutes. `default: both`
-  and the guard's leading `github.event_name != 'workflow_dispatch'` keep the nightly proof running.
-- **C63 repaired and confirmed FAIL → PASS**, proven by diffing two runs' registry verdicts.
-- **`frontend.yml::quality` is GREEN** — all ten steps — which discharged tasks **1.2, 1.5** and parent
-  **1**. It took two repair commits and three CI runs.
-- **`SYNAPSE CI` advanced from step 5 to step 8.** See "The thing that is blocking everything".
-- `gate_surface --check` became the **sixth** cheap gate; `ledger_gen` went onto the never-run list.
-
-### Still red on PR #84, each with its reason
-
-| Job | Status |
+| STEP 3 item | Status after session 2q |
 |---|---|
-| `SYNAPSE CI :: Lint + Type Check + Unit Tests` | step 8, `mypy --strict orchestrator/`, **78 pre-existing errors** from `e000258`. **Not ours to fix; needs a decision.** |
-| `Truth Gates (enforcement spine)` | C44, **C56**, C69. C56 is the README headline drift — pre-existing, now measured as owed. |
-| `Falsification Sweep` | one survivor, `C28/zero-a-floor`, **disclosed**. `UNPROVEN=0`. Task 6's subject. |
-| `TypeScript strict — spec/ + tests/` | predicted red. **R2.15: a prediction is not a dispensation.** |
-| `Supply-chain audit` | `pnpm audit` reads a live advisory DB. Diagnose before repairing. |
-| `Audit-chain tamper detection (Postgres)` | fails on `main` too. Pre-existing. |
-| `Playwright E2E`, `Effectiveness harness`, `Stryker` | **newly visible, not newly broken** — unblocked by the green quality job, never run on this branch before. `blocking-steps.yaml` already records the e2e job as **expected red**. |
-| `Mutation Testing` | cancelled at 45m on every push. Precedent E-S13-05. |
+| 1 — take the survivor list to the operator | **Done.** Reviewed and accepted. Task 6 is `[x]` and **E1 is closed.** `C28/zero-a-floor`'s repair is deferred to `coverage_per_package.py --require-measured-floors` under its own owner. No mutation was weakened. |
+| 2 — decide the `readme_gen` escalation | **Done.** Decided *against* a local run. `.github/workflows/regenerate-truth-docs.yml` now runs both generators on a runner and uploads the result. **Never run `ledger_gen` or `readme_gen` locally.** |
+| 3 — decide the 78 `mypy --strict orchestrator/` errors | **Done.** Adopted in scope as spec parent **27**. 22 already cleared; **56 remain.** |
+| 4, 5, 6 — the dispatch, the margin, task 11's verdict | **Still owed, unchanged, and still the operator's** — except that item 4 is now **two** dispatches. See finding 16. |
 
-Green: `Terraform Validate`, `SYNAPSE Security Scan`, `SYNAPSE Policy Gate`, `SYNAPSE Frontend CI ::
-Lint • Typecheck • Unit`.
+### State of the tree
 
-### Verified vs merely authored
+**Two commits landed in session 2q**, plus the ledger commit carrying the handoff: `e1b274c` the
+regeneration job with all three of its couplings, `d1c4dc7` the `confidence_threshold` declaration
+fix. Branch was **20 ahead of `main`** before the ledger commit. Derive the rest:
 
-**Executed and green:** Property 60 **20 passed at `dev` and re-verified at `heavy`**;
-`test_regret_totality_property.py` (17) + `test_materiality_margin_rule.py` (13) = **30 at `heavy`**,
-so session 1r's properties survive the interval change; `ruff` clean; `mypy --strict` reports no error
-in any line written except the documented repo-wide `yaml` stub gap; `ruff check` and
-`ruff format --check` **0** at CI's exact scope; `mypy --strict packages/` **0**; `biome check ./src`
-**0**; `tsc --noEmit` **0**; six cheap gates at `0/0/0/2/1/0`; census pass. Process sweep clean.
+```powershell
+python -m scripts.audit.spec_ledger_census --files --next 11
+```
 
-**NOT executed, and must not be claimed:** `vitest` locally (CI ran it — that is what discharged 1.2
-and 1.5); **`uplift-verify`, so Properties 38–60 have never run in CI**; `_measure`'s wired interval
-path, which drives the SimPy twin and **discharges at the `twin-regret` dispatch**;
-`ledger_gen`/`readme_gen --check`; `test_env_response.py` (module-skipped, `gymnasium` absent);
-`test_aggregation_integrity_under_failures`, which still **fails** on pre-existing float fragility.
+At close that reported **140 leaf tasks: 57 done, 3 authored-pending-discharge, 80 open** (72
+authorable, 8 CI-gated). The total moved from 132 because session 2q registered two new parents. The
+three `[~]` are **10.4** (checkpoint A), **26.1** (the regeneration job, never executed) and **27.1**
+(the declaration fix, CI has not confirmed the count at its own scope).
+
+### FINDING 16 — checkpoint A needs TWO dispatches, not one. Unactioned.
+
+Derived by reading `policy.py`, `regret.py` and `uplift.yml`; **not executed**.
+
+- **`must_be_below_measured_headroom` never fires on run 1.** `policy.py::materiality_margin` returns
+  `None` on `committed is None` **before** reaching the guard, so the guard that makes the margin
+  falsifiable-by-construction is unexercised. `_measure` reports `margin_rule_below_headroom` only as
+  an informational bool that refuses nothing.
+- **`classify_regret` with `margin=None` returns `verdict: unavailable`.** Recording task 11 as
+  `inconclusive` off run 1's artifact means hand-computing a verdict from
+  `interval_excludes_rule_margin` + `margin_rule_derives` that **the instrument did not produce** —
+  the shape I-7 forbids, and the same shape as session 2p's defect 9.
+- **Run 2 is a verdict materialisation, not a re-measurement.** `_measure` iterates
+  `for seed in range(replicates)` — seeds `0..199`, fixed — and the interval's seed is committed, so
+  identical arguments give identical numbers. No metric-shopping surface.
+
+**The order:** dispatch 1 measures → *if the headroom moved materially, amend ADR-055 D2.5's
+`bracketing.upper` first, because it is prose and is not pinned* → commit the margin value plus its
+pin (discharges 10.4) → dispatch 2 (discharges 11).
+
+### Two independent tracks. Either may go first — verified, not assumed.
+
+`uplift.yml`'s jobs both carry `needs: NONE`, so **checkpoint A does not wait on `quality-gates`.**
+`ci.yml::uplift-verify` does.
+
+**Track A — checkpoint A.** Items 4, 5, 6 of STEP 3, with finding 16 applied.
+
+**Track B — session 2r, and it should precede session 2.** Six tasks:
+`26.2 26.3 27.2 27.3 27.4 27.5`.
+
+1. `gh workflow run regenerate-truth-docs.yml --ref feat/decision-quality-proof`, download
+   `regenerated-truth-docs`, read the diff, commit `docs/state/CURRENT.md` and `README.md`.
+   **Confirm two things, not one:** C56 goes PASS, **and** the falsification sweep's probeable set
+   returns to **8**. The second is the measurement power the drift cost.
+2. Clear the remaining 56 orchestrator errors — **27.2 (24 `arg-type`) → 27.3 (26 across eight codes)
+   → 27.4 (`unused-ignore` last, because `warn_unused_ignores` means the earlier repairs move that
+   count in both directions)** — then confirm `uplift-verify` **executes** (27.5).
+
+**Why 2r precedes session 2.** Session 2 authors eleven tasks, and **four of them (12.2, 12.4, 13.2,
+13.4) produce `@pytest.mark.slow` properties whose declared discharge is `ci.yml::uplift-verify`** —
+the job that has never run. They cannot be run locally (category 4 under I-0). Authoring them first
+adds eleven marks, four permanently unverifiable in the meantime, to a spec whose property surface is
+already unproven.
+
+### What session 2q proved, and what it did not
+
+**Executed and green:** `ruff` + `ruff format` **0** at CI's exact scope (386 files);
+`mypy --strict` clean on both changed non-test files; **`mypy --strict orchestrator/` 78 → 56** at
+CI's exact command, twice; **24 tests passing** (5 new config-default, 4 new closure-parity, 15 at
+`heavy` across the confidence-boundary suites); six cheap gates **0/0/0/2/1/0**; census 0; process
+sweep clean.
+
+**NOT executed, and must not be claimed:** **`uplift-verify`, so Properties 38–60 have still never
+run in CI** — step 8 still fails at 56 > 0; **`regenerate-truth-docs.yml` has never executed**, which
+is why 26.1 is `[~]`; `ledger_gen`, `readme_gen`, `verify_claims`, `doc_truth` — none run locally, in
+any form; the five slow-marked `ConsensusProtocol` properties; `vitest`; `_measure`'s wired interval
+path. **And the absolute CI value of the orchestrator error count** — 56 is the local number, the
+local environment has no `types-PyYAML`, and only the delta and the two vanished codes are
+stub-independent.
+
+### Three things session 2q learned that are not in the lists above
+
+- **A stated gate's number can be wrong in the safe direction, and mechanical literalism would have
+  thrown away a correct repair.** The plan set `78 → 57` as a revert condition; the measurement was
+  **56**. What made proceeding safe was evidence, not judgement: exactly two codes moved and both to
+  zero, **every** other count identical, no new code, and the 22nd error's mechanism read from source
+  (`thresholds.py:118` assigns the class *object* into a `Callable[[], OrchestratorConfig]` slot).
+  **Prove the shape of a deviation before accepting it** — "something was masked" was checkable, and
+  was checked.
+- **A `ruff format --check` diff whose two sides look character-identical is a LINE-ENDING diff.**
+  Programmatic edits wrote LF into CRLF working-tree files; `git ls-files --eol` reported `w/mixed`.
+  Repair with Python at `newline=''`. **Run `git ls-files --eol <path>` after any programmatic edit.**
+- **A gate's non-zero exit is a claim about the *invocation* as much as the gate.** A PowerShell
+  splatting bug (`$parts[1..0]` on a one-element array) made `workflow_shape_truth` report exit 2; it
+  is 0 when invoked correctly. Verify the command before believing the verdict.
+
+### The two corrections session 2q made to its own instructions
+
+Both are recorded in `HANDOFF.md` as conflicts F and G. **Do not re-derive them.**
+
+- **F — the `confidence_threshold` repair belongs at the declaration, never at the call sites.** The
+  reviewed default already existed as `Field(0.7, ge=0.0)`, passed *positionally*; there is no
+  `pydantic.mypy` plugin, so mypy reads defaults through PEP-681 `dataclass_transform`, which
+  recognises only `default=`. Three of the 21 reporting sites are **production**. Passing a value at
+  each would have put 21 unreviewed numbers on the I-5 gate.
+- **G — a `workflow_dispatch`-only job owes no `required-checks.yaml` entry.**
+  `ineligibleEntry.reason` is a closed six-value enum with no "dispatch-only" member;
+  `required_checks_truth` validates declared→resolves, not completeness; eight existing workflows
+  carry no entry. `HANDOFF.md`'s old mention of `uplift.yml` appearing there is **task 25's future
+  criterion**, not a present fact.
