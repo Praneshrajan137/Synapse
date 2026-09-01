@@ -15,15 +15,19 @@ session-2 row. Parent tasks 2, 3, 4, 5, 7, 8, 9 complete; **tasks 1 and 10 are n
 and its margin value owed at checkpoint A.
 
 > **Session 2p was pre-batch repair, not an authoring batch.** It made checkpoint A affordable, made
-> checkpoint A's verdict *admissible*, and repaired the discharge failures PR #84 exposed. **No
-> session-2 task was started.** The next thing in the plan is still checkpoint A, and it is an
-> operator action.
+> checkpoint A's verdict *admissible*, repaired the discharge failures PR #84 exposed, and then
+> **verified the CI run rather than trusting its own claims — which falsified two of them.** No
+> session-2 task was started. The next thing in the plan is still checkpoint A, an operator action.
 >
-> **Four commits on `feat/decision-quality-proof`, pushed to PR #84:** `85774e1` the interval + the
+> **Five commits on `feat/decision-quality-proof`, pushed to PR #84:** `85774e1` the interval + the
 > dispatch selector + the gate-surface regeneration, `d67f1c7` the first Biome repair, `77df3ef` the
-> ledger, `98b37d9` the lint/format gates this branch had left red — **found by verifying the CI run
-> rather than by trusting the previous session's claims.** The branch is **15 commits ahead of
-> `main`.**
+> ledger, `98b37d9` the lint/format gates this branch had left red, `85ed97a` the verified CI record
+> and the survivor list. Branch is **16 commits ahead of `main`.**
+>
+> **`frontend.yml::quality` is now GREEN, and tasks 1.2 and 1.5 are `[x]` — earned, not asserted.**
+> All ten steps pass, including step 8 `Vitest unit + property tests`, which is the only route by
+> which 1.5 could ever have been discharged. **Parent task 1 is complete.** Only **task 10.4**
+> remains `[~]`, and it discharges at checkpoint A.
 >
 > The working agreement is `.kiro/specs/decision-quality-proof/SESSION_PROTOCOL.md`.
 > The prompt to paste in a new session is
@@ -38,35 +42,34 @@ as it *is*, not as a diff against how it was.
 
 **All of it is operator work. There is no authoring owed before checkpoint A.**
 
-1. **The survivor list is IN HAND and is below — take it to the user, then decide what to fix.**
-   Exactly one survivor, `C28/zero-a-floor`, and it is the disclosed one. `UNPROVEN=0`. **Task 6 is
-   deliberately not ticked** until that review happens.
-2. **Read whether `98b37d9` turned `Lint • Typecheck • Unit` and Ruff green.** Both were verified
-   locally at CI's exact commands, but a local pass is not the job's verdict. Expect `SYNAPSE CI` to
-   fail **further down** now, at step 8 `mypy --strict orchestrator/` (78 pre-existing errors) —
-   which still leaves `uplift-verify` skipped.
-3. **Decide the `readme_gen` escalation, which is no longer speculative.** C56 is red, the counts
-   *did* move (PASS 53 -> 54), and the drift **removed C56 from the falsification measurement**. The
-   repair order is `gate_surface --write` (done), then `ledger_gen --write`, then
-   `readme_gen --write` — the last two ~15 min of full-core CPU each. Never repair a count by hand.
-4. **Dispatch the regret measurement alone** — what session 2p's `uplift.yml` change bought:
+1. **The survivor list is IN HAND and is recorded below and under task 6 — take it to the user, then
+   decide what to fix.** Exactly one survivor, `C28/zero-a-floor`, and it is the disclosed one.
+   `UNPROVEN=0`. **Task 6 is deliberately not ticked** until that review happens.
+2. **Decide the `readme_gen` escalation. It is no longer speculative.** C56 is red, the counts *did*
+   move (PASS 53 -> 54 -> 56), and the drift **removed C56 from the falsification measurement**, so
+   it costs measurement power and not just a red tick. Repair order: `gate_surface --write` (done),
+   then `ledger_gen --write`, then `readme_gen --write` — the last two ~15 min of full-core CPU each.
+   **Never repair a count by hand** (I-7).
+3. **Dispatch the regret measurement alone** — what session 2p's `uplift.yml` change bought:
    ```powershell
    gh workflow run uplift.yml --ref feat/decision-quality-proof --field job=twin-regret
    ```
    Then read `regret`, `interval_low`/`interval_high`, `comparator_headroom`, `margin_rule`,
    `margin_rule_derives` and `interval_excludes_rule_margin` from
    `artifacts/uplift/twin-regret.json`.
-5. **Instantiate `materiality_margin.value` from the committed rule** (`service_points * 0.01 *
+4. **Instantiate `materiality_margin.value` from the committed rule** (`service_points * 0.01 *
    weights.unmet_service`), record the headroom it was checked against, and pin the derived value.
    `policy.py::materiality_margin` will refuse a value the rule does not produce — that is intended.
-   Discharges task 10.4.
-6. **Record task 11's verdict** against `SESSION_PROTOCOL.md`'s four-value table, with evidence.
+   Discharges task 10.4, the last `[~]`.
+5. **Record task 11's verdict** against `SESSION_PROTOCOL.md`'s four-value table, with evidence.
    Then branch: `material` -> stop and re-cut R5; `inconclusive` -> session 2's eleven tasks;
    `unavailable` -> the measurement did not happen, say so.
 
-**The one thing that would most change this spec's position is not on that list, because it is not
-ours to decide:** `uplift-verify` cannot run until `mypy --strict orchestrator/`'s 78 errors are
-cleared, and **Properties 38-60 have never executed in CI.** See failure 4 below.
+**The single largest obstacle is not on that list, because it is not this spec's to decide.**
+`uplift-verify` needs `quality-gates` to *succeed*; `quality-gates` now fails at step 8,
+`mypy --strict orchestrator/`, with **78 pre-existing errors**; and therefore **Properties 38-60 have
+never executed in CI on this branch.** See failure 4 below, including why the dominant pattern must
+not be "fixed" by defaulting an argument.
 
 ---
 
@@ -473,10 +476,12 @@ independently of whether that value is committed yet.
 
 ### NOT executed. Must not be claimed as passing.
 
-- **`vitest`. At all.** I-0 bans it, so `frontend.yml::quality`'s third step is unverified.
-  **This is the whole reason 1.2 and 1.5 stay `[~]`.** What *is* now verified for that job:
-  Biome (step 1) and `tsc` (step 2). What is not: the run. The fast-check resolver either applies
-  at runtime or throws by design, and only a run distinguishes those (R2.13).
+- **`vitest` locally. At all.** I-0 bans it. **CI ran it instead, and that is what discharged tasks
+  1.2 and 1.5** — step 8 of a green `frontend.yml::quality` on the run for `85ed97a`. The lesson is
+  not that the ban was costly; it is that the ban made the `[~]` mark load-bearing for three CI runs.
+- **`uplift-verify`, and therefore Properties 38-60.** Skipped on every push so far, because
+  `quality-gates` has never succeeded. **This spec's entire property surface has never run in CI.**
+  The 46 property tests sessions 1/1r reported green, and this session's 20, are local evidence only.
 - **Task 1.5's file is reached by none of the local checks, and the reason is precise.**
   `biome check ./src` never scans `frontend/spec/`; `frontend/tsconfig.json`'s `include` names only
   `frontend/spec/effectiveness/harness.ts` and `e2e-entry.ts`, **not** `__tests__/**`; only
@@ -496,9 +501,9 @@ independently of whether that value is committed yet.
   locally.** They read `comparator.restock_threshold` (`0.0`) and `POLICY_PATH.name`
   (`policy.yaml`), neither of which changed. The twin-driving half discharges at checkpoint A.
 - **`ledger_gen --check` and `readme_gen --check`.** Offered, costed at ~30 minutes of full-core CPU
-  serial, and **declined** in favour of letting this push answer the same question. The prediction
-  that C63's repair moves no count is therefore **unverified**; item 2 of the owed list is to read
-  whether CI agrees.
+  serial, and declined in favour of letting the push answer it. **The push half-answered it:** C63
+  went green, but the counts moved and C56 is red, so `readme_gen --write` is now **measured** as owed
+  rather than predicted.
 - **Four pre-existing `ruff` violations in `scripts/audit/verify_claims.py`** (19, 23, 1020, 1315),
   invisible to CI, which scopes ruff to `packages/`, `agents/`, `orchestrator/`.
 
@@ -576,21 +581,34 @@ Operators: DECLARED=16 PROBED=16 UNPROVEN=0
 **Task 6 is NOT ticked.** The list goes to the user before anything is fixed, because a gate proven
 not to enforce means every number it reported is unsupported.
 
-**3. `SYNAPSE Frontend CI` — `Lint • Typecheck • Unit` was still red, and session 2p's claim was
-wrong.** CI reported `Found 3 errors. Found 80 warnings.` The claim "zero error-level findings" came
-from an over-generalisation: 40 local `needs to be formatted` errors, **one** file proven to be a
-`core.autocrlf` artifact, and that proof extended to all 40. Three were real and CRLF noise masked
-them — `DataPathNotice.tsx`, `surfaces/data-paths.ts`, `lib/interruption-precision.ts`, all from
-`5db5eb1`. Repaired in `98b37d9`.
+**3. `SYNAPSE Frontend CI` — `Lint • Typecheck • Unit` IS NOW GREEN, and it took two attempts.**
+
+On the run for `85ed97a` all ten steps pass: **step 6 Biome lint, step 7 TypeScript strict, and step
+8 `Vitest unit + property tests`.** That job is tasks 1.2 and 1.5's declared `discharge:`, so both are
+now `[x]` and parent task 1 is complete. **Step 8 is the only route by which 1.5 could ever have been
+discharged** — `biome check` never scans `frontend/spec/`, and `tsconfig.json`'s `include` omits
+`frontend/spec/effectiveness/__tests__/**` — and I-0 bans `vitest`, so nothing local could have
+judged it. That is the clearest case in this spec for why the `[~]` mark exists.
+
+**The first attempt failed, and session 2p's claim about it was wrong.** CI reported `Found 3 errors.
+Found 80 warnings.` The claim "zero error-level findings" came from an over-generalisation: 40 local
+`needs to be formatted` errors, **one** file proven to be a `core.autocrlf` artifact, and that proof
+extended to all 40. Three were real and CRLF noise masked them — `DataPathNotice.tsx`,
+`surfaces/data-paths.ts`, `lib/interruption-precision.ts`, all from `5db5eb1`. Repaired in `98b37d9`.
 
 **Now proven mechanically rather than argued:** `biome format --write ./src` reports "Fixed 40 files"
 while `git diff` shows exactly **3** changed, because git normalises line endings under autocrlf. The
-37 are line-ending-only; the 3 are the ones CI named. `biome check ./src` now exits **0**, and with
-the tree LF that result is directly comparable to CI's for the first time.
+37 are line-ending-only; the 3 are the ones CI named.
 
-Still red there, both out of scope: `TypeScript strict — spec/ + tests/` (predicted; R2.15 — a
-prediction is not a dispensation) and `Supply-chain audit` (`pnpm audit` reads a live advisory
-database; diagnose before repairing).
+**Green in that job unblocked five downstream jobs that had been skipped**, and three of them are now
+red for their own reasons: `Playwright E2E + axe` (`blocking-steps.yaml` records this job as
+**expected red** until its backendless-preview flakiness is fixed — disclosed, not new),
+`Effectiveness harness`, and `Stryker mutation`. **None of those had ever run on this branch.** They
+are newly *visible*, not newly broken, and they are the next honest reading.
+
+Still red and out of scope: `TypeScript strict — spec/ + tests/` (predicted; R2.15 — a prediction is
+not a dispensation) and `Supply-chain audit` (`pnpm audit` reads a live advisory database; diagnose
+before repairing).
 
 **4. `SYNAPSE CI` — the finding that matters most.**
 
@@ -609,11 +627,12 @@ this spec has written is supposed to run. Properties 38 through 60 have never ex
 branch.** A gate that reports nothing is indistinguishable from a gate that passes (I-7), and this is
 that failure at the scale of a whole workflow.
 
-**The repair advances the chain; it does not clear it.** `uplift-verify` needs `quality-gates` to
-*succeed*, and step 8, `mypy --strict orchestrator/`, reports **78 errors in 32 files** — 21 of them
-the single pattern `Missing named argument "confidence_threshold" for "OrchestratorConfig"`, plus 24
-`arg-type` and 7 `unused-ignore`. Measured locally at CI's exact scope; the count is unchanged by
-this session's edits and neither edited line adds one.
+**The repair advances the chain; it does not clear it — and the run for `85ed97a` confirms that
+exactly.** Steps 5, 6 and 7 now pass; the failure moved to **step 8, `mypy --strict orchestrator/`**,
+which reports **78 errors in 32 files** — 21 of them the single pattern `Missing named argument
+"confidence_threshold" for "OrchestratorConfig"`, plus 24 `arg-type` and 7 `unused-ignore`. Measured
+locally at CI's exact scope first, then confirmed by the run; the count is unchanged by this
+session's edits and neither edited line adds one.
 
 **That debt must NOT be cleared by giving `confidence_threshold` a default.**
 `GuardrailEngine(confidence_threshold=config.confidence_threshold)` consumes it, so a silent default

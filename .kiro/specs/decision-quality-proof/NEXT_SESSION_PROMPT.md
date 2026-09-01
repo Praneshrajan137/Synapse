@@ -179,22 +179,31 @@ wins; it promises the answer will be believable either way.
 
 ## Session 2p handoff — regenerate this section each session
 
-**Session 2p was pre-batch repair, and it is committed and pushed.** It did three things, in this
-order: made checkpoint A's dispatch affordable, made checkpoint A's *verdict admissible*, and
-repaired the two discharge failures PR #84 exposed — one of which nothing had recorded. **No
-session-2 task was started.** Three commits on `feat/decision-quality-proof`: `85774e1` the interval
-+ the dispatch selector + the gate-surface regeneration, `d67f1c7` the Biome repair, and the ledger
-commit. Derive the state with `spec_ledger_census`; at the time of writing: 132 leaf tasks, 54 done,
-3 authored-pending-discharge, 75 open — 69 authorable and 6 CI-gated, with `--next 11` returning
-exactly `12.1 12.2 12.3 12.4 13.1 13.2 13.3 13.4 13.5 13.6 13.7`.
+**Session 2p was pre-batch repair, and it is committed, pushed, and CI-verified.** It made checkpoint
+A's dispatch affordable, made its *verdict admissible*, repaired the discharge failures PR #84
+exposed, and then **read the CI run job-by-job rather than trusting its own claims — which falsified
+two of them.** **No session-2 task was started.** Five commits on `feat/decision-quality-proof`:
+`85774e1`, `d67f1c7`, `77df3ef`, `98b37d9`, `85ed97a`.
+
+**`frontend.yml::quality` is GREEN and tasks 1.2, 1.5 and parent 1 are `[x]`.** Derive the state with
+`spec_ledger_census`; at the time of writing: 132 leaf tasks, **56 done, 1 authored-pending-discharge
+(task 10.4 only), 75 open** — 69 authorable and 6 CI-gated, with `--next 11` returning exactly
+`12.1 12.2 12.3 12.4 13.1 13.2 13.3 13.4 13.5 13.6 13.7`.
 
 **Your first act is still NOT task 12, and there is no authoring owed before checkpoint A.** The
-order is: read the falsification sweep's survivor list and bring it to the user; read whether **C63**
-went green on this push (that is the deferred verification of the gate-surface repair — see the
-escalation below); dispatch `twin-regret` **alone**
-(`gh workflow run uplift.yml --ref feat/decision-quality-proof --field job=twin-regret` — session 2p
-is what makes that possible); instantiate the margin from the committed rule; record task 11's
-verdict; and only then author E2c. If the verdict is `material`, **stop and re-cut R5.**
+order is: take the survivor list (already recorded under task 6 and in `HANDOFF.md`) to the user;
+decide the `readme_gen` escalation, which is now **measured** as owed rather than predicted; dispatch
+`twin-regret` **alone** (`gh workflow run uplift.yml --ref feat/decision-quality-proof --field
+job=twin-regret`); instantiate the margin from the committed rule; record task 11's verdict. If the
+verdict is `material`, **stop and re-cut R5.**
+
+**The largest obstacle is not on that list, because it is not this spec's to decide.** `uplift-verify`
+needs `quality-gates` to *succeed*; `quality-gates` now fails at step 8, `mypy --strict orchestrator/`,
+with **78 pre-existing errors** from commit `e000258`; and therefore **Properties 38-60 have never
+executed in CI on this branch.** Before this session a single **101-character line** was gating 18
+steps and 3 jobs, including that one. Do **not** clear the 78 by giving `confidence_threshold` a
+default — `GuardrailEngine` consumes it, so a default substitutes an unreviewed number on the I-5
+confidence gate.
 
 ### The one finding that most changes what you do next
 

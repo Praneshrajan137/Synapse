@@ -109,48 +109,40 @@ tests in the interim, and that is a stated sequencing gap, not an omission.
       so CI cannot see them at all. This is the precondition for every other E0 sub-task.
     - _Requirements: 2.1_
 
-  - [~] 1.2 Add the fast-check budget resolver to the vitest setup file
-    - discharge: frontend.yml::quality
-    - **Authored, not discharged — and the discharge arrived RED on PR #84, which is the third
-      ledger state earning its place.** Session 1r marked this `[~]` precisely because no run or
-      gate had ever judged it; an `[x]` would have hidden what follows.
-    - **Session 2p repaired four error-level Biome findings, and only one of them was the one
-      PR #84's log named.** All four were authored by this branch's own commit `5db5eb1` — none
-      is `main`'s:
+  - [x] 1.2 Add the fast-check budget resolver to the vitest setup file
+    - **DISCHARGED on PR #84, run for `85ed97a`. `frontend.yml::quality` is GREEN — all ten steps,
+      including step 6 Biome lint, step 7 TypeScript strict, and step 8 `Vitest unit + property
+      tests`.** That is the job this task's `discharge:` line named, so the mark is earned rather
+      than asserted. It took two repair commits to get there, and the `[~]` mark is what kept the
+      claim honest in between.
+    - **The route to green, because it is the record of what the third ledger state bought.** Session
+      1r marked this `[~]` rather than `[x]` because no run or gate had ever judged it. PR #84's
+      first run then failed on Biome, naming ONE finding. Session 2p repaired that and claimed the
+      job would go green. **It did not** — CI reported `Found 3 errors`, and reading the run
+      job-by-job found **four** error-level findings in total, all authored by this branch's own
+      commit `5db5eb1`:
       1. `frontend/src/test/setup.ts` — `organizeImports`. Biome 1.9.4 sorts named specifiers by
          ASCII code point with the `type` keyword ignored, so SCREAMING_CASE precedes camelCase.
-      2. `frontend/src/test/fc-budget.ts:163` — `lint/complexity/useLiteralKeys`
-         (`env?.["HYPOTHESIS_PROFILE"]` -> `env?.HYPOTHESIS_PROFILE`). **This is 1.2's own
-         module** and the finding was unrecorded.
+      2. `frontend/src/test/fc-budget.ts:163` — `lint/complexity/useLiteralKeys`. **This task's own
+         module**, and the finding was unrecorded.
       3. `frontend/src/test/fc-budget.ts` — two `format` violations, on an LF file, so real on CI.
-      4. `frontend/src/surfaces/operations/SloBurnBoard.tsx:114` —
-         `lint/complexity/noUselessTernary`. `git blame` attributes line 114 to `5db5eb1`, so
-         despite sitting in a surface file this is **this spec's**, not PR #77's.
-    - **Two corrections to what `HANDOFF.md` recorded about the CI run.** The other finding it
-      named — `noNonNullAssertion` at `primary-surfaces.property.test.ts:33` — is configured
-      `warn`, and `biome check` on that file exits **0**. It never failed anything; it was
-      co-reported, not causal. And three real error-level findings went unrecorded.
-    - **Executed evidence, and the executor was the installed `biome` binary, not `pnpm`** (I-0
-      bans the package manager; a bounded single-file lint is the analogue of `ruff` on changed
-      files): the `HEAD` copy of `setup.ts` exits **1**, the working-tree copy exits **0**, and
-      `biome check --max-diagnostics=200 ./src` now reports **zero error-level lint findings**
-      across 351 files, down from 43 errors.
-    - **`tsc --noEmit -p tsconfig.json` exits 0** — the first time this branch's TypeScript has
-      ever been compiled. `tsconfig.json` includes `src` and `src/test/**/*` with
-      `noUncheckedIndexedAccess: true`, so both files in this sub-task were in the program.
-      **"Never type-checked" is no longer true of 1.2.**
-    - **WHY THIS IS STILL `[~]`.** `frontend.yml::quality` runs Biome, then `pnpm typecheck`,
-      then `pnpm test:coverage`. The first two are now verified locally; **the vitest step is
-      not, and cannot be — I-0 bans `vitest` outright.** The resolver either applies at runtime
-      or throws by design, and only a run distinguishes those (R2.13). The mark flips to `[x]`
-      when that job is green, not when this file is.
-    - **A trap for whoever verifies this locally on Windows.** `biome check ./src` also reports
-      **40 `needs to be formatted` errors that do not exist on CI.** They are `core.autocrlf`
-      artifacts: the working tree checks out CRLF, `.gitattributes` pins only `*.sh` and
-      `*.sql`, and `biome.json` sets `formatter.lineEnding: lf`. Proven, not assumed —
-      `frontend/src/domain/primitives.ts` is byte-identical to its `HEAD` blob once CRLF is
-      normalised. **Do not "fix" them**; a `biome format --write` sweep over those 40 files
-      would commit a line-ending churn diff and change nothing about the gate.
+      4. `frontend/src/surfaces/operations/SloBurnBoard.tsx:114` — `lint/complexity/noUselessTernary`,
+         attributed to `5db5eb1` by `git blame -L 112,116`.
+      Plus three more format errors found only by reading the CI log against the local run:
+      `DataPathNotice.tsx`, `surfaces/data-paths.ts`, `lib/interruption-precision.ts`.
+    - **Two corrections to what was recorded about the CI run.** The finding attributed to PR #77 —
+      `noNonNullAssertion` at `primary-surfaces.property.test.ts:33` — is configured `warn`, and
+      `biome check` on that file exits **0**. It never failed anything. And "zero error-level
+      findings remain" was wrong: it came from over-generalising a single proof that one of 40 local
+      format errors was a `core.autocrlf` artifact.
+    - **The mechanical proof that replaced the over-generalisation:** `biome format --write ./src`
+      reports "Fixed 40 files" while `git diff` shows exactly **3** changed, because git normalises
+      line endings under autocrlf. The 37 are line-ending-only; the 3 are the ones CI named.
+    - **A trap for whoever lints this tree on Windows.** `biome check ./src` reports ~40
+      `needs to be formatted` errors that do not exist on CI, for that same reason. **Do not "fix"
+      them** — a `format --write` sweep commits line-ending churn across untouched files and changes
+      nothing about the gate. A local Biome run is admissible evidence per file, on LF files, and not
+      as a whole-tree exit code.
     - File: `frontend/src/test/setup.ts` (already wired as `setupFiles` in
       `frontend/vitest.config.ts:26`, and contains no fast-check configuration today, so this
       is a net addition rather than a change to an existing knob).
@@ -184,25 +176,26 @@ tests in the interim, and that is a stated sequencing gap, not an omission.
       **not** assert a total (CF-13).
     - _Requirements: 3.4, 3.6, 3.7, 3.8_
 
-  - [~] 1.5 Write property test for the fast-check budget resolver
-    - discharge: frontend.yml::quality
-    - **Authored, not discharged. Never type-checked, never executed (R2.13) — and unlike 1.2,
-      session 2p could not change either of those, which is worth stating precisely.**
+  - [x] 1.5 Write property test for the fast-check budget resolver
+    - **DISCHARGED on PR #84, run for `85ed97a`, by step 8 `Vitest unit + property tests` of a green
+      `frontend.yml::quality`.** Discharged by **execution**, which for this file is the only route
+      there was — and that is worth stating precisely, because three separate local checks cannot
+      reach it:
       - `biome check ./src` **never scans `frontend/spec/`**, so this file is not linted by that
         step at all.
       - `frontend/tsconfig.json`'s `include` names only `frontend/spec/effectiveness/harness.ts`
         and `frontend/spec/effectiveness/e2e-entry.ts`, **not**
         `frontend/spec/effectiveness/__tests__/**`. So the `pnpm typecheck` pass that went green
         for 1.2 did **not** compile this file. The only job that type-checks it is
-        `frontend.yml::spec-typecheck`, which is predicted red and explicitly out of scope for
-        repair (R2.15: a prediction is not a dispensation).
+        `frontend.yml::spec-typecheck`, which is **still red** and remains out of scope for repair
+        (R2.15: a prediction is not a dispensation).
       - `frontend/vitest.config.ts`'s `include` **does** cover
-        `frontend/spec/effectiveness/__tests__/**`, so `frontend.yml::quality`'s
-        `pnpm test:coverage` step is what executes it — and that is the step I-0 forbids running
-        here.
-      - **So the declared discharge job is the right one, and it discharges by execution rather
-        than by lint or by compilation.** Repairing the Biome findings unblocked the two steps
-        in front of it; nothing local can reach the third.
+        `frontend/spec/effectiveness/__tests__/**`, which is why the vitest step is what discharged
+        it — and why I-0's ban on `vitest` meant nothing local could ever have judged this task.
+    - **So this task is the clearest case in the spec for why `[~]` exists.** It was authored in
+      session 1, could not be verified locally by construction, and sat behind two other steps'
+      failures for three CI runs before its own step ever executed. An `[x]` at authoring time
+      would have claimed a pass that nothing had produced.
     - `# Feature: decision-quality-proof, Property 42: The fast-check budget is a total function of the profile name`
     - File: `frontend/spec/effectiveness/__tests__/fc-budget-profile.property.test.ts`
     - Budget inherited from `fc.configureGlobal` in `frontend/src/test/setup.ts`. No per-call
