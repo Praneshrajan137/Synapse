@@ -34,13 +34,13 @@ the same pair.
 
 ## Summary
 
-Parsed 17 workflow file(s), 54 job(s), 370 step(s).
+Parsed 18 workflow file(s), 55 job(s), 378 step(s).
 
 | Trigger | Jobs executing | Jobs conditional | Jobs NOT EXECUTED | Steps blocking | Steps advisory | Steps conditional |
 |---|---|---|---|---|---|---|
-| push:main | 4 | 22 | 28 | 31 | 0 | 142 |
-| pull_request | 11 | 22 | 21 | 72 | 4 | 140 |
-| tag:v* | 3 | 3 | 48 | 18 | 0 | 29 |
+| push:main | 4 | 22 | 29 | 31 | 0 | 142 |
+| pull_request | 11 | 22 | 22 | 72 | 4 | 140 |
+| tag:v* | 3 | 3 | 49 | 18 | 0 | 29 |
 
 ## Job selection
 
@@ -94,6 +94,7 @@ Why each job runs, does not run, or runs conditionally under each trigger. `need
 | push:main | .github/workflows/policy.yml::policy-summary | CONDITIONAL | path-filtered (paths: agents/*/training/**, agents/*/models/**, agents/*/inference/**, tests/oracle/**, +3 more); needs 'twin-oracle', which is conditional; needs 'dpdpa', which is conditional; needs 'audit-immutability', which is conditional; needs 'license-policy', which is conditional |
 | push:main | .github/workflows/publish-audit-anchor.yml::anchor | NOT EXECUTED | if: false in push:main |
 | push:main | .github/workflows/publish-audit-anchor.yml::publish | CONDITIONAL | path-filtered (paths: infrastructure/audit_anchors/**) |
+| push:main | .github/workflows/regenerate-truth-docs.yml::regenerate | NOT EXECUTED | workflow on: has no push trigger |
 | push:main | .github/workflows/required-checks-reconcile.yml::reconcile | NOT EXECUTED | workflow on: has no push trigger |
 | push:main | .github/workflows/security.yml::security | NOT EXECUTED | workflow on: has no push trigger |
 | push:main | .github/workflows/sprint6-e2e-oracle.yml::sprint6-e2e | NOT EXECUTED | workflow on: has no push trigger |
@@ -148,6 +149,7 @@ Why each job runs, does not run, or runs conditionally under each trigger. `need
 | pull_request | .github/workflows/policy.yml::policy-summary | CONDITIONAL | path-filtered (paths: agents/*/training/**, agents/*/models/**, agents/*/inference/**, tests/oracle/**, +3 more); needs 'twin-oracle', which is conditional; needs 'dpdpa', which is conditional; needs 'audit-immutability', which is conditional; needs 'license-policy', which is conditional |
 | pull_request | .github/workflows/publish-audit-anchor.yml::anchor | NOT EXECUTED | workflow on: has no pull_request trigger |
 | pull_request | .github/workflows/publish-audit-anchor.yml::publish | NOT EXECUTED | workflow on: has no pull_request trigger |
+| pull_request | .github/workflows/regenerate-truth-docs.yml::regenerate | NOT EXECUTED | workflow on: has no pull_request trigger |
 | pull_request | .github/workflows/required-checks-reconcile.yml::reconcile | NOT EXECUTED | workflow on: has no pull_request trigger |
 | pull_request | .github/workflows/security.yml::security | CONDITIONAL | path-filtered (paths: **/requirements.txt, **/package.json, **/Dockerfile) |
 | pull_request | .github/workflows/sprint6-e2e-oracle.yml::sprint6-e2e | NOT EXECUTED | workflow on: has no pull_request trigger |
@@ -202,6 +204,7 @@ Why each job runs, does not run, or runs conditionally under each trigger. `need
 | tag:v* | .github/workflows/policy.yml::policy-summary | NOT EXECUTED | on: push is branch-scoped (no tags: filter), so a tag push is excluded |
 | tag:v* | .github/workflows/publish-audit-anchor.yml::anchor | NOT EXECUTED | on: push is branch-scoped (no tags: filter), so a tag push is excluded |
 | tag:v* | .github/workflows/publish-audit-anchor.yml::publish | NOT EXECUTED | on: push is branch-scoped (no tags: filter), so a tag push is excluded |
+| tag:v* | .github/workflows/regenerate-truth-docs.yml::regenerate | NOT EXECUTED | workflow on: has no push trigger |
 | tag:v* | .github/workflows/required-checks-reconcile.yml::reconcile | NOT EXECUTED | workflow on: has no push trigger |
 | tag:v* | .github/workflows/security.yml::security | NOT EXECUTED | workflow on: has no push trigger |
 | tag:v* | .github/workflows/sprint6-e2e-oracle.yml::sprint6-e2e | NOT EXECUTED | workflow on: has no push trigger |
@@ -387,6 +390,7 @@ Why each job runs, does not run, or runs conditionally under each trigger. `need
 | push:main | .github/workflows/publish-audit-anchor.yml::publish | Install cosign | CONDITIONAL | conditional - blocking |
 | push:main | .github/workflows/publish-audit-anchor.yml::publish | Sign + publish each anchor to Rekor | CONDITIONAL | conditional - blocking |
 | push:main | .github/workflows/publish-audit-anchor.yml::publish | Commit signatures back | CONDITIONAL | conditional - blocking |
+| push:main | .github/workflows/regenerate-truth-docs.yml::regenerate | - | NOT EXECUTED | workflow on: has no push trigger |
 | push:main | .github/workflows/required-checks-reconcile.yml::reconcile | - | NOT EXECUTED | workflow on: has no push trigger |
 | push:main | .github/workflows/security.yml::security | - | NOT EXECUTED | workflow on: has no push trigger |
 | push:main | .github/workflows/sprint6-e2e-oracle.yml::sprint6-e2e | - | NOT EXECUTED | workflow on: has no push trigger |
@@ -616,6 +620,7 @@ Why each job runs, does not run, or runs conditionally under each trigger. `need
 | pull_request | .github/workflows/policy.yml::policy-summary | Gate outcome | CONDITIONAL | conditional - blocking |
 | pull_request | .github/workflows/publish-audit-anchor.yml::anchor | - | NOT EXECUTED | workflow on: has no pull_request trigger |
 | pull_request | .github/workflows/publish-audit-anchor.yml::publish | - | NOT EXECUTED | workflow on: has no pull_request trigger |
+| pull_request | .github/workflows/regenerate-truth-docs.yml::regenerate | - | NOT EXECUTED | workflow on: has no pull_request trigger |
 | pull_request | .github/workflows/required-checks-reconcile.yml::reconcile | - | NOT EXECUTED | workflow on: has no pull_request trigger |
 | pull_request | .github/workflows/security.yml::security | uses: actions/checkout@v4 | CONDITIONAL | conditional - blocking |
 | pull_request | .github/workflows/security.yml::security | uses: actions/setup-python@v5 | CONDITIONAL | conditional - blocking |
@@ -740,6 +745,7 @@ Why each job runs, does not run, or runs conditionally under each trigger. `need
 | tag:v* | .github/workflows/policy.yml::policy-summary | - | NOT EXECUTED | on: push is branch-scoped (no tags: filter), so a tag push is excluded |
 | tag:v* | .github/workflows/publish-audit-anchor.yml::anchor | - | NOT EXECUTED | on: push is branch-scoped (no tags: filter), so a tag push is excluded |
 | tag:v* | .github/workflows/publish-audit-anchor.yml::publish | - | NOT EXECUTED | on: push is branch-scoped (no tags: filter), so a tag push is excluded |
+| tag:v* | .github/workflows/regenerate-truth-docs.yml::regenerate | - | NOT EXECUTED | workflow on: has no push trigger |
 | tag:v* | .github/workflows/required-checks-reconcile.yml::reconcile | - | NOT EXECUTED | workflow on: has no push trigger |
 | tag:v* | .github/workflows/security.yml::security | - | NOT EXECUTED | workflow on: has no push trigger |
 | tag:v* | .github/workflows/sprint6-e2e-oracle.yml::sprint6-e2e | - | NOT EXECUTED | workflow on: has no push trigger |
@@ -751,7 +757,7 @@ Why each job runs, does not run, or runs conditionally under each trigger. `need
 
 ## Declared-blocking anchors (R11.8)
 
-Every step `infrastructure/quality/blocking-steps.yaml` declares blocking, annotated with the command it runs so a governance claim can be pinned to a row. Source: 10 declared-blocking entries from infrastructure/quality/blocking-steps.yaml.
+Every step `infrastructure/quality/blocking-steps.yaml` declares blocking, annotated with the command it runs so a governance claim can be pinned to a row. Source: 11 declared-blocking entries from infrastructure/quality/blocking-steps.yaml.
 
 | Trigger | Job | Step | Propagates | Note |
 |---|---|---|---|---|
@@ -795,6 +801,14 @@ Every step `infrastructure/quality/blocking-steps.yaml` declares blocking, annot
 | push:main | .github/workflows/frontend.yml::effectiveness-ratchet | Effectiveness ratchet (fresh scorecard vs committed baseline) | NOT EXECUTED | declared blocking (R8.9) - if: false in push:main |
 | push:main | .github/workflows/frontend.yml::effectiveness-ratchet | Effectiveness baseline is a measurement, not a ceiling (R8.10) | NOT EXECUTED | declared blocking (R8.9) - if: false in push:main |
 | push:main | .github/workflows/frontend.yml::effectiveness-ratchet | Upload measured baseline candidate (commit this to clear R8.10) | NOT EXECUTED | declared blocking (R8.9) - if: false in push:main |
+| push:main | .github/workflows/regenerate-truth-docs.yml::regenerate | uses: actions/checkout@v4 | NOT EXECUTED | declared blocking (R4.4, R4.5, R4.8, R4.11, R10.1, R10.7, R11.7) - workflow on: has no push trigger |
+| push:main | .github/workflows/regenerate-truth-docs.yml::regenerate | Set up Python 3.11 | NOT EXECUTED | declared blocking (R4.4, R4.5, R4.8, R4.11, R10.1, R10.7, R11.7) - workflow on: has no push trigger |
+| push:main | .github/workflows/regenerate-truth-docs.yml::regenerate | Install dependencies | NOT EXECUTED | declared blocking (R4.4, R4.5, R4.8, R4.11, R10.1, R10.7, R11.7) - workflow on: has no push trigger |
+| push:main | .github/workflows/regenerate-truth-docs.yml::regenerate | Gate-surface record is current before anything is regenerated (C63) [scripts.audit.gate_surface] | NOT EXECUTED | declared blocking (R4.4, R4.5, R4.8, R4.11, R10.1, R10.7, R11.7) - workflow on: has no push trigger |
+| push:main | .github/workflows/regenerate-truth-docs.yml::regenerate | Regenerate the Truth_Ledger (R10.1-R10.9) [scripts.audit.ledger_gen] | NOT EXECUTED | declared blocking (R4.4, R4.5, R4.8, R4.11, R10.1, R10.7, R11.7) - workflow on: has no push trigger |
+| push:main | .github/workflows/regenerate-truth-docs.yml::regenerate | Regenerate the README headline (R4.4, R4.5, R4.8, R4.11) [scripts.audit.readme_gen] | NOT EXECUTED | declared blocking (R4.4, R4.5, R4.8, R4.11, R10.1, R10.7, R11.7) - workflow on: has no push trigger |
+| push:main | .github/workflows/regenerate-truth-docs.yml::regenerate | Show what regeneration changed | NOT EXECUTED | declared blocking (R4.4, R4.5, R4.8, R4.11, R10.1, R10.7, R11.7) - workflow on: has no push trigger |
+| push:main | .github/workflows/regenerate-truth-docs.yml::regenerate | Upload the regenerated documents | NOT EXECUTED | declared blocking (R4.4, R4.5, R4.8, R4.11, R10.1, R10.7, R11.7) - workflow on: has no push trigger |
 | push:main | .github/workflows/truth-gates.yml::truth-gates | uses: actions/checkout@v4 | yes | declared blocking (R1.1, R1.2, R1.5, R1.8) |
 | push:main | .github/workflows/truth-gates.yml::truth-gates | Set up Python 3.11 | yes | declared blocking (R1.1, R1.2, R1.5, R1.8) |
 | push:main | .github/workflows/truth-gates.yml::truth-gates | Install dependencies | yes | declared blocking (R1.1, R1.2, R1.5, R1.8) |
@@ -852,6 +866,14 @@ Every step `infrastructure/quality/blocking-steps.yaml` declares blocking, annot
 | pull_request | .github/workflows/frontend.yml::effectiveness-ratchet | Effectiveness ratchet (fresh scorecard vs committed baseline) | CONDITIONAL | declared blocking (R8.9) - conditional (path-filtered (paths: frontend/**, proto/domain/**, .github/workflows/frontend.yml); needs 'e2e-harness', which is conditional) |
 | pull_request | .github/workflows/frontend.yml::effectiveness-ratchet | Effectiveness baseline is a measurement, not a ceiling (R8.10) | CONDITIONAL | declared blocking (R8.9) - conditional (path-filtered (paths: frontend/**, proto/domain/**, .github/workflows/frontend.yml); needs 'e2e-harness', which is conditional) |
 | pull_request | .github/workflows/frontend.yml::effectiveness-ratchet | Upload measured baseline candidate (commit this to clear R8.10) | CONDITIONAL | declared blocking (R8.9) - conditional (path-filtered (paths: frontend/**, proto/domain/**, .github/workflows/frontend.yml); needs 'e2e-harness', which is conditional) |
+| pull_request | .github/workflows/regenerate-truth-docs.yml::regenerate | uses: actions/checkout@v4 | NOT EXECUTED | declared blocking (R4.4, R4.5, R4.8, R4.11, R10.1, R10.7, R11.7) - workflow on: has no pull_request trigger |
+| pull_request | .github/workflows/regenerate-truth-docs.yml::regenerate | Set up Python 3.11 | NOT EXECUTED | declared blocking (R4.4, R4.5, R4.8, R4.11, R10.1, R10.7, R11.7) - workflow on: has no pull_request trigger |
+| pull_request | .github/workflows/regenerate-truth-docs.yml::regenerate | Install dependencies | NOT EXECUTED | declared blocking (R4.4, R4.5, R4.8, R4.11, R10.1, R10.7, R11.7) - workflow on: has no pull_request trigger |
+| pull_request | .github/workflows/regenerate-truth-docs.yml::regenerate | Gate-surface record is current before anything is regenerated (C63) [scripts.audit.gate_surface] | NOT EXECUTED | declared blocking (R4.4, R4.5, R4.8, R4.11, R10.1, R10.7, R11.7) - workflow on: has no pull_request trigger |
+| pull_request | .github/workflows/regenerate-truth-docs.yml::regenerate | Regenerate the Truth_Ledger (R10.1-R10.9) [scripts.audit.ledger_gen] | NOT EXECUTED | declared blocking (R4.4, R4.5, R4.8, R4.11, R10.1, R10.7, R11.7) - workflow on: has no pull_request trigger |
+| pull_request | .github/workflows/regenerate-truth-docs.yml::regenerate | Regenerate the README headline (R4.4, R4.5, R4.8, R4.11) [scripts.audit.readme_gen] | NOT EXECUTED | declared blocking (R4.4, R4.5, R4.8, R4.11, R10.1, R10.7, R11.7) - workflow on: has no pull_request trigger |
+| pull_request | .github/workflows/regenerate-truth-docs.yml::regenerate | Show what regeneration changed | NOT EXECUTED | declared blocking (R4.4, R4.5, R4.8, R4.11, R10.1, R10.7, R11.7) - workflow on: has no pull_request trigger |
+| pull_request | .github/workflows/regenerate-truth-docs.yml::regenerate | Upload the regenerated documents | NOT EXECUTED | declared blocking (R4.4, R4.5, R4.8, R4.11, R10.1, R10.7, R11.7) - workflow on: has no pull_request trigger |
 | pull_request | .github/workflows/truth-gates.yml::truth-gates | uses: actions/checkout@v4 | yes | declared blocking (R1.1, R1.2, R1.5, R1.8) |
 | pull_request | .github/workflows/truth-gates.yml::truth-gates | Set up Python 3.11 | yes | declared blocking (R1.1, R1.2, R1.5, R1.8) |
 | pull_request | .github/workflows/truth-gates.yml::truth-gates | Install dependencies | yes | declared blocking (R1.1, R1.2, R1.5, R1.8) |
@@ -909,6 +931,14 @@ Every step `infrastructure/quality/blocking-steps.yaml` declares blocking, annot
 | tag:v* | .github/workflows/frontend.yml::effectiveness-ratchet | Effectiveness ratchet (fresh scorecard vs committed baseline) | NOT EXECUTED | declared blocking (R8.9) - on: push is branch-scoped (no tags: filter), so a tag push is excluded |
 | tag:v* | .github/workflows/frontend.yml::effectiveness-ratchet | Effectiveness baseline is a measurement, not a ceiling (R8.10) | NOT EXECUTED | declared blocking (R8.9) - on: push is branch-scoped (no tags: filter), so a tag push is excluded |
 | tag:v* | .github/workflows/frontend.yml::effectiveness-ratchet | Upload measured baseline candidate (commit this to clear R8.10) | NOT EXECUTED | declared blocking (R8.9) - on: push is branch-scoped (no tags: filter), so a tag push is excluded |
+| tag:v* | .github/workflows/regenerate-truth-docs.yml::regenerate | uses: actions/checkout@v4 | NOT EXECUTED | declared blocking (R4.4, R4.5, R4.8, R4.11, R10.1, R10.7, R11.7) - workflow on: has no push trigger |
+| tag:v* | .github/workflows/regenerate-truth-docs.yml::regenerate | Set up Python 3.11 | NOT EXECUTED | declared blocking (R4.4, R4.5, R4.8, R4.11, R10.1, R10.7, R11.7) - workflow on: has no push trigger |
+| tag:v* | .github/workflows/regenerate-truth-docs.yml::regenerate | Install dependencies | NOT EXECUTED | declared blocking (R4.4, R4.5, R4.8, R4.11, R10.1, R10.7, R11.7) - workflow on: has no push trigger |
+| tag:v* | .github/workflows/regenerate-truth-docs.yml::regenerate | Gate-surface record is current before anything is regenerated (C63) [scripts.audit.gate_surface] | NOT EXECUTED | declared blocking (R4.4, R4.5, R4.8, R4.11, R10.1, R10.7, R11.7) - workflow on: has no push trigger |
+| tag:v* | .github/workflows/regenerate-truth-docs.yml::regenerate | Regenerate the Truth_Ledger (R10.1-R10.9) [scripts.audit.ledger_gen] | NOT EXECUTED | declared blocking (R4.4, R4.5, R4.8, R4.11, R10.1, R10.7, R11.7) - workflow on: has no push trigger |
+| tag:v* | .github/workflows/regenerate-truth-docs.yml::regenerate | Regenerate the README headline (R4.4, R4.5, R4.8, R4.11) [scripts.audit.readme_gen] | NOT EXECUTED | declared blocking (R4.4, R4.5, R4.8, R4.11, R10.1, R10.7, R11.7) - workflow on: has no push trigger |
+| tag:v* | .github/workflows/regenerate-truth-docs.yml::regenerate | Show what regeneration changed | NOT EXECUTED | declared blocking (R4.4, R4.5, R4.8, R4.11, R10.1, R10.7, R11.7) - workflow on: has no push trigger |
+| tag:v* | .github/workflows/regenerate-truth-docs.yml::regenerate | Upload the regenerated documents | NOT EXECUTED | declared blocking (R4.4, R4.5, R4.8, R4.11, R10.1, R10.7, R11.7) - workflow on: has no push trigger |
 | tag:v* | .github/workflows/truth-gates.yml::truth-gates | uses: actions/checkout@v4 | NOT EXECUTED | declared blocking (R1.1, R1.2, R1.5, R1.8) - on: push is branch-scoped (no tags: filter), so a tag push is excluded |
 | tag:v* | .github/workflows/truth-gates.yml::truth-gates | Set up Python 3.11 | NOT EXECUTED | declared blocking (R1.1, R1.2, R1.5, R1.8) - on: push is branch-scoped (no tags: filter), so a tag push is excluded |
 | tag:v* | .github/workflows/truth-gates.yml::truth-gates | Install dependencies | NOT EXECUTED | declared blocking (R1.1, R1.2, R1.5, R1.8) - on: push is branch-scoped (no tags: filter), so a tag push is excluded |

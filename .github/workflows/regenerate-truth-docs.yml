@@ -1,0 +1,191 @@
+# SYNAPSE -- regenerate the projected truth documents on a runner, and upload them
+# (spec decision-quality-proof, session 2q, parent task 26)
+#
+# WHY THIS WORKFLOW EXISTS, AND WHY IT IS NOT A GATE.
+#
+# `truth-gates.yml` runs `ledger_gen --check`, `readme_gen --check` and
+# `gate_surface --check`. Those DETECT drift between a committed generated document and a
+# fresh projection; none of them REPAIRS it. The repair is the `--write` form, and until
+# now the only place `--write` could run was a developer's machine.
+#
+# That was a problem specific to this repository's hardware. `ledger_gen` and `readme_gen`
+# each execute the entire Check_Registry in-process -- `ledger_gen`'s own docstring says
+# every row is projected from "one in-process Check_Registry execution" -- which on the
+# 16 GB thermally-throttling Windows dev box is roughly 900 seconds and ~15 minutes of
+# full-core CPU EACH, about 30 minutes serial. `.kiro/steering/local-compute-budget.md`
+# (invariant I-0) classes that as a category-3/4 local workload and puts both on its
+# never-run-locally list. I-0's escalation path names this exact remedy first: "add a step
+# to a workflow rather than running locally".
+#
+# The asymmetry that makes this cheap here is worth stating, because the ~900s figure gets
+# quoted as if it were universal: it is the LOCAL WINDOWS cost. On a Linux runner
+# `truth-gates.yml::truth-gates` performs comparable work inside `timeout-minutes: 25`.
+#
+# IT COMMITS NOTHING, AND THAT IS DELIBERATE. The job writes the regenerated documents,
+# prints the diff to its own log, and uploads the files as an artifact. A human downloads,
+# reviews and commits them. An auto-commit variant was rejected: it would let a machine
+# write generated COUNTS into the tree with no reviewer, and the whole reason these
+# documents are generated is that hand-maintained counts drift. Review is the point, not
+# an inconvenience. Correspondingly the token is `contents: read` -- least privilege, and
+# it makes the no-commit property structural rather than a promise.
+#
+# WHY IT IS NOT IN `truth-gates.yml`. That file is the blocking enforcement spine and
+# carries no `workflow_dispatch` trigger. Adding one, plus a per-job `if:` guard to stop a
+# ~30-minute regeneration running on every pull request, would change the trigger surface
+# of a REQUIRED status-check workflow to host a utility that gates nothing. Its own header
+# reasons carefully about CF-2/CF-8 triggers; this job has no business perturbing that.
+#
+# WHY IT OWES NO `required-checks.yaml` ENTRY, checked rather than assumed.
+# `scripts/audit/required_checks_truth.py` validates that DECLARED jobs resolve to real
+# jobs; it does not require completeness. `required-checks.schema.json::ineligibleEntry`
+# constrains `reason` to a closed six-value enum -- `path-filtered`,
+# `path-filtered-and-conditioned`, `branch-push-only`, `conditioned-off-pull-request`,
+# `self-labelled-informational`, `post-merge` -- with `additionalProperties: false`, and
+# none of them describes "dispatch-only". Declaring this job would mean amending a schema
+# enum, which drags in the third same-commit coupling (a schema change and every fixture
+# that carries it) for a job that produces no status check on any pull request and blocks
+# no merge. Precedent agrees: `required-checks-reconcile.yml`, `publish-audit-anchor.yml`,
+# `uplift.yml`, `live-truth.yml`, `cd.yml`, `cd-recovery.yml`, `eval-llm-judge.yml` and
+# `sprint6-e2e-oracle.yml` have no entry in that file either.
+#
+# IT DOES OWE `blocking-steps.yaml` AND `gate_surface --write`, and both land in the same
+# commit as this file. The `blocking-steps.yaml` entry is a judgement rather than an
+# obligation -- that file's converse is a NAME rule (R11.3), so an undeclared
+# non-propagating step only has to be labelled `ADVISORY`. It is declared anyway because
+# the failure mode is sharp: a `continue-on-error` added to `ledger_gen --write` would
+# upload a stale or empty artifact that a reviewer then commits, which is repairing a
+# count by hand at one remove, and I-7 forbids that absolutely.
+#
+# EVERY STEP PROPAGATES ITS EXIT STATUS. No `continue-on-error`, no `|| true`, no
+# `|| echo`, no `; exit 0`. `scripts/audit/workflow_shape_truth.py` re-derives that from
+# this file on every run.
+
+name: SYNAPSE Regenerate Truth Docs
+
+on:
+  # Dispatch ONLY. No `push`, no `pull_request`, no `schedule`. Two full Check_Registry
+  # executions per invocation is not something to spend on every commit, and nothing here
+  # gates anything, so there is no trigger that needs to fire automatically.
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  regenerate:
+    name: Regenerate CURRENT.md + README headline (artifact only -- commits nothing)
+    runs-on: ubuntu-latest
+
+    # DERIVED, not picked. `truth-gates.yml::truth-gates` covers its whole step set --
+    # `registry_gate`, `doc_truth`, three generator `--check`s and four cheap gates -- in
+    # `timeout-minutes: 25` on this same runner class. This job runs the same install plus
+    # two `--write` passes, so 45 is that shape with headroom for a slow dependency
+    # resolve. A timeout is a FAILED JOB, which is the honest outcome for an incomplete
+    # regeneration (I-7); it is never a partial artifact a reviewer might commit.
+    timeout-minutes: 45
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+
+      - name: Install dependencies
+        # COPIED VERBATIM from `truth-gates.yml::truth-gates`'s "Install dependencies"
+        # step, and it must STAY identical. That step's own comment records why: several
+        # registered checks import an optional dependency inside a try/except and report
+        # SKIP when it is absent (C45 needs torch, C46 the published-checkpoint stack,
+        # C58 synapse_common), and the README headline counts `doc_truth` pins were
+        # measured in that closure. A thinner environment here would turn a PASS into a
+        # SKIP and write WRONG NUMBERS into the very documents this job exists to repair
+        # -- a failure that would look like a successful regeneration.
+        #
+        # The duplication is pinned by `tests/verify/test_regeneration_closure_parity.py`
+        # rather than removed by extracting a shared script: refactoring the steps of a
+        # REQUIRED workflow to save a copy trades a real risk for a cosmetic gain. The
+        # precedent for reading closures before trusting them is HANDOFF defect 14, where
+        # `uplift/contract.py`'s `scipy` import would have crashed `twin-regret` at import
+        # inside the job that exists to run it.
+        run: |
+          pip install -r packages/requirements.txt -r packages/requirements-dev.txt
+          pip install -e packages/
+          pip install -r orchestrator/requirements.txt
+          pip install jsonschema pyyaml
+          for req in agents/*/requirements.txt; do pip install -r "$req"; done
+          pip install simpy sse-starlette
+          pip install -r agents/requirements-sprint3.txt
+          pip install --upgrade "pathspec>=0.12.1"
+          pip install "starlette>=0.37.2,<0.38.0"
+          pip install psycopg2-binary
+
+      - name: Gate-surface record is current before anything is regenerated (C63)
+        # A HARD GATE AT THE FRONT, not a courtesy. `gate_surface` projects every job and
+        # every step of every workflow into `docs/state/GATE_SURFACE.md`, and C63's status
+        # is inside the counts `doc_truth` and `readme_gen` pin. Regenerating on top of a
+        # stale surface produces an artifact that is stale the moment it is written, and a
+        # reviewer would commit numbers projected from a tree the record does not describe.
+        #
+        # A non-zero exit here means the commit being dispatched missed the fourth
+        # same-commit coupling: a workflow job/step change, or a `blocking-steps.yaml`
+        # entry, without `python -m scripts.audit.gate_surface --write`. That coupling was
+        # missed twice before (tasks 5.6 and 10.3) and cost four registered gates.
+        # `gate_surface` is pure workflow parsing -- ~1s -- so this costs nothing.
+        run: python -m scripts.audit.gate_surface --check
+
+      - name: Regenerate the Truth_Ledger (R10.1-R10.9)
+        # `docs/state/CURRENT.md`. One in-process Check_Registry execution; every row and
+        # every summary count is projected from that single verdict, which is what makes
+        # R10.1 hold structurally rather than by arithmetic that could disagree.
+        run: python -m scripts.audit.ledger_gen --write
+
+      - name: Regenerate the README headline (R4.4, R4.5, R4.8, R4.11)
+        # `README.md`'s generated region.
+        #
+        # DELIBERATELY WITHOUT `--counts-json`, and the reasoning is recorded because the
+        # obvious alternative looks cheaper. `readme_gen` must project the NESTED
+        # `verify_claims` execution -- the one carrying `SYNAPSE_DOC_TRUTH_NESTED=1`, in
+        # which C56 self-excludes -- because C56 compares the README against exactly that
+        # execution; projecting the top-level counts would make C56 FAIL by the guard
+        # delta. Passing `--counts-json` does not change WHICH counts are used: without it
+        # `readme_gen` calls `doc_truth.nested_suite_counts` itself, so the nested
+        # semantics hold either way, through the same function the gate calls. The flag is
+        # purely a cost saving.
+        #
+        # `truth-gates.yml` earns that saving by pairing this with
+        # `doc_truth --check --emit-nested-json`. Here that pairing would be actively
+        # harmful: `doc_truth --check` is EXPECTED to exit non-zero on this tree while C44
+        # and C69 are red, so it would fail the job before this step ran, and the only way
+        # through would be a `continue-on-error` inside a truth-gates-adjacent workflow.
+        # ACCEPTED COST: one extra Check_Registry execution, which the 45-minute budget
+        # above is sized for. REJECTED ALTERNATIVE: a discarding construct, for a saving.
+        run: python -m scripts.audit.readme_gen --write
+
+      - name: Show what regeneration changed
+        # Reviewable from the run page before the artifact is even downloaded, which is
+        # what makes "download and commit" a review rather than a transcription. `--stat`
+        # first so the shape is visible without scrolling the full diff.
+        run: |
+          git --no-pager diff --stat
+          git --no-pager diff
+
+      - name: Upload the regenerated documents
+        # `if-no-files-found: error`, not `warn`. All three paths are committed files that
+        # exist before this job starts, so an empty upload would mean the checkout or a
+        # generator did something unexpected -- and an artifact that silently arrives
+        # empty is indistinguishable from one that arrived correct (I-7).
+        #
+        # `GATE_SURFACE.md` is included even though this job does not write it: the three
+        # documents are projections of one tree and a reviewer comparing them needs the
+        # surface record the other two were generated against.
+        uses: actions/upload-artifact@v4
+        with:
+          name: regenerated-truth-docs
+          path: |
+            docs/state/CURRENT.md
+            README.md
+            docs/state/GATE_SURFACE.md
+          if-no-files-found: error
+          retention-days: 90

@@ -241,6 +241,68 @@ steps:
         consumes: "$RUNNER_TEMP/nested-verify-claims.json"
         requirement: "R4.4, R4.5, R4.8, R4.11"
 
+  # decision-quality-proof session 2q, parent task 26. The REPAIR half of the three
+  # generators, declared in the same commit as the job it describes.
+  #
+  # DECLARED BY JUDGEMENT, NOT BY OBLIGATION, and that distinction is recorded rather than
+  # blurred. This job gates no merge: it is `workflow_dispatch`-only, produces no status
+  # check on any pull request, and owes no `required-checks.yaml` entry (that file's
+  # `ineligibleEntry.reason` is a closed six-value enum with no "dispatch-only" member, and
+  # `required_checks_truth` validates declared->resolves rather than completeness). This
+  # file's converse rule is also only a NAME rule (R11.3), so leaving the job undeclared
+  # would violate nothing as long as a non-propagating step were labelled `ADVISORY`.
+  #
+  # It is declared anyway because the failure mode is sharp and specific. `truth-gates.yml`
+  # runs these two generators with `--check`, which DETECTS drift and cannot repair it; this
+  # job runs them with `--write` and uploads the result for a human to commit. A
+  # `continue-on-error` on `ledger_gen --write` or `readme_gen --write` would upload a STALE
+  # OR EMPTY document that a reviewer then commits in good faith -- repairing a generated
+  # count by hand at one remove, which I-7 forbids absolutely and which this file's own
+  # prose already forbids in those words. A swallowed failure here does not weaken the
+  # repair, it inverts it: the artifact would look like a successful regeneration.
+  #
+  # `all_steps: true` for the reason the two entries above give -- it cannot be evaded by
+  # renaming a step to carry `informational`, and it covers any step added later. The job
+  # holds eight: checkout, setup-python, install, the C63 precondition, the two `--write`
+  # passes, the diff display, and the upload.
+  #
+  # Declaring the install step blocking is the same argument the `truth-gates` entry makes,
+  # and here it is the load-bearing one. That closure is copied verbatim from
+  # `truth-gates.yml::truth-gates` precisely because several registered checks report SKIP
+  # when an optional import is missing (C45 torch, C46 the published-checkpoint stack, C58
+  # synapse_common). A swallowed `pip install` failure would turn PASSes into SKIPs and this
+  # job would then WRITE those wrong counts into `CURRENT.md` and the README headline -- the
+  # documents it exists to correct. Every other entry in this file protects a measurement;
+  # this one protects a document that other gates are judged against.
+  #
+  # ORDERED, and the order is a precondition chain rather than a data pipeline.
+  # `gate_surface --check` runs FIRST and is a hard gate: regenerating on top of a stale
+  # gate surface produces an artifact that is stale the moment it is written, because C63's
+  # status sits inside the counts `doc_truth` and `readme_gen` pin. `step_order` is a
+  # declaration for readers -- the gate reads only `workflow`, `job`, `step_names`,
+  # `all_steps`, `match` and `requirement` -- and the MECHANICAL enforcement is that
+  # `gate_surface --check` exits non-zero and, propagating, stops the job before either
+  # `--write` runs.
+  - workflow: .github/workflows/regenerate-truth-docs.yml
+    job: regenerate
+    all_steps: true
+    requirement: "R4.4, R4.5, R4.8, R4.11, R10.1, R10.7, R11.7"
+    step_order:
+      - step: "Gate-surface record is current before anything is regenerated (C63)"
+        role: precondition
+        requirement: "R11.7"
+      - step: "Regenerate the Truth_Ledger (R10.1-R10.9)"
+        role: producer
+        emits: "docs/state/CURRENT.md (one in-process Check_Registry execution)"
+        requirement: "R10.1, R10.7"
+      - step: "Regenerate the README headline (R4.4, R4.5, R4.8, R4.11)"
+        role: producer
+        emits: "README.md generated region (projected from the NESTED verify_claims run)"
+        requirement: "R4.4, R4.5, R4.8, R4.11"
+      - step: "Upload the regenerated documents"
+        role: consumer
+        consumes: "docs/state/CURRENT.md, README.md, docs/state/GATE_SURFACE.md"
+
   # -------------------------------------------------------------------------
   # R8.9 declares three frontend sites blocking BY REQUIREMENT: the
   # `Task_Completion_Tests + Resilience_Scenarios` step of `e2e-harness`, and
