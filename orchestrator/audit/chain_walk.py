@@ -397,8 +397,7 @@ def walk(
             return _bound_report(
                 rows,
                 bound=(
-                    f"max_wall_clock_seconds={max_wall_clock_seconds} "
-                    f"(stopped at row {position})"
+                    f"max_wall_clock_seconds={max_wall_clock_seconds} (stopped at row {position})"
                 ),
                 walked=position,
                 verified=verified,

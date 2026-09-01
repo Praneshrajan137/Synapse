@@ -161,10 +161,7 @@ const SCOPE_KEY: Record<DataPathClass, string> = {
  * `syntheticSourced` and `syntheticUnknown` sit OUTSIDE that ordering, so
  * R4.3's label survives a degraded read (R3.5) rather than being masked by it.
  */
-export function resolveDataPath(
-  spec: DataPathSpec,
-  signals: DataPathSignals,
-): DataPathNoticeState {
+export function resolveDataPath(spec: DataPathSpec, signals: DataPathSignals): DataPathNoticeState {
   if (spec.endpoint === null) {
     const copy = KIND_COPY.absent;
     return {

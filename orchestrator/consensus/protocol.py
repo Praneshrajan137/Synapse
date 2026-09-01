@@ -151,7 +151,9 @@ TWIN_SCENARIOS = int(os.environ.get("SYNAPSE_TWIN_SCENARIOS", "1000"))
 REPO_ROOT: Final[Path] = Path(__file__).resolve().parents[2]
 #: The committed Tier-4 disagreement bound (ADR-054 D3, AD-13). The bound is read
 #: from here and is never a literal in this module.
-TWIN_BOUNDS_PATH: Final[Path] = REPO_ROOT / "infrastructure" / "quality" / "twin-verdict-bounds.yaml"
+TWIN_BOUNDS_PATH: Final[Path] = (
+    REPO_ROOT / "infrastructure" / "quality" / "twin-verdict-bounds.yaml"
+)
 
 
 class TwinVerdictConfigurationError(RuntimeError):

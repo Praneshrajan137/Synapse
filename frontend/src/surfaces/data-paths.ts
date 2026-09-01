@@ -163,5 +163,6 @@ export function surfaceDataPath(
 }
 
 /** The R13.6 subset: panels that have no data endpoint at all. */
-export const ABSENT_DATA_PATH_IDS: ReadonlyArray<SurfaceDataPathId> =
-  SURFACE_DATA_PATH_IDS.filter((id) => SURFACE_DATA_PATHS[id].endpoint === null);
+export const ABSENT_DATA_PATH_IDS: ReadonlyArray<SurfaceDataPathId> = SURFACE_DATA_PATH_IDS.filter(
+  (id) => SURFACE_DATA_PATHS[id].endpoint === null,
+);

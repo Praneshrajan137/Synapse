@@ -230,9 +230,7 @@ def guardrail_configurations(draw: st.DrawFn) -> dict[str, dict[str, Any]]:
             max_size=len(HARD_GUARDRAILS),
         ),
     )
-    config: dict[str, dict[str, Any]] = {
-        name: dict(HARD_GUARDRAILS[name]) for name in kept
-    }
+    config: dict[str, dict[str, Any]] = {name: dict(HARD_GUARDRAILS[name]) for name in kept}
 
     generated = draw(
         st.lists(
@@ -479,9 +477,7 @@ def test_an_unimplemented_blocking_declaration_always_fails_construction(
     """
     available = GuardrailEngine.available_check_functions()
     declared = f"{noise}{enforcement.lower() if lowered else enforcement}{noise}"
-    config: dict[str, dict[str, Any]] = {
-        name: dict(spec) for name, spec in HARD_GUARDRAILS.items()
-    }
+    config: dict[str, dict[str, Any]] = {name: dict(spec) for name, spec in HARD_GUARDRAILS.items()}
     config[rule_name] = {"rule": "generated declaration", "enforcement": declared}
 
     if expected_check_name(rule_name) in available:

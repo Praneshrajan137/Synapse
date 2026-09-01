@@ -146,9 +146,7 @@ class TestRecordedFrontIsTheSetSelectionRanOver:
             excluded_agents=(),
         )
         with pytest.raises(SelectionIntegrityError, match="not a member"):
-            ConsensusProtocol._assert_ratified_front_member(
-                drifted, selection, ratified=True
-            )
+            ConsensusProtocol._assert_ratified_front_member(drifted, selection, ratified=True)
 
     def test_front_naming_the_wrong_candidate_is_rejected(self) -> None:
         proposals = _proposals()
@@ -163,9 +161,7 @@ class TestRecordedFrontIsTheSetSelectionRanOver:
         if drifted.ratified_member_index == honest.ratified_member_index:
             pytest.skip("single-member front cannot express this drift")
         with pytest.raises(SelectionIntegrityError, match="candidate index"):
-            ConsensusProtocol._assert_ratified_front_member(
-                drifted, selection, ratified=True
-            )
+            ConsensusProtocol._assert_ratified_front_member(drifted, selection, ratified=True)
 
 
 class TestDebateAdvisoryStamp:

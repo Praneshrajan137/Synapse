@@ -191,9 +191,7 @@ def record_provenance(row: DecisionDataProvenance, dsn: str | None = None) -> bo
                 ),
             )
     except Exception as exc:  # noqa: BLE001
-        logger.warning(
-            "provenance_insert_failed", decision_id=str(row.decision_id), error=str(exc)
-        )
+        logger.warning("provenance_insert_failed", decision_id=str(row.decision_id), error=str(exc))
         return False
     finally:
         conn.close()

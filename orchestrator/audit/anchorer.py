@@ -254,9 +254,7 @@ class AnchorRecord(BaseModel):
             try:
                 head_created_at = _as_utc(datetime.fromisoformat(created_raw))
             except ValueError as exc:
-                raise AnchorFormatError(
-                    f"anchor 'head_created_at' is not ISO-8601: {exc}"
-                ) from exc
+                raise AnchorFormatError(f"anchor 'head_created_at' is not ISO-8601: {exc}") from exc
 
         row_id = mapping.get("head_row_id", mapping.get("row_id"))
         date = mapping.get("date")

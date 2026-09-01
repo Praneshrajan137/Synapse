@@ -165,8 +165,7 @@ const PRECISION_CEILING_TAIL =
  * 20.5). Extends the shared verbatim {@link SCRIPTED_PROXY_CEILING} rather than
  * restating it, so the two statements cannot drift apart.
  */
-export const INTERRUPTION_PRECISION_PROXY_CEILING =
-  `${SCRIPTED_PROXY_CEILING} ${PRECISION_CEILING_TAIL}`;
+export const INTERRUPTION_PRECISION_PROXY_CEILING = `${SCRIPTED_PROXY_CEILING} ${PRECISION_CEILING_TAIL}`;
 
 // ---------------------------------------------------------------------------
 // Observations -- what a collector records

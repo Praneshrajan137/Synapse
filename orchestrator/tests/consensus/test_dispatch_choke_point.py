@@ -20,7 +20,6 @@ rather than what a mock was told to say.
 
 from __future__ import annotations
 
-import asyncio
 from typing import TYPE_CHECKING, Any
 from unittest.mock import MagicMock
 from uuid import uuid4
@@ -45,6 +44,7 @@ from orchestrator.guardrails.rules import GuardrailEngine
 from orchestrator.hitl.escalation import HITLEscalation, WebSocketManager
 
 if TYPE_CHECKING:
+    import asyncio
     from collections.abc import Iterator
     from uuid import UUID
 

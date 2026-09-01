@@ -401,9 +401,7 @@ async def verify_once(
     """
     started = time.monotonic()
     try:
-        snapshot = await asyncio.wait_for(
-            read_snapshot(dsn, since=since), timeout=timeout
-        )
+        snapshot = await asyncio.wait_for(read_snapshot(dsn, since=since), timeout=timeout)
     except TimeoutError as exc:
         raise SnapshotUnavailableError(
             f"reading the ordered snapshot exceeded the declared bound timeout={timeout}s"

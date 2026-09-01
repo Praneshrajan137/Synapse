@@ -123,8 +123,7 @@ def build_timeout_record(
             requested=requested,
             dispatched=True,
             reason=(
-                f"{timeout_seconds}s HITL timeout - {requested.value} dispatched "
-                "and confirmed"
+                f"{timeout_seconds}s HITL timeout - {requested.value} dispatched and confirmed"
             ),
         )
     if requested is HitlTimeoutAction.DEFER:
@@ -139,8 +138,7 @@ def build_timeout_record(
         requested=requested,
         dispatched=False,
         reason=(
-            f"{timeout_seconds}s HITL timeout - {requested.value} requested, "
-            "no action dispatched"
+            f"{timeout_seconds}s HITL timeout - {requested.value} requested, no action dispatched"
         ),
     )
 

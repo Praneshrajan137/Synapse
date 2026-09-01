@@ -117,9 +117,7 @@ CONFIDENCE_FLOOR_RULE: Final[str] = "confidence_floor"
 
 #: The boundary the source *declares*. Read, never written, and never compared to a
 #: literal: the point is that it stays put while the effective boundary moves.
-SOURCE_DECLARED_DEFAULT: Final[Any] = HARD_GUARDRAILS[CONFIDENCE_FLOOR_RULE][
-    "default_threshold"
-]
+SOURCE_DECLARED_DEFAULT: Final[Any] = HARD_GUARDRAILS[CONFIDENCE_FLOOR_RULE]["default_threshold"]
 
 
 # ----------------------------------------------------------------------------- oracles
@@ -263,7 +261,9 @@ def straddled_reloads(draw: st.DrawFn) -> tuple[float, float, float]:
     return lower, upper, confidence
 
 
-def engine_over(configured: Sequence[float]) -> tuple[
+def engine_over(
+    configured: Sequence[float],
+) -> tuple[
     GuardrailEngine,
     ConfigConfidenceThresholdProvider,
     SettingsSequence,
