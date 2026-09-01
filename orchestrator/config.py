@@ -54,7 +54,25 @@ class OrchestratorConfig(BaseSettings):
     #: fail-closed knob - ``ConsensusDecision`` pins ``confidence <= 1``, so ``1.1``
     #: escalates everything - and removing it would take away an operator's kill switch
     #: to guard against nothing.
-    confidence_threshold: float = Field(0.7, ge=0.0)
+    #:
+    #: ``default=`` IS THE KEYWORD FORM ON PURPOSE, AND IT IS LOAD-BEARING FOR THE TYPE
+    #: CHECKER, NOT FOR PYDANTIC. This project configures no ``pydantic.mypy`` plugin
+    #: (``pyproject.toml``'s ``[tool.mypy]`` has no ``plugins`` entry), so mypy synthesises
+    #: ``__init__`` from pydantic v2's PEP-681 ``dataclass_transform`` instead, and that path
+    #: recognises a field-specifier default only when it arrives as ``default=``. Written
+    #: positionally as ``Field(0.7, ge=0.0)`` this field was synthesised as a REQUIRED
+    #: keyword argument and ``mypy --strict orchestrator/`` reported
+    #: ``Missing named argument "confidence_threshold"`` at 21 call sites - three of them
+    #: production (``inference/serve.py`` x2, ``audit/cli.py``). Runtime behaviour is
+    #: identical either way: ``default`` is ``Field``'s first positional parameter.
+    #:
+    #: **Never clear those errors by passing a value at a call site.**
+    #: ``GuardrailEngine(confidence_threshold=config.confidence_threshold)`` consumes this,
+    #: and ``thresholds.py`` records that the boundary is injected a single time at
+    #: ``inference/serve.py``, so a call-site literal substitutes an unreviewed number for a
+    #: committed one on the I-5 confidence gate. The reviewed default already exists; it was
+    #: only ever invisible to the type checker.
+    confidence_threshold: float = Field(default=0.7, ge=0.0)
     proposal_timeout_seconds: float = 2.0
     debate_timeout_seconds: float = 30.0
     debate_max_rounds: int = 3
