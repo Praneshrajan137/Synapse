@@ -111,10 +111,46 @@ tests in the interim, and that is a stated sequencing gap, not an omission.
 
   - [~] 1.2 Add the fast-check budget resolver to the vitest setup file
     - discharge: frontend.yml::quality
-    - **Authored, not discharged.** This is TypeScript: it has never been type-checked and
-      never executed. `getDiagnostics` returns no TS signal in this tree, which is
-      *inconclusive, not evidence* (R2.13). The resolver either applies or silently does not,
-      and only a run distinguishes those.
+    - **Authored, not discharged — and the discharge arrived RED on PR #84, which is the third
+      ledger state earning its place.** Session 1r marked this `[~]` precisely because no run or
+      gate had ever judged it; an `[x]` would have hidden what follows.
+    - **Session 2p repaired four error-level Biome findings, and only one of them was the one
+      PR #84's log named.** All four were authored by this branch's own commit `5db5eb1` — none
+      is `main`'s:
+      1. `frontend/src/test/setup.ts` — `organizeImports`. Biome 1.9.4 sorts named specifiers by
+         ASCII code point with the `type` keyword ignored, so SCREAMING_CASE precedes camelCase.
+      2. `frontend/src/test/fc-budget.ts:163` — `lint/complexity/useLiteralKeys`
+         (`env?.["HYPOTHESIS_PROFILE"]` -> `env?.HYPOTHESIS_PROFILE`). **This is 1.2's own
+         module** and the finding was unrecorded.
+      3. `frontend/src/test/fc-budget.ts` — two `format` violations, on an LF file, so real on CI.
+      4. `frontend/src/surfaces/operations/SloBurnBoard.tsx:114` —
+         `lint/complexity/noUselessTernary`. `git blame` attributes line 114 to `5db5eb1`, so
+         despite sitting in a surface file this is **this spec's**, not PR #77's.
+    - **Two corrections to what `HANDOFF.md` recorded about the CI run.** The other finding it
+      named — `noNonNullAssertion` at `primary-surfaces.property.test.ts:33` — is configured
+      `warn`, and `biome check` on that file exits **0**. It never failed anything; it was
+      co-reported, not causal. And three real error-level findings went unrecorded.
+    - **Executed evidence, and the executor was the installed `biome` binary, not `pnpm`** (I-0
+      bans the package manager; a bounded single-file lint is the analogue of `ruff` on changed
+      files): the `HEAD` copy of `setup.ts` exits **1**, the working-tree copy exits **0**, and
+      `biome check --max-diagnostics=200 ./src` now reports **zero error-level lint findings**
+      across 351 files, down from 43 errors.
+    - **`tsc --noEmit -p tsconfig.json` exits 0** — the first time this branch's TypeScript has
+      ever been compiled. `tsconfig.json` includes `src` and `src/test/**/*` with
+      `noUncheckedIndexedAccess: true`, so both files in this sub-task were in the program.
+      **"Never type-checked" is no longer true of 1.2.**
+    - **WHY THIS IS STILL `[~]`.** `frontend.yml::quality` runs Biome, then `pnpm typecheck`,
+      then `pnpm test:coverage`. The first two are now verified locally; **the vitest step is
+      not, and cannot be — I-0 bans `vitest` outright.** The resolver either applies at runtime
+      or throws by design, and only a run distinguishes those (R2.13). The mark flips to `[x]`
+      when that job is green, not when this file is.
+    - **A trap for whoever verifies this locally on Windows.** `biome check ./src` also reports
+      **40 `needs to be formatted` errors that do not exist on CI.** They are `core.autocrlf`
+      artifacts: the working tree checks out CRLF, `.gitattributes` pins only `*.sh` and
+      `*.sql`, and `biome.json` sets `formatter.lineEnding: lf`. Proven, not assumed —
+      `frontend/src/domain/primitives.ts` is byte-identical to its `HEAD` blob once CRLF is
+      normalised. **Do not "fix" them**; a `biome format --write` sweep over those 40 files
+      would commit a line-ending churn diff and change nothing about the gate.
     - File: `frontend/src/test/setup.ts` (already wired as `setupFiles` in
       `frontend/vitest.config.ts:26`, and contains no fast-check configuration today, so this
       is a net addition rather than a change to an existing knob).
@@ -150,7 +186,23 @@ tests in the interim, and that is a stated sequencing gap, not an omission.
 
   - [~] 1.5 Write property test for the fast-check budget resolver
     - discharge: frontend.yml::quality
-    - **Authored, not discharged.** TypeScript, never type-checked, never executed (R2.13).
+    - **Authored, not discharged. Never type-checked, never executed (R2.13) — and unlike 1.2,
+      session 2p could not change either of those, which is worth stating precisely.**
+      - `biome check ./src` **never scans `frontend/spec/`**, so this file is not linted by that
+        step at all.
+      - `frontend/tsconfig.json`'s `include` names only `frontend/spec/effectiveness/harness.ts`
+        and `frontend/spec/effectiveness/e2e-entry.ts`, **not**
+        `frontend/spec/effectiveness/__tests__/**`. So the `pnpm typecheck` pass that went green
+        for 1.2 did **not** compile this file. The only job that type-checks it is
+        `frontend.yml::spec-typecheck`, which is predicted red and explicitly out of scope for
+        repair (R2.15: a prediction is not a dispensation).
+      - `frontend/vitest.config.ts`'s `include` **does** cover
+        `frontend/spec/effectiveness/__tests__/**`, so `frontend.yml::quality`'s
+        `pnpm test:coverage` step is what executes it — and that is the step I-0 forbids running
+        here.
+      - **So the declared discharge job is the right one, and it discharges by execution rather
+        than by lint or by compilation.** Repairing the Biome findings unblocked the two steps
+        in front of it; nothing local can reach the third.
     - `# Feature: decision-quality-proof, Property 42: The fast-check budget is a total function of the profile name`
     - File: `frontend/spec/effectiveness/__tests__/fc-budget-profile.property.test.ts`
     - Budget inherited from `fc.configureGlobal` in `frontend/src/test/setup.ts`. No per-call
@@ -416,9 +468,29 @@ tests in the interim, and that is a stated sequencing gap, not an omission.
     - _Requirements: 1.12_
 
   - [x] 5.6 Add the `falsification-sweep` job and its declarations in one commit
+    - **A THIRD HALF OF THE COUPLING WAS MISSED, AND SESSION 2p REPAIRED IT.** The two
+      declarations below landed; the *generated* record of them did not.
+      `scripts/audit/gate_surface.py` projects every job and every step of every workflow into
+      `docs/state/GATE_SURFACE.md`, so adding a job makes that document stale and flips
+      registered check **C63** to FAIL — and `blocking-steps.yaml` says so in its own prose at
+      the point where it declines to add two other entries. The committed document named
+      neither this job nor `uplift.yml::twin-regret` (task 10.3), and carried
+      `52 job(s), 357 step(s)` and `8 declared-blocking entries` against a tree with 54, 370
+      and 10. So C63 was red on PR #84 while `docs/state/CURRENT.md:94` records it **PASS**,
+      which drifts `ledger_gen --check` too — up to four registered gates from one missed
+      regeneration, and `HANDOFF.md`'s CI decomposition had it hidden inside "Truth Gates
+      (enforcement spine), predicted red".
+      **Repaired by `python -m scripts.audit.gate_surface --write` (+50/-5 lines);
+      `--check` now exits 0.** The generator is pure file reads, which is why this was
+      affordable under I-0 — `ledger_gen --write` and `readme_gen --write` are **not**, because
+      each executes the whole Check_Registry in-process. They should also be unnecessary here:
+      `CURRENT.md` already records C63 as PASS, so restoring PASS restores agreement rather
+      than moving a count. **That last sentence is a prediction from reading the committed
+      ledger, not a verified fact** — verifying it is the escalation the session close records.
     - Files: `.github/workflows/truth-gates.yml`,
       `infrastructure/quality/blocking-steps.yaml`,
-      `infrastructure/quality/required-checks.yaml`
+      `infrastructure/quality/required-checks.yaml`,
+      `docs/state/GATE_SURFACE.md` (generated; added in session 2p)
     - New job, separate from `truth-gates` (whose 25-minute budget is sized for stdlib gates):
       `runs-on: ubuntu-latest` only (R1.13, precedent E-S13-05 — the sweep copies the tree and
       spawns gate subprocesses, a category-2/3 workload, never the Windows dev box); the same
@@ -1098,6 +1170,23 @@ tests in the interim, and that is a stated sequencing gap, not an omission.
       `Par_Level_Reorder` is owned by `decision-integrity-uplift-proof` and is a
       **precondition**, not a deliverable here. What this job establishes is the comparator's
       own headroom, which bounds the `(s, S)` regret from above.
+    - **AMENDED IN SESSION 2p, BEFORE THE FIRST DISPATCH: the report now carries an interval,
+      and the job can be dispatched alone.** Two changes, neither of which alters what is
+      measured:
+      - `_measure` estimates a paired percentile bootstrap over the per-seed costs
+        (`uplift/interval.py`, design E3.1) at `1 - alpha` from the committed Metric_Contract,
+        reports `interval_low/high/point/alpha/method/resamples/seed` plus
+        `interval_excludes_rule_margin`, and passes the bounds to `classify_regret`. The
+        interval's point estimate is **pinned** against `objective.regret`'s rather than
+        trusted to agree. A measurement whose dispersion cannot be estimated now reports
+        `status: unavailable` and the CLI exits 2, which fails the job -- it is never
+        downgraded to a point-estimate verdict. **Why this had to land before checkpoint A is
+        recorded under task 11.**
+      - `uplift.yml` gained `workflow_dispatch.inputs.job` with an `if:` guard per job, so
+        `twin-regret` dispatches without also spending `uplift-proof`'s ~350 runner-minutes.
+        `default: both` preserves the previous behaviour and the schedule is unaffected. No
+        step was added, so no new `blocking-steps.yaml` entry is owed; the existing
+        declaration still resolves, re-verified at C64 `verdict=pass` over 370 steps.
     - _Requirements: 5.1, 5.32_
     - Files: `uplift/foresight.py` (new), `uplift/harness.py`
     - Pass one runs the twin with a no-op policy at seed `s` and records the `DemandTrace`;
@@ -1187,6 +1276,28 @@ tests in the interim, and that is a stated sequencing gap, not an omission.
     `SESSION_PROTOCOL.md`'s checkpoint-A table states what each of the four licenses. Checkpoint
     A exists to move this task off `unavailable` **before** task 12 is authored — which is the
     sequencing `## Overview` calls load-bearing.
+  - **A THIRD CONFLICT, FOUND AND CLOSED IN SESSION 2p BEFORE THE MEASURING RUN.** Three
+    sources disagreed about what `material` requires, and the disagreement decided whether this
+    spec could be stopped by a number with no dispersion.
+    - `RegretVerdict`'s docstring and `SESSION_PROTOCOL.md`'s checkpoint-A table both define
+      `material` as regret at or above the margin **with its interval excluding it**.
+    - **R5.3 does not.** It says: at or above the margin, therefore falsified. The interval
+      clause is **R5.13**, which governs the *non-stationary* twin at task 13.7 — not this run.
+    - And `_measure` supplied **no interval at all**. `classify_regret`'s material branch reads
+      `regret >= margin and (interval is None or excludes_margin)`, so an absent interval was
+      not a missing precondition, it was a *satisfied* one. On a point estimate alone, this
+      checkpoint could have reported Finding 4 falsified and ended the spec.
+    - **Resolved in favour of the stricter reading, and by changing the instrument rather than
+      the standard.** `uplift/interval.py` (design E3.1's estimator, landed early out of task
+      15.2) now supplies a paired bootstrap interval at `1 - alpha` from the committed
+      Metric_Contract, and `_measure` passes it. `classify_regret`'s logic is **unchanged** —
+      supplying a non-`None` interval is what makes `excludes_margin` load-bearing, so all 17
+      of task 10.6's pinned properties still hold. A run whose dispersion cannot be estimated
+      reports `status: unavailable` and exits 2 rather than falling back.
+    - **This is stricter than R5.3 requires, deliberately.** Adopting a standard the criterion
+      does not demand is only legitimate in the direction that makes falsification *harder to
+      claim*, never easier; the reverse would be metric-shopping. Recorded here rather than
+      absorbed, because a reader comparing this run to R5.3 should find the deviation stated.
   - **This task's own precondition conflicts with task 12's, and the conflict is in this file.**
     Task 12's preconditions say only "task 11 did not falsify Finding 4", which an
     `inconclusive` satisfies; the licensing clause above requires every objective KPI recorded
@@ -1411,11 +1522,56 @@ tests in the interim, and that is a stated sequencing gap, not an omission.
     - `alpha` is **read** from `uplift/metric_contract.yaml` (a committed `0.05`), never inlined
       — the `95%` in R6.1 and R6.2 is `1 - alpha` from that contract and is not an invented
       number (AD-13). The resampling `seed` is recorded so the interval replays.
+    - **HALF LANDED EARLY, IN SESSION 2p. LEFT OPEN ON PURPOSE — read this before authoring.**
+      The estimator exists and is executed; the wiring does not and cannot yet. Left `[ ]`
+      rather than `[~]` because the owed half is *authoring blocked on task 15.1*, not a proof
+      owed by a CI job, and a `discharge:` line naming a job would be false — it would also make
+      the census stop offering this as authorable work, which is exactly what session 3 needs
+      it to do.
+      - **Landed and executed:** `uplift/interval.py` — `paired_difference_interval`,
+        `headline_interval` (E3.1's declared name, a thin alias), a frozen `Interval` carrying
+        the seven fields `ArtifactInterval` declares, `contract_alpha`, and `resamples_for`.
+        `tests/uplift/test_interval_estimation_property.py` (task 15.3) is **20 tests passing at
+        both `dev` and `heavy`**. `uplift/regret.py::_measure` is the first consumer.
+      - **Still owed here:** the `uplift/harness.py::assemble_uplift_result` call site, which
+        needs task **15.1**'s `ArtifactInterval` and `schema_version` to exist first.
+      - **Three deviations from the design, all recorded in design.md E3.1 rather than absorbed:**
+        the return type is `uplift.interval.Interval` and not `ArtifactInterval` (importing
+        `harness.py` would drag the twin and numpy into `regret.py`'s light import path);
+        `alpha` is read with `yaml` and not through `uplift.contract.load_contract` (which
+        imports `scipy`, absent from `uplift.yml::twin-regret`'s install closure — the two
+        readers are pinned together by a test); and **the design's order-invariance mechanism
+        was wrong** and is corrected there.
+      - **Why it came forward:** see task 11's third conflict. Without an interval,
+        `classify_regret` reached `material` on a point estimate, and `material` stops the spec.
     - _Requirements: 6.13, 7.14_
 
-  - [ ] 15.3 Write property test for the interval estimator
+  - [x] 15.3 Write property test for the interval estimator
     - `# Feature: decision-quality-proof, Property 60: The interval is estimated at 1 - alpha, brackets the point estimate and is order-invariant`
     - File: `tests/uplift/test_interval_estimation_property.py`
+    - **20 tests passing**, executed at `HYPOTHESIS_PROFILE=dev` **and re-verified at `heavy`**.
+      Not slow-marked (pure arithmetic over stdlib `random`; locus `ci.yml::uplift-verify` fast
+      step). Landed early with 15.2's estimator half; ticked because it is both authored and
+      executed, not because the estimator exists.
+    - All three declared clauses are asserted, and the third found a design defect: E3.1 claimed
+      sorting the resample statistics gives input-order invariance, which it does not — the
+      seeded index stream is fixed, so a permutation changes which values each resample draws.
+      The subject sorts the paired differences *before* resampling and the statistics *after*;
+      design.md E3.1 now records the correction.
+    - Bracketing is asserted **unconditionally**, with no tolerated-exception disjunct: the
+      percentile bootstrap of a mean does not guarantee it as a theorem, so a counterexample
+      would be a finding about the estimator (R2.10). The refusal path is proven separately by
+      constructing an inadmissible `Interval` directly, because "no generated example triggered
+      it" is not evidence that a guard works.
+    - Carries the **two-reader agreement test** that stops `contract_alpha` drifting from
+      `MetricContract.alpha`. It runs here rather than in `twin-regret` because `scipy` is
+      present in this job's closure and absent from that one — which is the whole reason the
+      narrow read exists.
+    - **A lesson worth carrying: `dev` passed and `heavy` failed.** The degenerate-sample test
+      asserted `point == value` exactly; `fmean` of `n` copies of a value is one ulp off at
+      `value=4.413920275115946e-253, count=5`. Fixed the **precondition** (closeness for
+      point-vs-value, exact equality retained for `low == high == point`), not the assertion,
+      and did not touch the subject. **A `dev`-profile green is ten examples of evidence.**
     - Budget inherited from the root `conftest.py` profile via `HYPOTHESIS_PROFILE`.
     - Locus: `ci.yml::uplift-verify` fast step.
     - _Requirements: 6.13, 7.14_

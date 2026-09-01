@@ -248,12 +248,13 @@ python -m mypy --strict <changed python files>
 $env:HYPOTHESIS_PROFILE='dev'
 python -m pytest <changed test files> -q --tb=line -p no:randomly -m "not slow"
 
-# 3. The cheap gates. Five of them, all pure file reads, ~1s each.
+# 3. The cheap gates. SIX of them, all pure file reads, ~1s each.
 python -m scripts.audit.workflow_shape_truth              # C64
 python -m scripts.audit.pin_extractor_truth --check       # C75
 python -m scripts.audit.sweep_budget_truth --check        # C73
 python -m scripts.audit.dataset_licence_truth --check     # C74 (expect exit 2 = honest SKIP)
 python -m scripts.audit.task_claim_truth --check          # ticked-but-not-landed
+python -m scripts.audit.gate_surface --check              # C63 (added session 2p -- see below)
 
 # 4. Re-derive the ledger and confirm it moved by exactly what was ticked.
 python -m scripts.audit.spec_ledger_census --files --check
@@ -272,15 +273,48 @@ already a *detected pending* claim, because its title matches the `lands-registr
 and its body names `published_checkpoints.json`. Ticking it requires the registry to hold a real
 validated non-placeholder entry, or the gate fails naming the record.
 
+**`gate_surface --check` joined the list in session 2p, and it is the most likely of the six to
+bite.** It is the gate every workflow edit trips: `scripts/audit/gate_surface.py` projects **every
+job and every step of every workflow** plus the whole of `blocking-steps.yaml` into
+`docs/state/GATE_SURFACE.md`, so adding a job, renaming a step or adding a blocking declaration
+makes that committed document stale and flips **C63** to FAIL. It belongs here on cost as well as
+on relevance: it is pure workflow parsing and file reads, ~1s, no subprocess and no registry
+execution.
+
+Session 2p added it because it had already fired unnoticed. Both `truth-gates.yml::falsification-sweep`
+(task 5.6) and `uplift.yml::twin-regret` (task 10.3) landed in session 1 **without** the
+regeneration, so the committed record carried `52 job(s), 357 step(s)` and `8 declared-blocking
+entries` against a tree with 54, 370 and 10 — while `docs/state/CURRENT.md:94` records C63 as
+**PASS**. C63 was therefore red on PR #84, hidden inside "Truth Gates (enforcement spine),
+predicted red", and its FAIL also drifts `ledger_gen --check`, `doc_truth`'s pinned counts and the
+README headline. **Four registered gates from one missed `--write`.**
+
+**The asymmetry that makes this affordable, and the trap in it.** `gate_surface --write` is cheap
+and is the repair. `ledger_gen --write` and `readme_gen --write` — the other two thirds of the
+repair order `truth-gates.yml` fixes — each execute the entire Check_Registry in-process and are
+**category 3/4 under I-0**. So a change that moves a check's *status* cannot be fully regenerated
+locally; a change that only moves the *workflow tree* can, because the committed ledger's recorded
+status for C63 does not move. Know which kind of change you are making before you start, and if it
+is the first kind, escalate to CI rather than hand-editing a count (I-7 forbids the latter
+absolutely).
+
 Expected exit codes for the block above, as executed on 2026-09-01: `workflow_shape_truth` 0,
 `pin_extractor_truth` 0, `sweep_budget_truth` 0, `dataset_licence_truth` **2** (honest SKIP —
 the M5 terms sit behind a Kaggle acceptance gate an agent must not accept), `task_claim_truth`
-**1** (pre-existing, `core-purpose-uplift`), `spec_ledger_census` 0.
+**1** (pre-existing, `core-purpose-uplift`), `gate_surface --check` 0 (**after** session 2p's
+regeneration; it was non-zero before), `spec_ledger_census` 0.
 
 **NEVER run**, in any session (I-0): `scripts.audit.verify_claims`, `scripts.audit.doc_truth`,
-bare `readme_gen --check`, `gate_fault_injection --sweep`, repo-wide `pytest`, `--cov`, `-n auto`,
-`pnpm` anything, `docker compose`, or any `MIN_SCENARIOS`-scale run. Each spawns either the whole
-Check_Registry as a 900s subprocess or a category-4 workload.
+bare `readme_gen --check`, **`ledger_gen --check` or `--write`**, `gate_fault_injection --sweep`,
+repo-wide `pytest`, `--cov`, `-n auto`, `pnpm` anything, `docker compose`, or any
+`MIN_SCENARIOS`-scale run. Each spawns either the whole Check_Registry as a 900s subprocess or a
+category-4 workload.
+
+**`ledger_gen` was added to that list in session 2p, and it had been missing.** Its own module
+docstring is the evidence: "every row and every count is projected from **one**
+`RegistryVerdict` — one in-process Check_Registry execution". It reads as a document generator and
+costs what `verify_claims` costs. `gate_surface` is the one generator in that trio that is genuinely
+cheap, which is exactly why it is in the sweep and these two are not.
 
 **Sweep for processes before finishing.** List background processes; confirm none of yours
 survived. After a cancelled run, check for orphaned `python`, `node` and `chrome` explicitly — a
@@ -329,3 +363,6 @@ And **disk outranks all four.** Session 1 opened with eight tasks implemented an
 | 1 | 2026-09-01 | Front-load (3 blockers, HANDOFF.md); reconciled 5.3–5.10; tasks 7.1–7.5, 8.1–8.4, 9.1–9.12, 10.1–10.3, 10.5, 10.6 | Overran ten deliberately: the session began with a ledger reconciliation (8 tasks already on disk, unticked) that was discovery rather than authoring. Found and fixed 3 real defects: `_apply_cold_start` deleting the catalogue, a missing JSON-Schema format checker, and a stale `stryker-break` drift record. Established this protocol at the end. |
 | 1r | 2026-09-01 | **Protocol revision + the margin rule. No spec task completed.** Added `scripts/audit/spec_ledger_census.py` + 16 tests. Re-cut the batch plan around checkpoints A–D. Introduced the `[~]` mark; reconciled 1.2 and 1.5 from `[x]`. Landed ADR-055 **D2.5** and task 10.4's *first half* — the enforced materiality-margin rule, pin (C75 now 14/14), `direction: down` ratchet, + 13 tests. | Reconciliation and pre-registration, not authoring — session 1's row is left as written. Found: tasks 11 and 14 fired after the work they gate; task 11's `unavailable` state was absent from the verdict table; the two sensitivity flips were unassigned; task 12.1 still declared the path Conflict A rejected; task 24.1's gate ids were stale by two (C75 is highest, C76 next free); task 7.2's declared module name never landed. Fixed the census's rejection of dotfile-rooted paths and an ASCII-only violation in its own output. Sweep executed: census 0, `workflow_shape_truth` 0, `pin_extractor_truth` 0 (14/14), `sweep_budget_truth` 0, `dataset_licence_truth` 2 (honest SKIP), `task_claim_truth` **1** on pre-existing `core-purpose-uplift` claims — recorded, not repaired. |
 | 1r-close | 2026-09-01 | **Committed, pushed, PR #84 opened.** Three commits: `1f4f7d1` E4a/E2a/E2b + margin rule (42 files), `dd5cd8c` the protocol re-cut (5 files), `e0944cb` a flaky-generator fix (1 file). | Two blockers surfaced at the commit gate. **(1)** `.gitignore`'s bare `data/` matched a directory named `data` at any depth, silently ignoring `infrastructure/data/dataset-licences.yaml` and its schema — so task 7.1 was ticked while its deliverable could not reach CI, and C74's honest SKIP would have been indistinguishable from a file-missing SKIP on CI. Anchored to `/data/`, blast radius verified as exactly those two paths before staging. **(2)** Session 1 was entirely uncommitted and interleaved with 1r across eight shared files, so the planned three-commit split would have produced commit messages that misdescribed their own diffs; re-split by what must land together instead. A flaky property surfaced on the pre-push re-verify and was fixed at the precondition. **First CI run then reclassified the expected-red list: 3 predicted, 1 session-1 discharge failure (task 1.2's Biome `organizeImports` — the `[~]` mark working), 2 pre-existing on `main`, 1 unclassified.** |
+| 2p | 2026-09-01 | **Pre-batch repair. No session-2 task started, and that was the point.** Ticked **15.3** only (Property 60, `tests/uplift/test_interval_estimation_property.py`, 20 tests passing at `dev` and `heavy`); landed **15.2**'s estimator half early as `uplift/interval.py` and left 15.2 `[ ]` on purpose. Repaired PR #84's two discharge failures. Added `gate_surface --check` as the sixth cheap gate and `ledger_gen` to the never-run list. Census moved 53/76 -> 54/75. | **Found seven defects, and one of them could have ended the spec.** **(9)** `classify_regret`'s `material` branch reads `regret >= margin and (interval is None or excludes_margin)`, and `_measure` supplied **no interval** — so checkpoint A could have reported Finding 4 falsified on a point estimate with no dispersion. Three sources disagreed on what `material` requires (`RegretVerdict`'s docstring and this protocol say "interval excluding it"; R5.3 does not; R5.13 does but governs task 13.7's twin). Resolved toward the stricter reading by changing the **instrument**, not the classifier — all 17 of task 10.6's pinned properties still pass. **(10)** `GATE_SURFACE.md` was stale on **two** of this spec's own jobs (5.6's `falsification-sweep`, 10.3's `twin-regret`), carrying `52 job(s)/357 step(s)/8 anchors` against `54/370/10`, so **C63 was red on PR #84 while `CURRENT.md:94` records it PASS** — four gates cascade from one missed `--write`, and it had been hidden inside "predicted red". **(11)** Three unrecorded error-level Biome findings beyond the one the log named, **all four from this branch's own commit `5db5eb1`**; and the finding previously attributed to PR #77 is a `warn` that exits 0 and never failed anything. **(12)** `ledger_gen` executes the whole Check_Registry in-process and was missing from the never-run list. **(13)** Design E3.1's order-invariance mechanism was wrong — sorting the resample statistics does not give it; the paired differences must be sorted before resampling. Property 60's third clause found it. **(14)** Task 15.2's "read `alpha` through `load_contract`" is unexecutable in `twin-regret`, whose install closure has no `scipy`; caught by reading the closures, not by a failed CI run. **(15)** This project's `HANDOFF.md` said three commits; the branch carries eleven. Sweep: six cheap gates at 0/0/0/2/1/0, census pass, 50 tests green, `biome check ./src` down from 43 error-level findings to 0, `tsc --noEmit` exit 0 for the first time on this branch. **`heavy` failed what `dev` passed for the second session running** — fixed at the precondition (R2.10). **Not committed, and one escalation (`ledger_gen`/`readme_gen --check`, ~15 min full-core CPU each) is stated and unrun.** |
+
+| 2p-close | 2026-09-01 | **Committed and pushed to PR #84.** Three commits: `85774e1` the interval + the dispatch selector + the gate-surface regeneration (6 files), `d67f1c7` the Biome repair (3 files), and the ledger commit that carries this row. Branch now 14 commits ahead of `main`. | **The I-0 escalation was offered, costed and declined, and that was a judgement about evidence rather than only about heat.** Verifying that C63's repair moves no count needs `ledger_gen --check` + `readme_gen --check`, each ~900s and ~15 min of full-core CPU, ~30 min serial. `truth-gates.yml` runs all three generators on this push anyway, so the local run would have bought the same answer twice — and if the prediction is wrong, C63/C56/the README headline go red and **name** the drift. A legible failure in a run that was going to happen beats a private confirmation that costs the machine. The question was **not** skipped: reading C63's status is item 2 of `HANDOFF.md`'s owed list, and the prediction is recorded as unverified. **One incident, caught by byte-inspection rather than by a gate.** Splicing `NEXT_SESSION_PROMPT.md` with PowerShell's `Get-Content`/`Set-Content` mojibaked every em dash in its 179-line head and added a UTF-8 **BOM** — which Python's `read_text(encoding='utf-8')` does *not* strip, so the first line would silently have gained a `\ufeff`. On PS 5.1 `Get-Content -Raw` decodes with the ANSI codepage. Restored with `git checkout`, redone with a `pathlib` one-liner at explicit `encoding='utf-8', newline='\n'`, then the two small edits re-applied with the editor tool. **All nine written files then byte-verified: no BOM, no U+FFFD.** Recorded as a trap in the new handoff section, because the next agent to splice a document this way will not notice. Commit split by what must land together, not by narrative: the workflow change and `gate_surface --write` share a commit (the fourth same-commit coupling), the frontend repair stands alone, and the spec docs — which describe *both* streams — go last so no message misdescribes its own diff. That is the 1r-close lesson applied rather than re-learned. |

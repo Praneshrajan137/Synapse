@@ -96,13 +96,15 @@ Run the verification sweep in `SESSION_PROTOCOL.md`, including
   fan-out execution (`-n auto`, `-j`, repo-wide bare `pytest`, `--cov`, `mutmut`); any
   `MIN_SCENARIOS`-scale or training workload.
 - **Never run, specific to this spec:** `scripts.audit.verify_claims`, `scripts.audit.doc_truth`,
-  bare `readme_gen --check` (all three spawn the entire Check_Registry as a 900-second
-  subprocess), `gate_fault_injection --sweep` (30 gate subprocesses over a tree copy), `pnpm`
-  anything.
+  bare `readme_gen --check`, **`ledger_gen --check` or `--write`** (its own docstring: every row
+  comes from "one in-process Check_Registry execution"), `gate_fault_injection --sweep` (30 gate
+  subprocesses over a tree copy), `pnpm` anything.
 - **Cheap and encouraged:** file reads, `grep`, `ruff`/`mypy` on changed files, **one** scoped
-  `pytest` run on a single file or narrow directory, `spec_ledger_census`, and the five cheap
-  gates (`workflow_shape_truth`, `pin_extractor_truth`, `sweep_budget_truth`,
-  `dataset_licence_truth`, `task_claim_truth` — each ~1s of pure file reads).
+  `pytest` run on a single file or narrow directory, `spec_ledger_census`, the six cheap gates
+  (`workflow_shape_truth`, `pin_extractor_truth`, `sweep_budget_truth`, `dataset_licence_truth`,
+  `task_claim_truth`, `gate_surface` — each ~1s of pure file reads), and the installed
+  `frontend/node_modules/.bin/biome` and `tsc` binaries on changed files. **Never via `pnpm`, and
+  `vitest` not at all.**
 - **Concurrency is the load-bearing half.** Parallel sub-agents for reading, writing and
   analysis: unlimited. **Sub-agents that execute code: exactly ONE at a time.** If your
   orchestrator template permits 3–5, I-0 overrides it.
@@ -138,9 +140,12 @@ Run the verification sweep in `SESSION_PROTOCOL.md`, including
   Absence of proof is never a pass. **"Authored and diagnostics-clean, not executed" is a
   legitimate result and its mark is `[~]`; "should pass" reported as "passes" is a violation.**
 
-**The three same-commit couplings.** A rename and its declaration; a new CI job and both its
+**The four same-commit couplings.** A rename and its declaration; a new CI job and both its
 `blocking-steps.yaml` step entry and `required-checks.yaml` job entry; a schema change and every
-fixture that carries it. Either half alone is a red gate.
+fixture that carries it; **and any workflow job/step change, or any `blocking-steps.yaml` entry, and
+`python -m scripts.audit.gate_surface --write`.** Either half alone is a red gate. The fourth is the
+one session 1 missed twice, on tasks 5.6 and 10.3 — it cost C63 and cascaded into three more gates,
+and `gate_surface --check` is now in the sweep so it cannot recur unnoticed.
 
 ---
 
@@ -172,101 +177,165 @@ wins; it promises the answer will be believable either way.
 
 ---
 
-## Session 1r handoff — regenerate this section each session
+## Session 2p handoff — regenerate this section each session
 
-**Session 1r was a protocol revision plus one pre-registration, and it is committed.** Three commits
-on `feat/decision-quality-proof`, PR **#84** open against `main`: `1f4f7d1` (E4a/E2a/E2b + the
-margin rule, 42 files), `dd5cd8c` (the protocol re-cut, 5 files), `e0944cb` (a flaky-generator fix).
-Derive the state with `spec_ledger_census`; at the time of writing: 132 leaf tasks, 53 done, 3
-authored-pending-discharge, 76 open — 70 authorable and 6 CI-gated.
+**Session 2p was pre-batch repair, and it is committed and pushed.** It did three things, in this
+order: made checkpoint A's dispatch affordable, made checkpoint A's *verdict admissible*, and
+repaired the two discharge failures PR #84 exposed — one of which nothing had recorded. **No
+session-2 task was started.** Three commits on `feat/decision-quality-proof`: `85774e1` the interval
++ the dispatch selector + the gate-surface regeneration, `d67f1c7` the Biome repair, and the ledger
+commit. Derive the state with `spec_ledger_census`; at the time of writing: 132 leaf tasks, 54 done,
+3 authored-pending-discharge, 75 open — 69 authorable and 6 CI-gated, with `--next 11` returning
+exactly `12.1 12.2 12.3 12.4 13.1 13.2 13.3 13.4 13.5 13.6 13.7`.
 
-**Your first act is NOT task 12.** The order is: make the `uplift.yml` dispatch affordable, repair
-the discharge failure below, complete checkpoint A, read task 11's verdict, and only then author
-E2c. If the verdict is `material`, **stop and re-cut R5** — that is a success of the method, not a
-failure of the plan. Session 2 is then eleven tasks: 12.1–12.4 and 13.1–13.7.
+**Your first act is still NOT task 12, and there is no authoring owed before checkpoint A.** The
+order is: read the falsification sweep's survivor list and bring it to the user; read whether **C63**
+went green on this push (that is the deferred verification of the gate-surface repair — see the
+escalation below); dispatch `twin-regret` **alone**
+(`gh workflow run uplift.yml --ref feat/decision-quality-proof --field job=twin-regret` — session 2p
+is what makes that possible); instantiate the margin from the committed rule; record task 11's
+verdict; and only then author E2c. If the verdict is `material`, **stop and re-cut R5.**
 
 ### The one finding that most changes what you do next
 
-**Task 1.2's discharge arrived on PR #84 and it is RED.** `Lint • Typecheck • Unit` fails on Biome,
-and one of its two findings is `frontend/src/test/setup.ts`'s `organizeImports` — the import block
-task 1.2 added. That is precisely why 1.2 and 1.5 were marked `[~]` rather than `[x]`: no local run
-and no gate had ever judged them, and an `[x]` would have hidden this. **Repair it and they become
-`[x]`.** The other Biome finding (`noNonNullAssertion` at
-`frontend/src/app/__tests__/primary-surfaces.property.test.ts:33`) arrived in PR #77 and is on
-`main` — not yours. Note `biome check ./src` never scans `spec/`, so four of the five declared
-console property files are unlinted by that job.
+**Checkpoint A could have ended this spec on a point estimate, and now it cannot.**
+`classify_regret`'s material branch is `regret >= margin and (interval is None or excludes_margin)`,
+and `uplift/regret.py::_measure` supplied **no interval** — so an absent interval was not a missing
+precondition, it was a *satisfied* one. A bare point estimate at or above the margin would have
+reported Finding 4 falsified and stopped 132 tasks of work.
 
-`HANDOFF.md` carries the full six-way CI decomposition: 3 predicted, 1 session-1 discharge failure,
-2 pre-existing on `main`, 1 unclassified (`pnpm audit` reads a live advisory database).
+Three authorities disagreed about whether that is admissible, and the disagreement is now recorded
+in task 11 rather than resolved silently: `RegretVerdict`'s docstring and `SESSION_PROTOCOL.md`'s
+checkpoint-A table both require the interval to exclude the margin; **R5.3 does not**; R5.13 does,
+but governs the *non-stationary* twin at task 13.7. Resolved toward the stricter reading — **by
+changing the instrument, not the classifier.** `uplift/interval.py` (design **E3.1**, task 15.2's
+estimator half, landed early) supplies a paired percentile bootstrap at `1 - alpha` from the
+committed Metric_Contract; `_measure` passes it; `classify_regret` is untouched and all 17 of task
+10.6's pinned properties still pass. A run whose dispersion cannot be estimated reports
+`status: unavailable` and exits 2 rather than falling back.
 
-### What session 1r changed, and why
+**Adopting a standard the criterion does not demand is only legitimate in the direction that makes
+falsification harder to *claim*.** That direction is stated in task 11 so a reader comparing the run
+to R5.3 finds the deviation rather than inferring it.
 
-- **The batch plan was re-cut around the two early-exit gates.** Tasks 11 and 14 were pooled into
-  the final session, so each could only fire after the seventy-odd tasks it exists to prevent.
-  They are now checkpoints A and B, ahead of the work they gate. Tasks 21, 22.3 and 25 became
-  checkpoints C and D — CI-gated but not able to end the spec.
-- **The ledger gained a third mark.** `[~]` means authored, discharge pending, with a
-  `discharge:` line naming the owed job. Tasks **1.2** and **1.5** moved from `[x]` to `[~]`:
-  both are TypeScript, neither has ever been type-checked or executed, and `HANDOFF.md` already
-  said so in prose while the ledger said `[x]`. **Task 10.4** is now `[~]` too — see below.
-- **Counts became mechanical.** `scripts/audit/spec_ledger_census.py` (+16 tests, all passing)
-  replaces the `python -c` one-liner and the hand-copied tables. It derives the CI-gated set from
-  `discharge:` lines, so the "six-versus-seven" disagreement between the old `GATED` literal and
-  the prose beside it cannot recur.
-- **The materiality margin's rule was pre-registered and made enforceable** — ADR-055 **D2.5**,
-  `regret_objective.materiality_margin` in the policy file, `policy.py::materiality_margin`, a
-  pin (C75 now reports **14/14**), a `direction: down` ratchet, and 13 tests. This is task 10.4's
-  first half; its *value* is still `null` and is owed at checkpoint A. The rule matters because
-  R5.2's "commit the margin only after measuring it" would otherwise let the margin be chosen to
-  suit the number it judges — the reader now **re-derives a committed value and refuses one that
-  disagrees**, and refuses any margin at or above the measured headroom as unfalsifiable.
-- **`task_claim_truth --check` joined the sweep.** It already parses `tasks.md` and already
-  catches ticked-but-not-landed registry claims; nothing had ever invoked it here. **It is red on
-  arrival**, at exit 1, on `core-purpose-uplift` tasks 9 and 9.1 — pre-existing and not this
-  spec's. Recorded rather than skipped: a gate you skip because it is red is a gate you disabled.
+### What else session 2p changed, and why
 
-### Defects found in session 1r
+- **`uplift.yml` gained a job selector.** `workflow_dispatch.inputs.job` (`both` | `uplift-proof` |
+  `twin-regret`) with an `if:` guard per job, so checkpoint A stops costing ~350 runner-minutes it
+  does not need. `default: both` and the guard's leading `github.event_name != 'workflow_dispatch'`
+  keep the nightly proof running — a guard written only against `inputs.job` would have silently
+  disabled it, and a job that stops running is indistinguishable from one that passes (I-7). No step
+  was added, so no new `blocking-steps.yaml` entry is owed; `workflow_shape_truth` re-verified at
+  `verdict=pass`, 370 steps, 10 declared-blocking entries.
+- **C63's gate-surface drift is repaired, and it was hiding.** `docs/state/GATE_SURFACE.md` named
+  neither `truth-gates.yml::falsification-sweep` (task 5.6) nor `uplift.yml::twin-regret` (task
+  10.3), and carried `52 job(s)/357 step(s)/8 anchors` against a tree with `54/370/10` — while
+  `docs/state/CURRENT.md:94` records C63 as **PASS**. So C63 was red on PR #84 against a ledger that
+  says green, which drifts `ledger_gen`, `doc_truth`'s pinned counts and the README headline: **four
+  gates from one missed `--write`**, filed until now as "predicted red". Repaired with
+  `gate_surface --write` (+50/-5). **`gate_surface --check` is now the sixth cheap gate in the
+  sweep**, and there is now a **fourth** same-commit coupling because of it.
+- **`ledger_gen` went onto the never-run list.** Its docstring says every row is projected from "one
+  in-process Check_Registry execution". It reads like a document generator and costs what
+  `verify_claims` costs.
+- **The frontend discharge failure was four findings, not one, and all four were ours.** See below.
+- **Task 15.3 is `[x]`; task 15.2 is deliberately still `[ ]`.** 15.2's estimator half is landed and
+  executed, but its `uplift/harness.py::assemble_uplift_result` call site needs task 15.1's
+  `ArtifactInterval` first. Left open rather than `[~]` because the owed half is *authoring blocked
+  on another task*, not a proof owed by a CI job — and because the census must keep offering it to
+  session 3. **Read 15.2's note before authoring it; `--files` will flag `uplift/interval.py` as
+  prior art, correctly.**
 
-1. **Task 12.1 — session 2's first task — still declared
-   `infrastructure/quality/twin-decision-relevance.yaml`**, the path Conflict A decided against.
-   Authoring it would have forked the twin's parameters across two files. Corrected to
-   `digital_twin/simulation/policy.yaml`.
-2. **The two sensitivity flips were unassigned.** The protocol asserted tasks 12.3 and 13.3 *earn*
-   `spoilage_rate` and `delivery_latency` becoming `sensitive: true`, but no sub-task instructed
-   the edit and `policy.py` refuses to default a missing key. Now written into both tasks, each
-   coupled to the pin test it breaks.
-3. **Task 11's verdict table was missing the state the tree is in.** The verdict is four-valued
-   and the protocol resolved three; today's value is `unavailable`, which is not `inconclusive`.
-4. **Task 24.1's gate identifiers were stale by two.** C75 is the highest registered
-   (`check_pin_extractors`); next free is C76. The two checks 24.1 called "still owed" are
-   registered as C74 and C75, so following it would have collided.
-5. **Task 7.2 declared `scripts/audit/feed_licence_truth.py`**, which never landed — the module
-   is `dataset_licence_truth.py`.
-6. Two in the new script itself: its path extractor rejected dotfile-rooted paths (`.github/`,
-   `.kiro/`), and its human report echoed em dashes from `tasks.md`, violating the ASCII-only
-   console rule.
+### The frontend repair, and the two corrections it forced
 
-### Verified vs merely authored — session 1r
+`frontend.yml::quality` failed on Biome. **All four error-level findings were authored by this
+branch's own commit `5db5eb1`** — `git merge-base --is-ancestor 5db5eb1 main` exits 1:
+`setup.ts` `organizeImports`; `fc-budget.ts:163` `useLiteralKeys`; two `fc-budget.ts` `format`
+violations; `SloBurnBoard.tsx:114` `noUselessTernary`. Three of those were unrecorded. And the
+finding previously attributed to PR #77 (`noNonNullAssertion`) is configured `warn` and **exits 0** —
+it never failed anything.
 
-**Executed and green:** `test_spec_ledger_census.py` 16, `test_materiality_margin_rule.py` 13,
-`test_regret_totality_property.py` 17 (46 together). `ruff` clean on every touched file.
-`mypy --strict` reports no error in any line written this session. Cheap gates at their claimed
-exit codes: `workflow_shape_truth` 0, `pin_extractor_truth` 0 (14/14), `sweep_budget_truth` 0,
-`dataset_licence_truth` 2 (honest SKIP), `spec_ledger_census` 0.
+Verified by executing the installed `biome` binary directly, never `pnpm`: the `HEAD` copy of
+`setup.ts` exits **1**, the working-tree copy exits **0**, and `biome check ./src` now reports
+**zero error-level lint findings** across 351 files, down from 43 errors. **`tsc --noEmit -p
+tsconfig.json` exits 0** — the first time this branch's TypeScript has been compiled.
 
-**Red, honestly:** `task_claim_truth --check` exits **1** on `core-purpose-uplift` tasks 9 and 9.1
-— pre-existing, another spec's ledger, not repaired here.
+**Tasks 1.2 and 1.5 are still `[~]`, and the reason is exact.** `frontend.yml::quality` runs Biome,
+then `tsc`, then vitest. The first two are now verified locally; **the third cannot be — I-0 bans
+`vitest` outright.** 1.5's file is reached by none of the local checks at all: Biome never scans
+`frontend/spec/`, and `tsconfig.json`'s `include` omits `frontend/spec/effectiveness/__tests__/**`.
+Its discharge is by **execution**.
 
-**NOT executed:** `digital_twin/tests/test_env_response.py` (module-skipped, `gymnasium` absent);
-`tests/uplift/test_aggregation_integrity_property.py::test_aggregation_integrity_under_failures`
-which **fails** on pre-existing float fragility; and the four slow-marked E2c properties session 2
-will author, which the local sweep deselects by design.
+### Two traps in the local environment, both proven rather than assumed
 
-**A lesson worth carrying.** A flaky property passed twice at `HYPOTHESIS_PROFILE=dev` and failed on
-the third run, because `dev` draws only **10 examples**. Its "excluding" interval was built from an
-absolute width, so at `width >= excess` the lower bound landed on the margin and the test asserted
-`material` for an interval that excludes nothing — `classify_regret` was right to refuse it, since
-`low > margin` is strict because a closed interval whose endpoint sits on the margin *contains* it.
-Fixed the precondition, not the assertion, and did not touch the subject (R2.10); re-verified at
-`heavy`, 17 passed. **A `dev`-profile green is ten examples of evidence, not a proof.** Re-verify
-anything load-bearing at `heavy` on a single scoped file before you claim it.
+1. **`biome check ./src` reports 40 `needs to be formatted` errors that do not exist on CI.** They
+   are `core.autocrlf` artifacts: the working tree checks out CRLF, `.gitattributes` pins only
+   `*.sh` and `*.sql`, and `biome.json` sets `formatter.lineEnding: lf`. Proven —
+   `frontend/src/domain/primitives.ts` contains CRLF and is byte-identical to its `HEAD` blob once
+   CRLF is normalised. **Do not "fix" them**; a `format --write` sweep would commit line-ending
+   churn across 40 untouched files and change nothing about the gate. A local Biome run is
+   admissible evidence **per file, on LF files** — not as a whole-tree exit code.
+2. **PowerShell's `Get-Content`/`Set-Content` round-trip corrupts UTF-8 in this repo, and it bit
+   this session.** On PowerShell 5.1 `Get-Content -Raw` decodes with the ANSI codepage, so splicing
+   a file that way mojibakes every em dash and `Set-Content -Encoding utf8` adds a **BOM** —
+   which Python's `read_text(encoding='utf-8')` does *not* strip, so the first line of a spliced
+   document silently gains a `\ufeff`. Caught by byte-inspecting the result and restored with
+   `git checkout`. **Splice documents with Python (`pathlib`, explicit `encoding='utf-8'`) or with
+   the editor tools, never with PowerShell text cmdlets.** Related: PowerShell also mangles the
+   box-drawing characters Biome and several gates print, so read exit codes or use
+   `--reporter=summary` rather than grepping for `━`.
+
+### The escalation was offered, costed, and declined. Read C63 instead.
+
+**Claim, still a prediction:** repairing C63 needed `gate_surface --write` only; `ledger_gen --write`
+and `readme_gen --write` should be unnecessary, because `CURRENT.md` already records C63 as PASS, so
+restoring PASS restores agreement rather than moving a count.
+
+Verifying it locally costs roughly **900 seconds and ~15 minutes of full-core CPU per command, ~30
+minutes serial** — category 3/4 under I-0. It was declined, and not only on heat:
+`truth-gates.yml` runs all three generators on this push anyway, so the local run would have bought
+the same answer twice, and **if the prediction is wrong, C63, C56 and the README headline go red and
+name the drift.** A legible failure in a run that was going to happen beats a private confirmation
+that costs the machine.
+
+**The question was not skipped.** Reading C63's status on this push is an owed item, and the
+prediction is recorded as unverified in `HANDOFF.md`'s honesty ledger. **Never repair a count by
+hand** (I-7).
+
+### Verified vs merely authored — session 2p
+
+**Executed and green:** `test_interval_estimation_property.py` **20 passed at `dev` and re-verified
+at `heavy`**; `test_regret_totality_property.py` (17) + `test_materiality_margin_rule.py` (13) =
+**30 passed at `heavy`**, so session 1r's properties survive the interval change; **50 passed**
+across the three at the sweep profile. `ruff` clean on all three touched Python files.
+`mypy --strict` reports no error in any line written this session except the documented repo-wide
+`yaml` stub gap. The six cheap gates at `workflow_shape_truth` 0, `pin_extractor_truth` 0,
+`sweep_budget_truth` 0, `dataset_licence_truth` **2** (honest SKIP), `task_claim_truth` **1**
+(pre-existing, another spec's ledger), `gate_surface --check` **0**. `spec_ledger_census --check`
+pass. Process sweep clean.
+
+**NOT executed:** `vitest`, at all. `_measure`'s new interval path — it drives the SimPy twin, so
+its arithmetic is covered by Property 60 and its wiring **discharges at the `twin-regret`
+dispatch**. `ledger_gen`/`readme_gen --check`. `test_env_response.py` (module-skipped, `gymnasium`
+absent). `test_aggregation_integrity_under_failures`, which still **fails** on pre-existing float
+fragility.
+
+**A lesson, for the second session running: `heavy` failed what `dev` passed.** Property 60's
+degenerate-sample clause asserted `point == value` exactly, and `fmean` of `n` copies is one ulp off
+at `value=4.413920275115946e-253, count=5`. Fixed the **precondition** — closeness for
+point-vs-value, exact equality retained for `low == high == point`, which *is* exact by construction
+— not the assertion, and did not touch the subject (R2.10). **A `dev`-profile green is ten examples
+of evidence. Re-verify anything load-bearing at `heavy` on one scoped file.**
+
+**And one design defect that Property 60's own third clause found.** Design E3.1 said sorting the
+resample *statistics* makes the interval invariant to input order. It does not — the seeded index
+stream is fixed, so permuting the inputs changes which values each resample draws, sorted or not.
+Order-invariance needs the paired *differences* sorted before resampling; sorting the statistics is
+what makes percentile extraction well defined. **Both are needed and they do different jobs.**
+`design.md` E3.1 records the correction, along with the two forced deviations from its declared
+signature: the return type is `uplift.interval.Interval` and not `ArtifactInterval` (importing
+`harness.py` would drag the twin and numpy into `regret.py`'s deliberately light import path), and
+`alpha` is read with `yaml` rather than through `uplift.contract.load_contract`, because
+`contract.py` imports `scipy` and **`scipy` is not in `uplift.yml::twin-regret`'s install closure** —
+routing one float through the validating reader would have failed the regret measurement at import,
+inside the job that exists to run it. Both deviations are pinned by tests, not by intention.

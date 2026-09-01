@@ -1,24 +1,27 @@
 # HANDOFF — decision-quality-proof
 
-**State at end of session 1r (2026-09-01). Committed, pushed, and on PR #84.** Derive the counts,
-never read them:
+**State at end of session 2p (2026-09-01). Committed and pushed; awaiting CI.** Derive the
+counts, never read them:
 
 ```powershell
 python -m scripts.audit.spec_ledger_census --files --next 11
 ```
 
-At the time of writing that reported **132 leaf tasks: 53 done, 3 authored-pending-discharge, 76
-open** — 70 authorable and 6 CI-gated. Parent tasks 2, 3, 4, 5, 7, 8, 9 complete; **tasks 1 and 10
-are not** — 1.2, 1.5 and 10.4 are `[~]`. E0 is authored, E1/E4a/E2a are closed, E2b is authored
-with its margin rule landed and its margin value owed at checkpoint A.
+At the time of writing that reported **132 leaf tasks: 54 done, 3 authored-pending-discharge, 75
+open** — 69 authorable and 6 CI-gated, with `next 11` returning exactly
+`12.1 12.2 12.3 12.4 13.1 13.2 13.3 13.4 13.5 13.6 13.7`, which matches `SESSION_PROTOCOL.md`'s
+session-2 row. Parent tasks 2, 3, 4, 5, 7, 8, 9 complete; **tasks 1 and 10 are not** — 1.2, 1.5 and
+10.4 are `[~]`. E0 is authored, E1/E4a/E2a are closed, E2b is authored with its margin rule landed
+and its margin value owed at checkpoint A.
 
-**Three commits, on `feat/decision-quality-proof`, PR #84 open against `main`:**
-`1f4f7d1` E4a/E2a/E2b + the margin rule (42 files) · `dd5cd8c` the protocol re-cut (5 files) ·
-`e0944cb` the excluding-interval generator fix (1 file).
-
-> **The next thing in the plan is checkpoint A, and it is an operator action, not an authoring
-> session.** Tasks 6, 10.4 and 11 discharge there. **Do not author task 12** until task 11's
-> verdict is recorded and is not `material`. Session 2 is then eleven tasks: 12.1–12.4, 13.1–13.7.
+> **Session 2p was pre-batch repair, not an authoring batch.** It made checkpoint A affordable, made
+> checkpoint A's verdict *admissible*, and repaired two discharge failures PR #84 exposed — one of
+> which nothing had recorded. **No session-2 task was started.** The next thing in the plan is still
+> checkpoint A, and it is an operator action.
+>
+> **Three commits on `feat/decision-quality-proof`, pushed to PR #84:** `85774e1` the interval +
+> the dispatch selector + the gate-surface regeneration (6 files), `d67f1c7` the Biome repair
+> (3 files), `<this commit>` the ledger. The branch is now **14 commits ahead of `main`.**
 >
 > The working agreement is `.kiro/specs/decision-quality-proof/SESSION_PROTOCOL.md`.
 > The prompt to paste in a new session is
@@ -29,11 +32,39 @@ as it *is*, not as a diff against how it was.
 
 ---
 
+## What is owed right now, in order
+
+**All of it is operator work. There is no authoring owed before checkpoint A.**
+
+1. **Read `truth-gates.yml::falsification-sweep`'s survivor list on PR #84 and bring it to the user
+   before fixing anything.** That discharges task 6. Never weaken a mutation to clear a survivor.
+2. **Read whether C63 went green** on this push. That is the deferred verification of the
+   gate-surface repair — see "The escalation that was declined, and why that was the cheaper truth"
+   below. If C63, C56 or the README headline are red, the prediction was wrong and the run names the
+   drift.
+3. **Dispatch the regret measurement alone** — now possible, and this is what session 2p's
+   `uplift.yml` change bought:
+   ```powershell
+   gh workflow run uplift.yml --ref feat/decision-quality-proof --field job=twin-regret
+   ```
+   Then read `regret`, `interval_low`/`interval_high`, `comparator_headroom`, `margin_rule`,
+   `margin_rule_derives` and `interval_excludes_rule_margin` from
+   `artifacts/uplift/twin-regret.json`.
+4. **Instantiate `materiality_margin.value` from the committed rule** (`service_points * 0.01 *
+   weights.unmet_service`), record the headroom it was checked against, and pin the derived value.
+   `policy.py::materiality_margin` will refuse a value the rule does not produce — that is intended.
+   Discharges task 10.4.
+5. **Record task 11's verdict** against `SESSION_PROTOCOL.md`'s four-value table, with evidence.
+   Then branch: `material` -> stop and re-cut R5; `inconclusive` -> session 2's eleven tasks;
+   `unavailable` -> the measurement did not happen, say so.
+
+---
+
 ## Read these first, in this order. Binding, not advisory.
 
 1. `.kiro/steering/local-compute-budget.md` — invariant **I-0**. Highest precedence.
 2. `.kiro/specs/decision-quality-proof/SESSION_PROTOCOL.md` — the cap, the three marks, the four
-   checkpoints, the batch plan.
+   checkpoints, the batch plan, and the **six** cheap gates (a sixth joined in session 2p).
 3. `CLAUDE.md` — 14 invariants, honesty contract, gate registry, `E-S*` lessons.
 4. `.claude/skills/synapse-engineer/SKILL.md` + `references/`.
 5. `.cursorrules` + `docs/cursor/*.md`.
@@ -41,7 +72,7 @@ as it *is*, not as a diff against how it was.
 7. `.kiro/specs/decision-quality-proof/{requirements,design,tasks}.md`.
 
 When two conflict, the higher-numbered authority wins **and the conflict is surfaced, never
-silently resolved.**
+silently resolved.** Session 2p surfaced three; all three are recorded below.
 
 ### The ledger has three marks and four sources
 
@@ -56,7 +87,159 @@ every task within an eleven-second window, so a record there is not evidence any
 **And disk outranks all four.** Session 1 opened with eight tasks complete on disk and unchecked.
 `--files` is the mechanical version of that check; read its `prior-art` lines before authoring.
 Treat them as informational — `tasks.md` names some paths in order to reject them (7.1, 7.3, 8.2),
-and a task that modifies an existing module always shows prior art.
+and a task that modifies an existing module always shows prior art. **It now flags `uplift/interval.py`
+against open task 15.2, correctly:** session 2p landed that task's estimator half early. Read 15.2's
+note before authoring it.
+
+---
+
+## Session 2p — what changed, and why each change had to happen before the dispatch
+
+### 1. The interval, which is the substantive one
+
+**`uplift/regret.py::_measure` supplied no interval, and `classify_regret` reads an absent interval
+as a satisfied precondition, not a missing one.** Its material branch is
+
+```python
+if regret >= margin and (interval is None or excludes_margin):
+```
+
+so on a bare point estimate at or above the margin, checkpoint A could have reported Finding 4
+**falsified** and ended a 132-task spec on a number with no dispersion.
+
+Three sources disagreed about whether that is admissible, and the disagreement was surfaced rather
+than resolved silently:
+
+| Source | What it says `material` requires |
+|---|---|
+| `RegretVerdict` docstring, `SESSION_PROTOCOL.md`'s checkpoint-A table | regret at or above the margin **with its interval excluding it** |
+| `requirements.md` **R5.3** | at or above the margin. **No interval clause.** |
+| `requirements.md` **R5.13** | the interval clause — but for the *non-stationary* twin at task 13.7, not this run |
+
+**Resolved by changing the instrument, not the standard.** `uplift/interval.py` (design **E3.1**,
+task 15.2's estimator half, landed early) supplies a paired percentile bootstrap at `1 - alpha`
+from the committed Metric_Contract; `_measure` passes it. **`classify_regret`'s logic is
+unchanged** — supplying a non-`None` interval is what makes `excludes_margin` load-bearing, so all
+17 of task 10.6's pinned properties still hold. A measurement whose dispersion cannot be estimated
+reports `status: unavailable` and the CLI exits 2, failing the job; it is never downgraded to a
+point-estimate verdict.
+
+**This is stricter than R5.3 requires, deliberately.** Adopting an undemanded standard is only
+legitimate in the direction that makes falsification *harder to claim*. The reverse would be
+metric-shopping. Recorded in task 11 so a reader comparing the run to R5.3 finds the deviation
+stated.
+
+**What the estimator is, and the three things about it that are not free choices.**
+
+- A paired bootstrap over replicate-aligned samples; the statistic is the mean paired difference,
+  which is exactly `RegretObjective.regret`'s estimator *and* the headline uplift's — one estimator
+  for both call sites rather than two disagreeing about what "95%" means.
+- `resamples` is **derived**: `ceil(TAIL_ORDER_STATISTICS / (alpha / 2))`, which is 2000 at the
+  committed `alpha = 0.05`. The one flagged choice is `TAIL_ORDER_STATISTICS = 50` — how many
+  resample statistics must lie beyond each tail bound. A bare `2000` would be a number with no
+  antecedent. It carries no ratchet: unlike the materiality margin, a wider or narrower interval
+  has no self-serving sign.
+- The seed is committed and **its fixity, not its value, is the point.** The module states the
+  honesty clause explicitly: re-seeding after seeing an interval — until a lower bound clears a
+  floor, or until an interval excludes a margin — is metric-shopping with extra steps.
+
+### 2. The dispatch selector, which is what makes checkpoint A repeatable
+
+`uplift.yml` had `workflow_dispatch: {}` and two jobs, so a bare dispatch ran both — spending up to
+~350 runner-minutes on `uplift-proof`, which cannot produce an admissible artifact until E3/E5. It
+now has `workflow_dispatch.inputs.job` (`both` | `uplift-proof` | `twin-regret`) and an `if:` guard
+per job.
+
+Two details that were reasoned about rather than defaulted:
+
+- **`default: both`, and the guard's leading disjunct is `github.event_name != 'workflow_dispatch'`.**
+  On `schedule` there are no inputs at all, so a guard written only against `inputs.job` would
+  silently disable the nightly proof — and a job that stops running is indistinguishable from a job
+  that passes, which is the failure I-7 exists to prevent.
+- **`concurrency` was left at workflow scope.** Moving it to job scope would let the two jobs run
+  side by side, but it would stop being one group across two dispatches of `uplift-proof`, and the
+  guarantee that key exists for — never two powered runs writing the same artifact — is worth more
+  than saving an operator a wait. The consequence (a dispatch during the 03:00 UTC window queues)
+  is recorded in the file rather than removed.
+
+**No step was added, so no new `blocking-steps.yaml` entry is owed.** The existing `twin-regret`
+declaration still resolves: `workflow_shape_truth` re-verified at `verdict=pass`, 370 steps, 10
+declared-blocking entries.
+
+### 3. The frontend discharge failure — four findings, not one, and none of them `main`'s
+
+`frontend.yml::quality` failed on Biome. **All four error-level findings were authored by this
+branch's own commit `5db5eb1`** (task 1.2's commit; `git merge-base --is-ancestor 5db5eb1 main`
+exits 1, so it is not on `main`):
+
+| # | Finding | Note |
+|---|---|---|
+| 1 | `src/test/setup.ts` — `organizeImports` | the one PR #84's log named |
+| 2 | `src/test/fc-budget.ts:163` — `lint/complexity/useLiteralKeys` | **task 1.2's own module**, unrecorded |
+| 3 | `src/test/fc-budget.ts` — two `format` violations | LF file, so real on CI, unrecorded |
+| 4 | `src/surfaces/operations/SloBurnBoard.tsx:114` — `lint/complexity/noUselessTernary` | `git blame` attributes line 114 to `5db5eb1`; unrecorded |
+
+**Two corrections to what this file previously recorded about that CI run.** The other finding it
+named — `noNonNullAssertion` at `primary-surfaces.property.test.ts:33` — is configured `warn`, and
+`biome check` on that file **exits 0**. It never failed anything; it was co-reported, not causal.
+And three real error-level findings went unrecorded, so "one session-1 discharge failure" understated
+it by three.
+
+**The Biome rule was derived from the tree, then executed.** Biome 1.9.4 sorts named specifiers by
+ASCII code point with the `type` keyword ignored, so SCREAMING_CASE precedes camelCase. Six
+Biome-clean files on `main` agree, and one of them only ASCII ordering explains:
+`degradation-rendering.property.test.ts` has `SURFACE_DATA_PATHS` before `SURFACE_DATA_PATH_IDS`,
+which requires `S` (0x53) < `_` (0x5F).
+
+### 4. C63 — the gate-surface drift nothing had recorded
+
+**Two of this spec's own jobs were missing from `docs/state/GATE_SURFACE.md`:**
+`truth-gates.yml::falsification-sweep` (task 5.6) and `uplift.yml::twin-regret` (task 10.3). Both
+landed in session 1 without the regeneration `scripts/audit/gate_surface.py` requires. The committed
+document carried `52 job(s), 357 step(s)` and `8 declared-blocking entries` against a tree with
+**54, 370 and 10**.
+
+`blocking-steps.yaml` predicted this in its own prose, at the point where it declines to add two
+other entries: adding one "makes `gate_surface --check` (C63) FAIL until `--write` is re-run — and
+C63's status is inside the counts `doc_truth` and `readme_gen` pin, so the drift cascades into C56
+and the README headline."
+
+**And `docs/state/CURRENT.md:94` records C63 as `PASS`.** So C63 was red on PR #84 against a
+committed ledger that says green — which drifts `ledger_gen --check` too. **Up to four registered
+gates from one missed `--write`**, and this file had it hidden inside "Truth Gates (enforcement
+spine), predicted red".
+
+Repaired: `python -m scripts.audit.gate_surface --write`, +50/-5 lines, 533 surface rows.
+`--check` now exits **0**. The `if:` guards added in change 2 contributed **no** drift of their own —
+the `on:` trigger test short-circuits before the `if:` is evaluated, so both jobs still render
+`NOT EXECUTED` under all three synthetic contexts.
+
+---
+
+## The escalation that was declined, and why that was the cheaper truth
+
+**Claim, still a prediction:** repairing C63 needed `gate_surface --write` **only**;
+`ledger_gen --write` and `readme_gen --write` should be unnecessary.
+
+**Basis:** `docs/state/CURRENT.md` already records `C63 | PASS` and its registry-verdict line names
+only `C44`, `C64`, `C69` as failures. Restoring C63 to PASS therefore restores agreement rather than
+moving a count, so the documents projected from those counts should not move either.
+
+**Verifying it locally was offered, costed, and declined.** `ledger_gen --check` and
+`readme_gen --check` each execute the entire Check_Registry in-process — `ledger_gen`'s own docstring
+says every row is projected from "**one** in-process Check_Registry execution" — at roughly **900
+seconds and ~15 minutes of full-core CPU each, ~30 minutes serial**, on a thermally throttling
+laptop. That is category 3/4 under I-0.
+
+**The decision was to push instead, and the reasoning is not just about cost.** `truth-gates.yml`
+runs all three generators on this push anyway, so the local run would have bought the same answer
+twice, one of them at 30 minutes of thermal budget. And the failure mode is benign: **if the
+prediction is wrong, C63, C56 and the README headline go red and name the drift.** A legible failure
+in a run that was going to happen is worth more than a private confirmation that costs the machine.
+What would *not* have been acceptable is skipping the question — hence item 2 of the owed list.
+
+**Do not repair a count by hand.** I-7 forbids it absolutely, and `blocking-steps.yaml` says so in
+those words.
 
 ---
 
@@ -66,23 +249,21 @@ and a task that modifies an existing module always shows prior art.
 profiles; the inventory gate's TypeScript rule **inverted** to forbid `numRuns` entirely (R3.8
 forbids a minimum coexisting — do not reintroduce one); six per-file console verdicts with exactly
 one passing; `workflow_shape_truth`'s `final_list_element` correction; `readme_gen` projecting the
-README headline from the **nested** `verify_claims` execution C56 compares against. **Tasks 1.2
-and 1.5 are `[~]`, not `[x]`:** both are TypeScript, neither has been type-checked or executed,
-and this file already said so while the ledger claimed otherwise.
+README headline from the **nested** `verify_claims` execution C56 compares against. **Tasks 1.2 and
+1.5 remain `[~]`** — see the honesty ledger for exactly which of `quality`'s three steps are now
+verified and which is not.
 
 **E1 — gate falsifiability (task 5).** `truth-gates.yml::falsification-sweep` is a gating job with
 a committed cost budget (`per_subprocess_timeout_s: 90`, `install_budget_s: 420`,
 `job_timeout_minutes: 60`). `sweep_budget_truth` re-derives both counts from the declaration's own
 pointers and pins `job_timeout_minutes` to the workflow's own `timeout-minutes`. Registered as
-**C73**.
+**C73**. Its job is now also present in `GATE_SURFACE.md`, which it was not.
 
 **E4a — feed admission (task 7).** At the *design's* paths, not `tasks.md`'s:
 `infrastructure/data/dataset-licences.yaml` + schema, `data_fabric/licence.py`,
 `data_fabric/ingest/m5.py`, `scripts/audit/dataset_licence_truth.py` → **C74**.
 `record_ingestion` **refuses** an ingestion whose licence is unconfirmed, whose dataset is
 undeclared, or whose revision disagrees with the terms read (I-6, a hard guardrail).
-**Both artifacts were invisible to git until this branch fixed `.gitignore`** — see the latent
-blockers in the honesty ledger below.
 
 **E2a — decision record and instrumentation (tasks 8, 9).** `ADR-055` committed **before** any R5
 engine change (R5.7). `digital_twin/simulation/policy.yaml` is the single committed
@@ -107,35 +288,32 @@ lazily at mutations and advance boundaries — never by a sampling process, whic
 events and could reorder same-timestamp callbacks.
 
 **E2b — regret and comparator (task 10, except 10.4).** `uplift/regret.py`: five cost terms, every
-number read from `policy.yaml`, four-valued verdict (`material` | `sub-margin` | `inconclusive` |
-`unavailable`). `uplift/foresight.py`: two-pass comparator with the `demand_identical` soundness
-invariant recorded, not assumed. `uplift.yml::twin-regret` + its same-commit declaration.
-Measured: foresight cost 2.93 / fill 0.9149 vs no-op 11.79 / fill 0.3592.
+number read from `policy.yaml`, four-valued verdict. `uplift/foresight.py`: two-pass comparator with
+the `demand_identical` soundness invariant recorded, not assumed. `uplift.yml::twin-regret` + its
+same-commit declaration, now with a job selector and an interval. Measured: foresight cost 2.93 /
+fill 0.9149 vs no-op 11.79 / fill 0.3592.
 
-**Task 10.4 is half landed and half owed, and the split is deliberate.** Session 1r committed the
-margin's *derivation rule*; the *value* is still `null` and is owed at checkpoint A. See below.
+**Task 10.4 is half landed and half owed, and the split is deliberate.** The margin's *derivation
+rule* is committed and enforced; the *value* is still `null` and is owed at checkpoint A.
 
-**Session 1r — protocol revision plus the margin rule.** `scripts/audit/spec_ledger_census.py` +
-16 tests. The batch plan re-cut around checkpoints A–D. The `[~]` mark introduced.
-`task_claim_truth --check` added to the sweep. ADR-055 **D2.5** and the enforced margin rule
-(13 tests). No spec task authored to completion.
+**Task 15.2 is now also half landed, and it is left `[ ]` on purpose.** The estimator exists and is
+executed; the `uplift/harness.py::assemble_uplift_result` call site needs task **15.1**'s
+`ArtifactInterval` and `schema_version` first. Left open rather than `[~]` because the owed half is
+*authoring blocked on another task*, not a proof owed by a CI job — a `discharge:` line would be
+false, and would also stop the census offering it to session 3, which is precisely what session 3
+needs it to do. Task **15.3** is `[x]`: authored *and* executed.
 
 ---
 
 ## The two checkpoints that come before the work they gate
 
 `tasks.md`'s overview says E2b precedes E2c "specifically to try to kill this spec's central claim
-before the project spends its largest single block of work on a premise it declined to test". The
-previous batch plan pooled tasks 11 and 14 into the final session, which preserved the authoring
-order and destroyed the decision order. **A gate that fires after the work it guards is not a
-gate.** They are now operator actions ahead of that work — zero local compute, so I-0 is
-unaffected.
+before the project spends its largest single block of work on a premise it declined to test". **A
+gate that fires after the work it guards is not a gate.** They are operator actions ahead of that
+work — zero local compute, so I-0 is unaffected.
 
-**Checkpoint A** (tasks 6, 10.4, 11) — push the branch for its first CI exposure; read the
-falsification sweep's survivor list and bring it to the user before fixing anything; dispatch
-`uplift.yml::twin-regret`; instantiate the margin **from the committed rule** (the run reports
-`margin_rule`, `margin_rule_derives` and `comparator_headroom` for exactly this); record task 11's
-verdict.
+**Checkpoint A** (tasks 6, 10.4, 11) — survivor list, then the `twin-regret` dispatch (now
+cheap and alone), then the margin from the committed rule, then task 11's verdict.
 
 **Checkpoint B** (task 14) — after 13.7, dispatch the E2c measurements; if **any** single-objective
 policy is Pareto-optimal under interval-aware dominance, consensus is provably unnecessary and E3
@@ -145,26 +323,26 @@ policy is Pareto-optimal under interval-aware dominance, consensus is provably u
 Finding 4 falsified. `sub-margin` → confirms it, unreachable today. `inconclusive` → proceed, on
 task 11's own words that "the repair is to the instrument" and E2c *is* that repair.
 `unavailable` → **not a verdict at all**; it is the absence of a measurement, and I-7 forbids
-reading absence as either a pass or a null. That is what checkpoint A exists to move off.
+reading absence as either a pass or a null.
 
-**The margin's derivation rule is landed and enforced; only its value is owed.** R5.2 says commit
-the margin only after measuring it, while every other threshold here is pinned before the run
-judged against it. Naively combined, those license choosing the margin with the number in hand —
-deciding task 11's verdict by the choice of margin. ADR-055 **D2.5** now states the rule:
+**The margin's derivation rule is landed and enforced; only its value is owed.** ADR-055 **D2.5**:
 
 ```
 materiality_margin = service_points * 0.01 * weights.unmet_service      # 5.0 -> 0.40
 ```
 
-Three things make it binding rather than prose. `policy.py::materiality_margin` **re-derives** a
-committed value from the rule and **refuses one that disagrees**. It also refuses a margin at or
-above the measured comparator headroom (`11.79 - 2.93 = 8.86`), which would be unfalsifiable by
-construction. And the ratchet direction is **`down`**, because unlike an objective weight this
-threshold has an obvious self-serving sign: raising it makes Finding 4 harder to falsify. The one
-chosen input, `service_points: 5.0`, is flagged `chosen` exactly as the `delivery_latency` weight
-is, and bracketed on both sides — below ~3.3 points it would call the incumbent's known shortfall
-against its own newsvendor target (`0.8556` vs `8/9`) material; above 8.86 it cannot fire.
+`policy.py::materiality_margin` **re-derives** a committed value from the rule and **refuses one
+that disagrees**. It also refuses a margin at or above the measured comparator headroom
+(`11.79 - 2.93 = 8.86`), which would be unfalsifiable by construction. The ratchet direction is
+**`down`**, because unlike an objective weight this threshold has an obvious self-serving sign:
+raising it makes Finding 4 harder to falsify. The one chosen input, `service_points: 5.0`, is
+bracketed on both sides — below ~3.3 points it would call the incumbent's known shortfall against
+its own newsvendor target (`0.8556` vs `8/9`) material; above 8.86 it cannot fire.
 **A margin that could not have been written down before the number existed is not admissible.**
+
+The run now reports `interval_excludes_rule_margin` beside the verdict, so checkpoint A's operator
+can see whether *this* interval would have licensed `material` at the value the rule derives —
+independently of whether that value is committed yet.
 
 ---
 
@@ -175,55 +353,72 @@ against its own newsvendor target (`0.8556` vs `8/9`) material; above 8.86 it ca
 1. **`_apply_cold_start` deleted the catalogue** (`sim._inventory.clear()`). Harmless while a
    stockout cost nothing; once delivery became stock-conditional it meant **no demand event was
    recorded at all**, so both `fill_rate` and `stockout_rate` reported `0.0` for a city where
-   every order fails — exactly the insensitive-instrument failure R5.35 exists to catch. Fixed to
-   zero the levels and keep the keys: cold start now measures `stockout_rate = 1.0000` over 799
-   demand events. An empty *catalogue* remains distinct from empty *stock*.
+   every order fails. Fixed to zero the levels and keep the keys: cold start now measures
+   `stockout_rate = 1.0000` over 799 demand events.
 2. **The licence schema had no JSON-Schema format checker**, so `read_date: "banana"` would have
-   validated — `format` is annotation-only in draft-07 by default. Now enforced at two layers,
-   because `load_licence_document` deliberately skips schema validation on the runtime path.
+   validated. Now enforced at two layers.
 3. **A stale `stryker-break` drift record** claimed a live 26-vs-50 hole whose own recorded
-   remediation was already complete. **Two tests were failing before session 1 began.** Retired to
-   a note per the block's own convention that `drift:` records only live drift.
+   remediation was already complete. **Two tests were failing before session 1 began.**
 
 **Session 1r.**
 
-4. **Task 12.1 — session 2's first task — declared the path Conflict A rejected**
-   (`infrastructure/quality/twin-decision-relevance.yaml`). Authoring it would have forked the
-   twin's parameters across two artifacts while `pin_extractor_truth` resolves 13 pins against the
-   other one. Corrected to `digital_twin/simulation/policy.yaml`.
-5. **The two `kpi_sensitivity` flips were unassigned.** The protocol asserted that structures 2
-   and 4 *earn* `spoilage_rate` and `delivery_latency` becoming `sensitive: true`, but neither
-   task 12.3 nor 13.3 instructed the edit, and `policy.py` refuses to default a missing key. Both
-   now carry the obligation explicitly, each coupled to the pin test it breaks.
-6. **Task 24.1's gate identifiers were stale by two.** It said C73 was highest and that the
-   dataset-licence check and `pin_extractor_truth` were "still owed"; both are registered, as C74
-   and C75. **C75 is the highest; next free is C76.** Following the old text would have collided.
-7. **Task 7.2 declared `scripts/audit/feed_licence_truth.py`**, which never landed — the module is
-   `dataset_licence_truth.py`.
-8. Two in the new census script: it rejected dotfile-rooted paths (`.github/`, `.kiro/`,
-   `.claude/`) because its pattern required an alphanumeric first character, and its human report
-   echoed em dashes from `tasks.md`, violating the ASCII-only console rule. The payload keeps the
-   true text; only the console rendering is transliterated.
+4. **Task 12.1 declared the path Conflict A rejected** (`infrastructure/quality/twin-decision-relevance.yaml`).
+   Corrected to `digital_twin/simulation/policy.yaml`.
+5. **The two `kpi_sensitivity` flips were unassigned.** Both now written into tasks 12.3 and 13.3
+   explicitly, each coupled to the pin test it breaks.
+6. **Task 24.1's gate identifiers were stale by two.** **C75 is the highest; next free is C76.**
+7. **Task 7.2 declared `scripts/audit/feed_licence_truth.py`**, which never landed.
+8. Two in the census script: dotfile-rooted paths rejected, and em dashes echoed to an ASCII-only
+   console.
+
+**Session 2p.**
+
+9. **`classify_regret` reached `material` on a point estimate, and `_measure` supplied no
+   interval.** The single most consequential defect found so far: it could have ended the spec.
+   Fixed by supplying the interval, not by changing the classifier. See above.
+10. **`docs/state/GATE_SURFACE.md` was stale on two of this spec's own jobs, and C63 was red on
+    PR #84 while `CURRENT.md` records it PASS.** Four gates cascade from it. Repaired with
+    `--write`; `gate_surface --check` added to the sweep so it cannot recur unnoticed.
+11. **Three unrecorded error-level Biome findings, all from this branch's commit `5db5eb1`** —
+    `fc-budget.ts:163` `useLiteralKeys`, two `fc-budget.ts` format violations, and
+    `SloBurnBoard.tsx:114` `noUselessTernary`. All repaired. And the finding this file attributed
+    to PR #77 is a **warning that exits 0** and never failed anything.
+12. **`ledger_gen` was missing from the never-run list.** Its docstring says every row comes from
+    "one in-process Check_Registry execution" — it costs what `verify_claims` costs and reads like
+    a document generator. Added to `SESSION_PROTOCOL.md`'s never-run block.
+13. **Design E3.1's order-invariance mechanism was wrong.** It said sorting the resample
+    *statistics* makes the interval invariant to input order. It does not: the seeded index stream
+    is fixed, so permuting the inputs changes which values each resample draws, sorted or not.
+    Order-invariance needs the paired *differences* sorted before resampling; sorting the statistics
+    is what makes percentile extraction well defined. **Both are needed and they do different
+    jobs.** The subject does both; `design.md` E3.1 records the correction. Property 60's third
+    clause is what found it.
+14. **`task 15.2`'s "read `alpha` from the contract" is not executable in the job that needs it.**
+    `uplift/contract.py` imports `scipy` at module scope; `scipy` is in neither
+    `packages/requirements.txt` nor `packages/requirements-dev.txt` and reaches
+    `ci.yml::uplift-verify` only transitively through `agents/*/requirements.txt`, which
+    `uplift.yml::twin-regret` does not install. Routing one float through the validating reader
+    would have failed the regret measurement at import — **discovered by reading the install
+    closures, before a CI round trip paid for it.** Resolved with a narrow `yaml` read plus a test
+    asserting the two readers agree, which runs where `scipy` is present.
+15. **This file said the branch carries three commits. It carries eleven** (`main..HEAD`), and HEAD
+    is `24a1a8a`, a fourth spec-doc commit it did not name.
 
 ---
 
 ## Three findings that constrain future tasks
 
 1. **The intra-day demand shape is NOT derivable from M5.** Its observation columns are **daily**
-   totals; no arithmetic recovers an hour-of-day shape from daily aggregates.
-   `extract_statistics` reports it `unavailable` naming the granularity gap, and `ShapeEstimate`
-   structurally forbids an unavailable shape from carrying values. **Task 12.1 must source it
-   elsewhere and record where — inventing a curve is precisely what R5.11 forbids.** Day-of-week
-   and promotion-uplift shapes *are* derived. This is also the sharpest evidence for R8.12's
-   domain gap between daily grocery and 10-minute quick-commerce demand.
+   totals. `extract_statistics` reports it `unavailable` naming the granularity gap, and
+   `ShapeEstimate` structurally forbids an unavailable shape from carrying values. **Task 12.1 must
+   source it elsewhere and record where — inventing a curve is precisely what R5.11 forbids.**
 2. **The benchmark metric does not line up.** M5's Uncertainty track scores **WSPL** over
    50/67/95/99% intervals; `demand_prophet` declares `quantile_levels: [0.1, 0.5, 0.9]` (an
    **80% raw** band); INV-DP-002 asserts a **conformal-adjusted 90%** band. Three interval
    families. R8.18's *not leaderboard-comparable rather than a rank* must carry this (task 19.4).
 3. **Task 11 cannot confirm Finding 4 today** — only falsify it or return `inconclusive` — because
-   `spoilage_rate` and `delivery_latency` are still `sensitive: false` (`_spoilage` reads neither
-   inventory nor order size; `_delivery` draws travel from an independent uniform). Structures 2
-   and 4 earn the flips, and tasks 12.3 and 13.3 now carry that obligation by name.
+   `spoilage_rate` and `delivery_latency` are still `sensitive: false`. Structures 2 and 4 earn the
+   flips, and tasks 12.3 and 13.3 carry that obligation by name.
 
 ---
 
@@ -231,192 +426,149 @@ against its own newsvendor target (`0.8556` vs `8/9`) material; above 8.86 it ca
 
 | # | Decision |
 |---|---|
-| Conflict A | Twin policy file → `digital_twin/simulation/policy.yaml` (design E2c.2), not `infrastructure/quality/twin-decision-relevance.yaml`. **Task 12.1's declared path was still wrong and is now corrected.** |
-| Conflict B | Licence artifact → `infrastructure/data/dataset-licences.yaml` (design E4a.1), making task 19.1 a **verification** not a migration |
-| Conflict C | Property 47/48 attribution — follow the property index; extractor resolution landed in 8.3 |
-| Conflict D | **C75 is the highest registered gate id; next free is C76.** Task 24.1 has now been stale twice; re-derive against `@register` at implementation time. |
-| M5 licence | Fields land **explicitly null** with a `confirmation.procedure` block; the gate reports SKIP. The terms sit behind a Kaggle acceptance gate an agent must not accept. **Never invent a `licence_id`** — `CC-BY-4.0` would be indistinguishable from fact to every downstream reader. |
-| Ratchets | Only 2 of 4 new pinned values got `ratchets.json` entries. A ratchet asserts a monotone better-direction; an objective **weight** has none, so inventing a `direction` would be the fabrication that file's header forbids. Recorded in `$note_on_absent_siblings`. |
-| Task 7.3 | Declined the "ingestion-record block inside the licence declaration" — it would make the artifact ingestion is checked against **mutable by ingestion**. The binding runs the other way: the record pins the artifact's digest. |
-| Property 49 clause 2 | Stated as the equivalent invariant *the demand path is invariant to fulfilment*, because comparing against the deleted pre-change engine would mean maintaining a second copy of the physics whose fidelity nobody checks. |
-| Checkpoint order | Tasks 11 and 14 fire **before** the work they gate, as operator checkpoints A and B. Tasks 21, 22.3, 25 become C and D. |
-| Margin derivation | The *rule* is pre-registered and **enforced by the reader**; the *value* is measured. MDE-shaped. Ratchet `down`, because raising a falsification threshold is the self-serving move. |
-| Census | `spec_ledger_census` is local hygiene, **not** a registered check — registration precedes generation (task 24's rule). |
+| Conflict A | Twin policy file → `digital_twin/simulation/policy.yaml` (design E2c.2) |
+| Conflict B | Licence artifact → `infrastructure/data/dataset-licences.yaml` (design E4a.1) |
+| Conflict C | Property 47/48 attribution — follow the property index |
+| Conflict D | **C75 is the highest registered gate id; next free is C76.** Re-derive against `@register` at implementation time. |
+| M5 licence | Fields land **explicitly null** with a `confirmation.procedure` block; the gate reports SKIP. **Never invent a `licence_id`.** |
+| Ratchets | Only 2 of 4 new pinned values got `ratchets.json` entries. An objective **weight** has no monotone better-direction, so inventing a `direction` would be fabrication. |
+| Task 7.3 | Declined the "ingestion-record block inside the licence declaration" — it would make the artifact ingestion is checked against mutable by ingestion. |
+| Property 49 clause 2 | Stated as *the demand path is invariant to fulfilment*, not as a comparison against the deleted pre-change engine. |
+| Checkpoint order | Tasks 11 and 14 fire **before** the work they gate, as operator checkpoints A and B. |
+| Margin derivation | The *rule* is pre-registered and **enforced by the reader**; the *value* is measured. Ratchet `down`. |
+| Census | `spec_ledger_census` is local hygiene, **not** a registered check. |
+| **Conflict E (2p)** | **`material` requires an interval excluding the margin, which is stricter than R5.3.** Resolved toward the stricter reading because the deviation only ever makes falsification harder to *claim*. Instrument changed, classifier untouched. |
+| **Interval estimator (2p)** | One estimator for regret and headline uplift, in `uplift/interval.py` at its designed path and name. Return type is `Interval` and not `ArtifactInterval` (import weight); `alpha` read with `yaml` and not via `load_contract` (`scipy`). Both deviations recorded in design.md E3.1 and pinned by tests. |
+| **`gate_surface` (2p)** | Promoted to the **sixth** cheap gate in the sweep. Pure file reads, and it is the gate every workflow edit trips. `ledger_gen` went the other way, onto the never-run list. |
+| **Local Biome/tsc (2p)** | The installed `biome` and `tsc` binaries may be run directly on changed files or on `./src` — bounded, single-process, sub-second-to-seconds, the analogue of `ruff`. **`pnpm` remains banned** and `vitest` remains banned outright. |
 
 ---
 
 ## Honesty ledger — verified vs merely authored
 
-**Executed and green.** 108 passed / 1 skipped / 22 deselected on the fast suites. All 33
-`digital_twin` tests. New property tests: 48 (13), 49 (8), 50 (6), 51 (6), 52 (7), 53 (6), 54
-(16). Cheap gates, re-executed 2026-09-01 at the end of session 1r: `workflow_shape_truth` PASS
-(exit 0, 370 steps, 0 findings), `pin_extractor_truth` PASS (exit 0, **14/14** resolving on both
-sides), `sweep_budget_truth` PASS (exit 0, 3120s ≤ 3600s, 480s headroom), `dataset_licence_truth`
-honest SKIP (exit 2), `spec_ledger_census` PASS (exit 0, every record classified).
-`task_claim_truth` exits **1** on a pre-existing claim in another spec — see the expected-red list.
-Session 1r: `test_spec_ledger_census.py` 16 passed; `test_materiality_margin_rule.py` 13 passed;
-`test_regret_totality_property.py` 16 still passing after the margin reader was wired in (29
-together); `ruff` clean on all four touched/new files; `mypy --strict` reports **no error in any
-line written this session** — `policy.py:28` is the documented repo-wide `yaml` import-untyped and
-the other 11 are pre-existing in `uplift/fidelity.py`, `uplift/contract.py`, `uplift/harness.py`,
-`uplift/consensus_arm.py` and `orchestrator/`.
+### Executed and green, session 2p
 
-**NOT executed. Must not be claimed as passing.**
+| What | Result |
+|---|---|
+| `tests/uplift/test_interval_estimation_property.py` | **20 passed at `dev` and re-verified at `heavy`** |
+| `test_regret_totality_property.py` + `test_materiality_margin_rule.py` | **30 passed at `heavy`** — session 1r's properties survive the interval change |
+| The three together, sweep profile `dev` | **50 passed** |
+| `ruff` on the three touched Python files | exit 0 |
+| `mypy --strict` on the same | **no error in any line written this session** except `interval.py:46`, the documented repo-wide `yaml` stub gap (identical to `policy.py:28`) |
+| `biome check src/test/setup.ts` | **`HEAD` copy exits 1, working-tree copy exits 0** |
+| `biome check --max-diagnostics=200 ./src` | **zero error-level lint findings** across 351 files, down from 43 errors |
+| `tsc --noEmit -p tsconfig.json` | **exit 0 — the first time this branch's TypeScript has been compiled** |
+| The six cheap gates | `workflow_shape_truth` 0, `pin_extractor_truth` 0, `sweep_budget_truth` 0, `dataset_licence_truth` **2** (honest SKIP), `task_claim_truth` **1** (pre-existing), `gate_surface --check` **0** |
+| `spec_ledger_census --files --check` | pass, exit 0, every record classified |
 
-- **All TypeScript.** The five declared console property files plus `fc-budget-profile` are
-  authored, not type-checked, not executed. `getDiagnostics` returns no TS signal here —
-  **inconclusive, not evidence** (R2.13). Tasks 1.2 and 1.5 are `[~]` for exactly this reason.
+### NOT executed. Must not be claimed as passing.
+
+- **`vitest`. At all.** I-0 bans it, so `frontend.yml::quality`'s third step is unverified.
+  **This is the whole reason 1.2 and 1.5 stay `[~]`.** What *is* now verified for that job:
+  Biome (step 1) and `tsc` (step 2). What is not: the run. The fast-check resolver either applies
+  at runtime or throws by design, and only a run distinguishes those (R2.13).
+- **Task 1.5's file is reached by none of the local checks, and the reason is precise.**
+  `biome check ./src` never scans `frontend/spec/`; `frontend/tsconfig.json`'s `include` names only
+  `frontend/spec/effectiveness/harness.ts` and `e2e-entry.ts`, **not** `__tests__/**`; only
+  `frontend/vitest.config.ts`'s `include` covers it. So its discharge is by **execution**, and
+  `frontend.yml::spec-typecheck` — the only job that type-checks it — is predicted red and out of
+  scope (R2.15).
+- **`uplift/regret.py::_measure`'s new interval path has never executed.** It drives the SimPy twin
+  through `run_two_pass`, a category-4 workload. Its arithmetic is covered by Property 60 and its
+  types by `mypy --strict`, but **the wired path discharges at the `twin-regret` dispatch, not
+  here.**
 - **`digital_twin/tests/test_env_response.py`** — module-skipped by
-  `pytest.importorskip("gymnasium")` at line 17; collects **0 items**. Runs in CI. Carries a real
-  new interaction: `test_good_action_beats_bad_over_seeds` asserts `mean(fast) > mean(slow)`, and
-  faster dispatch now consumes stock sooner, so dispatch latency alone no longer guarantees the
-  reward ordering.
+  `pytest.importorskip("gymnasium")`; collects **0 items**. Runs in CI.
 - **`tests/uplift/test_aggregation_integrity_property.py::test_aggregation_integrity_under_failures`
-  FAILS.** Falsifying example has `arm=''`, `seed=0`, hypothesis-built `KpiVector`s — never
-  executes the twin, compares float dicts with `==`. **Diagnosed as pre-existing float fragility;
-  with no before/after run that is a diagnosis, not evidence.**
-- **A second flaky property was found and fixed in this session, and the way it was found matters.**
-  `test_material_requires_the_interval_to_exclude_the_margin` passed twice and then failed on the
-  pre-push re-verify, because `HYPOTHESIS_PROFILE=dev` draws only 10 examples per run. Its
-  "excluding" interval was built from an *absolute* width, so at `width >= excess` the lower bound
-  landed on or below the margin and the test asserted `material` for an interval that excludes
-  nothing. `classify_regret` was right to refuse it: `low > margin` is strict because a closed
-  interval whose endpoint sits on the margin **contains** it. **Fixed the precondition, not the
-  assertion, and did not touch the subject** (R2.10). Verified at `HYPOTHESIS_PROFILE=heavy`, 17
-  passed. **Lesson: a `dev`-profile green is 10 examples of evidence. It is not a proof.**
-- **`tests/uplift/test_comparator_restock_disabled_property.py` — 7 tests, all deselected
-  locally.** They are slow-marked because they drive the twin, so `-m "not slow"` skips them and
-  I-0 forbids running them here. They read `comparator.restock_threshold` and `POLICY_PATH.name`,
-  neither of which session 1r changed. The reachable half was checked directly rather than
-  assumed: `restock_threshold` reads `0.0` and the filename is `policy.yaml`. The twin-driving
-  half remains **unverified** and discharges at checkpoint A.
-- **CI has never run this branch. Checkpoint A is its first exposure.** Every gate runs for the
-  first time there.
-- **Four pre-existing ruff violations in `scripts/audit/verify_claims.py`** (lines 19, 23, 1020,
-  1315). Invisible to CI, which scopes ruff to `packages/`, `agents/`, `orchestrator/`.
-  **Correction to an earlier claim in this file: the expiry is not session 5.** `verify_claims.py`
-  is modified in this branch (the C73/C74/C75 registrations), so it is staged in this PR's first
-  commit. The deferral holds only because `pre-commit` is **not installed** — `.git/hooks/` holds
-  nothing but `.sample` files. It expires the moment anyone runs `pre-commit install`.
+  FAILS** on pre-existing float fragility. Diagnosed, not repaired; with no before/after run that
+  is a diagnosis, not evidence.
+- **`tests/uplift/test_comparator_restock_disabled_property.py` — 7 tests, slow-marked, deselected
+  locally.** They read `comparator.restock_threshold` (`0.0`) and `POLICY_PATH.name`
+  (`policy.yaml`), neither of which changed. The twin-driving half discharges at checkpoint A.
+- **`ledger_gen --check` and `readme_gen --check`.** Offered, costed at ~30 minutes of full-core CPU
+  serial, and **declined** in favour of letting this push answer the same question. The prediction
+  that C63's repair moves no count is therefore **unverified**; item 2 of the owed list is to read
+  whether CI agrees.
+- **Four pre-existing `ruff` violations in `scripts/audit/verify_claims.py`** (19, 23, 1020, 1315),
+  invisible to CI, which scopes ruff to `packages/`, `agents/`, `orchestrator/`.
 
-### Two latent blockers found while preparing the commit
+### Two lessons from this session, both worth carrying
 
-1. **`.gitignore`'s bare `data/` silently ignored both E4a artifacts. FIXED in this branch.**
-   `data/` matches a directory named `data` at *any* depth, so `infrastructure/data/` was
-   excluded, taking `dataset-licences.yaml` and `schemas/dataset-licences.schema.json` with it.
-   Because `git add` refuses an ignored path **without printing anything** unless `-f` is passed,
-   task 7.1 could tick complete while its deliverable never reached CI — the same defect class as
-   task 1.1's untracked console files, but silent.
+**A `dev`-profile green is ten examples of evidence, for the second session running.** Property 60's
+degenerate-sample clause **passed at `dev` and failed at `heavy`**: it asserted `point == value`
+exactly, and `fmean` of `n` copies of a value is one ulp off at
+`value=4.413920275115946e-253, count=5`. Fixed the **precondition** (closeness for point-vs-value,
+exact equality retained for `low == high == point`, which *is* exact by construction), not the
+assertion, and did not touch the subject (R2.10). **Re-verify anything load-bearing at `heavy` on
+one scoped file before claiming it.**
 
-   **The consequence that matters is C74's degradation becoming indistinguishable.** Locally the
-   gate exits 2 as an honest SKIP because the Kaggle terms are unconfirmed. On CI it would have
-   exited 2 because *the file was absent*. Same exit code, different cause, nothing to tell them
-   apart — exactly the failure I-7 exists to prevent, and this file previously recorded only the
-   benign cause.
+**A local red is not always a CI red, and the difference is worth proving rather than assuming.**
+`biome check ./src` reports **40 `needs to be formatted` errors that do not exist on CI.** They are
+`core.autocrlf` artifacts: the working tree checks out CRLF, `.gitattributes` pins only `*.sh` and
+`*.sql`, and `biome.json` sets `formatter.lineEnding: lf`. **Proven, not assumed** —
+`frontend/src/domain/primitives.ts` contains CRLF and is byte-identical to its `HEAD` blob once CRLF
+is normalised. **Do not "fix" them:** a `biome format --write` sweep would commit a line-ending
+churn diff across 40 untouched files and change nothing about the gate. It also means a local Biome
+run is only admissible evidence per-file, on LF files — which is why `setup.ts`, `fc-budget.ts` and
+`SloBurnBoard.tsx` (all LF, all verified individually) count and a whole-tree exit code does not.
 
-   Fixed by anchoring the rule to `/data/` rather than adding an exception or using `git add -f`,
-   both of which leave the trap armed for the next file. Blast radius verified empirically before
-   staging: **exactly two paths become visible**, both intended. The root `data/` tree stays
-   ignored (`data/bengaluru/*`), and `data_fabric/feast/data/demand_signals.parquet` stays ignored
-   by its own explicit entry at `.gitignore:122`.
+### Observed on PR #84's first CI run, as now corrected
 
-2. **`pre-commit install` is a larger latent blocker than the ruff debt, and it is unrecorded.**
-   `.pre-commit-config.yaml:14-22` runs `mypy --strict` with
-   `additional_dependencies: [pydantic>=2.7.0, types-PyYAML]` and **no `files:` filter**.
-   `types-PyYAML` resolves the three `yaml` import-untyped errors this file records as repo-wide
-   noise, which unmasks **nine real pre-existing errors**: `uplift/fidelity.py:43,102`,
-   `uplift/harness.py:270`, `uplift/consensus_arm.py:384,385,392,637`,
-   `orchestrator/guardrails/thresholds.py:118`.
+Six jobs failed. The decomposition this file previously carried was wrong in two places, and the
+corrections both move work **into** this spec's scope:
 
-   **These block commits to files that do not contain them**, because mypy follows imports:
-   checking `uplift/regret.py` pulls in `fidelity.py`, `harness.py` and `consensus_arm.py`. So the
-   first developer to run `pre-commit install` inherits nine failures in code this spec never
-   touched, on a commit that only edits `regret.py`. Not repaired here — predecessor code, and
-   repairing it under a session-protocol commit would be exactly the misdescribed diff this
-   branch's commit split exists to avoid.
-- **`_Unresolvable`'s N818** is cleared by a `pyproject.toml` per-file-ignore with a recorded
-  reason, matching the `schema_registry.py` / `invariants.py` / `training_contract.py` precedent.
-  Proven: `ruff --isolated --select N818` exits 1 naming line 139; with the ignore, exit 0.
+**This spec's own discharge failures (2, was 1).**
 
-### Observed on first CI — PR #84, run 2026-09-01. No longer predictions.
+- **`Lint • Typecheck • Unit`** — four error-level Biome findings, **all** from commit `5db5eb1`.
+  Repaired. Two steps of that job now verified locally, one not.
+- **`Truth Gates (enforcement spine)`** — carries **C63's gate-surface drift**, from tasks 5.6 and
+  10.3. Repaired. This was previously filed as "predicted red", which concealed it.
 
-The branch is pushed (`e0944cb`) and PR **#84** is open against `main`. CI has run. **Six jobs
-failed, and they decompose into four different kinds — read the kind before touching anything.**
-
-**Predicted, and correct (3).**
+**Predicted, and correct (2).**
 
 - **`TypeScript strict — spec/ + tests/`** (`frontend.yml::spec-typecheck`) — predicted red by
   `tsconfig.spec.json`'s own header. **A prediction is not a dispensation (R2.15):** repair types,
   never `continue-on-error`, never narrow the project's `include`.
 - **`Falsification Sweep (declared gate mutations)`** — at most 8 of 14 declared checks are
   probeable, because `falsifies()` reports `indeterminate` when a gate does not pass on the
-  unmutated copy. **Read the survivor list before fixing anything, and never weaken a mutation to
-  clear a survivor.** This is task 6's subject and discharges it.
-- **`Truth Gates (enforcement spine)`** — the `verify_claims` spine, including C67's SKIP.
+  unmutated copy. **Read the survivor list before fixing anything.** Task 6's subject.
 
-**Session 1's own discharge, and it failed (1). This is the `[~]` mark earning its place.**
+**Pre-existing on `main`, not this branch's (1).**
 
-- **`Lint • Typecheck • Unit` fails on Biome**, and one of its two findings is
-  `frontend/src/test/setup.ts`'s `organizeImports` — **the import block task 1.2 added**. Tasks 1.2
-  and 1.5 were marked `[~]` precisely because no local run or gate had ever judged them; the
-  discharge has now arrived and it is red. The third ledger state predicted this exactly, where an
-  `[x]` would have hidden it. **Repairing it is what turns 1.2 and 1.5 into `[x]`.**
-
-**Pre-existing on `main`, not this branch's (2).**
-
-- The other Biome finding, `lint/style/noNonNullAssertion` at
-  `frontend/src/app/__tests__/primary-surfaces.property.test.ts:33` (`matches[0]!`), arrived in
-  PR **#77** and is on `main` today. Note `biome check ./src` never scans `spec/`, so four of the
-  five declared console property files are not linted by this job at all.
 - **`Audit-chain tamper detection against Postgres`** — `main`'s own `SYNAPSE Integration` run
-  concluded **failure** on 2026-09-01, so this is not introduced here.
+  concluded failure on 2026-09-01.
 
 **Unclassified (1) — do not assume.**
 
 - **`Supply-chain audit (pnpm audit + lockfile HTTPS/host check)`.** `pnpm audit` reads a live
-  advisory database, so it can turn red without any code change. `main`'s last Security Scan was
-  green on 2026-08-31. **Diagnose before repairing; that is a diagnosis, not evidence.**
+  advisory database, so it can turn red without any code change. **Diagnose before repairing.**
 
-**Also still true, and unchanged by this run:** C28's `zero-a-floor` is a disclosed survivor until
+**Also still true:** C28's `zero-a-floor` is a disclosed survivor until
 `coverage_per_package.py --require-measured-floors` lands; `gate-mutations.yaml`'s recorded
 survivor shape for C16 at line 26 is **misattributed**; C67 reads SKIP on Linux too because
-`infrastructure/audit_anchors` does not exist — **not another C44**.
-
-### Checkpoint A's cost, discovered while preparing its command
-
-`uplift.yml` declares `workflow_dispatch: {}` with **no inputs**, and holds **two** jobs:
-`uplift-proof` (`timeout-minutes: 350`) and `twin-regret`. A bare dispatch therefore runs **both**,
-spending up to ~350 minutes of runner time on a job checkpoint A does not need — and `uplift-proof`
-cannot produce an admissible artifact yet anyway, so the spend buys nothing.
-
-**Recommended first act of the next session:** add a `workflow_dispatch.inputs.job` selector with
-an `if:` guard on each job, so `twin-regret` can be dispatched alone. Small, and it makes checkpoint
-A cheap and repeatable rather than a once-per-six-hours event. Declare any new step in
-`blocking-steps.yaml` in the same commit.
-- **`task_claim_truth` is red, and the red belongs to another spec.** Executed 2026-09-01: 563
-  records across 7 specs, exit **1**, naming `core-purpose-uplift` tasks **9** and **9.1** — both
-  `[x]` while `infrastructure/ml/published_checkpoints.json` holds only `__placeholder__`. Exactly
-  the defect the gate exists to catch, pre-existing, and not this spec's to repair. It is in the
-  sweep anyway, because a gate you skip because it is red is a gate you have disabled. **Read the
-  subject before treating a failure as yours.**
-- **`task_claim_truth` will also bite at task 20.3**, confirmed at `tasks.md:1883`: that task is
-  already a detected *pending* claim, because its title matches the `lands-registry-entry` pattern
-  and its body names `published_checkpoints.json`. Ticking it requires the registry to hold a real
-  validated non-placeholder entry.
+`infrastructure/audit_anchors` does not exist. `task_claim_truth` is red on
+`core-purpose-uplift` tasks 9 and 9.1 — **another spec's ledger**, and it will bite this spec at
+task 20.3, already a *detected pending* claim at `tasks.md:2050`.
 
 ---
 
 ## Environment notes
 
-- **PowerShell.** `$env:VAR='x'; cmd`, **not** `set VAR=x && cmd` (`&&` is not a valid separator).
-  `powershell -NoProfile -Command` is not allowlisted.
+- **PowerShell.** `$env:VAR='x'; cmd`, **not** `set VAR=x && cmd`. No heredocs — write a commit
+  message to a temp file and use `git commit -F`.
+- **PowerShell mangles the box-drawing characters Biome and some gates print.** Read exit codes, or
+  use `--reporter=summary`, rather than grepping for `━`.
 - Suppress twin logging in any engine-driving probe or the output floods:
   `structlog.configure(wrapper_class=structlog.make_filtering_bound_logger(logging.ERROR))`.
 - `types-PyYAML` is not installed locally, so `mypy --strict` reports import-untyped on every
-  yaml-importing module. Pre-existing and repo-wide (70 errors across 36 files) — not introduced
-  by this work.
-- Python 3.14.0, pytest 8.4.2, hypothesis 6.151.11, jsonschema 4.26.0.
-- `gymnasium` is not installed, which is why `test_env_response.py` skips.
+  yaml-importing module. Pre-existing and repo-wide — **but `pre-commit install` would install it
+  and unmask nine real pre-existing errors** in `uplift/fidelity.py:43,102`,
+  `uplift/harness.py:270`, `uplift/consensus_arm.py:384,385,392,637`,
+  `orchestrator/guardrails/thresholds.py:118`. Because mypy follows imports, those block commits to
+  files that do not contain them. **Do not run `pre-commit install`.**
+- Python 3.14.0, pytest 8.4.2, hypothesis 6.151.11, jsonschema 4.26.0. `gymnasium` absent.
+- `frontend/node_modules` is installed, so `biome` and `tsc` are runnable directly. **Never via
+  `pnpm`.**
 
 ---
 
@@ -425,69 +577,64 @@ A cheap and repeatable rather than a once-per-six-hours event. Declare any new s
 16 GB laptop, RTX 3050, thermally throttling. **Process type and process count** are what
 throttle it.
 
-**Never run:** dev servers, watchers (`vitest` without `--run` is a watcher — in practice do not
-run `vitest` at all), browsers/Playwright, `docker compose up`, anything binding a port; fan-out
-execution (`-n auto`, `-j`, repo-wide bare `pytest`, `--cov`, `mutmut`); any `MIN_SCENARIOS`-scale
-or training workload.
+**Never run:** dev servers, watchers (`vitest` at all), browsers/Playwright, `docker compose up`,
+anything binding a port; fan-out execution (`-n auto`, `-j`, repo-wide bare `pytest`, `--cov`,
+`mutmut`); any `MIN_SCENARIOS`-scale or training workload.
 
 **Never run, specific to this spec:** `scripts.audit.verify_claims`, `scripts.audit.doc_truth`,
-bare `readme_gen --check` — all three spawn the entire Check_Registry as a **900-second**
-subprocess. `gate_fault_injection --sweep` — 30 gate subprocesses over a tree copy (precedent
-**E-S13-05**: `mutmut` was validated on CI Linux runners, never the Windows dev box). `pnpm`
-anything.
+bare `readme_gen --check`, **`ledger_gen --check` or `--write`**, `gate_fault_injection --sweep`,
+`pnpm` anything.
 
 **Cheap and encouraged:** file reads, `grep`, `ruff`/`mypy` on changed files, **one** scoped
-`pytest` run on a single file or narrow directory, `spec_ledger_census`, and the five cheap gates
-(`workflow_shape_truth`, `pin_extractor_truth`, `sweep_budget_truth`, `dataset_licence_truth`,
-`task_claim_truth`).
+`pytest` run on a single file or narrow directory, `spec_ledger_census`, the **six** cheap gates,
+and the `biome`/`tsc` binaries on changed files.
 
 **Concurrency is the load-bearing half.** Parallel sub-agents for reading, writing and analysis:
-unlimited. **Sub-agents that execute code: exactly ONE at a time.** If an orchestrator template
-permits 3–5, I-0 overrides it — the 2026-08-01 incident was caused by relaxing precisely that cap.
+unlimited. **Sub-agents that execute code: exactly ONE at a time.**
 
 **Preferred flags:** `-x -q --tb=line -p no:randomly -m "not slow"`, `HYPOTHESIS_PROFILE=dev`.
+
+**Process sweep at the end of session 2p:** no background jobs; the only `node` process is Kiro
+CLI's own ACP server. Nothing of this session's survived.
 
 ---
 
 ## Authoring rules that will bite you
 
-- **Never hardcode `max_examples`.** Inherit from the root `conftest.py` profiles. A hardcoded
-  value overrides the profile in *both* directions — what amplified the original I-0 incident.
-  Pre-existing violations are out of scope; do not add one, and **do not assert a total** (CF-13 —
-  the gate reports the count, the prose does not).
+- **Never hardcode `max_examples`.** Inherit from the root `conftest.py` profiles. Do not assert a
+  total (CF-13).
 - **`-m "slow"` is a selector, not a path filter.** `ci.yml::uplift-verify`'s slow step collects
-  `tests/uplift`, `tests/verify`, `orchestrator/tests/consensus`, `digital_twin/tests` (line 351);
-  its fast step collects only `tests/uplift tests/verify` (line 316). A slow-marked test outside
-  the slow step's four paths is selected by **no job at all**; one that must run in
-  `quality-gates` must **not** be slow-marked, since that job filters `-m "not slow"`.
+  `tests/uplift`, `tests/verify`, `orchestrator/tests/consensus`, `digital_twin/tests`; its fast
+  step collects only `tests/uplift tests/verify`. A slow-marked test outside the slow step's four
+  paths is selected by **no job at all**.
 - **Never weaken a generator or assertion to make a property pass** (R2.10). Fix the subject — or,
-  if the *precondition* was wrong, fix the precondition and say so. The difference is whether the
-  subject changed or the standard did. That happened twice in session 1 and twice in 1r; every
-  time the subject was correct except the census's own path pattern.
+  if the *precondition* was wrong, fix the precondition and say so. That happened once more this
+  session, and the record above names which changed.
 - Type hints everywhere, Pydantic v2 `ConfigDict(frozen=True)` for recorded facts, `structlog`
   never `print()` in library code, canonical
   `json.dumps(obj, sort_keys=True, separators=(',',':'))`, `encoding='utf-8'` on **every**
-  `read_text` (E-S13-07), ASCII-only console output, lines ≤ 100 chars.
-- **I-1:** never add `openai`, `anthropic`, `cohere`, or any paid SDK.
+  `read_text` (E-S13-07), ASCII-only console output, lines <= 100 chars.
+- **I-1:** never add `openai`, `anthropic`, `cohere`, or any paid SDK. `uplift/interval.py` is
+  stdlib-only for this reason among others.
 - **I-4:** never UPDATE/DELETE audit rows; never mutate `make_canonical_row`.
-- **I-7:** a SKIP is not a PASS. Absence of proof is never a pass. **"Authored and
-  diagnostics-clean, not executed" is legitimate and its mark is `[~]`; "should pass" reported as
-  "passes" is not.**
-- **Three same-commit couplings:** a rename and its declaration; a new CI job and *both* its
-  `blocking-steps.yaml` and `required-checks.yaml` entries; a schema change and every fixture that
-  carries it. Either half alone is a red gate.
+- **I-7:** a SKIP is not a PASS. **"Authored and diagnostics-clean, not executed" is legitimate and
+  its mark is `[~]`.**
+- **Four same-commit couplings, not three.** A rename and its declaration; a new CI job and *both*
+  its `blocking-steps.yaml` and `required-checks.yaml` entries; a schema change and every fixture
+  that carries it; **and any workflow job/step change or `blocking-steps.yaml` entry and
+  `gate_surface --write`.** The fourth is the one session 1 missed twice.
 
 ---
 
 ## Two decision points can end this spec early, on purpose
 
 **Checkpoint A, task 11** — if measured `(s, S)` regret on the unmodified twin is at or above the
-R5.2 margin with its interval excluding it, **Finding 4 is falsified. Stop.** R5's scope shrinks
-and the spec is re-cut (R5.3, R5.4). Report it plainly; it is a good outcome.
+R5.2 margin **with its interval excluding it**, **Finding 4 is falsified. Stop.** R5's scope shrinks
+and the spec is re-cut (R5.3, R5.4). Report it plainly; it is a good outcome. The interval clause in
+that sentence is new as of session 2p, and it is the difference between a decision and a coin flip.
 
 **Checkpoint B, task 14** — if **any** single-objective policy is Pareto-optimal under
-interval-aware dominance, consensus is provably unnecessary and **the experiment must NOT be
-run.**
+interval-aware dominance, consensus is provably unnecessary and **the experiment must NOT be run.**
 
 ### The pre-commitment, binding before the number is known
 
@@ -500,5 +647,8 @@ SKIP, and `uplift_floor.py`'s `0.0` meant a measured zero compared against zero 
 number that cannot fail is not a number.**
 
 Two guards on reading it: a null while any objective KPI is recorded not observably sensitive is
-**inconclusive**, not confirmation (task 10.5, implemented). And no headline may be published while
-no Power_Report describes the harness revision under measurement (task 17.3).
+**inconclusive**, not confirmation (task 10.5). And no headline may be published while no
+Power_Report describes the harness revision under measurement (task 17.3).
+
+**And one more, added this session:** a `material` verdict on a point estimate with no dispersion is
+not a falsification either. The instrument now refuses to produce one.
