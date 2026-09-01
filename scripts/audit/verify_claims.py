@@ -2485,9 +2485,31 @@ def check_gate_fault_injection() -> CheckResult:
     the row permanently red over roughly fifty pre-existing rows -- a gate born red for
     someone else's debt asserts nothing new. The exclusion is the honest label AD-4 asks
     for, and it is recorded, not hidden.
+
+    R1.12 (decision-quality-proof task 5.5). The row used to end in a fixed sentence --
+    `no falsification was probed` -- and that sentence was true in every context this
+    check runs in, because the sweep is a category-2/3 workload that cannot run inside
+    the registry's own process. It is no longer true in the one context that matters:
+    `truth-gates.yml::falsification-sweep` runs the sweep and writes its canonical
+    report, and this row projects the counts of THAT run when it is pointed at it. Three
+    counts, in the units the sweep reports them: probed operators, falsified checks,
+    unproven operators.
+
+    Three guards on that projection, because a row that projects the wrong run is worse
+    than one that projects none:
+
+    * The path comes from `$SYNAPSE_FAULT_INJECTION_REPORT` when set, and the resolved
+      path is named in the detail. Provenance is a claim, so it is stated rather than
+      assumed.
+    * A payload carrying `probed: false` is not a probe, and one carrying
+      `baseline_suppressed: true` proved nothing by construction (R1.16). Either is
+      reported as read-but-not-probing, and the row stays with the unprobed detail.
+    * When no report is readable at all, the row keeps the unprobed detail and reports
+      SKIP -- the honest state of a job in which no sweep ran, and never a PASS (I-7).
     """
     try:
         from scripts.audit.gate_fault_injection import evaluate as _eval_injection
+        from scripts.audit.gate_fault_injection import read_sweep_report as _read_sweep
     except ImportError as exc:
         return CheckResult(
             "C72",
@@ -2495,14 +2517,207 @@ def check_gate_fault_injection() -> CheckResult:
             "SKIP",
             f"gate_fault_injection import failed: {exc}",
         )
+
+    swept, swept_reason = _read_sweep()
+    if swept is not None and swept.probed and not swept.baseline_suppressed:
+        return CheckResult(
+            "C72",
+            "Gate fault injection",
+            GATE_STATUS[swept.verdict],
+            f"{swept.probed_operators} of {swept.declared_operators} declared operator(s) "
+            f"probed, {len(swept.falsified_ids)} check(s) falsified by every declared "
+            f"mutation, {len(swept.unproven_operator_ids)} operator(s) unproven; "
+            f"{swept_reason}; {swept.reason}",
+        )
+
     report = _eval_injection(probe=False)
+    suffix = (
+        f"; {swept_reason}, and it reports "
+        + ("a suppressed baseline" if swept.baseline_suppressed else "no probe")
+        + ", so nothing is projected from it (I-7)"
+        if swept is not None
+        else f"; {swept_reason}"
+    )
     return CheckResult(
         "C72",
         "Gate fault injection",
         GATE_STATUS[report.verdict],
         f"{len(report.declared_ids)} of {len(report.registered_ids)} registered check(s) "
-        f"declare a falsification, {len(report.undeclared_ids)} undeclared and excluded "
-        f"from PASS-eligibility; {report.reason}",
+        f"declare a falsification over {report.declared_operators} operator(s), "
+        f"{len(report.undeclared_ids)} undeclared and excluded from PASS-eligibility; "
+        f"{report.reason}{suffix}",
+    )
+
+
+@register("C73", "The falsification sweep's cost budget is an arithmetic claim that holds")
+def check_sweep_budget() -> CheckResult:
+    """R1.11 (decision-quality-proof task 5.3).
+
+    `gate-mutations.yaml::sweep_budget` commits three numbers and one inequality over
+    them. The inequality was worked once, in a comment, against counts that were true
+    that day: 30 subprocesses at 90s plus a 420s install allowance against a 3600s job.
+    A comment is not a gate, and a fifteenth declaring check -- or a second operator on
+    an existing one -- would make the committed budget stop fitting with nothing to say
+    so. This row is the gate: `sweep_budget_truth` re-derives BOTH counts from the
+    declaration's own `gates:` block through the pointers the declaration itself commits,
+    and asserts the inequality over them.
+
+    It also pins the third number to its consumer. `job_timeout_minutes` is documented as
+    "MUST equal `timeout-minutes` on the job that runs the sweep"; unchecked, that leaves
+    the inequality verified against a job budget the job does not have. The gate resolves
+    `truth-gates.yml::falsification-sweep` and compares.
+
+    Nothing here measures a duration. The bounds are committed, and the declaration says
+    so in its own words; a gate that cannot answer inside the per-subprocess bound reports
+    `indeterminate` naming the timeout, which is non-passing and therefore surfaces. What
+    this row establishes is narrower and checkable: that the committed numbers are
+    consistent with each other, with the declared operator set, and with the job that
+    hosts them.
+
+    `unavailable` -> SKIP for an absent budget, an absent `derivation` block, an
+    unresolvable sweep job, or a `declared_gates` count that disagrees with `gates:` (that
+    last drift is C72's finding and is not re-reported here as a second FAIL). SKIP is
+    non-passing and is never a PASS (I-7).
+    """
+    try:
+        from scripts.audit.sweep_budget_truth import assess as _assess_budget
+    except ImportError as exc:
+        return CheckResult(
+            "C73", "Sweep budget", "SKIP", f"sweep_budget_truth import failed: {exc}"
+        )
+    report = _assess_budget()
+    return CheckResult(
+        "C73", "Sweep budget", GATE_STATUS[report.verdict], report.reason
+    )
+
+
+@register("C74", "External-dataset licence terms are recorded, schema-valid and confirmed")
+def check_dataset_licence() -> CheckResult:
+    """R8.1, R8.2, R8.16 (decision-quality-proof task 7.2).
+
+    There is no dataset-licence gate anywhere else in the tree, so this row is the whole
+    of the mechanism. `dataset_licence_truth` reads
+    `infrastructure/data/dataset-licences.yaml`, validates it against its committed
+    draft-07 schema, and reports every field that is absent, malformed or explicitly
+    unconfirmed -- by name, per dataset.
+
+    R8.16's "before the first ingestion" is enforceable only on the change that performs
+    the ingestion, which is why this lives in the Check_Registry:
+    `truth-gates.yml::truth-gates` runs the registry on every push and pull request,
+    including Markdown-only ones, so no ingesting change can avoid it. The runtime
+    companion is `data_fabric/ingest/m5.py::record_ingestion`, which REFUSES to record an
+    ingestion whose licence entry is unconfirmed, whose dataset is undeclared, or whose
+    revision disagrees with the revision the terms were read against. This row reports;
+    that refusal enforces. Neither alone is enough -- a gate can be merged around, and a
+    refusal inside a job nobody reads is invisible.
+
+    Two non-passing verdicts, split on WHY rather than on severity. An **absent or null**
+    field, an unparseable artifact, an unreadable schema, a schema that is not itself a
+    valid draft-07 schema, or a register declaring no dataset at all is `unavailable` ->
+    SKIP: nobody knows the term, and a term nobody knows must never be able to read as a
+    permissive one. A field that is **present and wrong** -- a `read_date` that is not a
+    date, an empty `permitted_use` -- or a `confirmation.confirmed` flag that contradicts
+    its own fields is a FAIL: somebody wrote that value in this tree. Both are non-passing,
+    so R8.2's "non-passing result IF any declared field is absent or fails schema
+    validation" holds under either branch; the split is what makes the report actionable,
+    because "go and read the terms" and "fix the value you wrote" are different work for
+    different people. `LicenceFinding.fatal` carries that distinction per finding.
+
+    **Completeness has exactly one owner.** The six R8.1 fields are deliberately NOT in the
+    schema's `required` list and default to `None` on the model, so an ABSENT key and a NULL
+    key are the same fact and produce one verdict. Had the schema required them, a dropped
+    key would surface as `schema-invalid` -> FAIL while a null key surfaced as
+    `field-absent` -> SKIP: two verdicts for "nobody established this term", decided by
+    whichever mechanism noticed first. What the schema owns is the complementary half -- a
+    term that is PRESENT must be well-formed -- and it is constructed WITH a format checker,
+    because `format` is annotation-only in draft-07 by default and `read_date: "banana"`
+    would otherwise validate. `DatasetLicence` re-checks the date at the model layer too,
+    since `load_licence_document` deliberately skips JSON-Schema validation on the runtime
+    ingestion path.
+
+    **`confirmed` is derived, never read.** `DatasetLicence.confirmed` is computed from
+    whether every R8.1 field is non-null; the artifact's own `confirmation.confirmed` flag is
+    only ever compared against it, via `flag_disagrees()`. A boolean that can disagree with
+    its own subject is a claim, not evidence -- the same shape that let
+    `published_checkpoint_truth.evaluate` fall through from `UNAVAILABLE` to `ok`. Note the
+    asymmetry: over-claiming (`confirmed: true` beside a null term) is a FAIL, while
+    under-claiming (every field populated, flag still false) is not a finding at all -- that
+    is an operator mid-procedure, and failing it would punish the honest half of the work.
+
+    The runtime companion is `data_fabric/ingest/m5.py::record_ingestion`, which REFUSES to
+    record an ingestion whose licence entry is unconfirmed, whose dataset is undeclared, or
+    whose revision disagrees with the revision the terms were read against. This row
+    reports; that refusal enforces (I-6: a hard guardrail beats a learned policy). Neither
+    alone is enough -- a gate can be merged around, and a refusal inside a job nobody reads
+    is invisible.
+
+    **Today this row reads SKIP, and that is the honest state, not a defect.** The M5
+    licence terms are competition rules requiring acceptance by a logged-in person, so they
+    cannot be confirmed by CI or by a code-authoring session. The artifact records
+    `licence_id`, `read_date`, `permitted_use`, `dataset_revision` and the redistribution
+    disposition as `null` -- a positive assertion of ignorance -- with a `confirmation` block
+    naming the operator steps and why they cannot be automated. `dataset_id` and
+    `licence_text_uri` ARE populated, because a dataset's identity and the location of its
+    terms are establishable from public metadata without reading them; naming where a
+    document lives is not a claim to have read it. Writing a plausible `licence_id` such as
+    `CC-BY-4.0` instead would be indistinguishable from a fact for every reader downstream
+    and is precisely the fabrication I-7 forbids. A SKIP is not a PASS.
+    """
+    try:
+        from scripts.audit.dataset_licence_truth import assess as _assess_licence
+    except ImportError as exc:
+        return CheckResult(
+            "C74", "Dataset licence", "SKIP", f"dataset_licence_truth import failed: {exc}"
+        )
+    report = _assess_licence()
+    return CheckResult(
+        "C74", "Dataset licence", GATE_STATUS[report.verdict], report.reason
+    )
+
+
+@register("C75", "Every declared document pin's extractor resolves when actually run")
+def check_pin_extractors() -> CheckResult:
+    """R5.2, R5.12 (decision-quality-proof task 8.3). AD-13's one-word addition.
+
+    A pin is a triple -- document anchor, mechanical source, extractor. The predecessor
+    spec's Property 5 asserts that the two extracted values AGREE and that extraction is
+    IDEMPOTENT. It does not assert that the extractor RESOLVES, and that gap is silent: a
+    `yaml_path:` naming a key that no longer exists yields nothing, a `json_path:` into a
+    restructured file yields nothing, and *nothing compared against nothing agrees*. `None
+    == None`. Such a pin reports green having established nothing about the number it was
+    written to protect -- the same shape as `published_checkpoint_truth.evaluate` letting an
+    `UNAVAILABLE` fall through to `ok`, and as a property passing over a stub returning `[]`.
+
+    Why this cannot be left to C56/`doc_truth`. `doc_truth` only reaches a source extractor
+    when the DOCUMENT anchor resolved first, so a long-dead `yaml_path:` sitting behind a
+    reworded sentence is never exercised at all. `pin_extractor_truth` inverts that: it runs
+    every declared extractor against its declared source UNCONDITIONALLY, independent of the
+    document side, and fails naming the pin, the side, the file and the expression.
+
+    This row FAILs on a dead extractor or a dead anchor -- a defect in this tree, fixable in
+    the change that broke it. It reports `unavailable` -> SKIP when a declared file is absent
+    or the pin table itself cannot be read, because "the file is gone" and "the file is there
+    and the expression no longer matches it" are different repairs and only the second is
+    evidence that a pin silently stopped measuring.
+
+    `kind: generated` pins are skipped by design and COUNTED in the report: their document
+    side is a projection of their source side, so comparing them compares a mechanism to
+    itself (the defect AD-21 rejects), and their generator's own `--check` mode owns them.
+    The exemption is visible rather than silent.
+
+    Nothing here compares values -- whether the two sides agree is C56's subject. This row
+    answers the strictly prior question nobody was asking: did either side produce a value at
+    all?
+    """
+    try:
+        from scripts.audit.pin_extractor_truth import assess as _assess_pins
+    except ImportError as exc:
+        return CheckResult(
+            "C75", "Pin extractors", "SKIP", f"pin_extractor_truth import failed: {exc}"
+        )
+    report = _assess_pins()
+    return CheckResult(
+        "C75", "Pin extractors", GATE_STATUS[report.verdict], report.reason
     )
 
 

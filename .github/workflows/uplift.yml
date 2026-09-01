@@ -136,3 +136,90 @@ jobs:
           path: artifacts/uplift/result.json
           if-no-files-found: warn
           retention-days: 90
+
+
+  # =====================================================================================
+  # twin-regret -- E2b's (s, S) regret measurement (decision-quality-proof task 10.3)
+  # =====================================================================================
+  # ITS OWN JOB, not a step inside `uplift-proof`, and that is deliberate. The two-pass
+  # foresight protocol DOUBLES the twin cost of every replicate, so folding it into a job
+  # already sized at 350 minutes against a ~360-minute ceiling would make one measurement
+  # able to time out the other -- and a timeout is a red job, so the powered uplift proof
+  # would fail for a reason that has nothing to do with uplift.
+  #
+  # WHY THIS CANNOT RUN LOCALLY (I-0). A scenario sweep at `MIN_SCENARIOS` scale
+  # (`digital_twin/simulation/monte_carlo.py:22`, `MIN_SCENARIOS = 1000`) is a category-4
+  # workload, `monte_carlo.py` also drives a `ProcessPoolExecutor`, and the two-pass
+  # protocol doubles it again. Linux CI is the only locus (R5.32).
+  #
+  # WHAT THIS MEASURES, STATED HONESTLY. The comparator is no-op versus perfect-foresight.
+  # That is NOT yet the `(s, S)` regret R5.1 asks for: `Par_Level_Reorder` is owned by
+  # `.kiro/specs/decision-integrity-uplift-proof/` and is a PRECONDITION of R5.1, not a
+  # deliverable of R5. What this job establishes is the comparator's own headroom, which
+  # BOUNDS the `(s, S)` regret from above -- so a small value here would already be
+  # informative, and the report says so in its own `comparator` field rather than leaving a
+  # reader to assume the stronger claim.
+  #
+  # NO MARGIN IS COMMITTED YET, BY DESIGN. R5.2 forbids pinning the materiality margin
+  # before a measurement exists, so this job reports `verdict: unavailable` and judges
+  # nothing. Task 10.4 reads this report and commits the margin; only SUBSEQUENT runs are
+  # judged against it. A job that judged a run against a threshold committed after that run
+  # is the exact defect R5.2 names.
+  twin-regret:
+    name: E2b twin regret vs perfect foresight (measure, do not judge)
+    runs-on: ubuntu-latest
+    # Well under the ceiling: this measurement is far cheaper than the powered proof, and
+    # sizing it honestly leaves the difference visible rather than reserving budget nobody
+    # uses. A timeout is a failed job, which is the honest outcome for an incomplete
+    # measurement (I-7), never a partial result the gate may read.
+    timeout-minutes: 120
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+
+      - name: Install dependencies
+        # simpy + numpy are the whole closure this measurement needs; it touches neither the
+        # agents nor the orchestrator, so a thinner install is honest rather than risky here.
+        run: |
+          pip install -r packages/requirements.txt
+          pip install -e packages/
+          pip install simpy numpy pyyaml
+
+      - name: Measure twin regret against the perfect-foresight comparator (R5.1, R5.33)
+        # Exit status propagates. No `continue-on-error`, no `|| true`, no `|| echo`: a
+        # measurement that could not run is not a measurement, and exit 2 (nothing
+        # measurable) must fail this job rather than be read as a zero regret.
+        #
+        # The replicate count is the one number here that is NOT yet committed to
+        # policy.yaml, because R5.2's deferral covers the margin and not the sample size,
+        # and the sample size needed follows from the variance this run reports. Stated as
+        # a CLI argument so the value used is visible in the job log.
+        run: |
+          mkdir -p artifacts/uplift
+          python -m uplift.regret --replicates 200 --hours 24 --json \
+            | tee artifacts/uplift/twin-regret.json
+
+      - name: Report the objective's insensitive KPIs (R5.34, R5.35)
+        # A separate, always-run step because it is the clause a reader most needs and most
+        # easily misses: while ANY objective KPI is recorded not observably sensitive, a
+        # sub-margin regret is INCONCLUSIVE and must not be read as confirming Finding 4.
+        # `always()` publishes it even when the measurement above failed; this step's own
+        # exit status still propagates.
+        if: always()
+        run: |
+          python -c "from uplift.regret import load_objective; o = load_objective(); print('insensitive objective KPIs:', [i.term for i in o.insensitive] or 'none'); [print(' -', i.term, '::', i.blocked_on.split(chr(46))[0]) for i in o.insensitive]"
+
+      - name: Upload the regret report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: twin-regret
+          path: artifacts/uplift/twin-regret.json
+          if-no-files-found: warn
+          retention-days: 90

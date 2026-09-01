@@ -159,6 +159,75 @@ steps:
   # mechanically enforced ordering. The mechanical enforcement is that `readme_gen`
   # reports a non-passing `unavailable` when the payload it was pointed at is absent
   # or unreadable -- an out-of-order pair fails rather than silently re-executing.
+  # -------------------------------------------------------------------------
+  # decision-quality-proof task 5.6 (R1.1, R1.2, R1.14). Declared in the SAME COMMIT as
+  # the job, because `required_checks_truth` resolves declared job names against the
+  # workflow tree and `workflow_shape_truth` resolves these step declarations against it
+  # too: either half alone is a red gate.
+  #
+  # `all_steps: true` rather than a name list, for the reason the `truth-gates` entry below
+  # gives: `all_steps` cannot be evaded by renaming a step to carry `informational`, and it
+  # covers any step added to the job later. The job holds six steps -- checkout,
+  # setup-python, install, the sweep, the C72 projection, and the artifact upload -- and
+  # every one of them propagates today.
+  #
+  # Declaring the install step blocking is deliberate and is the same argument the
+  # `truth-gates` entry makes, sharpened: `falsifies()` reports `indeterminate` when a gate
+  # does not PASS on the UNMUTATED copy, so a swallowed `pip install` failure would turn
+  # probeable baselines into indeterminate ones and the sweep would report that it learned
+  # nothing about gates that bite perfectly well. A swallowed install here does not weaken
+  # the measurement, it erases it.
+  #
+  # ORDERED TRIPLE, and the order is load-bearing (R1.12). The sweep writes
+  # `artifacts/audit/fault-injection.json`; the C72 step reads it back through
+  # $SYNAPSE_FAULT_INJECTION_REPORT and projects the probed, falsified and unproven counts
+  # of that run; the upload preserves it. `step_order` is a declaration for readers -- the
+  # gate reads only `workflow`, `job`, `step_names`, `all_steps`, `match` and `requirement`
+  # -- and the MECHANICAL enforcement is in the consumer: C72 keeps its unprobed detail and
+  # reports SKIP when no report is readable, so an out-of-order pair reports honestly
+  # instead of projecting a stale run.
+  - workflow: .github/workflows/truth-gates.yml
+    job: falsification-sweep
+    all_steps: true
+    requirement: "R1.1, R1.2, R1.11, R1.12, R1.13, R1.14"
+    step_order:
+      - step: "Probe every declared mutation operator (R1.1-R1.16 - BLOCKING)"
+        role: producer
+        emits: "artifacts/audit/fault-injection.json (--report-json, canonical)"
+      - step: "C72 row projects the counts of the run that produced them (R1.12)"
+        role: consumer
+        consumes: "artifacts/audit/fault-injection.json via $SYNAPSE_FAULT_INJECTION_REPORT"
+        requirement: "R1.12"
+
+  # decision-quality-proof task 10.3. E2b's regret measurement, declared in the same change
+  # as the job -- `required_checks_truth` and `workflow_shape_truth` both resolve declared
+  # names against the workflow tree, so either half alone is a red gate.
+  #
+  # `all_steps: false` and an explicit list, because the two substantive steps have different
+  # jobs: the first MEASURES (and must fail the job when nothing was measurable -- exit 2 is
+  # not a zero regret), the second DISCLOSES the objective's insensitive KPIs. The second
+  # carries `if: always()` so it publishes even on a failed measurement, which does NOT
+  # discard its own exit status; the disclosure is the clause a reader most easily misses,
+  # because while any objective KPI is recorded not observably sensitive a sub-margin regret
+  # is INCONCLUSIVE and must not be read as confirming Finding 4 (R5.35).
+  #
+  # NOTE what this job does NOT do: it commits no materiality margin and judges nothing.
+  # R5.2 forbids pinning the margin before the measurement exists, so the run reports
+  # `verdict: unavailable`. Task 10.4 reads the report and commits the margin; only
+  # subsequent runs are judged against it.
+  - workflow: .github/workflows/uplift.yml
+    job: twin-regret
+    all_steps: false
+    requirement: "R5.1, R5.32, R5.33, R5.34, R5.35"
+    steps:
+      - step: "Measure twin regret against the perfect-foresight comparator (R5.1, R5.33)"
+        role: producer
+        emits: "artifacts/uplift/twin-regret.json (canonical JSON, --json)"
+        requirement: "R5.1, R5.32"
+      - step: "Report the objective's insensitive KPIs (R5.34, R5.35)"
+        role: disclosure
+        requirement: "R5.34, R5.35"
+
   - workflow: .github/workflows/truth-gates.yml
     job: truth-gates
     all_steps: true

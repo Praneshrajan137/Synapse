@@ -185,6 +185,85 @@ pins:
     compare: count
     scale: identity
 
+  # -------------------------------------------------------------------------
+  # ADR-055 / twin decision-relevance (decision-quality-proof task 8.2).
+  #
+  # Source is `digital_twin/simulation/policy.yaml`, the single committed
+  # simulation-parameter file design E2c.2 names. The document side is ADR-055,
+  # the Decision_Relevance_Record. Only values ADR-055 ACTUALLY STATES are
+  # pinned here -- pinning a number the ADR does not state would create a pin
+  # whose document side can never resolve, which is precisely the dead-extractor
+  # shape C75 (`pin_extractor_truth`) exists to catch.
+  #
+  # The materiality margin, the utilisation ladder and the near-saturation band
+  # are DELIBERATELY ABSENT: R5.2 forbids pinning them before measurement, and
+  # they are listed under `deferred:` in the policy file with their owning task.
+  # -------------------------------------------------------------------------
+
+  # The shortage weight, read from newsvendor.py::cost_under rather than chosen.
+  - id: regret-weight-shortage
+    kind: threshold
+    required: true
+    document: docs/adr/ADR-055-twin-decision-relevance.md
+    anchor: '\|\s+`stockout_rate`\s+\|\s+(?P<value>[\d.]+)\s+\|'
+    source: digital_twin/simulation/policy.yaml
+    extractor: 'yaml_path:regret_objective.weights.stockout_rate'
+    compare: numeric
+    scale: identity
+
+  # The holding weight, read from newsvendor.py::cost_over rather than chosen.
+  # Together with the row above this pins the 8:1 critical ratio the objective
+  # inherits from the inventory agent's own reward.
+  - id: regret-weight-holding
+    kind: threshold
+    required: true
+    document: docs/adr/ADR-055-twin-decision-relevance.md
+    anchor: '\|\s+`avg_on_hand_units`\s+\(normalised\)\s+\|\s+(?P<value>[\d.]+)\s+\|'
+    source: digital_twin/simulation/policy.yaml
+    extractor: 'yaml_path:regret_objective.weights.on_hand'
+    compare: numeric
+    scale: identity
+
+  # R6.15 reads BOTH of the next two from the Decision_Relevance_Record. Without
+  # them declared there, R6.15 is unsatisfiable -- which is why ADR-055 D6
+  # declares them rather than leaving them to a later amendment.
+  - id: negative-control-seed-sets
+    kind: threshold
+    required: true
+    document: docs/adr/ADR-055-twin-decision-relevance.md
+    anchor: 'Independent seed sets: (?P<value>\d+)'
+    source: digital_twin/simulation/policy.yaml
+    extractor: 'yaml_path:negative_control.independent_seed_sets'
+    compare: numeric
+    scale: identity
+
+  - id: negative-control-rate-tolerance
+    kind: threshold
+    required: true
+    document: docs/adr/ADR-055-twin-decision-relevance.md
+    anchor: 'exceed `(?P<value>[\d.]+)`'
+    source: digital_twin/simulation/policy.yaml
+    extractor: 'yaml_path:negative_control.max_proven_gain_rate'
+    compare: numeric
+    scale: identity
+
+  # ADR-055 D2.5. The materiality margin's DERIVATION RULE is pre-registered before
+  # checkpoint A; only its magnitude is instantiated afterwards from the measured
+  # distribution (R5.2). This pin covers the rule's one chosen input. The derived
+  # margin itself is NOT pinned here yet, because
+  # `regret_objective.materiality_margin.value` is still `null` and a pin against a
+  # null extracts nothing while comparing green -- the `None == None` hole C75 exists
+  # to close. Task 10.4 adds that pin in the same commit as the value.
+  - id: materiality-margin-service-points
+    kind: threshold
+    required: true
+    document: docs/adr/ADR-055-twin-decision-relevance.md
+    anchor: 'service_points = (?P<value>[\d.]+)'
+    source: digital_twin/simulation/policy.yaml
+    extractor: 'yaml_path:regret_objective.materiality_margin.derivation.service_points'
+    compare: numeric
+    scale: identity
+
 # ---------------------------------------------------------------------------
 # Pins whose resolution source does not exist yet.
 #
@@ -255,16 +334,31 @@ pending_pins:
 # document or the configuration is corrected in the task named below.
 # ---------------------------------------------------------------------------
 drift:
-  - pin: stryker-break
-    document_value: 26
-    source_value: 50
-    detail: >-
-      CLAUDE.md says `break: 26`; frontend/stryker.conf.json ships 50 (bumped
-      2026-05-29 after json-canonical.ts reached 96.30% kill rate). The C16
-      ratchet constant `STRYKER_BREAK_NOW = 26` (verify_claims.py:357) is also
-      below the shipped value, so a regression 50 -> 26 currently PASSES. This is
-      audit finding R7.8; ratchets.json records the same pair.
-    remediation: "task 12.1 -- update CLAUDE.md and the ratchet constant to the shipped 50"
+  # RESOLVED, and retired from `drift:` per this block's own convention that it
+  # "records drift that is still live" (see the cov-fail-under note below for the
+  # precedent). Kept as a note because the finding is historically load-bearing:
+  # it is the R7.8 config-agreement hole that ratchets.json was built to make
+  # visible, and `gate-mutations.yaml` still cites the 26-vs-50 shape.
+  #
+  # WAS: `pin: stryker-break, document_value: 26, source_value: 50` -- CLAUDE.md
+  # said `break: 26` while frontend/stryker.conf.json shipped 50 (bumped
+  # 2026-05-29 after json-canonical.ts reached 96.30% kill rate), and the C16
+  # ratchet constant `STRYKER_BREAK_NOW = 26` sat below the shipped value, so a
+  # regression 50 -> 26 PASSED.
+  #
+  # The recorded remediation ("update CLAUDE.md and the ratchet constant to the
+  # shipped 50") is COMPLETE and verified mechanically, not by assertion:
+  #   * the `stryker-break` pin now resolves `ok` -- CLAUDE.md and
+  #     frontend/stryker.conf.json both read 50;
+  #   * `ratchet_truth` reports `stryker-break` with guard_symbol
+  #     `STRYKER_BREAK_NOW`, guard_value 50.0, agrees_with_shipped true,
+  #     outcome pass.
+  #
+  # Retired during decision-quality-proof task 8.3. Leaving it as a live entry
+  # made `test_every_recorded_drift_entry_is_still_mechanically_real` fail
+  # correctly: a record claiming a hole that has been closed is precisely the
+  # stale-claim class this spec exists to eliminate, and the honest repair is to
+  # retire the record rather than to relax the test (R2.10 -- fix the subject).
 
   # RESOLVED in task 2.8 (ledger_gen). docs/state/CURRENT.md row C15 stated
   # `--cov-fail-under=64` against a ci.yml that ships `--cov-fail-under=0` -- the

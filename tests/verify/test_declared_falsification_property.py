@@ -219,15 +219,25 @@ def declared_outcome(
     return "survived"
 
 
-def declared_verdict(*, blocking: int, probed: bool, indeterminate: int) -> str:
+def declared_verdict(
+    *, blocking: int, probed: bool, indeterminate: int, unproven: int = 0
+) -> str:
     """The aggregate verdict E2.1 mandates, first match wins.
 
     A declaration defect or a surviving mutation FAILs; an unprobed run is
     ``unavailable`` because nothing was proven; an indeterminate probe is
     ``unavailable`` for the same reason; only a fully probed, fully falsified run
     passes.
+
+    ``unproven`` joins the blocking class rather than forming a category of its own
+    (decision-quality-proof task 5.4, R1.7). A **complete** sweep that returned no
+    outcome for a declared operator has proven nothing about that operator, and a
+    denominator that quietly shrinks to the operators that happened to run is the exact
+    shape of a gate reporting a pass over an absence. It is deliberately *not* folded into
+    ``indeterminate``: an indeterminate probe ran and could not conclude, an unproven one
+    never ran, and the two have different repairs.
     """
-    if blocking:
+    if blocking or unproven:
         return "fail"
     if not probed:
         return "unavailable"
@@ -772,6 +782,18 @@ class DeclarationDraft:
         return tuple(dict.fromkeys((*self.declared, *self.unregistered)))
 
     @property
+    def declared_pairs(self) -> tuple[tuple[str, str], ...]:
+        """``(check, operator_id)`` for every operator this draft declares, in file order.
+
+        The unit a sweep is measured in (R1.7). ``document()`` names each operator
+        ``op-{index}`` over :attr:`gate_ids`, and a synthetic sweep must return results
+        keyed by these pairs: a result carrying an operator id the declaration does not
+        contain models a sweep that cannot exist, and would leave every real declared
+        operator unproven for a reason the harness is not responsible for.
+        """
+        return tuple((check, f"op-{index}") for index, check in enumerate(self.gate_ids))
+
+    @property
     def known(self) -> frozenset[str]:
         return frozenset(self.gate_ids) | frozenset(self.tools)
 
@@ -879,8 +901,19 @@ def sweep_cases(draw: st.DrawFn) -> tuple[DeclarationDraft, tuple[FaultInjection
 
     ``tools`` is drawn independently of ``declared`` so the overlap case is reachable: a
     check that both declares an operator *and* is listed as a reporting tool is the case
-    where the PASS-eligibility filter has to earn its keep, and results are drawn for
-    tool-only checks too so a defective sweep cannot smuggle one into the PASS set.
+    where the PASS-eligibility filter has to earn its keep, and that is the case a
+    reporting tool could smuggle a PASS through.
+
+    Results are keyed by the draft's own ``(check, operator_id)`` pairs, in declaration
+    order, and the drawn subset includes the complete set. Two things follow, and both
+    are deliberate (task 5.4). A **strict** subset is a sweep that left declared operators
+    unproven, which R1.7 makes a FAIL -- so that branch is reachable. The **full** subset
+    is a complete sweep, so the ``pass`` branch stays reachable too; keying results by
+    invented operator ids would have made every draw unproven and quietly retired the pass
+    branch from this property. A tool-only check -- one listed under ``reporting_tools``
+    with no ``gates:`` entry -- has no declared operator, so no sweep can return a result
+    for it; the PASS-eligibility filter is exercised through the overlap case instead,
+    which is the reachable one.
     """
     declared = tuple(
         draw(st.lists(st.sampled_from(REGISTERED_IDS), min_size=1, max_size=4, unique=True))
@@ -888,11 +921,19 @@ def sweep_cases(draw: st.DrawFn) -> tuple[DeclarationDraft, tuple[FaultInjection
     tools = tuple(draw(st.lists(st.sampled_from(REGISTERED_IDS), max_size=3, unique=True)))
     draft = DeclarationDraft(declared=declared, tools=tools)
 
-    candidates = tuple(dict.fromkeys((*declared, *tools)))
-    probed = draw(st.lists(st.sampled_from(candidates), max_size=5))
+    pairs = draft.declared_pairs
+    indices = sorted(
+        draw(
+            st.lists(
+                st.integers(min_value=0, max_value=len(pairs) - 1),
+                unique=True,
+                max_size=len(pairs),
+            )
+        )
+    )
     results = tuple(
-        synthetic_result(check, f"op-{index}", draw(st.sampled_from(OUTCOMES)))
-        for index, check in enumerate(probed)
+        synthetic_result(pairs[index][0], pairs[index][1], draw(st.sampled_from(OUTCOMES)))
+        for index in indices
     )
     return draft, results
 
@@ -973,12 +1014,22 @@ def test_a_reporting_tool_or_undeclared_check_is_never_pass_eligible(
     assert report.excluded_ids == tuple(dict.fromkeys((*draft.tools, *draft.undeclared)))
     assert set(draft.tools) <= set(report.excluded_ids)
 
-    # A check is falsified only when EVERY result for it falsified.
+    # A check is falsified only when EVERY operator DECLARED for it falsified (R1.6, as
+    # AD-22 states it). Two clauses, and the second was added by task 5.4: every probed
+    # result for the check falsified, AND no operator declared for it went unprobed. A check
+    # whose second mutation was never applied is not falsified by its first.
+    probed_pairs_seen = {(result.check, result.operator_id) for result in results}
+    partially_probed = {
+        check
+        for check, operator_id in draft.declared_pairs
+        if (check, operator_id) not in probed_pairs_seen
+    }
     probed_order = tuple(dict.fromkeys(result.check for result in results))
     expected_falsified = tuple(
         check
         for check in probed_order
-        if all(result.falsified for result in results if result.check == check)
+        if check not in partially_probed
+        and all(result.falsified for result in results if result.check == check)
     )
     assert report.falsified_ids == expected_falsified
 
@@ -998,8 +1049,38 @@ def test_a_reporting_tool_or_undeclared_check_is_never_pass_eligible(
     # here rather than quietly assumed away; it is reported as an observation.
     blocking = sum(1 for result in results if result.outcome in BLOCKING_OUTCOMES)
     indeterminate = sum(1 for result in results if result.outcome == "indeterminate")
+
+    # R1.7 (task 5.4): the probed and the declared count in the SAME UNIT, and the
+    # remainder reported UNPROVEN. Recomputed from the draft rather than read back, so
+    # this compares two implementations of the rule instead of asking the report to agree
+    # with itself.
+    probed_pairs = {(result.check, result.operator_id) for result in results}
+    expected_unproven = tuple(
+        f"{check}/{operator_id}"
+        for check, operator_id in draft.declared_pairs
+        if (check, operator_id) not in probed_pairs
+    )
+    assert report.declared_operators == len(draft.declared_pairs)
+    assert report.probed_operators == len(results)
+    assert report.complete_sweep is True
+    assert report.unproven_operator_ids == expected_unproven
+    assert report.probed_operators + len(report.unproven_operator_ids) == (
+        report.declared_operators
+    )
+    unproven_findings = tuple(
+        finding for finding in report.findings if finding.rule == "declared-operator-unproven"
+    )
+    assert len(unproven_findings) == len(expected_unproven)
+    for finding in unproven_findings:
+        assert f"{finding.check}/{finding.operator_id}" in expected_unproven
+        assert finding.requirement == "R1.7"
+        assert "UNPROVEN" in finding.detail
+
     assert report.verdict == declared_verdict(
-        blocking=blocking, probed=True, indeterminate=indeterminate
+        blocking=blocking,
+        probed=True,
+        indeterminate=indeterminate,
+        unproven=len(expected_unproven),
     )
     assert report.exit_code == EXPECTED_EXIT_CODES[report.verdict]
     assert report.passing is (report.verdict == "pass")

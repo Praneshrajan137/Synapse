@@ -66,6 +66,38 @@ required:
       `continue-on-error` and no construct that discards an exit status, which
       workflow_shape_truth re-derives from the workflow file on every run (R1.8).
 
+  # Declared by decision-quality-proof task 5.6 (R1.1, R1.14), in the SAME COMMIT as the
+  # job. It satisfies the eligibility rule above without a trade: `truth-gates.yml` carries
+  # an unfiltered `pull_request: branches: [main]` and this job has no per-job `if:`, so it
+  # reports on every pull request to `main`. That is CF-8 -- `ci.yml` could not have hosted
+  # it, because its `paths-ignore: ["**.md", ...]` makes R1.1 literally unsatisfiable there:
+  # a commit that changed only a declaration's notes would produce no sweep at all.
+  #
+  # EXPECT THIS CHECK RED BEFORE IT IS GREEN, and that is the point rather than a defect.
+  # `gate-mutations.yaml` discloses C28's `zero-a-floor` as a surviving mutation and records
+  # six checks whose baselines do not pass on this tree, so their probes report
+  # `indeterminate`. A survivor is a gate proven not to enforce, which invalidates every
+  # number that gate ever reported; the repair is to the gate, never to the mutation. Making
+  # this entry required is what converts "we have never checked whether our gates bite" into
+  # a merge-blocking fact.
+  - job: falsification-sweep
+    workflow: .github/workflows/truth-gates.yml
+    check_name: "Falsification Sweep (declared gate mutations)"
+    gates:
+      - "gate_fault_injection --sweep -- every declared mutation operator is probed out-of-process against a temporary tree copy, and a gate that survives its declared mutation FAILs naming the check and the operator (R1.1-R1.10, R1.15, R1.16)"
+      - "the C72 projection step -- the registry row reported by this job states the probed-operator count, the falsified-check count and the unproven count observed in this run (R1.12)"
+    rationale: >-
+      R1's finding, in one sentence: this repository had 64 mechanical checks and almost no
+      evidence that any of them bites. The harness that answers that existed, was tested,
+      and was called by nothing -- a search of every workflow and the Makefile for
+      `gate_fault_injection` or `--sweep` returned no match. This job is the call site, and
+      its exit status is the sweep's verdict. It runs on Linux runners only (R1.13): the
+      sweep copies the tree and spawns one gate subprocess per declared check plus one per
+      declared operator, which is a category-2/3 workload under I-0 and never a dev-box one
+      (precedent E-S13-05). Its cost is not a hope -- `sweep_budget` commits the
+      per-subprocess bound, the install allowance and this job's own `timeout-minutes`, and
+      C73 re-derives the inequality over the declaration's own operator set on every run.
+
   - job: quality-gates
     workflow: .github/workflows/ci.yml
     check_name: "Lint + Type Check + Unit Tests"

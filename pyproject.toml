@@ -33,6 +33,17 @@ runtime-evaluated-base-classes = ["pydantic.BaseModel"]
 # TrainingContractViolation mirrors InvariantViolation — the training-truth
 # contract concept (ADR-042), deliberately a *Violation not a generic *Error.
 "packages/synapse_common/training_contract.py" = ["N818"]
+# `_Unresolvable` is the same intentional-concept naming as the three above, one
+# level further in: it is not an error condition but I-7's *unavailable* state as
+# a control-flow signal — "a claim could not be evaluated", which always becomes
+# a `skip` and never a pass. An `-Error` suffix would assert the opposite of what
+# the type means, since nothing is wrong when it is raised: the gate is reporting
+# honestly that it has no measurement. Named, module-private, and raised in one
+# module only (decision-quality-proof front-load; ~40 call sites inside
+# `doc_truth.py`). CI's own ruff step scopes to `packages/synapse_common/`,
+# `agents/` and `orchestrator/`, so this ignore records the decision where the
+# pre-commit hook will actually read it rather than leaving a mystery failure.
+"scripts/audit/doc_truth.py" = ["N818"]
 # Spec-assertion + reward-safety test bodies use UPPER_CASE for the spec
 # constants under test (THRESHOLD, BUDGET_MS, FORBIDDEN_KEYS) so the test reads
 # like the invariant it checks; nested `if`s mirror the spec's guard structure;

@@ -20,6 +20,61 @@
   ],
   "version": 1,
   "ratchets": {
+    "negative-control-seed-sets": {
+      "kind": "control-repetition-floor",
+      "direction": "up",
+      "bound": 20,
+      "unit": "independent-seed-sets",
+      "shipped": {
+        "file": "digital_twin/simulation/policy.yaml",
+        "extractor": "yaml_path:negative_control.independent_seed_sets",
+        "value": 20
+      },
+      "guard_constant": null,
+      "agrees_with_shipped": true,
+      "status": "unmeasured",
+      "measured_at": null,
+      "source_run": null,
+      "source": "docs/adr/ADR-055-twin-decision-relevance.md",
+      "note": "ADR-055 D6 / R6.15. direction: up because MORE independent seed sets is strictly more statistical power -- lowering this below 20 weakens the negative control, so 20 is a floor. Chosen so the expected number of false positives at alpha = 0.05 is exactly 1, the smallest count at which a false-positive RATE is estimable rather than merely bounded. status: unmeasured is correct and not a defect: this is a PRE-REGISTERED design parameter, not an observation, and no run has yet exercised it. Only a run that measured something may write measured_at + source_run (I-7, CF-3)."
+    },
+    "negative-control-rate-tolerance": {
+      "kind": "false-positive-ceiling",
+      "direction": "down",
+      "bound": 0.2,
+      "unit": "proportion-of-repetitions",
+      "shipped": {
+        "file": "digital_twin/simulation/policy.yaml",
+        "extractor": "yaml_path:negative_control.max_proven_gain_rate",
+        "value": 0.2
+      },
+      "guard_constant": null,
+      "agrees_with_shipped": true,
+      "status": "unmeasured",
+      "measured_at": null,
+      "source_run": null,
+      "source": "docs/adr/ADR-055-twin-decision-relevance.md",
+      "note": "ADR-055 D6 / R6.15. direction: down because this is a CEILING on the proportion of negative-control repetitions allowed to report a proven gain -- raising it would weaken the gate, so it may only tighten. Deliberately loose against the nominal alpha = 0.05: at 20 repetitions the exact binomial upper bound on an alpha = 0.05 process is 4/20 = 0.20 at roughly the 98th percentile, so a correctly-calibrated instrument passes almost always while an instrument reporting gains on a third of its null repetitions fails. Tightening to 0.05 itself would fail a CORRECT instrument roughly a quarter of the time -- a gate that punishes the truth. status: unmeasured because this is a pre-registered target, not a measurement.",
+      "$note_on_absent_siblings": "The two regret WEIGHTS (regret-weight-shortage = 8.0, regret-weight-holding = 1.0) are PINNED in doc-number-pins.yaml but deliberately carry NO ratchet entry. A ratchet asserts a monotonic better-direction, and for an objective weight neither direction is better -- 8.0 is not 'safer' than 9.0, it is the newsvendor critical ratio this repository already commits in agents/inventory_sentinel/models/newsvendor.py::cost_under. Inventing a `direction` for them would be exactly the fabrication this file's own header forbids ('Nothing here was invented'). They are guarded by their pins and by C75, which verifies each extractor resolves by running it. Recorded here so their absence reads as a decision rather than an oversight. CONTRAST with materiality-margin-service-points below, which DOES carry a direction: unlike a weight, a falsification threshold has an obvious self-serving sign."
+    },
+    "materiality-margin-service-points": {
+      "kind": "falsification-threshold-ceiling",
+      "direction": "down",
+      "bound": 5.0,
+      "unit": "service-points-of-fill-rate",
+      "shipped": {
+        "file": "digital_twin/simulation/policy.yaml",
+        "extractor": "yaml_path:regret_objective.materiality_margin.derivation.service_points",
+        "value": 5.0
+      },
+      "guard_constant": null,
+      "agrees_with_shipped": true,
+      "status": "unmeasured",
+      "measured_at": null,
+      "source_run": null,
+      "source": "docs/adr/ADR-055-twin-decision-relevance.md",
+      "note": "ADR-055 D2.5 / R5.2. The one chosen input to the materiality margin's pre-registered derivation rule: margin = service_points * 0.01 * weight(unmet_service), so at the committed weight of 8.0 this is 5 service points = 0.40 objective units. direction: down because RAISING the margin is the self-serving move -- a larger margin makes `material` harder to reach, which makes Finding 4 harder to falsify, which lets the spec proceed. It may therefore only ever be tightened. This is the one threshold in the phase where the motivated error has an obvious sign, which is why it carries a direction while the objective weights beside it do not. Bracketed on both sides rather than asserted: below ~3.3 points it would call the incumbent (s,S) policy's known shortfall against its own newsvendor target (0.8556 measured vs 8/9 targeted) 'material', and above the measured comparator headroom of 8.86 objective units it would be unfalsifiable by construction. status: unmeasured because the rule is pre-registered before checkpoint A, not observed; only the DERIVED VALUE is instantiated afterwards, by task 10.4, which adds its own pin in the same commit."
+    },
     "coverage-floor:packages/synapse_common": {
       "kind": "coverage-floor",
       "direction": "up",

@@ -106,12 +106,20 @@ class NumericPin(BaseModel):
     ``kind`` records which mechanical source family the pin resolves against and
     is reported with the verdict; it never changes the comparison. Comparison is
     driven by ``compare`` alone, so a pin's verdict is readable from its own row.
+
+    ``kind: generated`` is the one exception, and it is a *reachability* exception rather
+    than a comparison one (decision-quality-proof task 8.3): a pin whose DOCUMENT side sits
+    inside a generated region compares a projection against the very source that projected
+    it, which is comparing a mechanism to itself. AD-21 rejects that shape, so such a pin is
+    skipped with the reason named rather than evaluated into a tautological ``ok``.
     """
 
     model_config = ConfigDict(frozen=True, extra="forbid")
 
     id: str
-    kind: Literal["threshold", "flag", "blocking-gate", "required-job"]
+    kind: Literal[
+        "threshold", "flag", "blocking-gate", "required-job", "generated"
+    ]
     required: bool
     document: str
     anchor: str
@@ -496,6 +504,21 @@ def compare_pin(
     if pin.compare == "count":
         expected = _as_count(documented)
         distinct = _distinct(source_values)
+        if not source_values and expected == 0:
+            # THE `None == None` HOLE (decision-quality-proof task 8.3). An empty extraction
+            # against a documented zero is not agreement -- it is two absences matching. A
+            # `yaml_path:` naming a key that no longer exists resolves to nothing, and a pin
+            # comparing nothing to a claim of nothing reports green while establishing
+            # nothing. Everywhere else an empty extraction is the honest count `0` and FAILs
+            # a non-zero claim (that is the pin table's documented contract and it stays);
+            # this one case cannot distinguish "the source genuinely declares none" from
+            # "the extractor no longer resolves", so it refuses to guess.
+            raise _Unresolvable(
+                f"{pin.source} yields no value at all for extractor {pin.extractor!r} while "
+                f"{location} claims {documented}: an empty extraction agreeing with a zero "
+                "claim compares nothing to nothing, so the extractor cannot be shown to "
+                "resolve. Give the pin a non-zero subject, or correct the extractor"
+            )
         if len(distinct) != expected:
             listed = ", ".join(distinct) if distinct else "<none>"
             return result(
@@ -546,6 +569,17 @@ def resolve_pin_texts(pin: NumericPin, document_text: str, source_text: str) -> 
     """
     try:
         documented, line_number = documented_value(pin, document_text)
+        if pin.kind == "generated":
+            # AD-21: the document side is a PROJECTION of the source side, so comparing them
+            # compares a mechanism to itself and can only ever agree. Skipped with the reason
+            # named, never evaluated into a tautological `ok`. The generator's own `--check`
+            # mode is what actually guards these, by diffing the rendered region.
+            raise _Unresolvable(
+                f"{pin.document}:{line_number} sits inside a generated region "
+                f"(kind: generated), so pinning it against {pin.source} would compare that "
+                "region against the source it is projected from -- a mechanism against "
+                "itself. The generator's --check mode owns this claim"
+            )
         try:
             values = extract_source_values(pin.extractor, source_text)
         except _Unresolvable as exc:

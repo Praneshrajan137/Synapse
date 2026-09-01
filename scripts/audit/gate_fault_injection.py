@@ -157,6 +157,18 @@ DEFAULT_TIMEOUT_S: Final[float] = 900.0
 #: never inlined: the bound is a committed number and a gate asserts its arithmetic.
 SWEEP_BUDGET_KEY: Final[str] = "sweep_budget"
 
+#: Where ``--report-json`` writes the canonical payload C72 reads back (R1.12). Under
+#: ``artifacts/``, which is git-ignored: the sweep's report is evidence produced by a run,
+#: not a file committed to the tree, and C60's whole falsification rests on that ignore
+#: rule holding.
+SWEEP_REPORT_PATH: Final[Path] = ROOT / "artifacts" / "audit" / "fault-injection.json"
+
+#: The environment variable a job sets to point C72 at the report the *same job* produced.
+#: Preferred over the default path because "the run that produced it" (R1.12) is a claim
+#: about provenance, and an environment variable set by the job that ran the sweep carries
+#: that provenance where a file on disk does not.
+SWEEP_REPORT_ENV: Final[str] = "SYNAPSE_FAULT_INJECTION_REPORT"
+
 #: Directory and file names never copied into the temporary tree. None of them is read
 #: by a registered check; all of them are large, regenerable, or process-local. ``.git``
 #: is excluded deliberately: a fault-injected tree is not a branch and must not be
@@ -201,6 +213,8 @@ __all__ = [
     "ROOT",
     "SCHEMA_FILE",
     "SWEEP_BUDGET_KEY",
+    "SWEEP_REPORT_ENV",
+    "SWEEP_REPORT_PATH",
     "Completeness",
     "DeclarationError",
     "FaultInjectionReport",
@@ -222,6 +236,7 @@ __all__ = [
     "load_schema",
     "main",
     "mutated_path",
+    "read_sweep_report",
     "parse_declaration",
     "parse_document_path",
     "read_sweep_budget",
@@ -523,6 +538,22 @@ class FaultInjectionReport(BaseModel):
     reporting_tool_ids: tuple[str, ...]
     undeclared_ids: tuple[str, ...]
     unregistered_declared_ids: tuple[str, ...]
+    #: R1.7. The probed and the declared count IN THE SAME UNIT -- the operator, not the
+    #: check. 14 declared checks carry 16 operators, so a report pairing "DECLARED=14"
+    #: with "PROBED=16" states two numbers a reader will subtract and two units nobody
+    #: named. Per-check reporting also cannot identify *which* of C44's two mutations
+    #: survived, which is the whole reason the unit is the operator.
+    probed_operators: int = 0
+    declared_operators: int = 0
+    #: R1.7, R1.8, R1.15. ``check/operator`` for every declared operator a complete sweep
+    #: did not probe. Absence of proof is never a pass (I-7), so an unproven declaration
+    #: is a finding rather than a silently smaller denominator. Empty under a deliberate
+    #: ``--gate`` / ``--operator`` selection, where a narrower probe set is the request.
+    unproven_operator_ids: tuple[str, ...] = ()
+    #: True when the run probed the whole declared set rather than a selected subset. The
+    #: unproven rule is scoped to it: ``--gate C60`` (task 17.9) probes one operator on
+    #: purpose and must not read as fifteen unproven ones.
+    complete_sweep: bool = False
     results: tuple[FaultInjectionResult, ...]
     falsified_ids: tuple[str, ...]
     pass_eligible_ids: tuple[str, ...]
@@ -631,6 +662,51 @@ def read_sweep_budget(document: Mapping[str, object]) -> tuple[SweepBudget | Non
         f"per-subprocess bound {budget.per_subprocess_timeout_s:.0f}s read from "
         f"`{SWEEP_BUDGET_KEY}.per_subprocess_timeout_s`"
     )
+
+
+def read_sweep_report(path: Path | None = None) -> tuple[FaultInjectionReport | None, str]:
+    """Read back a sweep report a job wrote, so C72 can project it (R1.12).
+
+    Resolution order, and the order is the provenance argument: the path named by
+    :data:`SWEEP_REPORT_ENV` first, because an environment variable is set by the job that
+    ran the sweep and therefore carries "the run that produced it"; then
+    :data:`SWEEP_REPORT_PATH`. Either way the resolved path is returned in the reason
+    string, so a row projecting these counts names the file it read them from and a reader
+    can tell a same-job report from anything else.
+
+    Total, and non-passing in every failure direction. An absent file, unreadable bytes,
+    unparseable JSON and a payload that does not validate as a
+    :class:`FaultInjectionReport` each return ``None`` with a distinct reason -- four
+    different repairs. A payload that validates but carries ``probed`` false, or
+    ``baseline_suppressed`` true, is returned as-is: it is a real report of a run that
+    proved nothing, and the caller is the one that must not read it as a probe.
+    """
+    from os import environ
+
+    declared = environ.get(SWEEP_REPORT_ENV, "").strip()
+    resolved = Path(declared) if declared else (path or SWEEP_REPORT_PATH)
+    source = "environment" if declared else ("argument" if path else "default path")
+    label = f"{_relative(resolved)} ({source})"
+
+    if not resolved.is_file():
+        return None, f"no sweep report at {label}"
+    try:
+        raw: object = json.loads(resolved.read_text(encoding="utf-8"))
+    except OSError as error:
+        return None, f"the sweep report at {label} could not be read: {_ascii(str(error))}"
+    except json.JSONDecodeError as error:
+        return None, f"the sweep report at {label} is not parseable JSON: {_ascii(str(error))}"
+    if not isinstance(raw, dict):
+        return None, f"the sweep report at {label} is not a JSON object"
+    try:
+        report = FaultInjectionReport.model_validate(raw)
+    except ValidationError as error:
+        detail = "; ".join(
+            f"{'.'.join(str(part) for part in item['loc']) or '(payload)'}: {item['msg']}"
+            for item in error.errors()[:3]
+        )
+        return None, f"the sweep report at {label} is not a valid report: {_ascii(detail)}"
+    return report, f"sweep report read from {label}"
 
 
 def _pointer(parts: Sequence[object]) -> str:
@@ -1503,7 +1579,11 @@ def evaluate(
        as falsified, so no probe under it can prove a gate falsifiable
     1. any declaration finding (schema violation, a declared id nobody registered, a
        ``declared_gates`` count that disagrees with ``gates``) -> ``fail``
-    2. any operator that survived or could not be applied -> ``fail`` naming each
+    2. any operator that survived, could not be applied, or -- in a **complete** sweep --
+       was never probed at all -> ``fail`` naming each (R1.7: an unprobed declaration is
+       UNPROVEN, and absence of proof is never a pass). The unproven clause is scoped to a
+       complete sweep: ``--gate`` and ``--operator`` narrow the probe set on request, and
+       task 17.9's single ``--gate C60`` probe must not read as fifteen unproven operators.
     3. a probe was requested but the declaration commits no usable per-subprocess bound
        -> ``unavailable`` naming the block, having probed nothing (R1.11)
     4. nothing was probed -> ``unavailable`` (absence of proof is not a pass, I-7)
@@ -1605,6 +1685,46 @@ def evaluate(
             )
         )
 
+    # R1.7: the probed and the declared count, in the SAME UNIT. The unit is the operator
+    # because that is the unit a probe is taken in: C44 and C56 declare two each, so a
+    # per-check count cannot say which of C44's two mutations survived.
+    declared_operators = declaration.operator_count
+    probed_operators = len(results)
+    complete_sweep = probed and only is None and operator_id is None
+    probed_pairs = {(outcome.check, outcome.operator_id) for outcome in results}
+    unproven_pairs = tuple(
+        (gate.check, operator.id)
+        for gate in declaration.gates
+        for operator in gate.operators
+        if (gate.check, operator.id) not in probed_pairs
+    )
+    #: Checks carrying at least one operator nobody probed. Used to keep such a check out
+    #: of the falsified count in EVERY mode, including under a selection: R1.6's count is
+    #: over the operators DECLARED for a check, not over the ones that happened to run, so
+    #: a check whose second mutation was never applied is not falsified by its first.
+    partially_probed = {check for check, _operator in unproven_pairs}
+    unproven = tuple(f"{check}/{operator}" for check, operator in unproven_pairs)
+    if not complete_sweep:
+        # A selection is a narrower request, not a shortfall, so it raises no FINDING. The
+        # falsified count still excludes the partially probed check above -- narrowing what
+        # you probe is legitimate, and calling the remainder proven is not.
+        unproven = ()
+    for pair in unproven:
+        check_id, _, op_id = pair.partition("/")
+        findings.append(
+            Finding(
+                rule="declared-operator-unproven",
+                requirement="R1.7",
+                check=check_id,
+                operator_id=op_id,
+                detail=(
+                    "a complete sweep produced no outcome for this declared operator, so "
+                    "nothing is known about whether it falsifies its gate; an unprobed "
+                    "declaration is UNPROVEN, and absence of proof is never a pass (I-7)"
+                ),
+            )
+        )
+
     probed_ids = tuple(dict.fromkeys(outcome.check for outcome in results))
     # R1.16: a suppressed baseline contributes no falsified count. The per-probe outcomes
     # are still reported faithfully - they are what the diagnosis is for - but they are
@@ -1616,7 +1736,8 @@ def evaluate(
         else tuple(
             cid
             for cid in probed_ids
-            if all(outcome.falsified for outcome in results if outcome.check == cid)
+            if cid not in partially_probed
+            and all(outcome.falsified for outcome in results if outcome.check == cid)
         )
     )
     pass_eligible = tuple(cid for cid in falsified_ids if cid not in set(tools))
@@ -1624,11 +1745,25 @@ def evaluate(
 
     notes = [
         f"{len(declared)} of {len(registered)} registered check(s) declare a falsification",
+        # Both numbers in operator units, side by side, so no reader has to guess which
+        # unit a count is in (R1.7). The check-unit line above says "check(s)" and this
+        # one says "operator(s)"; the two are never mixed inside one comparison.
+        f"{probed_operators} of {declared_operators} declared operator(s) were probed"
+        + (
+            ""
+            if complete_sweep or not probed
+            else " (a --gate/--operator selection was given, so the remainder is not "
+            "reported unproven)"
+        ),
         f"{len(tools)} reporting tool(s) and {len(undeclared)} undeclared check(s) are "
         "excluded from PASS-eligibility (I-7: absence of a falsification is absence of "
         "proof, never a pass)",
         f"completeness.enforced_by: {declaration.completeness.enforced_by}",
     ]
+    if unproven:
+        notes.append(
+            f"{len(unproven)} declared operator(s) are UNPROVEN: " + ", ".join(unproven)
+        )
     if not probe:
         notes.append(
             "no mutation was applied: --sweep copies the tree and runs one subprocess per "
@@ -1714,6 +1849,10 @@ def evaluate(
         reporting_tool_ids=tools,
         undeclared_ids=undeclared,
         unregistered_declared_ids=unregistered,
+        probed_operators=probed_operators,
+        declared_operators=declared_operators,
+        unproven_operator_ids=unproven,
+        complete_sweep=complete_sweep,
         results=results,
         falsified_ids=falsified_ids,
         pass_eligible_ids=pass_eligible,
@@ -1757,10 +1896,20 @@ def _print_report(report: FaultInjectionReport) -> None:
         f"{_SYMBOLS[report.verdict]} gate-fault-injection: {report.verdict.upper()} - "
         f"{report.reason}"
     )
+    # Two summary lines, one per unit, and neither mixes the two (R1.7). The single line
+    # this replaced read `DECLARED=14 PROBED=16`: two numbers a reader subtracts to get a
+    # shortfall of -2 that does not exist, because one counts checks and the other counts
+    # operators.
     print(
-        f"Summary: REGISTERED={len(report.registered_ids)} DECLARED={len(report.declared_ids)} "
-        f"PROBED={len(report.results)} FALSIFIED={len(report.falsified_ids)} "
+        f"Checks:    REGISTERED={len(report.registered_ids)} "
+        f"DECLARED={len(report.declared_ids)} FALSIFIED={len(report.falsified_ids)} "
         f"PASS_ELIGIBLE={len(report.pass_eligible_ids)} EXCLUDED={len(report.excluded_ids)}"
+    )
+    print(
+        f"Operators: DECLARED={report.declared_operators} "
+        f"PROBED={report.probed_operators} "
+        f"UNPROVEN={len(report.unproven_operator_ids)}"
+        + ("" if report.complete_sweep else "  (selection given: not a complete sweep)")
     )
     if report.sweep_timeout_s is not None:
         print(
@@ -1849,11 +1998,20 @@ def run(
     operator_id: str | None = None,
     timeout: float | None = None,
     with_baseline: bool = True,
+    report_json: Path | None = None,
 ) -> int:
     """Evaluate and report. Returns ``0`` / ``1`` / ``2`` in both modes.
 
     ``--check`` only suppresses the operator note: a gate whose default invocation cannot
     fail is the hole this feature exists to close (R1.8).
+
+    ``report_json`` writes the canonical payload to a path **in addition to** the human
+    summary, which is what the sweep job uses: C72 reads that file back and projects the
+    counts of the run that produced it (R1.12). It is a separate option rather than a
+    redirect of ``--json`` so the job's log still carries a readable survivor list -- the
+    list a human has to act on. A payload that cannot be written is ``unavailable`` naming
+    the path: the step promised its consumer a report, and a consumer that finds none
+    reports SKIP, so a silent write failure would turn a real sweep into an invisible one.
 
     ``timeout=None`` resolves the per-subprocess bound from the committed
     ``sweep_budget`` under ``probe``; see :func:`evaluate`. The three ways this call can
@@ -1881,6 +2039,23 @@ def run(
         return _print_unavailable(
             f"the sweep could not start: {_ascii(str(error))}", as_json=as_json
         )
+
+    if report_json is not None:
+        try:
+            report_json.parent.mkdir(parents=True, exist_ok=True)
+            report_json.write_text(
+                json.dumps(
+                    report.model_dump(mode="json"), sort_keys=True, separators=(",", ":")
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+        except (OSError, TypeError, ValueError) as error:
+            return _print_unavailable(
+                f"the sweep report could not be written to {report_json}: "
+                f"{_ascii(str(error))}",
+                as_json=as_json,
+            )
 
     if as_json:
         try:
@@ -1960,6 +2135,17 @@ def main(argv: list[str] | None = None) -> int:
         ),
     )
     parser.add_argument(
+        "--report-json",
+        default=None,
+        metavar="PATH",
+        help=(
+            "also write the canonical report to PATH, so C72 can project the counts of "
+            f"the run that produced it (R1.12). The job's convention is "
+            f"{SWEEP_REPORT_PATH.relative_to(ROOT).as_posix()}, pointed at by "
+            f"${SWEEP_REPORT_ENV}"
+        ),
+    )
+    parser.add_argument(
         "--run-check",
         default=None,
         metavar="CID",
@@ -1978,6 +2164,7 @@ def main(argv: list[str] | None = None) -> int:
         operator_id=str(args.operator) if args.operator else None,
         timeout=None if args.timeout is None else float(args.timeout),
         with_baseline=not bool(args.no_baseline),
+        report_json=Path(str(args.report_json)) if args.report_json else None,
     )
 
 

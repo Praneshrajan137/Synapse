@@ -1,5 +1,30 @@
 # Implementation Plan: Decision Quality Proof
 
+> ## SESSION PROTOCOL — READ FIRST
+>
+> **Work on this spec is batched: TEN leaf tasks per session, then STOP.**
+>
+> The binding agreement, the batch plan, the two CI checkpoints, the verification sweep and the
+> resolved tasks-11→12 circularity all live in
+> [`SESSION_PROTOCOL.md`](./SESSION_PROTOCOL.md). The prompt to paste when opening a new session is
+> [`NEXT_SESSION_PROMPT.md`](./NEXT_SESSION_PROMPT.md).
+>
+> **No count is written here.** Derive it:
+> `python -m scripts.audit.spec_ledger_census --next 10`. That command is the census; every
+> document cites it and none transcribes it.
+>
+> **Three marks, because the honesty contract has three states (I-7).**
+> `[ ]` open · `[~]` **authored, discharge pending** — the work is on disk and the proof is owed
+> by the job named in its `discharge:` line · `[x]` done **and** discharged. A `[~]` is not a
+> pass. "Authored and diagnostics-clean, not executed" is a legitimate result; recording it as
+> `[x]` is the I-7 violation. An open leaf carrying a `discharge:` line is CI-gated and is not
+> offered as authorable work.
+>
+> **DISK OUTRANKS THIS LEDGER.** Session 1 opened with eight tasks fully implemented on disk and
+> still showing `[ ]`. Run `--files` before authoring, verify a task's artifacts do not already
+> exist, and read the cited requirement criteria rather than treating file existence as
+> completion.
+
 ## Overview
 
 This plan covers all five elements. **Phases 0-2** (tasks 1-14) are **E0** (instrument hygiene,
@@ -84,7 +109,12 @@ tests in the interim, and that is a stated sequencing gap, not an omission.
       so CI cannot see them at all. This is the precondition for every other E0 sub-task.
     - _Requirements: 2.1_
 
-  - [x] 1.2 Add the fast-check budget resolver to the vitest setup file
+  - [~] 1.2 Add the fast-check budget resolver to the vitest setup file
+    - discharge: frontend.yml::quality
+    - **Authored, not discharged.** This is TypeScript: it has never been type-checked and
+      never executed. `getDiagnostics` returns no TS signal in this tree, which is
+      *inconclusive, not evidence* (R2.13). The resolver either applies or silently does not,
+      and only a run distinguishes those.
     - File: `frontend/src/test/setup.ts` (already wired as `setupFiles` in
       `frontend/vitest.config.ts:26`, and contains no fast-check configuration today, so this
       is a net addition rather than a change to an existing knob).
@@ -118,7 +148,9 @@ tests in the interim, and that is a stated sequencing gap, not an omission.
       **not** assert a total (CF-13).
     - _Requirements: 3.4, 3.6, 3.7, 3.8_
 
-  - [x] 1.5 Write property test for the fast-check budget resolver
+  - [~] 1.5 Write property test for the fast-check budget resolver
+    - discharge: frontend.yml::quality
+    - **Authored, not discharged.** TypeScript, never type-checked, never executed (R2.13).
     - `# Feature: decision-quality-proof, Property 42: The fast-check budget is a total function of the profile name`
     - File: `frontend/spec/effectiveness/__tests__/fc-budget-profile.property.test.ts`
     - Budget inherited from `fc.configureGlobal` in `frontend/src/test/setup.ts`. No per-call
@@ -315,7 +347,7 @@ tests in the interim, and that is a stated sequencing gap, not an omission.
 
 ### Phase 1 — E1: gate falsifiability (R1)
 
-- [ ] 5. Make the falsification sweep gate a job, with a committed cost budget
+- [x] 5. Make the falsification sweep gate a job, with a committed cost budget
   - Implements **AD-22**. The harness already exists (`--sweep`, `--gate`, `--operator`,
     `--timeout`, `--no-baseline`, four-value `Outcome`, `FaultInjectionReport`); what is
     missing is one gating job, a cost budget, and per-operator accountability. A search of
@@ -352,7 +384,7 @@ tests in the interim, and that is a stated sequencing gap, not an omission.
       unparseable report records a non-passing result.
     - _Requirements: 1.11, 1.16_
 
-  - [ ] 5.3 Register the budget-inequality check
+  - [x] 5.3 Register the budget-inequality check
     - Files: `scripts/audit/sweep_budget_truth.py` (new),
       `scripts/audit/verify_claims.py` (`@register`)
     - Asserts the inequality over the declaration's own `declared_gates` and operator count,
@@ -361,7 +393,7 @@ tests in the interim, and that is a stated sequencing gap, not an omission.
       and pinned.
     - _Requirements: 1.11_
 
-  - [ ] 5.4 Report per-operator outcomes, derive the counts, and never assert them
+  - [x] 5.4 Report per-operator outcomes, derive the counts, and never assert them
     - File: `scripts/audit/gate_fault_injection.py`
     - Per probed operator: check id, operator id, exactly one of `falsified`, `survived`,
       `indeterminate`, `not-applied` (`:364`, pinned as `OUTCOMES` in
@@ -377,13 +409,13 @@ tests in the interim, and that is a stated sequencing gap, not an omission.
       undeclared — E1 makes the gap visible, it does not close it by invention.
     - _Requirements: 1.3, 1.4, 1.5, 1.6, 1.7, 1.8, 1.9, 1.10, 1.15_
 
-  - [ ] 5.5 Make the C72 row project the counts of the run that produced it
+  - [x] 5.5 Make the C72 row project the counts of the run that produced it
     - File: `scripts/audit/verify_claims.py`
     - Replace the fixed `no falsification was probed` detail with the probed count, the
       falsified-check count and the unproven count observed in that same job.
     - _Requirements: 1.12_
 
-  - [ ] 5.6 Add the `falsification-sweep` job and its declarations in one commit
+  - [x] 5.6 Add the `falsification-sweep` job and its declarations in one commit
     - Files: `.github/workflows/truth-gates.yml`,
       `infrastructure/quality/blocking-steps.yaml`,
       `infrastructure/quality/required-checks.yaml`
@@ -412,28 +444,28 @@ tests in the interim, and that is a stated sequencing gap, not an omission.
       reports C60 as `indeterminate`, naming the non-passing baseline.
     - _Requirements: 1.1, 1.2, 1.13, 1.14_
 
-  - [ ] 5.7 Write property test for sweep outcome classification
+  - [x] 5.7 Write property test for sweep outcome classification
     - `# Feature: decision-quality-proof, Property 38: Sweep outcome classification is total, four-valued and per-operator`
     - File: `tests/verify/test_sweep_outcome_totality_property.py`
     - Budget inherited from the root `conftest.py` profile.
     - Locus: `ci.yml::uplift-verify` fast step.
     - _Requirements: 1.3, 1.4, 1.5_
 
-  - [ ] 5.8 Write property test for derived counts and PASS-eligibility
+  - [x] 5.8 Write property test for derived counts and PASS-eligibility
     - `# Feature: decision-quality-proof, Property 39: The falsified-check count and PASS-eligibility are derived, never asserted`
     - File: `tests/verify/test_sweep_count_derivation_property.py`
     - Budget inherited from the root `conftest.py` profile.
     - Locus: `ci.yml::uplift-verify` fast step.
     - _Requirements: 1.6, 1.7, 1.8, 1.9, 1.10, 1.15_
 
-  - [ ] 5.9 Write property test for a sweep that could not observe
+  - [x] 5.9 Write property test for a sweep that could not observe
     - `# Feature: decision-quality-proof, Property 40: A sweep that could not observe is non-passing`
     - File: `tests/verify/test_sweep_unobservable_property.py`
     - Budget inherited from the root `conftest.py` profile.
     - Locus: `ci.yml::uplift-verify` fast step.
     - _Requirements: 1.11, 1.16_
 
-  - [ ] 5.10 Write property test for the C72 row projection
+  - [x] 5.10 Write property test for the C72 row projection
     - `# Feature: decision-quality-proof, Property 41: The C72 row projects the counts of the run that produced it`
     - File: `tests/verify/test_c72_row_projection_property.py`
     - Budget inherited from the root `conftest.py` profile.
@@ -441,6 +473,7 @@ tests in the interim, and that is a stated sequencing gap, not an omission.
     - _Requirements: 1.12_
 
 - [ ] 6. Checkpoint — review the sweep's survivor list
+  - discharge: truth-gates.yml::falsification-sweep
   - Ensure all tests pass, ask the user if questions arise.
   - **Expect red, and read the red correctly.** The honest expectation stated before the run:
     at most **8 of 14** declared checks are probeable on this tree (C16, C28, C56, C57, C61,
@@ -464,7 +497,7 @@ tests in the interim, and that is a stated sequencing gap, not an omission.
 
 ### Phase 2 — E4a and E2a (parallel), then E2b, then E2c
 
-- [ ] 7. E4a — feed admission: licence, registered check, ingestion record, statistics
+- [x] 7. E4a — feed admission: licence, registered check, ingestion record, statistics
   - Implements **CF-7**'s split: R8's first four criteria become E4a and precede E2c, because
     R5.11 requires the demand-intensity shape to be calibrated from Real_Data_Feed statistics
     rather than invented literals. R8.5-R8.15 and R8.18 keep their stated position in E4
@@ -478,24 +511,55 @@ tests in the interim, and that is a stated sequencing gap, not an omission.
     outside this pass's bounded reading). Confirm each against R8.1/R8.2/R8.16/R8.17 at
     implementation time and correct without ceremony if they differ.
 
-  - [ ] 7.1 Commit the feed licence artifact
-    - File: `infrastructure/quality/feed-licence.yaml` (new; confirm the path against R8.1)
+  - [x] 7.1 Commit the feed licence artifact
+    - File: `infrastructure/data/dataset-licences.yaml` (new) + its schema under
+      `infrastructure/data/schemas/`
+    - **Conflict B, resolved forward rather than moved later.** This task originally named
+      `infrastructure/quality/feed-licence.yaml`, derived from neighbouring convention with an
+      explicit note to "correct without ceremony if they differ". They differ: design **E4a.1**
+      names `infrastructure/data/dataset-licences.yaml`, and R8.1's six fields (`dataset_id`,
+      `licence_id`, `licence_text_uri`, `read_date`, `permitted_use`, `dataset_revision`) were
+      confirmed by reading the criterion. Landing at the design's path here makes **task 19.1 a
+      verification instead of a migration**. The companion modules land at the design's names
+      too: `data_fabric/licence.py::DatasetLicence`, `data_fabric/ingest/m5.py::M5IngestRecord`,
+      `scripts/audit/dataset_licence_truth.py`.
+    - **The licence terms cannot be confirmed from inside this repo.** They live behind Kaggle
+      competition rules requiring acceptance — an operator step. The artifact lands with fields
+      **explicitly marked unconfirmed**, and the registered check reports `unavailable` -> SKIP
+      until an operator confirms. That is what R8.2 and I-7 prescribe. **Do not invent a
+      `licence_id`.**
     - Records the licence terms, the source URL, the retrieved-at timestamp, and the
       redistribution disposition. Every field is explicit; an absent field is **named** rather
       than defaulted, so a missing term cannot read as a permissive one.
     - _Requirements: 8.1, 8.2_
 
-  - [ ] 7.2 Register the licence check
-    - Files: `scripts/audit/feed_licence_truth.py` (new),
+  - [x] 7.2 Register the licence check
+    - Files: `scripts/audit/dataset_licence_truth.py` (new),
       `scripts/audit/verify_claims.py` (`@register`)
+    - **Path corrected.** This sub-task declared `scripts/audit/feed_licence_truth.py`; the
+      module landed as `dataset_licence_truth.py` to match Conflict B's artifact name, and is
+      registered as **C74**. The stale name is recorded here rather than quietly swapped,
+      because the census reads declared paths and a wrong one reads as an absent artifact.
     - Schema-total over the artifact; any absent or unparseable field yields `unavailable` ->
       SKIP, never PASS (`verify_claims.py::GATE_STATUS`, `"unavailable": "SKIP"`).
     - Locus: `truth-gates.yml::truth-gates`.
     - _Requirements: 8.1, 8.2_
 
-  - [ ] 7.3 Add the ingestion record and the first-ingestion reporting rule
-    - Files: `data_fabric/etl/m5_ingest.py` (new),
-      `infrastructure/quality/feed-licence.yaml` (ingestion-record block)
+  - [x] 7.3 Add the ingestion record and the first-ingestion reporting rule
+    - Files: `data_fabric/ingest/m5.py` (new — **design E4a.3's path and single-module
+      shape**, not `tasks.md`'s `data_fabric/etl/m5_ingest.py` + `m5_statistics.py` split;
+      the statistics are a product of an ingestion and carry the same identity fields, so
+      splitting them would put the dataset revision in two files kept in step by hand)
+    - **Conflict recorded, not resolved silently:** `tasks.md` also asked for an
+      "ingestion-record block" *inside* the licence declaration. Not implemented, and
+      deliberately: the declaration is a committed statement of terms, and writing runtime
+      ingestion facts back into it would make the artifact that ingestion is checked against
+      mutable by ingestion. The binding runs the other way — the record pins the artifact's
+      `sha256:` digest.
+    - `record_ingestion` **refuses** rather than annotates in three cases (I-6, a hard
+      guardrail over a learned policy): the register declares no entry for the dataset; the
+      entry is not confirmed (naming every unestablished field, so the message is a work list);
+      or the entry's `dataset_revision` disagrees with the revision being ingested.
     - Records what was consumed: row count, file digests, the licence artifact digest in force
       at ingestion time. A first ingestion is reported as such rather than silently folded into
       a steady-state path.
@@ -506,8 +570,31 @@ tests in the interim, and that is a stated sequencing gap, not an omission.
       touches the training-row path; do not conflate them.
     - _Requirements: 8.16, 8.17_
 
-  - [ ] 7.4 Extract the M5 aggregate statistics structure 1 will calibrate against
-    - File: `data_fabric/etl/m5_statistics.py` (new)
+  - [x] 7.4 Extract the M5 aggregate statistics structure 1 will calibrate against
+    - File: `data_fabric/ingest/m5.py` (merged per design E4a.3 — see 7.3)
+    - **FINDING, and it constrains task 12.1: the intra-day intensity shape is NOT derivable
+      from M5.** M5's observation columns are **daily** totals per series, and an hour-of-day
+      shape cannot be recovered from daily aggregates by any amount of arithmetic. R5.11 asks
+      for a shape "calibrated from statistics derived from the Real_Data_Feed rather than from
+      invented literals", so emitting a plausible intra-day curve — a lunch peak and an
+      evening peak — would be exactly the invention R5.11 forbids while *appearing* to satisfy
+      it. `extract_statistics` therefore reports that shape `unavailable` naming the
+      granularity gap, and `ShapeEstimate` structurally forbids an `unavailable` shape from
+      carrying values so no downstream reader can pick numbers out of it.
+    - **Task 12.1 must not assume this input exists.** Whatever calibrates the intra-day shape
+      has to come from elsewhere, and that decision belongs to 12.1 with this evidence in hand.
+      This is also the sharpest single piece of evidence for R8.12's documented domain gap
+      between daily grocery demand and 10-minute quick-commerce demand.
+    - Derivable and derived: the **day-of-week** shape, and the **promotion-uplift** shape
+      (through a declared price proxy, labelled as one).
+    - Runs in `ci.yml::training-smoke`, never locally: a bulk streaming read over ~42,000
+      hierarchical daily series is a category-3/4 workload under I-0. Written import-safe and
+      fixture-testable — nothing runs at import, every path is a parameter, every reader
+      streams (no pandas, no full-file materialisation).
+    - Every failure names its subject and yields `unavailable`: a missing column, a
+      non-numeric observation cell, a short row, a degenerate normaliser. **None returns a
+      shape with zeros in it** — a zero-filled shape is a measurement claim, and defaulting an
+      unreadable cell to zero would silently flatten the very shape being measured (I-7).
     - Derives the intra-day intensity shape, the day-of-week shape and the promotion uplift
       shape as **aggregate statistics**, written to the R5.12 policy file by task 12.1. The
       extraction runs in CI (`ci.yml::training-smoke`), not on the dev box: it is a bulk file
@@ -515,7 +602,7 @@ tests in the interim, and that is a stated sequencing gap, not an omission.
     - This is the artefact that makes R5.11's "calibrated rather than invented" checkable.
     - _Requirements: 8.16, 8.17_
 
-  - [ ] 7.5 Write unit tests for licence schema totality and the ingestion record
+  - [x] 7.5 Write unit tests for licence schema totality and the ingestion record
     - File: `tests/verify/test_feed_licence_admission.py` (new)
     - Cover: every absent field named; an unparseable artifact yields `unavailable`; the
       ingestion record's digest binding.
@@ -526,7 +613,7 @@ tests in the interim, and that is a stated sequencing gap, not an omission.
       and its properties later. Recording that as a deliberate gap rather than an omission.
     - _Requirements: 8.1, 8.2, 8.16, 8.17_
 
-- [ ] 8. E2a — record the decision and commit the thresholds before touching the engine
+- [x] 8. E2a — record the decision and commit the thresholds before touching the engine
   - **ADR-055 is committed before any change to `digital_twin/simulation/engine.py` made under
     R5** (R5.7). This is not ceremony: R5.5 and R5.6 require the record to state the
     inventory-theory argument, the five structures, the agent decision each structure unlocks,
@@ -534,7 +621,7 @@ tests in the interim, and that is a stated sequencing gap, not an omission.
     — so the phase is falsifiable rather than aesthetic. ADR-054 is the highest committed ADR,
     so 055 is the next free identifier.
 
-  - [ ] 8.1 Author and commit ADR-055
+  - [x] 8.1 Author and commit ADR-055
     - File: `docs/adr/ADR-055-twin-decision-relevance.md` (new)
     - States: the inventory-theory argument (stationary Poisson demand + independent identical
       items + i.i.d. lead times uncorrelated with demand + no capacity coupling => base-stock
@@ -557,10 +644,41 @@ tests in the interim, and that is a stated sequencing gap, not an omission.
       non-empty by construction.
     - _Requirements: 5.5, 5.6, 5.7, 5.33, 5.34_
 
-  - [ ] 8.2 Create the twin policy file, pin it, and add its ratchet entry
-    - Files: `infrastructure/quality/twin-decision-relevance.yaml` (new),
+  - [x] 8.2 Create the twin policy file, pin it, and add its ratchet entry
+    - **Landed:** `digital_twin/simulation/policy.yaml` (new, design E2c.2's path — Conflict A
+      above), four pins in `doc-number-pins.yaml`, two ratchet entries in `ratchets.json`.
+    - **Four pins, verified by execution not assumption:** `regret-weight-shortage` (8.0),
+      `regret-weight-holding` (1.0), `negative-control-seed-sets` (20),
+      `negative-control-rate-tolerance` (0.20). C75 reports 13/13 pins resolving on both
+      sides, and `resolve_pin` confirms all four *agree* (`8.0 == 8.0`, `1.0 == 1.0`,
+      `20 == 20`, `0.20 == 0.20`). Only values ADR-055 **actually states** were pinned — a pin
+      whose document side can never resolve is the dead-extractor shape C75 exists to catch.
+    - **Only TWO ratchet entries, and the omission is a decision.** A ratchet asserts a
+      monotonic better-direction. `negative-control-seed-sets` has one (`up` — more seed sets
+      is strictly more power, so 20 is a floor) and `negative-control-rate-tolerance` has one
+      (`down` — a false-positive ceiling may only tighten). The two regret **weights do not**:
+      8.0 is not "safer" than 9.0, it is the newsvendor critical ratio the repo already
+      commits. Inventing a `direction` for them would be the fabrication `ratchets.json`'s own
+      header forbids ("Nothing here was invented"). Recorded in a
+      `$note_on_absent_siblings` key so the absence reads as a decision, not an oversight;
+      they are guarded by their pins and by C75.
+    - Both new ratchets read as `status: unmeasured` / `outcome: skip` — correct, because they
+      are **pre-registered design parameters, not observations**. Only a run that measured
+      something may write `measured_at` (I-7, CF-3).
+    - _Requirements: 5.2, 5.12, 5.36_
+    - Files: `digital_twin/simulation/policy.yaml` (new),
       `infrastructure/quality/doc-number-pins.yaml`,
       `infrastructure/quality/ratchets.json`
+    - **Conflict A, surfaced then decided — do not re-litigate.** This task originally named
+      `infrastructure/quality/twin-decision-relevance.yaml`; design **E2c.2** names
+      `digital_twin/simulation/policy.yaml`. **No task in this plan reconciled it** (19.1 covers
+      only the licence artifact), and six requirements read from this file (R5.12, R5.18, R5.19,
+      R5.27, R5.28, R5.36), so a silent pick would have stranded them. Decision: the design's
+      path. `design.md` is the architecture authority and `tasks.md` derives from it, and the
+      design's own reasoning — "the single committed policy file ... so no literal lands in
+      `engine.py`" — argues for co-location with the engine that reads it. The pin table can
+      point anywhere, so nothing is lost by leaving `infrastructure/quality/` for gate
+      declarations.
     - Every threshold this phase introduces goes into the policy file, read rather than
       inlined, and pinned by AD-3's pin table (AD-13). The values this pass adds: the
       comparator restock threshold (R5.36) now; the `(s, S)` materiality margin (R5.2) after
@@ -572,10 +690,34 @@ tests in the interim, and that is a stated sequencing gap, not an omission.
       judging a run against a threshold committed after that run.
     - _Requirements: 5.2, 5.12, 5.36_
 
-  - [ ] 8.3 Make pin extractors resolve, and verify each by running it
+  - [x] 8.3 Make pin extractors resolve, and verify each by running it
     - Files: `scripts/audit/doc_truth.py`,
       `scripts/audit/pin_extractor_truth.py` (new),
-      `scripts/audit/verify_claims.py` (`@register`)
+      `scripts/audit/verify_claims.py` (**registered as C75**),
+      `infrastructure/quality/doc-number-pins.yaml` (retired a resolved drift entry)
+    - **Narrower than the task assumed, and the narrowing is recorded.** `compare: string`
+      and `compare: numeric` already raised on an empty extraction (`_single_source_value`
+      refuses a non-singleton set), so those two were never vulnerable. The live hole was
+      `compare: count` with a documented **zero**: an empty extraction produced `len == 0`,
+      matched the claim, and returned `ok` — comparing nothing to nothing. That one case now
+      raises, because it cannot distinguish "the source genuinely declares none" from "the
+      extractor no longer resolves". Everywhere else an empty extraction remains the honest
+      count `0` that FAILs a non-zero claim; that documented contract is unchanged.
+    - **The real gap was reachability, not comparison.** `doc_truth` only reaches a source
+      extractor once the DOCUMENT anchor has resolved, so a dead `yaml_path:` sitting behind a
+      reworded sentence is never exercised at all. `pin_extractor_truth` probes both sides
+      **independently and unconditionally** — that is Property 48's load-bearing clause.
+    - **DISCOVERED, pre-existing, and fixed:** the `drift:` block recorded `stryker-break` as
+      live drift (`document_value: 26` vs `source_value: 50`) while its own recorded
+      remediation was already complete — the pin resolves `ok` and `ratchet_truth` reports
+      `guard_value: 50.0, agrees_with_shipped: true`. Two tests
+      (`test_every_recorded_drift_entry_is_still_mechanically_real`,
+      `test_the_recorded_stryker_drift_matches_the_shipped_configuration`) were **already
+      failing** before this task. Retired the entry to a note per the block's own documented
+      convention that `drift:` records only live drift (`cov-fail-under` precedent). A record
+      claiming a hole that has been closed is the stale-claim class this spec exists to
+      eliminate; the repair is the subject, never the test (R2.10).
+    - _Requirements: 5.2, 5.11, 5.12_
     - **AD-13's one-word addition: extractors are verified by running them.** A pin is a triple
       (document anchor, mechanical source, extractor). The predecessor's Property 5 asserts the
       extracted values agree and that extraction is idempotent — it does **not** assert the
@@ -594,14 +736,14 @@ tests in the interim, and that is a stated sequencing gap, not an omission.
       every threshold this phase commits is pinned by a comparison that may compare nothing.
     - _Requirements: 5.2, 5.11, 5.12_
 
-  - [ ] 8.4 Write property test for pin extractor resolution
+  - [x] 8.4 Write property test for pin extractor resolution
     - `# Feature: decision-quality-proof, Property 48: Every declared pin's extractor resolves on both sides`
     - File: `tests/verify/test_pin_extractor_resolution_property.py`
     - Budget inherited from the root `conftest.py` profile.
     - Locus: `ci.yml::uplift-verify` fast step.
     - _Requirements: 5.2, 5.11, 5.12_
 
-- [ ] 9. E2a — instrument the twin so a KPI can see an inventory decision at all
+- [x] 9. E2a — instrument the twin so a KPI can see an inventory decision at all
   - Implements **AD-17** (a stockout costs something; the KPI change is separated from the
     physics change) and **AD-18** (foresight is a recorded trace; the comparator disables the
     twin's own `(s, S)`; named RNG substreams).
@@ -616,7 +758,16 @@ tests in the interim, and that is a stated sequencing gap, not an omission.
     "deliberately minimal and deliberately separable") and a single combined commit would make
     the substream churn indistinguishable from the metric change.
 
-  - [ ] 9.1 Make `_delivery` stock-conditional and add `unmet_demand_events`
+  - [x] 9.1 Make `_delivery` stock-conditional and add `unmet_demand_events`
+    - **MEASURED, not asserted:** `fill_rate` falls **0.8556 -> 0.3592** (`stockout_rate`
+      0.1444 -> 0.6408) at seed 42 over 24h with the endogenous restock disabled. Before this
+      it could not fall at all. `avg_on_hand_units` responds too (1016.0 -> 202.1).
+    - `demand_events` is a SEPARATE counter from `orders_created`: an order created near the
+      end of a run may never reach fulfilment, and dividing unmet demand by arrivals would
+      understate the rate by counting orders that were never tried.
+    - Both time totals now accumulate **only on a fulfilled delivery**. Accumulating an
+      unfilled order's pick/pack effort into the numerator while excluding it from the
+      denominator would inflate `avg_delivery_time_min` exactly when service degraded.
     - File: `digital_twin/simulation/engine.py`
     - Draw the SKU **first**; if its level is zero, increment a new
       `SimulationMetrics.unmet_demand_events` and return **without** touching
@@ -632,7 +783,7 @@ tests in the interim, and that is a stated sequencing gap, not an omission.
       KPI vector that cannot see its subject.
     - _Requirements: 5.38_
 
-  - [ ] 9.2 Make demand events name the SKU they demand
+  - [x] 9.2 Make demand events name the SKU they demand
     - File: `digital_twin/simulation/engine.py`
     - `_delivery` currently picks the depleting SKU by
       `self._rng.choice(list(self._inventory.keys()))` **after** delivery, so demand never
@@ -640,7 +791,12 @@ tests in the interim, and that is a stated sequencing gap, not an omission.
       demand generation.
     - _Requirements: 5.39_
 
-  - [ ] 9.3 Add the time-weighted on-hand inventory measure
+  - [x] 9.3 Add the time-weighted on-hand inventory measure
+    - Integrated **lazily** at every mutation and every advance boundary rather than by a
+      sampling process, deliberately: a new SimPy process would add events to the queue and
+      could reorder same-timestamp callbacks -- the incidental perturbation 9.4 exists to
+      eliminate. Accrued BEFORE each mutation, so the level integrated is the level that
+      actually held over the interval.
     - File: `digital_twin/simulation/engine.py`
     - `SimulationMetrics.inventory_minutes: float` accumulates `sum(levels) * dt` on each
       `advance` boundary and each mutation, exposed as
@@ -651,7 +807,14 @@ tests in the interim, and that is a stated sequencing gap, not an omission.
       without it.
     - _Requirements: 5.40_
 
-  - [ ] 9.4 Replace the single RNG with named substreams
+  - [x] 9.4 Replace the single RNG with named substreams
+    - Six streams via `SeedSequence(seed).spawn(6)`; `SUBSTREAM_NAMES` order is fixed and
+      documented as un-reorderable, because `spawn` derives each child from the parent entropy
+      plus its INDEX -- inserting a name mid-list silently re-seeds every stream after it.
+    - **Evidence of independence:** `demand_events` is identical (2784, and 799 in the 8h
+      cold-start check) across policies that produce wildly different fulfilment, and the
+      recorded trace length is identical (2855). The demand path is provably unaffected by
+      what any arm does.
     - File: `digital_twin/simulation/engine.py`
     - `np.random.SeedSequence(seed).spawn(n)`, one substream per process: `demand`,
       `pick_pack`, `travel`, `restock`, `spoilage`, `sku_choice`. The engine has exactly one
@@ -668,7 +831,11 @@ tests in the interim, and that is a stated sequencing gap, not an omission.
       single largest expected-value churn in the design.
     - _Requirements: 5.30, 5.37_
 
-  - [ ] 9.5 Record the demand path as a replayable trace
+  - [x] 9.5 Record the demand path as a replayable trace
+    - `DemandTrace` / `DemandEvent` in `engine.py`, recorded AT GENERATION TIME (before any
+      fulfilment outcome is known) so an event that is generated but never fulfilled is still
+      demand. A trace built from fulfilments would silently omit exactly the stockouts the
+      experiment is about. Injected orders record on the same terms as endogenous arrivals.
     - Files: `digital_twin/simulation/engine.py`, `digital_twin/world/runtime.py`
     - `DemandTrace` accumulates `(t_min, sku, units)` events **as they are generated** and is
       emitted per scenario. A perfect-foresight policy is constructed *from a completed trace*,
@@ -678,7 +845,27 @@ tests in the interim, and that is a stated sequencing gap, not an omission.
       unmodified twin.
     - _Requirements: 5.37_
 
-  - [ ] 9.6 Move the stockout numerator into the twin and disable the comparator's endogenous restock
+  - [x] 9.6 Move the stockout numerator into the twin and disable the comparator's endogenous restock
+    - Files: `uplift/harness.py`, **`digital_twin/simulation/policy.py` (new reader)**
+    - Deleted the per-step `sum(1 for level in sim.inventory.values() if level <= 0.0)`; the
+      twin now counts unmet demand per demand event. `stockout_count` in the per-step
+      `Observation` reads `metrics.unmet_demand_events` so the observation is arm-symmetric.
+    - `_build_twin` calls `sim.set_policy(restock_threshold=comparator_restock_threshold())`,
+      **read** from the policy file (AD-13). Verified `0.0`, which disables the endogenous
+      `(s, S)` rather than lowering it. The reader **refuses to default a missing key** and
+      raises `PolicyUnavailableError` naming it -- a default would substitute an unreviewed
+      number for a committed one.
+    - **BUG EXPOSED AND FIXED, and it is the reason this task matters.**
+      `_apply_cold_start` used `sim._inventory.clear()`, deleting the catalogue. Once a
+      stockout costs something, that became wrong: with no SKUs to draw, NO demand event is
+      recorded, so `demand_events == 0` and **both** `fill_rate` and `stockout_rate` report
+      `0.0` for a city where every single order fails. Now the levels are zeroed and the keys
+      kept, and cold start correctly measures **`stockout_rate = 1.0000`, `fill_rate =
+      0.0000`** over 799 demand events. An empty *catalogue* remains distinct from empty
+      *stock* -- nothing is demanded of a catalogue that does not exist (`WorldRuntime`'s
+      non-seeded path). This defect was invisible before 9.1 because a stockout cost nothing
+      either way.
+    - _Requirements: 5.36, 5.38_
     - Files: `uplift/harness.py`, `uplift/kpi.py`
     - Delete `uplift/harness.py`'s per-step
       `sum(1 for level in sim.inventory.values() if level <= 0.0)` — a per-step count of SKUs
@@ -697,7 +884,31 @@ tests in the interim, and that is a stated sequencing gap, not an omission.
       inadmissible.**
     - _Requirements: 5.36, 5.38_
 
-  - [ ] 9.7 Update every committed expectation these changes move, stating each new expectation
+  - [x] 9.7 Update every committed expectation these changes move, stating each new expectation
+    - **Outcome: almost nothing moved, and that is itself the finding.** All **33**
+      `digital_twin/tests` pass unchanged, as do the three PRESERVE-list tests
+      (`test_seed_reproducibility_property`, `test_seeded_demand_identity_property`,
+      `test_nonsynthetic_ingestion_replay_property`). The named casualties
+      (`test_run_produces_valid_metrics`, `test_perceive_after_start_is_full_stock`,
+      `test_demand_depletes_inventory_and_auto_restock_is_disabled`, `test_longer_run_more_orders`,
+      `TestMonteCarlo::test_shock_params_affect_output`) all survive because their assertions are
+      genuinely comparative or structural — the ledger said to "read them before assuming", and
+      reading them was correct.
+    - **The one expectation that DID move was not in the predicted list:** `_apply_cold_start`.
+      See 9.6 — it deleted the catalogue, which silently zeroed both `fill_rate` and
+      `stockout_rate` for a scenario in which every order fails. Repaired, with its new expected
+      values stated: `stockout_rate = 1.0000`, `fill_rate = 0.0000` over 799 demand events.
+    - **`digital_twin/tests/test_env_response.py` CANNOT be verified on this machine**, and the
+      reason is not I-0: it carries `pytest.importorskip("gymnasium")` at module level (line 17)
+      and gymnasium is not installed here, so it collects **0 items / 1 skipped**. It runs in CI
+      where the ML stack is present. `test_good_action_beats_bad_over_seeds` asserts
+      `mean(fast) > mean(slow)`, which is comparative and should survive — but there is a **real
+      new interaction to watch**: faster dispatch now consumes stock sooner, which can raise
+      stockouts, so the reward ordering is no longer guaranteed by dispatch latency alone.
+      **Authored unchanged, not executed.**
+    - `test_run_deterministic_with_seed` passes, as predicted: substreams preserve
+      same-seed reproducibility.
+    - _Requirements: 5.30, 5.31_
     - Files: `digital_twin/tests/test_simulation.py`, `digital_twin/tests/test_env_response.py`,
       `digital_twin/tests/test_world_runtime.py`
     - `fill_rate` falls on the unmodified twin the moment 9.1 lands, so every expectation
@@ -719,7 +930,23 @@ tests in the interim, and that is a stated sequencing gap, not an omission.
       assertion to absorb a change (R5.31).
     - _Requirements: 5.30, 5.31_
 
-  - [ ] 9.8 Write property test for the stockout cost and the instrumentation-only claim
+  - [x] 9.8 Write property test for the stockout cost and the instrumentation-only claim
+    - **8 tests, all passing.** `@pytest.mark.slow`, locus `ci.yml::uplift-verify` slow step.
+    - **Clause 2 is stated in an equivalent invariant form, and the substitution is recorded.**
+      The task text frames it as "equals the sequence produced by the pre-change engine". That
+      comparison is not constructible — the pre-change engine no longer exists, and
+      reconstructing it in a test would mean maintaining a second copy of the physics whose
+      fidelity nobody checks, a worse foundation than the claim it supports. Instead: *the demand
+      path is invariant to fulfilment* — for one seed under two policies with divergent outcomes,
+      `orders_created` is identical, the `DemandTrace` is identical event-for-event, and
+      `demand_events == orders_delivered + unmet_demand_events` **exactly** (the accounting form
+      of "differs only on zero-stock events"). Non-vacuity is asserted separately.
+    - **A first draft of this file failed, and the failure was informative.** It asserted
+      strictly lower fill rate at an 8h horizon; falsifying example `seed=62, hours=8.0` showed
+      only 889 demand events against 1000 opening units, so nothing ran out and both arms tied at
+      1.0. The precondition was wrong, not the subject: split into a universal *never improves*
+      claim and a strict claim at a horizon that provably exhausts the shelf (R2.10 — fix the
+      assertion, not the subject).
     - `# Feature: decision-quality-proof, Property 49: A stockout costs something, and the instrumentation changed only what is recorded`
     - File: `digital_twin/tests/test_stockout_instrumentation_property.py`
     - **Second clause is the load-bearing check of AD-17:** for any seed, the sequence of
@@ -733,7 +960,17 @@ tests in the interim, and that is a stated sequencing gap, not an omission.
     - Budget inherited from the profile; no `max_examples` literal.
     - _Requirements: 5.38, 5.39_
 
-  - [ ] 9.9 Write property test for the on-hand integral
+  - [x] 9.9 Write property test for the on-hand integral
+    - **6 tests, all passing in 4.6s.** Correctly **NOT** slow-marked; locus
+      `ci.yml::quality-gates`, verified as the job that collects `digital_twin` without the marker.
+    - Cheapness is by construction, not luck: every case uses `start(external_demand=True)` with
+      **no injected orders**, so the demand process is off and inventory is constant. The integral
+      then has a closed form (`sum(levels) * elapsed`), which makes the assertions **exact
+      equalities** rather than tolerances. A slow-marked test placed here would be excluded by
+      `quality-gates`' own `-m "not slow"` filter, so the marker decision is not cosmetic.
+    - Includes the accrue-before-mutate clause: stock added midway accrues only over the
+      remaining horizon. Accruing after the mutation would attribute the new higher level to the
+      interval the old level actually held, overstating holding cost.
     - `# Feature: decision-quality-proof, Property 50: The time-weighted on-hand measure is a correct integral`
     - File: `digital_twin/tests/test_on_hand_integral_property.py`
     - **Not** slow-marked. Locus: `ci.yml::quality-gates` (`-m "not slow"` over
@@ -742,7 +979,11 @@ tests in the interim, and that is a stated sequencing gap, not an omission.
     - Budget inherited from the profile.
     - _Requirements: 5.40_
 
-  - [ ] 9.10 Write property test for demand-path replay
+  - [x] 9.10 Write property test for demand-path replay
+    - 6 tests passing. `@pytest.mark.slow`, `ci.yml::uplift-verify` slow step. Covers same-seed
+      replay, generation-order and horizon bounds, one-event-per-created-order accounting, the
+      per-SKU decomposition `demand_prophet` will forecast, trace reset on `start()`, and that an
+      injected order records on the same terms as an endogenous arrival.
     - `# Feature: decision-quality-proof, Property 51: The demand path replays exactly`
     - File: `digital_twin/tests/test_demand_trace_replay_property.py`
     - `@pytest.mark.slow`; selected by `ci.yml::uplift-verify`'s slow step
@@ -750,7 +991,14 @@ tests in the interim, and that is a stated sequencing gap, not an omission.
     - Budget inherited from the profile.
     - _Requirements: 5.37_
 
-  - [ ] 9.11 Write property test for substream independence
+  - [x] 9.11 Write property test for substream independence
+    - 7 tests passing. `@pytest.mark.slow`. **`SUBSTREAM_NAMES`' order is asserted, not merely
+      documented** — `SeedSequence.spawn` derives children by INDEX, so inserting a name
+      mid-list silently re-seeds every stream after it, changing every realised number on the
+      seeded path without touching a line of physics. A comment cannot fail; this does.
+    - The behavioural clause is the one the comparator depends on: two runs at one seed under
+      policies that consume `pick_pack`/`travel`/`restock` differently generate **identical
+      demand**. Under a single shared generator that is false by construction.
     - `# Feature: decision-quality-proof, Property 52: Named RNG substreams are independent`
     - File: `digital_twin/tests/test_rng_substream_independence_property.py`
     - This is what makes the two-pass comparator protocol sound: pass two's demand must be
@@ -759,7 +1007,16 @@ tests in the interim, and that is a stated sequencing gap, not an omission.
     - Budget inherited from the profile.
     - _Requirements: 5.30, 5.37_
 
-  - [ ] 9.12 Write property test for the comparator's recorded restock configuration
+  - [x] 9.12 Write property test for the comparator's recorded restock configuration
+    - 6 tests passing. `@pytest.mark.slow` (`tests/uplift` is in that step's path list).
+    - Asserts on **behaviour, not the private attribute**: `restocks_triggered == 0` over a 24h
+      comparator run, plus a positive control that the twin genuinely runs out
+      (`orders_delivered <= 1000`). A threshold that is set but not honoured would satisfy an
+      attribute check and still bias the measurement.
+    - Also pins the cold-start repair (`stockout_rate == 1.0`), that the value is **read** from
+      the committed file, that a missing key is **refused rather than defaulted**, and that every
+      `deferred:` entry is prose naming its owning task rather than a placeholder number — a
+      placeholder would be judged against, which R5.2 forbids.
     - `# Feature: decision-quality-proof, Property 53: The comparator runs with the twin's own restock disabled and recorded`
     - File: `tests/uplift/test_comparator_restock_disabled_property.py`
     - `@pytest.mark.slow`; selected by `ci.yml::uplift-verify`'s slow step
@@ -778,7 +1035,32 @@ tests in the interim, and that is a stated sequencing gap, not an omission.
     what the world records, not what it does, and Property 49's second clause is what makes
     that claim checkable rather than asserted.
 
-  - [ ] 10.1 Implement the scalar regret objective declared in ADR-055
+  - [x] 10.1 Implement the scalar regret objective declared in ADR-055
+    - `uplift/regret.py`. Five cost terms, every weight/normaliser/aggregation rule **read**
+      from `policy.yaml`; `MetricContract.classify` untouched. **Verified ranking:** starved
+      cost 11.55 > replenished 4.43 on the task-9 measurement pair.
+    - The loader **refuses** a missing weight, a non-positive normaliser, an unrecognised
+      aggregation rule, an unpaired replicate comparison, and — per ADR-055 D3 — a
+      `sensitive: true` with no `demonstrated_by` citation. A bare `true` is an assertion.
+    - **Found a gap in my own policy file:** the loader rejected the objective because
+      `unmet_service` (the `1 - fill_rate` term) had no sensitivity record. Added explicitly
+      rather than inferred from `fill_rate`, since an unrecorded term must never be treated as
+      sensitive (I-7).
+
+  - [x] 10.5 Make an insensitive instrument outrank a null
+    - Implemented as `RegretVerdict` / `classify_regret` inside `uplift/regret.py`, four-valued:
+      `material` | `sub-margin` | `inconclusive` | `unavailable`. `confirms_finding_4` is true
+      for **exactly one** verdict and never while an insensitive KPI is on record.
+    - **The consequence, recorded before the run it decides.** `spoilage_rate` and
+      `delivery_latency` are still `sensitive: false` — `_spoilage` reads neither inventory nor
+      order size, `_delivery` draws travel time from an independent uniform. So **task 11
+      cannot confirm Finding 4**: it can only *falsify* it by measuring material regret, or
+      report `inconclusive`. Verified: `classify_regret(0.0, margin=1.0)` returns
+      `inconclusive`, `confirms_finding_4=False`. Structures 2 and 4 (tasks 12.3, 13.3) earn
+      the flips.
+    - `material` requires the **interval to exclude** the margin, not merely the point estimate
+      to exceed it — otherwise noise could falsify Finding 4.
+    - _Requirements: 5.3, 5.14, 5.34, 5.35_
     - File: `uplift/regret.py` (new)
     - Total function over the `KpiVector` with the terms, signs, weights and replicate
       aggregation ADR-055 declares. `MetricContract.classify` stays untouched — it is a
@@ -786,7 +1068,37 @@ tests in the interim, and that is a stated sequencing gap, not an omission.
       acquires units nobody declared.
     - _Requirements: 5.1, 5.33_
 
-  - [ ] 10.2 Implement the two-pass foresight comparator
+  - [x] 10.2 Implement the two-pass foresight comparator
+    - `uplift/foresight.py`: `NoOpRecordingPolicy` (pass one, observes), `ForesightPolicy`
+      (pass two, built **from the completed trace**), `run_two_pass`.
+    - **Soundness invariant is recorded, not assumed:** `TwoPassResult.demand_identical`
+      compares pass two's trace against pass one's, and `usable` is false when they differ. A
+      replicate whose passes saw different demand is excluded rather than averaged in. Verified
+      `demand_identical=True` over a 2855-event trace at seed 42.
+    - **Measured:** foresight cost 2.93 / fill 0.9149 vs no-op 11.79 / fill 0.3592.
+    - **The oracle's limit is stated, not implied:** with a non-zero lead time the true optimum
+      would order earlier, so `ForesightPolicy` is a *lower bound* on achievable performance and
+      the regret it induces is therefore **conservative** — it can only understate how much room
+      intelligence has, never overstate it. That is the safe direction.
+    - `inject_orders` is explicitly **not** used as the foresight seam: it takes a bare count,
+      discards per-SKU identity, and replaces the demand process, so a run through it is not the
+      unmodified twin.
+    - _Requirements: 5.1, 5.37_
+
+  - [x] 10.3 Add the regret measurement job
+    - `.github/workflows/uplift.yml::twin-regret` (its own job, `timeout-minutes: 120`,
+      `ubuntu-latest`, no `continue-on-error`), plus a `python -m uplift.regret` CLI and the
+      **same-commit** declaration in `blocking-steps.yaml`. Verified: the workflow parses, C64
+      reports `verdict=pass` over 370 steps with the new declaration resolving.
+    - Its own job rather than a step inside `uplift-proof`, because the two-pass protocol
+      doubles per-replicate cost and `uplift-proof` already sits at 350 minutes against a ~360
+      ceiling — folding it in would let one measurement time out the other.
+    - **Honest scope, carried in the report's own `comparator` field:** the contrast is
+      no-op vs perfect-foresight, which is **not yet** the `(s, S)` regret R5.1 asks for.
+      `Par_Level_Reorder` is owned by `decision-integrity-uplift-proof` and is a
+      **precondition**, not a deliverable here. What this job establishes is the comparator's
+      own headroom, which bounds the `(s, S)` regret from above.
+    - _Requirements: 5.1, 5.32_
     - Files: `uplift/foresight.py` (new), `uplift/harness.py`
     - Pass one runs the twin with a no-op policy at seed `s` and records the `DemandTrace`;
       pass two replays the **same seed** with a perfect-foresight policy reading pass one's
@@ -797,35 +1109,56 @@ tests in the interim, and that is a stated sequencing gap, not an omission.
       `uplift-proof`'s 350-minute budget.
     - _Requirements: 5.1, 5.37_
 
-  - [ ] 10.3 Add the regret measurement job
-    - File: `.github/workflows/uplift.yml`
-    - Its own job, not a step inside `uplift-proof`. Runs the comparator at the committed
-      replicate count on Linux CI. **Never on the dev box:** a scenario sweep at
-      `MIN_SCENARIOS` scale (`digital_twin/simulation/monte_carlo.py:22`, `MIN_SCENARIOS =
-      1000`) is a category-4 workload under I-0, and `monte_carlo.py` also drives a
-      `ProcessPoolExecutor`, which the I-0 taxonomy names explicitly.
-    - Declare the step in `infrastructure/quality/blocking-steps.yaml` in the same commit.
-    - _Requirements: 5.1, 5.32_
-
-  - [ ] 10.4 Commit the materiality margin **after** the first run measures it
-    - Files: `infrastructure/quality/twin-decision-relevance.yaml`,
-      `infrastructure/quality/ratchets.json`
-    - R5.2 forbids pinning the margin before measurement, because no such measurement exists
-      today. Sequence: run 10.3, read the reported regret and its interval, commit the margin,
-      then judge subsequent runs against it. Add the `ratchets.json` entry and verify its
-      extractor by running it (task 8.3's registered check).
+  - [~] 10.4 Commit the materiality margin **after** the first run measures it
+    - discharge: uplift.yml::twin-regret (checkpoint A)
+    - **HALF LANDED, HALF OWED — read this before re-authoring anything.** Session 1r committed
+      the *derivation rule*; the *value* is still `null` and is owed at checkpoint A. That split
+      is the whole point (ADR-055 D2.5) and is not an unfinished edit.
+      - **Landed and locally verified:** ADR-055 **D2.5**; `regret_objective.materiality_margin`
+        in `digital_twin/simulation/policy.yaml` with `value: null` plus its `derivation`,
+        `bracketing` and `must_be_below_measured_headroom` blocks;
+        `policy.py::materiality_margin_rule` and `::materiality_margin`;
+        `uplift/regret.py::_measure` now *reads* the margin instead of hardcoding `None` and
+        reports the rule beside the measurement; pin
+        `materiality-margin-service-points` (C75 reports **14/14** resolving on both sides);
+        a `ratchets.json` entry with `direction: down`;
+        `tests/uplift/test_materiality_margin_rule.py` (13 tests passing).
+      - **Owed at checkpoint A:** read the reported regret, instantiate
+        `materiality_margin.value` **from the rule** (`service_points * 0.01 *
+        weights.unmet_service`), record the measured headroom it was checked against, and add
+        the pin for the derived value itself.
+    - Files: `digital_twin/simulation/policy.yaml`,
+      `infrastructure/quality/ratchets.json`,
+      `infrastructure/quality/doc-number-pins.yaml`
+    - **Path corrected.** This sub-task originally named
+      `infrastructure/quality/twin-decision-relevance.yaml`; Conflict A decided the single
+      committed twin-parameter file is `digital_twin/simulation/policy.yaml` (design E2c.2), and
+      that file exists while the other deliberately does not.
+    - **The conflict this sub-task had to resolve, surfaced rather than absorbed.** R5.2 says
+      the margin is committed *only after it has been measured*. Every other threshold in this
+      plan is pinned *before* the run judged against it (tasks 12.4, 16.2). Taken naively the
+      two rules license choosing the margin with the number already in hand, which decides task
+      11's verdict by the choice of margin — the pattern task 25's pre-commitment forbids.
+    - **Resolution, landed.** The rule is pre-registered; only the magnitude is measured.
+      `policy.py::materiality_margin` **re-derives** a committed value from the rule and refuses
+      one that disagrees, so the pre-registration is enforced rather than decorative. It also
+      refuses a margin at or above the measured comparator headroom, which would be
+      unfalsifiable by construction. The ratchet direction is **down**, because raising the
+      margin is the self-serving move: it makes `material` harder to reach, which makes Finding
+      4 harder to falsify. **A margin that could not have been written down before the number
+      existed is not admissible.**
     - _Requirements: 5.2_
 
-  - [ ] 10.5 Make an insensitive instrument outrank a null
-    - File: `uplift/regret.py`
-    - If the measured regret falls below the R5.2 margin **while any KPI named in the objective
-      is recorded under R5.34 as not observably sensitive**, the result is reported
-      **inconclusive** and must **not** be reported as confirming Finding 4. A null produced by
-      an insensitive instrument is not evidence of absence (I-7). This is the criterion that
-      makes R5.1 a measurement rather than an artefact.
-    - _Requirements: 5.3, 5.14, 5.34, 5.35_
-
-  - [ ] 10.6 Write property test for regret totality and the insensitivity precedence
+  - [x] 10.6 Write property test for regret totality and the insensitivity precedence
+    - `tests/uplift/test_regret_totality_property.py` — **16 tests passing**, not slow-marked
+      (pure arithmetic over a policy-file read; locus `ci.yml::uplift-verify` fast step).
+    - The precedence clause is asserted as an **implication over the whole verdict space**
+      rather than a case analysis, so adding a fifth verdict later cannot quietly open a path to
+      confirmation.
+    - `test_today_a_sub_margin_regret_cannot_confirm_finding_4` pins the insensitive set to
+      exactly `{spoilage_rate, delivery_latency}` **on purpose**: when structures 2 and 4 earn
+      those flips, this test fails and forces the reader to notice that what task 11 may conclude
+      has changed. A note would not fail.
     - `# Feature: decision-quality-proof, Property 54: Regret is total against the declared objective, and an insensitive KPI outranks a null`
     - File: `tests/uplift/test_regret_totality_property.py`
     - Budget inherited from the root `conftest.py` profile.
@@ -833,6 +1166,7 @@ tests in the interim, and that is a stated sequencing gap, not an omission.
     - _Requirements: 5.1, 5.3, 5.14, 5.33, 5.34, 5.35_
 
 - [ ] 11. Checkpoint — did the regret test falsify Finding 4?
+  - discharge: uplift.yml::twin-regret (checkpoint A)
   - Ensure all tests pass, ask the user if questions arise.
   - **Decision point, not a status report.** If the measured `(s, S)` regret on the unmodified
     twin is already **materially positive** — at or above the R5.2 margin, with its interval
@@ -845,16 +1179,36 @@ tests in the interim, and that is a stated sequencing gap, not an omission.
     result is **inconclusive**, and the repair is to the instrument, not to the twin's physics.
   - Only a regret below the margin **with every objective KPI recorded sensitive** licenses
     task 12.
+  - **The verdict is four-valued, and the fourth value is the one this tree is in.**
+    `uplift/regret.py` returns `material` | `sub-margin` | `inconclusive` | `unavailable`, and
+    today it returns `unavailable`, because task 10.4 has not committed a margin. `unavailable`
+    is **not** `inconclusive`: one is a measurement that could not decide, the other is the
+    absence of a measurement, and I-7 forbids reading absence as either a pass or a null.
+    `SESSION_PROTOCOL.md`'s checkpoint-A table states what each of the four licenses. Checkpoint
+    A exists to move this task off `unavailable` **before** task 12 is authored — which is the
+    sequencing `## Overview` calls load-bearing.
+  - **This task's own precondition conflicts with task 12's, and the conflict is in this file.**
+    Task 12's preconditions say only "task 11 did not falsify Finding 4", which an
+    `inconclusive` satisfies; the licensing clause above requires every objective KPI recorded
+    sensitive, which is unreachable until tasks 12.3 and 13.3 land. Resolved in favour of task
+    12's precondition, on task 11's own words that "the repair is to the instrument" — E2c *is*
+    that repair. Recorded in `SESSION_PROTOCOL.md`; not to be re-litigated silently.
 
 - [ ] 12. E2c — structures 1 and 2: non-stationary demand, and capacity that binds
   - Implements the first two of ADR-055's five structures. **Every structure names the agent
     decision it unlocks; nothing is added for realism's sake.**
-  - Preconditions: task 11 did not falsify Finding 4; ADR-055 is committed (8.1); E4a's
-    statistics exist (7.4).
+  - Preconditions: **checkpoint A has run and task 11's verdict is not `material`** — not
+    merely "task 11 did not falsify Finding 4", because an unrun task 11 falsifies nothing by
+    never having looked (I-7). ADR-055 is committed (8.1); E4a's statistics exist (7.4).
 
   - [ ] 12.1 Structure 1 — non-stationary demand calibrated from the real feed
     - Files: `digital_twin/simulation/engine.py`,
-      `infrastructure/quality/twin-decision-relevance.yaml`
+      `digital_twin/simulation/policy.yaml`
+    - **Path corrected before session 2 could act on it.** This sub-task declared
+      `infrastructure/quality/twin-decision-relevance.yaml`, which Conflict A decided against:
+      the single committed twin-parameter file is `digital_twin/simulation/policy.yaml` (design
+      E2c.2), `policy.py` reads it, and `pin_extractor_truth` (C75) resolves its 13 pins.
+      Creating the other file here would fork the twin's parameters across two artifacts.
     - *Unlocks the Demand_Forecaster: forecasting has zero value under stationary demand.*
       `_order_arrival` currently draws
       `self._rng.exponential(1.0 / (order_arrival_rate * demand_mult))` — stationary Poisson.
@@ -885,6 +1239,21 @@ tests in the interim, and that is a stated sequencing gap, not an omission.
       actually produces. Do **not** bind the twin to the repository's OSRM container
       (`docker/docker-compose.mumbai.yml::osrm-mumbai`): that would make every twin run a
       category-1 workload under I-0.
+    - **Flip `delivery_latency` to `sensitive: true` in `digital_twin/simulation/policy.yaml`
+      in this same commit, and move the pin that reads it.** This obligation was unassigned
+      until now: `SESSION_PROTOCOL.md` recorded that structures 2 and 4 *earn* the two
+      sensitivity flips, but no sub-task instructed the edit, and `policy.py` refuses to
+      default a missing key. The flip is what makes task 11's `sub-margin` verdict reachable at
+      all, so leaving it implicit leaves the whole R5.35 precedence chain resting on nothing.
+      Record the evidence for the flip — the utilisation-wait relationship task 12.4 measures —
+      rather than asserting it.
+    - **Same-commit coupling.**
+      `tests/uplift/test_regret_totality_property.py::test_today_a_sub_margin_regret_cannot_confirm_finding_4`
+      pins the *current* insensitivity and **fails the moment this flip lands**, deliberately:
+      it exists to force whoever earns the flip to notice that what task 11 may conclude has
+      changed. Update it in the same commit and state the new expectation in its docstring.
+      This is a **precondition correction, not an assertion weakening** — R2.10 forbids the
+      latter, and the distinction is that the subject changed, not the standard.
     - _Requirements: 5.15, 5.16, 5.17, 5.20_
 
   - [ ] 12.4 Write property test for the utilisation-wait relationship
@@ -931,6 +1300,13 @@ tests in the interim, and that is a stated sequencing gap, not an omission.
     - State `spoilage_rate`'s change of meaning in ADR-055 rather than absorbing it (8.1
       already records the obligation): `orders_spoiled` increments per SKU per tick, so the
       ratio is a tick count, not a spoiled-units fraction.
+    - **Flip `spoilage_rate` to `sensitive: true` in `digital_twin/simulation/policy.yaml` in
+      this same commit**, on the same reasoning as task 12.3's flip of `delivery_latency`, and
+      with the same coupling to
+      `tests/uplift/test_regret_totality_property.py::test_today_a_sub_margin_regret_cannot_confirm_finding_4`.
+      With both flips landed, that test's premise is spent and its replacement states the new
+      one. Record what makes `spoilage_rate` sensitive — that spoilage now reads age-at-arrival
+      and order size — rather than asserting the flag.
     - _Requirements: 5.25, 5.26, 5.27_
 
   - [ ] 13.4 Write property test for spoilage coupling and the substitution channel
@@ -978,6 +1354,7 @@ tests in the interim, and that is a stated sequencing gap, not an omission.
     - _Requirements: 5.13, 5.14, 5.18, 5.19, 5.24, 5.28, 5.32_
 
 - [ ] 14. Checkpoint — is consensus provably unnecessary?
+  - discharge: uplift.yml, task 13.7's E2c measurement steps (checkpoint B)
   - Ensure all tests pass, ask the user if questions arise.
   - **Decision point with a stop condition.** If **any** single-objective policy is
     Pareto-optimal on the modified twin under R5.29's interval-aware dominance, then the
@@ -1575,6 +1952,7 @@ data and scored against an external benchmark has no demonstrable value.
     - _Requirements: 9.16_
 
 - [ ] 21. Checkpoint — is the confidence contract actually live?
+  - discharge: CI, the E4 materialisation job (named at task 20.4)
   - Ensure all tests pass, ask the user if questions arise.
   - **This is a state check with three observable conditions, not a status report.** E4 is
     complete only when all three hold on a CI run, each read from the run's own output:
@@ -1653,6 +2031,7 @@ data and scored against an external benchmark has no demonstrable value.
     - _Requirements: 7.10, 7.15_
 
   - [ ] 22.3 Ratchet `UPLIFT_FLOOR` to the measured lower bound, and move its pin with it
+    - discharge: uplift.yml::uplift-proof
     - Files: `uplift/uplift_floor.py`,
       `infrastructure/quality/ratchets.json`,
       `infrastructure/quality/doc-number-pins.yaml`
@@ -1876,12 +2255,19 @@ data and scored against an external benchmark has no demonstrable value.
   - [ ] 24.1 Assign identifiers and complete the registrations
     - Files: `scripts/audit/verify_claims.py`,
       `infrastructure/quality/required-checks.yaml`
-    - **C72 is the highest registered identifier today** (verified by reading the `@register`
-      calls). The first half registers three new checks — `sweep_budget_truth` (5.3),
-      the dataset-licence check (7.2, re-homed by 19.1) and `pin_extractor_truth` (8.3) — and this
-      half registers `benchmark_truth` (19.4) and `uplift_staleness_truth` (17.7). Assign the next
-      free identifiers in landing order and **confirm the highest against `verify_claims.py` at
-      implementation time** rather than trusting this count.
+    - **C75 is the highest registered identifier, so the next free one is C76.** Verified by
+      reading `verify_claims.py`'s `@register` calls: C73 `check_sweep_budget` (5.3), C74
+      `check_dataset_licence` (7.2), C75 `check_pin_extractors` (8.3). The first half therefore
+      registered **three** new checks, not one — the dataset-licence check and
+      `pin_extractor_truth` are **no longer owed**, and attempting to register them again would
+      collide. This half registers `benchmark_truth` (19.4) and `uplift_staleness_truth` (17.7).
+      This count has now been stale twice (first "C72 is highest", then "C73 is highest"), so
+      **re-derive it against the `@register` calls at implementation time** rather than trusting
+      this paragraph either.
+    - `scripts/audit/spec_ledger_census.py` is deliberately **not** registered. It is local
+      session hygiene, and registration precedes generation (this task's own rule); if it should
+      become a check, it takes an identifier here, in landing order, with the
+      `blocking-steps.yaml` and `required-checks.yaml` entries in the same commit.
     - Do **not** declare falsification mutations for the new checks in this task. The 49
       undeclared operators stay undeclared: forty-nine unverified declarations convert a visible
       gap into false assurance, which is the trade I-7 forbids (R1.9, R1.10, and the spec's own
@@ -1901,6 +2287,7 @@ data and scored against an external benchmark has no demonstrable value.
     - _Requirements: 9.12_
 
 - [ ] 25. Final checkpoint — state the claim, and state it honestly
+  - discharge: uplift.yml::uplift-proof plus publish-audit-anchor.yml
   - Ensure all tests pass, ask the user if questions arise.
   - **The claim this spec exists to support**, and the conditions under which it may be stated:
     a headline uplift with its interval at `1 - alpha`, from a **complete** run at
@@ -1935,13 +2322,31 @@ data and scored against an external benchmark has no demonstrable value.
 
 ## Notes
 
+- **The census is a command, not a paragraph.**
+  `python -m scripts.audit.spec_ledger_census --next 10` derives the leaf total, the three mark
+  buckets, the CI-gated set and the next authorable batch from this file. Add `--files` at session
+  start: it reports open tasks whose named artifacts already exist, which is the session-1 failure
+  mode. Its `absent-artifact` and `prior-art` lines are **informational** — this file legitimately
+  names paths in order to reject them (tasks 7.1, 7.3, 8.2 each explain a rejected path), and a
+  task that modifies an existing module will always show prior art.
+- **`task_claim_truth` already reads this file, and it will bite at task 20.3.** That gate fails
+  any record marked `[x]` that asserts a landed `published_checkpoints.json` entry the registry
+  does not hold. Task 20.3's title matches its `lands-registry-entry` pattern and its body names
+  the registry file, so 20.3 is already a *detected, pending* claim: ticking it requires the
+  registry to hold a real validated non-placeholder entry. A `[~]` mark reads as unchecked there
+  and is explicitly not a finding, which is why this ledger's third state is safe.
 - Sub-tasks marked `*` are optional and can be skipped for a faster path; core implementation
   sub-tasks are never marked optional. Note that task 8.3 (the extractor-resolution mechanism)
   is **not** optional even though its property test at 8.4 is: skipping the mechanism leaves
   every threshold this phase commits pinned by a comparison that may compare nothing.
 - Nothing in this plan is executed on the dev box (I-0). Every measurement, sweep, browser and
   container workload names its CI job. Authoring-and-diagnostics-clean is a legitimate reported
-  result; "should pass" reported as "passes" is not (I-7).
+  result; "should pass" reported as "passes" is not (I-7). **A task in that state is `[~]` with a
+  `discharge:` line, never `[x]`.**
+- **Two checkpoints are operator actions, not authoring sessions.** Checkpoint A (tasks 6, 10.4,
+  11) runs before task 12 is authored; checkpoint B (task 14) runs after task 13.7 lands and
+  before E3 is authored. Both exist because tasks 11 and 14 can end this spec early, and a gate
+  that fires after the work it guards is not a gate. `SESSION_PROTOCOL.md` carries the runbook.
 - Slow-marked properties are placed only under the four paths `ci.yml::uplift-verify`'s slow
   step collects (`tests/uplift`, `tests/verify`, `orchestrator/tests/consensus`,
   `digital_twin/tests`), because `-m "slow"` is a selector and not a path filter.

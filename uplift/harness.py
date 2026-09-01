@@ -73,6 +73,7 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator, model_valida
 from digital_twin.config import TwinConfig
 from digital_twin.simulation.engine import SupplyChainSimulation
 from digital_twin.simulation.monte_carlo import MIN_SCENARIOS, ShockParams
+from digital_twin.simulation.policy import comparator_restock_threshold
 
 from uplift.contract import MetricContract, relative_pct_change
 from uplift.fidelity import FidelityReport
@@ -199,21 +200,54 @@ def _build_twin(scenario: Scenario, seed: int) -> SupplyChainSimulation:
         spoilage_rate_multiplier=shock.spoilage_rate_multiplier,
     )
     sim.start()
+    # ── decision-quality-proof task 9.6 (R5.36) ───────────────────────────────────
+    # THE BIAS THIS REMOVES. `start()` leaves `_restock_threshold` at its constructor
+    # default of 50.0, so a compared `(s, S)` policy reaching the twin through this
+    # harness was measured STACKED ON TOP OF the twin's own endogenous `(s, S)`
+    # restock. That biases regret toward zero independently of whether the world is
+    # easy -- and a null result would then be uninterpretable in exactly the way this
+    # phase exists to prevent.
+    #
+    # The value is READ from `digital_twin/simulation/policy.yaml`, never inlined
+    # (AD-13), and the resolved value is recorded so a run whose recorded threshold
+    # differs from the committed one is inadmissible.
+    sim.set_policy(restock_threshold=comparator_restock_threshold())
     if scenario.cold_start:
         _apply_cold_start(sim)
     return sim
 
 
 def _apply_cold_start(sim: SupplyChainSimulation) -> None:
-    """Empty the twin's initial inventory/freshness for the cold-start-city scenario.
+    """Zero the twin's initial stock for the cold-start-city scenario.
 
     ``SupplyChainSimulation.start`` warms every canonical SKU to 100 units / full
     freshness; the cold-start-city scenario models a brand-new city with no warm
-    history. The engine exposes no public "empty" lever, so this clears the engine's
+    history. The engine exposes no public "empty" lever, so this reaches the engine's
     inventory/freshness maps directly. Kept as a single, documented seam.
+
+    **decision-quality-proof task 9.6 -- this used to `.clear()` the inventory dict, and
+    that became wrong the moment a stockout started costing something.** A brand-new city
+    still *stocks* these SKUs; it simply has none of them yet. Those are different facts:
+
+    * levels zeroed, keys kept  -> demand names a SKU, finds it at zero, and every event is
+      correctly recorded as unmet demand. `stockout_rate` -> 1.0, which is the truth.
+    * keys deleted              -> `_draw_demanded_sku` has nothing to draw, no demand event
+      is recorded at all, and `demand_events == 0` makes BOTH `fill_rate` and
+      `stockout_rate` report 0.0 -- a scenario in which every order fails, reporting a
+      stockout rate of zero.
+
+    The second reading is the insensitive-instrument failure this whole phase exists to
+    prevent, and it was invisible before task 9.1 because a stockout cost nothing either way.
+    An empty *catalogue* is still distinct from empty *stock*, and the engine keeps that
+    distinction: `WorldRuntime` passes an empty mapping for a genuinely absent world, and
+    nothing is demanded of a catalogue that does not exist.
+
+    Freshness IS cleared: there is no stock on the shelf to spoil, so accruing spoilage
+    against an empty shelf would manufacture waste that did not happen.
     """
     try:
-        sim._inventory.clear()  # noqa: SLF001 — no public lever to empty initial stock
+        for sku in list(sim._inventory):  # noqa: SLF001 — no public lever to empty stock
+            sim._inventory[sku] = 0.0  # noqa: SLF001
         sim._freshness.clear()  # noqa: SLF001
     except AttributeError:  # pragma: no cover — engine shape changed
         logger.warning("uplift_cold_start_unavailable")
@@ -301,7 +335,6 @@ def run_closed_loop(
 
         current_price: float | None = None
         delivered_orders: list[DeliveredOrder] = []
-        unmet_demand_events = 0
         prev_delivered = int(sim.metrics.orders_delivered)
 
         for _ in range(loop_config.n_steps):
@@ -312,7 +345,7 @@ def run_closed_loop(
                 sim_time=sim.sim_time_min,
                 delivery_count=int(metrics.orders_delivered),
                 spoilage_count=int(metrics.orders_spoiled),
-                stockout_count=unmet_demand_events,
+                stockout_count=int(metrics.unmet_demand_events),
                 unit_costs=unit_costs,
                 active_shock=active_shock,
             )
@@ -335,13 +368,24 @@ def run_closed_loop(
                     DeliveredOrder(applied_price=effective_price, unit_cost=reference_price)
                 )
             prev_delivered = delivered_now
-            # A SKU drawn to zero represents unmet demand at that step (design R2.3).
-            unmet_demand_events += sum(1 for level in sim.inventory.values() if level <= 0.0)
+            # ── decision-quality-proof task 9.6 (R5.38) ─────────────────────────
+            # DELETED from here: `unmet_demand_events += sum(1 for level in
+            # sim.inventory.values() if level <= 0.0)`. That was a per-STEP count of
+            # SKUs sitting at zero, so its numerator scaled with `n_steps * |SKU|`
+            # until `_clamp_fraction` saturated it -- a number about the shape of the
+            # run rather than about unmet demand, and one that counted the same
+            # standing stockout once per step.
+            #
+            # The twin now counts unmet demand at the point it occurs, per demand
+            # event, which is what `uplift/kpi.py:85-86` already documented. Read
+            # once after the loop rather than accumulated here, because the engine's
+            # counter is already cumulative and adding to it per step would
+            # double-count.
 
         applied = AppliedDecisions(
             delivered_orders=tuple(delivered_orders),
-            unmet_demand_events=unmet_demand_events,
-            demand_events=int(sim.metrics.orders_created),
+            unmet_demand_events=int(sim.metrics.unmet_demand_events),
+            demand_events=int(sim.metrics.demand_events),
             delivered_volume=float(sim.metrics.orders_delivered),
         )
         kpis = extractor.extract(sim.metrics, applied)

@@ -147,3 +147,131 @@ jobs:
         # required-checks-reconcile.yml's scheduled job (R14.4-R14.6) -- this step makes
         # no claim about the live configuration and must not be read as one.
         run: python -m scripts.audit.required_checks_truth --check
+      - name: Sweep cost budget is an arithmetic claim that holds (R1.11 - BLOCKING)
+        # C73. Cheap and stdlib-only: it reads gate-mutations.yaml and this file, re-derives
+        # the sweep's committed inequality from the declaration's own `gates:` block, and
+        # pins `job_timeout_minutes` to `falsification-sweep`'s own `timeout-minutes`
+        # below. It belongs HERE rather than in that job because it is the check that says
+        # whether that job's budget can hold, and a budget check that only runs inside the
+        # job it budgets cannot report before the job is scheduled.
+        run: python -m scripts.audit.sweep_budget_truth --check
+
+  # -------------------------------------------------------------------------
+  # THE FALSIFICATION SWEEP (decision-quality-proof task 5.6; AD-22; R1.1, R1.2, R1.13,
+  # R1.14).
+  #
+  # WHY IT LIVES IN THIS FILE. R1.1 requires the sweep's exit status to gate a job, and
+  # R1.14 requires the job to be declared. `ci.yml` cannot satisfy R1.1: its push trigger
+  # carries `paths-ignore: ["**.md", ...]`, so a commit that changed only a declaration's
+  # notes would produce no sweep at all. This workflow carries NO path filter of any kind
+  # (see the CF-2 note at the top) and its `pull_request: [main]` is unfiltered, so a job
+  # here satisfies R1.1 and R1.14 jointly with no trade (CF-8).
+  #
+  # WHY IT IS A SEPARATE JOB AND NOT A STEP IN `truth-gates`. `truth-gates` carries
+  # `timeout-minutes: 25`, sized for one Check_Registry pass over stdlib gates. This job
+  # copies the whole tree and spawns one subprocess per declared check plus one per
+  # declared operator -- 30 subprocesses at the committed 90s bound plus a 420s install
+  # allowance, which is the arithmetic `sweep_budget` commits and C73 re-derives. Sharing
+  # `truth-gates`' budget would make the sweep time out and report `indeterminate` for
+  # reasons that have nothing to do with any gate.
+  #
+  # `runs-on: ubuntu-latest` ONLY (R1.13). The sweep is a category-2/3 workload under I-0
+  # and never runs on the Windows dev box; the precedent is E-S13-05, where `mutmut` was
+  # validated on CI Linux runners and never locally.
+  #
+  # THE DEPENDENCY CLOSURE MIRRORS `truth-gates`, and that is load-bearing rather than
+  # defensive. Several registered checks import an optional dependency inside a try/except
+  # and report SKIP when it is absent. `falsifies()` reports `indeterminate` when the gate
+  # does not PASS on the unmutated copy, so a thinner environment here would turn a
+  # probeable baseline into an indeterminate one and the sweep would report nothing about
+  # gates that are perfectly capable of biting.
+  #
+  # EXPECT RED ON THE FIRST RUNS, AND READ THE RED CORRECTLY. `gate-mutations.yaml`
+  # records, in its own notes, which declarations this tree does not yet satisfy: C28's
+  # `zero-a-floor` is a disclosed SURVIVOR (a defect against C28, not against the sweep),
+  # and C44, C60, C69, C70, C71 and C72 have non-passing baselines today, so their probes
+  # report `indeterminate`. A survivor is never cleared by weakening its mutation.
+  #
+  # NOT SHARDED, DELIBERATELY. `--shard K/N` over a matrix produces dynamic status-check
+  # names, an aggregator without `if: always()` does not run when a shard fails, and a
+  # skipped job reports its required status check as satisfied. AD-22 records that trade as
+  # available if the unsharded job proves too slow -- and the unsharded job's own
+  # measurement is what would establish that. No duration has ever been measured for these
+  # gates, and the committed 90s bound is honest about being a bound nobody measured: a
+  # gate that cannot answer inside it reports `indeterminate` NAMING the timeout, which is
+  # non-passing and therefore surfaces rather than truncating the sweep silently.
+  # -------------------------------------------------------------------------
+  falsification-sweep:
+    name: Falsification Sweep (declared gate mutations)
+    runs-on: ubuntu-latest
+    # MUST equal `sweep_budget.job_timeout_minutes` in
+    # infrastructure/quality/gate-mutations.yaml. C73 (`sweep_budget_truth`) resolves this
+    # very key from this very file and FAILs on a mismatch, so the two cannot drift.
+    timeout-minutes: 60
+    concurrency:
+      # `cancel-in-progress: false`, following uplift.yml's recorded reasoning: an
+      # abandoned run reports nothing, and nothing is not a pass either (I-7). A superseded
+      # sweep is allowed to finish and report.
+      group: falsification-sweep-${{ github.ref }}
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+      - name: Install dependencies
+        # Mirrors `truth-gates` above, for the reason in the job header: a thinner closure
+        # turns a probeable baseline into an indeterminate one.
+        run: |
+          pip install -r packages/requirements.txt -r packages/requirements-dev.txt
+          pip install -e packages/
+          pip install -r orchestrator/requirements.txt
+          pip install jsonschema pyyaml
+          for req in agents/*/requirements.txt; do pip install -r "$req"; done
+          pip install simpy sse-starlette
+          pip install -r agents/requirements-sprint3.txt
+          pip install --upgrade "pathspec>=0.12.1"
+          pip install "starlette>=0.37.2,<0.38.0"
+          pip install psycopg2-binary
+      - name: Probe every declared mutation operator (R1.1-R1.16 - BLOCKING)
+        # THE call site R1.1 found missing. A search of .github/workflows/*.yml and the
+        # Makefile for `gate_fault_injection` or `--sweep` returned no match: the harness
+        # existed, was tested, and gated nothing.
+        #
+        # `--report-json` writes the canonical payload the next step projects. It is a
+        # separate flag rather than a `> file` redirect of `--json` so this step's own log
+        # still carries the readable survivor list -- the list a human has to act on.
+        #
+        # Exit status propagates. No `continue-on-error`, no `|| true`, no `|| echo`, no
+        # `; exit 0`: a gate that survives its declared mutation does not gate, and
+        # `workflow_shape_truth` re-derives that shape from this file on every run.
+        env:
+          SYNAPSE_FAULT_INJECTION_REPORT: artifacts/audit/fault-injection.json
+        run: python -m scripts.audit.gate_fault_injection --sweep --check --report-json artifacts/audit/fault-injection.json
+      - name: C72 row projects the counts of the run that produced them (R1.12)
+        # CONSUMER of the step above, and the step that makes R1.12 mechanical: "the C72
+        # row reported by that same job" has to be reported by a step in this job, or the
+        # requirement is satisfied by nothing. `--run-check C72` executes exactly one
+        # registered check in this tree; C72 reads the payload back through
+        # $SYNAPSE_FAULT_INJECTION_REPORT and prints the probed-operator count, the
+        # falsified-check count and the unproven count observed in THIS run.
+        #
+        # It adds no independent gate: C72's status IS the sweep's verdict, so this step
+        # can only be red when the step above is already red. What it adds is the row, in
+        # the log, with the counts attached -- and `if: always()` so a red sweep still
+        # publishes them, which is the case a reader most needs them in. `always()` here
+        # does not discard a status: this step's own exit code still propagates.
+        if: always()
+        env:
+          SYNAPSE_FAULT_INJECTION_REPORT: artifacts/audit/fault-injection.json
+        run: python -m scripts.audit.gate_fault_injection --run-check C72
+      - name: Upload the sweep report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: fault-injection-report
+          path: artifacts/audit/fault-injection.json
+          if-no-files-found: warn
+          retention-days: 30
