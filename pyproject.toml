@@ -188,6 +188,27 @@ ignore_missing_imports = true
 module = "ollama.*"
 ignore_missing_imports = true
 
+[[tool.mypy.overrides]]
+# typeshed publishes `types-PyYAML`, and it is deliberately NOT installed: the
+# stubs unmask seven pre-existing errors under `uplift/` that the pre-commit
+# mypy hook then reports against commits to files which do not contain them.
+# Declared here so the missing-stub condition is a recorded decision rather than
+# a permanent red on `ci.yml::quality-gates` step 8. Inference is UNCHANGED by
+# this entry: with the stubs absent mypy already models `yaml` as `Any`, so the
+# override removes the report and nothing else. Read by
+# `orchestrator/audit/chain_walk.py` and `orchestrator/consensus/protocol.py`.
+module = "yaml.*"
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+# psycopg2 is an OPTIONAL runtime dependency, imported lazily inside a
+# `try/except ImportError` in `orchestrator/audit/data_provenance.py` whose
+# except branch degrades honestly (I-7). Whether the driver is present is a
+# deploy-time fact, not a type-time one, so a missing-stub report here gates a
+# type check on a packaging decision. Same inference note as `yaml.*` above.
+module = "psycopg2.*"
+ignore_missing_imports = true
+
 [tool.pytest.ini_options]
 minversion = "7.0"
 testpaths = ["packages/tests", "agents", "orchestrator", "tests"]
