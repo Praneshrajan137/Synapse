@@ -77,6 +77,51 @@ on:
           - both
           - uplift-proof
           - twin-regret
+  pull_request:
+    # THE ON-DEMAND MECHANISM THAT ACTUALLY WORKS FROM A FEATURE BRANCH
+    # (decision-quality-proof finding 23).
+    #
+    # `workflow_dispatch` cannot reach this file from `feat/decision-quality-proof`.
+    # `gh workflow run uplift.yml --ref feat/decision-quality-proof` returns
+    # `HTTP 404: workflow uplift.yml not found on the default branch`. `--ref` selects which
+    # ref's CODE runs; it does not make a workflow dispatchable. GitHub requires the file on
+    # the default branch first, and `origin/main` carries 14 workflow files of which this is
+    # not one. So checkpoint A -- a gate that can END this spec -- had no way to run at all.
+    #
+    # `pull_request` has no such requirement: a same-repo PR runs the workflow as defined in
+    # its own head. `truth-gates.yml` is likewise absent from `main` and runs on every PR,
+    # which is the empirical proof that this works rather than an inference.
+    #
+    # `types: [labeled]` AND NOTHING ELSE, which is the whole point. Specifying `types`
+    # replaces the default `[opened, synchronize, reopened]`, so this trigger does NOT fire
+    # on pushes. A run happens only when a label is added, and each job's `if:` decides
+    # whether anything executes. An unrelated label creates a run in which every job is
+    # skipped, which costs no runner minutes.
+    #
+    # REJECTED ALTERNATIVES, recorded because each looked cheaper than it was:
+    #   * Land this file on `main` as-is. `uplift-proof` cannot produce an admissible
+    #     artifact until E3/E5 and this file's own header says an incomplete run exits 2 and
+    #     turns the job RED -- so the nightly would manufacture a permanent red on `main`
+    #     that means nothing. A gate with a foreordained verdict is the exact failure this
+    #     spec exists to remove; installing a second one while repairing the first would be
+    #     incoherent.
+    #   * Land it on `main` with the schedule stripped. Works, and gives correct provenance,
+    #     but diverges `main` from this branch on a workflow file and spends a change to the
+    #     shared default branch to buy a capability this branch can grant itself.
+    #   * Land only `regenerate-truth-docs.yml` on `main`. Unblocks task 26.2 -- whose
+    #     precondition (track A's margin commit) is itself blocked, so it buys nothing yet.
+    #   * A `push:` trigger on a magic branch prefix. Gives a real head SHA rather than a
+    #     merge SHA, but litters the remote with throwaway branches and hides the operator's
+    #     intent in a ref name instead of showing it on the PR.
+    #
+    # This trigger does NOT make any job here eligible to be a required status check.
+    # Eligibility needs a job that reports on EVERY pull request; `twin-regret` fires only
+    # when labelled and carries a per-job `if:`. `required-checks.yaml`'s `ineligibleEntry`
+    # enum has no member describing "label-conditioned", and `required_checks_truth`
+    # validates that declared jobs resolve rather than that the file is complete, so no entry
+    # is owed (conflict G).
+    types: [labeled]
+    branches: [main]
 
 permissions:
   contents: read
@@ -105,16 +150,35 @@ jobs:
   uplift-proof:
     name: Powered uplift harness + C60 verdict (one job -- shared run)
     runs-on: ubuntu-latest
-    # SELECTED BY THE DISPATCH INPUT, NEVER SKIPPED ON A SCHEDULE. The first disjunct is what
-    # keeps the nightly run untouched: on `schedule` there are no inputs at all, so a guard
-    # written only against `inputs.job` would silently disable the scheduled proof -- a job
-    # that stops running is indistinguishable from a job that passes, which is the failure
-    # I-7 exists to prevent. This is a SELECTOR and not a `continue-on-error`: when the job
-    # runs, every step's exit status still gates it.
+    # AN ALLOW-LIST, AND IT WAS A DENY-LIST UNTIL FINDING 23. The previous form led with
+    # `github.event_name != 'workflow_dispatch'`, which was correct while the only other
+    # trigger was `schedule`: on `schedule` there are no inputs at all, so a guard written
+    # only against `inputs.job` would silently disable the scheduled proof -- a job that stops
+    # running is indistinguishable from a job that passes, which is the failure I-7 exists to
+    # prevent.
+    #
+    # That intent is preserved and the MECHANISM is inverted, because the deny-list form is
+    # fail-OPEN against a new trigger. Adding `pull_request` above would have made
+    # `github.event_name != 'workflow_dispatch'` true on every label event and fired THIS job
+    # -- ~350 minutes, on a run that cannot produce an admissible artifact until E3/E5. Naming
+    # the events that may start this job means a future trigger cannot enable it by accident,
+    # which for the most expensive workload in the repository is the correct direction to
+    # fail. `schedule` is named explicitly, so the nightly is protected by declaration rather
+    # than by a double negative.
+    #
+    # `pull_request` IS DELIBERATELY ABSENT, for a second reason beyond cost. On a
+    # `pull_request` event `GITHUB_SHA` is the synthetic MERGE commit, not the head. This
+    # job's gate compares the artifact's recorded `revision` against `GITHUB_SHA` to reject
+    # stale or foreign evidence, so a `pull_request`-triggered powered proof would be
+    # provenance-inadmissible by construction. `twin-regret` carries no such gate, which is
+    # why the label mechanism is safe there and would not be safe here.
+    #
+    # This is a SELECTOR and not a `continue-on-error`: when the job runs, every step's exit
+    # status still gates it.
     if: >-
-      github.event_name != 'workflow_dispatch'
-      || inputs.job == 'both'
-      || inputs.job == 'uplift-proof'
+      github.event_name == 'schedule'
+      || (github.event_name == 'workflow_dispatch'
+      && (inputs.job == 'both' || inputs.job == 'uplift-proof'))
     # Just inside the hosted-runner job ceiling. A timeout is a failed job, which is the
     # honest outcome for a measurement that did not complete (I-7); it is not a partial
     # result the gate may read.
@@ -220,13 +284,28 @@ jobs:
   twin-regret:
     name: E2b twin regret vs perfect foresight (measure, do not judge)
     runs-on: ubuntu-latest
-    # Same selector shape as `uplift-proof`, same reason for the leading disjunct: the
-    # scheduled run must keep running both jobs. This is the job checkpoint A dispatches
-    # alone, with `--field job=twin-regret`.
+    # Same allow-list shape as `uplift-proof` and the same reason for inverting it, plus one
+    # disjunct that job must never have: the LABEL path, which is how checkpoint A actually
+    # runs (finding 23). `schedule` is named explicitly so the nightly is protected by
+    # declaration rather than by a double negative.
+    #
+    # WHY THE LABEL IS SAFE HERE AND NOT ON `uplift-proof`. That job's gate compares the
+    # artifact's `revision` against `GITHUB_SHA`, which on a `pull_request` event is the
+    # synthetic merge commit -- so a labelled powered proof would be provenance-inadmissible
+    # by construction. This job carries no such gate: it MEASURES and does not judge, and its
+    # artifact is read by a human at checkpoint A. The merge-SHA subtlety is therefore not a
+    # correctness problem here, but it IS an attribution problem, and the disclosure step
+    # below closes it rather than leaving the reader to know about it.
+    #
+    # To run it: add the `measure-twin-regret` label to the pull request. Remove it afterwards
+    # so the next label event does not re-measure. The label is visible on the PR, which makes
+    # the operator's intent auditable in a way a dispatch is not.
     if: >-
-      github.event_name != 'workflow_dispatch'
-      || inputs.job == 'both'
-      || inputs.job == 'twin-regret'
+      github.event_name == 'schedule'
+      || (github.event_name == 'workflow_dispatch'
+      && (inputs.job == 'both' || inputs.job == 'twin-regret'))
+      || (github.event_name == 'pull_request'
+      && contains(github.event.pull_request.labels.*.name, 'measure-twin-regret'))
     # Well under the ceiling: this measurement is far cheaper than the powered proof, and
     # sizing it honestly leaves the difference visible rather than reserving budget nobody
     # uses. A timeout is a failed job, which is the honest outcome for an incomplete
@@ -235,6 +314,27 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+
+      - name: Disclose the revision under measurement (attribution, not a gate)
+        # FIRST, so a run that fails still records WHICH revision failed. This exists because
+        # the label path introduces one trap the dispatch path did not have: on a
+        # `pull_request` event `github.sha` is a SYNTHETIC MERGE COMMIT that appears in no
+        # branch's history, so a reader asking "which code produced this number?" would get a
+        # commit they cannot find.
+        #
+        # `github.event.pull_request.head.sha` is the real head on a labelled run and empty
+        # otherwise, so the fallback yields `github.sha` on `schedule` and `workflow_dispatch`
+        # where that is already the right answer. Checkpoint A can END this spec; the verdict
+        # it records must be attributable to a commit that exists -- the same concern task
+        # 17.7 gates mechanically for the powered proof.
+        #
+        # Disclosure only: it asserts nothing and gates nothing, and its exit status still
+        # propagates like every other step in this file.
+        run: |
+          echo "event=${{ github.event_name }}"
+          echo "github.sha=${{ github.sha }}"
+          echo "measured_revision=${{ github.event.pull_request.head.sha || github.sha }}"
+          echo "run_id=${{ github.run_id }}"
 
       - name: Set up Python 3.11
         uses: actions/setup-python@v5

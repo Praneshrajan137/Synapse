@@ -34,12 +34,12 @@ the same pair.
 
 ## Summary
 
-Parsed 18 workflow file(s), 55 job(s), 378 step(s).
+Parsed 18 workflow file(s), 55 job(s), 379 step(s).
 
 | Trigger | Jobs executing | Jobs conditional | Jobs NOT EXECUTED | Steps blocking | Steps advisory | Steps conditional |
 |---|---|---|---|---|---|---|
 | push:main | 4 | 22 | 29 | 31 | 0 | 142 |
-| pull_request | 11 | 22 | 22 | 72 | 4 | 140 |
+| pull_request | 11 | 23 | 21 | 72 | 4 | 147 |
 | tag:v* | 3 | 3 | 49 | 18 | 0 | 29 |
 
 ## Job selection
@@ -156,8 +156,8 @@ Why each job runs, does not run, or runs conditionally under each trigger. `need
 | pull_request | .github/workflows/terraform-validate.yml::validate | CONDITIONAL | path-filtered (paths: infrastructure/gcp/terraform/**, infrastructure/oracle/terraform/**, .github/workflows/terraform-validate.yml) |
 | pull_request | .github/workflows/truth-gates.yml::truth-gates | EXECUTES | - |
 | pull_request | .github/workflows/truth-gates.yml::falsification-sweep | EXECUTES | - |
-| pull_request | .github/workflows/uplift.yml::uplift-proof | NOT EXECUTED | workflow on: has no pull_request trigger |
-| pull_request | .github/workflows/uplift.yml::twin-regret | NOT EXECUTED | workflow on: has no pull_request trigger |
+| pull_request | .github/workflows/uplift.yml::uplift-proof | NOT EXECUTED | if: false in pull_request |
+| pull_request | .github/workflows/uplift.yml::twin-regret | CONDITIONAL | unparsable if: (unparsable at offset 220: "*.name, 'measure-twi") |
 | tag:v* | .github/workflows/cd-gcp.yml::build-push-sign | CONDITIONAL | path-filtered (paths-ignore: **.md, docs/**, plans/**, notebooks/**) |
 | tag:v* | .github/workflows/cd-gcp.yml::deploy-to-vm | CONDITIONAL | path-filtered (paths-ignore: **.md, docs/**, plans/**, notebooks/**); needs 'build-push-sign', which is conditional |
 | tag:v* | .github/workflows/cd-gcp.yml::alert-on-failure | CONDITIONAL | path-filtered (paths-ignore: **.md, docs/**, plans/**, notebooks/**); if: outcome-dependent (failure()); needs 'build-push-sign', which is conditional; needs 'deploy-to-vm', which is conditional |
@@ -656,8 +656,14 @@ Why each job runs, does not run, or runs conditionally under each trigger. `need
 | pull_request | .github/workflows/truth-gates.yml::falsification-sweep | Probe every declared mutation operator (R1.1-R1.16 - BLOCKING) | yes | blocking |
 | pull_request | .github/workflows/truth-gates.yml::falsification-sweep | C72 row projects the counts of the run that produced them (R1.12) | yes | blocking |
 | pull_request | .github/workflows/truth-gates.yml::falsification-sweep | Upload the sweep report | yes | blocking |
-| pull_request | .github/workflows/uplift.yml::uplift-proof | - | NOT EXECUTED | workflow on: has no pull_request trigger |
-| pull_request | .github/workflows/uplift.yml::twin-regret | - | NOT EXECUTED | workflow on: has no pull_request trigger |
+| pull_request | .github/workflows/uplift.yml::uplift-proof | - | NOT EXECUTED | if: false in pull_request |
+| pull_request | .github/workflows/uplift.yml::twin-regret | uses: actions/checkout@v4 | CONDITIONAL | conditional - blocking |
+| pull_request | .github/workflows/uplift.yml::twin-regret | Disclose the revision under measurement (attribution, not a gate) | CONDITIONAL | conditional - blocking |
+| pull_request | .github/workflows/uplift.yml::twin-regret | Set up Python 3.11 | CONDITIONAL | conditional - blocking |
+| pull_request | .github/workflows/uplift.yml::twin-regret | Install dependencies | CONDITIONAL | conditional - blocking |
+| pull_request | .github/workflows/uplift.yml::twin-regret | Measure twin regret against the perfect-foresight comparator (R5.1, R5.33) | CONDITIONAL | conditional - blocking |
+| pull_request | .github/workflows/uplift.yml::twin-regret | Report the objective's insensitive KPIs (R5.34, R5.35) | CONDITIONAL | conditional - blocking |
+| pull_request | .github/workflows/uplift.yml::twin-regret | Upload the regret report | CONDITIONAL | conditional - blocking |
 | tag:v* | .github/workflows/cd-gcp.yml::build-push-sign | uses: actions/checkout@v4 | CONDITIONAL | conditional - blocking |
 | tag:v* | .github/workflows/cd-gcp.yml::build-push-sign | Set up Docker Buildx | CONDITIONAL | conditional - blocking |
 | tag:v* | .github/workflows/cd-gcp.yml::build-push-sign | Authenticate to GCP via Workload Identity Federation | CONDITIONAL | conditional - blocking |
