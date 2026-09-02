@@ -36,6 +36,27 @@ it *is*, not as a diff against how it was.
 
 ## What is owed right now, in order
 
+> **STOP — READ FIRST. Neither track can start, and the blocker is not either track's.**
+> **`workflow_dispatch` is unavailable from this branch (finding 23).**
+> `gh workflow run uplift.yml --ref feat/decision-quality-proof` returns
+> `HTTP 404: workflow uplift.yml not found on the default branch`. GitHub requires a workflow to
+> exist on `main` before it can be dispatched; `--ref` picks which code runs, not whether dispatch is
+> possible. **`uplift.yml` and `regenerate-truth-docs.yml` are not on `main`.** So checkpoint A,
+> checkpoint B, and task 26.2's regeneration are all unreachable until that is resolved — **an
+> operator decision, because the cheapest repair has a cost.**
+>
+> | Option | Cost |
+> |---|---|
+> | **A. Land both workflow files on `main` in a small registration PR** | Unblocks everything. But `uplift.yml` carries `schedule: "0 3 * * *"` and its `if:` guards lead with `github.event_name != 'workflow_dispatch'`, so **on `schedule` both jobs run** — a nightly **~350-minute** `uplift-proof` that cannot produce an admissible artifact until E3/E5 starts immediately. |
+> | **B. Land them on `main` with `uplift.yml`'s `schedule:` trigger removed**, restoring it when PR #84 merges | Same unblock, no runaway nightly. Cost: `main` and the branch diverge on that file, which is drift the branch must reconcile — and `gate_surface` on `main` would then describe a different tree. |
+> | **C. Land only `regenerate-truth-docs.yml`** (dispatch-only, no schedule) | Harmless and immediate. Unblocks **track B's regeneration only**. Checkpoint A stays blocked. |
+> | **D. Add a temporary `push:` trigger on this branch to `uplift.yml`** | No `main` change. But it is a workflow-shape change needing `gate_surface --write`, it fires on every push, and it must be reverted — a construct that exists only to be removed. |
+> | **E. Merge PR #84 first** | Premature: the PR is red at `mypy --strict orchestrator/` with 56 errors, and merging to clear a dispatch would invert the gate. |
+>
+> **Recommended: C now, then B or A when checkpoint A is actually wanted.** C costs nothing and lets
+> session 2r's last step proceed; the checkpoint-A question can then be answered on its own merits
+> rather than under time pressure. **Not taken unilaterally — it changes `main`.**
+
 **Two tracks, and they are NOT freely orderable. Corrected in session 2r-pre; 2q's closing summary
 got this wrong.** `uplift.yml`'s jobs `uplift-proof` and `twin-regret` both carry `needs: NONE`, so
 checkpoint A does not wait on `quality-gates`, and `ci.yml::uplift-verify` does (`needs:
@@ -458,6 +479,56 @@ spec); `GATE_SURFACE.md` stale on two of this spec's own jobs; three unrecorded 
     stating the literal on exactly one line. **`required: false` was available and rejected** — it
     would have let the pin stand today without touching C56, but a pin that cannot fail is not a pin,
     and downgrading a claim to make it safe is the assertion-weakening R2.10 forbids.
+
+21. **Session 2q told the operator the two tracks were freely orderable. They are not.** `needs: NONE`
+    is true of CI triggering and says nothing about the generated documents. Corrected in place above,
+    and recorded as the `Track coupling` decision row.
+
+22. **`uplift.yml::twin-regret` could not have imported the twin.** Its closure was
+    `packages/requirements.txt` + `-e packages/` + `simpy numpy pyyaml`, and **`pydantic-settings` is
+    in none of them** — not the six packages in `packages/requirements.txt`, not the seven in
+    `packages/pyproject.toml`'s `dependencies`, not its `dev` extra. It lives in every
+    `agents/*/requirements.txt`, which this job does not read. So the unavoidable chain
+    `uplift.regret` → `_measure` → `uplift.foresight` → `digital_twin.simulation.engine` →
+    `digital_twin.config` → `pydantic_settings` would have raised `ModuleNotFoundError` **at import,
+    inside the job that exists to run the measurement, on the first dispatch checkpoint A ever
+    made.** The job has never executed, so nothing had reported it. **Same defect class as defect 14
+    (`scipy`), found the same way** — by reading the closure rather than paying for a CI round trip.
+    Proven over the whole graph, not the one path first followed: a static AST walk of all **9**
+    first-party modules reachable from `uplift.regret` reports this as the **only** gap. Fixed
+    narrowly, in that job only. **The broad fix is the dangerous one:** adding it to
+    `packages/requirements.txt` widens the closure `truth-gates`, `quality-gates` and the
+    regeneration job run in, and several registered checks report SKIP when an optional import is
+    missing — so it could turn a SKIP into a PASS and **move the registry counts**, immediately
+    before a regeneration.
+
+23. **`workflow_dispatch` is not available from this branch at all, and both dispatch-gated
+    discharges depend on it.** `gh workflow run uplift.yml --ref feat/decision-quality-proof` returns
+    **`HTTP 404: workflow uplift.yml not found on the default branch`**. `--ref` selects which ref's
+    *code* runs; it does not make a workflow dispatchable. GitHub requires the workflow file to exist
+    on the **default branch** (`main`) before it can be dispatched at all.
+
+    **`origin/main` carries 14 workflow files, and `uplift.yml` is not one of them.** Neither is
+    `truth-gates.yml` — which still runs, because it triggers on `pull_request`, and a PR runs the
+    workflow as defined in its own head. **`workflow_dispatch` has no equivalent escape.**
+    `gh workflow list` confirms the split: `SYNAPSE Truth Gates` is registered (it has run), and
+    `uplift.yml` and `regenerate-truth-docs.yml` do not appear at all, because neither has ever run.
+
+    **Consequence, and it is structural rather than incidental.** `SESSION_PROTOCOL.md` defines
+    checkpoints as "push the branch, dispatch a workflow, read the output, record the verdict" and
+    states that "`uplift.yml` carries only `schedule` and `workflow_dispatch`, so dispatch is the
+    mechanism." **Dispatch is not a mechanism available to a feature branch.** So checkpoint A
+    (tasks 10.4, 11), checkpoint B (task 14), and task 26.2's regeneration are all unreachable as
+    currently designed — and so are tasks 22.3 and 25, whose `discharge:` lines name
+    `uplift.yml::uplift-proof`. That is **five** CI-gated leaves plus the two `[~]` marks that
+    depend on them.
+
+    **Not resolved here: it is an operator decision with a real cost.** The obvious repair is to land
+    the workflow files on `main` in a small registration PR. But `uplift.yml` also carries
+    `schedule: cron "0 3 * * *"`, and its `if:` guards lead with
+    `github.event_name != 'workflow_dispatch'` — so on `schedule` **both** jobs run, meaning landing
+    it on `main` starts a nightly **~350-minute** `uplift-proof` run that cannot produce an
+    admissible artifact until E3/E5. Options are costed in the owed list above.
 
 ---
 
