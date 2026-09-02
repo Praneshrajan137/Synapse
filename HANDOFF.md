@@ -36,26 +36,37 @@ it *is*, not as a diff against how it was.
 
 ## What is owed right now, in order
 
-> **STOP — READ FIRST. Neither track can start, and the blocker is not either track's.**
-> **`workflow_dispatch` is unavailable from this branch (finding 23).**
-> `gh workflow run uplift.yml --ref feat/decision-quality-proof` returns
-> `HTTP 404: workflow uplift.yml not found on the default branch`. GitHub requires a workflow to
-> exist on `main` before it can be dispatched; `--ref` picks which code runs, not whether dispatch is
-> possible. **`uplift.yml` and `regenerate-truth-docs.yml` are not on `main`.** So checkpoint A,
-> checkpoint B, and task 26.2's regeneration are all unreachable until that is resolved — **an
-> operator decision, because the cheapest repair has a cost.**
+> **FINDING 23 IS RESOLVED, and it did not cost a change to `main`.** `workflow_dispatch`
+> cannot reach this file from a feature branch — `gh workflow run uplift.yml --ref
+> feat/decision-quality-proof` returns `HTTP 404: workflow uplift.yml not found on the default
+> branch`, and `--ref` selects which ref's *code* runs rather than whether dispatch is possible.
+> **`pull_request` has no such requirement**, which `truth-gates.yml` proves empirically by
+> running on every PR while being absent from `main`.
 >
-> | Option | Cost |
-> |---|---|
-> | **A. Land both workflow files on `main` in a small registration PR** | Unblocks everything. But `uplift.yml` carries `schedule: "0 3 * * *"` and its `if:` guards lead with `github.event_name != 'workflow_dispatch'`, so **on `schedule` both jobs run** — a nightly **~350-minute** `uplift-proof` that cannot produce an admissible artifact until E3/E5 starts immediately. |
-> | **B. Land them on `main` with `uplift.yml`'s `schedule:` trigger removed**, restoring it when PR #84 merges | Same unblock, no runaway nightly. Cost: `main` and the branch diverge on that file, which is drift the branch must reconcile — and `gate_surface` on `main` would then describe a different tree. |
-> | **C. Land only `regenerate-truth-docs.yml`** (dispatch-only, no schedule) | Harmless and immediate. Unblocks **track B's regeneration only**. Checkpoint A stays blocked. |
-> | **D. Add a temporary `push:` trigger on this branch to `uplift.yml`** | No `main` change. But it is a workflow-shape change needing `gate_surface --write`, it fires on every push, and it must be reverted — a construct that exists only to be removed. |
-> | **E. Merge PR #84 first** | Premature: the PR is red at `mypy --strict orchestrator/` with 56 errors, and merging to clear a dispatch would invert the gate. |
+> **`uplift.yml` now carries `pull_request: types: [labeled], branches: [main]`.** To run
+> checkpoint A's measurement, **add the `measure-twin-regret` label to PR #84**, then remove it.
+> Specifying `types` replaces the default `[opened, synchronize, reopened]`, so the trigger does
+> **not** fire on pushes, and an unrelated label produces a run in which every job is skipped at
+> zero runner cost.
 >
-> **Recommended: C now, then B or A when checkpoint A is actually wanted.** C costs nothing and lets
-> session 2r's last step proceed; the checkpoint-A question can then be answered on its own merits
-> rather than under time pressure. **Not taken unilaterally — it changes `main`.**
+> **Both guards were inverted from deny-lists to allow-lists, and that is the load-bearing
+> half.** Each led with `github.event_name != 'workflow_dispatch'`, which was correct while the
+> only other trigger was `schedule` but is **fail-open against a new one**: adding
+> `pull_request` would have made that disjunct true on every label event and fired
+> `uplift-proof` — ~350 minutes on a run that cannot be admissible until E3/E5. Session 2p's
+> intent (never silently stop the nightly) is preserved by naming `schedule` explicitly.
+>
+> **`uplift-proof` is excluded from `pull_request` for a second reason:** on that event
+> `GITHUB_SHA` is the synthetic merge commit, and that job's gate compares the artifact's
+> `revision` against it, so a labelled powered proof would be provenance-inadmissible by
+> construction. `twin-regret` carries no such gate — which is precisely why the label is safe
+> there and would not be safe there. A **revision-disclosure step** runs first in
+> `twin-regret` so a reader always knows which real commit produced the number.
+>
+> Verified by evaluating both guards over every event × input × label combination, which caught
+> two defects reading would not have (an orphaned disjunct that defeated the fail-closed
+> property, and a duplicated clause) plus a YAML folding subtlety. Rejected alternatives are
+> recorded in the workflow itself.
 
 **Two tracks, and they are NOT freely orderable. Corrected in session 2r-pre; 2q's closing summary
 got this wrong.** `uplift.yml`'s jobs `uplift-proof` and `twin-regret` both carry `needs: NONE`, so
@@ -523,12 +534,22 @@ spec); `GATE_SURFACE.md` stale on two of this spec's own jobs; three unrecorded 
     `uplift.yml::uplift-proof`. That is **five** CI-gated leaves plus the two `[~]` marks that
     depend on them.
 
-    **Not resolved here: it is an operator decision with a real cost.** The obvious repair is to land
-    the workflow files on `main` in a small registration PR. But `uplift.yml` also carries
-    `schedule: cron "0 3 * * *"`, and its `if:` guards lead with
-    `github.event_name != 'workflow_dispatch'` — so on `schedule` **both** jobs run, meaning landing
-    it on `main` starts a nightly **~350-minute** `uplift-proof` run that cannot produce an
-    admissible artifact until E3/E5. Options are costed in the owed list above.
+    **RESOLVED in the same session, and without touching `main`.** `uplift.yml` now carries
+    `pull_request: types: [labeled], branches: [main]`, and adding the `measure-twin-regret`
+    label to PR #84 runs the measurement. `types` replaces the default
+    `[opened, synchronize, reopened]`, so it does not fire on pushes. **Both guards were
+    inverted from deny-lists to allow-lists**, because the deny-list form was fail-open against
+    a new trigger and would have fired `uplift-proof` on every label event; session 2p's intent
+    is preserved by naming `schedule` explicitly. `uplift-proof` is excluded from
+    `pull_request` for a second reason — `GITHUB_SHA` is the merge commit there and its gate
+    compares the artifact's `revision` against it, so a labelled powered proof would be
+    provenance-inadmissible by construction. A revision-disclosure step runs first in
+    `twin-regret` to close the attribution gap the merge SHA would otherwise open. Verified by
+    a truth table over every event × input × label case, which caught an orphaned disjunct, a
+    duplicated clause, and a `>-` folded-scalar indentation bug that was preserving literal
+    newlines in the parsed expression. The four rejected alternatives — including landing the
+    file on `main`, which would manufacture a permanent nightly red that means nothing — are
+    recorded in the workflow header.
 
 ---
 
@@ -556,6 +577,7 @@ spec); `GATE_SURFACE.md` stale on two of this spec's own jobs; three unrecorded 
 | **Batch order (2q)** | **Session 2r precedes session 2**, because session 2 would author four more properties against a job that has never run. |
 | **Conflict H (2r-pre)** | **The derived-margin pin is PARKED in `pending_pins:`, not landed in `pins:`.** Task 10.4 and this pin table both instruct "same commit as the value"; obeyed literally that stands up a pin whose document anchor matches nothing, which makes C56 SKIP while C75 reports 15/15 green. `required: false` was rejected — a pin that cannot fail is not a pin. It graduates when the value is non-null **and** D2.5 states the literal. |
 | **Track coupling (2r-pre)** | **Track A and Track B are independent in CI triggering only.** `needs: NONE` says nothing about the generated documents: a `doc-number-pins.yaml` change can move C56, whose status is inside the counts both generators project. **The regeneration goes last.** |
+| **Dispatch mechanism (2r-pre)** | **Checkpoint A runs by LABEL, not by dispatch, and `main` is not touched.** `pull_request: types: [labeled]` reaches a branch-only workflow; `workflow_dispatch` cannot. Both guards became **allow-lists** so a future trigger cannot enable a job by accident, and `uplift-proof` is excluded from `pull_request` because its provenance gate reads `GITHUB_SHA`, which is the merge commit there. Landing the file on `main` was rejected: the nightly would manufacture a permanent red that means nothing. |
 
 ---
 

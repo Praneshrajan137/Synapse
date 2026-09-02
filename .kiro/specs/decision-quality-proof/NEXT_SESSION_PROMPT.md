@@ -62,36 +62,47 @@ order. `SESSION_PROTOCOL.md`'s batch table places session **2r** before session 
 starting. If the table and the census disagree, the census is authoritative for *counts* and the
 table for *order* — surface it, do not pick.
 
-### STEP 3 — one decision to put to me FIRST, and one inference not to draw from it
+### STEP 3 — the blocker that is now resolved, and the inference not to draw from it
 
-**Finding 23: `workflow_dispatch` is unavailable from this branch.**
+**Finding 23 was found and resolved in session 2r-pre. Read it; do not re-derive it.**
+
+`workflow_dispatch` cannot reach a workflow that is not on the default branch:
 
 ```
 gh workflow run uplift.yml --ref feat/decision-quality-proof
 -> HTTP 404: workflow uplift.yml not found on the default branch
 ```
 
-`--ref` selects which ref's *code* executes; it does not make a workflow dispatchable. GitHub
-requires the file on the **default branch** first. **`origin/main` carries 14 workflow files and
-`uplift.yml` is not one of them.** `truth-gates.yml` is not either and still runs — because it
-triggers on `pull_request`, and a PR runs the workflow as defined in its own head. **`workflow_dispatch`
-has no equivalent escape.** `gh workflow list` shows the split exactly: `SYNAPSE Truth Gates` is
-registered because it has run, while `uplift.yml` and `regenerate-truth-docs.yml` do not appear at
-all, never having run.
+`--ref` selects which ref's *code* executes; it does not make a workflow dispatchable.
+**`origin/main` carries 14 workflow files and `uplift.yml` is not one of them.** But `pull_request`
+has no such requirement — a same-repo PR runs the workflow as defined in its own head, which
+`truth-gates.yml` proves by running on every PR while also being absent from `main`.
 
-**Unreachable until I decide:** checkpoint A (tasks 10.4, 11), checkpoint B (14), task 26.2's
-regeneration, and tasks 22.3 and 25. Five CI-gated leaves plus the two `[~]` marks depending on them.
-`SESSION_PROTOCOL.md`'s own definition of a checkpoint — "dispatch a workflow, read the output,
-record the verdict" — is unexecutable as written.
+**So `uplift.yml` now carries `pull_request: types: [labeled], branches: [main]`.** Checkpoint A's
+measurement runs by **adding the `measure-twin-regret` label to PR #84**. `types` replaces the
+default `[opened, synchronize, reopened]`, so it does not fire on pushes.
 
-**Put the five costed options in `HANDOFF.md`'s owed list to me and wait.** Do not change `main`. Do
-not add a `push:` trigger to work around it. Do not fabricate a measurement.
+**Three things about it you must not undo:**
 
-**NOW THE INFERENCE YOU MUST NOT DRAW.** Finding 23 does **not** block your batch, and this was
-verified rather than assumed: `ci.yml` fires on `pull_request: [main]`, `quality-gates` carries
-`needs: NONE` and no `if:`, and `uplift-verify` carries `needs: quality-gates`. **Both are reachable
-by pushing to the PR branch.** No dispatch is involved anywhere in tasks 27.2–27.5. Start them while
-the decision is outstanding.
+- **Both job guards are allow-lists now, and they must stay that way.** They used to lead with
+  `github.event_name != 'workflow_dispatch'`, which is **fail-open against a new trigger** — adding
+  `pull_request` under that form would have fired `uplift-proof`, ~350 minutes on a run that cannot
+  be admissible until E3/E5. `schedule` is named explicitly so the nightly is protected by
+  declaration rather than a double negative (session 2p's intent, better mechanism).
+- **`uplift-proof` must never gain `pull_request`.** On that event `GITHUB_SHA` is the synthetic
+  merge commit, and its gate compares the artifact's `revision` against it — a labelled powered
+  proof is provenance-inadmissible by construction. `twin-regret` has no such gate.
+- **A `>-` folded scalar preserves a MORE-INDENTED continuation line verbatim** instead of folding
+  it, so the parsed expression carries literal newlines. Keep every disjunct at one indentation.
+
+**Still mine, and it blocks nothing you are doing:** `regenerate-truth-docs.yml` is also absent from
+`main`, so task **26.2** still cannot be dispatched. It is 2r's *last* step and its precondition
+(track A's margin commit) is itself outstanding, so nothing waits on it today.
+
+**NOW THE INFERENCE NOT TO DRAW.** None of this gates your batch, and it was verified rather than
+assumed: `ci.yml` fires on `pull_request: [main]`, `quality-gates` carries `needs: NONE` and no
+`if:`, and `uplift-verify` carries `needs: quality-gates`. **Both are reachable by pushing to the PR
+branch.** No dispatch and no label is involved anywhere in tasks 27.2–27.5. Start them immediately.
 
 ### STEP 4 — the work order
 
