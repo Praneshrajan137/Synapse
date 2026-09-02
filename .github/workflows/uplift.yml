@@ -243,12 +243,42 @@ jobs:
           cache: "pip"
 
       - name: Install dependencies
-        # simpy + numpy are the whole closure this measurement needs; it touches neither the
-        # agents nor the orchestrator, so a thinner install is honest rather than risky here.
+        # THIS CLOSURE WAS WRONG UNTIL SESSION 2r-pre, AND ITS OWN COMMENT WAS THE REASON.
+        # It used to read "simpy + numpy are the whole closure this measurement needs; it
+        # touches neither the agents nor the orchestrator, so a thinner install is honest
+        # rather than risky here." The premise was almost right and the conclusion was
+        # wrong: the measurement does not touch the agents, but it DOES import the twin,
+        # and `digital_twin/config.py` reads its settings through
+        # `from pydantic_settings import BaseSettings`.
+        #
+        # `pydantic-settings` is in every `agents/*/requirements.txt` and is installed
+        # explicitly by integration.yml and policy.yml, but it is in NEITHER
+        # `packages/requirements.txt` (six packages) NOR `packages/pyproject.toml`'s
+        # `dependencies` (seven), which is all this job installed besides the three extras.
+        # So the unavoidable chain
+        #   uplift.regret -> _measure -> uplift.foresight
+        #     -> digital_twin.simulation.engine -> digital_twin.config -> pydantic_settings
+        # would have raised ModuleNotFoundError at import, inside the job that exists to run
+        # the measurement, on the first dispatch checkpoint A ever made. Same defect class as
+        # the `scipy` gap recorded as HANDOFF defect 14 -- found the same way, by reading the
+        # closure instead of paying for a CI round trip. A static walk of all 9 first-party
+        # modules reachable from `uplift.regret` reports this as the ONLY gap.
+        #
+        # FIXED NARROWLY, ON PURPOSE. The tempting repair is to add `pydantic-settings` to
+        # `packages/requirements.txt` so every job gets it. That is the dangerous one: several
+        # registered checks report SKIP when an optional import is missing, so widening the
+        # shared closure can turn a SKIP into a PASS and MOVE THE REGISTRY COUNTS that
+        # `doc_truth` pins and `ledger_gen`/`readme_gen` project. Adding a package to the
+        # shared file immediately before a regeneration is exactly the wrong time. This job
+        # gets what this job needs.
+        #
+        # Version bound matches `agents/*/requirements.txt` verbatim rather than being
+        # invented here, per CLAUDE.md's rule that every dependency is pinned with an upper
+        # bound.
         run: |
           pip install -r packages/requirements.txt
           pip install -e packages/
-          pip install simpy numpy pyyaml
+          pip install simpy numpy pyyaml "pydantic-settings>=2.2.0,<3.0"
 
       - name: Measure twin regret against the perfect-foresight comparator (R5.1, R5.33)
         # Exit status propagates. No `continue-on-error`, no `|| true`, no `|| echo`: a
