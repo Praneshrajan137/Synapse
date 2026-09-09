@@ -58,7 +58,7 @@ Why each job runs, does not run, or runs conditionally under each trigger. `need
 | push:main | .github/workflows/cd.yml::promote-models | NOT EXECUTED | if: false in push:main |
 | push:main | .github/workflows/cd.yml::deploy-oracle-canary | NOT EXECUTED | if: false in push:main |
 | push:main | .github/workflows/ci.yml::quality-gates | CONDITIONAL | path-filtered (paths-ignore: **.md, docs/**, plans/**, notebooks/**) |
-| push:main | .github/workflows/ci.yml::uplift-verify | CONDITIONAL | path-filtered (paths-ignore: **.md, docs/**, plans/**, notebooks/**); needs 'quality-gates', which is conditional |
+| push:main | .github/workflows/ci.yml::uplift-verify | CONDITIONAL | path-filtered (paths-ignore: **.md, docs/**, plans/**, notebooks/**) |
 | push:main | .github/workflows/ci.yml::sprint6-verify | CONDITIONAL | path-filtered (paths-ignore: **.md, docs/**, plans/**, notebooks/**); needs 'quality-gates', which is conditional |
 | push:main | .github/workflows/ci.yml::v4-compliance | CONDITIONAL | path-filtered (paths-ignore: **.md, docs/**, plans/**, notebooks/**) |
 | push:main | .github/workflows/ci.yml::chromatic-color-gates | CONDITIONAL | path-filtered (paths-ignore: **.md, docs/**, plans/**, notebooks/**) |
@@ -792,8 +792,8 @@ Every step `infrastructure/quality/blocking-steps.yaml` declares blocking, annot
 | push:main | .github/workflows/ci.yml::quality-gates | Per-package coverage floor (Sprint 13 Phase 2) [scripts/coverage_per_package.py] | CONDITIONAL | declared blocking (R1.8) - conditional (path-filtered (paths-ignore: **.md, docs/**, plans/**, notebooks/**)) |
 | push:main | .github/workflows/ci.yml::quality-gates | Spec coverage (Sprint 13 Phase 5) [scripts/check_spec_coverage.py] | CONDITIONAL | declared blocking (R1.8) - conditional (path-filtered (paths-ignore: **.md, docs/**, plans/**, notebooks/**)) |
 | push:main | .github/workflows/ci.yml::quality-gates | Contract tests [/tests/test_contracts.py] | CONDITIONAL | declared blocking (R1.8) - conditional (path-filtered (paths-ignore: **.md, docs/**, plans/**, notebooks/**)) |
-| push:main | .github/workflows/ci.yml::uplift-verify | Property + unit tests (fast - full 500-example budget) | CONDITIONAL | declared blocking (R1.8) - conditional (path-filtered (paths-ignore: **.md, docs/**, plans/**, notebooks/**); needs 'quality-gates', which is conditional) |
-| push:main | .github/workflows/ci.yml::uplift-verify | Property + regression tests (slow - 100-example budget) | CONDITIONAL | declared blocking (R1.8) - conditional (path-filtered (paths-ignore: **.md, docs/**, plans/**, notebooks/**); needs 'quality-gates', which is conditional) |
+| push:main | .github/workflows/ci.yml::uplift-verify | Property + unit tests (fast - full 500-example budget) | CONDITIONAL | declared blocking (R1.8) - conditional (path-filtered (paths-ignore: **.md, docs/**, plans/**, notebooks/**)) |
+| push:main | .github/workflows/ci.yml::uplift-verify | Property + regression tests (slow - 100-example budget) | CONDITIONAL | declared blocking (R1.8) - conditional (path-filtered (paths-ignore: **.md, docs/**, plans/**, notebooks/**)) |
 | push:main | .github/workflows/ci.yml::training-smoke | R3.2 serving-resolution proof (recorded entry resolves, BLOCKING) [tests/integration/test_published_entry_serving_resolution.py] | CONDITIONAL | declared blocking (R3.2) - conditional (path-filtered (paths-ignore: **.md, docs/**, plans/**, notebooks/**); needs 'quality-gates', which is conditional) |
 | push:main | .github/workflows/frontend.yml::e2e | uses: actions/checkout@v4 | NOT EXECUTED | declared blocking (R8.9) - if: false in push:main |
 | push:main | .github/workflows/frontend.yml::e2e | uses: pnpm/action-setup@v4 | NOT EXECUTED | declared blocking (R8.9) - if: false in push:main |

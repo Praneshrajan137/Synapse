@@ -34,9 +34,16 @@ property over generated inputs, so there is no Hypothesis budget to inherit. Not
 ``slow``-marked -- it reads two small YAML files and spawns nothing. Locus is
 ``ci.yml::uplift-verify``'s fast step, which collects ``tests/uplift tests/verify``.
 
-**CI DISCHARGE IS OWED, NOT HELD.** ``uplift-verify`` needs ``quality-gates`` to succeed and
-``quality-gates`` fails at ``mypy --strict orchestrator/``, so this test has never executed
-in CI. It is locally executed and CI-undischarged; parent task 27 is what unblocks it.
+**CI DISCHARGE IS OWED, NOT HELD -- AND THE REASON IT WAS OWED HAS CHANGED.** This paragraph
+used to read "``uplift-verify`` needs ``quality-gates`` to succeed and ``quality-gates`` fails
+at ``mypy --strict orchestrator/``, so this test has never executed in CI ... parent task 27 is
+what unblocks it." Both halves of that went stale: step 8 was cleared in session 2r, and
+session 5 removed the ``needs: quality-gates`` edge outright, because it made a declared
+``required:`` check reportable only as ``skipped`` (obstruction 2.5 disposition (a); see the
+comment in ``ci.yml`` where the edge was). So this test is no longer waiting on parent 27 or on
+any ``quality-gates`` step -- it is waiting on the first execution of ``uplift-verify`` itself,
+which as of session 5 had still never happened. Until a run says otherwise it remains locally
+executed and CI-undischarged, which is task 26.1's second named subject.
 """
 
 from __future__ import annotations

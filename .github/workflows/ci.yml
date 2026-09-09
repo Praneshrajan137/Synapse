@@ -272,7 +272,52 @@ jobs:
     # what already fitted there -- but this job was already the longest one and the
     # headroom was thin, so the bound moves with the load rather than after a timeout.
     timeout-minutes: 60
-    needs: quality-gates
+    # `needs: quality-gates` WAS HERE AND WAS REMOVED (decision-quality-proof session 5,
+    # obstruction 2.5 disposition (a)). THE REASON IS THAT THE EDGE MADE A DECLARED
+    # REQUIRED CHECK UNSATISFIABLE, NOT THAT IT WAS INCONVENIENT.
+    #
+    # `infrastructure/quality/required-checks.yaml` declares this job `required:`. With the
+    # edge in place its status was `skipped` on every run of this branch's entire life --
+    # first behind step 5 `ruff check`, then step 8 `mypy --strict orchestrator/`, then step
+    # 17 C56, and now behind step 18 `Golden-trace replay metrics`. A required check that
+    # can only report `skipped` is not a gate, and `tests/uplift` + `tests/verify` --
+    # Properties 38-60, this feature's whole property surface -- had therefore never
+    # executed in CI. Measured on run 34375108385 (sha e8c7c5a): steps 1-17 success, step
+    # 18 failure, 19-23 skipped, this job skipped with steps=0.
+    #
+    # STEP 18 CANNOT PASS ON A HOSTED RUNNER AS WRITTEN, so the edge was not a temporary
+    # inconvenience. `kv_cache_hit_rate` needs an Ollama-backed cache observation; the
+    # replay takes none, so `replay_metrics` reports UNAVAILABLE and exits 2 rather than
+    # call an unmeasured floor a pass. The gate is behaving exactly as I-7 demands. Its
+    # repair (split the step, declaring the unmeasurable floor SKIP with its reason) is
+    # owed separately and is tracked at task 27.5; it is NOT this edge's business, and
+    # coupling the property surface to it is what kept both stuck for five sessions.
+    #
+    # WHAT THIS DOES NOT DO, stated because a scheduling change is easy to over-read:
+    # `quality-gates` keeps every gate it had, keeps its own `required:` declaration, and
+    # keeps blocking the merge on its own verdict. Nothing is lowered, no floor moves, no
+    # exit status is discarded, and no `continue-on-error` is added. Two independent
+    # required checks now report two independent verdicts instead of one masking the other.
+    #
+    # THE COST, HONESTLY: this job now runs on pushes where the tree does not type-check,
+    # so a broken tree spends up to 60 runner-minutes. That is CI's cost and the repository
+    # is public with unmetered standard-runner minutes; the alternative was a required
+    # check that cannot report. Reds that appear here are NEWLY VISIBLE, NOT NEWLY BROKEN
+    # -- the same reading session 2p-green's five unblocked jobs required.
+    #
+    # THE INSTALL CLOSURE WAS PROVEN AT THE COMMAND THIS JOB RUNS, before the edge was
+    # removed, because finding 36 is that a closure proof starting anywhere else is worth
+    # nothing: `python -m pytest tests/uplift tests/verify` imports `uplift.*`, so
+    # `uplift/__init__.py` runs first and drags `consensus_arm -> harness -> contract ->
+    # scipy` in. A static walk over 117 seed modules and 304 first-party files reports
+    # every reachable third-party top-level import covered. Two flagged results, neither a
+    # gap: `psycopg2` is outside this closure but imported at FUNCTION scope inside
+    # `try/except ImportError` with an honest degrade (`orchestrator/audit/
+    # data_provenance.py:166`), and `scipy` is pinned in NO requirements file in the
+    # repository yet arrives transitively via `scikit-learn` (five `agents/*/
+    # requirements.txt`) and `lifelines`. A declared import resting on an unpinned
+    # transitive dependency is a fragility; widening the closure to fix it is the broad
+    # change defect 22's precedent rejects, so it is recorded rather than repaired.
     # The `tests/` tree was gated by NO workflow: the quality-gates unit step runs
     # `packages/tests agents orchestrator digital_twin api` and every other workflow
     # targets a single subdirectory (tests/integration, tests/oracle,
