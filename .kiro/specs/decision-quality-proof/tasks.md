@@ -2618,11 +2618,27 @@ data and scored against an external benchmark has no demonstrable value.
     `ci.yml::uplift-verify` declares `needs: quality-gates`; `quality-gates` fails at step 8,
     `mypy --strict orchestrator/`; so **Properties 38–60 have never executed in CI on this branch.**
     Every property this spec has authored is local evidence only until this parent closes.
-  - **Measured baseline, session 2q, at CI's exact command:** 78 errors in 32 files, decomposing as
+  - **Measured baseline, session 2q:** 78 errors in 32 files, decomposing as
     `call-arg` 21, `arg-type` 24, `unused-ignore` 7, `type-arg` 5, `no-any-return` 5,
     `no-untyped-def` 4, `import-untyped` 4, `attr-defined` 2, `union-attr` 2,
-    `comparison-overlap` 2, `method-assign` 1, `assignment` 1. All 78 originate from commit
-    `e000258`; none is on `main`.
+    `comparison-overlap` 2, `method-assign` 1, `assignment` 1.
+  - **CORRECTED session 2r — that baseline is NOT at CI's exact command, and the error costs a
+    session if believed.** `ci.yml::quality-gates` step 8 runs
+    `mypy --strict orchestrator/ --exclude orchestrator/tests`; the 78/56 figures are the **wide**
+    `mypy --strict orchestrator/`, which **no workflow in the repository runs**. Read from CI's own
+    step-8 log on run `33582858699`: `Found 3 errors in 3 files (checked 44 source files)` against
+    89 source files locally. The 56 decompose by scope as **3** in `orchestrator/` source (the whole
+    of step 8's failure, all `import-untyped`), **49** under `orchestrator/tests/` (excluded at step
+    8), and **4** under `agents/` (reached by followed imports; step 9 is `continue-on-error: true`).
+    The exclusion is effective because nothing imports `orchestrator.tests` — checked, not assumed.
+    **So the group 27.3 flagged as probably-unrepairable was the only group that gated anything, and
+    the 24 `arg-type` errors 27.2 ranks first gate nothing.**
+  - **CORRECTED session 2r — "all 78 originate from `e000258`; none is on `main`" is false.** Nine of
+    the twelve files carrying the remaining bucket-B errors, and both bucket-C files, were last
+    touched by commits that are ancestors of `origin/main`, so their content is byte-identical to
+    `main` and their errors are `main`'s. The single largest file, `test_brownout.py` with 26 of the
+    56, is `be3edd1` — on `main`. Ownership had been misfiled in the *opposite* direction this time:
+    filed as this branch's, and mostly the default branch's.
   - **Determine ownership mechanically before filing any of the remainder as pre-existing.** Two
     findings have already been misfiled as `main`'s and turned out to be this branch's.
       ```powershell
@@ -2630,6 +2646,11 @@ data and scored against an external benchmark has no demonstrable value.
       git merge-base --is-ancestor <sha> main     # exit 1 => NOT on main => this branch's
       gh run list --branch main --workflow '<name>' --limit 3
       ```
+    **`git log -1` reports LAST TOUCH, not authorship, and session 2r was misled by exactly that.**
+    `test_cognition_phase.py` resolved to `e000258` and looked like this branch's; the file also
+    exists on `main`, and `git diff origin/main -- <file>` showed the failing assertion is
+    unchanged from `main`. When a file exists on both, attribute the **line**, and confirm by
+    running `git show origin/main:<file>`.
   - **FORBIDDEN REPAIRS, and each names what it would destroy.** No error may be cleared by giving
     an argument a default, by widening a type to `Any`, by adding a `# type: ignore`, or by
     narrowing mypy's scope. The first substitutes an unreviewed value for a committed one; the
@@ -2640,8 +2661,11 @@ data and scored against an external benchmark has no demonstrable value.
     as progress, not regression. It is why 27.4 is sequenced last.
   - _Requirements: —  (adopted debt; no requirement in this spec declares it)_
 
-  - [~] 27.1 Make the committed `confidence_threshold` default visible to the type checker
+  - [x] 27.1 Make the committed `confidence_threshold` default visible to the type checker
     - discharge: ci.yml::quality-gates step 8 (the error count it reports at CI's own scope)
+    - **DISCHARGED session 2r.** `ci.yml::quality-gates` step 8 reported **success** on run
+      `33588706405`, sha `b7954b6` — the first time that step has passed on this branch. Read from
+      the job's own step conclusion, not inferred from a local run.
     - **Landed and locally measured in session 2q: one line, 22 errors cleared, no runtime change.**
       `orchestrator/config.py` declared `Field(0.7, ge=0.0)` — default passed **positionally**.
       This project configures no `pydantic.mypy` plugin, so mypy reads the field through pydantic
@@ -2677,15 +2701,30 @@ data and scored against an external benchmark has no demonstrable value.
       available as an operator kill switch.
     - _Requirements: —_
 
-  - [ ] 27.2 Diagnose and repair the 24 `arg-type` errors, per error rather than per pattern
+  - [x] 27.2 Diagnose and repair the 24 `arg-type` errors, per error rather than per pattern
     - **The largest remaining group, and it must not be treated as one pattern.** 27.1's group was
       genuinely uniform — all 21 were one declaration's artifact — and reading that as licence to
       batch-fix these would be exactly the over-generalisation that cost session 2p three real
       Biome findings. Classify each before repairing any.
     - Expect the repair to move the `unused-ignore` count in both directions; 27.4 absorbs that.
+    - **Done session 2r. Classified first, then repaired once.** All 24 are **two** distinct
+      messages — argument 2 and argument 3 — across **12** call sites, every one in
+      `orchestrator/tests/test_brownout.py` supplying a `_FakeBreaker`. Uniformity was *established*
+      by grouping the captured messages, not assumed from 27.1.
+    - **The declaration was the defect.** `BrownoutController` reads exactly one attribute from a
+      breaker — `.state`, compared against `BreakerState` — and calls no method and mutates nothing.
+      Typing both parameters as the whole `AsyncBreaker` overstated the requirement, and the
+      overstatement was reported 24 times at the call sites rather than once where it lived.
+    - Files: `orchestrator/consensus/brownout.py` — a read-only `BreakerStateSource` Protocol.
+      `AsyncBreaker` satisfies it **structurally** (its `state` is a read-only property returning
+      `BreakerState`), so `inference/serve.py:116` and every other caller is untouched and no
+      runtime behaviour moves. Read-only on purpose: a mutable protocol member would reject a
+      property. `arg-type` 24 → **0**.
+    - `unused-ignore` did **not** move in either direction here; it held at 7. Recorded because the
+      prediction that it would move is what sequenced 27.4 last, and the prediction did not fire.
     - _Requirements: —_
 
-  - [ ] 27.3 Repair the remaining 26 errors across eight codes
+  - [x] 27.3 Repair the remaining 26 errors across eight codes
     - `type-arg` 5, `no-any-return` 5, `no-untyped-def` 4, `import-untyped` 4, `attr-defined` 2,
       `union-attr` 2, `comparison-overlap` 2, `method-assign` 1.
     - **`import-untyped` may not be repairable here, and that must be recorded rather than
@@ -2695,13 +2734,54 @@ data and scored against an external benchmark has no demonstrable value.
       deferral naming the reason, not a `# type: ignore`.
     - `comparison-overlap` is worth reading closely rather than silencing: a comparison mypy proves
       can never be true is usually a real defect, not a typing nuisance.
+    - **Done session 2r. `import-untyped` was the ONLY group that gated anything, and a deferral
+      would have been the wrong call.** Three of the four are in `orchestrator/` source and were
+      the entire content of step 8's failure; landed separately in `b7954b6` as `yaml.*` and
+      `psycopg2.*` `[[tool.mypy.overrides]]` entries — the mechanism `pyproject.toml` already uses
+      for 27 other packages, and a declaration about a third-party package's stub availability
+      rather than a check weakened on first-party code. Inference is unchanged either way: with the
+      stubs absent mypy already models both modules as `Any`.
+    - **`comparison-overlap` was right twice, and both were assertions that CANNOT FAIL.** Not
+      comparisons that can never be true — comparisons mypy could prove *decided*, which is the same
+      defect from the other side. `test_data_provenance_builder.py` asserted R4.4's distinctness
+      clause *after* two equality assertions had narrowed both operands to distinct `Literal`s;
+      moved above them, it can fail. `test_protocol.py` asserted the FSM reached `COLLECTING` after
+      a mutating `transition()`, but the preceding `== IDLE` assertion narrows the member expression
+      and mypy does not discard that across the call — so the assertion was provably false. Each
+      observation is now bound to a fresh local where it is observed. The same narrowing mechanism
+      explains four of 27.4's unused ignores.
+    - `union-attr` was a third one: `test_brownout.py` called `.current_level()` straight through
+      `get_controller()`, typed `BrownoutController | None`, so a registration failure would raise
+      `AttributeError` instead of failing the assertion the test is named for.
+    - Every remaining repair is at the point the `Any` **enters**, not where it exits:
+      `newsvendor.py` gained a typed `_sqrt` mirroring its own `_ln` (because `x ** 0.5` is typed
+      `Any` — a float base with a float exponent may be complex — which leaked into three `-> float`
+      returns); `inventory_sentinel/a2a/handler.py` adopted the typed-local convention its **seven**
+      sibling handlers already use, being the only one of eight that returned `json.loads(...)`
+      directly; `attr-defined` and `method-assign` became `monkeypatch.setattr`, which also restores
+      the attribute; `test_twin_verification.py` gained four return annotations (`boom` is
+      `NoReturn`, which states that the fake never returns) and lost three now-redundant `ANN202`
+      noqas; bare `dict`/`list` parameterised. **No `# type: ignore` was added anywhere.**
     - _Requirements: —_
 
-  - [ ] 27.4 Clear the `unused-ignore` errors LAST, once the others have stopped moving
+  - [x] 27.4 Clear the `unused-ignore` errors LAST, once the others have stopped moving
     - **Sequenced last on purpose.** `warn_unused_ignores = true`, so every repair in 27.1–27.3
       can both remove an ignore's justification and create a new unused one. Clearing them first
       would mean clearing them twice, and the second pass would look like a regression.
     - A `# type: ignore` that is genuinely unused is deleted, never re-narrowed to keep it alive.
+    - **Done session 2r. Seven deleted, none re-narrowed, `unused-ignore` 7 → 0.** The hazard the
+      sequencing guards against did **not** fire: the count held at exactly 7 across 27.2 and 27.3,
+      measured, which is what made a single clearing pass sufficient. Six were wholly unused —
+      `test_audit.py`, `test_audit_logger.py`, and four in `test_outbox_dispatcher.py` whose
+      `attr-defined` ignores are redundant because mypy narrows the member expression to `AsyncMock`
+      after the assignment above them.
+    - The seventh is the one that needed judgement.
+      `test_confidence_gate_universality_property.py:640` carried
+      `# type: ignore[method-assign,assignment]` and mypy proved only `assignment` redundant. The
+      compound loses that code and keeps `method-assign`, which is still doing work. **That is not
+      re-narrowing an unused ignore to keep it alive** — the ignore is used; one of its two codes
+      was not. Lines 638 and 639 are byte-identical in form and were *not* reported, so the
+      distinction is mypy's, not a preference.
     - _Requirements: —_
 
   - [ ] 27.5 Confirm step 8 passes and that `uplift-verify` actually executes
@@ -2714,6 +2794,27 @@ data and scored against an external benchmark has no demonstrable value.
       once gated 18 steps and 3 jobs across two pushes with nothing recording it.
     - Until this leaf is `[x]`, every `HANDOFF.md` must continue to state that this spec's property
       surface is local evidence only.
+    - **STEP 8 PASSES. `uplift-verify` STILL DOES NOT RUN, and the reason is not this parent's.**
+      Measured on run `33588706405`, sha `b7954b6`: steps 1–16 **success**, including step 8. The
+      failure moved to **step 17, the C56 narrative-truth gate**, and steps 18–23 are skipped behind
+      it — so `uplift-verify` is skipped for a third distinct reason.
+    - **The chain to `uplift-verify` is at least FOUR deep, and parent 27 names only the first.**
+      (1) step 8 `mypy --strict orchestrator/ --exclude orchestrator/tests` — **cleared**.
+      (2) step 17 **C56**, failing on exactly one claim, `doc-truth/headline-counts`: README claims
+      `PASS 51 / FAIL 3 / SKIP 10 / TOTAL 64`, suite reports `54 / 2 / 11 / 67`. That is **task 26's
+      drift**, and its repair is `readme_gen --write` via `regenerate-truth-docs.yml` — which is
+      not dispatchable, so **task 26.2 now blocks task 27.5.**
+      (3) step 19 unit tests, never executed on this branch, will fail on
+      `orchestrator/tests/test_cognition_phase.py::test_run_consensus_streams_correlated_phases`
+      — found locally in session 2r and **proven pre-existing on `main`** by running
+      `git show origin/main:` of that file.
+      (4) steps 20–22 (coverage floors, spec coverage, contract tests) have never executed on this
+      branch **or on `main`**, so their state is unknown, not green.
+    - **C56 and the hidden unit-test failure are both red on `main` itself.** `main`'s last three
+      `SYNAPSE CI` runs (`045f44c`, `4114557`, `bd64483`) all fail `quality-gates` at step 17 on the
+      same claim, with its unit-test step skipped behind it. `045f44c` is this branch's fork point.
+      So obstructions 2–4 are **default-branch debt this spec did not create**, and reading step 8's
+      clearance as "27.5 is nearly done" would be the error.
     - _Requirements: —_
 
 ## Notes
