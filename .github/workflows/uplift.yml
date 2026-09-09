@@ -375,21 +375,70 @@ jobs:
         # Version bound matches `agents/*/requirements.txt` verbatim rather than being
         # invented here, per CLAUDE.md's rule that every dependency is pinned with an upper
         # bound.
+        #
+        # `scipy` ADDED SESSION 4, AND THE CLAIM BELOW WAS FALSIFIED BY THE FIRST REAL RUN.
+        # This comment used to end: "A static walk of all 9 first-party modules reachable
+        # from `uplift.regret` reports this as the ONLY gap." Run `34364879758` proved
+        # otherwise -- the measurement died at import on `ModuleNotFoundError: No module
+        # named 'scipy'`.
+        #
+        # WHY THE WALK MISSED IT, because the mechanism is the transferable part: it followed
+        # `import` statements FROM `uplift.regret`, but `python -m uplift.regret` first
+        # executes the PACKAGE initialiser, and `uplift/__init__.py` imports
+        # `uplift.consensus_arm` -> `uplift.harness` -> `uplift.contract` -> `from scipy
+        # import stats`. None of that is reachable from `regret.py`'s own import list. The
+        # walk was correct about the module graph and wrong about the ENTRY POINT'S import
+        # closure. A closure proof must start at the command the job actually runs.
+        #
+        # This is also HANDOFF defect 14 recurring: that defect named this exact `scipy`
+        # import, and the repair taken at the time was to route `uplift/interval.py` around
+        # `load_contract` rather than to widen this closure. The import was still on the
+        # package-initialisation path.
+        #
+        # `scipy` is pinned in NO requirements file in this repository (`policy.yml` installs
+        # it bare), so there is no bound to copy verbatim and `>=1.11,<2.0` is a CHOICE --
+        # flagged as one, shaped like the `numpy>=1.26,<2.0` and `pandas>=2.2,<3.0` bounds
+        # `policy.yml` uses beside it.
         run: |
           pip install -r packages/requirements.txt
           pip install -e packages/
-          pip install simpy numpy pyyaml "pydantic-settings>=2.2.0,<3.0"
+          pip install simpy numpy pyyaml "pydantic-settings>=2.2.0,<3.0" "scipy>=1.11,<2.0"
 
       - name: Measure twin regret against the perfect-foresight comparator (R5.1, R5.33)
-        # Exit status propagates. No `continue-on-error`, no `|| true`, no `|| echo`: a
-        # measurement that could not run is not a measurement, and exit 2 (nothing
-        # measurable) must fail this job rather than be read as a zero regret.
+        # `set -o pipefail` IS LOAD-BEARING, AND ITS ABSENCE MADE THIS STEP LIE.
+        #
+        # This comment used to read "Exit status propagates. No `continue-on-error`, no
+        # `|| true`, no `|| echo`". That enumerated three discarding constructs and MISSED
+        # THE ONE THIS STEP ACTUALLY USES. Under `bash -e` a pipeline's status is the status
+        # of its LAST command, so `python -m uplift.regret ... | tee <file>` reports `tee`'s
+        # success even when the Python crashed. Measured on run `34364879758`: the
+        # measurement died at import with `ModuleNotFoundError: No module named 'scipy'`,
+        # `tee` wrote a ZERO-BYTE artifact, and this step reported **success** while
+        # `blocking-steps.yaml` declares it `role: producer` emitting canonical JSON.
+        #
+        # The job was red only because the *disclosure* step below -- explicitly "not a
+        # gate" -- failed on the same missing import. Without that step this job would have
+        # been GREEN with no measurement in it, which is precisely the defect this spec
+        # exists to eliminate: a gate that reports nothing is indistinguishable from a gate
+        # that passes (I-7).
+        #
+        # `| tee` is KEPT rather than replaced by a plain redirect, because seeing the JSON
+        # in the job log is what lets a reader check the artifact against the run. With
+        # `pipefail` that visibility is free; without it, it was the whole bug.
+        #
+        # NOTE FOR THE ENFORCEMENT SPINE: `scripts/audit/workflow_shape_truth.py` cannot
+        # catch this. Its `DISCARDING_CONSTRUCTS` is four literals -- `|| true`, `|| echo`,
+        # `; exit 0`, bare `exit 0` -- and an unguarded pipeline is none of them, so a
+        # declared-blocking step could discard its status with the gate reporting pass.
+        # `| tee` appears exactly ONCE in this workflow tree (this step), so the exposure is
+        # closed here; the gate gap is recorded for its owner rather than patched silently.
         #
         # The replicate count is the one number here that is NOT yet committed to
         # policy.yaml, because R5.2's deferral covers the margin and not the sample size,
         # and the sample size needed follows from the variance this run reports. Stated as
         # a CLI argument so the value used is visible in the job log.
         run: |
+          set -o pipefail
           mkdir -p artifacts/uplift
           python -m uplift.regret --replicates 200 --hours 24 --json \
             | tee artifacts/uplift/twin-regret.json
