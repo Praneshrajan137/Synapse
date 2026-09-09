@@ -2595,12 +2595,21 @@ data and scored against an external benchmark has no demonstrable value.
 
   - [ ] 26.2 Dispatch the job and review the regenerated diff
     - discharge: regenerate-truth-docs.yml::regenerate
-    - `gh workflow run regenerate-truth-docs.yml --ref feat/decision-quality-proof`, then download
-      the `regenerated-truth-docs` artifact and read the diff the run printed.
+    - **RUN IT BY LABEL, NOT BY DISPATCH. This sub-task's instruction was wrong and is
+      corrected here rather than left for the next reader to discover.** It said
+      `gh workflow run regenerate-truth-docs.yml --ref feat/decision-quality-proof`; finding 23
+      proves that returns **HTTP 404**, because GitHub requires a workflow file on the DEFAULT
+      branch before it can be dispatched and `origin/main` does not carry this one. Session 3
+      landed route 1 (`bbe4278`): add the **`regenerate-truth-docs`** label to PR #84, then
+      remove it. Then download the `regenerated-truth-docs` artifact and read the diff the run
+      printed.
     - **Operator action.** The review is the point: the artifact is a proposal, and a reader must
       confirm the counts moved for the reason expected before any of it is committed.
     - Confirm the job's own first step passed — a red `gate_surface --check` means the dispatching
       commit missed the fourth coupling and the artifact must not be used.
+    - **STILL BLOCKED, and no longer by its own mechanism.** Route 1 removed the structural
+      blocker; what remains is the account-level CI block (session 3, run `34319298166` at
+      `fe8ddeb` started no jobs). A labelled run today would fail before its first step.
     - _Requirements: 4.4, 4.5, 10.1, 11.7_
 
   - [ ] 26.3 Commit the regenerated documents and confirm C56 returns to PASS
@@ -2818,6 +2827,23 @@ data and scored against an external benchmark has no demonstrable value.
       same claim, with its unit-test step skipped behind it. `045f44c` is this branch's fork point.
       So obstructions 2–4 are **default-branch debt this spec did not create**, and reading step 8's
       clearance as "27.5 is nearly done" would be the error.
+    - **OBSTRUCTION 3 IS NOW REPAIRED ON DISK, session 3 (`bf8693f`), by explicit operator
+      decision — and this leaf is still `[ ]`.** The repair is a **precondition correction**, not an
+      assertion weakening (R2.10): `all(c.args[0] == PHASE_TOPIC for c in calls)` claimed the
+      protocol emits to no other topic, which stopped being true when ADR-038's
+      `emit_agent_signals` and ADR-053's `emit_agent_metrics` began sharing the producer at
+      `protocol.py:1021` and `:1024`. The calls are now **partitioned** with the partition asserted
+      **exhaustive** — a filter alone would have discarded what the original assertion protected —
+      and the permitted non-phase topics are **derived** from `firehose_signals.METRICS_TOPIC` and
+      `SIGNAL_CHANNELS` rather than transcribed. Ownership was re-confirmed mechanically first:
+      the file exists on `origin/main` and `git diff origin/main` shows only session 2r's type
+      repairs, so the failing assertion is byte-identical to `main`. **6 passed locally; the file is
+      green for the first time on this branch. That is not a discharge** — this leaf's
+      `discharge:` line names `ci.yml::uplift-verify`, obstruction 2 still sits ahead of it, and
+      CI is account-blocked.
+    - **OBSTRUCTION 2's mechanism is unblocked but not cleared.** Route 1 landed in `bbe4278`, so
+      task 26.2 can now be reached by label instead of by an impossible dispatch. The regeneration
+      itself has still never run.
     - _Requirements: —_
 
 ## Notes

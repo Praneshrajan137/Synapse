@@ -1,6 +1,6 @@
 # HANDOFF — decision-quality-proof
 
-**State at end of session 2r (2026-09-09). Two commits pushed; the commit carrying this file is the
+**State at end of session 3 (2026-09-09). Two commits pushed; the commit carrying this file is the
 third.** Derive the counts, never read them:
 
 ```powershell
@@ -8,26 +8,15 @@ python -m scripts.audit.spec_ledger_census --files --next 30
 ```
 
 At the time of writing that reported **140 leaf tasks: 61 done, 2 authored-pending-discharge, 77
-open** — 69 authorable and 8 CI-gated.
+open** — 69 authorable and 8 CI-gated. **Unchanged by this session, deliberately: no task was
+ticked and none was attempted.**
 
-**The session cap is now THIRTY leaf tasks, in three waves of about ten, and it is expected never to
-bind.** `SESSION_PROTOCOL.md` carries the derivation; the short version is that the ten-cap bound
-zero of eight observed sessions, and at thirty the remaining plan is governed entirely by barriers
-and phase boundaries: session 2 is **11** (checkpoint B), session 3 is **21** (Phase 3), session 4 is
-**22** (checkpoint C), session 5 is **15** (checkpoint D). Eight authoring sessions became four, and
-two same-commit couplings that the ten-cap split across sessions now land whole.
-
-> **Session 2r closed parent 27's four authorable leaves and made `ci.yml::quality-gates` step 8
-> pass for the first time on this branch. It did NOT reach `uplift-verify`, and the reason is the
-> session's most important finding: the chain to that job is at least four obstructions deep, and
-> parent 27 named only the first.**
->
-> Tasks **27.1** (discharged by CI), **27.2**, **27.3** and **27.4** are `[x]`. Task **27.5** is
-> `[ ]` and is now blocked by **task 26.2**, which is blocked by finding 23's residue.
->
-> **`mypy --strict orchestrator/` went 56 → 0.** CI's step 8 went from failure to **success**.
-> Properties 38–60 have **still never executed in CI**, and every `HANDOFF.md` must keep saying so
-> until 27.5 is `[x]`.
+> **Session 3 was ended by STEP 0 before it could author anything. CI is still blocked at the
+> account level, and the barriers prove that fact is total rather than inconvenient: ZERO of the 69
+> authorable leaves are reachable without checkpoint A.** What ran instead was the
+> barrier-independent fallback the standing prompt reserves for exactly this case, on the operator's
+> explicit word: **route 1** for C56, and the **adopted `test_cognition_phase` repair**, plus the
+> **ruff-scope measurement** that makes the third option costable instead of speculative.
 >
 > The working agreement is `.kiro/specs/decision-quality-proof/SESSION_PROTOCOL.md`.
 > The prompt to paste in a new session is
@@ -38,400 +27,319 @@ it *is*, not as a diff against how it was.
 
 ---
 
-## STOP — CI CANNOT RUN. Account-level block, found after this session's work was pushed.
+## STOP — CI STILL CANNOT RUN. Proven at this branch's actual head, not inferred.
 
-**Run `34315612360` (sha `bfad6a0`) did not execute. GitHub refused to start any job:**
+**Run `34319298176`… every workflow on sha `fe8ddeb` refused to start. Read `34319298166`
+(`SYNAPSE CI`):**
 
 ```
 The job was not started because recent account payments have failed or your spending
 limit needs to be increased. Please check the 'Billing & plans' section in your settings
 ```
 
-All three eligible jobs failed in 3–4 seconds with **zero steps recorded**, and the three downstream
-jobs were skipped. **That run is not evidence about the code** — nothing in it ran.
+Three jobs `failure` in **2–3 seconds with `steps=0`**; three `skipped`. **All eight workflows on
+that sha are identical.** Nothing in any of them ran, so none of it is evidence about the code.
 
-**Consequence: every CI-gated leaf in this spec is blocked at the account level, not by its own
-precondition.** That is all **8** CI-gated open leaves plus the 2 `[~]` marks:
+**Resolve billing before anything below is attempted.** Checkpoint A's label, the regeneration
+label, and every CI-gated leaf assume a runner will start. None will.
 
-| Blocked | Needs |
-|---|---|
-| **27.5** | `ci.yml::uplift-verify` |
-| **10.4**, **11** | the `measure-twin-regret` label on PR #84 → `uplift.yml::twin-regret` |
-| **14** | checkpoint B's measurement |
-| **26.2**, **26.3** | `regenerate-truth-docs.yml`, then `truth-gates.yml` |
-| **21**, **22.3**, **25** | the E4 materialisation job, `uplift.yml::uplift-proof` |
+### CONFLICT K — the stated HEAD was stale for the THIRD session running
 
-**Resolve billing before anything below is attempted.** Decision 1's three routes, checkpoint A's
-label, and the regeneration dispatch all assume a runner will start. None will.
+The standing prompt gave HEAD `3b2ec15`, "31 commits ahead", and named run `34315612360` at
+`bfad6a0` as the run to check. Disk and `origin` both held **`fe8ddeb`**, **32** ahead of
+`origin/main` — which is still `045f44c` and has not moved. So **two** pushes newer than the one the
+prompt described existed, each with its own blocked run set. Reading the run for the *actual* head
+is what turned "probably still blocked" into proof.
 
-**What survives the block, because it was measured before it:** run `33588706405`, head_sha
-`b7954b66c7f3b452dfab2158ed4a8ccb3acf9d17`, head_commit *"fix(mypy): declare yaml and psycopg2
-stub-free so step 8 stops gating uplift-verify"* — attributed by sha and message, not timestamp, per
-this file's own rule. That run executed real steps with real conclusions and is the sole basis for
-the step 8 claim below. **It does not cover `743ca6b`.** Step 8's scope is a strict subset of the
-wide command, and the wide command exits 0 locally, so step 8 is 0 **by mechanical implication from
-local evidence** — not because CI said so at that commit.
+```powershell
+git rev-parse --short HEAD                       # trust this, not the prompt
+git rev-list --count origin/main..HEAD
+gh run list --branch feat/decision-quality-proof --limit 12 --json databaseId,headSha,workflowName,conclusion
+```
 
-**One further anomaly, recorded and unexplained.** `33588706405` reports `created_at`
-`2026-09-02T03:52:59Z` for a commit authored in this session on 2026-09-09. The sha and commit
-message match this tree exactly, so attribution is sound and the step conclusions stand. But the
-recorded clock skew in this file is "~2h45m", and this is seven days. **Do not use `created_at` to
-decide which run describes which tree** — the rule was already to use `head_commit.message`, and this
-is a second, larger reason.
+**Conflict J said "do not carry the stated ahead-count forward". Conflict K is the same defect a
+third time. The standing prompt cannot state HEAD correctly, because it is written before the commit
+that carries it.** Treat every HEAD and ahead-count in it as stale by at least one commit, by
+construction.
 
 ---
 
-## THE THING THAT IS BLOCKING EVERYTHING — restated, because it changed shape
+## THE THING THAT IS BLOCKING EVERYTHING — the chain, with session 3's movement
 
-**`uplift-verify` still has not run, and clearing 56 mypy errors was not enough.** Measured on run
-`33588706405`, sha `b7954b6`:
+**`uplift-verify` has still never run, so Properties 38–60 have never executed in CI.**
 
 | # | Obstruction | State |
 |---|---|---|
-| 1 | step 8 `mypy --strict orchestrator/ --exclude orchestrator/tests` | **CLEARED session 2r** |
-| 2 | step 17 **C56** narrative-truth, claim `doc-truth/headline-counts` | **RED — and red on `main` too** |
-| 3 | step 19 unit tests → `test_cognition_phase.py::test_run_consensus_streams_correlated_phases` | **fails; proven pre-existing on `main`** |
-| 4 | steps 20–22 coverage floors, spec coverage, contract tests | **never executed on this branch or `main`** |
+| 0 | **the runner itself** — account billing | **BLOCKED; nothing starts** |
+| 1 | step 8 `mypy --strict orchestrator/ --exclude orchestrator/tests` | **CLEARED** session 2r (56 → 0; CI step 8 success) |
+| 2 | step 17 **C56**, claim `doc-truth/headline-counts` | red, and red on `main` too. **Its MECHANISM is now unblocked** (route 1, `bbe4278`) — the drift itself is not repaired |
+| 3 | step 19 `test_cognition_phase.py::test_run_consensus_streams_correlated_phases` | **REPAIRED ON DISK** session 3 (`bf8693f`), 6 passed locally. **Not discharged** — local green is not CI green |
+| 4 | steps 20–22 coverage floors, spec coverage, contract tests | **never executed on this branch or `main`.** Unknown, which is not green |
 
-Steps 18–23 are skipped behind obstruction 2, so obstructions 3 and 4 are *predicted from local
-measurement and from `main`'s history*, not yet observed in CI on this branch. Obstruction 3 was
-found by running the test locally; obstruction 4 is unknown, which is not the same as green.
-
-**C56's failure is one claim and four numbers:**
-
-```
-[XX] doc-truth/headline-counts [required] README headline drifted from the live verify_claims
-     summary: PASS (README claims 51, suite reports 54); FAIL (3 -> 2); SKIP (10 -> 11);
-     TOTAL (64 -> 67)
-```
-
-That is **task 26's drift**, unchanged and previously documented. Its repair is `readme_gen --write`,
-whose sanctioned route is `regenerate-truth-docs.yml` (I-0 escalation step 1). **Never repair those
-four numbers by hand** — `blocking-steps.yaml` forbids it in those words, and the README headline is
-a projection of a whole registry execution, not four integers.
-
-**So task 26.2 now blocks task 27.5, and that inverts what session 2r was told.** The standing
-prompt said `regenerate-truth-docs.yml`'s absence from `main` "blocks nothing you are doing" because
-26.2's precondition (track A's margin commit) was outstanding. It now blocks the payoff of parent 27.
+**Session 2r's lesson holds and got a second confirmation.** Clearing a layer reveals what it was
+shielding, and the depth is unknown until each clears. Session 3 moved obstruction 3 off the critical
+path *on disk* and unblocked obstruction 2's *mechanism*, and **neither is a discharge.** No single
+clearance licenses a claim about the job at the end of the chain.
 
 ---
 
 ## What is owed right now, in order
 
-### DECISION 1 — how to reach C56, and it is a three-way trade
+### 1. BILLING. Everything else is downstream of it.
 
-`regenerate-truth-docs.yml` is `workflow_dispatch` only and absent from `main`, so per finding 23 it
-**cannot be dispatched from this branch at all.** Three routes, costed:
+### 2. Checkpoint A — track A, the operator's, and its procedure is now correct in `SESSION_PROTOCOL.md`
 
-1. **Give it the same `pull_request: types: [labeled]` trigger `uplift.yml` got in `e8e9528`.**
-   Precedented, small, touches no shared branch, and it is the mechanism this branch already proved
-   works. It is finding 23's repair applied a second time, and finding 23's repair is **the
-   operator's** — so it is offered, not taken. Coupling 4 applies: a new trigger moved
-   `gate_surface` from 536 to 542 rows last time, so `--write` is owed in the same commit.
-2. **Land `regenerate-truth-docs.yml` on `main`.** Harmless in itself (dispatch-only, no schedule),
-   and it was session 2r-pre-c's own recommendation before the label mechanism was found. Costs a
-   change to the shared default branch to buy what the branch can grant itself.
-3. **Wait for track A.** `SESSION_PROTOCOL.md` sequences the regeneration **last** so one dispatch
-   suffices: task 10.4's margin pin changes `doc_truth`'s claim set and can move C56, making an
-   earlier regeneration stale within the hour. Correct while nothing waited on it. **Now
-   `uplift-verify` waits on it**, so the ~45-minute second dispatch buys the first CI execution of
-   Properties 38–60 rather than nothing.
+`SESSION_PROTOCOL.md`'s checkpoint-A section was **stale in four ways** and is corrected (conflict
+L, below). Read it there rather than reconstructing it here. In brief: **two labelled runs**, one
+ADR-055 D2.5 amendment covering **both** owed amendments, one margin commit that graduates the
+parked pin, one recorded verdict.
 
-**The trade is explicit: one extra regeneration dispatch against continuing to hold this spec's
-entire property surface as local-only evidence.** Route 1 then 3 is the cheapest ordering that does
-not touch `main`.
+**The one gap worth carrying in your head:** after graduating the pin, **no cheap gate checks the
+document-anchor side.** `pin_extractor_truth` probes source extractors *"unconditionally, independent
+of whether the document anchor matched"* and will report **15/15 green** even if the ADR line does
+not match; `doc_truth` is the gate that would catch it and I-0 forbids running it locally. Probe it
+with `doc_truth.documented_value(pin, text)` — a pure function, and the contract is **exactly one**
+matching line. A mismatch takes C56 from FAIL to **SKIP** through R1.4/R1.6's non-maskable rule,
+moving registry counts immediately before the regeneration.
 
-### DECISION 2 — obstruction 3 is `main`'s, and adopting it needs your word
+### 3. Task 26.2 — reachable now, by LABEL
 
-`orchestrator/tests/test_cognition_phase.py::test_run_consensus_streams_correlated_phases` fails,
-and it fails **on `main`** — proven by running `git show origin/main:` of that file, not inferred.
-It will become the blocker the moment C56 clears.
+Route 1 landed. Add the **`regenerate-truth-docs`** label to PR #84, then remove it. The
+`gh workflow run` instruction that used to sit in task 26.2 was **wrong** (HTTP 404, finding 23) and
+has been corrected in `tasks.md`. Sequence it **after** the margin commit, per the operator's
+"route 1 then 3": task 10.4's pin changes `doc_truth`'s claim set and can move C56, so an earlier
+regeneration is stale within the hour.
 
-**Diagnosed, so whoever owns it does not re-derive it.** The test asserts that *every*
-`kafka.produce` call targets `synapse.orchestrator.phase`:
+### 4. Task 27.5 — still a CI read, still blocked
 
-```python
-assert all(c.args[0] == "synapse.orchestrator.phase" for c in calls)
-```
+Obstruction 2 sits ahead of it. Until this leaf is `[x]`, **every `HANDOFF.md` must keep stating that
+this spec's property surface is local evidence only.**
 
-But the protocol's producer is shared: ADR-038's `emit_agent_signals` and ADR-053's
-`emit_agent_metrics` both emit through it, on other topics. The assertion therefore claims the
-protocol emits to no other topic, which stopped being true when those landed. **The repair is a
-precondition correction, not an assertion weakening (R2.10):** filter to the phase-topic calls and
-assert the phase narrative and decision-id correlation over those. Roughly six lines.
+### DECISIONS 1 AND 2 ARE CLOSED. Do not re-litigate them.
 
-**Not adopted in session 2r on purpose.** Parent 27 was adopted by *explicit operator decision*;
-taking this too would be a fourth adoption made unilaterally. Precedent is task 6's disposition of
-`C28/zero-a-floor` — "its real repair waits on its own owner and is not this spec's."
-
-### Track A — checkpoint A, operator work, unchanged
-
-Reachable since `e8e9528`. **Run it by adding the `measure-twin-regret` label to PR #84**, then
-removing it. `workflow_dispatch` cannot reach a workflow absent from `main`; `pull_request` can.
-
-1. Label PR #84. Read `regret`, `interval_low`/`interval_high`, `comparator_headroom`,
-   `margin_rule`, `margin_rule_derives`, `margin_rule_below_headroom` and
-   `interval_excludes_rule_margin` from `artifacts/uplift/twin-regret.json`.
-2. **One ADR-055 D2.5 amendment, one commit, one amendment-log line, covering BOTH owed amendments.**
-   State the derived value as a literal on **exactly one line** — that is what the parked pin anchors
-   to (finding 20) — and correct `bracketing.upper` if the measured headroom moved from
-   `11.79 - 2.93 = 8.86`, which is prose and is not pinned. D2.5's own rule puts this **before**
-   dispatch 2.
-3. **Commit `materiality_margin.value`** (`5.0 * 0.01 * 8.0` = `0.40`) and **graduate the parked
-   pin** from `pending_pins:` into `pins:`. Read finding 20 first; do not author a fresh pin. No
-   second `ratchets.json` entry is owed. Discharges **10.4**.
-4. **Label a second time.** Finding 16, not optional: run 1 cannot exercise
-   `must_be_below_measured_headroom` and reports `verdict: unavailable`. Discharges **11**.
-5. Record task 11's verdict against `SESSION_PROTOCOL.md`'s four-value table.
-
-### Track B — what remains of session 2r
-
-6. **Tasks 27.1–27.4 are `[x]`.** Nothing further is authorable under parent 27.
-7. **Task 27.5 is a CI read**, blocked behind decision 1 and then decision 2.
-8. **Tasks 26.2 / 26.3** — the regeneration, now on the critical path. Confirm **two** things when it
-   lands, not one: C56 goes PASS, **and** the falsification sweep's probeable set returns to **8**.
+- **Decision 1 → route 1 then 3**, taken by the operator, landed in `bbe4278`.
+- **Decision 2 → adopt `test_cognition_phase`**, taken by the operator, landed in `bf8693f`.
+- **The third item was a MEASUREMENT, not an adoption**, and it stays that way until someone decides
+  otherwise. See finding 32.
 
 ---
 
-## Read these first, in this order. Binding, not advisory.
+## Session 3's findings
 
-1. `.kiro/steering/local-compute-budget.md` — invariant **I-0**. Highest precedence.
-2. `.kiro/specs/decision-quality-proof/SESSION_PROTOCOL.md` — the cap, the three marks, the four
-   checkpoints, the batch plan, the six cheap gates.
-3. `CLAUDE.md` — 14 invariants, honesty contract, gate registry, `E-S*` lessons.
-4. `.claude/skills/synapse-engineer/SKILL.md` + `references/`.
-5. `.cursorrules` + `docs/cursor/*.md`.
-6. `docs/adr/ADR-055-twin-decision-relevance.md` — the record this phase executes against.
-7. `.kiro/specs/decision-quality-proof/{requirements,design,tasks}.md`.
+### CONFLICT L — this project's own checkpoint-A procedure was unexecutable
 
-### The ledger has three marks and four sources
+`SESSION_PROTOCOL.md`'s batch table row A had been updated to "reachable by labelling PR #84" when
+finding 23 was resolved. **The procedure three sections below it was not**, so the binding working
+agreement still instructed a command proven to return HTTP 404. Four defects in one section:
 
-`[ ]` open · `[~]` **authored, discharge pending** — not a pass, and it carries a `discharge:` line
-naming the job that owes the proof · `[x]` done **and** discharged. An *open* leaf with a
-`discharge:` line is CI-gated and is not authorable work.
+1. **The mechanism is a LABEL, not a dispatch** (finding 23, repaired in `e8e9528`).
+2. **Step 0's `workflow_dispatch.inputs.job` selector already landed**, in `85774e1`. Following the
+   instruction would re-author a committed change.
+3. **Step 1 discharges task 6, which is already `[x]`.**
+4. **It described ONE run where finding 16 proves TWO are required.**
 
-Authoritative: `tasks.md` checkboxes for state, `spec_ledger_census` for every count, this file for
-what executed. **`tasks.meta.json` is not authority.** **And disk outranks all four.**
+Checkpoint B carried the same dispatch defect. All corrected in place, **with the correction stated
+in the document rather than applied silently.** The general lesson: *a table and the procedure below
+it can disagree, and the table is the one people update.*
 
----
+### Finding 30 — `gate_surface` cannot parse a label guard, and that is honest rather than broken
 
-## Session 2r — five findings, two conflicts, and the batch's premise was inverted
+The new row renders `CONDITIONAL | unparsable if: (unparsable at offset 126: "*.name, 'regenerate-")`.
+It reads like a defect this change introduced. It is not: **`uplift.yml::twin-regret` carries the
+identical rendering in the committed, C63-green surface.** `gate_surface`'s expression parser does
+not understand the `labels.*.name` filter-object syntax, and `CONDITIONAL` is the **conservative**
+classification for a guard it cannot decide — the job may or may not run, which is exactly true
+(I-7). Now the case for two of two label-conditioned jobs in the tree. **Not repaired: the parser's
+degradation is correct, and improving it is not this spec's remit.** Recorded so the next reader does
+not chase it.
 
-### Conflict I — CI's step 8 is not the command the baseline was measured at
+### Finding 31 — the test repair had a second symptom, and the obvious repair would have created a vacuous assertion
 
-**This is the finding that reshaped the session, and believing the record would have cost it.**
+**The recorded diagnosis was verified before it was trusted, and it needed it:** `protocol.py` has
+only **one** `produce(` call and it targets the phase topic. The other emitters are
+`emit_agent_signals` and `emit_agent_metrics` in `orchestrator/consensus/firehose_signals.py`,
+reached at `protocol.py:1021` and `:1024`.
 
-```yaml
-- name: MyPy strict type check (orchestrator — blocking)
-  run: mypy --strict orchestrator/ --exclude orchestrator/tests
-```
+**Second symptom.** Those two pass their payload **positionally** (`producer.produce(topic, item,
+key=...)`) while `_emit_phase` passes it as **`value=`** — so `c.kwargs["value"]` over the unfiltered
+call list raised `KeyError` as well. One defect, two symptoms, both repaired by the partition.
 
-`HANDOFF.md`, `tasks.md:2657` and the standing prompt all said the `78 → 56` baseline was measured
-"at CI's exact command", using `python -m mypy --strict orchestrator/`. That command has no
-`--exclude`, and `[tool.mypy]` declares none either. **No workflow in the repository runs the wide
-command.**
+**And the tempting repair was a trap.** Filtering to the phase topic and asserting the rest is a
+subset of the declared telemetry topics looks complete — but `set() <= anything` is **vacuously
+true**, so the clause becomes an assertion that cannot fail the moment the telemetry side stops
+firing. That is **finding 26's defect class, in a hole the repair itself opened.** Non-emptiness is
+now asserted, which closes it and doubles as the mechanical re-proof that the shared-producer premise
+holds in this run.
 
-Read from CI's own step-8 log, run `33582858699`: **`Found 3 errors in 3 files (checked 44 source
-files)`** against 89 files locally. The 56 decompose by scope:
+**Why it is a partition and not a filter.** The original assertion was protecting something real —
+that nothing emits to an unexpected topic. A filter discards that protection. The partition keeps a
+rogue topic a failure, and the permitted set is **derived** from `firehose_signals.METRICS_TOPIC` and
+`SIGNAL_CHANNELS` rather than transcribed, so enabling either follow-up channel that module records
+as pending does not break the test.
 
-| bucket | n | gates step 8? |
+### Finding 32 — the ruff-scope gap is larger than recorded, and it is now a number
+
+Session 2r recorded that `scripts/` and `tests/` are outside CI's ruff scope. Read from `ci.yml`, the
+scope is exactly `packages/synapse_common/ agents/ orchestrator/`, and `[tool.ruff]` declares no
+`include`/`exclude` — so the unlinted set also contains **`uplift/` and `digital_twin/`, this spec's
+own production code**, plus `api/`, `data_fabric/`, `ml_pipelines/`, `packages/tests/` and root
+`conftest.py`.
+
+Measured in two ruff passes:
+
+| tree | lint findings | files `ruff format` would rewrite |
 |---|---|---|
-| `orchestrator/` source | **3** | **YES — all of it** |
-| `orchestrator/tests/` | 49 | no, excluded |
-| `agents/` (followed imports) | 4 | no, step 9 is `continue-on-error: true` |
+| `tests/` | 255 | 118 |
+| `scripts/` | 103 | 48 |
+| `packages/tests/` | 57 | 21 |
+| `uplift/` | 53 | 17 |
+| `api/` | 24 | 8 |
+| `data_fabric/` | 13 | 14 |
+| `ml_pipelines/` | 13 | 7 |
+| `digital_twin/` | 12 | 20 |
+| `conftest.py` | 0 | 1 |
+| **TOTAL** | **530** | **254** |
 
-The exclusion is effective because nothing imports `orchestrator.tests` — grepped, not assumed. The
-bucket-A count **equals CI's 3 exactly**, so the path filter was validated against CI's own log
-rather than trusted.
+Top rules: `ANN001` 99, `I001` 95, `E501` 69, `F401` 34, `UP037` 28, `TC003` 25.
 
-**The work order was therefore inverted.** It ranked 27.2's 24 `arg-type` first and flagged 27.3's
-`import-untyped` as *"may not be repairable here… the honest outcome is a recorded deferral."* All
-three gating errors were `import-untyped`. **A deferral would have been honest and would have left
-`uplift-verify` dead** — the one outcome the batch existed to prevent. The 24 `arg-type` errors gate
-nothing.
+**The 254 is an UPPER BOUND and must not be reported as 254 real defects.** Session 2p proved 37 of
+40 comparable Biome findings were `core.autocrlf` artifacts, and this session re-proved the mechanism
+directly (finding 33). Separating real from artifact needs the `--write`-then-`git diff` comparison,
+which modifies files and was not taken unasked. **The 530 are not line-ending sensitive and stand.**
 
-Two sub-corrections: the caveat "the absolute CI count may differ because the local environment has
-no `types-PyYAML`" is weaker than recorded in that direction — `types-PyYAML` appears in exactly one
-place in the repo, `.pre-commit-config.yaml`'s `additional_dependencies`, so CI's `quality-gates`
-installs no stubs either. The real divergence risks are the scope above and `mypy>=1.10.0,<2.0` in
-`packages/requirements-dev.txt`, an unpinned floor.
+**The decisive consequence, and it is why this stayed a measurement rather than a repair.** `Ruff
+lint` is step **5** of `quality-gates` — *earlier* than the step 8 session 2r cleared — and both ruff
+steps are **declared blocking anchors** in `blocking-steps.yaml`. Widening the scope would re-close
+the gate at an earlier point than the one just opened, re-burying `uplift-verify` behind 530
+findings, and would owe `gate_surface --write` for editing an anchor step's `run:`.
 
-### Conflict J — the stated HEAD was three commits stale
+**And the two mitigations are mutually exclusive today.** CI does not lint these trees, and the
+`.pre-commit-config.yaml` ruff hook that would (it carries no `files:` filter) is the one this file
+forbids installing — because it also installs the mypy stubs that unmask seven pre-existing errors
+under `uplift/`.
 
-The prompt gave HEAD `5bcf42c` and "24 commits ahead". `.git/refs/heads/feat/decision-quality-proof`
-held **`1508685`**, and the branch reflog shows `5bcf42c → be666ea → e8e9528 → 1508685` — so
-`e8e9528`, finding 23's actual repair, is absent from the commit table that describes it as done.
-Benign, but do not carry "24 ahead" forward.
+### Finding 33 — the line-ending trap, sixth session running, with a refinement
 
-### Finding 24 — ownership was misfiled, in the opposite direction this time
-
-`tasks.md` said *"All 78 originate from commit `e000258`; none is on `main`."* **False.** Nine of the
-twelve files carrying the remaining errors, and both `agents/` files, were last touched by ancestors
-of `origin/main`, so their content is byte-identical to `main` and their errors are `main`'s. The
-largest single file, `test_brownout.py` with **26** of the 56, is `be3edd1` — on `main`.
-
-**And `git log -1` reports LAST TOUCH, not authorship — which misled this session too.**
-`test_cognition_phase.py` resolved to `e000258` and looked like this branch's. The file also exists
-on `main`; `git diff origin/main` showed the failing assertion **unchanged from `main`**, and
-`git show origin/main:<file>` run as a probe **fails there too**. When a file exists on both
-branches, attribute the *line*, then confirm by executing `main`'s version.
-
-### Finding 25 — mypy's incremental cache hides a per-module override change
-
-After adding the `yaml.*` override, `mypy --strict orchestrator/ --exclude orchestrator/tests` still
-reported the same 3 errors. Not a failed repair: a **stale cache**. A cache entry is keyed to the
-*importing* module, while `ignore_missing_imports` belongs to the *imported* one, so mypy reused
-`chain_walk`'s entry. `--no-incremental` reported `Success: no issues found in 44 source files`.
-
-**A cached mypy run is a claim about the cache as much as the code** — the same shape as session 2q's
-PowerShell splatting bug, where a gate's non-zero exit was a claim about its invocation. Use
-`--no-incremental` for any measurement that follows a config change.
-
-### Finding 26 — `comparison-overlap` found two assertions that CANNOT FAIL, and a third was next to them
-
-The work order said a comparison mypy proves can never be true is usually a real defect. Both were
-real, and both were the *mirror* case — comparisons mypy could prove **decided**:
-
-- `test_data_provenance_builder.py` asserted R4.4's distinctness clause *after* two equality
-  assertions had narrowed both operands to distinct `Literal`s. Moved above them, it can fail.
-- `test_protocol.py` asserted the FSM reached `COLLECTING` after a mutating `transition()`, but the
-  preceding `== IDLE` assertion narrows the member expression and mypy does not discard that across
-  the call — so the assertion was provably **false**. Each observation is now bound to a fresh local
-  where it is observed.
-- Beside them, `union-attr` in `test_brownout.py`: `.current_level()` called straight through
-  `get_controller()`, typed `BrownoutController | None`, so a registration failure raised
-  `AttributeError` instead of failing the assertion the test is named for.
-
-**"A number that cannot fail is not a number" applies to assertions too.** The same mypy
-member-expression narrowing explains four of 27.4's seven unused ignores — one mechanism, two
-opposite symptoms.
-
-### Finding 27 — a test in `main` asserts nothing at all
-
-`test_protocol.py::test_tier1_skips_debate` builds a tier classification, installs it, and then
-**contains no assertion** — only three comment lines describing what it would verify. Untouched
-beyond the type repair, because it is `main`'s and rewriting it is not this batch's remit. Recorded
-because it is the same defect class as finding 26 and nothing else names it.
-
-### Finding 28 — clearing a gate reveals what it was shielding, and here it was three more things
-
-Step 8's failure was hiding **15 steps** in `quality-gates`. Clearing it exposed C56 immediately, and
-local measurement plus `main`'s history predicts two more obstructions behind that. Session 2p's
-lesson was "read what got SKIPPED behind the failure." The stronger version: **the depth of the
-chain is unknown until each layer is cleared, so no single clearance licenses a claim about the
-job at the end of it.**
+`git ls-files --eol` reported **`i/lf`** while the worktree was **140 CRLF / 51 LF**. **The index
+column is normalised and must not be used to choose the target ending — count the worktree bytes.**
+Normalising to the dominant CRLF left `git diff --stat` as pure content (`+46/-8`); forcing LF, which
+`i/lf` invites, would have rewritten the whole file and buried the real change.
 
 ---
 
-## What session 2r changed
+## What session 3 changed
 
-### `b7954b6` — the three errors that were the entire gate
+### `bbe4278` — the regeneration becomes reachable by label, and fails closed
 
-`pyproject.toml` gained `[[tool.mypy.overrides]]` for `yaml.*` and `psycopg2.*` with
-`ignore_missing_imports = true`, clearing `orchestrator/audit/chain_walk.py:98`,
-`orchestrator/consensus/protocol.py:42` and `orchestrator/audit/data_provenance.py:166`.
+`.github/workflows/regenerate-truth-docs.yml` gained `pull_request: types: [labeled], branches:
+[main]` and a per-job **allow-list** `if:` guard. `docs/state/GATE_SURFACE.md` regenerated in the
+same commit (coupling 4).
 
-**Chosen by the operator over installing the stubs, and it is the mechanism this file already uses
-for 27 other packages** including `scipy`, `pandas`, `sklearn`, `redis` and `simpy`. It is a
-declaration about a third-party package's stub availability, not a check weakened on first-party
-code — and **inference is unchanged either way**, because with the stubs absent mypy already models
-both modules as `Any`. So the override removes the report and nothing else; no new `no-any-return`
-appeared, which was the predicted risk and did not materialise.
+**The guard is the load-bearing half, not the trigger.** The job carried no `if:` at all — correct
+while `workflow_dispatch` was its only trigger. Adding `pull_request` without one would have run two
+full Check_Registry executions on **every** label event on PR #84, including checkpoint A's
+`measure-twin-regret` label: ~45 minutes for a label with nothing to do with regeneration. That is the
+fail-OPEN shape session 2r-pre-c caught in `uplift.yml`.
 
-`types-PyYAML` stays uninstalled: it unmasks seven pre-existing errors under `uplift/` that the
-pre-commit mypy hook reports against commits to files which do not contain them. `psycopg2` is
-imported lazily inside a `try/except ImportError` that degrades honestly (I-7) and appears in **no**
-requirements file, so its presence is a deploy-time fact, not a type-time one.
+**Verified by truth table over every event × input × label combination, for all three conditioned
+jobs in the tree**, because reading the expression is what failed to catch three defects last time.
+The property that matters is **non-interference**, and it is proven rather than asserted:
 
-Pushed alone and first, deliberately: CI then ran the real verification while local work continued.
-
-### `743ca6b` — 56 → 0 across the wide command
-
-| code | before | after | owner |
+| trigger | `uplift-proof` | `twin-regret` | `regenerate` |
 |---|---|---|---|
-| `arg-type` | 24 | 0 | 27.2 — **one declaration** |
-| `import-untyped` | 4 | 0 | `b7954b6` |
-| `type-arg` | 5 | 0 | 27.3 |
-| `no-any-return` | 5 | 0 | 27.3 |
-| `no-untyped-def` | 4 | 0 | 27.3 |
-| `attr-defined` · `union-attr` · `comparison-overlap` | 2 · 2 · 2 | 0 · 0 · 0 | 27.3 |
-| `method-assign` | 1 | 0 | 27.3 |
-| `unused-ignore` | 7 | 0 | 27.4, last |
+| `schedule` | runs | runs | — (no schedule trigger) |
+| `workflow_dispatch` + `job=twin-regret` | no | runs | runs (declares no inputs) |
+| label `measure-twin-regret` | no | **runs** | **no** |
+| label `regenerate-truth-docs` | no | **no** | **runs** |
+| unrelated label, or undeclared `push` | no | no | no |
 
-Every code reached zero; no new code appeared. **No `# type: ignore` was added anywhere**, no
-argument gained a default, nothing was widened to `Any`, and mypy's scope was not narrowed.
+The parsed `if:` carries **zero literal newlines** (the folded-scalar trap) and **no `!=`** (the
+deny-list shape).
 
-**27.2 was diagnosed before it was repaired.** All 24 are two distinct messages — argument 2 and
-argument 3 — across 12 call sites, every one supplying a `_FakeBreaker`. Uniformity was
-*established* by grouping the captured messages, not inherited from 27.1. `BrownoutController` reads
-exactly one attribute from a breaker, `.state`; declaring the parameters as the whole `AsyncBreaker`
-overstated that, and the overstatement was reported 24 times at the call sites rather than once
-where it lived. Repaired with a read-only `BreakerStateSource` Protocol, which `AsyncBreaker`
-satisfies structurally because its `state` **is** a read-only property returning `BreakerState`. No
-production call site moves.
+**A header claim the change would have falsified was corrected rather than left.** The file used to
+say the job "produces no status check on any pull request". On a *labelled* event it does produce
+one. What it still does not do is report on **every** pull request — and that, not the absence of a
+check run, is why it owes no `required-checks.yaml` entry.
 
-**`warn_unused_ignores` did not move in both directions.** The count held at exactly 7 across 27.2
-and 27.3, measured. The hazard that sequenced 27.4 last did not fire — recorded because a prediction
-that does not fire is still worth knowing, and it is why one clearing pass sufficed.
+**Coupling 4 observed firing, with its shape predicted first.** `gate_surface --check` exit 1;
+`--write` took the surface **542 → 549** rows. The +7 is one `pull_request` placeholder step row
+expanding into the job's eight real steps, while the job row changed *status* without changing the
+row count. `workflow_shape_truth` stayed **0** — correctly, since no step was added, renamed or
+removed.
 
-**27.4's seventh ignore needed judgement.**
-`test_confidence_gate_universality_property.py:640` carried `[method-assign,assignment]` and mypy
-proved only `assignment` redundant. The compound loses that code and keeps the one still working.
-That is **not** re-narrowing an unused ignore to keep it alive — the ignore is used; one of its two
-codes was not. Lines 638 and 639 are identical in form and were *not* reported, so the distinction
-is mypy's.
+### `bf8693f` — `test_cognition_phase`'s precondition, corrected rather than weakened
+
+**Ownership re-confirmed mechanically first**, not carried over: the file exists on `origin/main`
+(`git cat-file -e` exit 0) and `git diff origin/main` shows only session 2r's type repairs, so the
+failing assertion is byte-identical to `main`. **`git log -1` was not used** — it reports last touch,
+not authorship, and it is what misled session 2r on this exact file.
+
+The repair is a **precondition correction (R2.10)**: the subject moved when ADR-038 and ADR-053 began
+sharing the producer; the standard did not. See finding 31 for the two symptoms and the vacuity trap.
+`PHASE_TOPIC` is declared **once** in the test so the two tests asserting on it cannot drift; it was
+**not** added to `protocol.py`, which states the literal inline — a production constant is not this
+repair's remit.
 
 ---
 
 ## Honesty ledger — verified vs merely authored
 
-### Executed and green, session 2r
+### Executed and green, session 3
 
 | What | Result |
 |---|---|
-| **`ci.yml::quality-gates` step 8, on CI** | **success** on run `33588706405` — first time on this branch |
-| `mypy --strict orchestrator/ --exclude orchestrator/tests` (CI's exact command) | exit **0**, `no issues found in 44 source files` |
-| `mypy --strict orchestrator/` (wide) | **56 → 0**, exit 0, 89 source files, decomposed per code above |
-| `ruff check` / `ruff format --check`, CI's exact scope | **0 / 0**, 386 files |
-| `pytest` over the 13 touched loci, `HYPOTHESIS_PROFILE=dev` | **191 passed, 18 skipped, 5 deselected, 1 failed** (the pre-existing `main` failure) |
-| Six cheap gates | `workflow_shape_truth` **0** (379 steps), `pin_extractor_truth` **0** (**14** declared/probed), `sweep_budget_truth` **0**, `dataset_licence_truth` **2** (honest SKIP), `task_claim_truth` **1** (pre-existing, `core-purpose-uplift`), `gate_surface --check` **0** (542 rows) |
-| `spec_ledger_census --files --check` | exit **0**; 57/3/80 → **61/2/77** |
-| Line endings | all 16 written files `w/crlf` or `w/lf` per file, **none `w/mixed`** after repair |
-| Bytes | all 16 verified: **no BOM, no U+FFFD** |
-| Process sweep | see below |
+| `gh` reads of every run on sha `fe8ddeb` | **8 workflows, all refused to start, `steps=0`** — the STEP 0 finding |
+| `spec_ledger_census --files --next 30` | exit **0**; 140/61/2/77 **unchanged**; both barriers named and answered |
+| Guard truth table, 3 conditioned jobs × events × inputs × labels | **non-interference proven**; 0 literal newlines; no deny-list `!=` |
+| `gate_surface --check` → `--write` → `--check` | **1 → 0**, surface **542 → 549** rows, shape as predicted |
+| `workflow_shape_truth --check` | **0** (379 steps, 11 blocking entries) — unmoved, correctly |
+| `ruff check` / `ruff format --check` on the one changed Python file | **0 / 0** |
+| `mypy --strict orchestrator/tests/test_cognition_phase.py` | **0**, 1 source file |
+| `pytest orchestrator/tests/test_cognition_phase.py` | **6 passed** — green for the first time on this branch |
+| `pytest tests/verify/test_regeneration_closure_parity.py` | **4 passed** |
+| Six cheap gates | **0 / 0 / 0 / 2 / 1 / 0** |
+| `pin_extractor_truth --check` | **0**, and **14 declared / 14 probed / 14 both-sides — not 15** |
+| Line endings | `w/crlf` or `w/lf` per file, **none `w/mixed`** after repair |
+| Bytes | every written file verified: **no BOM, no U+FFFD** |
+| Process sweep | `python` **0**, `node` 1 (Kiro's own ACP server), `chrome` 11 (the operator's browser, started before this session's first command; no browser was launched here) |
 
-**mypy invocations spent, honestly counted.** The budget was four passes of the wide command; **three**
-were spent (baseline, after 27.2+27.3, final). 27.2 and 27.3 own **disjoint** error codes, so one
-pass attributes both unambiguously per code — the saving cost no attribution. Three cheaper
-invocations were also spent and are not wide passes: two at CI's narrow scope (44 files) and one
-single-file probe that isolated finding 25.
+**Budget, honestly counted.** **Three** bounded `pytest` invocations — the protocol's stated
+per-session maximum — declared rather than left to be counted: one for wave 1, and two for wave 2
+because the repair had to be verified after the non-vacuity assertion was added. **Zero** wide
+`mypy --strict orchestrator/` passes of the four-pass budget; one single-file probe, which is not a
+wide pass. **One cancelled run, swept explicitly:** a PowerShell `-f` format-string error
+(`{1,>6}` is not a valid .NET alignment) ran into the 120s timeout; the `python` process count after
+it was **0**, so nothing leaked.
 
 ### NOT executed. Must not be claimed as passing.
 
-- **`uplift-verify`, and therefore Properties 38–60.** Skipped on every push. **This spec's entire
-  property surface has never run in CI.** Session 2r cleared obstruction 1 of at least four.
-- **`quality-gates` steps 18–23.** Skipped behind C56 on this branch **and on `main`**. Their state
-  is unknown, which is not green.
-- **`.github/workflows/regenerate-truth-docs.yml` has never executed.** Task 26.1 stays `[~]`.
+- **`uplift-verify`, and therefore Properties 38–60.** This spec's entire property surface has never
+  run in CI. Session 3 did not change this.
+- **`regenerate-truth-docs.yml` has never executed.** Task 26.1 stays `[~]`. Route 1 made it
+  *reachable*, which is not the same as *run* — a workflow that has never executed is the I-7 shape.
+- **`quality-gates` steps 18–23.** Skipped behind C56 on this branch and on `main`. Unknown, not
+  green.
+- **The `test_cognition_phase` repair, in CI.** 6 passed locally. Local green is not CI green, and
+  obstruction 2 sits ahead of it.
 - **`ledger_gen`, `readme_gen`, `verify_claims`, `doc_truth`** — not run locally in any form. I-0.
-- **The five slow-marked tests in `test_confidence_gate_universality_property.py`.** Deselected by
-  `-m "not slow"`. Line 640 was edited; that edit is diagnostics-verified, not executed.
-- **`vitest` locally. At all.**
+- **The document-anchor side of the parked derived-margin pin.** No cheap gate covers it.
+- **The five slow-marked tests in `test_confidence_gate_universality_property.py`.** Deselected.
+- **`vitest`. At all.**
 - **`uplift/regret.py::_measure`'s wired interval path.** Discharges at checkpoint A.
+- **Whether any of the 254 `ruff format` findings are real** versus line-ending artifacts.
 - **`digital_twin/tests/test_env_response.py`** — module-skipped, `gymnasium` absent.
 - **`tests/uplift/test_aggregation_integrity_property.py::test_aggregation_integrity_under_failures`**
   — pre-existing float fragility, diagnosed, not repaired.
-- **The behaviour of `newsvendor.py` on a negative lead time.** `_sqrt` raises
-  `ValueError: math domain error` where `** 0.5` raised `TypeError` from `max(0.0, <complex>)`. Both
-  fail; the change is on input already invalid and is **not** covered by a test.
 
 ### The lesson from this session
 
-**A measurement taken at the wrong boundary can be exactly reproducible and still wrong about what
-it means.** The 56-error figure reproduced to the error, per code, on the first attempt — and it
-described a command no gate runs. Reproducibility is not relevance. The check that caught it cost
-one `gh` API read of the log of the step being claimed, which is free under I-0, and it should have
-been the first action of three sessions rather than the first action of this one.
+**A gate whose mechanism you unblock is not a gate you have run, and a repair that is locally green
+is not a repair that has been judged.** Session 3 moved two obstructions and discharged nothing,
+which is the honest outcome and is why no mark changed. The corollary is sharper: **the instruction
+set itself decays.** Three of this session's findings are corrections to committed instructions —
+task 26.2's dispatch command, `SESSION_PROTOCOL.md`'s entire checkpoint-A procedure, and a workflow
+header claim that this session's own change falsified. **Read the procedure you are about to follow
+against the tree, not against its own table of contents.**
 
 ---
 
@@ -458,43 +366,48 @@ been the first action of three sessions rather than the first action of this one
 | Regeneration (2q) | **A CI job that uploads an artifact**, not a local `--write` and not an auto-commit. |
 | Batch order (2q) | **Session 2r precedes session 2.** |
 | Conflict H (2r-pre) | **The derived-margin pin is PARKED in `pending_pins:`.** `required: false` rejected — a pin that cannot fail is not a pin. |
-| Track coupling (2r-pre) | Independent in CI triggering only. **The regeneration goes last** — *now contested by C56 blocking 27.5; see decision 1.* |
-| Dispatch mechanism (2r-pre-c) | **Checkpoint A runs by LABEL, not by dispatch, and `main` is not touched.** Both guards are **allow-lists**; `uplift-proof` is excluded from `pull_request` because its provenance gate reads `GITHUB_SHA`, the merge commit there. |
-| **Conflict I (2r)** | **CI step 8 excludes `orchestrator/tests`; the wide command is run by no workflow.** The 56-error baseline over-described the gate by a factor of ~19. |
-| **`import-untyped` (2r)** | **`ignore_missing_imports` for `yaml.*` and `psycopg2.*`**, chosen over installing stubs. Precedent: 27 sibling entries. Inference unchanged; the module was already `Any`. |
-| **Scope (2r)** | **The full wide 56 was cleared**, not only the 3 that gate step 8 — operator's choice, so `mypy --strict orchestrator/` is green locally as well as in CI. |
-| **Obstruction 3 (2r)** | **`test_cognition_phase`'s failure is `main`'s and is NOT adopted.** Diagnosed and handed over. Precedent: C28. |
+| Dispatch mechanism (2r-pre-c) | **Checkpoint A runs by LABEL, not by dispatch, and `main` is not touched.** Both guards are **allow-lists**. |
+| Conflict I (2r) | **CI step 8 excludes `orchestrator/tests`; the wide command is run by no workflow.** |
+| `import-untyped` (2r) | **`ignore_missing_imports` for `yaml.*` and `psycopg2.*`**, chosen over installing stubs. |
+| Scope (2r) | **The full wide 56 was cleared**, not only the 3 that gate step 8. |
+| **Decision 1 (3)** | **ROUTE 1 THEN 3.** `regenerate-truth-docs.yml` gets the label trigger; the dispatch happens **after** the margin lands, so one regeneration suffices. Landed `bbe4278`. |
+| **Decision 2 (3)** | **`test_cognition_phase` IS ADOPTED** — reversing 2r's refusal, on the operator's explicit word. Landed `bf8693f`. |
+| **Ruff scope (3)** | **MEASURED, NOT ADOPTED.** 530 lint findings / 254 format findings across nine unlinted trees. Widening CI's scope is the operator's call and would re-red `quality-gates` at step 5. |
+| **Conflict L (3)** | **`SESSION_PROTOCOL.md`'s checkpoint-A procedure was stale in four ways and is corrected in place**, with the correction stated in the document. |
 
 ---
 
 ## Environment notes and traps
 
-- **NEW: a cached mypy run can hide a `[[tool.mypy.overrides]]` change.** Finding 25. Use
-  `--no-incremental` for any measurement taken after a config change.
-- **NEW: `git log -1 -- <file>` is last-touch, not authorship.** If the file also exists on `main`,
-  `git diff origin/main -- <file>` the line and, when it matters, execute `main`'s version via
-  `git show origin/main:<file>` written to a scratch path.
+- **NEW: `git ls-files --eol`'s index column does not describe the worktree.** It read `i/lf` on a
+  file whose worktree was 140 CRLF / 51 LF. **Count the worktree bytes** before normalising; the
+  index side is normalised by `.gitattributes` and will send you to the wrong ending, which turns a
+  46-line change into a whole-file diff.
+- **NEW: PowerShell's `-f` operator rejects `{1,>6}`.** `>` is not a .NET alignment character; the
+  operator throws per-call and the surrounding loop keeps going, so the failure looks like a hang.
+  Write anything with formatting or per-item aggregation as a temp `.py` and run that.
+- **NEW: `gate_surface` renders a label guard as `CONDITIONAL | unparsable if:`.** Expected, honest,
+  and already true of `uplift.yml::twin-regret` in the green surface. Not a defect (finding 30).
 - **A `ruff format --check` diff whose two sides look identical is a LINE-ENDING diff.** Fired for
-  the **fifth** session running: all 11 programmatically edited files reported `w/mixed`
-  immediately. Repair with Python at `newline=''`, normalising to the file's *dominant* ending —
-  count first: `pyproject.toml` was 231 CRLF / 25 LF, `test_hash_chain.py` 286 / 3, and
-  `test_confidence_gate_universality_property.py` is **pure LF** and must stay LF. **Check
-  `git ls-files --eol` after every programmatic edit**; the editor tool preserves endings
-  inconsistently, so the check cannot be skipped on the strength of a previous file.
-- **PowerShell's `Get-Content`/`Set-Content` corrupt UTF-8 in this repo.** `Get-Content` also
-  *displays* em dashes as mojibake while the file is clean — verify bytes, do not trust the console.
-- **PowerShell mangles box-drawing characters and em dashes**, so `Select-String` on a CI step name
-  containing one finds nothing. Match on an ASCII substring of the name instead.
+  the **sixth** session running. Normalise to the file's **dominant** ending with Python at
+  `newline=''`.
+- **A cached mypy run can hide a `[[tool.mypy.overrides]]` change.** `--no-incremental` after any
+  config change.
+- **`git log -1 -- <file>` is last-touch, not authorship.** If the file exists on `main` too, diff
+  the line and, when it matters, execute `main`'s version from a scratch path.
+- **PowerShell's `Get-Content`/`Set-Content` corrupt UTF-8 in this repo**, and `Get-Content`
+  *displays* em dashes as mojibake while the file is clean. **Verify bytes, never the console.**
 - **PowerShell strips double quotes inside single-quoted `--jq`.** Capture `gh api` into a variable
-  and use `ConvertFrom-Json`. `>` writes UTF-16; no heredocs — `git commit -F` a temp file.
-- **`$LASTEXITCODE` is unreliable after a native command is piped through `Select-String`.** It read
-  `-1` for a census run whose own report said `exit 0`; re-run with `*> $null` to read it.
+  and use `ConvertFrom-Json`. `>` writes **UTF-16**; there are **no heredocs** — write commit
+  messages to a temp file and use `git commit -F`.
+- **`$LASTEXITCODE` is unreliable after a native command is piped through `Select-String`.** Re-run
+  with `*> $null` to read it.
 - **`git status` over-reports on this tree.** Trust `git diff`, and stage precisely.
-- **The local clock runs ~2h45m ahead.** Identify a run by `head_commit.message` or sha, never by
-  timestamp.
-- `types-PyYAML` is now moot for `orchestrator/` (finding: the override), but **do not run
-  `pre-commit install`** — it installs the stubs and unmasks seven pre-existing errors under
-  `uplift/` that block commits to files which do not contain them.
+- **`git add` refuses an ignored path SILENTLY.** `git check-ignore -v <paths>` first (exit 1 = not
+  ignored).
+- **Identify a CI run by `head_sha` and `head_commit.message`, NEVER by timestamp.**
+- **Do not run `pre-commit install`** — it installs `types-PyYAML` and unmasks seven pre-existing
+  errors under `uplift/` that block commits to files which do not contain them.
 - Python 3.14.0, **mypy 1.19.1** locally against CI's unpinned `mypy>=1.10.0,<2.0`, pytest 8.4.2,
   hypothesis 6.151.11, jsonschema 4.26.0. `gymnasium` absent. `frontend/node_modules` installed.
   `gh` 2.82.0, authenticated.
@@ -509,14 +422,13 @@ anything binding a port; fan-out execution (`-n auto`, `-j`, repo-wide bare `pyt
 
 **Never run, specific to this spec:** `scripts.audit.verify_claims`, `scripts.audit.doc_truth`,
 bare `readme_gen --check`, **`ledger_gen --check` or `--write`**, `gate_fault_injection --sweep`,
-`pnpm` anything. **`regenerate-truth-docs.yml` is the sanctioned route for the middle two.**
+`pnpm` anything. **`regenerate-truth-docs.yml` is the sanctioned route for the middle two, and as of
+`bbe4278` it is reachable by label.**
 
-**Cheap and encouraged:** file reads, `grep`, `ruff`/`mypy` on changed files, **one** scoped `pytest`
-run, `spec_ledger_census`, the **six** cheap gates, the `biome`/`tsc` binaries on changed files, and
-**`gh` API reads — which are free and which this session should have spent sooner.**
-
-**`mypy --strict orchestrator/` is category 2.** Session 2r spent three wide passes of a four-pass
-budget, plus two narrow and one single-file invocation, each recorded above.
+**Cheap and encouraged:** file reads, `grep`, `ruff`/`mypy` on changed files, **one bounded `pytest`
+per wave**, `spec_ledger_census`, the **six** cheap gates, the `biome`/`tsc` binaries on changed
+files, and **`gh` API reads — free, and the highest-yield evidence in this repo. Spend them first:
+this session's entire STEP 0 verdict cost four of them.**
 
 **Concurrency is the load-bearing half.** Parallel sub-agents for reading, writing and analysis:
 unlimited. **Sub-agents that execute code: exactly ONE at a time.**
@@ -538,5 +450,5 @@ If the measured uplift is null or negative, **it is reported as null or negative
 at `0.0`, no headline is published as a gain, and the result is written up as a finding — not
 reframed, not re-run at a different replicate count until it moves, not held back pending a "better"
 configuration. A null from a **validated** instrument on a **decision-relevant** world is worth more
-than the tautological PASS it replaces. **A number that cannot fail is not a number** — and session
-2r found three assertions in the same condition.
+than the tautological PASS it replaces. **A number that cannot fail is not a number** — and session 3
+found an *assertion* it was about to create in exactly that condition, in its own repair.
