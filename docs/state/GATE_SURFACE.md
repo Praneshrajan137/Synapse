@@ -39,7 +39,7 @@ Parsed 18 workflow file(s), 55 job(s), 379 step(s).
 | Trigger | Jobs executing | Jobs conditional | Jobs NOT EXECUTED | Steps blocking | Steps advisory | Steps conditional |
 |---|---|---|---|---|---|---|
 | push:main | 4 | 22 | 29 | 31 | 0 | 142 |
-| pull_request | 11 | 23 | 21 | 72 | 4 | 147 |
+| pull_request | 11 | 24 | 20 | 72 | 4 | 155 |
 | tag:v* | 3 | 3 | 49 | 18 | 0 | 29 |
 
 ## Job selection
@@ -149,7 +149,7 @@ Why each job runs, does not run, or runs conditionally under each trigger. `need
 | pull_request | .github/workflows/policy.yml::policy-summary | CONDITIONAL | path-filtered (paths: agents/*/training/**, agents/*/models/**, agents/*/inference/**, tests/oracle/**, +3 more); needs 'twin-oracle', which is conditional; needs 'dpdpa', which is conditional; needs 'audit-immutability', which is conditional; needs 'license-policy', which is conditional |
 | pull_request | .github/workflows/publish-audit-anchor.yml::anchor | NOT EXECUTED | workflow on: has no pull_request trigger |
 | pull_request | .github/workflows/publish-audit-anchor.yml::publish | NOT EXECUTED | workflow on: has no pull_request trigger |
-| pull_request | .github/workflows/regenerate-truth-docs.yml::regenerate | NOT EXECUTED | workflow on: has no pull_request trigger |
+| pull_request | .github/workflows/regenerate-truth-docs.yml::regenerate | CONDITIONAL | unparsable if: (unparsable at offset 126: "*.name, 'regenerate-") |
 | pull_request | .github/workflows/required-checks-reconcile.yml::reconcile | NOT EXECUTED | workflow on: has no pull_request trigger |
 | pull_request | .github/workflows/security.yml::security | CONDITIONAL | path-filtered (paths: **/requirements.txt, **/package.json, **/Dockerfile) |
 | pull_request | .github/workflows/sprint6-e2e-oracle.yml::sprint6-e2e | NOT EXECUTED | workflow on: has no pull_request trigger |
@@ -620,7 +620,14 @@ Why each job runs, does not run, or runs conditionally under each trigger. `need
 | pull_request | .github/workflows/policy.yml::policy-summary | Gate outcome | CONDITIONAL | conditional - blocking |
 | pull_request | .github/workflows/publish-audit-anchor.yml::anchor | - | NOT EXECUTED | workflow on: has no pull_request trigger |
 | pull_request | .github/workflows/publish-audit-anchor.yml::publish | - | NOT EXECUTED | workflow on: has no pull_request trigger |
-| pull_request | .github/workflows/regenerate-truth-docs.yml::regenerate | - | NOT EXECUTED | workflow on: has no pull_request trigger |
+| pull_request | .github/workflows/regenerate-truth-docs.yml::regenerate | uses: actions/checkout@v4 | CONDITIONAL | conditional - blocking |
+| pull_request | .github/workflows/regenerate-truth-docs.yml::regenerate | Set up Python 3.11 | CONDITIONAL | conditional - blocking |
+| pull_request | .github/workflows/regenerate-truth-docs.yml::regenerate | Install dependencies | CONDITIONAL | conditional - blocking |
+| pull_request | .github/workflows/regenerate-truth-docs.yml::regenerate | Gate-surface record is current before anything is regenerated (C63) | CONDITIONAL | conditional - blocking |
+| pull_request | .github/workflows/regenerate-truth-docs.yml::regenerate | Regenerate the Truth_Ledger (R10.1-R10.9) | CONDITIONAL | conditional - blocking |
+| pull_request | .github/workflows/regenerate-truth-docs.yml::regenerate | Regenerate the README headline (R4.4, R4.5, R4.8, R4.11) | CONDITIONAL | conditional - blocking |
+| pull_request | .github/workflows/regenerate-truth-docs.yml::regenerate | Show what regeneration changed | CONDITIONAL | conditional - blocking |
+| pull_request | .github/workflows/regenerate-truth-docs.yml::regenerate | Upload the regenerated documents | CONDITIONAL | conditional - blocking |
 | pull_request | .github/workflows/required-checks-reconcile.yml::reconcile | - | NOT EXECUTED | workflow on: has no pull_request trigger |
 | pull_request | .github/workflows/security.yml::security | uses: actions/checkout@v4 | CONDITIONAL | conditional - blocking |
 | pull_request | .github/workflows/security.yml::security | uses: actions/setup-python@v5 | CONDITIONAL | conditional - blocking |
@@ -872,14 +879,14 @@ Every step `infrastructure/quality/blocking-steps.yaml` declares blocking, annot
 | pull_request | .github/workflows/frontend.yml::effectiveness-ratchet | Effectiveness ratchet (fresh scorecard vs committed baseline) | CONDITIONAL | declared blocking (R8.9) - conditional (path-filtered (paths: frontend/**, proto/domain/**, .github/workflows/frontend.yml); needs 'e2e-harness', which is conditional) |
 | pull_request | .github/workflows/frontend.yml::effectiveness-ratchet | Effectiveness baseline is a measurement, not a ceiling (R8.10) | CONDITIONAL | declared blocking (R8.9) - conditional (path-filtered (paths: frontend/**, proto/domain/**, .github/workflows/frontend.yml); needs 'e2e-harness', which is conditional) |
 | pull_request | .github/workflows/frontend.yml::effectiveness-ratchet | Upload measured baseline candidate (commit this to clear R8.10) | CONDITIONAL | declared blocking (R8.9) - conditional (path-filtered (paths: frontend/**, proto/domain/**, .github/workflows/frontend.yml); needs 'e2e-harness', which is conditional) |
-| pull_request | .github/workflows/regenerate-truth-docs.yml::regenerate | uses: actions/checkout@v4 | NOT EXECUTED | declared blocking (R4.4, R4.5, R4.8, R4.11, R10.1, R10.7, R11.7) - workflow on: has no pull_request trigger |
-| pull_request | .github/workflows/regenerate-truth-docs.yml::regenerate | Set up Python 3.11 | NOT EXECUTED | declared blocking (R4.4, R4.5, R4.8, R4.11, R10.1, R10.7, R11.7) - workflow on: has no pull_request trigger |
-| pull_request | .github/workflows/regenerate-truth-docs.yml::regenerate | Install dependencies | NOT EXECUTED | declared blocking (R4.4, R4.5, R4.8, R4.11, R10.1, R10.7, R11.7) - workflow on: has no pull_request trigger |
-| pull_request | .github/workflows/regenerate-truth-docs.yml::regenerate | Gate-surface record is current before anything is regenerated (C63) [scripts.audit.gate_surface] | NOT EXECUTED | declared blocking (R4.4, R4.5, R4.8, R4.11, R10.1, R10.7, R11.7) - workflow on: has no pull_request trigger |
-| pull_request | .github/workflows/regenerate-truth-docs.yml::regenerate | Regenerate the Truth_Ledger (R10.1-R10.9) [scripts.audit.ledger_gen] | NOT EXECUTED | declared blocking (R4.4, R4.5, R4.8, R4.11, R10.1, R10.7, R11.7) - workflow on: has no pull_request trigger |
-| pull_request | .github/workflows/regenerate-truth-docs.yml::regenerate | Regenerate the README headline (R4.4, R4.5, R4.8, R4.11) [scripts.audit.readme_gen] | NOT EXECUTED | declared blocking (R4.4, R4.5, R4.8, R4.11, R10.1, R10.7, R11.7) - workflow on: has no pull_request trigger |
-| pull_request | .github/workflows/regenerate-truth-docs.yml::regenerate | Show what regeneration changed | NOT EXECUTED | declared blocking (R4.4, R4.5, R4.8, R4.11, R10.1, R10.7, R11.7) - workflow on: has no pull_request trigger |
-| pull_request | .github/workflows/regenerate-truth-docs.yml::regenerate | Upload the regenerated documents | NOT EXECUTED | declared blocking (R4.4, R4.5, R4.8, R4.11, R10.1, R10.7, R11.7) - workflow on: has no pull_request trigger |
+| pull_request | .github/workflows/regenerate-truth-docs.yml::regenerate | uses: actions/checkout@v4 | CONDITIONAL | declared blocking (R4.4, R4.5, R4.8, R4.11, R10.1, R10.7, R11.7) - conditional (unparsable if: (unparsable at offset 126: "*.name, 'regenerate-")) |
+| pull_request | .github/workflows/regenerate-truth-docs.yml::regenerate | Set up Python 3.11 | CONDITIONAL | declared blocking (R4.4, R4.5, R4.8, R4.11, R10.1, R10.7, R11.7) - conditional (unparsable if: (unparsable at offset 126: "*.name, 'regenerate-")) |
+| pull_request | .github/workflows/regenerate-truth-docs.yml::regenerate | Install dependencies | CONDITIONAL | declared blocking (R4.4, R4.5, R4.8, R4.11, R10.1, R10.7, R11.7) - conditional (unparsable if: (unparsable at offset 126: "*.name, 'regenerate-")) |
+| pull_request | .github/workflows/regenerate-truth-docs.yml::regenerate | Gate-surface record is current before anything is regenerated (C63) [scripts.audit.gate_surface] | CONDITIONAL | declared blocking (R4.4, R4.5, R4.8, R4.11, R10.1, R10.7, R11.7) - conditional (unparsable if: (unparsable at offset 126: "*.name, 'regenerate-")) |
+| pull_request | .github/workflows/regenerate-truth-docs.yml::regenerate | Regenerate the Truth_Ledger (R10.1-R10.9) [scripts.audit.ledger_gen] | CONDITIONAL | declared blocking (R4.4, R4.5, R4.8, R4.11, R10.1, R10.7, R11.7) - conditional (unparsable if: (unparsable at offset 126: "*.name, 'regenerate-")) |
+| pull_request | .github/workflows/regenerate-truth-docs.yml::regenerate | Regenerate the README headline (R4.4, R4.5, R4.8, R4.11) [scripts.audit.readme_gen] | CONDITIONAL | declared blocking (R4.4, R4.5, R4.8, R4.11, R10.1, R10.7, R11.7) - conditional (unparsable if: (unparsable at offset 126: "*.name, 'regenerate-")) |
+| pull_request | .github/workflows/regenerate-truth-docs.yml::regenerate | Show what regeneration changed | CONDITIONAL | declared blocking (R4.4, R4.5, R4.8, R4.11, R10.1, R10.7, R11.7) - conditional (unparsable if: (unparsable at offset 126: "*.name, 'regenerate-")) |
+| pull_request | .github/workflows/regenerate-truth-docs.yml::regenerate | Upload the regenerated documents | CONDITIONAL | declared blocking (R4.4, R4.5, R4.8, R4.11, R10.1, R10.7, R11.7) - conditional (unparsable if: (unparsable at offset 126: "*.name, 'regenerate-")) |
 | pull_request | .github/workflows/truth-gates.yml::truth-gates | uses: actions/checkout@v4 | yes | declared blocking (R1.1, R1.2, R1.5, R1.8) |
 | pull_request | .github/workflows/truth-gates.yml::truth-gates | Set up Python 3.11 | yes | declared blocking (R1.1, R1.2, R1.5, R1.8) |
 | pull_request | .github/workflows/truth-gates.yml::truth-gates | Install dependencies | yes | declared blocking (R1.1, R1.2, R1.5, R1.8) |

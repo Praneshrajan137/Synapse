@@ -41,10 +41,19 @@
 # constrains `reason` to a closed six-value enum -- `path-filtered`,
 # `path-filtered-and-conditioned`, `branch-push-only`, `conditioned-off-pull-request`,
 # `self-labelled-informational`, `post-merge` -- with `additionalProperties: false`, and
-# none of them describes "dispatch-only". Declaring this job would mean amending a schema
-# enum, which drags in the third same-commit coupling (a schema change and every fixture
-# that carries it) for a job that produces no status check on any pull request and blocks
-# no merge. Precedent agrees: `required-checks-reconcile.yml`, `publish-audit-anchor.yml`,
+# none of them describes "dispatch-only" or "label-conditioned". Declaring this job would
+# mean amending a schema enum, which drags in the third same-commit coupling (a schema
+# change and every fixture that carries it) for a job that blocks no merge.
+#
+# CORRECTED WHEN THE LABEL TRIGGER LANDED, because the change made the previous wording
+# false rather than merely dated. This header used to say the job "produces no status check
+# on any pull request"; on a LABELLED `pull_request` event it does produce one. What it
+# still does not do is report on EVERY pull request, and that -- not the absence of a check
+# run -- is what makes it ineligible: a required status appearing only when a label is added
+# would leave every unlabelled PR waiting for it forever. Same reasoning and the same
+# wording as `uplift.yml::twin-regret` (conflict G).
+#
+# Precedent agrees: `required-checks-reconcile.yml`, `publish-audit-anchor.yml`,
 # `uplift.yml`, `live-truth.yml`, `cd.yml`, `cd-recovery.yml`, `eval-llm-judge.yml` and
 # `sprint6-e2e-oracle.yml` have no entry in that file either.
 #
@@ -63,10 +72,39 @@
 name: SYNAPSE Regenerate Truth Docs
 
 on:
-  # Dispatch ONLY. No `push`, no `pull_request`, no `schedule`. Two full Check_Registry
-  # executions per invocation is not something to spend on every commit, and nothing here
-  # gates anything, so there is no trigger that needs to fire automatically.
+  # No `push` and no `schedule`. Two full Check_Registry executions per invocation is not
+  # something to spend on every commit, and nothing here gates anything, so there is no
+  # trigger that needs to fire automatically.
   workflow_dispatch:
+
+  pull_request:
+    # THE ON-DEMAND MECHANISM THAT ACTUALLY WORKS FROM A FEATURE BRANCH (finding 23,
+    # applied a second time -- the first is `uplift.yml`'s `measure-twin-regret` label in
+    # `e8e9528`). `workflow_dispatch` alone left this job UNREACHABLE from
+    # `feat/decision-quality-proof`: GitHub requires a workflow file on the DEFAULT branch
+    # before it can be dispatched, `origin/main` carries 14 workflow files and this is not
+    # one of them, and `--ref` selects which ref's CODE runs rather than making a workflow
+    # dispatchable. So `gh workflow run regenerate-truth-docs.yml --ref
+    # feat/decision-quality-proof` returns HTTP 404, and task 26.2 could not run at all.
+    #
+    # `pull_request` carries no such requirement -- a same-repo PR runs the workflow as
+    # defined in its own head, which `truth-gates.yml` (also absent from `main`, and
+    # running on every push to PR #84) proves empirically rather than by inference.
+    #
+    # `types: [labeled]` AND NOTHING ELSE. Specifying `types` REPLACES the default
+    # `[opened, synchronize, reopened]`, so this does NOT fire on pushes -- which matters
+    # more here than it did for `twin-regret`, because this job costs two Check_Registry
+    # executions, and a regeneration on every commit is precisely the spend the
+    # dispatch-only design existed to prevent.
+    #
+    # ROUTE 1 OF THREE, chosen by the operator over (2) landing this file on `main` and
+    # (3) continuing to wait for track A. Route 2 spends a change to the shared default
+    # branch to buy a capability this branch can grant itself; route 3 leaves task 27.5 --
+    # and with it the first CI execution of Properties 38-60 -- blocked behind a document
+    # drift that this job is the only sanctioned way to repair (I-0 forbids the local
+    # `--write`, and `truth-gates.yml` only ever DETECTS the drift).
+    types: [labeled]
+    branches: [main]
 
 permissions:
   contents: read
@@ -75,6 +113,29 @@ jobs:
   regenerate:
     name: Regenerate CURRENT.md + README headline (artifact only -- commits nothing)
     runs-on: ubuntu-latest
+
+    # AN ALLOW-LIST, AND IT IS THE LOAD-BEARING HALF OF THIS CHANGE -- not the trigger.
+    # This job carried NO `if:` at all, which was correct while `workflow_dispatch` was the
+    # only trigger. Adding `pull_request` without a guard would run two full Check_Registry
+    # executions on EVERY label event on the PR, including the `measure-twin-regret` label
+    # checkpoint A uses -- roughly 45 minutes of runner time for a label that has nothing
+    # to do with regeneration. That is the fail-OPEN shape session 2r-pre-c caught in
+    # `uplift.yml`, where a `github.event_name != 'workflow_dispatch'` guard would have
+    # fired a 350-minute job on a label event.
+    #
+    # So the events that may start this job are NAMED. A future trigger cannot enable it by
+    # accident, and an unrelated label produces a run in which this job SKIPS at zero cost.
+    #
+    # To run it: add the `regenerate-truth-docs` label to the pull request, then remove it
+    # so the next label event does not re-regenerate. The label is visible on the PR, which
+    # makes the operator's intent auditable in a way a dispatch is not.
+    #
+    # This is a SELECTOR and not a `continue-on-error`: when the job runs, every step's
+    # exit status still gates it.
+    if: >-
+      github.event_name == 'workflow_dispatch'
+      || (github.event_name == 'pull_request'
+      && contains(github.event.pull_request.labels.*.name, 'regenerate-truth-docs'))
 
     # DERIVED, not picked. `truth-gates.yml::truth-gates` covers its whole step set --
     # `registry_gate`, `doc_truth`, three generator `--check`s and four cheap gates -- in
