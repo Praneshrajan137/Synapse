@@ -215,6 +215,32 @@ steps:
   # R5.2 forbids pinning the margin before the measurement exists, so the run reports
   # `verdict: unavailable`. Task 10.4 reads the report and commits the margin; only
   # subsequent runs are judged against it.
+  #
+  # THE `emits:` LINE BELOW WAS FALSE FOR ONE RUN, AND NOTHING OBJECTED. Recorded here
+  # rather than quietly corrected, because a declaration that was wrong once and is right
+  # now is worth more to the next reader than one that has always looked right.
+  #
+  # Run 34366766968 uploaded 215,293,577 bytes to this artifact name. The twin's
+  # `structlog` writes to stdout and the step pipes stdout through `tee`, so the file was a
+  # debug flood with the report on its final line: `json.load` raised `JSONDecodeError:
+  # Extra data: line 1 column 5` against a declaration promising canonical JSON, and tasks
+  # 17.x, 22.3 and 25 read this artifact with a parser.
+  #
+  # Made true in session 5 at the producer rather than at this declaration, which is the
+  # direction R2.10 requires -- weakening the `emits:` claim to match a broken artifact
+  # would have been assertion weakening. `uplift/regret.py::main` now configures structlog
+  # with BOTH a `logging.ERROR` floor (which removes the volume) AND a stderr logger
+  # factory (which removes the channel). The second is what makes the claim unconditional:
+  # with a level floor alone, canonicality held only while nothing logged at ERROR, and one
+  # bad replicate would have re-broken it. `| tee` reads stdout only, so every log line and
+  # traceback still reaches the job log through stderr and no diagnostic was traded away.
+  #
+  # AND IT IS NOW ASSERTED, NOT DECLARED. `tests/uplift/
+  # test_regret_cli_artifact_shape_property.py` runs the CLI with `_measure` replaced --
+  # no twin, so it is not `slow` and I-0 is not engaged -- and asserts over the WHOLE
+  # stdout stream that it is one parseable canonical document, that no log line at any
+  # level reaches it, and that an ERROR line still reaches stderr. A declaration in this
+  # file is not a gate; that test is.
   - workflow: .github/workflows/uplift.yml
     job: twin-regret
     all_steps: false

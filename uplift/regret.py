@@ -572,6 +572,50 @@ def main(argv: list[str] | None = None) -> int:
     """Measure and report. Exit 0 on a completed measurement, 2 when nothing was measurable."""
     import argparse
     import json
+    import logging
+    import sys as _sys
+
+    import structlog
+
+    # THE ARTIFACT'S SHAPE IS THESE TWO LINES' RESPONSIBILITY, AND IT WAS FALSE WITHOUT THEM.
+    #
+    # `uplift.yml::twin-regret` runs `python -m uplift.regret --replicates 200 --hours 24
+    # --json | tee artifacts/uplift/twin-regret.json`, and
+    # `infrastructure/quality/blocking-steps.yaml` declares that step `role: producer` with
+    # `emits: "artifacts/uplift/twin-regret.json (canonical JSON, --json)"`. Run
+    # 34366766968 uploaded 215,293,577 bytes: the twin's `structlog` writes to stdout, so
+    # `tee` captured a debug flood with the report on the final line and `json.load` raised
+    # `JSONDecodeError: Extra data: line 1 column 5`. The declaration was FALSE AS WRITTEN,
+    # and tasks 17.x, 22.3 and 25 read this artifact with a JSON parser. 90-day retention
+    # on 215 MB per run is its own cost.
+    #
+    # TWO CONFIGURATIONS, AND THE SECOND IS THE ONE THAT MAKES THE CLAIM UNCONDITIONAL.
+    #
+    #   1. `wrapper_class` at `logging.ERROR` removes the VOLUME. That is the idiom five
+    #      twin-driving modules under `digital_twin/tests/` already use, and it is what the
+    #      215 MB was made of: `engine.py`'s `logger.debug("unmet_demand", ...)` and
+    #      `logger.debug("delivery_done", ...)` once per event.
+    #   2. `logger_factory` at **stderr** removes the CHANNEL. Without it, canonicality
+    #      would hold only while nothing logged at ERROR or above -- a clause true by
+    #      accident, which is the tolerated-exception disjunct the authoring rules forbid.
+    #      A single `logger.error` on a bad replicate would have re-broken the artifact,
+    #      and the next reader would have found a `JSONDecodeError` with no cause in sight.
+    #
+    # Together they cost nothing that was worth keeping. `| tee` reads stdout only, so
+    # every log line and every traceback still lands in the job log via stderr -- the
+    # visibility `set -o pipefail` was made safe for is preserved in full, and the
+    # measurement's JSON stays the only thing on the pipe. An `--out` flag was the other
+    # candidate repair and was rejected: it would give the artifact two sources of truth
+    # and lose the JSON-in-the-log check a reader uses to tie artifact to run.
+    #
+    # CLI-ONLY, DELIBERATELY. `structlog.configure` is process-global and `regret.py` is
+    # imported by the fast property suite, so configuring at module scope would silence
+    # logging for every test that imports this module. Here it runs only under
+    # `python -m uplift.regret`.
+    structlog.configure(
+        wrapper_class=structlog.make_filtering_bound_logger(logging.ERROR),
+        logger_factory=structlog.PrintLoggerFactory(file=_sys.stderr),
+    )
 
     parser = argparse.ArgumentParser(
         prog="uplift.regret",
