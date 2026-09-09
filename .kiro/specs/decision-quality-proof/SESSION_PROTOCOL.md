@@ -272,6 +272,33 @@ labelled runs, one ADR amendment, one margin commit, and one recorded verdict.
 
 The predecessor protocol resolved three of these four and the tree was sitting in the fourth.
 
+> **BLOCKING NOTE, SESSION 4 — `material` IS CURRENTLY FORCED, AND IT WOULD BE A CLAIM ABOUT THE
+> WRONG COMPARATOR. Do not act on the `material` row until this clears (conflict M, task 11).**
+>
+> Run `34366766968` (sha `245d0dc`) measured `regret = 8.937888952967558`, interval
+> `[8.916389405913677, 8.958204644600675]`, over 200 of 200 usable replicates. Run 1 reported
+> `verdict: unavailable`, correctly, because no margin is committed. But:
+>
+> 1. **The baseline arm is `NoOpRecordingPolicy`** — "Pass one: change nothing", `restock_threshold:
+>    0.0` — so the measured quantity is the **no-op's** regret, not the `(s, S)` regret R5.1 and
+>    Finding 4 are about. The artifact says so in its own `comparator` field. `Par_Level_Reorder`
+>    is a declared precondition owned by another spec and has not landed.
+> 2. **`regret` and `comparator_headroom` are the same expression**
+>    (`aggregate(policy) - aggregate(reference)`), confirmed equal to every digit in the run. So
+>    `must_be_below_measured_headroom` admits exactly the margins that are below the regret they
+>    will be compared against, and **every margin inside D2.5's own bracket (`0.264`–`0.709`
+>    objective units) forces `material` by construction.**
+>
+> The guard was written to stop a margin being unfalsifiable in one direction and is blind to the
+> other, because it checks the margin against the very quantity being judged rather than against
+> an independent bound. **A verdict that cannot be anything else is not a verdict** — the mirror
+> of this project's own "a number that cannot fail is not a number".
+>
+> **Consequence for this procedure: steps 2, 3 and 4 above are SUSPENDED.** Do not amend D2.5's
+> derived literal, do not commit `materiality_margin.value`, do not graduate the parked pin, and
+> do not run the second label. Step 1 is done and its numbers are recorded in task 10.4. The two
+> candidate resolutions are costed in task 11 and both are the operator's.
+
 ### Checkpoint B — after task 13.7, before E3 is authored
 
 Discharges task **14**.

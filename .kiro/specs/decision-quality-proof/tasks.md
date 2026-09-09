@@ -1230,6 +1230,53 @@ tests in the interim, and that is a stated sequencing gap, not an omission.
         `default: both` preserves the previous behaviour and the schedule is unaffected. No
         step was added, so no new `blocking-steps.yaml` entry is owed; the existing
         declaration still resolves, re-verified at C64 `verdict=pass` over 370 steps.
+      - **THREE DEFECTS IN THIS JOB, FOUND ONLY BY RUNNING IT (session 4, once the repository
+        went public and CI could start at all). Two are repaired in `245d0dc`; the third is
+        open.** Recorded here because this sub-task owns the job.
+        1. **The measure step reported `success` while measuring nothing.** Under `bash -e` a
+           pipeline's status is its LAST command's, so `python -m uplift.regret ... | tee <file>`
+           returns `tee`'s success even when the Python crashed. Run `34364879758`: the
+           measurement died at import, `tee` wrote a **zero-byte** artifact, and the step was
+           **green** while `blocking-steps.yaml` declares it `role: producer` emitting canonical
+           JSON. **The job was red only because the DISCLOSURE step below it — explicitly "not a
+           gate" — failed on the same root cause. Without that step this job would have been
+           GREEN with no measurement in it.** Repaired with `set -o pipefail`. `| tee` kept: the
+           JSON in the log is what lets a reader check the artifact against the run, and with
+           `pipefail` that visibility is free.
+           - **`scripts/audit/workflow_shape_truth.py` CANNOT CATCH THIS.** Its
+             `DISCARDING_CONSTRUCTS` is four literals — `|| true`, `|| echo`, `; exit 0`, bare
+             `exit 0` — and an unguarded pipeline is none of them, so a declared-blocking step
+             can discard its exit status with **C64 reporting pass**. Its own docstring is "A gate
+             whose exit status is discarded is not a gate." `| tee` occurs **exactly once** in
+             the workflow tree (this step), so the exposure is closed here; **extending the gate
+             is a registered-check change and is the operator's call, not this task's.**
+        2. **`scipy` was missing from the install closure, and the proof that it was not was
+           wrong in an instructive way.** The step's comment claimed a static walk of the 9
+           first-party modules reachable from `uplift.regret` found `pydantic-settings` as "the
+           ONLY gap". The walk followed imports *from* `uplift.regret`, but `python -m` executes
+           the **package initialiser** first, and `uplift/__init__.py` → `uplift.consensus_arm`
+           → `uplift.harness` → `uplift.contract` → `from scipy import stats` is nowhere in that
+           graph. **Correct about the module graph, wrong about the entry point's import
+           closure. A closure proof must start at the command the job actually runs.** This is
+           also HANDOFF defect 14 recurring: that defect named this exact import, and the repair
+           taken then routed `uplift/interval.py` around `load_contract` instead of widening the
+           closure, leaving the import on the package-initialisation path. Fixed narrowly, this
+           job only, per defect 22's precedent. `scipy` is pinned in **no** requirements file in
+           the repository (`policy.yml` installs it bare), so `>=1.11,<2.0` is a **choice**,
+           flagged as one.
+        3. **OPEN — the artifact is not canonical JSON.** Run `34366766968` uploaded
+           **215,293,577 bytes**: the twin's `structlog` writes to stdout, so `tee` captured a
+           debug flood with the report on the final line. `json.load` on the artifact raises
+           `JSONDecodeError: Extra data: line 1 column 5`, while `blocking-steps.yaml` declares
+           this step `emits: "artifacts/uplift/twin-regret.json (canonical JSON, --json)"` —
+           **so that declaration is false as written.** The number was recovered from the last
+           line, which is why task 10.4 has figures at all. Not repaired in `245d0dc` because
+           the repair is a choice between suppressing twin logging in the measurement path
+           (`structlog.configure(wrapper_class=make_filtering_bound_logger(logging.ERROR))`, the
+           documented idiom) and writing the report to the file directly instead of through
+           stdout — and the second loses the log visibility `pipefail` was just made safe for.
+           **Downstream consumers matter here: tasks 17.x, 22.3 and 25 read uplift artifacts
+           with a JSON parser, and a 90-day retention on 215 MB per run is its own cost.**
     - _Requirements: 5.1, 5.32_
     - Files: `uplift/foresight.py` (new), `uplift/harness.py`
     - Pass one runs the twin with a no-op policy at seed `s` and records the `DemandTrace`;
@@ -1259,6 +1306,36 @@ tests in the interim, and that is a stated sequencing gap, not an omission.
         `materiality_margin.value` **from the rule** (`service_points * 0.01 *
         weights.unmet_service`), record the measured headroom it was checked against, and add
         the pin for the derived value itself.
+      - **MEASURED, SESSION 4 — run `34366766968`, sha `245d0dc`, `uplift.yml::twin-regret` via
+        the `measure-twin-regret` label. The first real measurement this spec has ever
+        produced.** `status: measured`, **200 of 200** replicates usable, `unusable_seeds: []`,
+        24.0 h per replicate.
+
+        | field | measured |
+        |---|---|
+        | `mean_baseline_cost` | `11.835228527152536` |
+        | `mean_foresight_cost` | `2.897339574184977` |
+        | `comparator_headroom` | `8.937888952967558` |
+        | `regret` | `8.937888952967558` |
+        | `interval_low` / `interval_high` | `8.916389405913677` / `8.958204644600675` |
+        | `interval_point` | `8.937888952967558` (agrees with `regret`) |
+        | `interval_method` / `alpha` / `resamples` / `seed` | `paired_percentile_bootstrap` / `0.05` / `2000` / `0` |
+        | `margin_rule_derives` | `0.4` |
+        | `margin_rule_below_headroom` | `true` |
+        | `interval_excludes_rule_margin` | `true` |
+        | `margin_committed` | `null` |
+        | `verdict` | `unavailable` — exactly as finding 16 predicted |
+        | `insensitive_kpis` | `["spoilage_rate", "delivery_latency"]` |
+
+      - **THE HEADROOM MOVED, so the D2.5 amendment owes the `bracketing.upper` correction.**
+        D2.5 and `policy.yaml`'s `bracketing.upper` both record `11.79 - 2.93 = 8.86`; the
+        measurement is `11.835228527152536 - 2.897339574184977 = 8.937888952967558`. That is
+        prose and is not pinned, but it is a recorded number that no longer matches the tree.
+      - **DO NOT COMMIT THE MARGIN YET. Committing any value inside D2.5's own bracket forces
+        `verdict: material`, which instructs a reader to declare Finding 4 falsified and stop
+        the spec — on a measurement of the WRONG COMPARATOR. See conflict M under task 11.**
+        The value the rule derives is confirmed as `0.40` and the guard would accept it; that
+        is precisely what makes this dangerous rather than merely incomplete.
     - Files: `digital_twin/simulation/policy.yaml`,
       `infrastructure/quality/ratchets.json`,
       `infrastructure/quality/doc-number-pins.yaml`
@@ -1347,6 +1424,67 @@ tests in the interim, and that is a stated sequencing gap, not an omission.
     sensitive, which is unreachable until tasks 12.3 and 13.3 land. Resolved in favour of task
     12's precondition, on task 11's own words that "the repair is to the instrument" — E2c *is*
     that repair. Recorded in `SESSION_PROTOCOL.md`; not to be re-litigated silently.
+
+  - **CONFLICT M — SESSION 4. THE INSTRUMENT CAN NOW ONLY RETURN `material`, AND `material`
+    WOULD BE A CLAIM ABOUT A COMPARATOR THIS TASK IS NOT ABOUT. Read this before committing a
+    margin; it is the reason task 10.4's remaining half was NOT taken when it became possible.**
+
+    Run `34366766968` (sha `245d0dc`) measured `regret = 8.937888952967558` with interval
+    `[8.916389405913677, 8.958204644600675]`. Run 1 correctly reports `verdict: unavailable`
+    because no margin is committed. But trace what run 2 must return:
+
+    - `classify_regret`: `regret >= margin` → `8.9379 >= 0.40` → **true**;
+      `excludes_margin = interval_low > margin` → `8.9164 > 0.40` → **true**;
+      therefore **`material`** → "FINDING 4 IS FALSIFIED" → this task says **STOP**.
+
+    **Two independent reasons that verdict would be wrong, and the second is structural.**
+
+    1. **The baseline arm is a NO-OP, not a base-stock `(s, S)` policy.** `uplift/foresight.py`
+       pass one is `NoOpRecordingPolicy` — its own docstring is "Pass one: change nothing" — and
+       the run reports `restock_threshold: 0.0`. The artifact's own `comparator` field states it
+       outright: *"this is NOT yet the (s, S) regret R5.1 asks for -- Par_Level_Reorder is owned
+       by decision-integrity-uplift-proof and is a PRECONDITION. This job measures the
+       comparator's own headroom, which bounds it"*. This task, R5.1 and Finding 4 are all about
+       the `(s, S)` policy's regret. **8.9379 is the regret of doing nothing**, which bounds the
+       `(s, S)` regret from above and does not equal it. In service-point equivalents it is
+       `8.9379 / 0.08` ≈ **112 points**, against an incumbent whose recorded shortfall against
+       its own newsvendor target is about **3.3** points — the number is describing a different
+       subject, not a surprising result about this one.
+
+    2. **`regret` and `comparator_headroom` are the SAME EXPRESSION, so the guard that exists to
+       keep `material` reachable-but-not-inevitable is vacuous here.**
+       `RegretObjective.regret(policy, reference)` is `aggregate(policy) - aggregate(reference)`,
+       and `_measure` computes `headroom = mean_baseline - mean_foresight` — identical, and the
+       run confirms it: `regret == comparator_headroom == interval_point` to every digit.
+       `policy.py::materiality_margin`'s `must_be_below_measured_headroom` therefore admits
+       exactly the margins that are **below the regret it will be compared against**. Any
+       admissible margin below `interval_low` satisfies both `material` clauses by construction.
+       D2.5's own bracket is 3.3–8.86 **service points** = `0.264`–`0.709` objective units, all
+       far below `8.9164`. **Inside its own declared bracket, this task can return nothing but
+       `material`.**
+
+    **That is the mirror of this project's own rule.** "A number that cannot fail is not a
+    number"; a verdict that cannot be anything else is not a verdict. The guard was written to
+    prevent an unfalsifiable margin in one direction and is blind to the other, because it
+    checks the margin against the very quantity being judged rather than against an independent
+    bound.
+
+    **Not resolved here, because both candidate resolutions are the operator's** (authority
+    rule: surface, never silently resolve). Recorded so the next reader does not commit `0.40`
+    and read the result as the end of the spec:
+
+    - **Land the real comparator.** `Par_Level_Reorder` is the `(s, S)` arm R5.1 names and is a
+      declared **precondition** owned by `.kiro/specs/decision-integrity-uplift-proof/`. With it
+      in place, `regret` and `comparator_headroom` stop being the same expression, the guard
+      regains its discriminating power, and the verdict becomes a claim about the right subject.
+      This is the repair the design already implies.
+    - **Or give the guard an independent bound**, so a margin is checked against a contrast other
+      than the one it judges. Cheaper, and it changes a committed pre-registered rule, which is
+      exactly the kind of change D2.5 requires to land *before* the run judged against it.
+
+    **Until one of them lands, task 11's honest state is `unavailable` on a run that succeeded**
+    — not `inconclusive`, and emphatically not `material`. I-7: the measurement happened, and
+    what it measured is not what this task asks.
 
 - [ ] 12. E2c — structures 1 and 2: non-stationary demand, and capacity that binds
   - Implements the first two of ADR-055's five structures. **Every structure names the agent
@@ -2610,6 +2748,17 @@ data and scored against an external benchmark has no demonstrable value.
     - **STILL BLOCKED, and no longer by its own mechanism.** Route 1 removed the structural
       blocker; what remains is the account-level CI block (session 3, run `34319298166` at
       `fe8ddeb` started no jobs). A labelled run today would fail before its first step.
+    - **UNBLOCKED SESSION 4 — the repository went public and CI runs again. AND DECISION 1's
+      ORDERING PREMISE HAS LAPSED, which changes when this should be dispatched.** Decision 1
+      chose "route 1 **then 3**" — regenerate *after* the margin lands — on a single argument:
+      task 10.4's pin changes `doc_truth`'s claim set and can move C56, so an earlier
+      regeneration is stale within the hour and costs a second ~45-minute dispatch. **Conflict M
+      removed that argument.** The margin cannot land until the `(s, S)` comparator exists or the
+      headroom guard gains an independent bound, both operator decisions with no date. So there
+      is no imminent pin to invalidate this regeneration, and dispatching it now costs nothing
+      extra while buying what `uplift-verify` — and therefore Properties 38–60 — has been waiting
+      on since this branch was cut. **Surfaced rather than silently re-ordered: the trade decision
+      1 made was correct on its own facts, and its facts changed.**
     - _Requirements: 4.4, 4.5, 10.1, 11.7_
 
   - [ ] 26.3 Commit the regenerated documents and confirm C56 returns to PASS
