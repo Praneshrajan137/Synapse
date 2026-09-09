@@ -2683,6 +2683,43 @@ data and scored against an external benchmark has no demonstrable value.
   - **Repair order is fixed and is the one `truth-gates.yml`'s own header states:**
     `gate_surface --write` (landed session 2p, re-run session 2q for the new job) →
     `ledger_gen --write` → `readme_gen --write`. Registration and wiring first, generation last.
+  - **CORRECTED SESSION 4 — THAT ORDER IS BACKWARDS FOR EXACTLY THE CASE THIS PARENT EXISTS TO
+    REPAIR, and the first real execution proved it.** `ledger_gen` projects a **top-level**
+    registry execution, in which C56 **is** evaluated, and C56 reads the README headline that
+    `readme_gen` rewrites **afterwards**. The true dependency is
+    `readme_gen` → `README.md` → C56 → `ledger_gen`, so the committed order inverts it: run
+    `34372152090` generated `CURRENT.md` against the pre-repair README and recorded
+    `C56 | FAIL`, which became false the moment step 7 rewrote the README. Measured, not
+    predicted: the registry verdict in the artifact reads `C44=FAIL, C56=FAIL, C69=FAIL`, while
+    `truth-gates.yml` on the very next commit reads `C44=FAIL, C69=FAIL`.
+    - **The README headline is NOT affected**, and the reason is the recursion guard working as
+      designed: it projects the **nested** execution, in which C56 self-excludes and counts as a
+      SKIP. Only the top-level ledger is exposed.
+    - **Consequence: a SECOND regeneration is owed, and it is owed by this job's own step order
+      rather than by any external pin.** `CURRENT.md`'s `C56` row and its registry-verdict line
+      reach their fixed point only on a dispatch made *after* `2be5a96`. This is a different
+      obligation from the one decision 1 weighed — that one was about task 10.4's pin
+      invalidating a regeneration; this one is internal to the generator sequence and would
+      recur on every future repair of a README-sourced claim.
+    - **The durable repair is to swap the two `--write` steps** so `readme_gen` precedes
+      `ledger_gen`, which makes the ledger a projection of the tree the README already describes.
+      **Not taken here:** the order is stated in `truth-gates.yml`'s header as well as in this
+      parent, so changing it edits the declared repair order of the enforcement spine — a
+      registered-surface change, and the operator's. Recorded with its mechanism so it is not
+      re-derived.
+  - **A LOCAL-GENERATION ARTIFACT WAS MASKING THREE REAL FINDINGS, and this was the first
+    projection of `CURRENT.md` ever taken on a Linux runner.** The committed ledger recorded
+    C44's detail as `check raised FileNotFoundError: [WinError 3] ... The system cannot find the
+    path specified: 'C:\Users\Pranesh\Projects\synapse\frontend\node_modules\.pnpm\...'` — a
+    Windows dev-box path error standing in for a check's finding. The runner's projection reports
+    what C44 actually finds: **three liveness violations** — two dead modules
+    (`data_fabric/ingest/__init__.py`, `data_fabric/ingest/m5.py`) against a named baseline of
+    `0`, and `synapse_common.contracts.validate_audit_insertion`, which encodes a `[deal.post]`
+    invariant and is invoked **only** from `packages/tests/test_contracts.py`. **This is the
+    strongest available justification for I-0's never-run-locally rule on the generators and for
+    task 26 choosing a CI job over a local `--write`: a document generated on the wrong machine
+    does not merely go stale, it can record an environment error as a finding and hide the real
+    ones behind it.** C44's repair belongs to its own owner and is not adopted here.
   - **Never repair a count by hand (I-7).** `blocking-steps.yaml` says so in those words. The job
     exists so the number is projected, and the human step is *review*, not transcription.
   - _Requirements: 4.4, 4.5, 4.8, 4.11, 10.1, 10.7, 11.7_
@@ -2731,8 +2768,16 @@ data and scored against an external benchmark has no demonstrable value.
       workflows carry no entry either.
     - _Requirements: 4.4, 4.5, 4.8, 4.11, 10.1, 10.7, 11.7_
 
-  - [ ] 26.2 Dispatch the job and review the regenerated diff
+  - [x] 26.2 Dispatch the job and review the regenerated diff
     - discharge: regenerate-truth-docs.yml::regenerate
+    - **DISCHARGED session 4. `regenerate-truth-docs.yml::regenerate` run `34372152090`, sha
+      `0c0e971`, reached by the `regenerate-truth-docs` label — the workflow's FIRST EXECUTION
+      EVER. All nine steps green, including step 5's `gate_surface --check` hard gate, so the
+      dispatching commit had not missed the fourth coupling.** The artifact's
+      `GATE_SURFACE.md` is byte-identical to the committed copy, which is the independent
+      confirmation that C63's PASS was real rather than asserted. The diff reproduces the job's
+      own `--stat` exactly: README 1 line, `CURRENT.md` 27, 16 insertions / 13 deletions.
+      Committed in `2be5a96`. **Nothing was hand-edited (I-7).**
     - **RUN IT BY LABEL, NOT BY DISPATCH. This sub-task's instruction was wrong and is
       corrected here rather than left for the next reader to discover.** It said
       `gh workflow run regenerate-truth-docs.yml --ref feat/decision-quality-proof`; finding 23
@@ -2761,7 +2806,7 @@ data and scored against an external benchmark has no demonstrable value.
       1 made was correct on its own facts, and its facts changed.**
     - _Requirements: 4.4, 4.5, 10.1, 11.7_
 
-  - [ ] 26.3 Commit the regenerated documents and confirm C56 returns to PASS
+  - [x] 26.3 Commit the regenerated documents and confirm C56 returns to PASS
     - discharge: truth-gates.yml::truth-gates
     - Files: `docs/state/CURRENT.md`, `README.md`
     - **Two things must be confirmed, not one.** C56 goes PASS on the next `truth-gates` run; and
@@ -2770,6 +2815,34 @@ data and scored against an external benchmark has no demonstrable value.
       parent exists rather than the tick.
     - Read the registry verdict line for the count, not a single step's conclusion — session 2p's
       lesson that a deferred verification aimed at a gated step is not a deferred verification.
+    - **DISCHARGED session 4, and BOTH conditions were read from `truth-gates.yml`'s own
+      execution — run `34373152377`, sha `2be5a96`.**
+      1. **C56 PASSES.** The registry verdict line from step 5's full Check_Registry execution
+         reads `[XX] registry-gate: FAIL - 2 check(s) did not pass: **C44=FAIL, C69=FAIL**`.
+         C56 is absent from the failure list, where the previous projection had
+         `C44=FAIL, C56=FAIL, C69=FAIL`. Read from the verdict line as this sub-task instructs,
+         not from a step conclusion. Independently corroborated by `ci.yml::quality-gates`
+         **step 17 `success`** on run `34373152347` — the first time that step has passed on
+         this branch.
+      2. **The probeable set is back to 8.** The sweep reports `7 check(s) falsified by every
+         declared mutation, 0 operator(s) unproven`, `16 of 16 declared operator(s) probed`, and
+         exactly **one** defect: `C28/zero-a-floor gate-survived-declared-mutation`. 7 falsified
+         + 1 survivor = **8 checks with a passing baseline**, and **no check is reported
+         `indeterminate`** — which is the condition C56's red baseline used to create. The one
+         survivor is task 6's reviewed-and-accepted survivor, whose repair is deferred to its
+         owner and is explicitly not this spec's.
+    - **`truth-gates.yml::truth-gates` is still RED as a job, and that is not this sub-task's
+      subject.** It fails at step 5 on `C44` and `C69`, so steps 6–12 — including
+      `ledger_gen --check` — are skipped behind it. Both are pre-existing and neither is this
+      spec's: **C69** is `core-purpose-uplift` task 9's placeholder checkpoint registry, the
+      same record `task_claim_truth` has reported for four sessions; **C44** is the three
+      liveness violations the previous ledger was masking (see below). Ticking on the two stated
+      conditions rather than on the job's colour is the same judgement `task_claim_truth`'s red
+      already requires: read the subject of a failure before treating it as yours.
+    - **AND `ledger_gen --check` IS EXPECTED RED WHEN IT NEXT EXECUTES, for a reason this
+      sub-task discovered and could not avoid.** See the repair-order finding under parent 26: a
+      second regeneration is owed because the committed order generates the ledger *before* the
+      README whose contents C56 reads.
     - _Requirements: 4.4, 4.5, 4.8, 4.11, 10.1, 10.7_
 
 - [ ] 27. `mypy --strict orchestrator/` — the debt that gates every property this spec has written
@@ -2993,6 +3066,52 @@ data and scored against an external benchmark has no demonstrable value.
     - **OBSTRUCTION 2's mechanism is unblocked but not cleared.** Route 1 landed in `bbe4278`, so
       task 26.2 can now be reached by label instead of by an impossible dispatch. The regeneration
       itself has still never run.
+    - **SESSION 4 — OBSTRUCTION 2 IS CLEARED, AND THE CHAIN GAINED A LAYER NOBODY HAD NAMED.
+      `uplift-verify` STILL HAS NOT RUN.** Measured on `ci.yml` run `34373152347`, sha `2be5a96`:
+      `quality-gates` steps 1–17 **success** — including **step 17 C56, for the first time on this
+      branch** — and the failure moved to **step 18**, with 19–23 skipped behind it.
+
+      | # | Obstruction | State, measured |
+      |---|---|---|
+      | 0 | the runner itself (billing) | **CLEARED** — repository made public |
+      | 1 | step 8 `mypy --strict orchestrator/ --exclude orchestrator/tests` | **CLEARED** (2r), re-confirmed `success` at `2be5a96` |
+      | 2 | step 17 **C56** narrative-truth | **CLEARED** (26.2/26.3) |
+      | **2.5** | **step 18 `Golden-trace replay metrics (R7.6/R7.7)`** | **RED, NEVER NAMED IN THIS CHAIN BEFORE, AND STRUCTURAL** |
+      | 3 | step 19 unit tests → `test_cognition_phase` | **still unknown** — skipped behind 18. The repair is on disk (`bf8693f`) and remains unjudged |
+      | 4 | steps 20–22 coverage floors, spec coverage, contract tests | **still unknown** |
+
+    - **OBSTRUCTION 2.5 IS AN HONEST I-7 REFUSAL, NOT A DEFECT, AND THAT IS WHY IT IS HARD.**
+      Step 18 measures two floors from `infrastructure/quality/replay-floors.yaml` over 200 golden
+      traces at seed `0xCAFEBABE`. It reported:
+      - `[OK] tier_routing_accuracy: measured 1.0000 >= floor 0.8000 (200/200 traces classified
+        into their expected tier)` — **passes, and it is a real measurement.**
+      - `[??] kv_cache_hit_rate: measured UNAVAILABLE, floor 0.7000 -- synapse_ollama_cache_hit_rate
+        has no samples -- the replay took no cache observation (Ollama offline); no hit rate was
+        measured`
+      - `[??] replay-metrics: UNAVAILABLE - at least one floor has no measurement behind it.
+        Absence of proof is not a pass (I-7).` → **exit 2.**
+
+      **The gate is behaving exactly as this project demands** — it refuses to call an unmeasured
+      floor a pass. But `kv_cache_hit_rate` needs an Ollama-backed cache observation, and a hosted
+      runner has no Ollama: standing one up is a category-1 service workload. So this step **cannot
+      pass on a GitHub-hosted runner as currently written**, which makes it a structural blocker
+      rather than a repairable red.
+    - **It is `main`'s, and it has never executed anywhere.** The step exists in `origin/main`'s
+      `ci.yml`; it sat behind step 5, then step 8, then step 17 for this branch's whole life, and
+      `main`'s own runs fail at step 17 too. Its own comment records the motive: *"The two numbers
+      CLAUDE.md has stated since Sprint 9 with NO gate anywhere"*. **So the gate was written to
+      close a documentation claim, and the first time anything ran it, it proved the claim is not
+      measurable in CI.** That is a genuine finding about the claim, not about the gate.
+    - **Three dispositions, all the operator's, none taken here.** (a) Give `uplift-verify` a
+      `needs:` that does not transit an unmeasurable step. (b) Split step 18 so
+      `tier_routing_accuracy` — which measures cleanly at 1.0000 — gates, while
+      `kv_cache_hit_rate` is declared unmeasurable-in-CI with its own recorded reason, which is
+      the `DEGRADED`/`SKIP` shape I-7 already blesses. (c) Provide a cache observation in CI.
+      **(b) is the one consistent with this repo's own precedent** (C74's honest SKIP behind a
+      Kaggle acceptance gate is the same shape) and it is the only one that does not weaken a
+      floor. **Do not clear this by lowering `kv_cache_hit_rate` or by making step 18
+      `continue-on-error`** — the first is assertion weakening (R2.10), the second re-creates the
+      swallowed-exit-status defect session 4 just repaired two steps away.
     - _Requirements: —_
 
 ## Notes
