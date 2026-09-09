@@ -637,7 +637,7 @@ async def run_route(
 
     protocol._phase_collect = _collect  # type: ignore[method-assign,assignment]
     protocol._phase_arbitrate = _arbitrate  # type: ignore[method-assign,assignment]
-    protocol._ratify_and_dispatch = _counted  # type: ignore[method-assign,assignment]
+    protocol._ratify_and_dispatch = _counted  # type: ignore[method-assign]
 
     request: dict[str, Any] = {"city": "bengaluru"}
     with mock.patch.object(protocol_mod, "send_a2a_request", harness.transport):

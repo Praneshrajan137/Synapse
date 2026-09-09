@@ -18,7 +18,7 @@ from __future__ import annotations
 
 import asyncio
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, NoReturn
 from unittest.mock import MagicMock
 from uuid import uuid4
 
@@ -87,7 +87,9 @@ def _proposal(agent: AgentName, *, degraded: bool) -> AgentProposal:
 def test_twin_verify_records_monte_carlo_verdict(monkeypatch: pytest.MonkeyPatch) -> None:
     proto = _build_protocol()
 
-    async def fake_a2a(*, target_url: str, method: str, params: dict, timeout: float):  # noqa: ANN202, ARG001
+    async def fake_a2a(
+        *, target_url: str, method: str, params: dict[str, Any], timeout: float
+    ) -> _FakeA2AResponse:  # noqa: ARG001
         assert target_url == protocol_mod.TWIN_ENDPOINT
         assert method == "monte_carlo"
         assert params["n_scenarios"] == protocol_mod.TWIN_SCENARIOS
@@ -117,7 +119,7 @@ def test_twin_disagreement_beyond_bound_vetoes(monkeypatch: pytest.MonkeyPatch) 
     """R13.4: a measured contradiction beyond the bound is a veto, not a note."""
     proto = _build_protocol()
 
-    async def fake_a2a(**_: Any):  # noqa: ANN202
+    async def fake_a2a(**_: Any) -> _FakeA2AResponse:
         # The consensus predicted 100 orders; the twin simulates 10.
         return _FakeA2AResponse(result={"n_scenarios": 1000, "kpi_means": {"orders": 10.0}})
 
@@ -142,7 +144,7 @@ def test_twin_agreement_within_bound_does_not_veto(monkeypatch: pytest.MonkeyPat
     """Ordinary Monte-Carlo dispersion inside the bound must not withhold dispatch."""
     proto = _build_protocol()
 
-    async def fake_a2a(**_: Any):  # noqa: ANN202
+    async def fake_a2a(**_: Any) -> _FakeA2AResponse:
         return _FakeA2AResponse(result={"n_scenarios": 1000, "kpi_means": {"orders": 110.0}})
 
     monkeypatch.setattr(protocol_mod, "send_a2a_request", fake_a2a)
@@ -160,7 +162,7 @@ def test_twin_agreement_within_bound_does_not_veto(monkeypatch: pytest.MonkeyPat
 def test_twin_verify_degrades_when_twin_unreachable(monkeypatch: pytest.MonkeyPatch) -> None:
     proto = _build_protocol()
 
-    async def boom(**_: Any):  # noqa: ANN202
+    async def boom(**_: Any) -> NoReturn:
         raise ConnectionError("twin down")
 
     monkeypatch.setattr(protocol_mod, "send_a2a_request", boom)

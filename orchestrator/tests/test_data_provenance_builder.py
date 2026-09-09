@@ -112,13 +112,19 @@ def test_a_real_perceived_state_round_trips_into_a_provenance_row() -> None:
 
     row = build_provenance(decision_id=uuid4(), state=state, observed_at=_FALLBACK)
     assert row is not None
-    assert row.source_class == "EXTERNAL"
-    assert row.is_synthetic is False
-
     seeded = WorldState(city="bengaluru", sim_time_min=60.0).model_dump(mode="json")
     seeded_row = build_provenance(decision_id=uuid4(), state=seeded, observed_at=_FALLBACK)
     assert seeded_row is not None
+
+    # R4.4: the two decisions carry values that cannot be confused for one another.
+    # This runs BEFORE the per-row equality assertions below, and the order is
+    # load-bearing. Asserting `row.source_class == "EXTERNAL"` narrows that member
+    # expression to `Literal["EXTERNAL"]`; after both narrowings mypy can PROVE the
+    # inequality, and `comparison-overlap` was reporting exactly that -- an
+    # assertion that cannot fail. Observed first, it can.
+    assert seeded_row.source_class != row.source_class
+
+    assert row.source_class == "EXTERNAL"
+    assert row.is_synthetic is False
     assert seeded_row.source_class == "SEEDED"
     assert seeded_row.is_synthetic is True
-    # R4.4: the two decisions carry values that cannot be confused for one another.
-    assert seeded_row.source_class != row.source_class

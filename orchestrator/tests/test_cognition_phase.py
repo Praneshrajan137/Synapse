@@ -100,13 +100,24 @@ def test_build_decision_uses_run_decision_id() -> None:
 async def test_run_consensus_streams_correlated_phases(monkeypatch: pytest.MonkeyPatch) -> None:
     kafka = MagicMock()
     proto = _protocol(kafka=kafka)
-    proto._tier_router.classify.return_value = TierClassification(
-        tier=DecisionTier.TIER_1,
-        confidence=0.95,
-        reasons=["single_agent"],
-        latency_budget_ms=100,
+    # `classify` is declared `Callable[[dict[str, Any]], TierClassification]` and
+    # `log_decision` is a real method, so reaching for `.return_value` on the first
+    # was `attr-defined` and rebinding the second was `method-assign`. Both belong
+    # to the mock, not to the declared type. `monkeypatch` replaces the attribute
+    # outright and restores it afterwards, which is also the stronger test.
+    monkeypatch.setattr(
+        proto._tier_router,
+        "classify",
+        MagicMock(
+            return_value=TierClassification(
+                tier=DecisionTier.TIER_1,
+                confidence=0.95,
+                reasons=["single_agent"],
+                latency_budget_ms=100,
+            )
+        ),
     )
-    proto._audit.log_decision = AsyncMock(return_value=uuid4())
+    monkeypatch.setattr(proto._audit, "log_decision", AsyncMock(return_value=uuid4()))
 
     async def fake_a2a(**kwargs: Any) -> SimpleNamespace:
         if kwargs.get("method") == "proposal":
