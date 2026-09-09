@@ -31,6 +31,8 @@ __all__ = [
     "POLICY_PATH",
     "MarginRule",
     "PolicyUnavailableError",
+    "ReferencePolicySpec",
+    "comparator_reference_policy",
     "comparator_restock_threshold",
     "load_policy",
     "materiality_margin",
@@ -91,6 +93,96 @@ def comparator_restock_threshold(path: Path = POLICY_PATH) -> float:
     return float(require(load_policy(path), "comparator.restock_threshold", path=path))
 
 
+@dataclasses.dataclass(frozen=True)
+class ReferencePolicySpec:
+    """The comparator's reference arm: the ``(s, S)`` policy R5.1 and Finding 4 are about.
+
+    **Why this exists (conflict M, session 5).** ``uplift/regret.py``'s comparator measured
+    a NO-OP against perfect foresight and reported the result as ``(s, S)`` regret. Two
+    consequences, and the second is structural: the measured quantity was about the wrong
+    subject, and because ``regret`` and ``comparator_headroom`` were then the *same*
+    subtraction, ``must_be_below_measured_headroom`` admitted exactly the margins below the
+    regret they would be judged against -- so every margin inside ADR-055 D2.5's own bracket
+    forced ``material`` by construction. A verdict that cannot be anything else is not a
+    verdict.
+
+    Naming this arm explicitly is what separates the two quantities. With a reference arm
+    the judged contrast is ``reference - foresight`` while the bound stays
+    ``no_op - foresight``, which is independent of it.
+    """
+
+    name: str
+    reorder_point: int
+    order_up_to: int
+
+    def describe(self) -> str:
+        """ASCII one-liner, so a report never states a bare pair of numbers."""
+        return f"{self.name}(s={self.reorder_point}, S={self.order_up_to})"
+
+
+#: The only reference-arm implementation this reader will resolve. Not a registry to be
+#: extended casually: a second entry would let the comparator's subject change without an
+#: ADR amendment, and D2.5 requires the amendment to land BEFORE the run judged against it.
+_IMPLEMENTED_REFERENCE_POLICIES: Final[frozenset[str]] = frozenset({"Par_Level_Reorder"})
+
+
+def comparator_reference_policy(path: Path = POLICY_PATH) -> ReferencePolicySpec:
+    """Read the committed reference arm, or raise naming exactly what is wrong.
+
+    Refuses, rather than defaults, in four distinct ways -- each one a way the comparator
+    could otherwise measure a different world without saying so:
+
+    * a missing key (via :func:`require`), because a default reorder point would substitute
+      an unreviewed number into the arm the whole checkpoint is about;
+    * a policy ``name`` this reader does not implement, because resolving an unknown name to
+      *something* is guessing at the subject of the measurement;
+    * a non-integral level, because ``Par_Level_Reorder`` takes ``int`` and silently
+      truncating ``50.7`` would measure a policy nobody committed;
+    * a pair violating ``0 <= s < S``, which is the policy's own documented invariant. A
+      transposed pair would still run and would still produce a number.
+
+    Raises:
+        PolicyUnavailableError: On any of the four.
+    """
+    document = load_policy(path)
+    base = "comparator.reference_policy"
+
+    name = str(require(document, f"{base}.name", path=path))
+    if name not in _IMPLEMENTED_REFERENCE_POLICIES:
+        known = ", ".join(sorted(_IMPLEMENTED_REFERENCE_POLICIES))
+        raise PolicyUnavailableError(
+            f"{path.as_posix()} declares reference policy {name!r}, which this reader does "
+            f"not implement (known: {known}). It will not guess: the reference arm is the "
+            "subject of task 11's verdict, and resolving an unrecognised name to something "
+            "plausible would change what the measurement is about without an ADR-055 "
+            "amendment saying so"
+        )
+
+    raw_s = require(document, f"{base}.reorder_point_s", path=path)
+    raw_big_s = require(document, f"{base}.order_up_to_S", path=path)
+    levels: dict[str, int] = {}
+    for key, raw in (("reorder_point_s", raw_s), ("order_up_to_S", raw_big_s)):
+        if isinstance(raw, bool) or not isinstance(raw, int):
+            raise PolicyUnavailableError(
+                f"{path.as_posix()} declares {base}.{key} as {raw!r}, which is not an "
+                "integer. Par_Level_Reorder takes integral levels; truncating here would "
+                "measure a policy nobody committed"
+            )
+        levels[key] = int(raw)
+
+    reorder_point = levels["reorder_point_s"]
+    order_up_to = levels["order_up_to_S"]
+    if not 0 <= reorder_point < order_up_to:
+        raise PolicyUnavailableError(
+            f"{path.as_posix()} declares {base} with reorder_point_s={reorder_point} and "
+            f"order_up_to_S={order_up_to}, violating Par_Level_Reorder's own documented "
+            "invariant 0 <= s < S. A transposed pair would still run and would still "
+            "produce a regret number, which is why this is refused rather than clamped"
+        )
+
+    return ReferencePolicySpec(name=name, reorder_point=reorder_point, order_up_to=order_up_to)
+
+
 def regret_weights(path: Path = POLICY_PATH) -> dict[str, float]:
     """The scalar regret objective's weights (ADR-055 D2.3, R5.33).
 
@@ -115,7 +207,6 @@ def negative_control_settings(path: Path = POLICY_PATH) -> tuple[int, float]:
     sets = int(require(document, "negative_control.independent_seed_sets", path=path))
     rate = float(require(document, "negative_control.max_proven_gain_rate", path=path))
     return sets, rate
-
 
 
 # ---------------------------------------------------------------------------

@@ -22,6 +22,17 @@ covering the whole document, and a decision record that changes without saying s
 drift this project gates against. Any future amendment appends a line here and lands **before**
 the run judged against the amended text.
 
+**Amendment, session 5 (2026-09-09) — D2.5 gains the three-arm comparator, and
+`bracketing.upper` is corrected to a measured value.** Conflict M established that the committed
+two-pass comparator measured a **no-op** against perfect foresight while reporting the result as
+the `(s, S)` regret R5.1 asks for, and that `regret` and `comparator_headroom` were the *same
+subtraction* — so `must_be_below_measured_headroom` admitted exactly the margins below the regret
+they would be judged against, and every margin inside this section's own bracket forced
+`material` by construction. The comparator now runs three arms and the two quantities are
+different expressions. **This amendment lands before the run judged against it**, per the rule in
+the paragraph above; it changes no threshold, and in particular it does **not** instantiate
+`regret_objective.materiality_margin.value`, which remains `null`.
+
 **This ADR is written to be falsifiable, and task 10 is the attempt.** Its central premise -
 that a base-stock `(s, S)` policy is near-optimal on today's twin, so intelligence cannot pay
 - is *analytical, not measured*. R5.1-R5.4 are the criteria that falsify it. If task 10
@@ -239,16 +250,84 @@ committed or measured quantities:
   (`cost_under / (cost_under + cost_over) = 8/9`) targets `0.8889`. The incumbent policy's
   shortfall against its *own* theoretical target is therefore about **3.3 service points**. A
   margin below that would call the incumbent's known, accepted shortfall "material".
-- **Not unreachably large.** The measured comparator headroom is `11.79 - 2.93 = 8.86`
-  objective units, and the fill-rate gap across the same pair is `0.9149 - 0.3592 = 55.6`
-  service points. A `5.0`-point margin is roughly 4.5% of the cost headroom perfect foresight
-  buys, so the criterion can fire.
+- **Not unreachably large.** The measured comparator headroom is `8.937888952967558` objective
+  units — the **no-op** arm against perfect foresight, measured over 200 of 200 usable
+  replicates in run `34366766968` (sha `245d0dc`). It supersedes the `11.79 - 2.93 = 8.86`
+  figure this bracket carried from session 1's four-replicate probe, and the correction is a
+  measurement update rather than a change of criterion. The fill-rate gap across the same pair
+  is `0.9149 - 0.3592 = 55.6` service points. A `5.0`-point margin is roughly 4.5% of the cost
+  headroom perfect foresight buys, so the criterion can fire.
 
 **A derivable guard, enforced by the reader.** The committed margin must be **strictly less
 than the measured comparator headroom**. A margin at or above the total headroom is
 unfalsifiable by construction: no policy could exceed it, so `material` would be unreachable
 and task 11 could only ever proceed. `digital_twin/simulation/policy.py` refuses such a value
 rather than recording it.
+
+#### D2.5.1 The three-arm comparator, and why the bound must be a different subtraction
+
+**Added by amendment in session 5. It exists because the guard immediately above was vacuous,
+and the way it was vacuous is the mirror of the defect this whole phase is about.**
+
+Run `34366766968` reported `regret` and `comparator_headroom` equal **to every digit**. That was
+not a coincidence, it was an identity: `RegretObjective.regret(policy, reference)` is
+`aggregate(policy) - aggregate(reference)`, and the headroom was `mean_baseline - mean_foresight`
+over the same two arms. So the guard checked the margin against the very quantity being judged,
+and every margin inside the bracket above — `0.264` to `0.709` objective units — satisfied both
+`material` clauses by construction. **A number that cannot fail is not a number, and a verdict
+that cannot be anything else is not a verdict.**
+
+The comparator therefore runs **three** arms per replicate, at one seed and one cadence:
+
+| Arm | Policy | Role |
+|---|---|---|
+| A | none (`NoOpRecordingPolicy`) | the **independent** bound: `comparator_headroom = A - C` |
+| B | the committed `(s, S)` reference policy | the **subject**: `regret = B - C` |
+| C | `ForesightPolicy`, built from A's recorded trace | the oracle |
+
+`regret` and `comparator_headroom` are now different subtractions over different pairs, so the
+guard bounds the margin against a quantity independent of the one it judges. `headroom >= regret`
+is no longer a tautology but a claim about the world — doing nothing cannot cost less than running
+the incumbent — and `uplift/regret.py` reports `unavailable` and exits 2 if it fails, rather than
+handing a verdict to a guard it has just invalidated.
+
+**The reference arm is `Par_Level_Reorder`, and it had already landed.** Four documents recorded
+it as "another spec's unlanded precondition"; it is on disk at
+`uplift/baselines/par_level_reorder.py`, `.kiro/specs/decision-integrity-uplift-proof/` marks its
+tasks 2, 2.1 and 2.2 `[x]`, and Property 1 already runs against it. Ownership is that spec's and
+this record does not adopt it; availability was never the blocker. The blocker was that the
+comparator invoked no `DecisionPolicy` at all. That correction is conflict N.
+
+**Both of its levels are read from the twin, not chosen.** A materiality margin is allowed
+exactly one irreducible choice (`service_points`, above); a comparator is allowed none.
+
+- The reference arm's reorder point `s = 50`, read from `engine.py`'s
+  `self._restock_threshold = 50.0`, commented "safety-stock level that triggers restock" — the
+  twin's own reorder point, which is what makes this arm the *incumbent* rather than a
+  differently-tuned policy that happens to be transparent.
+- The reference arm's order-up-to level `S = 100`, read from `engine.py`'s initial inventory of
+  `100.0` per SKU — the same literal `regret_objective.normalisers.on_hand_units` already lifts
+  as `100.0 x 10 SKUs = 1000.0`. Ordering up to the opening level is the twin's own notion of
+  full.
+
+**What is NOT claimed, stated because the bracket above depends on it.** That
+`Par_Level_Reorder(s=50, S=100)` *reproduces* the twin's endogenous restock is **unproven**: the
+endogenous rule is an internal guard the engine evaluates, while this arm is an external
+order-up-to decision applied through `add_stock` on the comparator's cadence. So the lower
+bracket's `fill_rate = 0.8556` is a *comparable* reference for this arm, not a measurement of it.
+Whoever wants the stronger claim must measure both and report the difference; nothing here
+licenses assuming it is zero.
+
+**And one asymmetry is recorded rather than closed.** `Observation.inventory` is declared
+`Mapping[str, int]`, so arms driven through the shared observe-decide-apply loop see truncated
+stock levels. Arm C is deliberately **not** routed through that loop: it would read levels up to
+one unit low per SKU per decision and over-order by up to ~240 units per replicate, which at the
+committed `on_hand` normaliser and weight is up to ~0.24 objective units — the same order as the
+`0.40` margin — and it would move the oracle's cost up and the measured regret **down**, which is
+the self-serving direction. Arm C therefore keeps the arithmetic run `34366766968` measured. The
+residual asymmetry is that the oracle observes more precision than the arms it is compared
+against; closing it means widening `Observation` (a schema change touching every fixture and
+every arm, including the consensus arm) and is not this amendment's to take.
 
 **The ratchet direction is `down`, and unlike the weights this number has one.** D2.3 records
 that an objective weight has no better-direction, so the weights are pinned without a ratchet.

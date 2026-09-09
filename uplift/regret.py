@@ -398,11 +398,13 @@ def _measure(replicates: int, hours: float) -> dict[str, object]:
     # Imported here, not at module scope: `regret.py` is imported by the fast property suite,
     # and pulling the engine in at import time would drag SimPy into every one of those runs.
     from digital_twin.simulation.policy import (
+        comparator_reference_policy,
         comparator_restock_threshold,
         materiality_margin,
         materiality_margin_rule,
     )
-    from uplift.foresight import run_two_pass
+    from uplift.baselines.par_level_reorder import Par_Level_Reorder
+    from uplift.foresight import run_three_pass
     from uplift.interval import (
         INTERVAL_SEED,
         IntervalUnavailableError,
@@ -413,8 +415,17 @@ def _measure(replicates: int, hours: float) -> dict[str, object]:
 
     objective = load_objective()
     threshold = comparator_restock_threshold()
+    # THE REFERENCE ARM IS RESOLVED HERE, ONCE, FROM THE COMMITTED FILE (conflict M).
+    # `comparator_reference_policy` refuses a missing key, an unimplemented policy name, a
+    # non-integral level and a pair violating `0 <= s < S`, so an arm this run could not
+    # justify never reaches the twin. The seed is the replicate seed, set per replicate
+    # below: `Par_Level_Reorder` is deterministic and uses no randomness, but it holds a
+    # seeded instance-local RNG under its R1.9 construction contract, so it is constructed
+    # inside the loop rather than shared across replicates.
+    reference_spec = comparator_reference_policy()
 
-    baseline_costs: list[float] = []
+    noop_costs: list[float] = []
+    reference_costs: list[float] = []
     foresight_costs: list[float] = []
     unusable: list[int] = []
 
@@ -429,31 +440,50 @@ def _measure(replicates: int, hours: float) -> dict[str, object]:
         )
 
     for seed in range(replicates):
-        result = run_two_pass(seed, hours=hours, restock_threshold=threshold)
+        result = run_three_pass(
+            seed,
+            hours=hours,
+            restock_threshold=threshold,
+            reference_policy=Par_Level_Reorder(
+                s=reference_spec.reorder_point, S=reference_spec.order_up_to, seed=seed
+            ),
+        )
         if not result.usable:
-            # A replicate whose two passes saw different demand is not evidence. Recorded and
+            # A replicate whose arms saw different demand is not evidence. Recorded and
             # excluded rather than silently averaged in (I-7).
             unusable.append(seed)
             continue
-        baseline_costs.append(_cost(result.baseline))
+        noop_costs.append(_cost(result.noop))
+        reference_costs.append(_cost(result.reference))
         foresight_costs.append(_cost(result.foresight))
 
-    if not baseline_costs:
+    if not reference_costs:
         return {
             "status": "unavailable",
             "reason": (
-                "no replicate produced usable evidence: every pass pair disagreed on the "
+                "no replicate produced usable evidence: every arm triple disagreed on the "
                 "demand path, so nothing was measured"
             ),
             "unusable_seeds": unusable,
         }
 
-    measured = objective.regret(baseline_costs, foresight_costs)
-    mean_baseline = objective.aggregate(baseline_costs)
+    # THE JUDGED CONTRAST IS THE REFERENCE ARM AGAINST THE ORACLE. That is the `(s, S)`
+    # regret R5.1, Finding 4 and task 11 are about, and until session 5 it was not what this
+    # function computed (conflict M).
+    measured = objective.regret(reference_costs, foresight_costs)
+    mean_noop = objective.aggregate(noop_costs)
+    mean_reference = objective.aggregate(reference_costs)
     mean_foresight = objective.aggregate(foresight_costs)
-    # The comparator's headroom bounds any (s, S) regret from above, and it is what the
-    # committed margin is checked against: a margin at or above it is unfalsifiable.
-    headroom = mean_baseline - mean_foresight
+    # THE BOUND IS THE NO-OP ARM AGAINST THE ORACLE, AND ITS INDEPENDENCE IS THE WHOLE
+    # POINT. `must_be_below_measured_headroom` exists to refuse a margin so large that
+    # `material` is unreachable. While the comparator had two arms this was
+    # `mean_baseline - mean_foresight` over the SAME pair `regret` was computed from -- the
+    # identical subtraction -- so the guard admitted exactly the margins below the regret
+    # they would be judged against, and every margin in D2.5's bracket forced `material`.
+    # With three arms the bound is a different subtraction over a different pair, and
+    # `headroom >= regret` holds because doing nothing cannot cost less than running the
+    # incumbent. That inequality is asserted below rather than assumed.
+    headroom = mean_noop - mean_foresight
 
     # THE INTERVAL, AND WHY IT IS NOT OPTIONAL HERE (design E3.1, R6.13, R7.14).
     #
@@ -466,13 +496,48 @@ def _measure(replicates: int, hours: float) -> dict[str, object]:
     # this is a stricter standard than the criterion requires, adopted deliberately and
     # recorded rather than assumed.
     #
+    # THE HEADROOM MUST BOUND THE REGRET, AND THAT IS NOW A CHECK RATHER THAN A DEFINITION.
+    #
+    # While the comparator had two arms this inequality was a tautology: `headroom` and
+    # `regret` were the same subtraction, so `headroom >= regret` held trivially and proved
+    # nothing. With three arms it is a real claim about the world -- doing nothing cannot cost
+    # less than running the incumbent `(s, S)` policy -- and if it fails, the premise this
+    # whole phase rests on has failed with it: either the reference arm is harming the twin,
+    # or the arms were not run on the same world, or the objective's signs are wrong. Any of
+    # those makes the margin guard meaningless again, so the run reports `unavailable` and
+    # exits 2 rather than handing a verdict to a guard it has just invalidated (I-7).
+    if headroom < measured:
+        return {
+            "status": "unavailable",
+            "reason": (
+                f"the no-op arm's headroom {headroom!r} is BELOW the measured (s, S) regret "
+                f"{measured!r}, which cannot be true of a world where doing nothing is never "
+                "better than running the incumbent. The margin guard bounds the margin "
+                "against this headroom, so a headroom that does not bound the regret makes "
+                "the guard meaningless and no verdict is admissible. Check the objective's "
+                "signs, the reference arm, and whether the arms shared a demand path"
+            ),
+            "replicates_usable": len(reference_costs),
+            "replicates_unusable": len(unusable),
+            "unusable_seeds": unusable,
+            "regret": measured,
+            "comparator_headroom": headroom,
+            "mean_noop_cost": mean_noop,
+            "mean_reference_cost": mean_reference,
+            "mean_foresight_cost": mean_foresight,
+        }
+
     # `alpha` is READ from the committed Metric_Contract; "95%" is `1 - alpha` and appears
     # nowhere as a literal (AD-13). The resample count is derived from that alpha.
     alpha = contract_alpha()
     resamples = resamples_for(alpha)
     try:
+        # OVER THE JUDGED CONTRAST, not the bound. `material` requires the interval to
+        # exclude the margin, so the interval must be about the same quantity the margin is
+        # compared against -- the reference arm's regret. An interval over the no-op contrast
+        # would be dispersion for a number nothing is judged on.
         interval = paired_difference_interval(
-            baseline_costs,
+            reference_costs,
             foresight_costs,
             alpha=alpha,
             resamples=resamples,
@@ -486,12 +551,12 @@ def _measure(replicates: int, hours: float) -> dict[str, object]:
         return {
             "status": "unavailable",
             "reason": (
-                f"measured regret {measured:.6g} over {len(baseline_costs)} usable replicate(s) "
+                f"measured regret {measured:.6g} over {len(reference_costs)} usable replicate(s) "
                 f"but no admissible interval could be estimated: {error}. The regret is "
                 "reported and JUDGED BY NOTHING: `material` requires an interval excluding the "
                 "margin, and a point estimate with no dispersion must not be read as one"
             ),
-            "replicates_usable": len(baseline_costs),
+            "replicates_usable": len(reference_costs),
             "replicates_unusable": len(unusable),
             "unusable_seeds": unusable,
             "regret": measured,
@@ -513,7 +578,7 @@ def _measure(replicates: int, hours: float) -> dict[str, object]:
                 "ways, so a disagreement means the paired difference and the difference of "
                 "means are not over the same replicate set. Nothing is judged on it"
             ),
-            "replicates_usable": len(baseline_costs),
+            "replicates_usable": len(reference_costs),
             "replicates_unusable": len(unusable),
             "unusable_seeds": unusable,
             "regret": measured,
@@ -532,15 +597,30 @@ def _measure(replicates: int, hours: float) -> dict[str, object]:
     )
     return {
         "status": "measured",
-        "replicates_usable": len(baseline_costs),
+        "replicates_usable": len(reference_costs),
         "replicates_unusable": len(unusable),
         "unusable_seeds": unusable,
         "hours_per_replicate": hours,
         "restock_threshold": threshold,
-        "mean_baseline_cost": mean_baseline,
+        "reference_policy": reference_spec.describe(),
+        "reference_policy_name": reference_spec.name,
+        "reference_reorder_point_s": reference_spec.reorder_point,
+        "reference_order_up_to_S": reference_spec.order_up_to,
+        # THREE ARMS, THREE MEANS. `mean_baseline_cost` was renamed to `mean_noop_cost`
+        # rather than kept and repurposed: it named the arm the regret was computed FROM, and
+        # that arm is no longer the subject. A reader comparing this report with run
+        # 34366766968's would otherwise read two different quantities under one key.
+        "mean_noop_cost": mean_noop,
+        "mean_reference_cost": mean_reference,
         "mean_foresight_cost": mean_foresight,
+        # The BOUND: no-op against the oracle. Independent of `regret` by construction now.
         "comparator_headroom": headroom,
+        # The JUDGED quantity: the committed (s, S) reference arm against the oracle.
         "regret": measured,
+        # Reported so a reader can see the two are no longer the same subtraction without
+        # recomputing them. Under the two-arm comparator this was 0.0 by identity, which is
+        # what conflict M was.
+        "headroom_minus_regret": headroom - measured,
         "interval": interval.describe(),
         "interval_low": interval.low,
         "interval_high": interval.high,
@@ -561,9 +641,16 @@ def _measure(replicates: int, hours: float) -> dict[str, object]:
         "reason": verdict.reason,
         "insensitive_kpis": [item.term for item in objective.insensitive],
         "comparator": (
-            "no-op vs perfect-foresight. NOTE: this is NOT yet the (s, S) regret R5.1 asks "
-            "for -- Par_Level_Reorder is owned by decision-integrity-uplift-proof and is a "
-            "PRECONDITION. This job measures the comparator's own headroom, which bounds it"
+            "THREE ARMS. regret = (s, S) reference - perfect foresight, which is the "
+            "quantity R5.1, Finding 4 and task 11 are about. comparator_headroom = no-op - "
+            "perfect foresight, retained as an INDEPENDENT bound so the margin guard "
+            "`must_be_below_measured_headroom` is not checking the margin against the very "
+            "quantity it judges. The reference arm is Par_Level_Reorder from "
+            "uplift/baselines/, owned by decision-integrity-uplift-proof (its task 2.1) and "
+            "LANDED -- four documents had recorded it as unlanded, which was conflict N. Its "
+            "s and S are read from the twin's own restock threshold and opening stock; the "
+            "claim that it REPRODUCES the twin's endogenous restock is not proven, because "
+            "the mechanisms differ, and policy.yaml records that limit"
         ),
     }
 

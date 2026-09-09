@@ -87,13 +87,23 @@ def test_the_rule_reads_its_weight_from_the_objective_not_a_literal() -> None:
 def test_the_derived_margin_is_below_the_measured_comparator_headroom() -> None:
     """ADR-055 D2.5's bracketing, as arithmetic rather than prose.
 
-    The measured headroom is ``11.79 - 2.93 = 8.86`` objective units (session 1, seed 42, 24h).
-    A margin at or above it would be unfalsifiable by construction. The lower bracket is the
-    incumbent's own shortfall against its newsvendor target: ``8/9 - 0.8556`` is about 3.3
-    service points, and a margin below that would call an accepted shortfall material.
+    **The upper bracket moved in session 5 and its MEANING did not, which is why this test's
+    logic is unchanged.** It read ``11.79 - 2.93 = 8.86`` from session 1's four-replicate
+    probe. The measured value is ``8.937888952967558``, from run ``34366766968`` over 200 of
+    200 usable replicates, and it is still the **no-op** arm against perfect foresight --
+    which is exactly the quantity D2.5's upper bracket is about, and which the three-arm
+    comparator retains as its independent bound (D2.5.1). So this is a measurement update,
+    not a change of criterion.
+
+    The lower bracket is the incumbent's own shortfall against its newsvendor target:
+    ``8/9 - 0.8556`` is about 3.3 service points, and a margin below that would call an
+    accepted shortfall material. Note what is NOT asserted here: that the committed
+    ``Par_Level_Reorder(s=50, S=100)`` reference arm reproduces the ``0.8556`` incumbent. The
+    mechanisms differ, ``policy.yaml`` records that limit, and this test compares the margin
+    against a bracket rather than against that arm.
     """
     rule = materiality_margin_rule()
-    measured_headroom = 11.79 - 2.93
+    measured_headroom = 8.937888952967558
     incumbent_shortfall_points = (8.0 / 9.0 - 0.8556) * 100.0
 
     assert rule.derived < measured_headroom

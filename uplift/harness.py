@@ -64,7 +64,7 @@ import os
 from concurrent.futures import ProcessPoolExecutor
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Callable, Final, Iterable, Sequence
+from typing import Any, Callable, Final, Iterable, Mapping, Sequence
 
 import numpy as np
 import structlog
@@ -267,8 +267,17 @@ def _apply_price(sim: SupplyChainSimulation, price: float, reference_price: floa
     sim.set_policy(demand_mult=demand_mult)
 
 
-def _apply_reorders(sim: SupplyChainSimulation, reorder_quantities) -> None:
-    """Apply per-SKU reorder quantities to the twin via ``add_stock`` (R2.2 mapping)."""
+def _apply_reorders(sim: SupplyChainSimulation, reorder_quantities: Mapping[str, float]) -> None:
+    """Apply per-SKU reorder quantities to the twin via ``add_stock`` (R2.2 mapping).
+
+    The annotation is the one ``mypy --strict`` had been asking for at this signature (it
+    was one of the seven pre-existing ``uplift/`` errors, in a tree CI's mypy scope never
+    reads). Typed at the declaration rather than silenced at the call sites, which is the
+    direction conflict F settled. ``Mapping[str, float]`` is what
+    ``PolicyAction.reorder_quantities`` declares; the defensive conversion below stays,
+    because a policy that violates its own contract at runtime should be skipped per SKU
+    rather than crash a whole replicate.
+    """
     for sku, qty in reorder_quantities.items():
         try:
             quantity = float(qty)
@@ -276,6 +285,33 @@ def _apply_reorders(sim: SupplyChainSimulation, reorder_quantities) -> None:
             continue
         if math.isfinite(quantity) and quantity > 0.0:
             sim.add_stock(str(sku), quantity)
+
+
+def observe(
+    sim: SupplyChainSimulation,
+    *,
+    unit_costs: Mapping[str, float],
+    active_shock: ShockParams | None = None,
+) -> Observation:
+    """Snapshot twin state as the :class:`Observation` a ``DecisionPolicy`` decides on.
+
+    **Extracted so there is exactly ONE construction site.** ``run_closed_loop`` built this
+    inline, and session 5's three-pass comparator needs the identical snapshot for its
+    ``(s, S)`` reference arm. Two implementations of "what a policy is allowed to see" would
+    drift, and the arm that drifted would be the one the whole of checkpoint A is about --
+    an arm observing a different world is not the arm R5.1 names, however transparent its
+    rule is.
+    """
+    metrics = sim.metrics
+    return Observation(
+        inventory={sku: int(level) for sku, level in sim.inventory.items()},
+        sim_time=sim.sim_time_min,
+        delivery_count=int(metrics.orders_delivered),
+        spoilage_count=int(metrics.orders_spoiled),
+        stockout_count=int(metrics.unmet_demand_events),
+        unit_costs=unit_costs,
+        active_shock=active_shock,
+    )
 
 
 def _apply_action(
@@ -338,17 +374,7 @@ def run_closed_loop(
         prev_delivered = int(sim.metrics.orders_delivered)
 
         for _ in range(loop_config.n_steps):
-            metrics = sim.metrics
-            inventory = sim.inventory
-            obs = Observation(
-                inventory={sku: int(level) for sku, level in inventory.items()},
-                sim_time=sim.sim_time_min,
-                delivery_count=int(metrics.orders_delivered),
-                spoilage_count=int(metrics.orders_spoiled),
-                stockout_count=int(metrics.unmet_demand_events),
-                unit_costs=unit_costs,
-                active_shock=active_shock,
-            )
+            obs = observe(sim, unit_costs=unit_costs, active_shock=active_shock)
 
             # observe -> decide (may raise -> honest failed run, R2.7)
             action = policy.decide(obs)

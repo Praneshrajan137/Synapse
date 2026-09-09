@@ -164,14 +164,24 @@ regret_objective:
         theoretical target is about 3.3 service points. A margin below that would call the
         incumbent's known and accepted shortfall "material".
       upper: >-
-        NOT unreachably large. Measured comparator headroom is 11.79 - 2.93 = 8.86 objective
-        units and the fill-rate gap across the same pair is 55.6 service points, so a
+        NOT unreachably large. Measured comparator headroom is 8.937888952967558 objective
+        units -- the NO-OP arm against perfect foresight, over 200 of 200 usable replicates in
+        run 34366766968 (sha 245d0dc). This supersedes the 11.79 - 2.93 = 8.86 figure carried
+        from session 1's four-replicate probe; it is a measurement update, not a change of
+        criterion. The fill-rate gap across the same pair is 55.6 service points, so a
         5.0-point margin is roughly 4.5% of what perfect foresight buys. The criterion can
         fire.
 
     # A DERIVABLE GUARD, enforced by the reader rather than trusted. A margin at or above the
     # total measured headroom is unfalsifiable by construction: no policy could exceed it, so
     # `material` becomes unreachable and task 11 could only ever proceed.
+    #
+    # AND THE HEADROOM IT IS CHECKED AGAINST IS NOW AN INDEPENDENT QUANTITY (ADR-055 D2.5.1,
+    # conflict M). Until session 5 the comparator had two arms, so `comparator_headroom` and
+    # `regret` were the SAME subtraction and this guard admitted exactly the margins below the
+    # regret they would be judged against -- every margin inside `bracketing` above forced
+    # `material`. The comparator now runs three arms: the bound is no-op minus foresight while
+    # the judged regret is the (s, S) reference arm minus foresight.
     must_be_below_measured_headroom: true
 
     # Unlike the objective weights, this number HAS a monotone better-direction, and
@@ -273,8 +283,78 @@ kpi_sensitivity:
 # The resolved value is written into `UpliftProvenance`, and **a run whose recorded
 # threshold differs from the value committed here is inadmissible.** Recording it is what
 # makes that check possible.
+#
+# ---------------------------------------------------------------------------------------
+# READ THIS BEFORE CHANGING `restock_threshold`: IT IS UNCHANGED, AND THAT IS THE POINT
+# ---------------------------------------------------------------------------------------
+# CONFLICT M's first reason was that `uplift/regret.py`'s two-pass comparator measured a
+# NO-OP against perfect foresight and reported it as the `(s, S)` regret R5.1 asks for.
+# 0.0 was not the defect. The defect was that the rationale above is about
+# `uplift/harness.py`, where an arm supplies its own `(s, S)` through `decide()` and the
+# twin's must therefore be off -- and `uplift/regret.py::_measure` reused the same key in a
+# code path that drove NO policy at all, so 0.0 there did not de-stack an arm, it deleted
+# the incumbent. That is why `regret` and `comparator_headroom` came out equal to every
+# digit: with no reference policy, the `(s, S)` regret and the comparator's total headroom
+# are the same subtraction.
+#
+# Session 5's repair keeps `restock_threshold: 0.0` for all three arms and supplies the
+# `(s, S)` arm through `decide()`, which is the configuration the rationale above describes
+# as CORRECT. Nothing here needed amending.
 comparator:
   restock_threshold: 0.0
+
+  # -------------------------------------------------------------------------------------
+  # THE REFERENCE ARM -- the `(s, S)` policy R5.1 and Finding 4 are actually about
+  # -------------------------------------------------------------------------------------
+  # CONFLICT N. Four documents recorded `Par_Level_Reorder` as "another spec's UNLANDED
+  # precondition". It is on disk at `uplift/baselines/par_level_reorder.py`, its owning
+  # spec (`.kiro/specs/decision-integrity-uplift-proof/`) marks tasks 2, 2.1 and 2.2 `[x]`,
+  # and `tests/uplift/test_par_level_reorder_properties.py` already runs Property 1 against
+  # it on `ci.yml::uplift-verify`'s fast step. Ownership is that spec's; AVAILABILITY was
+  # never the blocker. The blocker was that `run_two_pass` invoked no `DecisionPolicy`.
+  #
+  # KEY NAMES: spelled out rather than `s` and `S`. YAML would accept both -- they are
+  # distinct keys -- but a committed file a human edits should not distinguish two numbers
+  # by letter case alone. The reader maps them onto `Par_Level_Reorder(s=..., S=...)`, and
+  # it refuses anything that does not satisfy the policy's own `0 <= s < S` invariant, so a
+  # transposition fails loudly instead of measuring a different world.
+  reference_policy:
+    name: Par_Level_Reorder
+    reorder_point_s: 50
+    order_up_to_S: 100
+
+  # BOTH NUMBERS ARE READ, NOT CHOSEN, and that matters because a materiality margin is
+  # allowed exactly one irreducible choice (D2.5's `service_points`) and a comparator is
+  # allowed none. If these were invented, the regret they produce would be a fact about
+  # this file rather than about the twin.
+  reference_policy_provenance:
+    name: >-
+      read: uplift/baselines/par_level_reorder.py::Par_Level_Reorder -- the (s, S) arm R5.1
+      names, owned by decision-integrity-uplift-proof (its task 2.1, marked [x]). Not
+      re-implemented here; ADR-055's premise section already states "Par_Level_Reorder IS
+      that policy".
+    reorder_point_s: >-
+      read: digital_twin/simulation/engine.py::__init__ `self._restock_threshold = 50.0`,
+      commented "safety-stock level that triggers restock" -- the twin's own reorder point.
+      Using the twin's own level is what makes this arm the INCUMBENT rather than a
+      differently-tuned policy that happens to be transparent.
+    order_up_to_S: >-
+      read: digital_twin/simulation/engine.py initial inventory, `100.0` per SKU -- the same
+      literal `regret_objective.normalisers.on_hand_units` already lifts as 100.0 x 10 SKUs
+      = 1000.0. Ordering up to the opening level is the twin's own notion of "full".
+
+  # THE LIMIT OF THE PROVENANCE ABOVE, STATED RATHER THAN IMPLIED (I-7).
+  reference_policy_equivalence_unproven: >-
+    The two VALUES are read from the twin. The claim that Par_Level_Reorder(s=50, S=100)
+    REPRODUCES the twin's endogenous restock is NOT proven and must not be asserted: the
+    mechanisms differ. The endogenous rule is an internal guard evaluated by the engine's
+    own restock process; this arm is an external order-up-to decision applied through
+    `add_stock` on the comparator's step cadence. So D2.5's lower bracket -- the incumbent's
+    fill_rate = 0.8556 against the newsvendor target 8/9, about 3.3 service points -- is a
+    COMPARABLE reference for this arm, not a measurement of it. Whoever wants the stronger
+    claim must measure both arms and report the difference; nothing here licenses assuming
+    it is zero.
+
 
 # =======================================================================================
 # 3. Negative-control repetition and rate tolerance (ADR-055 D6; R6.15)
