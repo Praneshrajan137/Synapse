@@ -31,6 +31,49 @@ it *is*, not as a diff against how it was.
 
 ---
 
+## STOP — CI CANNOT RUN. Account-level block, found after this session's work was pushed.
+
+**Run `34315612360` (sha `bfad6a0`) did not execute. GitHub refused to start any job:**
+
+```
+The job was not started because recent account payments have failed or your spending
+limit needs to be increased. Please check the 'Billing & plans' section in your settings
+```
+
+All three eligible jobs failed in 3–4 seconds with **zero steps recorded**, and the three downstream
+jobs were skipped. **That run is not evidence about the code** — nothing in it ran.
+
+**Consequence: every CI-gated leaf in this spec is blocked at the account level, not by its own
+precondition.** That is all **8** CI-gated open leaves plus the 2 `[~]` marks:
+
+| Blocked | Needs |
+|---|---|
+| **27.5** | `ci.yml::uplift-verify` |
+| **10.4**, **11** | the `measure-twin-regret` label on PR #84 → `uplift.yml::twin-regret` |
+| **14** | checkpoint B's measurement |
+| **26.2**, **26.3** | `regenerate-truth-docs.yml`, then `truth-gates.yml` |
+| **21**, **22.3**, **25** | the E4 materialisation job, `uplift.yml::uplift-proof` |
+
+**Resolve billing before anything below is attempted.** Decision 1's three routes, checkpoint A's
+label, and the regeneration dispatch all assume a runner will start. None will.
+
+**What survives the block, because it was measured before it:** run `33588706405`, head_sha
+`b7954b66c7f3b452dfab2158ed4a8ccb3acf9d17`, head_commit *"fix(mypy): declare yaml and psycopg2
+stub-free so step 8 stops gating uplift-verify"* — attributed by sha and message, not timestamp, per
+this file's own rule. That run executed real steps with real conclusions and is the sole basis for
+the step 8 claim below. **It does not cover `743ca6b`.** Step 8's scope is a strict subset of the
+wide command, and the wide command exits 0 locally, so step 8 is 0 **by mechanical implication from
+local evidence** — not because CI said so at that commit.
+
+**One further anomaly, recorded and unexplained.** `33588706405` reports `created_at`
+`2026-09-02T03:52:59Z` for a commit authored in this session on 2026-09-09. The sha and commit
+message match this tree exactly, so attribution is sound and the step conclusions stand. But the
+recorded clock skew in this file is "~2h45m", and this is seven days. **Do not use `created_at` to
+decide which run describes which tree** — the rule was already to use `head_commit.message`, and this
+is a second, larger reason.
+
+---
+
 ## THE THING THAT IS BLOCKING EVERYTHING — restated, because it changed shape
 
 **`uplift-verify` still has not run, and clearing 56 mypy errors was not enough.** Measured on run
