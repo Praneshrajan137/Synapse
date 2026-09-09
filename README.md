@@ -30,7 +30,7 @@ Honesty matters more than ambition. Here is the state of the repository at a gla
      Prose outside them survives. The counts are the NESTED run's, which is why
      they differ by one check from `docs/state/CURRENT.md`'s - see below. -->
 
-Run `make verify-claims` for the live truth. Today it reports **51 PASS / 3 FAIL / 0 PARTIAL / 10 SKIP / 64 TOTAL**.
+Run `make verify-claims` for the live truth. Today it reports **54 PASS / 2 FAIL / 0 PARTIAL / 11 SKIP / 67 TOTAL**.
 
 Those are the counts of the nested execution that check C56 compares this line against: C56 is the check that validates this very line by executing the suite, so the nested run self-excludes it to bound the recursion at depth one and counts it as a skip. A top-level `make verify-claims` evaluates C56 instead, so whenever that check passes the top-level headline carries one more PASS and one fewer SKIP than the line above. That asymmetry is the recursion guard, not a discrepancy.
 <!-- generated:end -->
