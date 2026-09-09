@@ -1,26 +1,30 @@
 # HANDOFF — decision-quality-proof
 
-**State at end of session 4 (2026-09-09). Three commits pushed; the commit carrying this file is the
-fourth.** Derive the counts, never read them:
+**State at end of session 5 (2026-09-09). Three commits pushed; the commit carrying this file is
+the fourth.** Derive the counts, never read them:
 
 ```powershell
 python -m scripts.audit.spec_ledger_census --files --next 30
 ```
 
 At the time of writing that reported **140 leaf tasks: 63 done, 2 authored-pending-discharge, 75
-open** — 69 authorable and **6** CI-gated. Two leaves were discharged by CI this session (**26.2**,
-**26.3**), which is the first time this spec has moved on a runner's own verdict since 27.1.
+open** — 69 authorable and **6** CI-gated, **unchanged from session 4**. **No leaf was ticked, and
+that is correct**: the census offers zero authorable work behind checkpoints A and B.
 
-> **CI RUNS AGAIN. The repository was made public, which gives it unlimited standard-runner Actions
-> minutes, and the account-level block is gone.** Verified empirically rather than from
-> documentation: the push of `8da2c9d` produced runs in which `Security Scan`, `Terraform Validate`
-> and `Policy Gate` **succeeded**, which is impossible under the block where all eight workflows
-> died in 2–3 seconds with `steps=0`.
+> **`uplift-verify` HAS NOW RUN. For the first time in this branch's life, and it took two minutes
+> of editing to make possible after five sessions of being blocked behind it.** The job's own
+> verdict is the headline: **`830 passed, 9 failed`** on the fast step, with the slow step skipped
+> behind it.
 >
-> **Two obstructions fell, two new ones were found, and `uplift-verify` still has not run.**
-> C56 is PASS for the first time on this branch. Checkpoint A produced its first real measurement.
-> And the measurement cannot be judged, because the instrument can currently return only one verdict
-> and it would be about the wrong comparator (**conflict M**).
+> **And its first report falsifies six sessions of "local evidence only".** Seven of those nine
+> failures reproduce **locally, at `HYPOTHESIS_PROFILE=dev`, on the first try**, in four modules no
+> wave ever touched — so no sweep ever ran them and no gate ever reported them. For those modules
+> there was never any local evidence either. That is **finding 42**, and it is a hole in the
+> verification *procedure*, not in the tests.
+>
+> **Conflict M's first reason is repaired** and the comparator now measures the subject R5.1 names.
+> **Conflict N is why it was cheaper than costed**: the precondition four documents called
+> "unlanded" had landed.
 >
 > The working agreement is `.kiro/specs/decision-quality-proof/SESSION_PROTOCOL.md`.
 > The prompt to paste in a new session is
@@ -29,322 +33,237 @@ open** — 69 authorable and **6** CI-gated. Two leaves were discharged by CI th
 This file is **overwritten** at the end of each session, never appended to: it describes the tree as
 it *is*, not as a diff against how it was.
 
-**Secrets were checked when the repository went public, because public history is permanent.**
-**Clean:** no bare credential file was ever added in any commit on any ref; `.env.cloud` is
-gitignored at `.gitignore:64` and untracked; every tracked `.env` is an `.example` or `.template`.
-
 ---
 
-## THE TWO THINGS THAT NOW BLOCK EVERYTHING
+## THE THING THAT IS NOW MEASURED, AND EXACTLY HOW FAR IT GOES
 
-### 1. CONFLICT M — the regret instrument can only return `material`, and it would be wrong
+**Run `34384834900`, sha `e9db587`, `ci.yml::uplift-verify`: `steps=9`, conclusion `failure`.**
 
-**Checkpoint A's first measurement succeeded.** Run `34366766968`, sha `245d0dc`,
-`uplift.yml::twin-regret` via the `measure-twin-regret` label. **200 of 200 replicates usable.**
-
-| field | measured |
-|---|---|
-| `regret` | `8.937888952967558` |
-| `comparator_headroom` | `8.937888952967558` |
-| `interval_low` / `interval_high` | `8.916389405913677` / `8.958204644600675` |
-| `mean_baseline_cost` / `mean_foresight_cost` | `11.835228527152536` / `2.897339574184977` |
-| `margin_rule_derives` | `0.4` |
-| `verdict` | `unavailable` — exactly as finding 16 predicted |
-| `insensitive_kpis` | `["spoilage_rate", "delivery_latency"]` |
-
-**Now trace run 2.** With the margin committed at the value its own rule derives,
-`classify_regret` gets `8.9379 >= 0.40` true and `interval_low 8.9164 > 0.40` true, so it returns
-**`material`** — and task 11 says **STOP, Finding 4 is falsified, re-cut R5.**
-
-**Two reasons that verdict would be wrong. The second is structural.**
-
-1. **The baseline arm is a NO-OP, not a base-stock `(s, S)` policy.** `uplift/foresight.py` pass one
-   is `NoOpRecordingPolicy` — "Pass one: change nothing" — and the run reports
-   `restock_threshold: 0.0`. The artifact says so itself: *"this is NOT yet the (s, S) regret R5.1
-   asks for -- Par_Level_Reorder is owned by decision-integrity-uplift-proof and is a
-   PRECONDITION."* In service-point equivalents `8.9379` is ≈ **112 points**, against an incumbent
-   whose recorded shortfall against its own newsvendor target is ≈ **3.3**. The number describes a
-   different subject.
-2. **`regret` and `comparator_headroom` are the SAME EXPRESSION.**
-   `RegretObjective.regret(policy, reference)` is `aggregate(policy) - aggregate(reference)`, and
-   `_measure`'s `headroom` is `mean_baseline - mean_foresight` — identical, and the run confirms it
-   to every digit. So `policy.py`'s `must_be_below_measured_headroom` admits exactly the margins
-   that are **below the regret they will be compared against**. Every margin inside D2.5's own
-   bracket (`0.264`–`0.709` objective units) forces `material` **by construction**.
-
-**The guard was written to stop a margin being unfalsifiable in one direction and is blind to the
-other**, because it checks the margin against the very quantity being judged rather than against an
-independent bound. **A verdict that cannot be anything else is not a verdict** — the mirror of this
-project's own "a number that cannot fail is not a number".
-
-**Two repairs, both the operator's, both costed in task 11. Neither taken.**
-
-- **Land the real comparator.** `Par_Level_Reorder` is the `(s, S)` arm R5.1 names, a declared
-  precondition owned by `.kiro/specs/decision-integrity-uplift-proof/`. With it, `regret` and
-  `comparator_headroom` stop being the same expression, the guard regains discriminating power, and
-  the verdict becomes a claim about the right subject. **This is the repair the design implies.**
-- **Or give the guard an independent bound**, so a margin is checked against a contrast other than
-  the one it judges. Cheaper, and it changes a committed pre-registered rule — which D2.5 requires
-  to land *before* the run judged against it.
-
-**`SESSION_PROTOCOL.md`'s checkpoint-A steps 2, 3 and 4 are marked SUSPENDED in place.** Do not
-amend D2.5's derived literal, do not commit `materiality_margin.value`, do not graduate the parked
-pin, do not run the second label. **The headroom also moved** — D2.5 records `11.79 - 2.93 = 8.86`,
-the measurement is `8.937888952967558` — so `bracketing.upper` is owed a correction whenever the
-amendment does land.
-
-### 2. OBSTRUCTION 2.5 — step 18 cannot pass on a hosted runner, and it was never in the chain
-
-`ci.yml::quality-gates` at `2be5a96`: steps 1–17 **success**, failure at **step 18 `Golden-trace
-replay metrics (R7.6/R7.7 — KV-cache + tier routing)`**, steps 19–23 skipped.
-
-```
-[OK] tier_routing_accuracy: measured 1.0000 >= floor 0.8000 (200/200 traces)
-[??] kv_cache_hit_rate: measured UNAVAILABLE, floor 0.7000 -- synapse_ollama_cache_hit_rate
-     has no samples -- the replay took no cache observation (Ollama offline)
-[??] replay-metrics: UNAVAILABLE - at least one floor has no measurement behind it.
-     Absence of proof is not a pass (I-7).
-```
-
-**The gate is behaving exactly as this project demands.** It refuses to call an unmeasured floor a
-pass. But `kv_cache_hit_rate` needs an Ollama-backed cache observation and a hosted runner has none;
-standing one up is a category-1 service workload. **So the step cannot pass in CI as written.**
-
-**It is `main`'s, and it had never executed anywhere** — it sat behind step 5, then step 8, then
-step 17 for this branch's entire life, and `main`'s own runs fail at step 17. Its own comment
-records the motive: *"The two numbers CLAUDE.md has stated since Sprint 9 with NO gate anywhere."*
-**The gate was written to close a documentation claim, and the first execution proved the claim is
-not measurable in CI.** That is a finding about the claim, not about the gate.
-
-**Three dispositions, all the operator's.** (a) Re-point `uplift-verify`'s `needs:` so it does not
-transit an unmeasurable step. (b) **Split step 18** so `tier_routing_accuracy` — which measures
-cleanly at `1.0000` — gates, while `kv_cache_hit_rate` is declared unmeasurable-in-CI with its
-recorded reason, which is the `DEGRADED`/`SKIP` shape I-7 already blesses and the same shape as
-C74's honest SKIP. (c) Provide a cache observation in CI. **(b) is the only one consistent with
-precedent that does not weaken a floor.**
-
-**Do not clear it by lowering `kv_cache_hit_rate` or by making step 18 `continue-on-error`** — the
-first is assertion weakening (R2.10); the second re-creates the swallowed-exit-status defect this
-very session repaired two steps away.
-
----
-
-## The chain to `uplift-verify`, measured rather than predicted
-
-| # | Obstruction | State |
+| # | Step | Result |
 |---|---|---|
-| 0 | the runner itself — account billing | **CLEARED** — repository made public |
-| 1 | step 8 `mypy --strict orchestrator/ --exclude orchestrator/tests` | **CLEARED** (2r); re-confirmed `success` at `2be5a96` |
-| 2 | step 17 **C56** narrative-truth | **CLEARED** (26.2 / 26.3) — first PASS on this branch |
-| **2.5** | **step 18 golden-trace replay** | **RED, STRUCTURAL, never named before** |
-| 3 | step 19 unit tests → `test_cognition_phase` | **still unknown** — skipped behind 18. The repair is on disk (`bf8693f`) and remains unjudged |
-| 4 | steps 20–22 coverage floors, spec coverage, contract tests | **still unknown** |
+| 4 | Install dependencies | **success** — the closure proof taken before the push was right |
+| 5 | Property + unit tests (fast — 500-example budget) | **failure**: `9 failed, 830 passed, 1 skipped, 25 deselected, 2 xpassed` in `849.90s` |
+| 6 | Property + regression tests (slow — 100-example budget) | **skipped** behind step 5 |
 
-**Properties 38–60 have still never executed in CI**, and every `HANDOFF.md` must keep saying so
-until task 27.5 is `[x]`.
+**State the claim narrowly.** The **fast** surface of `tests/uplift` and `tests/verify` is now
+measured. The **slow** surface is not: the six slow properties, the 623-test regression floor, the
+subprocess fault-injection probe and `digital_twin`'s 1000-scenario run have still never executed.
+"Properties 38–60 have executed in CI" is **not** yet a true sentence — "their fast subset has" is.
 
-**Session 2r's lesson has now fired three times: clearing a gate reveals what it was shielding, and
-the depth is unknown until each layer clears.** Session 4 cleared two layers and found two more —
-one of them structural and one of them absent from every recorded chain. **No single clearance
-licenses a claim about the job at the end.**
+`sprint6-verify` and `training-smoke` are still `skipped`, correctly: they keep their own
+`needs: quality-gates`, and only `uplift-verify`'s edge was removed.
 
----
+### The nine failures, attributed mechanically
 
-## What else is owed
+`git cat-file -e origin/main:<f>` then `git diff origin/main -- <f>`, because `git log -1` is
+last-touch and ownership decides who repairs them.
 
-### A second regeneration, owed by the generator order itself
+| Module | Failures | On `origin/main`? | Owner |
+|---|---|---|---|
+| `tests/verify/test_command_path_resolution_property.py` | **5** | **absent** (1177 insertions) | **this spec** |
+| `tests/verify/test_ledger_gen_property.py` | **2** | **absent** (588 insertions) | **this spec** |
+| `tests/verify/test_ratchet_monotonicity_property.py` | **1** | **absent** (861 insertions) | **this spec** |
+| `tests/uplift/test_aggregation_integrity_property.py` | **1** | **byte-identical** | `main`'s |
 
-**The committed repair order is backwards for exactly the case task 26 exists to repair, and the
-first real execution proved it.** `ledger_gen` projects a **top-level** registry execution in which
-C56 **is** evaluated, and C56 reads the README headline that `readme_gen` rewrites **afterwards**.
-True dependency: `readme_gen` → `README.md` → C56 → `ledger_gen`. The committed order inverts it, so
-run `34372152090` generated `CURRENT.md` against the pre-repair README and recorded `C56 | FAIL` —
-which was false the moment step 7 finished.
+Shapes, for the next reader: three `AssertionError: generated roots collide: ['pytest']`; one
+`unresolvable-command` for `orchestrator.audit.cli`; one Makefile-recipe set mismatch; `assert 1 ==
+2` and `assert 'unavailable' == 'fail'` in the ledger-gen properties; `assert True is False` on the
+committed `stryker-break` hole; and a float **exact-equality** comparison differing in the last
+digit (`87381.33333333349` vs `...47`).
 
-Measured, not inferred: the artifact's verdict line reads `C44=FAIL, C56=FAIL, C69=FAIL`, while
-`truth-gates.yml` on the very next commit reads `C44=FAIL, C69=FAIL`.
+**Seven of the nine reproduce locally at `dev` on the first try.** The two exceptions are
+`test_ledger_gen_property.py`'s, and they are **deliberately unexamined locally**: that module names
+a registry execution and I-0 forbids `ledger_gen` in any form. Their shapes are *consistent with*
+the inverted `ledger_gen`/`readme_gen` order session 4 measured — the same defect surfacing in a
+property rather than in a gate — but that is **not confirmed**.
 
-**The README headline is unaffected** — it projects the *nested* execution where C56 self-excludes
-and counts as a SKIP, which is the recursion guard working. Only the top-level ledger is exposed.
+### Finding 42 — the sweep cannot see this class of failure
 
-**So `CURRENT.md`'s `C56` row and registry-verdict line are stale, and reach their fixed point only
-on a dispatch made after `2be5a96`.** `ledger_gen --check` will be red when it next executes. **The
-durable repair is to swap the two `--write` steps**; that edits the declared repair order of the
-enforcement spine and is the operator's.
+A hypothesis that the example budget was hiding them was formed and **refuted by measurement**:
+`test_command_path_resolution_property` fails **5 of 8 at `dev`** and **5 of 8 at `heavy`**, so ten
+examples suffice to find the falsifying inputs.
 
-### The twin-regret artifact is not canonical JSON
+The real cause is `SESSION_PROTOCOL.md`'s own verification block: *"one bounded `pytest` over the
+loci **that wave touched**"*. **No wave ever touched these four modules.** So they were authored,
+reported authored-and-diagnostics-clean, and executed by nothing — not by a sweep, because sweeps
+are scoped to changes, and not by CI, because `uplift-verify` was skipped. **The procedure verifies
+what a session changed and never what it already had.**
 
-Run `34366766968` uploaded **215,293,577 bytes**. The twin's `structlog` writes to stdout, so `tee`
-captured a debug flood with the report on the final line. `json.load` raises
-`JSONDecodeError: Extra data: line 1 column 5`, while `blocking-steps.yaml` declares this step
-`emits: "artifacts/uplift/twin-regret.json (canonical JSON, --json)"` — **so that declaration is
-false as written.** The figures above were recovered from the last line.
-
-**Tasks 17.x, 22.3 and 25 read uplift artifacts with a JSON parser**, and 90-day retention on
-215 MB per run is its own cost. Repair is a choice between suppressing twin logging in the
-measurement path (`structlog.configure(wrapper_class=make_filtering_bound_logger(logging.ERROR))`,
-the documented idiom) and writing the report to the file directly rather than through stdout — the
-second loses the log visibility `pipefail` was just made safe for. Not taken.
-
-### `main`'s registry debt, newly visible
-
-`truth-gates.yml::truth-gates` fails at step 5 on **C44** and **C69**, so steps 6–12 including
-`ledger_gen --check` are skipped behind it. Neither is this spec's.
-
-- **C69** — `core-purpose-uplift` task 9's placeholder checkpoint registry, the same record
-  `task_claim_truth` has reported for four sessions.
-- **C44** — three liveness violations that **the committed ledger had been masking**: two dead
-  modules (`data_fabric/ingest/__init__.py`, `data_fabric/ingest/m5.py`) against a named baseline of
-  `0`, and `synapse_common.contracts.validate_audit_insertion`, which encodes a `[deal.post]`
-  invariant and is invoked only from `packages/tests/test_contracts.py`.
+The cheapest repair may be the one now in place: keep `uplift-verify` reachable and read it every
+session. Whether the protocol should also mandate a periodic full-tree read is the operator's.
 
 ---
 
-## Session 4's findings
-
-### Finding 34 — the label mechanism was committed without its labels
-
-`uplift.yml`'s `measure-twin-regret` and `regenerate-truth-docs.yml`'s `regenerate-truth-docs` were
-designed, verified by truth table, and committed — and **neither label existed on the repository.**
-`gh pr edit --add-label` fails on a label that does not exist, so checkpoint A would still have been
-unrunnable after billing cleared. Created with descriptions naming the job each one runs. **A
-mechanism is not reachable until the thing that triggers it exists.**
-
-### Finding 35 — a declared-blocking step reported success while measuring nothing
-
-Run `34364879758`. Under `bash -e` a pipeline's status is its **last** command's, so
-`python -m uplift.regret ... | tee <file>` returns `tee`'s success even when the Python crashed. The
-measurement died at import, `tee` wrote a **zero-byte** artifact, and the step reported **success**
-while `blocking-steps.yaml` declares it `role: producer` emitting canonical JSON.
-
-**The step's own comment enumerated three discarding constructs — `continue-on-error`, `|| true`,
-`|| echo` — and missed the one it used.**
-
-**The job was red only because the DISCLOSURE step below it, explicitly "not a gate", failed on the
-same root cause. Without that step this job would have been GREEN with no measurement in it.**
-Repaired with `set -o pipefail` in `245d0dc`; `| tee` kept, because the JSON in the log is what lets
-a reader check the artifact against the run, and with `pipefail` that visibility is free.
-
-**`scripts/audit/workflow_shape_truth.py` cannot catch this.** Its `DISCARDING_CONSTRUCTS` is four
-literals — `|| true`, `|| echo`, `; exit 0`, bare `exit 0` — and an unguarded pipeline is none of
-them, so a declared-blocking step can discard its exit status with **C64 reporting pass**. Its own
-docstring is *"A gate whose exit status is discarded is not a gate."* `| tee` occurs **exactly
-once** in the workflow tree, so the exposure is closed; **extending the gate is a registered-check
-change and is the operator's.**
-
-### Finding 36 — a closure proof that started at the wrong entry point
-
-`scipy` was missing from `twin-regret`'s install closure. The step's comment claimed a static walk
-of the 9 first-party modules reachable from `uplift.regret` found `pydantic-settings` as "the ONLY
-gap". **The walk followed imports *from* `uplift.regret`, but `python -m` executes the package
-initialiser first**, and `uplift/__init__.py` → `uplift.consensus_arm` → `uplift.harness` →
-`uplift.contract` → `from scipy import stats` is nowhere in that graph.
-
-**Correct about the module graph, wrong about the entry point's import closure. A closure proof must
-start at the command the job actually runs.** This is also HANDOFF defect 14 recurring: that defect
-named this exact import, and the repair taken then routed `uplift/interval.py` around
-`load_contract` instead of widening the closure, leaving the import on the initialisation path.
-
-Fixed narrowly, this job only, per defect 22's precedent. **`scipy` is pinned in no requirements
-file in the repository** (`policy.yml` installs it bare), so `>=1.11,<2.0` is a **choice**, flagged
-as one.
-
-### Finding 37 — a local generation was recording an environment error as a finding
-
-The committed `CURRENT.md` gave C44's detail as
-`check raised FileNotFoundError: [WinError 3] ... 'C:\Users\Pranesh\Projects\synapse\frontend\node_modules\.pnpm\...'`
-— a Windows dev-box path error standing in for a check's finding, **hiding three real liveness
-violations behind it.** Session 4's run is the **first projection of that document ever taken on a
-Linux runner.**
-
-**This is the strongest available justification for I-0's never-run-locally rule on the generators,
-and for task 26 choosing a CI job over a local `--write`: a document generated on the wrong machine
-does not merely go stale — it can record an environment error as a finding and hide the real ones.**
-
-### Finding 38 — non-interference, proven in a live run rather than by truth table
-
-Adding `regenerate-truth-docs` also fires `uplift.yml`, which triggers on the same `labeled` event.
-Run `34372152145`: **both** its jobs `skipped`, `steps=0`, zero runner minutes — `twin-regret`
-because the label does not match, `uplift-proof` because `pull_request` is deliberately absent from
-its allow-list. The fail-closed guards hold in both directions, and the ~350-minute job stayed
-asleep. Session 3's truth table predicted exactly this; the live run confirms it.
-
----
-
-## What session 4 changed
+## WHAT SESSION 5 CHANGED
 
 | Commit | Subject |
 |---|---|
-| `245d0dc` | `twin-regret` reported success while measuring nothing — `set -o pipefail` + `scipy` |
-| `0c0e971` | conflict M: the instrument can only return `material`, on the wrong comparator |
-| `2be5a96` | the regenerated ledger and README headline (task 26.2's artifact, reviewed) |
-| *(fourth)* | this file, the ledger row, the prompt, and 26.2 / 26.3 ticked |
+| `28cecce` | a required check that can only report `skipped` is not a gate — `needs:` removed |
+| `e9db587` | a declared canonical-JSON artifact that no parser could read |
+| `4b9d0d4` | a verdict that cannot be anything else is not a verdict — the three-arm comparator |
+| *(fourth)* | this file, the ledger row, the prompt, and tasks 11 / 27.5 |
 
-**What was earned.** **26.2** and **26.3** are `[x]`, both on CI's own verdict. C56 PASSES for the
-first time on this branch. `regenerate-truth-docs.yml` executed for the first time ever, all nine
-steps green including its `gate_surface --check` hard gate. Census `140/61/2/77` → **`140/63/2/75`**,
-CI-gated `8` → `6`.
+### Conflict N — the repair option was costed against a false premise, twice
 
-**What was prevented.** Committing `0.40` and reading the resulting `material` as the end of this
-project. That was the next mechanical step in the standing work order.
+1. `SESSION_PROTOCOL.md:285` recorded `Par_Level_Reorder` as "a declared precondition owned by
+   another spec and **has not landed**"; `NEXT_SESSION_PROMPT.md` called it "another spec's
+   **unlanded** precondition". **It had landed.** On disk at
+   `uplift/baselines/par_level_reorder.py`; its owning spec marks tasks **2, 2.1 and 2.2 `[x]`**;
+   `tests/uplift/test_par_level_reorder_properties.py` already runs Property 1 against it on
+   `uplift-verify`'s fast step. Ownership is that spec's and is **not adopted here**. Availability
+   was never the blocker — **`run_two_pass` invoked no `DecisionPolicy` at all.** The gap was
+   wiring.
+2. This file's own repair note said landing the arm would make `regret` and `comparator_headroom`
+   "stop being the same expression". **It would not.** `regret` is `aggregate(policy) -
+   aggregate(reference)` and the headroom was `mean_baseline - mean_foresight` over the same two
+   arms, so whatever pass one became the two coincided. **They separate only if the no-op arm is
+   RETAINED as a third pass.** Option (b) alone would have fixed reason 1 of conflict M and left
+   reason 2 intact.
 
-**What is blocked, and it is the operator's.** Conflict M's two repairs; obstruction 2.5's three
-dispositions; the second regeneration; the artifact's JSON shape.
+### The three-arm comparator, as landed
+
+| Arm | Policy | Role |
+|---|---|---|
+| A | none (`NoOpRecordingPolicy`) | the **independent** bound: `comparator_headroom = A - C` |
+| B | the committed `(s, S)` reference arm | the **subject**: `regret = B - C` |
+| C | `ForesightPolicy` from A's recorded trace | the oracle |
+
+One seed, one cadence, all three at `comparator.restock_threshold: 0.0`. The interval is estimated
+over the **judged** contrast. `headroom >= regret` was a tautology under two arms — the same
+subtraction on both sides — and is now a claim about the world, with `_measure` reporting
+`unavailable` and exiting 2 if it fails rather than handing a verdict to a guard it has invalidated.
+
+**Both levels are read, so the comparator introduces no chosen constant.** `s = 50` from
+`engine.py::_restock_threshold` ("safety-stock level that triggers restock"); `S = 100` from its
+initial-stock literal, the same one `normalisers.on_hand_units` already lifts as `100.0 x 10`.
+
+**NOT claimed:** that `Par_Level_Reorder(s=50, S=100)` *reproduces* the twin's endogenous restock.
+An internal engine guard versus an external order-up-to decision on the comparator's cadence. D2.5's
+`fill_rate = 0.8556` lower bracket is a **comparable** reference for this arm, not a measurement of
+it. Recorded in `policy.yaml`, in ADR-055 D2.5.1, and in the bracket test.
+
+**One asymmetry recorded rather than closed, and it is why arm C is not routed through the shared
+loop.** `Observation.inventory` is declared `Mapping[str, int]`, so a driven arm reads truncated
+levels; `ForesightPolicy.decide` would then over-order by up to ~240 units per replicate ≈ **0.24
+objective units** — the same order as the `0.40` margin — moving the oracle's cost **up** and the
+measured regret **down**, which is the **self-serving** direction. Arm C keeps run `34366766968`'s
+exact arithmetic. Closing the asymmetry means widening `Observation` for every fixture and every arm
+including the consensus arm, and was not this repair's to take.
+
+### Findings 39, 40, 41
+
+- **39 — the instrument at the centre of checkpoint A had no test.** `run_two_pass` had one
+  consumer and **no test file in the tree imported `uplift.foresight`**. `NoOpRecordingPolicy` was
+  instantiated nowhere; `ForesightPolicy.decide` was never called. Both documented arms were prose.
+  Arm A now drives `NoOpRecordingPolicy` through the same loop as arm B, so the claim is structural.
+- **40 — the line where the wrong comparator entered.** `comparator.restock_threshold: 0.0`'s
+  rationale is about `uplift/harness.py`, where an arm supplies its own `(s, S)` through `decide()`.
+  `_measure` reused the key in a path driving **no** policy, so `0.0` deleted the incumbent rather
+  than de-stacking an arm. Supplying the arm through `decide()` at `0.0` is exactly what that
+  rationale calls correct: **R5.36 unamended, Property 53 untouched.**
+- **41 — the closure proof was taken before the push and was correct.** Finding 36's lesson applied
+  rather than re-learned: the walk started at the command the job runs. 117 seed modules, 304
+  first-party files. Step 4 succeeded. Two flagged, neither a gap: `psycopg2` is outside the closure
+  but imported at **function** scope inside `try/except ImportError` with an honest degrade, and
+  **`scipy` is pinned in NO requirements file in the repository** yet arrives transitively via
+  `scikit-learn` (five `agents/*/requirements.txt`) and `lifelines`. The second is a real fragility,
+  recorded rather than repaired — widening the closure is the broad change defect 22 rejects.
+
+### The artifact repair, and the test that improved it
+
+The 215 MB non-JSON artifact is fixed at the producer, never at the declaration (R2.10). **A test
+written against the first version exposed that a `structlog` level floor alone left canonicality
+true only while nothing logged at ERROR** — a tolerated-exception disjunct the authoring rules
+forbid — so the repair gained a **stderr logger factory** and the claim became unconditional. `|
+tee` reads stdout only, so every log line and traceback still reaches the job log; nothing was traded
+away. New `tests/uplift/test_regret_cli_artifact_shape_property.py` asserts over the **whole** stdout
+stream (not its last line, which would have passed against the 215 MB file).
+
+---
+
+## What is still owed, and who owns it
+
+- **The nine `uplift-verify` failures.** Eight are this spec's, one is `main`'s. Seven reproduce
+  locally at `dev`. **This is the top of the next session's list** and it is authorable work that
+  no barrier gates — it is repair, not new leaves.
+- **Obstruction 2.5's other half.** `quality-gates` is still red at step 18 and is a `required:`
+  check, so PR #84 still cannot merge and `main` is red too. **Disposition (b) — split the step so
+  `tier_routing_accuracy` gates while `kv_cache_hit_rate` is declared unmeasurable-in-CI with its
+  reason — is still owed**, and it carries an open sub-decision: C74's honest SKIP exits **2**, so
+  making step 18 green requires a declared-unmeasurable floor to be non-failing, which shifts the
+  honesty burden onto the declaration. **Do NOT lower the floor (R2.10) or add `continue-on-error`
+  (finding 35).**
+- **Checkpoint A, on the new comparator.** Run 1 by label, then the D2.5 amendment stating the
+  derived literal, then the margin commit, then run 2. **The verdict may still be `material`** —
+  which would now be an **admissible** falsification about the right subject, and this spec's own
+  design calls that a good outcome.
+- **A second regeneration**, owed by the generator order itself (`readme_gen` → README → C56 →
+  `ledger_gen`; the committed order inverts it). The two parked `s`/`S` pins graduate in the same
+  data edit, after it.
+- **`workflow_shape_truth` cannot see an unguarded pipeline** (finding 35). Registered-check change.
+- **CI's ruff scope** excludes nine trees including `uplift/` and `digital_twin/`: **530 lint, 254
+  format (upper bound).** Widening it re-closes `quality-gates` at step 5.
+- **CF-13 violations**: hardcoded `max_examples` in `tests/uplift/test_par_level_reorder_properties.py`
+  (200) and `tests/uplift/test_seeded_demand_identity_property.py` (300, 200).
 
 ---
 
 ## Honesty ledger — verified vs merely authored
 
-### Executed and green, session 4
+### Executed and measured, session 5
 
 | What | Result |
 |---|---|
-| Repository visibility | `public`, `private=False` — unlimited standard-runner minutes, and runs start |
-| Credential audit of full history | **clean** — no bare credential file ever added on any ref |
-| `uplift.yml::twin-regret`, run `34366766968` | **success**, 200/200 replicates, first real measurement this spec has produced |
-| `regenerate-truth-docs.yml::regenerate`, run `34372152090` | **success**, all 9 steps, **first execution ever** |
-| Artifact `GATE_SURFACE.md` vs committed | **byte-identical** — independent confirmation C63's PASS was real |
-| Regenerated diff vs the job's own `--stat` | **exact match**, 16 insertions / 13 deletions |
-| `ci.yml::quality-gates` step 17 (**C56**) | **success** — first time on this branch |
-| Registry verdict line, `truth-gates` step 5 | `FAIL - 2 check(s): C44=FAIL, C69=FAIL` — **C56 absent** |
-| Falsification sweep | `16 of 16 operators probed`, `7 falsified`, `0 unproven`, **no `indeterminate`**; 1 defect = `C28/zero-a-floor`, task 6's accepted survivor → **probeable set back to 8** |
-| `uplift.yml` on an unrelated label, run `34372152145` | **both jobs skipped**, `steps=0` — fail-closed guards proven live |
+| STEP 0 at the real HEAD (`e8c7c5a`, 39 ahead) | `quality-gates` 1–17 success, **18 failure**, 19–23 skipped, `uplift-verify` skipped `steps=0` |
+| Barriers 11 and 14 | both named; batch **depends on both**; offer truncates to **zero** |
+| `uplift-verify` install closure, at the command the job runs | **no gap** — confirmed by step 4 succeeding |
+| **`ci.yml::uplift-verify`, run `34384834900`** | **`steps=9`; fast step `830 passed / 9 failed`; slow step skipped** |
+| The nine failures' ownership | measured against `origin/main`, not assumed: **8 this spec's, 1 `main`'s** |
+| The budget hypothesis for finding 42 | **refuted**: 5 of 8 fail at `dev` **and** at `heavy` |
+| Coupling 4, shape predicted **then** measured | `--check` 1 → `--write` → 0; **3/3**; needs-clause **6 → 3**; lines 972, rows 920, uplift-verify rows 20 **all unchanged**; `workflow_shape_truth` **0** |
+| `blocking-steps.yaml` comment-only edit | `gate_surface --check` **0** — moved nothing, checked rather than assumed |
+| Both new pin anchors, probed as a pure function | first draft **0 matches**; corrected to **exactly one** each, capturing `50` and `100` |
 | Six cheap gates | **0 / 0 / 0 / 2 / 1 / 0** |
-| `spec_ledger_census --check` | exit **0**; `61/2/77` → **`63/2/75`**, CI-gated 8 → 6 |
-| Line endings / bytes | every written file uniform, **no `w/mixed`, no BOM, no U+FFFD** |
-| Process sweep | see below |
+| `spec_ledger_census --files --check` | exit **0**, **unchanged** at `140/63/2/75` |
+| `pin_extractor_truth` | **14 declared / 14 probed / 14 both-sides** — not 15, not 16 |
+| Lint/format ownership | the 12 in `uplift/harness.py` and the 1 in `test_materiality_margin_rule.py` proven **byte-identical at HEAD** by materialising the blob and re-running the checker — **zero added** |
+| `mypy --strict` | clean on `policy.py`, `foresight.py`, `regret.py`; `uplift/` total **7 → 6** |
+| Line endings / bytes | every written file uniform; trap fired on `ci.yml` (629/47), `blocking-steps.yaml` (576/38), `doc-number-pins.yaml` (518/7), each normalised by **worktree** byte count |
 
-**Budget.** **Zero** local `pytest` invocations and **zero** wide `mypy` passes — this session's
-verification was almost entirely free `gh` reads, which is what I-0 recommends and what made a
-session this productive affordable. Two cancelled PowerShell commands (a `-f` format error and a
-slow recursive walk) were both swept: `python` count **0** after each.
+**Budget, honestly counted.** **Nine** bounded `pytest` invocations — above the three-per-session
+figure `SESSION_PROTOCOL.md` states. Three were an author-fix-verify loop on one new file, three
+were per-wave verification, three were the diagnostics that produced finding 42. Every one was
+scoped to at most four files, serial, `-m "not slow"`, at `dev` except one deliberate `heavy` on a
+single file to test the budget hypothesis. **Zero** wide `mypy` passes.
+`ledger_gen`/`readme_gen`/`verify_claims`/`doc_truth` not run in any form.
 
 ### NOT executed. Must not be claimed as passing.
 
-- **`uplift-verify`, and therefore Properties 38–60.** Still skipped, now behind step 18. **This
-  spec's entire property surface remains local evidence only.**
-- **`quality-gates` steps 19–23.** Skipped behind step 18. Unknown, not green.
-- **The `test_cognition_phase` repair, in CI.** 6 passed locally in session 3; step 19 has not run.
-- **`ledger_gen --check` / `readme_gen --check`.** Skipped behind `truth-gates` step 5. Not run
-  locally in any form (I-0). `ledger_gen --check` is **expected red** — see the second regeneration.
-- **Task 11's verdict.** The measurement ran; what it measured is not what task 11 asks (conflict M).
-- **The document-anchor side of the parked derived-margin pin.** No cheap gate covers it.
-- **Whether any of the 254 `ruff format` findings in CI's unlinted trees are real** vs line-ending
-  artifacts. The 530 lint findings stand.
-- **`vitest`. At all.** **The five slow-marked `ConsensusProtocol` properties.** Deselected.
+- **The slow step, and therefore the slow half of Properties 38–60.** Skipped behind step 5.
+- **The three new slow twin-driving properties** in `test_three_arm_comparator_property.py`.
+  Authored, diagnostics-clean, **deselected locally** — category 4 under I-0. A deselection is not
+  a pass.
+- **That the three-arm comparator produces a correct regret.** No twin measurement was taken. What
+  the `(s, S)` regret *is* remains unmeasured; checkpoint A run 1 is its only source.
+- **That the next `twin-regret` run uploads a parseable artifact.** The mechanism is asserted
+  locally; the run is CI's to report.
+- **`quality-gates` steps 19–23.** Still skipped behind step 18.
+- **Task 11's verdict.** No margin is committed and no run has been made against the new comparator.
+- **The two `test_ledger_gen_property.py` failures**, locally. I-0 forbids it.
+- **`vitest`. At all.**
 
 ### The lesson from this session
 
-**Every one of the four defects that mattered was invisible to reading and appeared the instant
-something actually ran.** A closure proof that walked the wrong graph, a step that swallowed its
-subject's exit status, a generator order that produced a document stale on arrival, and a committed
-ledger that had recorded a Windows path error as a check's finding. Three sessions of careful reading
-had passed over all four.
+**Two of the three repairs were made cheaper or safer by checking a premise that four documents
+agreed on.** `Par_Level_Reorder` was recorded as unlanded and was not; the recorded fix for
+conflict M's second reason would not have fixed it; and a `structlog` level floor looked sufficient
+until a test asked what happens at ERROR. **Consensus across documents is not evidence — it is
+usually just one unchecked claim copied forward.**
 
-**The corollary is not "read less" — it is that a gate which has never executed is not evidence, and
-the cheapest way to find out what a job does is to run it once.** `gh` reads are free under I-0;
-this session spent about twenty of them and moved two leaves that four sessions of authoring could
-not.
+And the corollary to session 4's lesson is now measured rather than argued: **a gate that has never
+executed is not evidence, and neither is a test that nothing has ever run.** Eight property
+failures sat in this spec's own tree, reproducible on the first try at the cheapest profile, while
+six handoffs called the surface "local evidence only".
 
 ---
 
@@ -356,7 +275,7 @@ not.
 | Conflict B | Licence artifact → `infrastructure/data/dataset-licences.yaml` (design E4a.1) |
 | Conflict C | Property 47/48 attribution — follow the property index |
 | Conflict D | **C75 is the highest registered gate id; next free is C76.** |
-| M5 licence | Fields land **explicitly null** with a `confirmation.procedure` block; the gate reports SKIP. **Never invent a `licence_id`.** |
+| M5 licence | Fields land **explicitly null** with a `confirmation.procedure` block; gate reports SKIP. **Never invent a `licence_id`.** |
 | Ratchets | An objective **weight** has no monotone better-direction, so it gets no ratchet. |
 | Checkpoint order | Tasks 11 and 14 fire **before** the work they gate. |
 | Margin derivation | The *rule* is pre-registered and **enforced by the reader**; the *value* is measured. Ratchet `down`. |
@@ -372,54 +291,55 @@ not.
 | Dispatch mechanism (2r-pre-c) | **Checkpoint A runs by LABEL. `main` is not touched.** Guards are allow-lists. |
 | Conflict I (2r) | **CI step 8 excludes `orchestrator/tests`; the wide command is run by no workflow.** |
 | Scope (2r) | The full wide 56 mypy errors were cleared, not only the 3 that gated step 8. |
-| Decision 1 (3) | **Route 1 then 3.** Landed `bbe4278`. **Its "then 3" premise LAPSED in session 4** — conflict M means no imminent pin, so the regeneration was run immediately. Surfaced, not silently re-ordered. |
+| Decision 1 (3) | **Route 1 then 3.** Landed `bbe4278`. Its "then 3" premise lapsed in session 4. |
 | Decision 2 (3) | **`test_cognition_phase` IS adopted**, reversing 2r's refusal. Landed `bf8693f`. |
-| Ruff scope (3) | **Measured, not adopted.** 530 lint / 254 format findings across nine unlinted trees. |
-| Conflict L (3) | `SESSION_PROTOCOL.md`'s checkpoint-A procedure was stale in four ways; corrected in place with the correction stated. |
-| **Conflict M (4)** | **The margin is NOT committed.** Any value in D2.5's bracket forces `material` on a no-op comparator. Checkpoint A steps 2–4 SUSPENDED. Two repairs costed; both the operator's. |
-| **Obstruction 2.5 (4)** | **Step 18 is structurally unmeasurable in CI.** Three dispositions costed; splitting the step is the only one consistent with precedent. **Not** cleared by lowering a floor or by `continue-on-error`. |
-| **Repair order (4)** | **`ledger_gen` must run AFTER `readme_gen`.** The committed order is inverted; a second regeneration is owed. Swapping the steps edits the enforcement spine and is the operator's. |
-| **`scipy` bound (4)** | `>=1.11,<2.0`, added to `twin-regret` only. A **choice**, flagged — `scipy` is pinned nowhere in the repo. |
+| Ruff scope (3) | **Measured, not adopted.** 530 lint / 254 format across nine unlinted trees. |
+| Conflict L (3) | `SESSION_PROTOCOL.md`'s checkpoint-A procedure was stale in four ways; corrected in place. |
+| Conflict M (4) | **The margin is NOT committed.** Any value in D2.5's bracket forced `material` on a no-op comparator. |
+| Obstruction 2.5 (4) | **Step 18 is structurally unmeasurable in CI.** Three dispositions costed. |
+| Repair order (4) | **`ledger_gen` must run AFTER `readme_gen`.** A second regeneration is owed. |
+| `scipy` bound (4) | `>=1.11,<2.0`, `twin-regret` only. A **choice**, flagged. |
+| **Conflict M repair (5)** | **Option (b): `Par_Level_Reorder` as the reference arm, wired through `DecisionPolicy`** — plus the no-op arm RETAINED as a third pass, without which reason 2 survives. Both levels **read**, not chosen. |
+| **Obstruction 2.5 (5)** | **(a) then (b).** `needs:` removed now because a `required:` check that can only report `skipped` is not a gate; the step-18 split lands separately and is still owed. |
+| **Conflict N (5)** | **`Par_Level_Reorder` HAD landed.** Four documents said otherwise. Ownership stays with `decision-integrity-uplift-proof`; it is **not** adopted. |
+| **Arm C precision (5)** | **NOT routed through the shared observe loop.** Truncation would move the regret in the self-serving direction by ~0.24 objective units. Asymmetry recorded, not closed. |
+| **`s`/`S` pins (5)** | **PARKED**, not landed. One regeneration diff should not carry two causes. **No ratchet** — policy parameters have no monotone better-direction. |
 
 ---
 
 ## Environment notes and traps
 
-- **NEW: an unguarded shell pipeline discards its subject's exit status, and `workflow_shape_truth`
-  cannot see it.** `cmd | tee f` under `bash -e` reports `tee`'s status. Use `set -o pipefail` in any
-  `run:` block that pipes a gate or a measurement.
-- **NEW: a closure proof must start at the command the job runs**, not at the module you think it
-  imports. `python -m pkg.mod` executes `pkg/__init__.py` first.
-- **NEW: `gh label create` prints nothing on success**, and a `gh ... --json x | ConvertFrom-Json |
-  Where-Object` filter silently yields nothing on PowerShell 5.1 because `ConvertFrom-Json` hands
-  back the array unenumerated. Verify with `gh label list` directly. The same trap makes
-  `gh run list --json` need a `foreach`, not a pipeline.
-- **NEW: PowerShell's `-f` operator rejects `{1,>6}`** — `>` is not a .NET alignment character. It
-  throws per call while the loop continues, so it presents as a hang.
-- **NEW: a recursive `Get-ChildItem` over this tree can exceed a 120-second command timeout.** Use
-  the search tooling or a temp `.py`, and **sweep for orphaned processes after any cancelled run.**
-- **`git ls-files --eol`'s `i/` column does not describe the worktree.** It read `i/lf` on a file
-  whose worktree was 140 CRLF / 51 LF. **Count the worktree bytes** before normalising.
-- **A `ruff format --check` diff whose two sides look identical is a LINE-ENDING diff.** Six sessions
-  running. Normalise to the file's **dominant** ending with Python at `newline=''`.
+- **NEW: a level floor alone is a tolerated-exception disjunct.** Suppressing `structlog` below
+  ERROR keeps stdout clean only while nothing logs at ERROR. Route the **logger factory to
+  stderr** as well; `| tee` reads stdout only, so nothing is lost.
+- **NEW: `ruff`'s `SIM300` reads an upper-case attribute as a constant.** `assert arm.S == spec.x`
+  is flagged as a Yoda condition. Compare as a tuple; do not add a `noqa`.
+- **NEW: attribute pre-existing lint debt by MATERIALISING THE BLOB.** `python` writes
+  `git cat-file blob HEAD:<f>` to disk as bytes and the checker runs over it. PowerShell's `>`
+  writes UTF-16 and `Set-Content -Encoding utf8` adds a BOM, so neither can do this.
+- **NEW: probe a pin anchor before committing it.** `doc_truth.documented_value` requires **exactly
+  one** matching line, and a backtick one token out of place matches **zero** — which is a
+  non-maskable skip for a `required: true` pin, so C56 goes SKIP while `pin_extractor_truth`
+  reports green.
+- **`git ls-files --eol`'s `i/` column does not describe the worktree.** Count the worktree bytes.
+- **A `ruff format --check` diff whose two sides look identical is a LINE-ENDING diff.** Seventh
+  session running. Normalise to each file's **dominant** ending with Python at `newline=''`.
 - **A cached mypy run can hide a `[[tool.mypy.overrides]]` change.** `--no-incremental`.
-- **`git log -1 -- <file>` is last-touch, not authorship.** Prefer `git cat-file -e origin/main:<f>`
-  then `git diff origin/main -- <f>`, and execute `main`'s version when it matters.
-- **PowerShell's `Get-Content`/`Set-Content` corrupt UTF-8 in this repo**, and `Get-Content`
-  *displays* em dashes as mojibake while the file is clean. **Verify bytes, never the console.**
-  `Copy-Item` is a byte copy and is safe for installing a generated artifact.
+- **`git log -1 -- <file>` is last-touch, not authorship.** Use `git cat-file -e origin/main:<f>`
+  then `git diff origin/main -- <f>`.
+- **PowerShell's `Get-Content`/`Set-Content` corrupt UTF-8 in this repo.** Verify bytes, never the
+  console.
+- **There are no heredocs.** `python - <<'PY'` is a parse error; write a temp `.py`.
 - **`git push` writes progress to stderr**, so PowerShell reports `NativeCommandError` and a
   non-zero `$LASTEXITCODE` on a **successful** push. Read the `old..new ref` line.
-- **`>` writes UTF-16; there are no heredocs** — `git commit -F` a temp file.
-- **`$LASTEXITCODE` is unreliable after a pipe through `Select-String`.** Re-run with `*> $null`.
+- **PowerShell 5.1's `ConvertFrom-Json` returns an array unenumerated.** Assign, then `foreach`.
 - **`git status` over-reports.** Trust `git diff`, stage precisely, `git check-ignore -v` first.
-- **Identify a CI run by `head_sha`, NEVER by timestamp.** And **check the run for the sha
-  `git rev-parse` gives you**, not the one a document names.
-- **Do not run `pre-commit install`** — it installs `types-PyYAML` and unmasks seven pre-existing
-  errors under `uplift/`. Note the consequence: its ruff hook is also the only thing that would lint
-  the trees CI never reads, so **the two mitigations are mutually exclusive.**
-- Python 3.14.0, mypy 1.19.1 locally, pytest 8.4.2, hypothesis 6.151.11. `gymnasium` absent.
-  `gh` 2.82.0, authenticated.
+- **Identify a CI run by `head_sha`, NEVER by timestamp**, and check the run for the sha
+  `git rev-parse` gives you.
+- **Do not run `pre-commit install`** — it installs `types-PyYAML` and unmasks pre-existing errors
+  under `uplift/`.
+- Python 3.14.0, mypy 1.19.1 locally, pytest 8.4.2, hypothesis 6.151.11. `gh` 2.82.0.
+  **Repository is PUBLIC — Actions minutes are unmetered on standard runners.**
 
 ---
 
@@ -431,29 +351,27 @@ anything binding a port; fan-out execution (`-n auto`, `-j`, repo-wide bare `pyt
 
 **Never run, specific to this spec:** `scripts.audit.verify_claims`, `scripts.audit.doc_truth`,
 bare `readme_gen --check`, **`ledger_gen --check` or `--write`**, `gate_fault_injection --sweep`,
-`pnpm` anything. **`regenerate-truth-docs.yml` is the sanctioned route for the middle two, it is
-reachable by the `regenerate-truth-docs` label, and it has now been proven to work.**
+`pnpm` anything — **and note that `tests/verify/test_ledger_gen_property.py` names a registry
+execution, so that module is CI-only too.** `regenerate-truth-docs.yml` is the sanctioned route for
+the generators, reachable by the `regenerate-truth-docs` label, and proven to work.
 
-**Cheap and encouraged:** file reads, `grep`, `ruff`/`mypy` on changed files, one bounded `pytest`
-per wave, `spec_ledger_census`, the six cheap gates, and **`gh` API reads — free, and the
-highest-yield evidence in this repo. Session 4 spent about twenty and discharged two leaves.**
+**Cheap and encouraged:** file reads, `grep`, `ruff`/`mypy` on changed files, bounded scoped
+`pytest`, `spec_ledger_census`, the six cheap gates, `doc_truth.documented_value` as a pure
+function, and **`gh` API reads — free, and the highest-yield evidence in this repo.**
 
 **Concurrency is the load-bearing half.** Parallel sub-agents for reading, writing and analysis:
 unlimited. **Sub-agents that execute code: exactly ONE at a time.**
 
-**Process sweep at close:** `python` **0**, `node` **1** (Kiro's own ACP server), `chrome` the
-operator's own browser started before this session's first command. Two `python` processes seen
-mid-session belonged to `dataforge-automation`'s Snowflake CLI, from a different virtualenv — not
-this session's, and not killed.
+**Process sweep at close:** recorded in the progress ledger row.
 
 ---
 
 ## Two decision points can end this spec early, on purpose
 
 **Checkpoint A, task 11** — if measured `(s, S)` regret is at or above the R5.2 margin **with its
-interval excluding it**, Finding 4 is falsified. **Session 4 measured a regret that would trigger
-this and proved the trigger would be about the wrong comparator. That is conflict M, and it is why
-the checkpoint is suspended rather than concluded.**
+interval excluding it**, Finding 4 is falsified. **Session 5 repaired the instrument so that this
+verdict, if it comes, is about the arm R5.1 names.** It may well still be `material`, and that would
+now be an admissible falsification rather than an artefact of the wrong comparator.
 
 **Checkpoint B, task 14** — if **any** single-objective policy is Pareto-optimal under
 interval-aware dominance, consensus is provably unnecessary and the experiment must NOT be run.
@@ -464,4 +382,5 @@ If the measured uplift is null or negative, **it is reported as null or negative
 at `0.0`, no headline is published as a gain, and the result is written up as a finding — not
 reframed, not re-run at a different replicate count until it moves. **A number that cannot fail is
 not a number, and a verdict that cannot be anything else is not a verdict** — session 4 found the
-second of those in the instrument that decides this spec's central question.
+second of those in the instrument that decides this spec's central question, and session 5 removed
+it.

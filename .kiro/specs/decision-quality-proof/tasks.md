@@ -1486,6 +1486,72 @@ tests in the interim, and that is a stated sequencing gap, not an omission.
     — not `inconclusive`, and emphatically not `material`. I-7: the measurement happened, and
     what it measured is not what this task asks.
 
+  - **SESSION 5 — CONFLICT M's FIRST REASON IS REPAIRED, AND CONFLICT N IS WHY IT WAS CHEAPER
+    THAN COSTED. This task is still `[ ]`: no margin is committed and no run has been made
+    against the new comparator.**
+
+    **CONFLICT N — the repair option was costed against a false premise, twice.**
+
+    1. `SESSION_PROTOCOL.md:285` recorded `Par_Level_Reorder` as "a declared precondition owned
+       by another spec and **has not landed**", and `NEXT_SESSION_PROMPT.md` as "another spec's
+       **unlanded** precondition". **It had landed.** It is on disk at
+       `uplift/baselines/par_level_reorder.py`;
+       `.kiro/specs/decision-integrity-uplift-proof/tasks.md` marks its tasks **2, 2.1 and
+       2.2 `[x]`**; and `tests/uplift/test_par_level_reorder_properties.py` already runs
+       Property 1 against it on `uplift-verify`'s fast step. Ownership is that spec's and is
+       not adopted here. **Availability was never the blocker: `run_two_pass` invoked no
+       `DecisionPolicy` at all.** The gap was wiring, not a missing deliverable.
+    2. **`HANDOFF.md`'s repair note was wrong in its second half.** It said landing the arm
+       would make `regret` and `comparator_headroom` "stop being the same expression". It would
+       not: `regret` is `aggregate(policy) - aggregate(reference)` and the headroom was
+       `mean_baseline - mean_foresight` over the same two arms, so whatever pass one became the
+       two coincided. **They separate only if the no-op arm is RETAINED as a third pass.**
+       Repair option (b) alone would have fixed reason 1 and left reason 2 intact.
+
+    **FINDING 40 — the line where the wrong comparator entered, and why `restock_threshold`
+    needed no amendment.** `comparator.restock_threshold: 0.0`'s committed rationale is about
+    `uplift/harness.py`, where an arm supplies its own `(s, S)` through `decide()` so the twin's
+    own must be off. `uplift/regret.py::_measure` reused the same key in a path that drove **no
+    policy**, so `0.0` there did not de-stack an arm — it deleted the incumbent. Supplying the
+    `(s, S)` arm through `decide()` with the threshold still `0.0` is exactly the configuration
+    that rationale calls correct, so R5.36 is unamended and Property 53 is untouched.
+
+    **FINDING 39 — the instrument at the centre of this checkpoint had no test.**
+    `run_two_pass` had one consumer and **no test file in the tree imported
+    `uplift.foresight`**. `NoOpRecordingPolicy` was instantiated nowhere and
+    `ForesightPolicy.decide` was never called, so both documented arms were prose rather than
+    behaviour. That is why a no-op reference arm sat at the centre of this spec for four
+    sessions with nothing objecting.
+
+    **What landed (commit `4b9d0d4`).** Three arms per replicate at one seed and one cadence:
+    **A** no-op (`NoOpRecordingPolicy`, now the mechanism) supplying
+    `comparator_headroom = A - C`; **B** the committed `(s, S)` reference arm supplying
+    `regret = B - C`; **C** the foresight oracle. The interval is estimated over the **judged**
+    contrast. `headroom >= regret` was a tautology under two arms and is now a claim about the
+    world, with `_measure` reporting `unavailable` and exiting 2 if it fails. Both levels are
+    **read** — `s = 50` from `engine.py::_restock_threshold`, `S = 100` from its initial-stock
+    literal — so the comparator introduces no chosen constant. ADR-055 gained an amendment-log
+    line and **D2.5.1**, in the same commit as the code, per D2.5's own ordering rule; its
+    `bracketing.upper` moved from session 1's four-replicate `11.79 - 2.93 = 8.86` to the
+    measured `8.937888952967558` from run `34366766968`.
+
+    **What did NOT land, deliberately.** `regret_objective.materiality_margin.value` is still
+    `null`; the parked derived-margin pin is still parked; no second label was added. The two
+    new `s`/`S` pins are **parked** in `pending_pins:` rather than landed, because landing them
+    moves `doc_truth`'s claim set and can move C56, and a second regeneration is already owed
+    for the inverted `ledger_gen`/`readme_gen` order — one diff should not carry two causes.
+
+    **The unproven claim, stated so nobody assumes it.** That `Par_Level_Reorder(s=50, S=100)`
+    *reproduces* the twin's endogenous restock is **not** proven: an internal engine guard
+    versus an external order-up-to decision on the comparator's cadence. D2.5's lower bracket
+    (`fill_rate = 0.8556`) is a comparable reference for this arm, not a measurement of it.
+
+    **WHAT THIS TASK STILL NEEDS, and the verdict may still be `material`.** Run 1 by label on
+    the new comparator, then the D2.5 amendment stating the derived literal, then the margin
+    commit, then run 2. A `material` verdict on the reference arm would be an **admissible**
+    falsification about the right subject — which is a good outcome under this spec's own
+    design — as distinct from the inadmissible one conflict M prevented.
+
 - [ ] 12. E2c — structures 1 and 2: non-stationary demand, and capacity that binds
   - Implements the first two of ADR-055's five structures. **Every structure names the agent
     decision it unlocks; nothing is added for realism's sake.**
@@ -3112,6 +3178,62 @@ data and scored against an external benchmark has no demonstrable value.
       floor. **Do not clear this by lowering `kv_cache_hit_rate` or by making step 18
       `continue-on-error`** — the first is assertion weakening (R2.10), the second re-creates the
       swallowed-exit-status defect session 4 just repaired two steps away.
+    - **SESSION 5 — `uplift-verify` HAS NOW RUN, FOR THE FIRST TIME EVER. This leaf is still
+      `[ ]`, because its own `discharge:` line asks for a job that reaches its end and this one
+      did not.** Disposition **(a)** was taken by explicit operator decision: `needs:
+      quality-gates` was removed from `uplift-verify` (`28cecce`), because
+      `required-checks.yaml` declares that job `required:` and the edge made it reportable only
+      as `skipped` — behind step 5, then 8, then 17, and now behind an unmeasurable step 18.
+      **The two consequences of obstruction 2.5 are separable and only one of them is closed.**
+
+      **Measured on run `34384834900`, sha `e9db587`:** `uplift-verify` `steps=9`,
+      conclusion `failure`. Step 4 **`Install dependencies` SUCCESS** — the closure proof taken
+      before the push was correct. Step 5 `Property + unit tests (fast — full 500-example
+      budget)` **failure**: `9 failed, 830 passed, 1 skipped, 25 deselected, 2 xpassed` in
+      `849.90s`. Step 6, the slow step, **skipped behind it**.
+
+      **So the claim must be stated precisely, and it is narrower than "Properties 38-60 have
+      executed".** The **fast** surface of `tests/uplift` and `tests/verify` ran and is now
+      measured. The **slow** step never started, so the six slow properties, the 623-test
+      regression floor, the subprocess fault-injection probe and `digital_twin`'s 1000-scenario
+      run are all still unexecuted. `sprint6-verify` and `training-smoke` remain `skipped`,
+      correctly: they keep their own `needs: quality-gates`.
+
+      **THE NINE FAILURES, ATTRIBUTED MECHANICALLY (`git cat-file -e origin/main:<f>` then
+      `git diff origin/main -- <f>`), because ownership decides who repairs them.**
+
+      | Module | Failures | On `origin/main`? | Owner |
+      |---|---|---|---|
+      | `tests/verify/test_command_path_resolution_property.py` | **5** | **absent** (1177 insertions) | **this spec** |
+      | `tests/verify/test_ledger_gen_property.py` | 2 | **absent** (588 insertions) | **this spec** |
+      | `tests/verify/test_ratchet_monotonicity_property.py` | 1 | **absent** (861 insertions) | **this spec** |
+      | `tests/uplift/test_aggregation_integrity_property.py` | 1 | **byte-identical to main** | `main`'s |
+
+      **SEVEN OF THE NINE REPRODUCE LOCALLY, ON THE FIRST TRY, AT `HYPOTHESIS_PROFILE=dev`.**
+      Not environment-dependent and not budget-dependent: `test_command_path_resolution_property`
+      fails 5 of 8 at `dev` **and** 5 of 8 at `heavy`, so the falsifying inputs are found at ten
+      examples. A hypothesis that the example budget was hiding them was formed and **refuted**
+      by measurement rather than carried forward.
+
+      The remaining two, in `test_ledger_gen_property.py`, are **deliberately unexamined
+      locally**: `test_the_generated_ledger_round_trips_against_its_registry_execution` names a
+      registry execution, and I-0 forbids `ledger_gen` locally in any form. CI is the only
+      sanctioned place to read them, and their shapes (`assert 1 == 2`,
+      `assert 'unavailable' == 'fail'`) are consistent with the inverted
+      `ledger_gen`/`readme_gen` order session 4 measured — the same defect surfacing in a
+      property instead of in a gate. Not confirmed.
+
+      **FINDING 42 — THE PER-WAVE SWEEP CANNOT SEE THIS CLASS OF FAILURE, AND THAT IS A HOLE IN
+      THE PROCEDURE RATHER THAN IN THE TESTS.** `SESSION_PROTOCOL.md`'s verification block says
+      to run "one bounded `pytest` over the loci **that wave touched**", and no wave ever touched
+      these four modules. So they were authored, reported as authored-and-diagnostics-clean, and
+      executed by **nothing** — not by a sweep, because sweeps are scoped to changes, and not by
+      CI, because `uplift-verify` was skipped. Six sessions of `HANDOFF.md` recorded this spec's
+      property surface as "local evidence only"; for these modules **there was no local evidence
+      either.** The procedure verifies what a session changed and never what it already had.
+      Repair options belong to the operator: a periodic full-tree run in CI is what
+      `uplift-verify` now is, so the cheapest repair may be to keep this job reachable and read
+      it every session.
     - _Requirements: —_
 
 ## Notes
