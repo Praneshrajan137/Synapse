@@ -2,7 +2,9 @@
 
 > ## SESSION PROTOCOL — READ FIRST
 >
-> **Work on this spec is batched: TEN leaf tasks per session, then STOP.**
+> **Work on this spec is batched: at most THIRTY leaf tasks per session, in three waves of about
+> ten, then STOP. The ceiling is expected never to bind — barriers and phase boundaries are what
+> stop a session.**
 >
 > The binding agreement, the batch plan, the two CI checkpoints, the verification sweep and the
 > resolved tasks-11→12 circularity all live in
@@ -10,8 +12,9 @@
 > [`NEXT_SESSION_PROMPT.md`](./NEXT_SESSION_PROMPT.md).
 >
 > **No count is written here.** Derive it:
-> `python -m scripts.audit.spec_ledger_census --next 10`. That command is the census; every
-> document cites it and none transcribes it.
+> `python -m scripts.audit.spec_ledger_census --next 30`. That command is the census; every
+> document cites it and none transcribes it. It also names every **barrier** the offered batch
+> steps over — an open CI-gated checkpoint with offered ids behind it. Answer each one.
 >
 > **Three marks, because the honesty contract has three states (I-7).**
 > `[ ]` open · `[~]` **authored, discharge pending** — the work is on disk and the proof is owed
@@ -2820,7 +2823,7 @@ data and scored against an external benchmark has no demonstrable value.
 ## Notes
 
 - **The census is a command, not a paragraph.**
-  `python -m scripts.audit.spec_ledger_census --next 10` derives the leaf total, the three mark
+  `python -m scripts.audit.spec_ledger_census --next 30` derives the leaf total, the three mark
   buckets, the CI-gated set and the next authorable batch from this file. Add `--files` at session
   start: it reports open tasks whose named artifacts already exist, which is the session-1 failure
   mode. Its `absent-artifact` and `prior-art` lines are **informational** — this file legitimately

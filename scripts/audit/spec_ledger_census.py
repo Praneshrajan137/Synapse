@@ -79,7 +79,7 @@ Run::
     python -m scripts.audit.spec_ledger_census --json             # canonical JSON
     python -m scripts.audit.spec_ledger_census --check            # exit 0/2
     python -m scripts.audit.spec_ledger_census --files            # + disk observations
-    python -m scripts.audit.spec_ledger_census --next 10          # the next batch
+    python -m scripts.audit.spec_ledger_census --next 30          # the next batch
     python -m scripts.audit.spec_ledger_census --spec other-spec
 """
 
@@ -121,7 +121,7 @@ ROOT: Final[Path] = Path(__file__).resolve().parents[2]
 SPECS_DIR: Final[str] = ".kiro/specs"
 TASKS_FILENAME: Final[str] = "tasks.md"
 DEFAULT_SPEC: Final[str] = "decision-quality-proof"
-DEFAULT_BATCH: Final[int] = 10
+DEFAULT_BATCH: Final[int] = 30
 
 MARK_OPEN: Final[str] = " "
 MARK_PENDING: Final[str] = "~"
@@ -283,6 +283,11 @@ class LedgerCensus(BaseModel):
     authorable: tuple[str, ...]
     #: Open leaves whose ``discharge:`` line names the job that owes the proof.
     gated: tuple[str, ...]
+    #: Every open leaf id in ledger order, gated or not. Ledger *position* is what makes
+    #: ``barriers_crossed`` derivable: ``authorable`` alone cannot see what it steps over.
+    open_order: tuple[str, ...]
+    #: ``{task_id: job}`` for every open CI-gated leaf. A barrier candidate.
+    gated_jobs: dict[str, str]
     #: Every ``[~]`` leaf and the job that owes its proof.
     pending_discharges: tuple[str, ...]
     observations: tuple[DiskObservation, ...]
@@ -298,6 +303,37 @@ class LedgerCensus(BaseModel):
     def next_batch(self, size: int) -> tuple[str, ...]:
         """The next ``size`` authorable leaves, in ledger order."""
         return self.authorable[:size]
+
+    def barriers_crossed(self, size: int) -> tuple[str, ...]:
+        """Open CI-gated leaves the ``size``-batch steps OVER, in ledger order.
+
+        ``next_batch`` filters gated leaves out, so a batch large enough to span one
+        reports nothing about it -- and a checkpoint that can cancel the work behind it
+        is exactly the thing that must not be stepped over silently. Task 14's own words
+        are "the consensus experiment ... **must NOT be run**. Do not proceed to E3."
+
+        At a batch of 10 this was satisfied by accident, because ten authorable leaves
+        happened not to reach past a checkpoint. At 30 it is not, so the rule stops being
+        prose and becomes a derivation: a barrier is an open gated leaf with at least one
+        offered id after it in ledger order.
+
+        Advisory, not fatal. Ledger order is not execution order -- session 2r's own batch
+        (27.2-27.5) legitimately sat after checkpoint A's task 11 and did not depend on
+        it. So this names what is crossed and leaves the judgement where it belongs,
+        rather than manufacturing a block the ledger cannot justify.
+        """
+        batch = self.next_batch(size)
+        if not batch:
+            return ()
+        position = {task_id: index for index, task_id in enumerate(self.open_order)}
+        last = position.get(batch[-1])
+        if last is None:  # pragma: no cover - batch ids come from open_order by construction
+            return ()
+        return tuple(
+            task_id
+            for task_id in self.open_order
+            if task_id in self.gated_jobs and position[task_id] < last
+        )
 
     def canonical_json(self) -> str:
         """Canonical serialisation for a persisted payload."""
@@ -460,6 +496,12 @@ def census(
     gated = tuple(
         f"{record.task_id} -> {record.discharge}" for record in still_open if record.is_gated
     )
+    open_order = tuple(record.task_id for record in still_open)
+    gated_jobs = {
+        record.task_id: record.discharge or "(no discharge declared)"
+        for record in still_open
+        if record.is_gated
+    }
     pending_discharges = tuple(
         f"{record.task_id} -> {record.discharge or '(no discharge declared)'}"
         for record in pending
@@ -498,6 +540,8 @@ def census(
         open_count=len(still_open),
         authorable=authorable,
         gated=gated,
+        open_order=open_order,
+        gated_jobs=gated_jobs,
         pending_discharges=pending_discharges,
         observations=observations,
         findings=ordered,
@@ -616,6 +660,17 @@ def format_report(report: LedgerCensus, *, batch: int = DEFAULT_BATCH) -> list[s
     ]
     batched = report.next_batch(batch)
     lines.append(f"  next {batch:<2}      : {' '.join(batched) if batched else '(none)'}")
+    for barrier in report.barriers_crossed(batch):
+        following = sum(
+            1
+            for task_id in batched
+            if report.open_order.index(task_id) > report.open_order.index(barrier)
+        )
+        lines.append(
+            f"  [!!] barrier    : {barrier} is CI-gated and {following} of the {len(batched)} "
+            f"offered id(s) follow it in ledger order -> {report.gated_jobs[barrier]}. "
+            "Ledger order is not execution order: confirm the batch does not DEPEND on it."
+        )
     for entry in report.gated:
         lines.append(f"  [--] CI-gated : {entry}")
     for entry in report.pending_discharges:

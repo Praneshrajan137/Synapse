@@ -17,7 +17,9 @@ from __future__ import annotations
 from pathlib import Path
 
 from scripts.audit.spec_ledger_census import (
+    DEFAULT_BATCH,
     CensusOutcome,
+    LedgerRecord,
     census,
     evaluate,
     extract_paths,
@@ -54,7 +56,7 @@ _LEDGER = """# Plan
 """
 
 
-def _records() -> tuple:
+def _records() -> tuple[LedgerRecord, ...]:
     return parse_records(_LEDGER)
 
 
@@ -141,6 +143,58 @@ def test_authorable_preserves_ledger_order() -> None:
     report = census(_records(), spec="fixture", source="fixture")
     assert report.authorable == ("3.2", "4.1")
     assert report.next_batch(1) == ("3.2",)
+
+
+# --- barriers: what a batch steps OVER -------------------------------------
+
+
+def test_a_batch_reports_the_gated_leaf_it_steps_over() -> None:
+    """A checkpoint that can cancel the work behind it must not be crossed silently.
+
+    ``next_batch`` filters gated leaves out, so before this existed a batch large enough
+    to span one reported nothing about it. At the old batch of 10 that was satisfied by
+    accident; at 30 the offered batch reaches past checkpoint B, whose own task says
+    "the consensus experiment ... must NOT be run. Do not proceed to E3."
+    """
+    report = census(_records(), spec="fixture", source="fixture")
+    # `3.2` sits after gated `2`, so even a one-task batch crosses one barrier.
+    assert report.barriers_crossed(1) == ("2",)
+    # Widening to `4.1` steps over gated `3.3` as well, and both are named in ledger order.
+    assert report.barriers_crossed(2) == ("2", "3.3")
+
+
+def test_an_empty_batch_crosses_nothing() -> None:
+    """No offered work cannot step over anything -- absence is not a crossing."""
+    report = census(_records(), spec="fixture", source="fixture")
+    assert report.barriers_crossed(0) == ()
+
+
+def test_a_barrier_is_advisory_and_still_leaves_the_batch_offered() -> None:
+    """Ledger order is not execution order, so a crossing informs and never blocks.
+
+    Session 2r's own batch (27.2-27.5) legitimately sat after checkpoint A's task 11 and
+    did not depend on it. Truncating on ledger position alone would have refused correct
+    work, so the derivation names the crossing and leaves the judgement to the reader.
+    """
+    report = census(_records(), spec="fixture", source="fixture")
+    assert report.next_batch(2) == ("3.2", "4.1")
+    assert report.barriers_crossed(2), "the batch does cross barriers"
+    assert report.outcome is CensusOutcome.PASS
+    assert report.exit_code == 0
+
+
+def test_the_report_names_every_barrier_the_batch_crosses() -> None:
+    """The human report must surface the crossing, not just the model."""
+    report = census(_records(), spec="fixture", source="fixture")
+    text = "\n".join(format_report(report, batch=2))
+    assert "[!!] barrier" in text
+    assert "uplift.yml::twin-regret" in text
+    assert "Ledger order is not execution order" in text
+
+
+def test_the_default_batch_is_thirty() -> None:
+    """The cap lives in ONE place. Three documents used to transcribe it by hand."""
+    assert DEFAULT_BATCH == 30
 
 
 # --- path extraction -------------------------------------------------------

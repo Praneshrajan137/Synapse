@@ -4,11 +4,18 @@
 third.** Derive the counts, never read them:
 
 ```powershell
-python -m scripts.audit.spec_ledger_census --files --next 10
+python -m scripts.audit.spec_ledger_census --files --next 30
 ```
 
 At the time of writing that reported **140 leaf tasks: 61 done, 2 authored-pending-discharge, 77
 open** — 69 authorable and 8 CI-gated.
+
+**The session cap is now THIRTY leaf tasks, in three waves of about ten, and it is expected never to
+bind.** `SESSION_PROTOCOL.md` carries the derivation; the short version is that the ten-cap bound
+zero of eight observed sessions, and at thirty the remaining plan is governed entirely by barriers
+and phase boundaries: session 2 is **11** (checkpoint B), session 3 is **21** (Phase 3), session 4 is
+**22** (checkpoint C), session 5 is **15** (checkpoint D). Eight authoring sessions became four, and
+two same-commit couplings that the ten-cap split across sessions now land whole.
 
 > **Session 2r closed parent 27's four authorable leaves and made `ci.yml::quality-gates` step 8
 > pass for the first time on this branch. It did NOT reach `uplift-verify`, and the reason is the

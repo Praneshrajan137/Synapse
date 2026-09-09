@@ -9,23 +9,104 @@ context window. Work is therefore batched, and **the batch boundary is a hard st
 
 ## The rule
 
-> **At most TEN leaf tasks per session. Stop earlier at a dependency boundary. Then regenerate
-> the handoff and tell the user to start a new session.**
+> **At most THIRTY leaf tasks per session. Stop earlier at a barrier or a phase boundary — which
+> is what will actually stop you. Then regenerate the handoff and tell the user to start a new
+> session.**
 
-Ten is a **cap, not a quota**. The cap exists because context degrades before it exhausts: an
-agent at 85% context makes worse decisions than one at 40%, and the failure mode is silent — it
-stops reading files it should read and starts inferring from surrounding code. Ten is the point at
-which quality was observed to still be intact.
+Thirty is a **ceiling, and it is expected never to bind.** That is why it was chosen.
 
-A session that reaches a dependency boundary at task four stops at four. Session 7 below is
-deliberately four tasks long, because the fifth thing that has to happen is a CI run, not an edit.
-Padding it to ten would mean authoring E5 before the E4 checkpoint that gates E5 has looked.
+### Why the cap moved from ten, and what the number was really proxying for
+
+The ten-task cap was written at the end of session 1, with a stated rationale: context degrades
+before it exhausts, an agent at 85% context makes worse decisions than one at 40%, and the failure
+mode is **silent** — it stops reading files it should read and starts inferring from surrounding
+code. **That rationale is correct and is unchanged.** What was wrong was using *task count* as its
+proxy.
+
+Eight sessions of evidence, read from this document's own progress ledger:
+
+| Session | Leaves ticked | What actually consumed the session |
+|---|---|---|
+| 1 | ~34 | authoring plus 3 defects — it **overran the ten-cap in the very session that wrote it** |
+| 1r | 0 | protocol re-cut, the census tool, the margin rule |
+| 2p | 1 | seven defects |
+| 2q | 3 | four findings, two of them corrections to its own instructions |
+| 2r-pre / -b / -c | 0 / 0 / 0 | findings 20, 22, 23 |
+| 2r | 4 | Conflicts I and J, findings 24–29 |
+
+**42 leaves and 29 findings across eight sessions; mean 5.25 leaves.** The ten-cap was the binding
+constraint in **zero** of them. What binds is dependency boundaries and defect discovery. A ceiling
+never once reached protects nothing — it only splits coherent work, and at ten it was splitting two
+natural blocks of 21 and 22 tasks straight through their schema changes.
+
+**Task count is a poor proxy for all three risks it stood in for, and each has a better governor:**
+
+| Risk | What it actually scales with | Governor |
+|---|---|---|
+| Context degradation | files read and findings held unwritten, **not** tasks ticked | **wave discipline** — write findings into the ledger at each wave, delegate reading to sub-agents |
+| Bisect depth when verification goes red | **commits**, not tasks | **one commit per wave**, so a red is bounded to one wave's diff |
+| Authoring past a gate that could invalidate the work | **checkpoint crossings**, not tasks | **the barrier stop**, now *derived* by the census rather than asserted |
+
+A two-task batch that crosses checkpoint B is more dangerous than a twenty-eight-task batch that
+does not. The count was never the thing that mattered.
+
+### The barrier stop — the one rule that had to become mechanical
+
+**At ten, this rule was satisfied by accident. At thirty it is not.** `--next 30` offers
+`12.1 … 13.7` and then jumps straight to `15.1`, stepping over **checkpoint B** — whose own task
+says the consensus experiment "**must NOT be run**. Do not proceed to E3." `next_batch` filters
+gated leaves out, so the batch could not see what it crossed.
+
+So the census now derives it. `LedgerCensus.barriers_crossed(size)` names every open CI-gated leaf
+with at least one offered id after it in ledger order, and `format_report` prints:
+
+```
+[!!] barrier    : 14 is CI-gated and 19 of the 30 offered id(s) follow it in ledger order
+                  -> uplift.yml, task 13.7's E2c measurement steps (checkpoint B).
+                  Ledger order is not execution order: confirm the batch does not DEPEND on it.
+```
+
+**It is advisory and never truncates, and that is deliberate.** Ledger order is not execution
+order: session 2r's own batch (27.2–27.5) legitimately sat after checkpoint A's task 11 and did not
+depend on it. A census that refused work on ledger position alone would have refused a correct
+batch. So it names the crossing and leaves the judgement where the judgement belongs.
+
+**Your obligation: for every barrier the census names, state in the session's opening whether the
+batch depends on it.** An unanswered barrier line is a stop, not a warning.
+
+### Wave discipline — this is what replaces the count
+
+A thirty-task session is **three waves of about ten**, not one long run. Each wave is
+`read → author → verify → commit`.
+
+1. **Author** the wave's leaves.
+2. **Verify** the wave: `ruff check` and `ruff format --check` on that wave's changed files,
+   `mypy --strict` on its changed Python, and **one** bounded `pytest` invocation over the loci
+   that wave touched. Serial, never concurrent.
+3. **Write the findings into the ledger as you go** — into the task body in `tasks.md`, not into
+   your context. A finding held for the end of a thirty-task session is a finding that will be
+   written from memory.
+4. **Commit the wave.** Never carry two waves in one commit: the commit is the bisect unit, and
+   bounding it is the whole reason waves exist.
+5. **Re-read** the authority file for the next wave's area before starting it. This is the specific
+   defence against the silent failure mode, because the symptom of degradation is skipping exactly
+   this step.
+
+**Delegate reading, never execution.** I-0 permits **unlimited** parallel sub-agents for reading,
+writing and analysis, and **exactly ONE** that executes code. At twenty-plus tasks the main context
+cannot hold every file it needs, so dispatch `context-gatherer` sub-agents per area in parallel and
+keep every command in the main agent. That is how a thirty-task session stays inside I-0 rather than
+around it.
 
 ### What "one task" means
 
-One **leaf** entry in `tasks.md`: a numbered sub-task like `12.3`, or a checkpoint parent like
-`11` that has no sub-tasks. Leaf status is derived from the id tree — `12` is a parent because
-`12.1` exists — not from indentation. A parent with sub-tasks is ticked when its last child is.
+One **leaf** entry in `tasks.md`: a numbered sub-task like `12.3`, or a checkpoint parent like `11`
+that has no sub-tasks. Leaf status is derived from the id tree — `12` is a parent because `12.1`
+exists — not from indentation. A parent with sub-tasks is ticked when its last child is.
+
+A session that reaches a barrier at task four stops at four. **Padding a session to reach thirty is
+the failure this ceiling is most likely to cause, and it is forbidden.** The number is a limit on
+how much may be done, never a target.
 
 ### The three marks, because the honesty contract has three states (I-7)
 
@@ -48,20 +129,28 @@ a finding.
 ### What to do at the boundary
 
 1. Stop authoring. Do not start the next task, even partially.
-2. Run the verification sweep (below) and record real numbers.
-3. Regenerate `HANDOFF.md` — overwrite it, do not append. It must describe the tree as it is
+2. Confirm the last wave is committed. **An uncommitted wave is not a bisect unit.**
+3. Run the closing verification sweep (below) and record real numbers.
+4. Answer every `[!!] barrier` line the census printed: did the batch depend on it?
+5. Regenerate `HANDOFF.md` — overwrite it, do not append. It must describe the tree as it is
    **now**, not as a diff against how it was.
-4. Append a row to `## Progress ledger`. **Never edit a past row.**
-5. Tell the user, explicitly: **"Session complete. Start a new session and paste
+6. Append a row to `## Progress ledger`. **Never edit a past row.** Record the wave structure —
+   how many waves, how many leaves in each, and which wave any red came from.
+7. Tell the user, explicitly: **"Session complete. Start a new session and paste
    `NEXT_SESSION_PROMPT.md`."**
 
 ### The one permitted overrun
 
 If the last task leaves the tree in a state that **cannot be verified** — a half-edited module, a
 schema change whose consumers have not moved, a rename applied on one side of a coupling — finish
-the coupling and stop at eleven or twelve. A same-commit coupling left half-applied is a red gate
-for the next session and costs more than the extra task saved. **Record the overrun and its reason
-in the progress ledger.** Never overrun for convenience or momentum.
+the coupling and stop at thirty-one or thirty-two. A same-commit coupling left half-applied is a red
+gate for the next session and costs more than the extra task saved. **Record the overrun and its
+reason in the progress ledger.** Never overrun for convenience or momentum.
+
+At thirty this clause should almost never fire, because the couplings it protects — a schema change
+and its fixtures, a rename and its declaration — now sit **inside** one session rather than across a
+boundary. That is one of the concrete gains of the larger ceiling: at ten, task 15.1's
+`UpliftArtifact` change and the `tests/uplift/` fixtures it moves were in different sessions.
 
 ---
 
@@ -71,14 +160,20 @@ There is no count in this document, and there should never be one again. Three d
 carry the same three numbers by hand.
 
 ```powershell
-python -m scripts.audit.spec_ledger_census --next 10
+python -m scripts.audit.spec_ledger_census --next 30
 ```
 
 That command **is** the census. It reports the leaf total, the three mark buckets, the CI-gated
-set derived from `discharge:` lines, and the next authorable batch in ledger order. Add `--files`
-at session start: it reports open tasks whose named artifacts already exist, which is exactly the
-session-1 failure mode. `--json` for a payload, `--check` for an exit code (`0` pass, `2`
-unavailable — an unclassifiable mark or a duplicated id is non-passing, never a guess).
+set derived from `discharge:` lines, the next authorable batch in ledger order, and **every barrier
+that batch steps over**. Add `--files` at session start: it reports open tasks whose named artifacts
+already exist, which is exactly the session-1 failure mode. `--json` for a payload, `--check` for an
+exit code (`0` pass, `2` unavailable — an unclassifiable mark or a duplicated id is non-passing,
+never a guess).
+
+`DEFAULT_BATCH` lives in `scripts/audit/spec_ledger_census.py` and is **30**. It is the single
+place the ceiling is written down; when it moves, the code and the four documents that name it move
+in the same commit. It is not a registered check and no gate reads it, so changing it moves no
+registry count — verified before it was changed.
 
 Two things it deliberately does **not** do. It asserts no total, so no document has to be edited
 when the total moves. And its `--files` observations are **informational**: `tasks.md` legitimately
@@ -210,31 +305,39 @@ record the headroom it was checked against, and pin the derived value.
 
 ## The batch plan
 
-Sessions are sized by dependency boundaries, capped at ten. Re-derive membership with
-`--next N`; this table says where the boundaries are and why.
+Sessions are sized by **barriers and phase boundaries**, under a ceiling of thirty. Re-derive
+membership with `--next 30`; this table says where the boundaries are and why. **The ceiling binds
+in none of the remaining sessions — that is the test of whether it was set correctly.**
 
-| Session | Tasks | n | Theme and boundary |
+| Session | Tasks | n | Bound by |
 |---|---|---|---|
-| **A** | 6 · 10.4 · 11 | — | **Operator.** First CI exposure, survivor list, regret measurement, margin. Task 11's verdict gates session 2. Task 6 discharged in session 2q. |
-| **2q** | 6 · 26.1 · 27.1 | — | **Landed.** Task 6 ticked on the reviewed survivor list; the regeneration job and its couplings; the `confidence_threshold` declaration fix. Registered parents 26 and 27. |
-| **2r** | 27.2 · 27.3 · 27.4 · 27.5 · 26.2 · 26.3 | 6 | **Adopted debt, and it goes BEFORE session 2 — see below.** Clear `mypy --strict orchestrator/`; confirm `uplift-verify` executes; **then, last, dispatch and commit the regeneration.** The order within 2r is fixed: see "The regeneration goes last". |
-| **2 (next)** | 12.1–12.4 · 13.1–13.7 | 11 | E2c's five structures + Pareto. **Overruns by one deliberately:** 13.7 is what makes checkpoint B reachable. |
-| **B** | 14 | — | **Operator.** Pareto evaluation. Can cancel E3 outright. |
-| 3 | 15.1–15.6 · 16.1–16.4 | 10 | E3 interval + schema; controls begin |
-| 4 | 16.5–16.7 · 17.1–17.7 | 10 | Controls job; Power_Report; floor ratchet; staleness |
-| 5 | 17.8 · 17.9 · 18.1–18.6 · 19.1 · 19.2 | 10 | C60 operator; held-out block + recompute; benchmark begins |
-| 6 | 19.3–19.8 · 20.1–20.4 | 10 | Benchmark honesty; degradation disjunction; registry; materialisation |
-| 7 | 20.5–20.8 | 4 | **Stops at the E4/E5 boundary**, not at ten. |
+| **A** | 6 · 10.4 · 11 | — | **Operator.** Task 6 discharged in 2q. 10.4 and 11 outstanding, reachable by labelling PR #84. |
+| **2q** | 6 · 26.1 · 27.1 | — | **Landed.** Task 6 ticked; the regeneration job; the `confidence_threshold` declaration fix. |
+| **2r** | 27.1 · 27.2 · 27.3 · 27.4 | 4 | **Landed.** `mypy --strict orchestrator/` 56 → 0; CI step 8 passes. **27.5 left `[ ]`** — a CI read, now blocked behind 26.2. |
+| **2 (next)** | 12.1–12.4 · 13.1–13.7 | **11** | **Barrier: checkpoint B.** Cannot be padded — 13.7 is what makes B reachable, and B can cancel E3 outright. |
+| **B** | 14 | — | **Operator.** Pareto evaluation. Can cancel E3. |
+| **3** | 15.1 · 15.2 · 15.4–15.6 · 16.1–16.7 · 17.1–17.9 | **21** | **Phase 3 boundary.** All of E3: interval + schema, both controls and their job, Power_Report, floor admission, C60 operator. |
+| **4** | 18.1–18.6 · 19.1–19.8 · 20.1–20.8 | **22** | **Barrier: checkpoint C**, at the E4/E5 boundary. |
 | **C** | 21 | — | **Operator.** Is the confidence contract live? Repair before E5. |
-| 8 | 22.1 · 22.2 · 23.1–23.8 | 10 | E5 powered run, declarations, external anchor |
-| 9 | 23.9–23.11 · 24.1 · 24.2 | 5 | Chain export, registration, then generation last |
+| **5** | 22.1 · 22.2 · 23.1–23.11 · 24.1 · 24.2 | **15** | **Barrier: checkpoint D.** Registration precedes generation, so 24.1/24.2 go last inside it. |
 | **D** | 22.3 · 25 | — | **Operator.** Ratchet the floor if the measurement supports it; state the claim. |
+| **Phase 6** | 26.2 · 26.3 · 27.5 | — | **All CI-gated, all blocked** — 26.2 by finding 23's residue, 27.5 by 26.2, and every one of them by the account-level CI block. |
 
-Authorable total: `11 + 10 + 10 + 10 + 10 + 4 + 10 + 5 = 70`. CI-gated: `6, 10.4, 11, 14, 21,
-22.3, 25` = 7. Together 77 open leaves — but **check that against the census, not against this
-sum**, because this sum is prose and the census is not. **It is already stale by session 2q's
-eight new leaves, and that is the intended failure mode:** the census moved, this sentence did
-not, and the rule is to trust the command.
+Authorable total: `11 + 21 + 22 + 15 = 69`. CI-gated: `10.4`'s sibling `11`, `14`, `21`, `22.3`,
+`25`, `26.2`, `26.3`, `27.5` = 8. Together 77 open leaves — but **check that against the census, not
+against this sum**, because this sum is prose and the census is not.
+
+**What the re-cut bought, stated so it can be checked rather than believed.** Eight authoring
+sessions became **four**, and the two blocks the old ceiling was splitting — Phase 3 at 21 and Phase
+4 at 22 — now fit whole. That matters beyond convenience: at ten, task **15.1**'s `UpliftArtifact`
+`schema_version` + `interval` change and the `tests/uplift/` fixtures it moves fell in *different*
+sessions, and the same was true of **17.2/17.5**'s `PoweredProof` interval and both floor tests.
+Those are two of the three declared same-commit couplings. **A ceiling that splits a coupling
+manufactures the half-applied state the overrun clause exists to prevent.**
+
+**Session 2 is the proof that the ceiling is not a target.** It is eleven tasks and must stay
+eleven, because checkpoint B sits behind 13.7 and can end E3. Nineteen further authorable ids exist
+in ledger order immediately after it, and the census will name that crossing on every run.
 
 ### Why session 2r comes before session 2, and why it is not optional
 
@@ -303,9 +406,46 @@ broken for a reason that had nothing to do with it.
 
 ---
 
-## Verification sweep — run before closing any session
+## Verification sweep — run per WAVE, and again before closing
 
 Nothing here is expensive. All of it is category-5 under I-0. Serial, never concurrent.
+
+### The I-0 reading this depends on, stated rather than assumed
+
+I-0's category-5 list says "**One** scoped test run: a single file, or one narrow directory." A
+three-wave session needs three. **The reading taken here is that the bound is on the SCOPE of an
+invocation, not on a per-session quota** — the rule's named enemies are process *type* (services,
+watchers, browsers) and process *count in parallel*, and its own precedent section attributes both
+incidents to concurrency and leakage, never to serial repetition. Session 2r ran three bounded
+`pytest` invocations serially inside the ten-task regime without objection.
+
+**So: at most one `pytest` invocation per wave, each bounded to the loci that wave touched, strictly
+serial, never concurrent — three per session maximum.** If the operator wants that written into I-0
+rather than inferred here, the amendment is one line in
+`.kiro/steering/local-compute-budget.md`: *"One scoped test run per wave, at most three per session;
+the bound is on scope and serialisation, not on a session quota."* **I-0 outranks this document, so
+until that line exists this is an interpretation and is flagged as one.**
+
+`mypy --strict orchestrator/` is category 2 and its budget does **not** scale with the ceiling:
+still four wide passes per session, whatever the task count.
+
+### Per wave
+
+```powershell
+# Only what THIS wave touched. Never repo-wide -- pre-existing debt is not yours.
+python -m ruff check <this wave's changed files>
+python -m ruff format --check <this wave's changed files>
+python -m mypy --strict <this wave's changed python files>
+git ls-files --eol <this wave's changed files>     # w/mixed after ANY programmatic edit
+$env:HYPOTHESIS_PROFILE='dev'
+python -m pytest <this wave's touched loci> -q --tb=line -p no:randomly -m "not slow"
+```
+
+Then **commit the wave** and write its findings into `tasks.md`. A wave that is not committed is not
+a bisect unit, and a finding that is not written is a finding that will be reconstructed from memory
+at the end of a thirty-task session.
+
+### Before closing the session
 
 ```powershell
 # 1. Lint and type-check only what the session touched.
@@ -328,6 +468,9 @@ python -m scripts.audit.gate_surface --check              # C63 (added session 2
 # 4. Re-derive the ledger and confirm it moved by exactly what was ticked.
 python -m scripts.audit.spec_ledger_census --files --check
 ```
+
+**And answer every `[!!] barrier` line the census printed.** For each one, state whether the batch
+depended on the barrier. An unanswered barrier is a stop.
 
 `task_claim_truth` is in this list because it mechanically catches the failure the ledger warning
 describes in prose. **It is red today, and the red is not this spec's.** Executed 2026-09-01: 563
