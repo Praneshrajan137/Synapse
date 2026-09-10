@@ -37,11 +37,15 @@ global is patched and no generated path can bind to a committed file. All three 
 forms the gate implements (``yaml_path``, ``json_path``, ``regex``) are exercised, because
 a ratchet that cannot read its own configuration is unavailable, not passing.
 
-The live hole is asserted, not asserted away. The committed ``stryker-break`` row records
-``agrees_with_shipped: false`` - shipped ``50`` against a guard constant of ``26``, so a
-regression 50 -> 26 currently PASSES C16. This file asserts the gate *detects* that hole
-and names both files and both values. Repairing it is task 12.1; making it bite is task
-4.3's job and confirming the bite is this test's.
+R7.8's live hole is CLOSED, and the closure is pinned rather than the hole. The committed
+``stryker-break`` row recorded ``agrees_with_shipped: false`` - shipped ``50`` against a
+guard constant frozen at ``26``, so a regression 50 -> 26 passed C16 - and this file
+asserted that the gate detected it. The remediation landed (``ratchets.json`` now records
+``50``/``50``), so the committed-file test now re-derives agreement from the two files it
+governs and asserts the row PASSes. **The gate's ability to fail is unaffected and is
+asserted where it belongs:** ``test_a_guard_constant_differing_from_its_shipped_config_
+fails_naming_both`` constructs the disagreement over generated trees, so detection is
+proved by construction instead of by a live defect the repo is obliged to keep.
 
 I-0: this test reads and writes small files. It runs no coverage, no mutation sweep, and
 no suite. ``max_examples`` is never set here - the budget comes from the root
@@ -315,6 +319,25 @@ def detail_for(row: rt.RatchetReport, clause: rt.Clause) -> str:
         if finding.clause is clause:
             return finding.detail
     raise AssertionError(f"{row.id} carries no {clause.value} finding: {row.findings}")
+
+
+def without_recorded_measurement(document: Mapping[str, Any]) -> frozenset[str]:
+    """Ids in *document* that have no measurement behind them - I-7's SKIP domain.
+
+    ``status: unmeasured`` is the honest spelling and sixteen committed rows use it. Six
+    more say ``status: measured`` with ``measured_at: null``, which is the same condition
+    wearing a different label: a row claiming a measurement it cannot date has none. Both
+    committed-file tests below read this ONE predicate, so the SKIP set they assert against
+    cannot drift apart - and the twenty-two are derived here rather than counted in a
+    docstring, because a literal count in a test is a second source of truth.
+    """
+    ratchets = document["ratchets"]
+    assert isinstance(ratchets, dict)
+    return frozenset(
+        identifier
+        for identifier, raw in ratchets.items()
+        if raw.get("measured_at") is None or raw.get("status") != rt.STATUS_MEASURED
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -761,38 +784,78 @@ def test_a_real_regression_outranks_an_unmeasured_row_in_the_aggregate(
 # ---------------------------------------------------------------------------
 
 
-def test_the_committed_stryker_break_hole_is_detected_not_asserted_away() -> None:
-    """R7.8 live example: shipped ``break: 50`` against a guard constant of ``26``.
+def test_the_committed_stryker_break_row_now_agrees_with_the_config_it_guards() -> None:
+    """R7.8's live example is CLOSED, and this pins the closure rather than the hole.
 
-    A static read of the committed tree - no mutation run (I-0). The recorded row says
-    ``agrees_with_shipped: false``, and the point of task 4.3 is that recording the hole
-    does not excuse it: the gate must FAIL naming both files and both values. Asserting
-    the PASS this row would give under C16 today is what the audit found wrong; task 12.1
-    repairs the constant, and this assertion is what will then have to be updated
-    deliberately rather than drifting.
+    A static read of the committed tree - no mutation run (I-0).
+
+    **This is a precondition correction, not an assertion weakening (R2.10).** What
+    changed is the subject, not the standard. Until session 1 of `decision-quality-proof`
+    the committed row recorded ``agrees_with_shipped: false`` - shipped ``break: 50``
+    against a guard constant frozen at ``26`` - so a regression ``50 -> 26`` passed C16,
+    and this test asserted that the gate FAILed naming both files and both values. The
+    remediation then landed: ``ratchets.json`` now records ``50``/``50`` and
+    ``agrees_with_shipped: true``, ``ratchet_truth`` reports the row PASS with no findings,
+    and asserting the old FAIL is asserting a defect that no longer exists.
+
+    **The repair was a coordinated change across four sites and only two of them moved,
+    which is why this surfaced as a red rather than as a review comment.**
+    ``scripts/audit/verify_claims.py``'s own C16 docstring still describes the hole as live
+    ("**Expected FAIL on landing**") and names this module as one of the sites its repair
+    must touch. That prose is another spec's and is read by ``doc_truth``, so it is
+    recorded rather than edited here: an unmeasurable prose edit does not belong in the
+    same diff as a mechanical one.
+
+    **Agreement is re-derived from the two committed files, never from the record.** A row
+    that only agreed with itself would be the defect one layer up: the record could then
+    outrun its subject in either direction. The gate's ability to *detect* a disagreement
+    is asserted generically and by construction in
+    :func:`test_a_guard_constant_differing_from_its_shipped_config_fails_naming_both`, over
+    generated trees - so nothing is lost by this file no longer needing a live breach.
     """
+    shipped_config = json.loads(
+        (rt.ROOT / "frontend" / "stryker.conf.json").read_text(encoding="utf-8")
+    )
+    shipped_value = float(shipped_config["thresholds"]["break"])
+
+    guard_text = (rt.ROOT / "scripts" / "audit" / "verify_claims.py").read_text(
+        encoding="utf-8"
+    )
+    guard_match = re.search(r"^STRYKER_BREAK_NOW = (?P<value>[\d.]+)", guard_text, re.M)
+    assert guard_match is not None, "STRYKER_BREAK_NOW is no longer declared"
+    guard_value = float(guard_match.group("value"))
+
+    # The two files agree, read independently of anything ratchets.json claims.
+    assert same(shipped_value, guard_value)
+
     document = rt.load_ratchets()
     recorded = document["ratchets"]["stryker-break"]
-    assert recorded["agrees_with_shipped"] is False
-    assert recorded["shipped"]["value"] == 50
-    assert recorded["guard_constant"]["value"] == 26
+    # And the record agrees with that derivation, so the flag cannot outrun its subject.
+    assert recorded["agrees_with_shipped"] is True
+    assert same(float(recorded["shipped"]["value"]), shipped_value)
+    assert same(float(recorded["guard_constant"]["value"]), guard_value)
 
     report = rt.evaluate()
     row = row_of(report, "stryker-break")
-    assert row.outcome is rt.Outcome.FAIL
-    assert rt.Clause.CONFIG_AGREEMENT in clauses_of(row)
+    assert row.outcome is rt.Outcome.PASS
+    assert row.findings == ()
+    assert rt.Clause.CONFIG_AGREEMENT not in clauses_of(row)
 
-    detail = detail_for(row, rt.Clause.CONFIG_AGREEMENT)
-    assert "frontend/stryker.conf.json" in detail
-    assert "scripts/audit/verify_claims.py" in detail
-    assert "STRYKER_BREAK_NOW" in detail
-    assert "50" in detail and "26" in detail
+    # No committed ratchet breaches its bound or its configuration. Asserted with the row
+    # set pinned non-empty: an empty report would satisfy "nothing failed" vacuously.
+    assert report.ratchets, "the committed ratchets file records no ratchet at all"
+    assert {row.id for row in report.ratchets if row.outcome is rt.Outcome.FAIL} == set()
 
-    # The hole is the only breach in the committed file, and it reddens the aggregate.
-    failing = {row.id for row in report.ratchets if row.outcome is rt.Outcome.FAIL}
-    assert failing == {"stryker-break"}
-    assert report.outcome is rt.Outcome.FAIL
-    assert report.exit_code == rt.EXIT_FAIL
+    # The file verdict is SKIP, and that is the gate working. Rows with no measurement behind
+    # them cannot be read as passes (I-7), so the aggregate is non-passing while any remain.
+    # The skipped set is DERIVED from the document through the same predicate the sibling
+    # test uses, never counted here: a literal in a test is a second source of truth.
+    unmeasured = without_recorded_measurement(document)
+    skipped = {row.id for row in report.ratchets if row.outcome is rt.Outcome.SKIP}
+    assert unmeasured, "no row lacks a measurement, so the SKIP below would be unexplained"
+    assert skipped == unmeasured
+    assert report.outcome is rt.Outcome.SKIP
+    assert report.exit_code == rt.EXIT_UNAVAILABLE
 
 
 def test_every_committed_ratchet_can_re_read_the_configuration_it_guards() -> None:
@@ -815,18 +878,17 @@ def test_every_committed_ratchet_can_re_read_the_configuration_it_guards() -> No
 def test_committed_rows_with_no_measurement_are_never_reported_as_a_pass() -> None:
     """I-7 over the real file: ``measured_at: null`` never reads as proof.
 
-    Twelve of the committed rows are honestly unmeasured - nine zero coverage floors
-    (CF-3), the mutation-survival ceilings whose sweep is CI-only, the replay floors that
-    task 4.5 will first measure, and the data-gated uplift floor. Each must be a SKIP.
+    Several committed rows are honestly unmeasured - the zero coverage floors (CF-3), the
+    mutation-survival ceilings whose sweep is CI-only, the replay floors that task 4.5 will
+    first measure, and the data-gated uplift floor. Each must be a SKIP. How many there are
+    is derived by :func:`without_recorded_measurement` rather than stated here: the docstring
+    used to say "twelve" and the file had grown past it, which is the drift this suite exists
+    to catch, one level up.
     """
     document = rt.load_ratchets()
     outcomes = {row.id: row.outcome for row in rt.evaluate().ratchets}
 
-    unmeasured = {
-        identifier
-        for identifier, raw in document["ratchets"].items()
-        if raw.get("measured_at") is None or raw.get("status") != rt.STATUS_MEASURED
-    }
+    unmeasured = without_recorded_measurement(document)
     assert unmeasured, "the committed file records no unmeasured row; CF-3 expects several"
     for identifier in unmeasured:
         assert outcomes[identifier] is not rt.Outcome.PASS, (

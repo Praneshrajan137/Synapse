@@ -271,7 +271,24 @@ def test_the_generated_ledger_round_trips_against_its_registry_execution(
     # I-7: no row invents a pass. A check that emitted nothing reads NOT EXECUTED and
     # never blank, and the PASS cells are exactly the results that reported PASS.
     assert {row[0] for row in rows if row[2] == NOT_EXECUTED} == set(scenario.missing_ids)
-    assert sum(1 for row in rows if row[2] == "PASS") == independent["PASS"]
+
+    # The row set and the summary tally are DIFFERENT SUBJECTS, and comparing the PASS
+    # cells against `status_counts["PASS"]` conflated them. The matrix carries one row per
+    # REGISTERED id (R10.2, R10.3); `status_counts` tallies the whole execution, foreign
+    # results included (R10.5). So a foreign PASS is counted in the summary asserted above
+    # and earns no row here - both correct, and not the same number. Partitioned rather
+    # than filtered, with the partition asserted exhaustive so a widened scenario cannot
+    # slip a result past both halves, and the row set pinned non-empty so the PASS clause
+    # below cannot hold vacuously.
+    registered = set(scenario.registered_ids)
+    registered_results = tuple(item for item in scenario.results if item.cid in registered)
+    foreign_results = tuple(item for item in scenario.results if item.cid not in registered)
+    assert len(registered_results) + len(foreign_results) == len(scenario.results)
+    assert tuple(item.cid for item in foreign_results) == scenario.foreign_ids
+    assert scenario.registered_ids and rows
+    assert sum(1 for row in rows if row[2] == "PASS") == sum(
+        1 for item in registered_results if item.status == "PASS"
+    )
     assert all(row[2] and row[3] for row in rows)
 
 
@@ -303,6 +320,22 @@ def test_rendering_preserves_every_byte_of_prose_outside_the_markers(
 # ---------------------------------------------------------------------------
 
 
+def _without_last_generated_line(text: str) -> str:
+    """*text* with the last line INSIDE the generated region removed, markers intact.
+
+    The obvious spelling - ``text.replace(f"\\n{GENERATED_END}", "", 1)`` - deletes the END
+    MARKER rather than the last generated line, and that is a different defect with a
+    different verdict: a document whose region cannot be found is ``unavailable``, not
+    drifted. Conflating them made the drift case below assert ``fail`` against a probe that
+    was correctly reporting ``unavailable``. Both are asserted now, apart.
+    """
+    head, marker, tail = text.partition(GENERATED_END)
+    assert marker, "the clean render carries no end marker"
+    lines = head.rstrip("\n").splitlines()
+    assert len(lines) > 1, "the generated region has no body line to delete"
+    return "\n".join(lines[:-1]) + "\n" + marker + tail
+
+
 @given(scenario=registry_scenarios())
 def test_an_edit_inside_the_generated_region_is_reported_with_a_difference(
     scenario: RegistryScenario,
@@ -315,6 +348,10 @@ def test_an_edit_inside_the_generated_region_is_reported_with_a_difference(
     away from the checks it claims to define. A deleted last line is silent loss of
     coverage. All three must be reported ``fail`` with a unified diff carrying the
     offending text, never merely flagged.
+
+    A fourth mutation - removing the end marker - is asserted separately, because it is
+    not drift: with no region to compare there is nothing to diff, and ``unavailable`` says
+    "nothing was checked" where ``fail`` would say "the document disagrees".
     """
     verdict = verdict_of(scenario)
     titles = titles_of(scenario)
@@ -326,7 +363,7 @@ def test_an_edit_inside_the_generated_region_is_reported_with_a_difference(
     fabricated = "| C999 | Fabricated subject | PASS | - |"
     mutations = [
         clean.replace(GENERATED_END, f"{fabricated}\n{GENERATED_END}", 1),
-        clean.replace(f"\n{GENERATED_END}", "", 1),
+        _without_last_generated_line(clean),
     ]
     flipped = clean.replace("| PASS |", "| FAIL |", 1)
     if flipped != clean:
@@ -334,6 +371,10 @@ def test_an_edit_inside_the_generated_region_is_reported_with_a_difference(
 
     for mutated in mutations:
         assert mutated != clean
+        # Every drift mutation keeps BOTH markers. One that removed a marker would be
+        # exercising region discovery rather than drift detection, which is the confusion
+        # that made this loop assert `fail` against an honest `unavailable`.
+        assert mutated.count(GENERATED_BEGIN) == mutated.count(GENERATED_END) == 1
         probe = ledger_gen.probe_text(verdict, mutated, titles=titles)
         assert probe.status == "fail"
         assert not probe.passing
@@ -343,6 +384,17 @@ def test_an_edit_inside_the_generated_region_is_reported_with_a_difference(
         assert "(committed)" in probe.diff and "(regenerated)" in probe.diff
 
     assert fabricated in ledger_gen.probe_text(verdict, mutations[0], titles=titles).diff
+
+    # The fourth mutation, and the distinction the loop above must not swallow: with the
+    # end marker gone there is no region, so the probe reports `unavailable` (exit 2,
+    # non-passing under I-7) rather than a drift it cannot substantiate.
+    without_marker = clean.replace(f"\n{GENERATED_END}", "", 1)
+    assert GENERATED_END not in without_marker
+    unfindable = ledger_gen.probe_text(verdict, without_marker, titles=titles)
+    assert unfindable.status == "unavailable"
+    assert unfindable.status != "fail"
+    assert not unfindable.passing
+    assert unfindable.exit_code == 2
 
 
 @given(scenario=registry_scenarios(modes=("complete",)))

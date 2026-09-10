@@ -148,10 +148,16 @@ ANCHOR_SHAPES: Final[tuple[ModuleShape, ...]] = (
 )
 RESOLVABLE_ANCHOR_SHAPES: Final[tuple[ModuleShape, ...]] = ("module_file", "package_main")
 
-#: The root declared external for the generated trees. One name is enough: the branch
-#: under test is "root in the declared set", not the size of the set.
-EXTERNAL_ROOT: Final[str] = "pytest"
-EXTERNAL_ROOTS: Final[frozenset[str]] = frozenset({EXTERNAL_ROOT})
+#: Roots declared external for the generated trees, **one per extra a case may draw**.
+#: One name was not enough, and the generator's own disjointness guard is what said so:
+#: ``_extra_module`` ignored its ``index`` for this shape, so two ``external`` draws both
+#: claimed ``pytest`` and :func:`assert_roots_are_disjoint` fired exactly as its docstring
+#: promises. The branch under test is still "root in the declared set" rather than the
+#: size of the set - the set is indexed so that *naming two external modules* stays a
+#: reachable case instead of being filtered out of the generator.
+EXTERNAL_ROOTS_BY_INDEX: Final[tuple[str, ...]] = ("pytest", "coverage", "hypothesis")
+EXTERNAL_ROOT: Final[str] = EXTERNAL_ROOTS_BY_INDEX[0]
+EXTERNAL_ROOTS: Final[frozenset[str]] = frozenset(EXTERNAL_ROOTS_BY_INDEX)
 
 #: The Make-specific construct: a leading ``-`` makes Make ignore the recipe line's exit
 #: status. It was one of the three swallows removed from ``Makefile::deploy-gcp-verify``.
@@ -523,7 +529,7 @@ class CommandCase:
 def _extra_module(index: int, shape: ModuleShape) -> ModuleDraft:
     """An extra ``python -m`` path whose root belongs to it alone."""
     if shape == "external":
-        return ModuleDraft(dotted=EXTERNAL_ROOT, shape=shape)
+        return ModuleDraft(dotted=EXTERNAL_ROOTS_BY_INDEX[index], shape=shape)
     if shape == "unknown_root":
         return ModuleDraft(dotted=f"absent{index}.mod", shape=shape)
     leaf = {
@@ -568,6 +574,13 @@ def command_cases(
     the discard half: an unresolvable command there would supply the finding for the
     wrong reason.
     """
+    # Disjointness is promised by construction, and ``external`` is the one shape whose
+    # root cannot be derived from its index. Fail here, where the cause is one line away,
+    # rather than in ``assert_roots_are_disjoint`` on a mystifying duplicate.
+    assert max_extras <= len(EXTERNAL_ROOTS_BY_INDEX), (
+        f"max_extras={max_extras} exceeds the {len(EXTERNAL_ROOTS_BY_INDEX)} declared "
+        "external root(s); add one per extra to EXTERNAL_ROOTS_BY_INDEX"
+    )
     anchor_spec = draw(st.sampled_from(ANCHORS))
     anchor_shape = draw(
         st.sampled_from(RESOLVABLE_ANCHOR_SHAPES if resolvable_only else ANCHOR_SHAPES)
@@ -969,6 +982,14 @@ def test_a_make_recipe_line_is_read_with_the_same_two_rules(
     assert source.endswith("Makefile")
     assert case.scope == case.label
     assert case.step_name == case.recipe_line()[:80]
+
+    # Extraction is total on this surface too, and Make's own line prefixes do not
+    # silence it. Without this clause the findings-set equality below passes VACUOUSLY
+    # whenever every named command happens to resolve: a `-`-prefixed recipe contributed
+    # ZERO commands, its only finding was the swallow, and the two sides still matched.
+    # That is how the swallow came to conceal the unresolvable command it was swallowing.
+    assert observed_commands(report) == case.expected_commands()
+    assert report.commands
 
     discards = [
         item for item in report.findings if item.rule == "discarded-exit-status"

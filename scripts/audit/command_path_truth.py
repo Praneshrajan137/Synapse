@@ -542,17 +542,51 @@ def _makefile_recipe_lines(text: str) -> tuple[tuple[str, str], ...]:
     return tuple(lines)
 
 
+#: Make's own recipe-line prefixes: ``-`` ignores the line's exit status, ``@`` suppresses
+#: the echo, ``+`` forces execution under ``-n``. They may appear in any order, may repeat,
+#: and whitespace may sit between them.
+_MAKE_PREFIX_CHARS: Final[str] = "-@+"
+
+
+def split_make_prefix(line: str) -> tuple[str, str]:
+    """``(prefix, body)`` for a Make recipe line: Make's own characters, then the command.
+
+    Both readers below need this split, and they used to disagree about it. The discard
+    reader recognised ``-`` and ``@-``; extraction was handed the **raw** line, and
+    :data:`_MODULE_RE`'s negative lookbehind ``(?<![\\w./-])`` refuses to match ``python``
+    sitting behind a ``-``. So a leading ``-`` -- the one prefix that discards the exit
+    status -- also hid the command on that line, and R6.14's two independent clauses
+    collapsed into one: **the swallow concealed the unresolvable command it was
+    swallowing.** That is the exact pair of defects the audit found at
+    ``Makefile::deploy-gcp-verify``, where a leading ``-`` was one of the three swallows
+    removed. Splitting once, here, is what keeps the two clauses independent.
+
+    ``@`` never had the defect -- it is not in the lookbehind's character class -- which is
+    why the nine ``@python -m scripts.audit.*`` recipes in the committed Makefile were read
+    correctly all along. The prefix is not stripped from the reported step name: a reader
+    locating the finding sees the line as the Makefile writes it.
+    """
+    index = 0
+    while index < len(line) and (
+        line[index] in _MAKE_PREFIX_CHARS or line[index].isspace()
+    ):
+        index += 1
+    return line[:index], line[index:]
+
+
 def _makefile_discarding_construct(line: str) -> str | None:
     """The construct discarding a Make recipe line's exit status, or ``None``.
 
     Make's leading ``-`` (ignore errors) is Make-specific; the shell constructs are
     read with :func:`terminal_discarding_construct`, the same reading
-    ``workflow_shape_truth`` applies to a ``run:`` script.
+    ``workflow_shape_truth`` applies to a ``run:`` script. The ``-`` is looked for
+    anywhere in the prefix run rather than only at its head, so ``-@``, ``+-`` and
+    ``@+-`` are read as the swallows they are.
     """
-    body = line.lstrip()
-    if body.startswith("-") or body.startswith("@-"):
+    prefix, body = split_make_prefix(line)
+    if "-" in prefix:
         return "leading `-` (Make ignores errors)"
-    return terminal_discarding_construct(body.lstrip("@").strip())
+    return terminal_discarding_construct(body.strip())
 
 
 def collect_named_commands(
@@ -642,11 +676,15 @@ def collect_named_commands(
         for target, line in _makefile_recipe_lines(
             makefile.read_text(encoding="utf-8")
         ):
+            # `text` is what Make actually runs; `step_name` stays the raw line so a
+            # reader can find it. Passing the raw line as `text` made every command on a
+            # `-`-prefixed recipe invisible while still reporting the swallow.
+            _prefix, body = split_make_prefix(line)
             record(
                 source=source,
                 scope=target,
                 step_name=line[:80],
-                text=line,
+                text=body,
                 construct=_makefile_discarding_construct(line),
             )
 
