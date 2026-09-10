@@ -1552,6 +1552,30 @@ tests in the interim, and that is a stated sequencing gap, not an omission.
     falsification about the right subject — which is a good outcome under this spec's own
     design — as distinct from the inadmissible one conflict M prevented.
 
+  - **SESSION 6 — CHECKPOINT A WAS DELIBERATELY NOT RUN. This is a recorded decision, not an
+    oversight, and the next session should not read it as one.**
+
+    Nothing was taken from this task: `regret_objective.materiality_margin.value` is still
+    `null`, the derived-margin pin is still parked, the two `s`/`S` pins are still parked, no
+    D2.5 amendment landed, and no label was added. `pin_extractor_truth` reports **14** declared
+    at close — not 15, not 16 — which is the mechanical statement of all three.
+
+    **The reason, by explicit operator decision.** The instrument this checkpoint judges sat in
+    a tree whose own property surface was red in nine places, eight of them this spec's. A
+    `material` verdict read off that tree would be a claim about a comparator standing in a
+    suite that nothing had ever executed — weaker evidence than the same verdict read off a
+    green one, and this spec exists to refuse exactly that kind of weak evidence. Session 6
+    spent itself on the surface instead, and the whole of checkpoint A's remaining procedure —
+    run 1 by label, the D2.5 amendment, the margin commit, run 2 — carries over **unchanged and
+    in that order**, D2.5's own rule still putting the amendment before the run judged against
+    it.
+
+    **What changed in its favour anyway.** `quality-gates` step 18's repair (task 27.5, session
+    6) is predicted to unblock steps 19–23, and the fast property surface has had its first
+    repair pass. Neither is a precondition of this checkpoint — `twin-regret` has no `needs:` —
+    but both mean the next reading of a `material` verdict happens against a tree whose gates
+    report something.
+
 - [ ] 12. E2c — structures 1 and 2: non-stationary demand, and capacity that binds
   - Implements the first two of ADR-055's five structures. **Every structure names the agent
     decision it unlocks; nothing is added for realism's sake.**
@@ -3234,6 +3258,190 @@ data and scored against an external benchmark has no demonstrable value.
       Repair options belong to the operator: a periodic full-tree run in CI is what
       `uplift-verify` now is, so the cheapest repair may be to keep this job reachable and read
       it every session.
+
+    - **SESSION 6 — ALL NINE REPAIRED, EIGHT VERIFIED LOCALLY, AND THE NINE WERE ELEVEN.
+      THIS LEAF IS STILL `[ ]`: the job has not run since, so nothing has reached its end.**
+      Re-measured at HEAD `58fc4e1`, run `34434951478` (job `102737971857`): `quality-gates`
+      steps 1–17 success, **18 failure**, 19–23 skipped; `uplift-verify` step 4 success, step 5
+      **failure**, step 6 skipped. The same nine.
+
+      **Every falsifying example was read out of the step-5 log rather than guessed**, which is
+      what made the diagnoses mechanical. Two of the nine are `ExceptionGroup`s carrying **two
+      distinct failures each**, so the tree held **eleven** defects, not nine — a count nobody
+      could have got from the summary line.
+
+      | Test | Mechanism, as measured | Repaired at |
+      |---|---|---|
+      | `test_every_named_command…` (1 of 2) | two `external` extras both claimed root `pytest` | the generator |
+      | `test_an_out_of_scope_step…` | same collision | the generator |
+      | `test_a_discarded_exit_status…` | same collision | the generator |
+      | `test_a_console_script…` | same collision | the generator |
+      | `test_every_named_command…` (2 of 2) | `surface='makefile'`, `construct='leading-dash'` → `observed_commands == {}` | **the gate** |
+      | `test_a_make_recipe_line…` | the `unresolvable-command` finding was missing on the same shape | **the gate** |
+      | `test_aggregation_integrity…` (1 of 2) | `kpi_mean` last-bit mismatch | the test's reference |
+      | `test_aggregation_integrity…` (2 of 2) | `kpi_std` last-bit mismatch | the test's reference |
+      | `test_the_generated_ledger_round_trips…` | `sum(PASS rows) == status_counts["PASS"]` → `1 == 2` | the test |
+      | `test_an_edit_inside_the_generated_region…` | `'unavailable' == 'fail'` | the test's mutation |
+      | `test_the_committed_stryker_break_hole…` | `assert True is False` | a stale precondition |
+
+      **FINDING 43 — A GATE DEFECT, AND ITS SHAPE IS THE ONE R6.14 EXISTS TO CATCH.** Hypothesis
+      named `scripts/audit/command_path_truth.py:554` as the line run only by failing cases.
+      `_MODULE_RE`'s negative lookbehind `(?<![\w./-])` refuses to match `python` behind a `-`,
+      and the Makefile branch of `collect_named_commands` handed `named_commands_in` the **raw**
+      recipe line while `_makefile_discarding_construct` was already prefix-aware. So on a
+      `-`-prefixed recipe the gate reported the discarded exit status and extracted **zero
+      commands**: R6.14's two independent clauses collapsed, and **Make's ignore-errors prefix
+      concealed the unresolvable command it was ignoring.** That is precisely the pair of defects
+      the audit found at `Makefile::deploy-gcp-verify`, where a leading `-` was one of the three
+      swallows removed. Repaired with one reading of Make's prefix grammar (`split_make_prefix`)
+      shared by both consumers, which also makes `-@`, `+-` and `@+-` read as swallows.
+      `_MODULE_RE` is untouched, so no other surface gains a match. **`@` never had the defect** —
+      it is not in the lookbehind's class — so the nine `@python -m scripts.audit.*` recipes in
+      the committed Makefile read correctly all along; checked rather than assumed, because the
+      opposite would have been a much larger finding. Committed report unchanged at **37 commands
+      / 0 findings / pass**, predicted before the edit and measured after.
+
+      **FINDING 44 — THE PROPERTY THAT SHOULD HAVE CAUGHT FINDING 43 WAS VACUOUS ON EXACTLY THAT
+      INPUT.** `test_a_make_recipe_line_is_read_with_the_same_two_rules` asserted the findings
+      **set** and never the command set, so a `-`-prefixed line contributing nothing passed
+      whenever every named command happened to resolve. Only its sibling — which does compare
+      commands — failed on the resolvable case. The Makefile test now asserts both, and asserts
+      `report.commands` non-empty.
+
+      **FINDING 45 — SESSION 1's OWN REPAIR CREATED THE `stryker-break` RED, AND THE COORDINATED
+      CHANGE WAS HALF-APPLIED.** `ratchets.json` records `50`/`50` and
+      `agrees_with_shipped: true`; the row PASSes with no findings. `verify_claims.py`'s C16
+      docstring names the four sites its repair must touch — `CLAUDE.md`, `doc-number-pins.yaml`,
+      the ratchet constant, and *this property module* — and still describes the hole as live
+      (“**Expected FAIL on landing**”). Two sites moved, two did not, and
+      `doc-number-pins.yaml`'s own comment already called the remediation “COMPLETE and verified
+      mechanically”. **The prose in `verify_claims.py` is recorded, not edited:** it is another
+      spec's, it is read by `doc_truth`, and I-0 forbids running `doc_truth` locally to see what
+      the edit would move. Repaired here as a precondition correction — agreement is now
+      re-derived from the two committed files rather than from the record, so the flag cannot
+      outrun its subject, and detection stays proved by construction in the generated case that
+      was always there. The aggregate is SKIP / exit 2 over **22** rows with no measurement
+      behind them: 16 `status: unmeasured` **plus 6 that say `status: measured` with
+      `measured_at: null`**, derived through one shared predicate because the sibling test's
+      docstring said “twelve” and the file had grown past it.
+
+      **FINDING 46 — THE RECORDED HYPOTHESIS ABOUT THE LEDGER-GEN FAILURES IS REFUTED, BY READING
+      RATHER THAN BY RUNNING.** The `'unavailable' == 'fail'` failure has nothing to do with the
+      `ledger_gen`/`readme_gen` order. `mutations[1]` was
+      `clean.replace(f"\n{GENERATED_END}", "", 1)` — it deletes the **end marker**, not the last
+      generated line, so `probe_text` correctly reports `unavailable` (its own docstring: “if the
+      markers are missing it reports unavailable”) and the test demanded `fail`. Repaired by
+      partition: three drift mutations that keep both markers must report `fail`, and marker
+      removal is asserted separately as `unavailable` — a clause the file **gained**. The
+      `assert 1 == 2` is the same class one level up: the matrix carries one row per **registered**
+      id while `status_counts` tallies the whole execution, **foreign ids included**, and the
+      falsifying scenario is `registered_ids=('C1',)` with results for C1 and C2. Two subjects,
+      one number. Partitioned, partition asserted exhaustive, row set pinned non-empty. **Both
+      repairs are authored and diagnostics-clean and were NOT executed** — that module names a
+      registry execution and I-0 forbids it in any form. `ci.yml::uplift-verify`'s fast step is
+      the only sanctioned reader.
+
+      **FINDING 47 — THE NINTH FAILURE IS `main`'s AND IT GATED EVERYTHING BEHIND IT.** Repairing
+      this spec's eight was **necessary but not sufficient**: one red anywhere in the fast step
+      keeps step 6 skipped, so the slow surface could never have run while it stood. Adopted by
+      explicit operator decision (precedent: session 3's decision 2), ownership re-proved
+      mechanically first (`git cat-file -e origin/main:<f>` exit 0, `git diff origin/main` empty).
+      `aggregate_arm` sorts completed runs by `(seed, arm)` for R2.5 order-invariance;
+      `_reference_mean_std` reduced in **arrival** order and compared with `==`, so numpy's
+      pairwise summation differed in the last bits. The falsifying case is three runs at
+      **seed 0** with arms `''`, `'0'`, `''` — **the arm component alone reorders them**, which is
+      why no amount of seed-uniqueness reasoning would have found it. The reference now mirrors
+      the documented sort: exact equality retained, **no tolerance introduced**, no production
+      file touched. And because a mirrored sort could **mask** a subject that stopped
+      canonicalising, order-invariance is now asserted directly — scoped to key-distinct inputs,
+      because `sorted` is stable and the aggregate is invariant **up to ties**, not “entirely” as
+      `uplift/harness.py`'s docstring claims. That overclaim is recorded, not edited.
+
+      **CONFLICT O — CF-13 IS ENFORCED OVER A SCOPE THAT EXCLUDES EVERY ONE OF ITS VIOLATIONS.**
+      `.kiro/steering/local-compute-budget.md` and `NEXT_SESSION_PROMPT.md` say “**three**
+      pre-existing violations still sit in `tests/uplift/` and `tests/verify/`”; `HANDOFF.md`
+      names two files. Measured by **AST** over all **354** `test_*.py` in the tree: **41 files,
+      56 hardcoded `@settings(max_examples=…)` sites** — 37 files under `tests/uplift/`, 4 under
+      `tests/verify/`. And `tests/verify/test_property_inventory_consistency.py` **does** carry a
+      mechanical CF-13 check, but it walks `DECLARED_INVENTORY`'s 37 declared paths, and the
+      intersection of that inventory with the 41 offenders is **empty**: every violation sits in a
+      tree the check never reads. The most severe is
+      `tests/uplift/test_reproduction_stability_property.py`, pinned at **4** examples against
+      CI's 500 and the ≥100 obligation. **Surfaced, not repaired:** these are
+      `decision-integrity-uplift-proof`'s files, and adopting a second owner's debt in the same
+      session as finding 47's adoption is the broad change defect 22 rejects. Widening the check's
+      scope is the durable repair and is the operator's.
+
+      **A METHOD NOTE, because it is the same defect one level up.** The first draft of this
+      count was a regex over raw text and reported 62 sites in 43 files — including four inside
+      `tests/verify/test_inventory_budget_rule_property.py`, whose own docstring says
+      `max_examples` is never set there and which exists to make exactly this point: a regex over
+      raw text cannot tell a subject from its context. It had matched the assignments that file
+      **quotes as test data**. The count above is from the parse tree.
+
+      **WHAT SESSION 6 VERIFIED, AND ONLY THIS.** 21 tests green at `HYPOTHESIS_PROFILE=dev` over
+      the three locally-runnable repaired modules (8 + 11 + 2), plus 13 over the replay-metrics
+      property. `mypy --strict --no-incremental` clean on both changed non-test modules. Lint and
+      format debt proven byte-identical at HEAD by materialising the committed blobs — **zero
+      added**. Six cheap gates `0/0/0/2/1/0`, census exit 0 **unchanged at 140/63/2/75**,
+      `pin_extractor_truth` **14/14/14**, `gate_surface --check` **0** (coupling 4 checked, not
+      assumed: a comment-only workflow edit whose step name did not change moved nothing).
+
+      **WHAT IT DID NOT VERIFY.** That the fast step is green — nine reds were repaired and a
+      tenth may sit behind them; session 2r's lesson has fired four times. The two
+      `test_ledger_gen_property.py` repairs. `mypy --strict` over the four changed **test**
+      modules: attempted twice, exceeded the local 120s ceiling both times, abandoned; no CI step
+      type-checks `tests/`. The slow step, and therefore the slow half of Properties 38–60.
+
+    - **SESSION 6 — OBSTRUCTION 2.5's OTHER HALF IS LANDED. DISPOSITION (b), BY EXPLICIT OPERATOR
+      DECISION. `quality-gates` step 18 is predicted to exit 0; CI has not yet said so.**
+
+      **The floor was not lowered (R2.10) and the step did not gain `continue-on-error`
+      (finding 35).** No floor value moves: `read_floor` still returns `0.70`/`0.80`, so
+      `ratchets.json`'s two `floors.*.value` extractors and `doc-number-pins.yaml`'s pins are
+      untouched and `pin_extractor_truth` still reports 14/14/14 — verified, because a
+      declaration that moved a value would move registry counts immediately before an owed
+      regeneration.
+
+      **The declaration lives in the configuration, not behind a flag.** A CLI flag would let any
+      caller silence any floor from any workflow line with no record of who did it or why.
+      `infrastructure/quality/replay-floors.yaml` now carries `unmeasurable_in_ci:` on
+      `kv_cache_hit_rate` with `declared: true` plus a **prerequisite**, a **blocked_on** and a
+      **procedure** — the shape `infrastructure/data/dataset-licences.yaml` uses for the M5 terms
+      behind an acceptance gate an agent must not accept (C74). No JSON Schema governs
+      `replay-floors.yaml` (checked: `scripts/validate_schemas.py` does not read it and
+      `infrastructure/quality/schemas/` holds only three unrelated schemas), so coupling 3 does
+      not fire and well-formedness is enforced by the gate that reads it.
+
+      **The verdict gained a fourth state, and the declaration its own.** `Outcome` gains
+      `DECLARED_UNMEASURABLE` — exit 0, printed `[SKIP]`, a distinct value in the JSON, because a
+      SKIP is not a PASS **in the record** as well as in the exit code. `Declaration` is a
+      *separate* enum (`absent` / `malformed` / `honoured` / `void`), because the floor and its
+      declaration are different subjects and folding them into one value would make “the floor is
+      satisfied” and “the declaration is still true” indistinguishable — the conflation this gate
+      refuses everywhere else.
+
+      **Three clauses stop it being a mute button, and the honesty burden is carried by all
+      three.** (1) **Fail-closed**: a block that cannot state its prerequisite, reason and
+      procedure — or that carries an unrecognised key — declares nothing, the floor stays
+      `UNAVAILABLE`, and the gate still exits 2. It is still *reported* when the floor measured,
+      because present-and-unusable is a defect an operator should see. (2) **Falsifiable**: the
+      block names the observation whose presence voids it, so it states its own refutation. If a
+      measurement is ever obtained the declaration is `VOID` and the gate **FAILS until the block
+      is deleted**, whichever side of the floor the number fell on — C74's rule in the other
+      direction, since a flag that can disagree with its own subject is a claim rather than
+      evidence. A declaration that could not go stale would be permanent. (3) **It silences
+      nothing else**: a measured breach on any floor still fails, an undeclared absence on any
+      floor still exits 2, and an unreadable floor cannot be declared about at all.
+
+      **The prediction, and how it was taken.** `evaluate()`'s existing `measurers` seam was given
+      the two measurements CI itself reported — tier routing `1.0000` over 200/200, kv gauge with
+      no samples — while trace resolution ran **for real** against the committed 200-trace corpus
+      and the generator's own `0xCAFEBABE`. Result: `[SKIP] kv_cache_hit_rate`,
+      `[OK] tier_routing_accuracy 1.0000 >= 0.8000`, aggregate `declared-unmeasurable`, **exit 0**.
+      No replay was performed (I-0). **This predicts; it does not prove.** If the real replay
+      measures differently the verdict differs, and steps 19–23 have never executed on this branch
+      or on `main`, so what they report when they first run is unknown rather than green.
     - _Requirements: —_
 
 ## Notes
