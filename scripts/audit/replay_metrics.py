@@ -32,11 +32,35 @@ An ``unavailable`` is never a PASS and no value is ever fabricated to stand in f
 measurement that was not taken. A measured regression outranks an unavailability so an
 unrelated absence can never mask a real floor breach.
 
+**Declared unmeasurable in CI.** A floor may carry an ``unmeasurable_in_ci`` block in the
+committed configuration -- ``declared: true`` plus a ``prerequisite``, a ``blocked_on`` and
+a ``procedure``, the same shape ``dataset-licences.yaml`` uses for terms behind an
+acceptance gate (C74). Then an absent measurement reports ``declared-unmeasurable``: still
+not a pass in the record, but not a failure of the step either, so a step can gate on the
+floors it CAN measure. Three things keep that from being a mute button:
+
+* **the declaration must be well formed.** A missing prerequisite, reason or procedure --
+  or an unrecognised key -- declares nothing, and the floor stays ``unavailable`` at exit 2;
+* **the declaration is falsifiable.** It names the prerequisite whose presence voids it. If
+  the measurement is ever obtainable it is taken, the declaration is reported ``void``, and
+  the gate FAILS until the block is deleted -- whichever side of the floor the measurement
+  fell on, because a flag that can disagree with its own subject is a claim rather than
+  evidence;
+* **it silences nothing else.** A measured breach on any floor still fails, and an
+  undeclared absence on any floor still exits 2.
+
+It lives in the configuration rather than behind a CLI flag on purpose: a flag would let
+any caller silence any floor from any workflow line, with no record of who did it or why.
+**No floor value is ever changed by a declaration** (R2.10), and the step is never made
+``continue-on-error`` (finding 35).
+
 Outcome mapping::
 
-    any metric measured and below its floor -> exit 1  (fail; measured + floor printed)
-    else any metric unavailable             -> exit 2  (unavailable; never a pass)
-    else every metric at-or-above its floor -> exit 0  (pass)
+    any metric measured and below its floor   -> exit 1  (fail; measured + floor printed)
+    any declaration voided by a measurement   -> exit 1  (fail; the declaration is false)
+    else any metric unavailable, undeclared   -> exit 2  (unavailable; never a pass)
+    else any metric declared unmeasurable     -> exit 0  (skip; not a pass, not a failure)
+    else every metric at-or-above its floor   -> exit 0  (pass)
 
 CI: this gate is a ``.github/workflows/ci.yml::quality-gates`` step and nothing else.
 Replaying 200 traces is a CI workload; under **I-0** it is never run on the
@@ -63,7 +87,7 @@ import sys
 from collections.abc import Callable, Mapping
 from enum import Enum
 from pathlib import Path
-from typing import Any
+from typing import Any, Final
 
 import yaml
 from pydantic import BaseModel, ConfigDict
@@ -99,11 +123,69 @@ METRIC_ORDER = (KV_CACHE_METRIC, TIER_ROUTING_METRIC)
 
 
 class Outcome(str, Enum):
-    """Tri-state metric outcome. ``UNAVAILABLE`` is never a pass (I-7)."""
+    """Metric outcome. Only ``PASS`` is a pass (I-7).
+
+    ``DECLARED_UNMEASURABLE`` is the fourth state and the only one that is neither a
+    measurement nor a bare absence: the floor has no measurement AND the committed
+    configuration declares why, names the prerequisite that would void the declaration, and
+    records the procedure to obtain the number. It maps to exit ``0`` so a step can gate on
+    the floors it CAN measure, and it is reported as its own state so no reader can mistake
+    it for a pass -- a SKIP is not a PASS, in the record as well as in the exit code.
+    """
 
     PASS = "pass"
     FAIL = "fail"
     UNAVAILABLE = "unavailable"
+    DECLARED_UNMEASURABLE = "declared-unmeasurable"
+
+
+#: Metric outcomes that do not, on their own, stop the gate exiting ``0``. Written as the
+#: set of ALLOWED states rather than as "not FAIL and not UNAVAILABLE", so a fifth outcome
+#: added later is non-passing until somebody deliberately says otherwise (fail-closed).
+_NON_BLOCKING_OUTCOMES: Final[frozenset[Outcome]] = frozenset(
+    {Outcome.PASS, Outcome.DECLARED_UNMEASURABLE}
+)
+
+
+class Declaration(str, Enum):
+    """Whether a floor carries a usable unmeasurable-in-CI declaration.
+
+    Kept separate from :class:`Outcome` on purpose. The floor and its declaration are two
+    different subjects, and folding them into one value would make "the floor is satisfied"
+    and "the declaration is still true" indistinguishable in the report -- which is the
+    exact conflation this gate exists to refuse elsewhere.
+    """
+
+    #: No declaration. An absent measurement is ``UNAVAILABLE`` exactly as before.
+    ABSENT = "absent"
+    #: A declaration missing its prerequisite, reason or procedure declares nothing.
+    #: Fail-closed: the metric stays ``UNAVAILABLE`` and the gate still exits 2.
+    MALFORMED = "malformed"
+    #: Declared, and no measurement was obtainable -- the declaration bears out.
+    HONOURED = "honoured"
+    #: Declared, and a measurement WAS obtained. The declaration is false and the gate
+    #: fails until it is deleted, whatever the measured value was. A declaration that
+    #: cannot go stale would be a permanent mute button rather than a recorded absence.
+    VOID = "void"
+
+
+#: Keys a declaration must carry to declare anything at all. ``blocked_on`` and
+#: ``procedure`` mirror C74's ``confirmation`` block; ``prerequisite`` is what makes the
+#: declaration falsifiable rather than merely stated.
+DECLARATION_KEYS: Final[tuple[str, ...]] = ("prerequisite", "blocked_on", "procedure")
+
+#: Where a floor's declaration lives, under that floor's entry.
+DECLARATION_FIELD: Final[str] = "unmeasurable_in_ci"
+
+
+class DeclarationRecord(BaseModel):
+    """The committed unmeasurable-in-CI declaration for one floor, as read."""
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    prerequisite: str
+    blocked_on: str
+    procedure: str
 
 
 class MetricReport(BaseModel):
@@ -116,7 +198,15 @@ class MetricReport(BaseModel):
     measured: float | None = None
     direction: str | None = None
     outcome: Outcome
+    declaration: Declaration = Declaration.ABSENT
     detail: str
+
+    @property
+    def passing(self) -> bool:
+        """Whether this metric lets the gate exit ``0``. Never true for ``UNAVAILABLE``."""
+        return self.outcome in _NON_BLOCKING_OUTCOMES and self.declaration is not (
+            Declaration.VOID
+        )
 
 
 class ReplayReport(BaseModel):
@@ -283,6 +373,42 @@ def _generator_seed() -> int:
     return int(SEED)
 
 
+def read_declaration(
+    config: dict[str, Any], metric: str
+) -> tuple[DeclarationRecord | None, bool]:
+    """``(record, present)`` for *metric*'s unmeasurable-in-CI declaration.
+
+    ``present`` says a declaration was attempted; ``record`` is ``None`` when it declares
+    nothing usable. The two are distinguished so a MALFORMED declaration is reported as a
+    malformation the operator can fix, rather than silently reading as an absence.
+
+    Fail-closed on every path: a non-mapping block, ``declared`` other than ``True``, a
+    missing key, a non-string, a blank string, or an unrecognised extra key all decline to
+    declare. A declaration that cannot state its prerequisite, its reason and its procedure
+    is a mute button, and a mute button is what R2.10 and finding 35 forbid.
+    """
+    floors = config.get("floors")
+    if not isinstance(floors, dict):
+        return None, False
+    entry = floors.get(metric)
+    if not isinstance(entry, dict):
+        return None, False
+    block = entry.get(DECLARATION_FIELD)
+    if block is None:
+        return None, False
+    if not isinstance(block, dict) or block.get("declared") is not True:
+        return None, True
+    values: dict[str, str] = {}
+    for key in DECLARATION_KEYS:
+        text = block.get(key)
+        if not isinstance(text, str) or not text.strip():
+            return None, True
+        values[key] = " ".join(text.split())
+    if set(block) - {"declared", *DECLARATION_KEYS}:
+        return None, True
+    return DeclarationRecord(**values), True
+
+
 def measure_tier_routing_accuracy() -> tuple[float, str]:
     """Replay every golden trace through the real TierRouter via the eval harness."""
     try:
@@ -328,20 +454,103 @@ def measure_kv_cache_hit_rate() -> tuple[float, str]:
 
 
 def _judge(
-    metric: str, floor: float, direction: str, measured: float, detail: str
+    metric: str,
+    floor: float,
+    direction: str,
+    measured: float,
+    detail: str,
+    *,
+    declaration: DeclarationRecord | None = None,
+    declared: bool = False,
 ) -> MetricReport:
+    """Judge a metric that WAS measured, and void any declaration that a measurement voids.
+
+    Reaching here at all falsifies a well-formed unmeasurable-in-CI declaration, so it is
+    reported ``VOID`` regardless of which side of the floor the measurement fell on. That is
+    C74's rule in the other direction: a flag that can disagree with its own subject is a
+    claim rather than evidence, so the disagreement is itself the finding. The floor's own
+    verdict is left intact - the two subjects stay separate in the report.
+
+    A block that declares nothing is reported ``MALFORMED`` here too, even though a measured
+    floor silenced nothing: present-and-unusable is a defect an operator should see, and
+    dropping it to ``ABSENT`` would hide the junk until the day it mattered.
+    """
     below = measured < floor
+    outcome = Outcome.FAIL if below else Outcome.PASS
+    if declaration is not None:
+        return MetricReport(
+            metric=metric,
+            floor=floor,
+            measured=measured,
+            direction=direction,
+            outcome=outcome,
+            declaration=Declaration.VOID,
+            detail=(
+                f"{detail}; the `{DECLARATION_FIELD}` declaration is VOID -- its prerequisite "
+                f"({declaration.prerequisite}) is satisfied, so the measurement was taken. "
+                "Delete the declaration in the commit that records this run."
+            ),
+        )
+    if declared:
+        return MetricReport(
+            metric=metric,
+            floor=floor,
+            measured=measured,
+            direction=direction,
+            outcome=outcome,
+            declaration=Declaration.MALFORMED,
+            detail=(
+                f"{detail}; a `{DECLARATION_FIELD}` block is present but declares nothing. "
+                "It silenced nothing here because the floor was measured -- delete it, or "
+                f"complete it with `declared: true` plus {', '.join(DECLARATION_KEYS)}."
+            ),
+        )
     return MetricReport(
         metric=metric,
         floor=floor,
         measured=measured,
         direction=direction,
-        outcome=Outcome.FAIL if below else Outcome.PASS,
+        outcome=outcome,
         detail=detail,
     )
 
 
-def _unavailable_metric(metric: str, floor: float | None, detail: str) -> MetricReport:
+def _unavailable_metric(
+    metric: str,
+    floor: float | None,
+    detail: str,
+    *,
+    declaration: DeclarationRecord | None = None,
+    declared: bool = False,
+) -> MetricReport:
+    """A metric with no measurement: declared and non-failing, or absent and exit 2."""
+    if declaration is not None:
+        return MetricReport(
+            metric=metric,
+            floor=floor,
+            measured=None,
+            direction=None,
+            outcome=Outcome.DECLARED_UNMEASURABLE,
+            declaration=Declaration.HONOURED,
+            detail=(
+                f"{detail}; declared unmeasurable in CI -- blocked on "
+                f"{declaration.blocked_on} Voided by: {declaration.prerequisite}"
+            ),
+        )
+    if declared:
+        return MetricReport(
+            metric=metric,
+            floor=floor,
+            measured=None,
+            direction=None,
+            outcome=Outcome.UNAVAILABLE,
+            declaration=Declaration.MALFORMED,
+            detail=(
+                f"{detail}; a `{DECLARATION_FIELD}` block is present but declares nothing: "
+                f"it needs `declared: true` plus non-empty {', '.join(DECLARATION_KEYS)} "
+                "and no other key. Until it does, this floor is simply unmeasured."
+            ),
+        )
     return MetricReport(
         metric=metric,
         floor=floor,
@@ -368,23 +577,39 @@ def default_measurers() -> dict[str, Measurer]:
 def aggregate(metrics: tuple[MetricReport, ...]) -> Outcome:
     """Fold per-metric outcomes into the gate outcome.
 
-    A measured breach outranks an unavailability, so an unrelated absent measurement
-    can never mask a real floor regression; an unavailability outranks a pass, so
-    absence of proof is never a pass (I-7). An empty metric set is unavailable.
+    A measured breach outranks everything, so an unrelated absent measurement can never mask
+    a real floor regression. **A VOID declaration ranks with a breach**, because the only
+    thing that makes a declared skip safe is that the declaration is true: one a measurement
+    has falsified must stop the build rather than quietly persist. An undeclared
+    unavailability outranks a pass, so absence of proof is never a pass (I-7). A DECLARED
+    unavailability is the fourth state - non-passing in the record, non-blocking in the exit
+    code - and it ranks below a bare absence so a mixed report reports the worse of the two.
+    An empty metric set is unavailable.
     """
-    if any(metric.outcome is Outcome.FAIL for metric in metrics):
+    if any(metric.outcome is Outcome.FAIL for metric in metrics) or any(
+        metric.declaration is Declaration.VOID for metric in metrics
+    ):
         return Outcome.FAIL
     if not metrics or any(metric.outcome is Outcome.UNAVAILABLE for metric in metrics):
         return Outcome.UNAVAILABLE
+    if any(metric.outcome is Outcome.DECLARED_UNMEASURABLE for metric in metrics):
+        return Outcome.DECLARED_UNMEASURABLE
     return Outcome.PASS
 
 
 def exit_code_for(outcome: Outcome) -> int:
-    """The process exit code each outcome maps to. ``2`` is non-passing (I-7)."""
+    """The process exit code each outcome maps to. ``2`` is non-passing (I-7).
+
+    ``DECLARED_UNMEASURABLE`` maps to ``0``, so a step can gate on the floors it can measure
+    while an undeclared absence still exits ``2``. That is the whole of disposition (b), and
+    the honesty it rests on is carried by :class:`Declaration`: the exit code is ``0`` only
+    while every unmeasured floor's declaration is well-formed AND unfalsified.
+    """
     return {
         Outcome.PASS: EXIT_PASS,
         Outcome.FAIL: EXIT_FAIL,
         Outcome.UNAVAILABLE: EXIT_UNAVAILABLE,
+        Outcome.DECLARED_UNMEASURABLE: EXIT_PASS,
     }[outcome]
 
 
@@ -394,10 +619,13 @@ def evaluate(
     root: Path = ROOT,
     measurers: Mapping[str, Measurer] | None = None,
 ) -> ReplayReport:
-    """Measure both replay metrics and return the tri-state verdict.
+    """Measure both replay metrics and return the four-state verdict.
 
     A measured breach (``fail``) outranks an unavailability so an absent measurement
-    can never mask a real floor regression.
+    can never mask a real floor regression. A floor with no measurement is ``unavailable``
+    unless the committed configuration declares it unmeasurable in CI, in which case it is
+    ``declared-unmeasurable`` - and that declaration is voided, failing the gate, the moment
+    a measurement proves it wrong.
     """
     floors_file = floors_file if floors_file is not None else floors_path(root)
     try:
@@ -410,7 +638,10 @@ def evaluate(
     floors: dict[str, float | None] = {}
     directions: dict[str, str | None] = {}
     floor_errors: dict[str, str] = {}
+    declarations: dict[str, DeclarationRecord | None] = {}
+    declared: dict[str, bool] = {}
     for metric in METRIC_ORDER:
+        declarations[metric], declared[metric] = read_declaration(config, metric)
         try:
             floor, direction = read_floor(config, metric, floors_file=floors_file, root=root)
         except _Unavailable as exc:
@@ -418,17 +649,26 @@ def evaluate(
         else:
             floors[metric], directions[metric] = floor, direction
 
+    def absent(metric: str, detail: str) -> MetricReport:
+        """An unmeasured metric, with its declaration (if any) applied."""
+        return _unavailable_metric(
+            metric,
+            floors[metric],
+            detail,
+            declaration=declarations[metric],
+            declared=declared[metric],
+        )
+
     try:
         traces_dir, expected, found, seed = resolve_traces(
             config, floors_file=floors_file, root=root
         )
     except _Unavailable as exc:
         metrics = tuple(
-            _unavailable_metric(metric, floors[metric], floor_errors.get(metric, exc.detail))
-            for metric in METRIC_ORDER
+            absent(metric, floor_errors.get(metric, exc.detail)) for metric in METRIC_ORDER
         )
         return _report(
-            floors_file, None, None, None, None, metrics, Outcome.UNAVAILABLE, exc.detail,
+            floors_file, None, None, None, None, metrics, aggregate(metrics), exc.detail,
             root=root,
         )
 
@@ -437,22 +677,30 @@ def evaluate(
     measured: dict[str, MetricReport] = {}
     active = dict(default_measurers()) if measurers is None else dict(measurers)
     for metric in (TIER_ROUTING_METRIC, KV_CACHE_METRIC):
-        floor, direction = floors[metric], directions[metric]
-        if floor is None or direction is None:
-            measured[metric] = _unavailable_metric(metric, floor, floor_errors[metric])
+        metric_floor, metric_direction = floors[metric], directions[metric]
+        if metric_floor is None or metric_direction is None:
+            # An unreadable floor is not an unmeasurable one: there is no floor to declare
+            # anything about, so no declaration can apply and the gate stays at exit 2.
+            measured[metric] = _unavailable_metric(metric, metric_floor, floor_errors[metric])
             continue
         measurer = active.get(metric)
         if measurer is None:
-            measured[metric] = _unavailable_metric(
-                metric, floor, f"no measurer available for `{metric}`"
-            )
+            measured[metric] = absent(metric, f"no measurer available for `{metric}`")
             continue
         try:
             value, detail = measurer()
         except _Unavailable as exc:
-            measured[metric] = _unavailable_metric(metric, floor, exc.detail)
+            measured[metric] = absent(metric, exc.detail)
         else:
-            measured[metric] = _judge(metric, floor, direction, value, detail)
+            measured[metric] = _judge(
+                metric,
+                metric_floor,
+                metric_direction,
+                value,
+                detail,
+                declaration=declarations[metric],
+                declared=declared[metric],
+            )
 
     metrics = tuple(measured[metric] for metric in METRIC_ORDER)
     return _report(
@@ -495,7 +743,12 @@ def _report(
     )
 
 
-_MARKER = {Outcome.PASS: "[OK]", Outcome.FAIL: "[XX]", Outcome.UNAVAILABLE: "[??]"}
+_MARKER = {
+    Outcome.PASS: "[OK]",
+    Outcome.FAIL: "[XX]",
+    Outcome.UNAVAILABLE: "[??]",
+    Outcome.DECLARED_UNMEASURABLE: "[SKIP]",
+}
 
 
 def _format(report: ReplayReport) -> list[str]:
@@ -512,23 +765,48 @@ def _format(report: ReplayReport) -> list[str]:
         marker = _MARKER[metric.outcome]
         floor = "unknown" if metric.floor is None else f"{metric.floor:.4f}"
         if metric.measured is None:
+            state = (
+                "DECLARED UNMEASURABLE"
+                if metric.outcome is Outcome.DECLARED_UNMEASURABLE
+                else "UNAVAILABLE"
+            )
             lines.append(
-                f"{marker} {metric.metric}: measured UNAVAILABLE, floor {floor} "
+                f"{marker} {metric.metric}: measured {state}, floor {floor} "
                 f"-- {metric.detail}"
             )
         else:
-            relation = ">=" if metric.outcome is Outcome.PASS else "<"
+            relation = ">=" if metric.measured >= (metric.floor or 0.0) else "<"
             lines.append(
                 f"{marker} {metric.metric}: measured {metric.measured:.4f} {relation} "
                 f"floor {floor} ({metric.detail})"
             )
+    for metric in report.metrics:
+        if metric.declaration is Declaration.VOID:
+            lines.append(
+                f"[XX] {metric.metric}: its `{DECLARATION_FIELD}` declaration is VOID -- the "
+                "floor was measured, so the declaration is false. Delete it."
+            )
+        elif metric.declaration is Declaration.MALFORMED:
+            lines.append(
+                f"[??] {metric.metric}: its `{DECLARATION_FIELD}` block declares nothing, so "
+                "the floor is unmeasured rather than declared unmeasurable."
+            )
     if report.outcome is Outcome.UNAVAILABLE:
         lines.append(
             "[??] replay-metrics: UNAVAILABLE - at least one floor has no measurement "
-            "behind it. Absence of proof is not a pass (I-7)."
+            "behind it and none is declared. Absence of proof is not a pass (I-7)."
         )
     elif report.outcome is Outcome.FAIL:
-        lines.append("[XX] replay-metrics: FAIL - a measured value is below its committed floor.")
+        lines.append(
+            "[XX] replay-metrics: FAIL - a measured value is below its committed floor, "
+            "or a declared-unmeasurable floor turned out to be measurable."
+        )
+    elif report.outcome is Outcome.DECLARED_UNMEASURABLE:
+        lines.append(
+            "[SKIP] replay-metrics: every MEASURED value is at or above its floor; at least "
+            "one floor is declared unmeasurable in CI with its reason and procedure. A SKIP "
+            "is not a PASS (I-7) - it does not fail the step, and it is not a measurement."
+        )
     else:
         lines.append("[OK] replay-metrics: every measured value is at or above its floor.")
     return lines

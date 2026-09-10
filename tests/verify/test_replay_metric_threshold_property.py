@@ -51,7 +51,7 @@ import json
 import tempfile
 from collections.abc import Iterator, Mapping
 from contextlib import contextmanager
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Final
 
@@ -94,27 +94,57 @@ class ReplayCase:
     ``measurements[metric] is None`` models the measurement that could not be taken -
     traces absent, harness unimportable, or a gauge carrying no sample - which R7.3
     obliges the gate to report as ``unavailable`` rather than as a number.
+
+    ``declared`` names the metrics carrying a well-formed ``unmeasurable_in_ci`` block and
+    ``malformed`` the ones carrying an unusable one. Both default to empty, so every case
+    the original generator produced still means exactly what it meant.
     """
 
     floors: Mapping[str, float]
     measurements: Mapping[str, float | None]
     trace_count: int
+    declared: frozenset[str] = frozenset()
+    malformed: frozenset[str] = frozenset()
 
     def expected_outcome(self, metric: str) -> Outcome:
         """The verdict the rule mandates, restated independently of the gate."""
         measured = self.measurements.get(metric)
-        if metric not in self.floors or measured is None:
+        if metric not in self.floors:
+            # No readable floor means nothing to declare anything about, so a declaration
+            # cannot apply: the metric is simply unavailable.
+            return Outcome.UNAVAILABLE
+        if measured is None:
+            if metric in self.declared:
+                return Outcome.DECLARED_UNMEASURABLE
             return Outcome.UNAVAILABLE
         return Outcome.FAIL if measured < self.floors[metric] else Outcome.PASS
 
+    def expected_declaration(self, metric: str) -> rm.Declaration:
+        """What the gate must say about *metric*'s declaration, restated independently."""
+        if metric not in self.floors:
+            return rm.Declaration.ABSENT
+        if metric in self.malformed:
+            # Present and unusable, whether or not the floor measured: an operator should
+            # see the junk block rather than have it silently read as an absence.
+            return rm.Declaration.MALFORMED
+        if metric not in self.declared:
+            return rm.Declaration.ABSENT
+        if self.measurements.get(metric) is None:
+            return rm.Declaration.HONOURED
+        # A measurement falsifies the declaration, whichever side of the floor it fell on.
+        return rm.Declaration.VOID
+
     @property
     def expected_gate_outcome(self) -> Outcome:
-        """A breach outranks an absence, and an absence outranks a pass (I-7)."""
+        """A breach or a falsified declaration outranks an absence; an absence a pass (I-7)."""
         outcomes = [self.expected_outcome(metric) for metric in rm.METRIC_ORDER]
-        if Outcome.FAIL in outcomes:
+        declarations = [self.expected_declaration(metric) for metric in rm.METRIC_ORDER]
+        if Outcome.FAIL in outcomes or rm.Declaration.VOID in declarations:
             return Outcome.FAIL
         if Outcome.UNAVAILABLE in outcomes:
             return Outcome.UNAVAILABLE
+        if Outcome.DECLARED_UNMEASURABLE in outcomes:
+            return Outcome.DECLARED_UNMEASURABLE
         return Outcome.PASS
 
 
@@ -205,12 +235,7 @@ def write_tree(
             "runs_in": ".github/workflows/ci.yml::quality-gates",
         },
         "floors": {
-            metric: {
-                "value": value,
-                "unit": "fraction",
-                "documented_in": "CLAUDE.md",
-                "direction": direction,
-            }
+            metric: _floor_entry(metric, value, case, direction=direction)
             for metric, value in case.floors.items()
         },
     }
@@ -226,6 +251,37 @@ def write_tree(
                 json.dumps({"trace_id": f"t{index:03d}"}), encoding="utf-8"
             )
     return floors_file
+
+
+def _floor_entry(
+    metric: str, value: float, case: ReplayCase, *, direction: str
+) -> dict[str, object]:
+    """One floor's YAML entry, carrying its declaration block when the case declares one.
+
+    A malformed block is rendered as ``declared: true`` with the ``procedure`` key MISSING,
+    which is the realistic shape of the mistake: somebody adds the flag and the reason and
+    forgets to say what an operator should do about it. The gate must decline to honour it.
+    """
+    entry: dict[str, object] = {
+        "value": value,
+        "unit": "fraction",
+        "documented_in": "CLAUDE.md",
+        "direction": direction,
+    }
+    if metric in case.malformed:
+        entry[rm.DECLARATION_FIELD] = {
+            "declared": True,
+            "prerequisite": "a synthetic prerequisite",
+            "blocked_on": "a synthetic reason",
+        }
+    elif metric in case.declared:
+        entry[rm.DECLARATION_FIELD] = {
+            "declared": True,
+            "prerequisite": "a synthetic observation that would void this declaration",
+            "blocked_on": "a synthetic reason the measurement cannot be taken in CI",
+            "procedure": "a synthetic procedure an operator would follow to measure it",
+        }
+    return entry
 
 
 def measurers_for(measurements: Mapping[str, float | None]) -> dict[str, rm.Measurer]:
@@ -279,14 +335,34 @@ def assert_total_and_consistent(report: rm.ReplayReport, case: ReplayCase) -> No
     assert tuple(metric.metric for metric in report.metrics) == rm.METRIC_ORDER
     assert report.outcome is rm.aggregate(report.metrics)
     assert report.exit_code == rm.exit_code_for(report.outcome)
-    assert (report.exit_code == rm.EXIT_PASS) is (report.outcome is Outcome.PASS)
+    # Exit 0 is reachable from a pass and from a declared skip, and from nothing else. The
+    # two are distinct states in the record: a SKIP is not a PASS (I-7).
+    assert (report.exit_code == rm.EXIT_PASS) is (
+        report.outcome in {Outcome.PASS, Outcome.DECLARED_UNMEASURABLE}
+    )
+    assert (report.outcome is Outcome.DECLARED_UNMEASURABLE) is (
+        report.exit_code == rm.EXIT_PASS and report.outcome is not Outcome.PASS
+    )
 
     for metric in report.metrics:
         assert metric.outcome in set(Outcome)
+        assert metric.declaration in set(rm.Declaration)
         # A number is reported iff a measurement was taken; the two are never separable.
-        assert (metric.measured is None) is (metric.outcome is Outcome.UNAVAILABLE)
+        # Both unmeasured states carry no number - a declaration explains an absence, it
+        # does not supply a value (I-7 forbids inventing one).
+        assert (metric.measured is None) is (
+            metric.outcome in {Outcome.UNAVAILABLE, Outcome.DECLARED_UNMEASURABLE}
+        )
         assert metric.detail
+        assert metric.detail.isascii()
         assert metric.outcome is case.expected_outcome(metric.metric)
+        assert metric.declaration is case.expected_declaration(metric.metric)
+        # `passing` and the outcome cannot disagree: a void declaration is never passing,
+        # whatever the floor did.
+        assert metric.passing is (
+            metric.outcome in {Outcome.PASS, Outcome.DECLARED_UNMEASURABLE}
+            and metric.declaration is not rm.Declaration.VOID
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -327,6 +403,161 @@ def test_the_verdict_tracks_the_measurement_over_the_generated_space(
     assert report.traces_expected == case.trace_count
     assert report.traces_found == case.trace_count
     assert report.seed == committed_seed()
+
+
+# ---------------------------------------------------------------------------
+# The unmeasurable-in-CI declaration (obstruction 2.5, disposition (b))
+# ---------------------------------------------------------------------------
+
+
+@st.composite
+def declaration_cases(draw: st.DrawFn) -> ReplayCase:
+    """One case in which exactly one metric carries a declaration, well formed or not.
+
+    The declared metric may or may not measure and the OTHER metric may or may not breach,
+    because those are the two axes the mechanism has to be safe along: a declaration must
+    not survive a measurement, and it must not silence a breach somewhere else. Both are
+    drawn rather than pinned, so every one of the four declaration states is reachable.
+    """
+    subject = draw(st.sampled_from(rm.METRIC_ORDER))
+    other = next(metric for metric in rm.METRIC_ORDER if metric != subject)
+    well_formed = draw(st.booleans())
+    subject_measures = draw(st.booleans())
+    other_breaches = draw(st.booleans())
+
+    floors = {metric: 0.70 for metric in rm.METRIC_ORDER}
+    measurements: dict[str, float | None] = {
+        subject: 0.90 if subject_measures else None,
+        other: 0.10 if other_breaches else 0.95,
+    }
+    return ReplayCase(
+        floors=floors,
+        measurements=measurements,
+        trace_count=draw(st.integers(min_value=1, max_value=3)),
+        declared=frozenset({subject}) if well_formed else frozenset(),
+        malformed=frozenset() if well_formed else frozenset({subject}),
+    )
+
+
+@given(case=declaration_cases())
+def test_a_declared_unmeasurable_floor_skips_without_silencing_anything(
+    case: ReplayCase,
+) -> None:
+    """The declaration is a recorded absence, and it is safe along both axes.
+
+    Four clauses, and each one is the reason the mechanism is not a mute button:
+
+    * **honoured** - declared, no measurement obtainable: the metric reports
+      ``declared-unmeasurable`` and the gate may exit 0, so a step can gate on the floors it
+      CAN measure. That is the whole of obstruction 2.5 disposition (b).
+    * **void** - declared, and a measurement was taken anyway: the declaration is false, and
+      a false declaration fails the gate whichever side of the floor the number fell on. A
+      declaration that could not go stale would be permanent.
+    * **malformed** - a block that cannot state its prerequisite, reason and procedure
+      declares nothing: the floor stays ``unavailable`` and the gate still exits 2. Fail
+      closed, because the alternative is a typo that silences a floor.
+    * **no masking** - a breach on the OTHER metric fails the gate regardless. This is the
+      clause that would catch a declaration implemented as an early return.
+
+    Reported states are compared against :meth:`ReplayCase.expected_declaration`, which is
+    an independent restatement of the rule rather than a call into the gate.
+    """
+    report = evaluate_case(case)
+    assert_total_and_consistent(report, case)
+    assert report.outcome is case.expected_gate_outcome
+
+    entries = reports_by_metric(report)
+    declared_metric = next(iter(case.declared | case.malformed))
+    entry = entries[declared_metric]
+    other = entries[
+        next(metric for metric in rm.METRIC_ORDER if metric != declared_metric)
+    ]
+
+    # The floor is never touched by a declaration (R2.10): it is still read, still reported.
+    assert entry.floor == case.floors[declared_metric]
+
+    if entry.declaration is rm.Declaration.HONOURED:
+        assert case.measurements[declared_metric] is None
+        assert entry.outcome is Outcome.DECLARED_UNMEASURABLE
+        assert entry.measured is None
+        assert entry.passing
+        # The reason and the voiding prerequisite both reach the reader.
+        assert "declared unmeasurable in CI" in entry.detail
+        assert "Voided by" in entry.detail
+    elif entry.declaration is rm.Declaration.VOID:
+        assert case.measurements[declared_metric] is not None
+        assert entry.measured == case.measurements[declared_metric]
+        assert not entry.passing
+        assert report.outcome is Outcome.FAIL
+        assert report.exit_code == rm.EXIT_FAIL
+        assert "VOID" in entry.detail
+    else:
+        assert entry.declaration is rm.Declaration.MALFORMED
+        assert not entry.passing or entry.measured is not None
+        assert "declares nothing" in entry.detail
+        if entry.measured is None:
+            # Nothing was measured and nothing was declared: fail closed at exit 2.
+            assert entry.outcome is Outcome.UNAVAILABLE
+            assert not entry.passing
+        else:
+            # A junk block on a floor that measured silenced nothing, so it must not fail
+            # the gate - but it is still reported, because present-and-unusable is a defect.
+            assert entry.outcome in {Outcome.PASS, Outcome.FAIL}
+
+    # No masking, in the direction that matters: a measured breach anywhere fails the gate
+    # even when the other floor is honourably skipped.
+    if other.outcome is Outcome.FAIL:
+        assert report.outcome is Outcome.FAIL
+        assert report.exit_code == rm.EXIT_FAIL
+
+    # And the converse of the whole mechanism: the SAME case with no declaration at all is
+    # never milder. Without this the four clauses above would hold for a gate that ignored
+    # the block entirely and simply passed everything.
+    undeclared = evaluate_case(
+        replace(case, declared=frozenset(), malformed=frozenset())
+    )
+    assert_total_and_consistent(
+        undeclared, replace(case, declared=frozenset(), malformed=frozenset())
+    )
+    assert undeclared.exit_code >= report.exit_code or report.exit_code == rm.EXIT_FAIL
+    if case.measurements[declared_metric] is None:
+        assert reports_by_metric(undeclared)[declared_metric].outcome is (
+            Outcome.UNAVAILABLE
+        )
+        assert reports_by_metric(undeclared)[declared_metric].declaration is (
+            rm.Declaration.ABSENT
+        )
+
+
+def test_the_committed_kv_cache_declaration_is_well_formed_and_the_other_is_absent() -> None:
+    """The committed configuration, read statically: exactly one floor is declared.
+
+    A static read - no replay, no measurement (I-0). Three facts are pinned because the
+    mechanism's safety rests on them:
+
+    * ``kv_cache_hit_rate`` carries a well-formed declaration, so the block committed for
+      obstruction 2.5 actually parses as one rather than being silently ignored;
+    * ``tier_routing_accuracy`` carries NONE. It measures cleanly at 1.0000 over 200/200
+      traces, and declaring a measurable floor unmeasurable is the abuse this whole
+      mechanism has to make impossible;
+    * both floor VALUES are unchanged at 0.70 and 0.80. `ratchets.json`'s extractors and
+      `doc-number-pins.yaml`'s pins both read `floors.<metric>.value`, so a declaration
+      that moved a value would move registry counts (R2.10 forbids moving it at all).
+    """
+    config = rm.load_config()
+
+    declaration, present = rm.read_declaration(config, rm.KV_CACHE_METRIC)
+    assert present
+    assert declaration is not None
+    assert declaration.prerequisite and declaration.blocked_on and declaration.procedure
+    # The prerequisite names the gauge whose samples void the declaration, so the block
+    # states its own falsifier rather than merely asserting an impossibility.
+    assert "synapse_ollama_cache_hit_rate" in declaration.prerequisite
+
+    assert rm.read_declaration(config, rm.TIER_ROUTING_METRIC) == (None, False)
+
+    for metric, value in COMMITTED_FLOORS.items():
+        assert rm.read_floor(config, metric) == (value, rm.DIRECTION_AT_OR_ABOVE)
 
 
 @given(

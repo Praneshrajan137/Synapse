@@ -11,6 +11,14 @@
 #
 # I-7: a floor with no measurement is NOT a pass. `replay_metrics.py` reports
 # unavailable (never PASS) when the traces or the replay harness are missing.
+#
+# A floor may additionally carry an `unmeasurable_in_ci:` block declaring that no
+# measurement is obtainable in CI, with the prerequisite that would void the
+# declaration, the reason it is blocked, and the procedure to obtain the number.
+# A declared floor reports DECLARED UNMEASURABLE -- a non-passing metric state
+# that does not fail the gate -- while an UNDECLARED absence still exits 2, and a
+# declaration whose prerequisite is satisfiable is VOID and fails the gate. The
+# floor value itself is never touched by a declaration (R2.10).
 
 version: 1
 
@@ -29,10 +37,70 @@ floors:
     documented_in: CLAUDE.md
     documented_as: "KV-cache 0.70 floor (gate added in Sprint 11/WS-9)"
     direction: at-or-above
+    # -------------------------------------------------------------------------
+    # DECLARED UNMEASURABLE IN CI. decision-quality-proof obstruction 2.5,
+    # disposition (b), by explicit operator decision.
+    #
+    # The first execution of this gate proved the claim CLAUDE.md has stated
+    # since Sprint 9 is not measurable on a hosted runner: the replay takes no
+    # cache observation because there is no Ollama behind it, so the gauge
+    # carries no samples and `replay_metrics` reported UNAVAILABLE and exited 2.
+    # That is the gate working, not failing -- and it made step 18 of
+    # ci.yml::quality-gates unpassable, which blocked steps 19-23, PR #84's
+    # mergeability, and `main` itself.
+    #
+    # THE FLOOR IS NOT LOWERED AND THE STEP IS NOT `continue-on-error`. The
+    # first is assertion weakening (R2.10); the second re-creates the
+    # swallowed-exit-status defect (finding 35). What is declared here is the
+    # ABSENCE of a measurement, with its reason and its remedy -- the same shape
+    # `infrastructure/data/dataset-licences.yaml` uses for the M5 licence terms
+    # that sit behind an acceptance gate an agent must not accept (C74).
+    #
+    # THE DECLARATION IS FALSIFIABLE, WHICH IS WHAT MAKES IT MORE THAN A MUTE
+    # BUTTON. `prerequisite` names the observation whose presence VOIDS it: if
+    # the gauge ever carries samples, the measurement is taken, this block stops
+    # applying, and the gate FAILS naming the declaration as stale until it is
+    # deleted. So the declaration cannot silence a floor in any environment
+    # where the floor can actually be measured, and it cannot outlive the
+    # condition it describes. A malformed or incomplete declaration declares
+    # nothing: the metric stays UNAVAILABLE and the gate still exits 2.
+    #
+    # It lives here, in a reviewed and diffed artifact, rather than behind a CLI
+    # flag. A flag would let any caller silence any floor from any workflow
+    # line, with no record of who did it or why.
+    unmeasurable_in_ci:
+      declared: true
+      prerequisite: >-
+        A `synapse_ollama_cache_hit_rate` gauge carrying at least one sample after the
+        replay, which requires a reachable Ollama serving the completions the cache is
+        meant to be reused across. Present => this declaration is void.
+      blocked_on: >-
+        A GitHub-hosted runner has no Ollama. Standing one up inside the job is a
+        category-1 service workload under I-0 on the development machine and a
+        multi-gigabyte model pull in CI, and I-1 forbids substituting a paid API for it.
+        Neither is a measurement of THIS repository's cache behaviour, and inferring a
+        hit rate from anything other than the gauge would be fabricating the number the
+        gate exists to stop being fabricated (I-7).
+      procedure: >-
+        1. Provide a reachable Ollama with the model the client requests, in an
+           environment where a service process is affordable -- a self-hosted runner or
+           the GCP VM (ADR-036), never the development laptop (I-0).
+        2. Run `python -m scripts.audit.replay_metrics --check --out <path>` there, so
+           the 200 golden traces replay through the real client and the
+           `synapse_ollama_cache_hit_rate` gauge records observations.
+        3. Read the measured value from the report. If it is at or above 0.70, DELETE
+           this `unmeasurable_in_ci` block in the same commit that records the run id --
+           the gate will fail while it is both declared and measurable, by design.
+        4. If it is below 0.70, that is a real breach of a documented claim. Report it as
+           a finding and repair the cache; do NOT lower `value` (R2.10).
+        5. Record the measurement in `ratchets.json` under `replay-floor:kv-cache`
+           (`measured_at`, `source_run`), which is the row that has never had one.
     note: >-
       Sprint 8 recorded 0.65; Sprint 9 raised it to 0.70. The Sprint-11 gate the
       prose promises was never written -- that is audit finding R7.6. Ratcheted
-      via ratchets.json id `replay-floor:kv-cache`.
+      via ratchets.json id `replay-floor:kv-cache`. The floor is unchanged by the
+      declaration above: what is declared is that nothing has measured it, which
+      is exactly what `ratchets.json` already records with `measured_at: null`.
 
   tier_routing_accuracy:
     value: 0.80

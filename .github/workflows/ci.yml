@@ -144,6 +144,30 @@ jobs:
         # tests/eval harness. Exit 1 below floor, exit 2 when a metric has no
         # measurement behind it — an unavailable is never a pass (I-7). Replaying 200
         # traces is a CI workload; I-0 keeps it off the development laptop.
+        #
+        # THIS STEP CAN NOW EXIT 0 WITH ONE FLOOR UNMEASURED, and the honesty burden for
+        # that sits in the configuration rather than here (decision-quality-proof
+        # obstruction 2.5, disposition (b), by explicit operator decision).
+        #
+        # The first time this step ever executed it proved that `kv_cache_hit_rate` is
+        # not measurable on a hosted runner: the replay takes no cache observation
+        # because there is no Ollama behind it, the gauge carries no samples, and the
+        # gate exited 2 rather than call an unmeasured floor a pass. That is I-7 working.
+        # It also made this step unpassable, which skipped steps 19-23, blocked PR #84
+        # and left `main` red — for four sessions, behind three different failures.
+        #
+        # `replay-floors.yaml` now carries an `unmeasurable_in_ci:` declaration on that
+        # floor, with the prerequisite that VOIDS it, the reason it is blocked, and the
+        # procedure to obtain the number. A declared floor reports DECLARED UNMEASURABLE
+        # (exit 0, printed `[SKIP]`, and a distinct state in the JSON — a SKIP is not a
+        # PASS); an UNDECLARED absence still exits 2; a declaration a measurement
+        # contradicts is VOID and exits 1 until it is deleted. So `tier_routing_accuracy`
+        # — which measures cleanly at 1.0000 over 200/200 traces — gates here, and the
+        # unmeasured floor is a recorded absence rather than a silenced one.
+        #
+        # WHAT WAS NOT DONE, because both are what R2.10 and finding 35 forbid: the floor
+        # was NOT lowered, and this step did NOT gain `continue-on-error`. The second
+        # would re-create the swallowed-exit-status defect repaired two steps away.
         run: |
           python -m scripts.audit.replay_metrics --check \
             --out build/audit/replay-metrics.json
