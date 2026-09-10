@@ -50,23 +50,34 @@ gh api "repos/:owner/:repo/actions/jobs/<jobid>/logs" 2>$null |
   ForEach-Object { $_.Line }
 ```
 
-**At session 6's close, on sha `58fc4e1` (run `34434951478`):** `quality-gates` steps 1–17
-**success**, **step 18 failure**, 19–23 **skipped**; `uplift-verify` step 4 **success**, step 5
-fast **failure** (`9 failed, 838 passed, 1 skipped, 28 deselected, 2 xpassed`), step 6 slow
-**skipped**. Both of session 6's commits land after that run. **So the newest run is new evidence
-and the four things to read off it are:**
+**At session 6's close, on sha `b8eba2f` (run `34448902996`):** `quality-gates` steps 1–16
+**success**, **step 17 C56 failure**, steps 18–23 **skipped**. That C56 red is **session 6's own
+defect** (finding 48): the new `Outcome` member reached registry row **C71** before it reached
+`verify_claims.GATE_STATUS`, the table nineteen rows use to translate a verdict, so `_run_check`
+coerced a `KeyError` to FAIL, the registry counts moved `FAIL 2→3 / SKIP 11→10`, and the README
+headline drifted. **It is repaired in the commit carrying this prompt, and that repair is
+unjudged.** The previous run, on `58fc4e1`, had `uplift-verify` step 5 failing with
+`9 failed, 838 passed, 1 skipped, 28 deselected, 2 xpassed`; all nine are repaired.
 
-1. **Did step 18 exit 0?** Predicted, not proved. If it did, **steps 19–23 execute for the first
-   time on this branch or on `main`** — obstructions 3 and 4, whose state is *unknown*, not green.
-   Read what they say before treating anything as clear.
-2. **Did the fast step go green?** Nine reds were repaired. A tenth may sit behind them: session
-   2r's lesson has fired four times.
-3. **If the fast step is green, step 6 — the slow surface — runs for the first time ever.** Six
-   slow properties, the 623-test regression floor, the subprocess fault-injection probe and
-   `digital_twin`'s 1000-scenario run have never executed. Expect reds, and read them as **newly
-   visible, not newly broken**.
+**So the four things to read off the newest run are:**
+
+1. **Did C56 go green, and did step 18 then execute?** Predicted: C71 `FAIL → SKIP`, nested suite
+   `FAIL 3 → 2` and `SKIP 10 → 11`, matching the committed README headline. **Step 18 has still
+   never executed** — its first opportunity was skipped behind the C56 regression. If C56 is still
+   red, read `doc_truth`'s own line for the drift and then the `SYNAPSE Truth Gates` run for the
+   same sha, which is what named C71. **C44 and C69 are FAIL and are NOT this spec's:**
+   `data_fabric/ingest` module liveness, and `core-purpose-uplift`'s placeholder checkpoint
+   registry.
+2. **If step 18 ran, did it exit 0?** Predicted through the gate's own `measurers` seam, never
+   proved. If it did, **steps 19–23 execute for the first time on this branch or on `main`** —
+   obstructions 3 and 4, whose state is *unknown*, not green.
+3. **Did the fast step go green?** Nine reds were repaired. A tenth may sit behind them: session
+   2r's lesson has now fired **five** times, and the fifth was a repair reddening an EARLIER gate.
 4. **Did the two `test_ledger_gen_property.py` repairs pass?** They were authored and never
-   executed — I-0 forbids running that module locally, in any form. This run is their only reader.
+   executed — I-0 forbids running that module locally, in any form. If the fast step is green,
+   step 6 also runs for the first time ever: six slow properties, the 623-test regression floor,
+   the subprocess fault-injection probe and `digital_twin`'s 1000-scenario run. Expect reds, and
+   read them as **newly visible, not newly broken**.
 
 ### STEP 1 — read these, in this order. Binding, not advisory.
 
@@ -253,27 +264,36 @@ real and is not yours. Prove it rather than assume it.
 |---|---|---|
 | 0 | the runner itself — billing | **CLEARED** — repository made public |
 | 1 | step 8 mypy strict (orchestrator) | **CLEARED** (2r), re-confirmed `success` |
-| 2 | step 17 **C56** narrative-truth | **CLEARED** (26.2 / 26.3) |
-| **2.5** | **step 18 golden-trace replay** | **REPAIRED ON DISK, UNJUDGED.** (a) session 5, (b) session 6. Predicted exit 0 |
+| 2 | step 17 **C56** narrative-truth | **CLEARED** (26.2/26.3), **REGRESSED by session 6's own C71 defect**, repaired (finding 48). **UNJUDGED** |
+| **2.5** | **step 18 golden-trace replay** | **REPAIRED ON DISK, NEVER YET EXECUTED.** (a) session 5, (b) session 6; its first opportunity was skipped behind the C56 regression |
 | 3 | step 19 unit tests → `test_cognition_phase` | **unknown** — never executed here or on `main`; repair on disk since `bf8693f` |
 | 4 | steps 20–22 coverage / spec coverage / contract | **unknown** — never executed anywhere |
 | **5** | **`uplift-verify` step 5, the fast surface** | **REPAIRED ON DISK, UNJUDGED.** Nine reds repaired; eight verified locally, two authored-only |
 | **6** | **`uplift-verify` step 6, the slow surface** | **still skipped behind step 5** and has never executed |
 
-**Session 2r's lesson has fired four times: clearing a gate reveals what it was shielding, and the
-depth is unknown until each layer clears. No single clearance licenses a claim about the job at the
-end.**
+**Session 2r's lesson has fired FIVE times, and the fifth was self-inflicted: clearing a gate
+reveals what it was shielding, and a repair aimed at one gate can redden an earlier one. No single
+clearance licenses a claim about the job at the end.**
 
 ---
 
-## HARD-WON LESSONS. Forty-seven findings and fifteen conflicts, each one paid for.
+## HARD-WON LESSONS. Forty-eight findings and fifteen conflicts, each one paid for.
 
-### The nine habits that caught the most
+### The ten habits that caught the most
 
-1. **Read the LOG, not the summary.** Nine `FAILED` lines were eleven defects: two were
+1. **Enumerate a schema change's consumers by asking what TRANSLATES the value, not only what
+   reads it.** Session 6 added a fourth `Outcome` to a registered gate, grepped the module, its
+   artifact and its property test, and missed `verify_claims.GATE_STATUS` — the table nineteen
+   registry rows use to turn a verdict into `PASS`/`FAIL`/`SKIP`. `_run_check` coerced the
+   `KeyError` to FAIL, the registry counts moved, the README headline drifted, and **C56 went red
+   one gate EARLIER than the step the change was meant to unblock.** The comment two lines above
+   that table already described the failure mode. **A repair aimed at one gate can redden an
+   earlier one.**
+2. **Read the LOG, not the summary.** Nine `FAILED` lines were eleven defects: two were
    `ExceptionGroup`s of two. Every mechanism — an `arm`-driven float reorder, a mutation that
    deleted a marker, a lookbehind that refuses `-python` — was invisible from the summary and plain
-   from the falsifying example. **`gh` log reads are free under I-0. Spend them first.**
+   from the falsifying example. And C71 was named by **a different workflow's** log for the same
+   sha, not by the step that failed. **`gh` log reads are free under I-0. Spend them first.**
 2. **A gate that has never executed is not evidence — and neither is a test that nothing has ever
    run.** Eight own-spec property failures sat undiscovered for six sessions because the sweep is
    scoped to what a wave *changed*. **Verify what you already had, not only what you touched.**
@@ -523,7 +543,10 @@ python -m mypy --strict orchestrator/ --exclude orchestrator/tests   # CI's ACTU
    job is genuinely eligible** (conflict G).
 3. A schema change and every fixture that carries it. **Session 6: a new `Outcome` member and a new
    `Declaration` enum moved `_MARKER`, `exit_code_for`, `aggregate`, `_format`, the property's
-   severity map and its expected-outcome mirror — all in one commit.**
+   severity map and its expected-outcome mirror — and, missed on the first push,
+   `verify_claims.GATE_STATUS`, which is what a REGISTERED gate's verdict is translated through.
+   That miss is finding 48 and it cost a CI run. `test_every_outcome_this_gate_can_report_is_
+   translatable_by_the_registry` now asserts the coupling mechanically.**
 4. **Any workflow job/step change, or any `blocking-steps.yaml` entry, and
    `python -m scripts.audit.gate_surface --write`.** **Check it rather than assume it** — it fired
    17→18 files (2q), 536→542 rows (2r-pre-c), 542→549 (session 3), did **not** fire on a `run:`-only
@@ -578,40 +601,44 @@ the requirement does not name (conflict M).
 
 ## Session 6 handoff — regenerate this section each session
 
-**Two commits plus the documents commit. NO leaf ticked, and the census is unchanged at
+**Three commits plus a fourth repair commit. NO leaf ticked, and the census is unchanged at
 `140/63/2/75`.**
 
 | Commit | Subject |
 |---|---|
 | `2b35c5a` | the swallow was hiding the command it swallowed — all nine fast-step failures |
 | `d6443eb` | declare the unmeasurable floor, and give the declaration a falsifier |
-| *(third)* | this prompt, `HANDOFF.md`, the ledger row, and tasks 11 / 27.5 |
+| `b8eba2f` | the session ledger: findings 43–47 and conflict O |
+| *(fourth)* | **finding 48** — the fourth outcome reached C71 before it reached `GATE_STATUS`; this prompt and `HANDOFF.md` |
 
 **What was earned.** All nine `uplift-verify` failures repaired — **and the nine were eleven**, two
 being `ExceptionGroup`s of two. One was a real gate defect whose shape is the pair R6.14 exists to
 catch: on a `-`-prefixed Make recipe the gate reported the swallow and extracted **zero commands**.
 Obstruction 2.5's owed disposition (b) landed, with the declaration in the configuration and a
-prerequisite that **voids** it. Step 18 predicted exit 0 through the gate's own `measurers` seam.
+prerequisite that **voids** it.
 
-**What was learned.** The job log is worth more than the job's colour: every mechanism was in the
-falsifying example and none was in the summary line. Session 1's own `stryker-break` repair created
-a red six sessions later because a four-site coordinated change moved two sites. And CF-13 is
-enforced over a scope containing **none** of its 56 violations — a count four documents got wrong,
-and which the first tool written to measure it also got wrong, by repeating the exact regex defect
-one of the files it mis-flagged exists to warn about.
+**What was learned, and the sharpest of it was self-inflicted.** Disposition (b)'s first push
+reddened `quality-gates` at step 17, one gate **earlier** than the step it was meant to unblock,
+because a new enum member reached a registry row before it reached the table that translates
+verdicts — a coupling whose failure mode was documented two lines above that table. Read from two
+job logs, repaired, and now asserted mechanically. Also: the job log is worth more than the job's
+colour; session 1's own `stryker-break` repair created a red six sessions later because a four-site
+coordinated change moved two sites; and CF-13 is enforced over a scope containing **none** of its 56
+violations — a count four documents got wrong, and which the first tool written to measure it also
+got wrong, by repeating the exact regex defect one of the files it mis-flagged exists to warn about.
 
-**What is blocked, and it is CI's.** Both commits' discharge. The fast step's colour, the slow
-step's first execution, step 18's real verdict, and steps 19–23 — which have never executed on this
-branch **or on `main`**.
+**What is blocked, and it is CI's.** Every commit's discharge. Whether C56 clears, whether step 18
+ever executes, the fast step's colour, the slow step's first execution, and steps 19–23 — which have
+never executed on this branch **or on `main`**.
 
 **Verified at close:** six cheap gates **0/0/0/2/1/0**; census exit **0**, unchanged at
 `140/63/2/75`; `pin_extractor_truth` **14/14/14**; `gate_surface --check` **0** with coupling 4
-checked rather than assumed; 34 tests green at `dev` across five bounded serial `pytest`
+checked rather than assumed; **35** tests green at `dev` across **six** bounded serial `pytest`
 invocations; `mypy --strict --no-incremental` clean on both changed non-test modules; lint/format
-debt proven byte-identical at HEAD by materialising the blobs, **zero added**; every written file
-uniform-ending, no BOM, no U+FFFD; process sweep clean.
+debt proven byte-identical at HEAD by materialising the blobs, **zero added** across all seven
+changed source files; every written file uniform-ending, no BOM, no U+FFFD; process sweep clean.
 
-**NOT verified, and must not be claimed:** that the fast step is green; the two
-`test_ledger_gen_property.py` repairs; that step 18 exits 0; `quality-gates` steps 19–23; the slow
-step and therefore the slow half of Properties 38–60; `mypy --strict` on the four changed test
-modules; task 11's verdict.
+**NOT verified, and must not be claimed:** that C56 clears; that step 18 exits 0 (**it has still
+never executed**); that the fast step is green; the two `test_ledger_gen_property.py` repairs;
+`quality-gates` steps 19–23; the slow step and therefore the slow half of Properties 38–60;
+`mypy --strict` on the four changed test modules; task 11's verdict.

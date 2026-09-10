@@ -57,12 +57,25 @@ STATUSES: tuple[str, ...] = ("PASS", "FAIL", "PARTIAL", "SKIP")
 # count (R2.9) and a SKIP is not a PASS (I-7). A verdict outside this vocabulary raises
 # ``KeyError``, which ``_run_check`` coerces to FAIL naming the check -- an unknown
 # verdict is a defect, not a pass.
+#
+# ``declared-unmeasurable`` is the FIFTH member, added with `replay_metrics`' fourth
+# outcome (decision-quality-proof session 6, obstruction 2.5 disposition (b)), **and the
+# paragraph above is exactly the trap it fell into**: the new state reached C71 before it
+# reached this table, `_run_check` coerced the ``KeyError`` to FAIL, and the registry
+# counts moved SKIP 11 -> 10 / FAIL 2 -> 3, which drifted the README headline and
+# reddened C56 one gate ahead of the step the change was meant to unblock. It maps to
+# **SKIP**, for the same reason ``unavailable`` does: a floor whose measurement is
+# declared unobtainable in CI has established nothing about that floor. The gate's own
+# exit code is 0 there so a step can gate on the floors it CAN measure; this registry row
+# is the stricter surface and says the floor went unmeasured. Two vocabularies, one fact,
+# and the strict reading is the one the published counts carry.
 GATE_STATUS: dict[str, str] = {
     "pass": "PASS",
     "ok": "PASS",
     "fail": "FAIL",
     "skip": "SKIP",
     "unavailable": "SKIP",
+    "declared-unmeasurable": "SKIP",
 }
 
 
@@ -2439,6 +2452,14 @@ def check_replay_metrics() -> CheckResult:
     rate is 0.0", and either of those read as a PASS would be a fabricated measurement.
     Trace-count or seed drift against the generator is also `unavailable`, not a pass:
     a replay over the wrong traces measures the wrong thing.
+
+    **A floor declared unmeasurable in CI reads SKIP here, and that is stricter than the
+    gate's own exit code on purpose.** `replay-floors.yaml` may declare a floor
+    unmeasurable with its prerequisite, its reason and its procedure, and
+    `replay_metrics` then exits 0 so `ci.yml::quality-gates` can gate on the floors it CAN
+    measure. This row is the other surface: it reports that the floor went unmeasured, so
+    the published PASS count never absorbs a declared absence. A declaration a measurement
+    contradicts is `void` and the gate reports FAIL, which arrives here as FAIL unchanged.
     """
     try:
         from scripts.audit.replay_metrics import evaluate as _eval_replay

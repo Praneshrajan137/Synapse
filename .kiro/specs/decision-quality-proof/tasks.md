@@ -3442,6 +3442,61 @@ data and scored against an external benchmark has no demonstrable value.
       No replay was performed (I-0). **This predicts; it does not prove.** If the real replay
       measures differently the verdict differs, and steps 19–23 have never executed on this branch
       or on `main`, so what they report when they first run is unknown rather than green.
+
+      **FINDING 48 — THE FOURTH OUTCOME REACHED A REGISTRY ROW BEFORE IT REACHED THE TABLE THAT
+      TRANSLATES IT, AND THE TRAP WAS DOCUMENTED TWO LINES ABOVE THE TABLE. SELF-INFLICTED, FOUND
+      BY CI, REPAIRED IN THE SAME SESSION.**
+
+      The first push of disposition (b) **reddened `quality-gates` one step EARLIER than the step
+      it was meant to unblock.** Measured on run `34448902996`, sha `b8eba2f`: step 17 **C56
+      failure**, step 18 **skipped behind it** — so the repair was still unjudged and the
+      obstruction had moved backwards from 18 to 17, which had been `success` since session 4.
+
+      **Read, not guessed.** `doc_truth`'s own line names the drift:
+      `headline-counts … FAIL (README claims 2, suite reports 3); SKIP (README claims 11, suite
+      reports 10)` — one check moved SKIP → FAIL. Every pin, **including both `replay-floors.yaml`
+      pins (0.70 and 0.80)**, reported `[OK]`, so the declaration had moved no pinned value. The
+      `SYNAPSE Truth Gates` run for the same sha then named the check outright:
+      `C71 … check raised KeyError: 'declared-unmeasurable'`.
+
+      **`replay_metrics` is registered as C71**, and `verify_claims.GATE_STATUS` is the shared
+      table **nineteen** registry rows use to translate a gate's own verdict string into the
+      registry's `PASS`/`FAIL`/`SKIP` vocabulary. A new `Outcome` member is a schema change, and
+      that table is one of the fixtures carrying it (**coupling 3**). Session 6's wave-2 sweep
+      grepped for consumers of the persisted artifact and of `Outcome` **inside** the gate and its
+      property test, and did not grep for a *verdict translation* — so `_run_check` coerced the
+      `KeyError` to FAIL, the registry counts moved, the README headline drifted, and C56 went red.
+      **The comment block immediately above `GATE_STATUS` already describes this exact failure
+      mode**, in the words "the three-key mapping those rows used could not express the fourth
+      state and would `KeyError` on it — coerced to FAIL by `_run_check`, so never silent, but a
+      mapping defect reported as a gate defect". It was read after the fact, not before.
+
+      **Repaired at the declaration that misleads the checker, never at the call site.**
+      `"declared-unmeasurable": "SKIP"` joins the table, for the same reason `unavailable` maps
+      there: a floor whose measurement is declared unobtainable has established nothing about that
+      floor. **That is stricter than the gate's own exit code, deliberately** — the step exits 0 so
+      it can gate on the floors it CAN measure, and the registry row says the other one went
+      unmeasured, so the published PASS count never absorbs a declared absence. Two vocabularies,
+      one fact, and the published counts carry the strict reading. None of the six forbidden
+      repairs was used: no default, no `Any`, no `type: ignore`, no narrowed scope, no lowered
+      floor, no `continue-on-error`.
+
+      **And the obligation is now mechanical instead of remembered.**
+      `test_every_outcome_this_gate_can_report_is_translatable_by_the_registry` asserts that every
+      `Outcome` member is a `GATE_STATUS` key **and** that only a genuine pass maps to `PASS` — the
+      second clause catching the worse mistake, a non-passing state absorbed into the published
+      count. It imports `verify_claims` for a dict and never executes the registry, following the
+      two sibling tests that already do. **If a fact is worth discovering twice, it is worth a
+      gate**; this one was discovered by a CI run that cost a push.
+
+      **Predicted before the second push, so it can be checked rather than believed:** C71
+      `FAIL → SKIP`, the nested suite `FAIL 3 → 2` and `SKIP 10 → 11` matching the committed README
+      headline, C56 → PASS, step 17 → success, and **step 18 executing for the first time**. The
+      arithmetic cannot be confirmed locally — `doc_truth` and `verify_claims` are on the never-run
+      list — so CI is the only reader. **C44 and C69 stay FAIL and are not this spec's**:
+      `data_fabric/ingest` module liveness, and `core-purpose-uplift`'s placeholder checkpoint
+      registry, which is the pre-existing `task_claim_truth` red the sweep has reported for six
+      sessions.
     - _Requirements: —_
 
 ## Notes

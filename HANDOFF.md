@@ -24,9 +24,14 @@ and this session's work was repair.
 >
 > **Obstruction 2.5's other half is landed.** `kv_cache_hit_rate` is declared unmeasurable in CI
 > in `replay-floors.yaml`, with the prerequisite that **voids** the declaration, the reason it is
-> blocked, and the procedure to obtain the number. Step 18 is **predicted** to exit 0 with
-> `tier_routing_accuracy` gating on a real measurement. **Predicted, not proved** — CI has not run
-> since.
+> blocked, and the procedure to obtain the number.
+>
+> **And its first push reddened C56 one step EARLIER than the step it was meant to unblock.** The
+> fourth outcome reached registry row **C71** before it reached `verify_claims.GATE_STATUS`, the
+> table nineteen rows use to translate a verdict; `_run_check` coerted the `KeyError` to FAIL, the
+> counts moved, the README headline drifted. **Found by CI, diagnosed from two job logs, repaired
+> in the same session, and now asserted mechanically.** See finding 48 — it is the sharpest lesson
+> of the session and it was self-inflicted.
 >
 > **Checkpoint A was deliberately not run.** Recorded in task 11 as a decision. Nothing was taken
 > from it: no margin, no amendment, no pin graduated, no label added.
@@ -167,6 +172,41 @@ and the generator's own `0xCAFEBABE`. Result: `[SKIP] kv_cache_hit_rate`,
 `[OK] tier_routing_accuracy 1.0000 >= 0.8000`, aggregate `declared-unmeasurable`, **exit 0**. No
 replay was performed (I-0). **This predicts; it does not prove.**
 
+### Finding 48 — the fourth outcome reddened C56 one gate *earlier*, and the trap was documented two lines above the table
+
+**Self-inflicted, found by CI on the first push, repaired in the same session.** Run
+`34448902996`, sha `b8eba2f`: step 17 **C56 failure**, step 18 **skipped behind it**. The
+obstruction had moved *backwards* from 18 to 17, which had been `success` since session 4.
+
+`doc_truth` named the drift — `headline-counts … FAIL (README claims 2, suite reports 3); SKIP
+(README claims 11, suite reports 10)` — and every pin, **including both `replay-floors.yaml` pins**,
+reported `[OK]`, so no pinned value had moved. The `SYNAPSE Truth Gates` run for the same sha named
+the check: **`C71 … check raised KeyError: 'declared-unmeasurable'`**.
+
+**`replay_metrics` is registered as C71**, and `verify_claims.GATE_STATUS` is the table **nineteen**
+registry rows use to translate a gate's verdict string into `PASS`/`FAIL`/`SKIP`. A new `Outcome`
+member is a schema change and that table is one of the fixtures carrying it (**coupling 3**). The
+wave-2 sweep grepped for consumers of the artifact and of `Outcome` *inside* the gate and its
+property test, and never for a *verdict translation*. `_run_check` coerced the `KeyError` to FAIL,
+the counts moved, the headline drifted, C56 went red. **The comment block immediately above
+`GATE_STATUS` already describes this exact failure mode.** It was read after the fact.
+
+**Repaired at the declaration, never at the call site:** `"declared-unmeasurable": "SKIP"` joins the
+table, for the same reason `unavailable` maps there. **Stricter than the gate's own exit code,
+deliberately** — the step exits 0 to gate on the floors it can measure; the registry row says the
+other one went unmeasured, so the published PASS count never absorbs a declared absence.
+
+**And the obligation is now mechanical.**
+`test_every_outcome_this_gate_can_report_is_translatable_by_the_registry` asserts every `Outcome`
+member is a `GATE_STATUS` key **and** that only a genuine pass maps to `PASS`. It imports
+`verify_claims` for a dict and never executes the registry.
+
+**Predicted before the second push:** C71 `FAIL → SKIP`, nested suite `FAIL 3 → 2` /
+`SKIP 10 → 11` matching the committed headline, C56 → PASS, step 17 → success, **step 18 executing
+for the first time**. The arithmetic cannot be confirmed locally — `doc_truth` and `verify_claims`
+are on the never-run list. **C44 and C69 stay FAIL and are not this spec's**: `data_fabric/ingest`
+module liveness, and `core-purpose-uplift`'s placeholder checkpoint registry.
+
 ---
 
 ## THE CHAIN, MEASURED RATHER THAN PREDICTED
@@ -175,16 +215,17 @@ replay was performed (I-0). **This predicts; it does not prove.**
 |---|---|---|
 | 0 | the runner itself — billing | **CLEARED** — repository made public |
 | 1 | step 8 mypy strict (orchestrator) | **CLEARED** (2r), re-confirmed `success` |
-| 2 | step 17 **C56** narrative-truth | **CLEARED** (26.2 / 26.3) |
-| **2.5** | **step 18 golden-trace replay** | **REPAIRED ON DISK, UNJUDGED.** Disposition (a) landed session 5; **(b) landed session 6**. Predicted exit 0; CI has not run |
+| 2 | step 17 **C56** narrative-truth | **CLEARED** (26.2 / 26.3), then **REGRESSED by this session's own C71 defect** at `b8eba2f`, then repaired (finding 48). **UNJUDGED** |
+| **2.5** | **step 18 golden-trace replay** | **REPAIRED ON DISK, STILL UNJUDGED.** Disposition (a) landed session 5; **(b) landed session 6**. Its first run was **skipped behind the C56 regression above**, so the repair has never been reached |
 | 3 | step 19 unit tests → `test_cognition_phase` | **still unknown** — has never executed on this branch or on `main` |
 | 4 | steps 20–22 coverage / spec coverage / contract | **still unknown** — same |
 | **5** | **`uplift-verify` step 5, the fast surface** | **REPAIRED ON DISK, UNJUDGED.** All nine reds repaired; eight verified locally, two authored-only |
 | **6** | **`uplift-verify` step 6, the slow surface** | **still skipped behind step 5.** Six slow properties, the 623-test floor, the fault-injection probe and `digital_twin`'s 1000-scenario run have still never executed |
 
-**Session 2r's lesson has fired four times: clearing a gate reveals what it was shielding, and the
-depth is unknown until each layer clears.** Nine reds were repaired; a tenth may sit behind them.
-**No single clearance licenses a claim about the job at the end.**
+**Session 2r's lesson has fired five times now, and the fifth was this session's own doing:
+clearing a gate reveals what it was shielding — and a repair aimed at one gate can redden an
+earlier one.** Nine reds were repaired; a tenth may sit behind them. **No single clearance licenses
+a claim about the job at the end.**
 
 ---
 
@@ -224,8 +265,11 @@ depth is unknown until each layer clears.** Nine reds were repaired; a tenth may
 | `command_path_truth` over the committed tree | **37 commands / 0 findings / pass**, before **and** after the gate repair — predicted, then measured |
 | `ratchet_truth` over the committed file | `stryker-break` **PASS**, no findings; aggregate **SKIP**/exit 2 over **22** rows — 16 `unmeasured` + **6** `measured` with `measured_at: null` |
 | Step 18's verdict, through the `measurers` seam | `[SKIP]` + `[OK] 1.0000 >= 0.8000`, aggregate `declared-unmeasurable`, **exit 0**. No replay performed |
+| **The first push's CI verdict** | step 17 **C56 failure**, step 18 **skipped** — the repair reddened an earlier gate |
+| **The cause, from two job logs** | `headline-counts` drift `FAIL 2→3 / SKIP 11→10`, every pin `[OK]`, then `C71 … KeyError: 'declared-unmeasurable'` |
+| `GATE_STATUS` after the repair | every `Outcome` member translatable; `pass→PASS`, `fail→FAIL`, `unavailable→SKIP`, `declared-unmeasurable→SKIP` |
 | CF-13, by AST over 354 files | **41 files / 56 sites**; intersection with `DECLARED_INVENTORY` **empty** |
-| Bounded `pytest`, five invocations, serial, `dev` | **34 tests green**: 8 command-path, 11 ratchet, 2 aggregation, 13 replay-metrics |
+| Bounded `pytest`, six invocations, serial, `dev` | **35 tests green**: 8 command-path, 11 ratchet, 2 aggregation, 14 replay-metrics |
 | `mypy --strict --no-incremental` | clean on `scripts.audit.command_path_truth` and `scripts.audit.replay_metrics` |
 | Lint/format ownership | materialised the committed blobs and re-ran the checker: **9 findings before, 9 after** on wave 1's five files; **3 before, 3 after** on wave 2's two. **Zero added** |
 | Coupling 4 | `gate_surface --check` **0** — a comment-only workflow edit whose step NAME did not change moved nothing. Checked, not assumed |
@@ -246,10 +290,13 @@ not run in any form, and `tests/verify/test_ledger_gen_property.py` was not exec
 
 - **That the fast step is green.** Nine reds were repaired; the run that judges them has not
   happened, and a tenth may sit behind them.
+- **That C56 goes green on the second push.** Predicted from two job logs: C71 `FAIL → SKIP`, so
+  `FAIL 3 → 2` and `SKIP 10 → 11`, matching the committed README headline. **The arithmetic cannot
+  be checked locally** — `doc_truth` and `verify_claims` are on the never-run list.
+- **That step 18 exits 0.** It has still never executed: its first opportunity was skipped behind
+  the C56 regression. The prediction stands and is unproved.
 - **The two `test_ledger_gen_property.py` repairs.** Authored, diagnostics-clean, **not
   executed** — that module names a registry execution and I-0 forbids it in any form.
-- **That step 18 exits 0.** Predicted through the measurers seam with the measurements CI
-  reported. The replay is CI's to perform.
 - **`quality-gates` steps 19–23.** Have never executed on this branch **or on `main`**.
 - **The slow step, and therefore the slow half of Properties 38–60**, the six slow properties, the
   623-test floor, the fault-injection probe, `digital_twin`'s 1000-scenario run.
@@ -260,11 +307,20 @@ not run in any form, and `tests/verify/test_ledger_gen_property.py` was not exec
 
 ### The lesson from this session
 
+**A repair aimed at one gate can redden an earlier one, and the only thing that told me was a job
+log.** Disposition (b) was authored, verified locally against every clause a property could carry,
+predicted through the gate's own seam, and it still broke `quality-gates` at step 17 — because a new
+enum member reached a registry row before it reached the table that translates verdicts, and the
+comment two lines above that table already described the failure mode. **Enumerating a schema
+change's consumers by grepping the module and its test is not enumerating them.** Ask what
+*translates* the value, not only what reads it.
+
 **A gate that has never executed is not evidence, and the log of the run that finally executes it
 is worth more than any amount of reasoning about it.** Nine summary lines became eleven diagnosed
-defects because the falsifying examples were read; the `arm`-driven reorder behind the
-float mismatch, and the marker-deletion behind `'unavailable' == 'fail'`, were both invisible from
-the summary and obvious from the log.
+defects because the falsifying examples were read; the `arm`-driven reorder behind the float
+mismatch and the marker deletion behind `'unavailable' == 'fail'` were both invisible from the
+summary and obvious from the log. The same is true of C71: the step-17 log gave the drift, and only
+the *Truth Gates* run for the same sha named the check.
 
 **And the corollary: check the premise, then check your own instrument.** Four documents said
 CF-13 had three violations; there are 56. The first tool written to count them repeated, on its

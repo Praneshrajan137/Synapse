@@ -560,6 +560,47 @@ def test_the_committed_kv_cache_declaration_is_well_formed_and_the_other_is_abse
         assert rm.read_floor(config, metric) == (value, rm.DIRECTION_AT_OR_ABOVE)
 
 
+def test_every_outcome_this_gate_can_report_is_translatable_by_the_registry() -> None:
+    """The coupling a new `Outcome` member owes, made mechanical instead of remembered.
+
+    `replay_metrics` is registered as **C71**, and `verify_claims.GATE_STATUS` is the
+    shared table nineteen registry rows use to translate a gate's own verdict string into
+    the registry's `PASS`/`FAIL`/`SKIP` vocabulary. A member this gate can emit but that
+    table cannot translate raises `KeyError`, which `_run_check` coerces to **FAIL** — so
+    the row reports a gate defect for what is really a mapping defect, the registry counts
+    move, the README headline drifts, and **C56 goes red one gate ahead of whatever the
+    change was meant to unblock.** That is not hypothetical: it is exactly what session 6's
+    fourth outcome did on its first push, and the comment block two lines above
+    `GATE_STATUS` already described the trap.
+
+    So the obligation is asserted rather than documented. This is a dict lookup over an
+    imported module constant: `verify_claims` is IMPORTED, never executed — running the
+    registry is a 900s in-process workload I-0 forbids on this machine, and the two
+    sibling tests that already import this module set the precedent.
+
+    Both directions matter. Totality catches a new `Outcome` with no key. The
+    non-`PASS` clause catches the worse mistake: a non-passing state translated into the
+    published PASS count, which is the fabrication R2.9 and I-7 both forbid.
+    """
+    from scripts.audit import verify_claims
+
+    translatable = set(verify_claims.GATE_STATUS)
+    emitted = {outcome.value for outcome in Outcome}
+    missing = emitted - translatable
+    assert not missing, (
+        f"C71 can report {sorted(missing)}, which verify_claims.GATE_STATUS cannot "
+        "translate; the KeyError is coerced to FAIL and reported as a gate defect"
+    )
+
+    # Only a genuine pass may reach the published PASS count. `DECLARED_UNMEASURABLE` is
+    # exit 0 at the step and SKIP here, deliberately: the step gates on the floors it can
+    # measure, and the registry says the other one went unmeasured.
+    assert verify_claims.GATE_STATUS[Outcome.PASS.value] == "PASS"
+    assert verify_claims.GATE_STATUS[Outcome.FAIL.value] == "FAIL"
+    for outcome in (Outcome.UNAVAILABLE, Outcome.DECLARED_UNMEASURABLE):
+        assert verify_claims.GATE_STATUS[outcome.value] == "SKIP"
+
+
 @given(
     pair=threshold_sequences(min_size=2, max_size=2, low=0.0, high=1.0),
     floor=st.floats(min_value=0.0, max_value=1.0, allow_nan=False, allow_infinity=False).map(
