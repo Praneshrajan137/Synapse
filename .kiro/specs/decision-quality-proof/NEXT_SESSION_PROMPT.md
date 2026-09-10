@@ -38,11 +38,16 @@ foreach ($job in $j.jobs) { "{0} | {1} | steps={2}" -f $job.name, $job.conclusio
 ```
 
 **At handoff:** `quality-gates` steps 1–17 **success**, **step 18 failure**, 19–23 skipped.
-`uplift-verify` **ran**: step 4 install **success**, step 5 fast **failure** (`9 failed, 830 passed,
-1 skipped, 25 deselected, 2 xpassed`), step 6 slow **skipped behind it**. `sprint6-verify` and
-`training-smoke` still skipped — they keep their own `needs:`. **Use a `foreach`, not a pipeline:
-PowerShell 5.1's `ConvertFrom-Json` hands back the array unenumerated and a piped `Where-Object`
-silently yields nothing.**
+`uplift-verify` **ran**: step 4 install **success**, step 5 fast **failure** (`9 failed, 838 passed,
+1 skipped, 28 deselected, 2 xpassed` at the head commit), step 6 slow **skipped behind it**.
+`sprint6-verify` and `training-smoke` still skipped — they keep their own `needs:`. **Use a
+`foreach`, not a pipeline: PowerShell 5.1's `ConvertFrom-Json` hands back the array unenumerated and
+a piped `Where-Object` silently yields nothing.**
+
+**Read the two runs as a pair before touching anything**, because their deltas are the proof that the
+nine failures are not session 5's doing: across `e9db587 → 4b9d0d4` the passed count moved
+`830 → 838` (**+8**, exactly the new fast tests), deselected `25 → 28` (**+3**, exactly the new slow
+ones), and **the nine failures are the identical nine**.
 
 ### STEP 1 — read these, in this order. Binding, not advisory.
 

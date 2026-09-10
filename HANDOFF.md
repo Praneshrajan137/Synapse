@@ -45,6 +45,19 @@ it *is*, not as a diff against how it was.
 | 5 | Property + unit tests (fast — 500-example budget) | **failure**: `9 failed, 830 passed, 1 skipped, 25 deselected, 2 xpassed` in `849.90s` |
 | 6 | Property + regression tests (slow — 100-example budget) | **skipped** behind step 5 |
 
+**And the run for `4b9d0d4` — wave 3 included — is the arithmetic confirmation that this session
+added nothing red.** Run `34389144752`, same job, `972.38s`:
+**`9 failed, 838 passed, 1 skipped, 28 deselected, 2 xpassed`.**
+
+| Delta `e9db587` → `4b9d0d4` | Measured | Meaning |
+|---|---|---|
+| passed | `830 → 838` (**+8**) | **exactly** the eight fast tests in `test_three_arm_comparator_property.py`. All pass in CI. |
+| deselected | `25 → 28` (**+3**) | **exactly** the three slow twin-driving properties, correctly routed out of the fast step by `-m "not slow"`. |
+| failed | `9 → 9`, **identical list** | the three-arm comparator introduced **zero** regressions. |
+
+That is the cleanest available evidence that the repair is sound *and* that the nine failures are
+not its doing: the counts move by exactly what was added and the failure set does not move at all.
+
 **State the claim narrowly.** The **fast** surface of `tests/uplift` and `tests/verify` is now
 measured. The **slow** surface is not: the six slow properties, the 623-test regression floor, the
 subprocess fault-injection probe and `digital_twin`'s 1000-scenario run have still never executed.
@@ -241,10 +254,13 @@ single file to test the budget hypothesis. **Zero** wide `mypy` passes.
 
 - **The slow step, and therefore the slow half of Properties 38–60.** Skipped behind step 5.
 - **The three new slow twin-driving properties** in `test_three_arm_comparator_property.py`.
-  Authored, diagnostics-clean, **deselected locally** — category 4 under I-0. A deselection is not
-  a pass.
-- **That the three-arm comparator produces a correct regret.** No twin measurement was taken. What
-  the `(s, S)` regret *is* remains unmeasured; checkpoint A run 1 is its only source.
+  Authored, diagnostics-clean, **deselected locally and deselected in CI's fast step** — category 4
+  under I-0, and a deselection is not a pass. Their eight *fast* siblings **are** CI-verified: the
+  fast step's passed count moved `830 → 838` by exactly eight and its deselected count `25 → 28` by
+  exactly three.
+- **That the three-arm comparator produces a correct regret.** No twin measurement was taken. Its
+  code paths are CI-green and its arithmetic is unexercised: what the `(s, S)` regret *is* remains
+  unmeasured, and checkpoint A run 1 is its only source.
 - **That the next `twin-regret` run uploads a parseable artifact.** The mechanism is asserted
   locally; the run is CI's to report.
 - **`quality-gates` steps 19–23.** Still skipped behind step 18.
