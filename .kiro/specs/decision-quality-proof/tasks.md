@@ -2935,7 +2935,7 @@ data and scored against an external benchmark has no demonstrable value.
       README whose contents C56 reads.
     - _Requirements: 4.4, 4.5, 4.8, 4.11, 10.1, 10.7_
 
-- [ ] 27. `mypy --strict orchestrator/` — the debt that gates every property this spec has written
+- [x] 27. `mypy --strict orchestrator/` — the debt that gates every property this spec has written
   - **Adopted into scope by explicit operator decision in session 2q**, from three options: file it
     against its author, take it as a named batch, or split it. The batch was chosen.
   - **This is the single largest obstacle in the tree, and the reason is structural.**
@@ -3108,7 +3108,7 @@ data and scored against an external benchmark has no demonstrable value.
       distinction is mypy's, not a preference.
     - _Requirements: —_
 
-  - [ ] 27.5 Confirm step 8 passes and that `uplift-verify` actually executes
+  - [x] 27.5 Confirm step 8 passes and that `uplift-verify` actually executes
     - discharge: ci.yml::uplift-verify
     - **This is the payoff, and it is the only thing that discharges it.** Confirm `quality-gates`
       reaches its end, then confirm `uplift-verify` **ran** — not that it was skipped, and not that
@@ -3497,6 +3497,81 @@ data and scored against an external benchmark has no demonstrable value.
       `data_fabric/ingest` module liveness, and `core-purpose-uplift`'s placeholder checkpoint
       registry, which is the pre-existing `task_claim_truth` red the sweep has reported for six
       sessions.
+
+    - **SESSION 6-CI — DISCHARGED. `[x]`. THE WHOLE CHAIN CLEARED IN ONE RUN, AND THE SLOW SURFACE
+      EXECUTED FOR THE FIRST TIME IN THIS SPEC'S LIFE.** Measured on `ci.yml` run `34501159046`,
+      sha `1f4e876`.
+
+      **`quality-gates`: conclusion `success`, all 26 steps.** First time on this branch, and
+      steps 20–22 had never executed on this branch **or on `main`**:
+
+      | Step | Result | Obstruction |
+      |---|---|---|
+      | 17 C56 narrative-truth | **success** | 2 — the finding-48 regression cleared |
+      | 18 Golden-trace replay metrics | **success** | **2.5 CLEARED** — its first execution ever |
+      | 19 Unit tests (all gated trees) | **success** | **3 CLEARED** — `test_cognition_phase`'s repair (`bf8693f`) judged at last |
+      | 20 Per-package coverage floor | **success** | **4 CLEARED** |
+      | 21 Spec coverage | **success** | **4 CLEARED** |
+      | 22 Contract tests | **success** | **4 CLEARED** |
+      | 23 Upload coverage | **success** | — |
+
+      **Step 18's own output, and it matches the hermetic prediction in substance line for line —
+      except that the tier-routing number is now a REAL 200-trace replay rather than a substituted
+      one:**
+
+      ```
+      replay-metrics: 200 golden traces from tests/eval/golden_traces (seed 0xCAFEBABE)
+      [SKIP] kv_cache_hit_rate: measured DECLARED UNMEASURABLE, floor 0.7000 -- ... declared
+             unmeasurable in CI -- blocked on A GitHub-hosted runner has no Ollama ...
+      [OK]   tier_routing_accuracy: measured 1.0000 >= floor 0.8000 (200/200 traces classified)
+      [SKIP] replay-metrics: every MEASURED value is at or above its floor; at least one floor is
+             declared unmeasurable in CI with its reason and procedure. A SKIP is not a PASS (I-7)
+      ```
+
+      **`uplift-verify` step 5, the fast surface: `850 passed, 1 skipped, 28 deselected, 2 xpassed`
+      — ZERO FAILED.** Obstruction 5 **CLEARED**, and the arithmetic confirms the repair exactly:
+      `838 + 9 repaired + 3 new = 850`, and `9 failed -> 0`. **That includes the two
+      `test_ledger_gen_property.py` repairs, which were authored blind** — I-0 forbids running that
+      module locally, so this run is the only thing that could ever have judged them, and it did.
+
+      **`uplift-verify` step 6, the slow surface: it RAN. `1 failed, 59 passed, 936 deselected` in
+      421s.** Obstruction 6 is no longer "never executed": the six slow properties, the 623-test
+      regression floor, the subprocess fault-injection probe and `digital_twin`'s 1000-scenario run
+      have all now run. **The job's conclusion is `failure` on that one test, and it is not this
+      spec's — proven on both sides**, which is the "read the subject of a failure before treating
+      it as yours" rule:
+      - `tests/uplift/test_preserved_baseline_regression.py` exists on `origin/main`; this branch
+        modified it (45 insertions / 16 deletions) and **touched no `pinecone` line and no
+        `_PAID_CLIENT_TARGETS` line** — the failing assertion is byte-identical to `main`'s;
+      - `uplift/consensus_arm.py`, which constructs the client, is on `origin/main` and
+        `git diff origin/main` is **empty** — byte-identical.
+
+      **FINDING 49 — THE FULL DEPTH OF THE CHAIN IS NOW KNOWN, AND SESSION 2r's LESSON HELD TO THE
+      END.** Six obstructions were cleared across sessions 2r–6 and each one revealed the next; the
+      last two (3 and 4) had never executed anywhere, so nothing before this run could have said
+      what they would report. **They reported green.** The lesson is not that the predictions were
+      right — it is that four of the six could only be read after the one in front of it moved.
+
+      **FINDING 50 — THE BLOCKING I-1 GATE IS FAIL-OPEN TO `pinecone`, AND THE ONLY THING THAT SAW
+      IT WAS A PROPERTY THAT HAD NEVER RUN.** `ci.yml::quality-gates` step 13 ("No paid API imports
+      (I-1 — BLOCKING)") greps a **deny-list**:
+      `openai|anthropic|cohere|replicate` — and `pinecone` is not in it. The slow property asserts
+      the stricter and correct I-1 reading — that no paid SDK client is **constructed** on a
+      reproduction path — and it reports `paid client used: ['pinecone.Pinecone']`.
+      `uplift/consensus_arm.py:618,655` records the intent as an honest degrade ("the semantic cache
+      is constructed without a Pinecone key", "no Pinecone key -> the cache reports itself
+      unavailable"), so the *degradation* is deliberate; what the property objects to is that the
+      paid client is constructed at all. **A deny-list is fail-open by construction** — the prompt
+      already carries that lesson about workflow triggers, and here it is again on an invariant
+      gate. **Recorded, not repaired:** both sides are `main`'s, I-1 is the highest-precedence
+      invariant after I-0, and the choice between widening the grep, moving to an allow-list, and
+      changing what `consensus_arm` constructs is the operator's.
+
+      **What this leaf's `discharge:` line asked for, point by point.** `quality-gates` reached its
+      end — `success`, 26 of 26. `uplift-verify` **ran**, was not skipped, did not report nothing,
+      and **reached its end**: both functional steps executed and neither was skipped behind the
+      other. Properties 38–60's first full CI execution has been read. **So this spec's property
+      surface is no longer local evidence only, and `HANDOFF.md` no longer has to say it is.**
     - _Requirements: —_
 
 ## Notes

@@ -17,14 +17,26 @@ against `main`.
 **Your session cap is THIRTY leaf tasks, in three waves of about ten. It is a ceiling and it is
 expected never to bind.** What stops you is a barrier or a phase boundary.
 
-### STEP 0 — TWO REPAIRS ARE ON DISK AND UNJUDGED. READ THE RUN THAT JUDGES THEM.
+### STEP 0 — THE CHAIN IS CLEAR AND THE SLOW SURFACE HAS REPORTED. DERIVE HEAD, THEN READ THE NEWEST RUN.
 
-Session 6 repaired all nine `uplift-verify` fast-step failures and landed obstruction 2.5's
-disposition (b). **Neither has been judged by CI.** Reading the run for the newest sha is the whole
-of your STEP 0, and it decides what the session is.
+**Session 6 closed with `quality-gates` GREEN for the first time in this branch's life and the whole
+property surface executed in CI.** Run `34501159046`, sha `1f4e876`:
+
+| Job / step | Result |
+|---|---|
+| `quality-gates` | **`success`, 26 of 26 steps** — obstructions 2.5, 3 and 4 cleared together |
+| step 18 golden-trace replay | **`success`** — its first execution ever, exit 0, real 200/200 replay |
+| steps 19–22 unit tests / coverage / spec coverage / contract | **`success`** — 20–22 had never executed here **or on `main`** |
+| `uplift-verify` step 5, fast | **`850 passed, 1 skipped, 28 deselected, 2 xpassed`, 0 failed** |
+| `uplift-verify` step 6, slow | **RAN.** `1 failed, 59 passed, 936 deselected` — the failure is **`main`'s on both sides** |
+
+**So task 27.5 is `[x]` and this spec's property surface is no longer local evidence only.** The
+census moved `140/63/2/75` → `140/64/2/74`, 5 CI-gated.
+
+**Derive the state; never trust this document for it.**
 
 ```powershell
-git rev-parse --short HEAD                       # derive HEAD; never trust a document for it
+git rev-parse --short HEAD
 git rev-list --count origin/main..HEAD
 gh run list --branch feat/decision-quality-proof --limit 10 --json databaseId,headSha,workflowName,conclusion
 ```
@@ -40,9 +52,10 @@ foreach ($job in $j.jobs) { foreach ($s in $job.steps) { "{0,3} {1,-12} {2}" -f 
 **Use a `foreach`, not a pipeline: PowerShell 5.1's `ConvertFrom-Json` hands back the array
 unenumerated and a piped `Where-Object` silently yields nothing.**
 
-**Then read the LOG, not only the step list.** Session 6's entire payoff was the step-5 log: nine
-summary lines turned out to be **eleven** defects, because two of them were `ExceptionGroup`s
-carrying two distinct failures each, and every falsifying example was in the log.
+**Then read the LOG, not only the step list** — and read the OTHER workflows for the same sha.
+Session 6's two biggest reads were a step-5 log (nine summary lines were eleven defects, because two
+were `ExceptionGroup`s of two) and a `SYNAPSE Truth Gates` log that named a failing check the
+failing step's own log did not.
 
 ```powershell
 gh api "repos/:owner/:repo/actions/jobs/<jobid>/logs" 2>$null |
@@ -50,34 +63,21 @@ gh api "repos/:owner/:repo/actions/jobs/<jobid>/logs" 2>$null |
   ForEach-Object { $_.Line }
 ```
 
-**At session 6's close, on sha `b8eba2f` (run `34448902996`):** `quality-gates` steps 1–16
-**success**, **step 17 C56 failure**, steps 18–23 **skipped**. That C56 red is **session 6's own
-defect** (finding 48): the new `Outcome` member reached registry row **C71** before it reached
-`verify_claims.GATE_STATUS`, the table nineteen rows use to translate a verdict, so `_run_check`
-coerced a `KeyError` to FAIL, the registry counts moved `FAIL 2→3 / SKIP 11→10`, and the README
-headline drifted. **It is repaired in the commit carrying this prompt, and that repair is
-unjudged.** The previous run, on `58fc4e1`, had `uplift-verify` step 5 failing with
-`9 failed, 838 passed, 1 skipped, 28 deselected, 2 xpassed`; all nine are repaired.
+**What is left to read, in priority order:**
 
-**So the four things to read off the newest run are:**
-
-1. **Did C56 go green, and did step 18 then execute?** Predicted: C71 `FAIL → SKIP`, nested suite
-   `FAIL 3 → 2` and `SKIP 10 → 11`, matching the committed README headline. **Step 18 has still
-   never executed** — its first opportunity was skipped behind the C56 regression. If C56 is still
-   red, read `doc_truth`'s own line for the drift and then the `SYNAPSE Truth Gates` run for the
-   same sha, which is what named C71. **C44 and C69 are FAIL and are NOT this spec's:**
-   `data_fabric/ingest` module liveness, and `core-purpose-uplift`'s placeholder checkpoint
-   registry.
-2. **If step 18 ran, did it exit 0?** Predicted through the gate's own `measurers` seam, never
-   proved. If it did, **steps 19–23 execute for the first time on this branch or on `main`** —
-   obstructions 3 and 4, whose state is *unknown*, not green.
-3. **Did the fast step go green?** Nine reds were repaired. A tenth may sit behind them: session
-   2r's lesson has now fired **five** times, and the fifth was a repair reddening an EARLIER gate.
-4. **Did the two `test_ledger_gen_property.py` repairs pass?** They were authored and never
-   executed — I-0 forbids running that module locally, in any form. If the fast step is green,
-   step 6 also runs for the first time ever: six slow properties, the 623-test regression floor,
-   the subprocess fault-injection probe and `digital_twin`'s 1000-scenario run. Expect reds, and
-   read them as **newly visible, not newly broken**.
+1. **Is `quality-gates` still green?** It is now a green `required:` check and the merge no longer
+   waits on it. A regression here is the most important thing that can happen to this branch.
+2. **`uplift-verify`'s remaining red, and it is NOT this spec's.**
+   `tests/uplift/test_preserved_baseline_regression.py::test_reproduction_path_is_zero_cost_network_
+   free_and_synthetic_only` reports `paid client used: ['pinecone.Pinecone']`. Both sides are
+   `main`'s: the test file's assertion is untouched by this branch's 45/16-line diff, and
+   `uplift/consensus_arm.py` has an **empty** `git diff origin/main`. **That is finding 50 and it is
+   an I-1 matter** — `ci.yml` step 13's BLOCKING paid-import grep is a **deny-list** that does not
+   contain `pinecone`, so the invariant gate is fail-open and only a property that had never run saw
+   it. Widening the grep, moving to an allow-list, or changing what `consensus_arm` constructs is the
+   operator's decision.
+3. **Checkpoint A.** Session 6 deferred it because the instrument sat in a tree whose property
+   surface was red in nine places. **That reason has expired.** See STEP 3.
 
 ### STEP 1 — read these, in this order. Binding, not advisory.
 
@@ -111,16 +111,18 @@ more, and expect them in the procedure you are about to follow.
 python -m scripts.audit.spec_ledger_census --files --next 30
 ```
 
-At handoff: **140 leaf tasks — 63 done, 2 authored-pending-discharge, 75 open** (69 authorable,
-**6** CI-gated), unchanged across sessions 4, 5 and 6. `--next 30` offers `12.1 … 17.7` and names
+At handoff: **140 leaf tasks — 64 done, 2 authored-pending-discharge, 74 open** (69 authorable,
+**5** CI-gated). Session 6 ticked **27.5** and parent **27** with it, on `ci.yml::uplift-verify`'s
+own verdict — the first leaf in three sessions. `--next 30` offers `12.1 — 17.7` and names
 barriers **11** (30 of 30 follow) and **14** (19 of 30 follow).
 
 **The answer, which you should re-derive rather than copy: the batch DEPENDS ON BOTH.** Task 12's
-precondition is checkpoint A's verdict; `15.1`–`17.7` are all of E3, which checkpoint B can cancel.
-So the offer truncates to **11** and then to **zero**.
+precondition is checkpoint A's verdict; `15.1`–`17.7` are all of E3, which checkpoint B can
+cancel. So the offer truncates to **11** and then to **zero**.
 
-**That does NOT mean there is no work.** Sessions 5 and 6 each landed multiple commits with the
-same census. Do not read a zero-leaf census as a zero-work session.
+**That does NOT mean there is no work — but for the first time in this spec's life, the work that
+unblocks the census is a CHECKPOINT rather than a repair.** Sessions 5 and 6 each landed multiple
+commits with the same census. Do not read a zero-leaf census as a zero-work session.
 
 **For every barrier line, state in your opening whether the batch depends on it. An unanswered
 barrier is a stop, not a warning.**
@@ -131,51 +133,69 @@ claim about the gate; verify the invocation before believing it.
 
 ### STEP 3 — what to do, in priority order
 
-#### A. WHATEVER THE NEW RUN SAYS. Start there, and let it choose the session.
+#### A. CHECKPOINT A. It is the top of the list, and the reason it was deferred has expired.
 
-The three branches, in the order they become reachable:
+Session 6 deliberately did not run it, and task 11 records why: the instrument sat in a tree whose
+own property surface was red in nine places. **The fast surface is now green at `850 passed, 0
+failed` and the slow surface has executed.** So the deferral's own condition is discharged, and a
+`material` verdict read off this tree would now be read off a tree whose gates report.
 
-- **Fast step green, slow step ran** → read its reds, attribute each one mechanically
-  (`git cat-file -e origin/main:<f>`, then `git diff origin/main -- <f>`), and repair only what is
-  this spec's. **Task 27.5 discharges only when the job REACHES ITS END** — a job that runs is not
-  a job that finished.
-- **Fast step still red** → the tenth defect. Read the log for the falsifying example before
-  touching anything; session 6's whole method was that the log names the mechanism and the summary
-  line does not.
-- **Step 18 exited 0 and steps 19–23 ran** → obstructions 3 and 4 report for the first time ever,
-  on this branch or on `main`. Obstruction 3's repair is already on disk (`bf8693f`) and unjudged.
-  Steps 20–22 have never executed anywhere, so their state is **unknown**, not green.
+What remains, in order, and the order is D2.5's own rule rather than a preference:
 
-#### B. IF STEP 18 IS STILL RED, READ WHY BEFORE RE-REPAIRING IT
+1. **Run 1 by label.** Add `measure-twin-regret` to PR #84, then remove it so the next label event
+   does not re-measure. Read `regret`, `interval_low`/`interval_high`, `comparator_headroom`,
+   `margin_rule`, `margin_rule_derives`, `margin_rule_below_headroom` and
+   `interval_excludes_rule_margin` from `artifacts/uplift/twin-regret.json`. **Expect
+   `verdict: unavailable`** — that is finding 16, not a fault.
+2. **The D2.5 amendment stating the derived literal**, on exactly one line, in the `derives` form
+   the parked pin's anchor requires. **Probe the anchor as a pure function before committing it:**
+   `doc_truth.documented_value(pin, text)` requires it to match **exactly one** line, and session
+   5's first draft of two anchors matched ZERO over a misplaced backtick. A mismatch takes C56 from
+   FAIL to **SKIP**, which `pin_extractor_truth` will not see.
+3. **The margin commit**, instantiating the value from the committed rule
+   (`service_points * 0.01 * weights.unmet_service` = `5.0 * 0.01 * 8.0` = `0.40`), recording the
+   measured headroom it was checked against, and **graduating the parked pin** from `pending_pins:`
+   into `pins:`. That discharges **10.4**, and `pin_extractor_truth` should then report **15**.
+4. **Run 2 by label.** Finding 16, not optional: a *verdict materialisation, not a
+   re-measurement* — `_measure` iterates `for seed in range(replicates)` with seeds fixed, so
+   there is no metric-shopping surface. That discharges **11**.
+5. Read the verdict against `SESSION_PROTOCOL.md`'s four-value table and record it with evidence.
 
-The declaration mechanism has four states and three of them are non-passing on purpose:
+**The verdict may still be `material`, and that is a legitimate outcome.** With the reference arm in
+place a `material` verdict is an **admissible** falsification about the right subject, which this
+spec's design calls a good outcome. **Do not read `material` as a defect in the repair**, and do not
+re-run at a different replicate count until it moves.
+
+#### B. THE REMAINING `uplift-verify` RED IS NOT THIS SPEC'S, AND IT IS AN I-1 MATTER
+
+`tests/uplift/test_preserved_baseline_regression.py::test_reproduction_path_is_zero_cost_network_
+free_and_synthetic_only` reports `paid client used: ['pinecone.Pinecone']`. **Both sides are
+`main`'s, proven:** this branch's 45/16-line diff to that test touches no `pinecone` line and no
+`_PAID_CLIENT_TARGETS` line, and `uplift/consensus_arm.py` has an **empty** `git diff origin/main`.
+
+**That is finding 50.** `ci.yml` step 13's BLOCKING paid-import grep is a **deny-list** —
+`openai|anthropic|cohere|replicate` — and `pinecone` is not in it, so the invariant gate is
+fail-open and the only thing that saw the construction is a property that had never run.
+`uplift/consensus_arm.py:618,655` records the intent as an honest degrade, so the *degradation* is
+deliberate; what the property objects to is that the paid client is **constructed at all**.
+**Widening the grep, moving to an allow-list, or changing what `consensus_arm` constructs is the
+operator's decision.** Do not adopt it silently, and do not weaken the property (R2.10).
+
+#### C. IF STEP 18 GOES RED AGAIN, READ WHY BEFORE RE-REPAIRING IT
+
+The declaration mechanism has four states and three are non-passing on purpose:
 
 - `malformed` → the block declares nothing; the floor stays `unavailable` and the gate exits 2.
-  Check `declared: true` plus non-empty `prerequisite`, `blocked_on`, `procedure`, and **no other
+  It needs `declared: true` plus non-empty `prerequisite`, `blocked_on`, `procedure`, and **no other
   key** — the reader is fail-closed and `extra="forbid"` is deliberate.
-- `void` → a measurement was obtained, so the declaration is false and the gate fails **whichever
-  side of the floor the number fell on**. The repair is to DELETE the block, never to keep it.
+- `void` → a measurement was obtained, so the declaration is false and the gate fails
+  **whichever side of the floor the number fell on**. The repair is to DELETE the block.
 - an unreadable floor cannot be declared about at all.
 
 **Do NOT lower `kv_cache_hit_rate`** (R2.10) **and do NOT add `continue-on-error`** (finding 35).
-If the mechanism itself is wrong, repair it at the reader — `tests/verify/test_replay_metric_
-threshold_property.py` asserts all four states plus the converse that an undeclared case is never
-milder, so a change that breaks the contract will say so.
-
-#### C. CHECKPOINT A, on the repaired comparator — still owed, still the operator's
-
-Session 6 **deliberately did not run it**, and task 11 records why: the instrument sat in a tree
-whose own property surface was red in nine places. That reason expires the moment the fast step is
-green.
-
-What remains, in order: **run 1 by label**, then the **D2.5 amendment stating the derived literal**,
-then the **margin commit** with the parked pin graduated, then **run 2**. D2.5's own rule puts the
-amendment **before** the run judged against it. Expect `verdict: unavailable` on run 1 — that is
-finding 16, not a fault.
-
-**The verdict may still be `material`, and that is now a legitimate outcome.** With the reference
-arm in place a `material` verdict is an **admissible** falsification about the right subject, which
-this spec's design calls a good outcome. **Do not read `material` as a defect in the repair.**
+`tests/verify/test_replay_metric_threshold_property.py` asserts all four states, the converse that an
+undeclared case is never milder, and that every `Outcome` member is translatable by
+`verify_claims.GATE_STATUS` — which is the coupling finding 48 cost a CI run to learn.
 
 #### Also owed, and smaller
 
@@ -243,41 +263,40 @@ real and is not yours. Prove it rather than assume it.
 - **Stop at any barrier the census names that the batch depends on.** Say which.
 - **Stop and report if a count does not move as predicted.** State the delta **per code** and what
   you checked.
-- **Do not tick 11, 14, 21, 22.3, 25 or 27.5** without the naming job's own verdict. **27.5 needs
-  `uplift-verify` to reach its END** — running is not finishing.
+- **Do not tick 11, 14, 21, 22.3 or 25** without the naming job's own verdict. 27.5 is `[x]`, earned
+  on run `34501159046`: `quality-gates` reached its end at 26 of 26, `uplift-verify` ran and reached
+  its end, and Properties 38–60's first full CI execution has been read.
 - **Do not commit `materiality_margin.value`** until the D2.5 amendment stating the derived literal
   has landed and run 1 has been made against the three-arm comparator.
-- **`pin_extractor_truth` must report 14 declared.** 15 means the parked derived-margin pin moved
-  into `pins:`; 16 means the two parked `s`/`S` pins did, which the owed regeneration forbids until
-  it has run.
+- **`pin_extractor_truth` reports 14 declared today.** It becomes **15** when checkpoint A graduates
+  the parked derived-margin pin, and **16** only after the owed regeneration lands the two `s`/`S`
+  pins. Any other number is a defect.
 - **Do not change `main`.**
 - **Do not run `ledger_gen` or `readme_gen`** locally, in `--check` or `--write` form, for any
   reason — **and that includes `tests/verify/test_ledger_gen_property.py`.**
 - **Do not pad a session toward thirty**, and do not read a zero-leaf census as a zero-work session.
 - Surface every new conflict rather than resolving it silently.
 
----
-
 ## THE CHAIN, MEASURED RATHER THAN PREDICTED
 
 | # | Obstruction | State |
 |---|---|---|
 | 0 | the runner itself — billing | **CLEARED** — repository made public |
-| 1 | step 8 mypy strict (orchestrator) | **CLEARED** (2r), re-confirmed `success` |
-| 2 | step 17 **C56** narrative-truth | **CLEARED** (26.2/26.3), **REGRESSED by session 6's own C71 defect**, repaired (finding 48). **UNJUDGED** |
-| **2.5** | **step 18 golden-trace replay** | **REPAIRED ON DISK, NEVER YET EXECUTED.** (a) session 5, (b) session 6; its first opportunity was skipped behind the C56 regression |
-| 3 | step 19 unit tests → `test_cognition_phase` | **unknown** — never executed here or on `main`; repair on disk since `bf8693f` |
-| 4 | steps 20–22 coverage / spec coverage / contract | **unknown** — never executed anywhere |
-| **5** | **`uplift-verify` step 5, the fast surface** | **REPAIRED ON DISK, UNJUDGED.** Nine reds repaired; eight verified locally, two authored-only |
-| **6** | **`uplift-verify` step 6, the slow surface** | **still skipped behind step 5** and has never executed |
+| 1 | step 8 mypy strict (orchestrator) | **CLEARED** (2r), `success` |
+| 2 | step 17 **C56** narrative-truth | **CLEARED** — regressed by session 6's own C71 defect (finding 48), repaired, `success` |
+| **2.5** | **step 18 golden-trace replay** | **CLEARED.** First execution ever; exit 0 |
+| **3** | **step 19 unit tests → `test_cognition_phase`** | **CLEARED.** `success` — `bf8693f`'s repair judged at last |
+| **4** | **steps 20–22 coverage / spec coverage / contract** | **CLEARED.** `success` — they had never executed here **or on `main`** |
+| **5** | **`uplift-verify` step 5, the fast surface** | **CLEARED.** `850 passed`, **0 failed** |
+| **6** | **`uplift-verify` step 6, the slow surface** | **EXECUTED, FOR THE FIRST TIME EVER.** `1 failed, 59 passed`; the failure is `main`'s |
 
-**Session 2r's lesson has fired FIVE times, and the fifth was self-inflicted: clearing a gate
-reveals what it was shielding, and a repair aimed at one gate can redden an earlier one. No single
-clearance licenses a claim about the job at the end.**
+**Session 2r's lesson held to the end and fired FIVE times.** Four of the six could only be read once
+the one in front of it moved, and the fifth firing was self-inflicted: a repair aimed at step 18
+reddened step 17. **PR #84's `quality-gates` required check is GREEN**; `uplift-verify` is red on
+`main`'s I-1 defect, so the merge is still blocked — by a fully diagnosed defect belonging to
+another owner.
 
----
-
-## HARD-WON LESSONS. Forty-eight findings and fifteen conflicts, each one paid for.
+## HARD-WON LESSONS. Fifty findings and fifteen conflicts, each one paid for.
 
 ### The ten habits that caught the most
 
@@ -366,21 +385,29 @@ clearance licenses a claim about the job at the end.**
 
 ### On scope, ownership, adoption and closures
 
+- **A DENY-LIST IS FAIL-OPEN, AND THAT NOW INCLUDES AN INVARIANT GATE.** `ci.yml`'s BLOCKING I-1
+  check greps `openai|anthropic|cohere|replicate`; `pinecone` is not in it, and a slow property that
+  had never run reports a constructed `pinecone.Pinecone` on a reproduction path (finding 50). The
+  same lesson this spec learned about workflow triggers applies to the highest-precedence invariant
+  after I-0. **Prefer an allow-list, and verify it by truth table.**
 - **CI's scope is not the tree's scope, and the gap is measured.** `ruff` covers
   `packages/synapse_common/ agents/ orchestrator/` **only**. A CF-13 check walks 37 declared paths
   while all 41 violators sit outside them. **A rule enforced over the wrong scope is prose.**
-- **Attribute lint debt by materialising the committed blob and re-running the checker.**
-- **Necessary is not sufficient.** Repairing this spec's eight failures could not green the fast
-  step while `main`'s ninth stood, and one red anywhere keeps the slow step skipped. **Ask what
-  else gates the thing you are trying to reach.**
+- **Attribute lint debt by materialising the committed blob and re-running the checker.** And for a
+  file this branch DID modify, check whether the diff touches the FAILING lines — that is how
+  finding 50's ownership was settled on both sides.
+- **Necessary is not sufficient.** Repairing this spec's eight failures could not green the fast step
+  while `main`'s ninth stood, and one red anywhere kept the slow step skipped. **Ask what else gates
+  the thing you are trying to reach.**
 - **Do not adopt another owner's debt unilaterally**, but record the diagnosis so it is not
   re-derived. Two adoptions so far, each by *explicit* operator decision.
 - **One diff, one cause.** A CF-13 violation in a file you are repairing for another reason stays;
   changing an example budget in the same commit would confound the measurement of the repair.
 - **Read the install closure before trusting a job can run its own subject. Four times now.**
 - **`workflow_dispatch` requires the workflow on the default branch; `pull_request` does not.**
-- **A workflow that has never executed is the I-7 shape, and *reachable* is not *run*** — and *run*
-  is not *finished*.
+- **A workflow that has never executed is the I-7 shape, and *reachable* is not *run*** — and
+  *run* is not *finished*. All three distinctions were load-bearing in this spec, and all three are
+  now discharged for `uplift-verify`.
 
 ### On the ledger and the three marks
 
@@ -601,44 +628,51 @@ the requirement does not name (conflict M).
 
 ## Session 6 handoff — regenerate this section each session
 
-**Three commits plus a fourth repair commit. NO leaf ticked, and the census is unchanged at
-`140/63/2/75`.**
+**Five commits. ONE leaf ticked — 27.5, and parent 27 with it — the first in three sessions, and
+earned on the naming job's own verdict. Census `140/63/2/75` → `140/64/2/74`, 5 CI-gated.**
 
 | Commit | Subject |
 |---|---|
 | `2b35c5a` | the swallow was hiding the command it swallowed — all nine fast-step failures |
 | `d6443eb` | declare the unmeasurable floor, and give the declaration a falsifier |
 | `b8eba2f` | the session ledger: findings 43–47 and conflict O |
-| *(fourth)* | **finding 48** — the fourth outcome reached C71 before it reached `GATE_STATUS`; this prompt and `HANDOFF.md` |
+| `1f4e876` | the fourth outcome reached C71 before it reached the table that translates it |
+| *(fifth)* | the CI verdict: 27.5 discharged, findings 49 and 50, this prompt and `HANDOFF.md` |
 
-**What was earned.** All nine `uplift-verify` failures repaired — **and the nine were eleven**, two
-being `ExceptionGroup`s of two. One was a real gate defect whose shape is the pair R6.14 exists to
-catch: on a `-`-prefixed Make recipe the gate reported the swallow and extracted **zero commands**.
-Obstruction 2.5's owed disposition (b) landed, with the declaration in the configuration and a
-prerequisite that **voids** it.
+**What was earned, and it is the largest single clearance in this spec's life.** `quality-gates` is
+**`success` at 26 of 26 steps** for the first time ever, clearing obstructions **2.5, 3 and 4**
+together — and steps 20–22 had never executed on this branch **or on `main`**.
+`uplift-verify`'s fast step is **`850 passed, 0 failed`** against `9 failed, 838 passed` at the
+session's start, with the delta `+12 = 9 repaired + 3 new` and nothing newly excluded. Its slow step
+**ran for the first time in this spec's life**. **PR #84's `quality-gates` required check is GREEN.**
 
-**What was learned, and the sharpest of it was self-inflicted.** Disposition (b)'s first push
-reddened `quality-gates` at step 17, one gate **earlier** than the step it was meant to unblock,
-because a new enum member reached a registry row before it reached the table that translates
-verdicts — a coupling whose failure mode was documented two lines above that table. Read from two
-job logs, repaired, and now asserted mechanically. Also: the job log is worth more than the job's
-colour; session 1's own `stryker-break` repair created a red six sessions later because a four-site
-coordinated change moved two sites; and CF-13 is enforced over a scope containing **none** of its 56
-violations — a count four documents got wrong, and which the first tool written to measure it also
-got wrong, by repeating the exact regex defect one of the files it mis-flagged exists to warn about.
+**What was learned, and the sharpest of it was self-inflicted.** Disposition (b)'s first push reddened
+`quality-gates` at step 17, one gate **earlier** than the step it was meant to unblock, because a new
+enum member reached a registry row before it reached the table that translates verdicts — a
+coupling whose failure mode was documented two lines above that table. Read from two job logs,
+repaired, and now asserted mechanically. Also: the job log is worth more than the job's colour; nine
+summary lines were eleven defects; session 1's own `stryker-break` repair created a red six sessions
+later because a four-site coordinated change moved two sites; CF-13 is enforced over a scope
+containing **none** of its 56 violations; and the BLOCKING I-1 gate is a deny-list that does not
+contain `pinecone`.
 
-**What is blocked, and it is CI's.** Every commit's discharge. Whether C56 clears, whether step 18
-ever executes, the fast step's colour, the slow step's first execution, and steps 19–23 — which have
-never executed on this branch **or on `main`**.
+**What is owed.** **Checkpoint A is now the top of the list and its deferral condition has expired.**
+Then finding 50's I-1 question, the second regeneration with the two parked `s`/`S` pins and finding
+45's stale C16 docstring, `workflow_shape_truth`'s pipeline blindness, CI's ruff scope, conflict O's
+CF-13 scope, and `scipy`'s unpinned transitive arrival.
 
-**Verified at close:** six cheap gates **0/0/0/2/1/0**; census exit **0**, unchanged at
-`140/63/2/75`; `pin_extractor_truth` **14/14/14**; `gate_surface --check` **0** with coupling 4
-checked rather than assumed; **35** tests green at `dev` across **six** bounded serial `pytest`
-invocations; `mypy --strict --no-incremental` clean on both changed non-test modules; lint/format
-debt proven byte-identical at HEAD by materialising the blobs, **zero added** across all seven
-changed source files; every written file uniform-ending, no BOM, no U+FFFD; process sweep clean.
+**Verified at close:** six cheap gates **0/0/0/2/1/0** unchanged across all five commits; census exit
+**0**, moving by exactly the predicted delta for one CI-gated tick; `task_claim_truth` still **1**, so
+the tick created no ticked-but-not-landed claim; `pin_extractor_truth` **14/14/14**;
+`gate_surface --check` **0** with coupling 4 checked rather than assumed; **35** tests green locally at
+`dev` across **six** bounded serial `pytest` invocations; `mypy --strict --no-incremental` clean on
+both changed non-test modules; lint/format debt proven byte-identical at HEAD by materialising the
+blobs across all nine changed source files, **zero added**; every written file uniform-ending, no BOM,
+no U+FFFD; process sweep clean.
 
-**NOT verified, and must not be claimed:** that C56 clears; that step 18 exits 0 (**it has still
-never executed**); that the fast step is green; the two `test_ledger_gen_property.py` repairs;
-`quality-gates` steps 19–23; the slow step and therefore the slow half of Properties 38–60;
-`mypy --strict` on the four changed test modules; task 11's verdict.
+**NOT verified, and must not be claimed:** task 11's verdict; what the `(s, S)` regret **is** — no
+twin measurement has been taken since the comparator landed; that the next `twin-regret` run uploads a
+parseable artifact; `mypy --strict` on the four changed test modules; `sprint6-verify` and
+`training-smoke`, which remain `skipped` and correctly so — their `if:` restricts them to
+`main`/`develop`/`sprint-*`, which is a branch condition and **not** a `needs:` block; and `vitest`, at
+all.
