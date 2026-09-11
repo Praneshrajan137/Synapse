@@ -1771,7 +1771,7 @@ tests in the interim, and that is a stated sequencing gap, not an omission.
     reports `status: unavailable` and exits 2 on a negative regret, naming both arm costs. Same
     shape as the sibling `headroom >= regret` refusal, for the reason that guard already gives:
     a measurement whose comparator has been invalidated is not handed to a classifier.
-    `tests/uplift/test_regret_comparator_admissibility_property.py` (**Property 61**, 8 tests,
+    `tests/uplift/test_regret_comparator_admissibility_property.py` (**Property 61**, 9 tests,
     fast step) proves the hole is real rather than asserting it: on the measured numbers with the
     committed margin, `classify_regret` returns **`inconclusive` today** and -- with an empty
     insensitive set, which is exactly what tasks **12.3 and 13.3** produce -- **`sub-margin`,
@@ -1779,6 +1779,39 @@ tests in the interim, and that is a stated sequencing gap, not an omission.
     the spec loudly. **This one would have CONFIRMED the premise quietly, on a comparator that
     loses to its own subject. A false stop is recoverable; a false confirmation is the outcome
     this entire spec exists to prevent (I-7).**
+
+    **FINDING 56 -- PROPERTY 61's OWN FIRST DRAFT WAS FALSIFIED BY CI AT 500 EXAMPLES, AND THE
+    DEFECT WAS THAT AN ALGEBRAIC IDENTITY IS NOT A FLOATING-POINT IDENTITY.** Run `34575448394`,
+    `uplift-verify` step **5** -- the *fast* surface, which had been `850 passed, 0 failed` --
+    failed on one test, mine, with step 6 skipped behind it. Hypothesis's counterexample is
+    exact: `noop=0.0`, `reference=2.2722106724604736e-180`, `foresight=1.0`. Both subtractions
+    round to exactly `-1.0`, so `headroom >= regret` is **true** while `noop >= reference` is
+    **false**. **`(A - C) >= (B - C)` reduces to `A >= B` over the reals and NOT over IEEE 754**,
+    because subtracting a large term from two nearly-equal small ones destroys the difference
+    between them.
+
+    **Repaired by correcting the claim's DOMAIN, not by adding a tolerance, and the difference is
+    the one R2.10 turns on.** The reduction is now asserted over `Fraction`, where it is a
+    theorem and cannot fail for any finite input; a tolerance would have asserted a blurrier
+    version of the same claim in order to pass, which is the weakening R2.10 forbids. **The
+    subject did not change; the domain the claim was stated over was wrong.**
+
+    **And the repair exposed a second defect in the same clause, which is the more interesting
+    one.** Once the reduction is exact, the float-level branch that followed it -- "if the guard
+    passes and the regret is negative, the refusal fires" -- became a **restatement of clause 1's
+    iff**, because `negative_regret_refusal` returns non-`None` exactly when `regret < 0`. Its
+    real content was an **existence** claim: that the guard passing and the comparator being
+    invalid are *simultaneously reachable*. A `@given` body cannot assert existence -- it asserts
+    over the cases it is handed -- so that claim is now made **concretely, on run
+    `34570166681`'s own arm means**, which is stronger than a constructed example. That is the
+    "assert non-emptiness wherever a 'nothing bad happened' clause could be satisfied by an empty
+    set" rule, applied to a clause that had quietly become one.
+
+    **The budget lesson, for the third consecutive session: `heavy` and `ci` fail what `dev`
+    passes.** `dev`'s 10 examples never reached a subnormal. Verified after repair at **`heavy`
+    (100)** and then at **`ci` (500)** -- the exact budget that found it -- 9 and 22 tests green.
+    A single scoped pure-arithmetic file at 500 examples costs about five seconds, which makes
+    "verify at the budget that will judge you" affordable for exactly the files where it matters.
 
     **WHY THIS LEAF IS NOT TICKED, stated as a decision rather than an omission.** The verdict
     the instrument would have produced is `inconclusive`, whose own wording is "regret below the

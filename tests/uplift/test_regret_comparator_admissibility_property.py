@@ -42,6 +42,7 @@ arithmetic over hand-built objectives, with no twin, no subprocess and no networ
 from __future__ import annotations
 
 import math
+from fractions import Fraction
 
 from hypothesis import assume, given
 from hypothesis import strategies as st
@@ -238,21 +239,63 @@ def test_the_headroom_guard_reduces_to_a_claim_that_does_not_mention_the_oracle(
     This is the mechanical statement of why a second clause was needed. A guard built from two
     expressions that share a term cannot say anything about that term, and the existing guard
     shares arm C with the quantity it is checking.
+
+    **PRECONDITION CORRECTED AFTER CI FALSIFIED THE FIRST DRAFT -- NOT AN ASSERTION WEAKENING
+    (R2.10), AND THE DISTINCTION IS THE WHOLE POINT.** The first draft asserted the reduction
+    over ``float`` arithmetic and CI's 500-example budget found a counterexample that ``dev``'s
+    10 examples never reached: ``noop=0.0``, ``reference=2.2722106724604736e-180``,
+    ``foresight=1.0``. Both subtractions round to exactly ``-1.0``, so ``headroom >= regret`` is
+    **true** while ``noop >= reference`` is **false**. The identity is a fact about the reals; it
+    is not a fact about IEEE 754, because subtracting a large term from two nearly-equal small
+    ones destroys the difference between them.
+
+    **So the claim is now asserted where it is actually true -- exactly, over the rationals --
+    and the subject did not change.** ``Fraction`` makes the cancellation of ``C`` literal rather
+    than approximate. Weakening this to a tolerance would have been the other thing: it would
+    have asserted a blurrier version of the same claim in order to pass. Stating the domain the
+    claim holds over is a precondition correction.
+
+    **And the float-level consequence is asserted separately below**, because that is the one a
+    running gate actually experiences.
     """
     assume(all(math.isfinite(x) for x in (noop, reference, foresight)))
-    headroom = noop - foresight
-    regret = reference - foresight
 
-    # The guard's own comparison, and the claim it is equivalent to.
-    assert (headroom >= regret) == (noop >= reference)
+    # The reduction, exactly. `C` cancels over the rationals, which is the claim.
+    exact_headroom = Fraction(noop) - Fraction(foresight)
+    exact_regret = Fraction(reference) - Fraction(foresight)
+    assert (exact_headroom >= exact_regret) == (Fraction(noop) >= Fraction(reference))
 
-    # Non-vacuity: the reduced claim really is independent of the oracle, so a run can satisfy
-    # the guard while the oracle is invalid. That combination is exactly run 34570166681.
-    if noop >= reference and reference < foresight:
-        assert headroom >= regret
-        assert (
-            negative_regret_refusal(
-                regret=regret, mean_reference=reference, mean_foresight=foresight
-            )
-            is not None
-        ), "the guard passes and the comparator is still invalid -- the gap this closes"
+
+def test_the_guard_passed_on_the_very_run_whose_oracle_was_invalid() -> None:
+    """The gap, on measured numbers rather than on generated ones.
+
+    The generated clause above proves the reduction; it cannot prove that the two conditions are
+    **simultaneously reachable**, because a ``@given`` body asserts over the cases it is handed
+    and not over the existence of one. So the existence claim is made concretely, on the arm
+    means run ``34570166681`` actually produced -- which is the strongest form available, since
+    it is not a constructed example but the measurement that exposed the defect.
+
+    Without this, the property above would be satisfiable by a world in which the guard and the
+    invalidity never co-occur, which is exactly the "nothing bad happened" shape that an empty
+    set satisfies.
+    """
+    headroom = MEASURED_NOOP_COST - MEASURED_FORESIGHT_COST
+    regret = MEASURED_REFERENCE_COST - MEASURED_FORESIGHT_COST
+
+    # 1. The existing guard is SATISFIED on this run -- it reported no problem.
+    assert headroom >= regret
+    assert math.isclose(headroom, 8.937888952967558, rel_tol=1e-12)
+
+    # 2. And the comparator was invalid on the same run.
+    assert regret < 0.0
+    assert math.isclose(regret, MEASURED_REGRET, rel_tol=1e-12)
+
+    # 3. So the guard cannot be what catches it. Only the new refusal does.
+    assert (
+        negative_regret_refusal(
+            regret=regret,
+            mean_reference=MEASURED_REFERENCE_COST,
+            mean_foresight=MEASURED_FORESIGHT_COST,
+        )
+        is not None
+    ), "the guard passes and the comparator is still invalid -- the gap this closes"
