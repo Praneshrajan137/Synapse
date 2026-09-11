@@ -1356,6 +1356,44 @@ tests in the interim, and that is a stated sequencing gap, not an omission.
       margin is the self-serving move: it makes `material` harder to reach, which makes Finding
       4 harder to falsify. **A margin that could not have been written down before the number
       existed is not admissible.**
+
+    - **SESSION 7 -- THE VALUE IS LANDED. THIS LEAF IS STILL `[~]`, AND THE REASON IS THE POINT
+      OF THE MARK: run 1 reported `margin_committed: null` because the value did not exist when
+      it ran, so the job named in this leaf's `discharge:` line has not yet exercised the
+      committed margin. Run 2 does that, and this leaf is ticked on run 2's own verdict.**
+
+      **What landed, all in one commit** (ADR-055 D2.5's rule puts the amendment before the run
+      judged against the amended text, so the document moves first):
+      - **ADR-055 D2.5** now states the derived value as a literal on exactly one line, in the
+        `derives` form the pin's anchor requires, with an amendment-log line.
+      - `digital_twin/simulation/policy.yaml`: `value: null` -> **`value: 0.40`**. The measured
+        headroom it was checked against is recorded **as prose, not as a new key**, because that
+        file's own contract 2 pins every *value* it holds -- a new key would owe a further pin,
+        move `doc_truth`'s claim set a second time and compound the owed regeneration.
+      - The parked pin **`materiality-margin-derived-value` graduated** from `pending_pins:`
+        into `pins:`. `pin_extractor_truth` reports **15 declared / 15 probed / 15 both sides**,
+        exit 0 -- the predicted 15, and not the 16 the prompt's stop condition named (conflict P).
+      - `policy.py::materiality_margin` accepts it, verified by calling it both ways:
+        `materiality_margin()` -> `0.4`, and with `measured_headroom=8.937888952967558` -> `0.4`,
+        so the re-derivation and the headroom guard both pass on the committed value.
+
+      **THE ANCHOR WAS PROBED, THE PROBE WAS VALIDATED FIRST, AND IT STILL CAUGHT A DEFECT I
+      HAD MADE -- in the SIBLING pin, not the one I was adding.** `doc_truth.documented_value`
+      was run as a pure function against the *unamended* ADR first, where it correctly reported
+      zero matches, so the instrument was checked before its verdict was trusted. After the
+      amendment it reported `ok -- value '0.40'` on one line. But `pin_extractor_truth` then
+      failed: my new paragraph contained the words `service_points = 5.0`, which gave
+      **`materiality-margin-service-points`** a second matching line (256 and 284), and under the
+      exactly-one-line contract a second match is as fatal as none. Rephrased to
+      `` `service_points` of `5.0` `` and re-probed.
+
+      **The transferable repair, and it is now a tool rather than a resolution.** A document
+      edit's blast radius is **every pin anchored to that document**, and **eight of the fifteen
+      are anchored to ADR-055**. Probing only the pin being added is the finding-48 mistake in a
+      new place: enumerate what READS the text, not what you changed. `.tmp/probe_all_anchors.py`
+      probes all eighteen rows (15 live + 3 parked) on both sides and reports live document-side
+      failures; it found `0` after the repair. **That whole-table probe is what should be run
+      before any commit that touches a pinned document**, and it is cheap and pure.
     - _Requirements: 5.2_
 
   - [x] 10.6 Write property test for regret totality and the insensitivity precedence
@@ -1627,6 +1665,119 @@ tests in the interim, and that is a stated sequencing gap, not an omission.
     **What is NOT predicted, and must not be inferred.** The value of `regret` itself. No twin
     measurement has ever been taken against the `(s, S)` reference arm. `material` remains an
     admissible outcome and a good one; the pre-commitment binds either way.
+
+  - **SESSION 7 -- RUN 1 IS IN. ALL FIVE PREDICTIONS RESOLVED, FOUR CONFIRMED, AND THE FIFTH
+    EXPOSED A DEFECT NOBODY HAD NAMED. THIS LEAF STAYS `[ ]`.**
+
+    Run `34570166681` (sha `e94a1ac`), `uplift.yml::twin-regret` by the `measure-twin-regret`
+    label, **all 8 steps `success`**, `status: measured`, **200 of 200** replicates usable,
+    `unusable_seeds: []`. `uplift-proof` correctly **skipped** at zero cost, which is the
+    per-job allow-list working as designed.
+
+    | field | measured | prediction |
+    |---|---|---|
+    | `comparator_headroom` | `8.937888952967558` | **1: confirmed to every digit** |
+    | `verdict` | `unavailable` | **2: confirmed** (finding 16) |
+    | `regret` vs `comparator_headroom` | `-0.812...` vs `8.938...` | **3: confirmed** |
+    | `headroom_minus_regret` | `9.750241398919835` | **4: did not fire** -- ordering sane |
+    | `mean_noop_cost` (A) | `11.835228527152536` | |
+    | `mean_foresight_cost` (C) | `2.897339574184977` | |
+    | `mean_reference_cost` (B) | `2.0849871282327` | |
+    | **`regret` = B - C** | **`-0.8123524459522771`** | **5: see below** |
+    | 95% interval | `[-0.8273245113311902, -0.7977944274457321]` | excludes zero |
+    | `margin_rule_derives` / `margin_committed` | `0.4` / `null` | |
+    | `insensitive_kpis` | `["spoilage_rate", "delivery_latency"]` | |
+
+    **Prediction 1 confirmed to sixteen significant figures**, which is worth more than it looks:
+    it proves adding arm B perturbed neither arm A's nor arm C's realisation, so `bracketing.upper`
+    needs no correction and the two runs remain comparable. **Prediction 3 confirmed** means
+    conflict M's structural defect is genuinely closed -- `regret` and `comparator_headroom` are
+    different subtractions over different pairs, measured rather than argued.
+
+    **FINDING 54 -- THE REGRET IS NEGATIVE. THE ARM LABELLED `perfect_foresight` LOSES TO THE
+    INCUMBENT IT IS SUPPOSED TO BOUND, SO IT IS NOT AN ORACLE AND THE DIFFERENCE IS NOT A
+    REGRET.** The interval excludes zero over 200 of 200 replicates, so the sign is not noise.
+    Arm C sits strictly between the other two: better than doing nothing, worse than `(s, S)`.
+    Full record in **ADR-055 D2.5.2**, landed this session. In short:
+
+    - **Three candidate mechanisms were excluded before a fourth was accepted**, and excluding
+      them is what makes the survivor more than a guess. (a) *Unequal footing* -- excluded by
+      construction: `run_three_pass` imports `observe`, `_apply_reorders` and `_derive_unit_costs`
+      from `uplift/harness.py` and drives every arm on one cadence with one `restock_threshold`,
+      precisely so those cannot drift between the arms being subtracted. (b) *Lead time
+      penalising just-in-time ordering* -- excluded: `_apply_reorders` applies stock through
+      `sim.add_stock`, which is **instantaneous**, and the engine's own `_restock` lead time is
+      off in all three arms at `restock_threshold: 0.0`. (c) *The `Mapping[str, int]` truncation
+      asymmetry D2.5.1 records* -- excluded, and this one was **checked rather than assumed
+      because the ADR predicted an effect of the right order (~0.24 units) in the right
+      direction**: arm C is genuinely not routed through `_drive`, so the protection the document
+      claims is in the code.
+    - **The surviving explanation, stated as a hypothesis with a falsifier.** `stockout_rate`
+      carries weight **8.0** -- equal to `unmet_service`, eight times `on_hand` -- and **ADR-055
+      D3 already records that its numerator counts SKUs at zero stock and "does not count unmet
+      demand".** `ForesightPolicy.decide` orders the shortfall "no more, no less", so by
+      construction it drives on-hand toward zero every window; `Par_Level_Reorder(s=50, S=100)`
+      holds a 50-100 unit buffer and is almost never at zero. Against a term that measures
+      *empty shelf* rather than *unserved customer*, the efficient policy is charged 8.0 for
+      being efficient and the hoarding one 1.0 for hoarding. **The per-term decomposition was
+      NOT measured** -- the artifact reports five aggregate costs and no breakdown -- so this is
+      inference from the weights plus D3's own statement of the numerator. **The falsifier is
+      cheap and is owed: report each arm's per-term contribution in `twin-regret.json`.**
+    - **Why the D2.5.1 guard could not have caught it, and this is the transferable part.**
+      `headroom >= regret` substitutes to `(A - C) >= (B - C)`, which reduces to **`A >= B`** --
+      "doing nothing costs at least as much as the incumbent". True, and entirely silent about C,
+      because **C cancels**. A guard built from two expressions that share a term cannot
+      constrain that term. The three-arm repair fixed the identity defect and left the oracle's
+      validity unasserted, and **nothing anywhere asserted `regret >= 0`**.
+
+    **THE REFUSAL THIS SESSION ADDS, AND WHY IT IS NOT DEFENSIVE.**
+    `uplift/regret.py::negative_regret_refusal` is a module-level pure function; `_measure` now
+    reports `status: unavailable` and exits 2 on a negative regret, naming both arm costs. Same
+    shape as the sibling `headroom >= regret` refusal, for the reason that guard already gives:
+    a measurement whose comparator has been invalidated is not handed to a classifier.
+    `tests/uplift/test_regret_comparator_admissibility_property.py` (**Property 61**, 8 tests,
+    fast step) proves the hole is real rather than asserting it: on the measured numbers with the
+    committed margin, `classify_regret` returns **`inconclusive` today** and -- with an empty
+    insensitive set, which is exactly what tasks **12.3 and 13.3** produce -- **`sub-margin`,
+    whose `confirms_finding_4` is `True`.** Conflict M's defect forced `material`, which stops
+    the spec loudly. **This one would have CONFIRMED the premise quietly, on a comparator that
+    loses to its own subject. A false stop is recoverable; a false confirmation is the outcome
+    this entire spec exists to prevent (I-7).**
+
+    **WHY THIS LEAF IS NOT TICKED, stated as a decision rather than an omission.** The verdict
+    the instrument would have produced is `inconclusive`, whose own wording is "regret below the
+    margin" -- and recording that would tell a reader the `(s, S)` regret is small when it is
+    negative for a reason that has nothing to do with the policy. The precedent is this leaf's
+    own conflict M: session 4 measured a number, established it was about the wrong subject, and
+    **did not** commit the margin. Same shape, opposite direction. Task 10.4 **is** discharged,
+    because the margin is valid and independent of the comparator; task 11 is not, because its
+    subject is.
+
+    **AND E2c IS NOT AUTHORED THIS SESSION -- A BARRIER STOP, AND A DELIBERATE DEVIATION FROM
+    THE SESSION'S OWN PLAN, WHICH HAD APPROVAL TO AUTHOR ALL ELEVEN LEAVES ON AN `inconclusive`
+    VERDICT.** Three reasons, in increasing order of force:
+    1. Task 13.7 wires **four** E2c measurements, all of them regret against this comparator, and
+       one of them is **checkpoint B**, which can cancel E3 outright. Authoring eleven leaves
+       whose measurements run through a comparator known to be inverted is what
+       "checkpoints come before the work they gate" exists to forbid.
+    2. Every E2c structure makes the inversion **wider, not narrower**. 13.1 correlates lead
+       times with demand and auto-correlates them across days; 13.3 makes spoilage rise with
+       order size. Both raise the cost of holding a buffer -- but both also raise the cost of the
+       just-in-time arm, and neither touches the `stockout_rate` numerator that the hypothesis
+       names. Nothing in E2c repairs the oracle.
+    3. **Decisively: 12.3 and 13.3 are the two flips that empty the insensitive set.** With them
+       landed, this same negative regret becomes `sub-margin` and **confirms** Finding 4. E2c is
+       precisely the work that converts this defect from a wrong verdict into a false
+       confirmation. It must not be authored until the comparator is dispositioned.
+
+    **What the operator owns, costed.** (a) Repair the objective's `stockout_rate` numerator so
+    it counts unserved demand rather than empty shelves -- the largest change, and it moves a
+    committed weight's meaning, so D2.3/D3 and every historical value quoting it are affected.
+    (b) Replace `ForesightPolicy` with an arm that actually minimises the committed objective
+    over the known trace, making it an oracle by construction rather than by name. (c) Report the
+    per-term decomposition first -- cheapest, and it is the falsifier the hypothesis above needs
+    before either repair is chosen. **The refusal makes the defect loud in the meantime; it does
+    not choose between these, and it does not expire on its own.**
 
 - [ ] 12. E2c — structures 1 and 2: non-stationary demand, and capacity that binds
   - Implements the first two of ADR-055's five structures. **Every structure names the agent

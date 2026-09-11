@@ -132,10 +132,34 @@ regret_objective:
   # rule does not produce is refused, not recorded -- otherwise the rule is decoration.
   materiality_margin:
 
-    # Owed by task 10.4, from checkpoint A's `uplift.yml::twin-regret` run. `null` is the
-    # honest state, not a placeholder: `classify_regret` returns `unavailable` for it, and a
-    # placeholder would be judged against.
-    value: null
+    # INSTANTIATED AT CHECKPOINT A, SESSION 7. Was `null` from session 1r until here, which was
+    # the honest state rather than a placeholder: `classify_regret` returns `unavailable` for a
+    # null margin, and a placeholder would have been judged against.
+    #
+    # THE VALUE IS THE RULE'S, NOT A CHOICE MADE WITH THE NUMBER IN HAND. It is what
+    # `derivation` below has derived since the pre-registration:
+    #   service_points * points_to_fraction * weights.unmet_service = 5.0 * 0.01 * 8.0 = 0.40
+    # `policy.py::materiality_margin` re-derives it on every read and refuses a value the rule
+    # does not produce, so this line cannot drift from the rule without failing.
+    #
+    # THE MEASURED HEADROOM IT WAS CHECKED AGAINST, recorded as prose and deliberately NOT as a
+    # new key. Contract 2 at the head of this file says every VALUE here is pinned in
+    # doc-number-pins.yaml, so adding `checked_against_headroom: 8.93...` would owe a further
+    # pin, move `doc_truth`'s claim set a second time and compound the regeneration already
+    # owed. The number is `comparator_headroom = 8.937888952967558`, from run 34570166681
+    # (sha e94a1ac), 200 of 200 usable replicates -- unchanged to every digit from run
+    # 34366766968, which is what confirms arm A's realisation was not perturbed by adding arm B.
+    # `bracketing.upper` below therefore needs no correction. 0.40 < 8.937888952967558, so
+    # `must_be_below_measured_headroom` is satisfied against a quantity independent of the one
+    # the margin judges (ADR-055 D2.5.1).
+    #
+    # READ ADR-055 D2.5.2 BEFORE READING ANY VERDICT AGAINST THIS MARGIN. The same run measured
+    # `regret = -0.8123524459522771` with a 95% interval excluding zero: the `(s, S)` arm
+    # OUTPERFORMS the perfect-foresight arm it is subtracted from, so that arm does not bound it
+    # and the difference is not a regret. `_measure` now refuses a negative regret outright
+    # rather than classifying it. This margin is valid; the comparator it would be compared
+    # through is not, and those are two different defects with two different owners.
+    value: 0.40
 
     derivation:
       # margin = service_points * points_to_fraction * weights.unmet_service

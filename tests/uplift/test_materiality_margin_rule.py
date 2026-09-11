@@ -61,17 +61,39 @@ def _policy_with(tmp_path: Path, **overrides: Any) -> Path:
 # --- the committed state ---------------------------------------------------
 
 
-def test_the_rule_is_committed_and_the_value_is_not() -> None:
-    """The state checkpoint A must find: rule present, magnitude still owed (R5.2)."""
+def test_the_rule_is_committed_and_so_is_the_value_after_checkpoint_a() -> None:
+    """The state checkpoint A leaves behind: rule present, magnitude now instantiated (R5.2).
+
+    **PRECONDITION CORRECTION, SESSION 7 -- NOT AN ASSERTION WEAKENING (R2.10).** This test
+    read ``assert materiality_margin() is None``, with the reason "the margin's VALUE must
+    still be null **before checkpoint A**". That precondition was correct and it has now been
+    discharged: checkpoint A ran, run ``34570166681`` measured the comparator headroom, and
+    task 10.4 instantiated the value from the pre-registered rule. The subject changed, not the
+    standard -- which is the distinction R2.10 turns on, and the same distinction tasks 12.3 and
+    13.3 will invoke when the sensitivity flips retire Property 54's pinned premise.
+
+    **The standard is now STRICTER, not looser, and that is the test that it is a correction.**
+    The old clause admitted exactly one value, ``None``. This one admits exactly one value too,
+    and it is a number the rule must re-derive: ``policy.py::materiality_margin`` refuses a
+    committed value the rule does not produce, so asserting agreement here is asserting that the
+    pre-registration is still binding on the committed magnitude. A placeholder would fail this
+    just as it would have failed the old clause.
+    """
     rule = materiality_margin_rule()
     assert rule.form == "service_point_equivalent"
     assert rule.weight_term == "unmet_service"
     assert rule.service_points > 0.0
 
-    assert materiality_margin() is None, (
-        "the margin's VALUE must still be null before checkpoint A -- a placeholder would be "
-        "judged against, which is exactly what R5.2 forbids"
+    committed = materiality_margin()
+    assert committed is not None, (
+        "checkpoint A instantiated the margin in session 7, so a null here means the value was "
+        "reverted -- read ADR-055 D2.5 and task 10.4 before restoring the old expectation"
     )
+    assert committed == pytest.approx(rule.derived), (
+        "the committed magnitude must be the one its own pre-registered rule derives; "
+        "policy.py::materiality_margin refuses any other value rather than recording it"
+    )
+    assert committed > 0.0
 
 
 def test_the_rule_reads_its_weight_from_the_objective_not_a_literal() -> None:

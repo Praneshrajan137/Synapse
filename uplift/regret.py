@@ -47,6 +47,7 @@ __all__ = [
     "RegretVerdict",
     "TermContribution",
     "classify_regret",
+    "negative_regret_refusal",
     "load_objective",
 ]
 
@@ -284,6 +285,71 @@ class RegretVerdict:
     def confirms_finding_4(self) -> bool:
         """True ONLY for ``sub-margin``. An ``inconclusive`` result confirms nothing."""
         return self.verdict == "sub-margin"
+
+
+def negative_regret_refusal(
+    *, regret: float, mean_reference: float, mean_foresight: float
+) -> str | None:
+    """Why a measured regret is inadmissible, or ``None`` when it may be classified.
+
+    **The oracle must bound the subject, and until session 7 nothing in this tree said so**
+    (ADR-055 D2.5.2). ``regret`` is "how much better a policy could have done given perfect
+    information", which is bounded below by zero. A **negative** regret means the ``(s, S)``
+    reference arm outperforms the arm labelled ``perfect_foresight``, so that arm is not an
+    oracle and ``B - C`` is a difference between two ordinary policies rather than a regret.
+    Run ``34570166681`` measured exactly that: ``regret = -0.8123524459522771`` with a 95%
+    interval of ``[-0.8273, -0.7978]`` over 200 of 200 usable replicates, so the sign is not
+    noise.
+
+    **Why the sibling guard cannot see it**, which is why this is a separate clause rather than
+    a strengthening of that one. ``_measure`` already refuses a run in which
+    ``headroom >= regret`` fails, and substituting the definitions makes that
+    ``(A - C) >= (B - C)``, which reduces to **``A >= B``** -- "doing nothing costs at least as
+    much as the incumbent". True, and entirely silent about ``C``, because ``C`` cancels.
+    **A guard built from two expressions that share a term cannot constrain that term.** The
+    three-arm repair (conflict M) made ``regret`` and ``comparator_headroom`` different
+    subtractions and left the oracle's own validity unasserted.
+
+    **Why it refuses rather than classifying, which is the load-bearing half.** Handed to
+    :func:`classify_regret` today, a negative regret returns ``inconclusive`` -- which reads as
+    "regret below the margin" and would be recorded as task 11's verdict. Worse: once tasks
+    12.3 and 13.3 land the two E2c sensitivity flips, the same negative number maps to
+    ``sub-margin``, the **one** verdict that licenses reading the result as consistent with
+    Finding 4. Conflict M's defect forced ``material``, which stops the spec loudly; this one
+    would **confirm** the premise quietly, on a comparator that loses to its own subject. A
+    false stop is recoverable; a false confirmation is the outcome this spec exists to prevent
+    (I-7).
+
+    **Zero is admissible.** A regret of exactly ``0.0`` means the incumbent matched the oracle,
+    which is a legitimate measurement and the strongest possible support for Finding 4. The
+    boundary is therefore strict on the negative side only, and
+    ``tests/uplift/test_regret_comparator_admissibility_property.py`` asserts that rather than
+    leaving it to the reader.
+
+    Args:
+        regret: The measured judged contrast, ``mean_reference - mean_foresight``.
+        mean_reference: Arm B's mean objective cost, named in the reason so the refusal is
+            attributable without re-running anything.
+        mean_foresight: Arm C's mean objective cost.
+
+    Returns:
+        ``None`` when the comparator bounds the subject, so the regret may be classified.
+        Otherwise a non-empty reason naming both arm costs and what the refusal does not claim.
+    """
+    if regret >= 0.0:
+        return None
+    return (
+        f"measured regret {regret!r} is NEGATIVE: the (s, S) reference arm (mean objective "
+        f"cost {mean_reference!r}) outperforms the perfect-foresight arm it is subtracted from "
+        f"(mean objective cost {mean_foresight!r}), so that arm does not bound the subject and "
+        "their difference is not a regret. No verdict is read from it (ADR-055 D2.5.2). This is "
+        "refused rather than classified because the same number returns `inconclusive` today "
+        "and `sub-margin` once the E2c sensitivity flips land, and `sub-margin` is the one "
+        "verdict that licenses reading the result as consistent with Finding 4. The materiality "
+        "margin was still read and accepted by its own guard before this refusal, so a run "
+        "reaching here discharges task 10.4; it does not discharge task 11, and the repair is "
+        "to the comparator rather than to the margin"
+    )
 
 
 def classify_regret(
@@ -592,6 +658,43 @@ def _measure(replicates: int, hours: float) -> dict[str, object]:
     # produces beside the measurement rather than choosing a number to suit it (ADR-055 D2.5).
     rule = materiality_margin_rule()
     margin = materiality_margin(measured_headroom=headroom)
+
+    # THE ORACLE MUST BOUND THE SUBJECT, AND UNTIL SESSION 7 NOTHING SAID SO (ADR-055 D2.5.2).
+    # The decision is `negative_regret_refusal`, a module-level pure function, so that the
+    # refusal path is provable by construction rather than only by never firing: `_measure`
+    # itself drives the SimPy twin and cannot be exercised in the fast suite (I-0).
+    #
+    # The margin is resolved ABOVE this guard on purpose. It is valid, it is re-derived from the
+    # committed rule, and reporting it here is what lets checkpoint A discharge task 10.4 on
+    # this run even though no verdict may be read from it. Two defects, two owners.
+    inadmissible = negative_regret_refusal(
+        regret=measured, mean_reference=mean_reference, mean_foresight=mean_foresight
+    )
+    if inadmissible is not None:
+        return {
+            "status": "unavailable",
+            "reason": inadmissible,
+            "replicates_usable": len(reference_costs),
+            "replicates_unusable": len(unusable),
+            "unusable_seeds": unusable,
+            "hours_per_replicate": hours,
+            "mean_noop_cost": mean_noop,
+            "mean_reference_cost": mean_reference,
+            "mean_foresight_cost": mean_foresight,
+            "comparator_headroom": headroom,
+            "regret": measured,
+            "headroom_minus_regret": headroom - measured,
+            "interval": interval.describe(),
+            "interval_low": interval.low,
+            "interval_high": interval.high,
+            "interval_point": interval.point,
+            "margin_committed": margin,
+            "margin_rule": rule.describe(),
+            "margin_rule_derives": rule.derived,
+            "margin_rule_below_headroom": rule.derived < headroom,
+            "insensitive_kpis": [item.term for item in objective.insensitive],
+        }
+
     verdict = classify_regret(
         measured, objective=objective, margin=margin, interval=interval.bounds
     )

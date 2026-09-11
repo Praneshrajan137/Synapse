@@ -33,6 +33,20 @@ different expressions. **This amendment lands before the run judged against it**
 the paragraph above; it changes no threshold, and in particular it does **not** instantiate
 `regret_objective.materiality_margin.value`, which remains `null`.
 
+**Amendment, session 7 (2026-09-11) — D2.5 states the derived literal and the value is
+instantiated; D2.5.1 records that the oracle arm is NOT an upper bound on achievable
+performance, which the three-arm repair did not address and could not have detected.** Run
+`34570166681` (sha `e94a1ac`), the first measurement ever taken against the `(s, S)` reference
+arm, reported `comparator_headroom = 8.937888952967558` — unchanged from run `34366766968` to
+every digit, so `bracketing.upper` needs no correction and arm A's realisation is confirmed
+unperturbed by the addition of arm B. It also reported **`regret = -0.8123524459522771`**, with
+a 95% interval of `[-0.8273245113311902, -0.7977944274457321]` over 200 of 200 usable
+replicates. A negative regret means the incumbent `(s, S)` policy **outperforms the
+perfect-foresight arm it is measured against**, so that arm is not an oracle and the difference
+is not a regret. This amendment states that measurement, records the excluded mechanisms and
+the surviving hypothesis, and adds the non-negativity refusal that makes the defect loud. **It
+lands before the run judged against the amended text**, per the rule two paragraphs above.
+
 **This ADR is written to be falsifiable, and task 10 is the attempt.** Its central premise -
 that a base-stock `(s, S)` policy is near-optimal on today's twin, so intelligence cannot pay
 - is *analytical, not measured*. R5.1-R5.4 are the criteria that falsify it. If task 10
@@ -264,6 +278,21 @@ unfalsifiable by construction: no policy could exceed it, so `material` would be
 and task 11 could only ever proceed. `digital_twin/simulation/policy.py` refuses such a value
 rather than recording it.
 
+**THE DERIVED VALUE, INSTANTIATED AT CHECKPOINT A (session 7).** Run `34570166681` measured the
+comparator headroom at `8.937888952967558`, unchanged from run `34366766968` to every digit, so
+the `bracketing.upper` figure above stands as written and is not re-stated here. At the committed
+inputs — five service points, a `points_to_fraction` of `0.01`, and an `unmet_service` weight of
+`8.0` — the rule
+derives `materiality_margin = 0.40` objective units, and
+`digital_twin/simulation/policy.yaml` now commits exactly that value.
+`policy.py::materiality_margin` re-derives it from the rule and refuses a value the rule does
+not produce, so this literal is a projection of the pre-registered criterion rather than a
+second opinion about it; and `0.40 < 8.937888952967558` satisfies
+`must_be_below_measured_headroom` against a quantity independent of the one it judges
+(D2.5.1). **The value was not chosen with the judged number in hand:** it is the value this rule
+has derived since the session-1r pre-registration, and the only thing checkpoint A supplied is
+the headroom it is checked against.
+
 #### D2.5.1 The three-arm comparator, and why the bound must be a different subtraction
 
 **Added by amendment in session 5. It exists because the guard immediately above was vacuous,
@@ -336,6 +365,105 @@ makes `material` harder to reach, which makes Finding 4 harder to falsify, which
 proceed. So the margin may only ever be *tightened*, and
 `infrastructure/quality/ratchets.json` records `direction: down` for exactly that reason. This
 is the one threshold in the phase where the motivated error has an obvious sign.
+
+#### D2.5.2 The oracle arm is not an upper bound on achievable performance (session 7)
+
+**Added by amendment after the first measurement ever taken against the `(s, S)` reference arm.
+D2.5.1 fixed the identity defect and left a second one standing, and the second one is worse
+because it fails in the direction that lets the spec proceed.**
+
+Run `34570166681` (sha `e94a1ac`), 200 of 200 usable replicates, `unusable_seeds: []`:
+
+| quantity | measured |
+|---|---|
+| `mean_noop_cost` (arm A) | `11.835228527152536` |
+| `mean_foresight_cost` (arm C) | `2.897339574184977` |
+| `mean_reference_cost` (arm B) | `2.0849871282327` |
+| `comparator_headroom` = A - C | `8.937888952967558` (unchanged from run `34366766968`) |
+| **`regret` = B - C** | **`-0.8123524459522771`** |
+| 95% interval on the judged contrast | `[-0.8273245113311902, -0.7977944274457321]` |
+| `headroom_minus_regret` | `9.750241398919835` |
+
+**The interval excludes zero, so the sign is not noise.** Arm C sits strictly between the
+other two: better than doing nothing, **worse than the incumbent it is supposed to bound.**
+
+**What that makes `regret`.** R5.1's regret is "how much better a policy could have done given
+perfect information", a quantity bounded below by zero. Measuring `-0.81` does not mean the
+incumbent is 0.81 better than optimal; it means **arm C is not the optimum and therefore not an
+oracle**, so `B - C` is a difference between two ordinary policies and is not a regret at all.
+
+**`ForesightPolicy`'s own docstring already contained the admission, and drew the opposite
+conclusion from it.** It states the arm is "a **lower bound on achievable performance**, which
+makes the regret it induces a **conservative** estimate... it can only understate how much room
+intelligence has, never overstate it." The first clause is correct and the second does not
+follow: a comparator that loses to the subject does not *understate* the room for intelligence,
+it **inverts the sign of the quantity being reported**. Nothing in the tree asserted
+`regret >= 0`, so nothing objected.
+
+**Three candidate mechanisms were excluded before the fourth was accepted.** Each is recorded
+because excluding it is what makes the surviving explanation more than a guess:
+
+1. **Unequal footing between arms B and C — EXCLUDED by construction.** `run_three_pass`
+   imports `observe`, `_apply_reorders` and `_derive_unit_costs` from `uplift/harness.py` and
+   drives every arm on one cadence with one `restock_threshold`, precisely so that "what an arm
+   may see" and "how a reorder reaches the twin" cannot drift between the arms being subtracted.
+2. **Lead time penalising just-in-time ordering — EXCLUDED.** `_apply_reorders` applies stock
+   through `sim.add_stock`, which is **instantaneous**. Neither arm pays a lead time on the
+   orders it places, so the oracle's 60-minute look-ahead is not arriving late. (The engine's
+   own `_restock` lead time is disabled in all three arms by `restock_threshold: 0.0`.)
+3. **The `Mapping[str, int]` truncation asymmetry D2.5.1 records — EXCLUDED, and this one was
+   checked rather than assumed because the ADR predicted an effect of the right order (~0.24
+   objective units) in the right direction.** Arm C is genuinely not routed through `_drive`;
+   `run_three_pass` constructs it separately and the comment there states the reason. So the
+   protection this document claims is in the code, and the inflation it guards against is not
+   what happened.
+
+**THE SURVIVING EXPLANATION, STATED AS A HYPOTHESIS WITH A FALSIFIER, NOT AS A FINDING.** The
+objective charges `stockout_rate` at weight **8.0** — equal to `unmet_service` and eight times
+`on_hand` — and **D3 below records what its numerator counts: a per-step count of SKUs at zero
+stock, which "does not count unmet demand".** `ForesightPolicy.decide` orders exactly the
+shortfall between foreseen demand and present stock, "no more, no less", so by construction it
+drives on-hand toward **zero** at the end of every window; `Par_Level_Reorder(s=50, S=100)`
+holds a 50-100 unit buffer and is almost never at zero. Against a term that measures *empty
+shelf* rather than *unserved customer*, the efficient policy scores worse than the hoarding one,
+at weight 8.0, while the buffer's surplus is charged at weight 1.0 against a 1000-unit
+normaliser. **That is sufficient to invert an 0.81-unit difference, and it requires none of the
+three mechanisms above.**
+
+**It is a hypothesis because the per-term decomposition was not measured.** The artifact reports
+five aggregate costs and no breakdown, so which term dominates each arm is inferred from the
+weights and from D3's statement of the numerator, not read off a measurement. **The falsifier is
+cheap and is owed:** report the per-term contribution of each arm in `twin-regret.json`, and the
+hypothesis is confirmed or killed by one labelled run. Nothing here licenses assuming it.
+
+**Why the D2.5.1 guard could not have caught this, which is the transferable part.**
+`_measure` refuses a run in which `headroom >= regret` fails. Substituting the definitions,
+`A - C >= B - C` reduces to **`A >= B`** — "doing nothing costs at least as much as the
+incumbent". That is a true and unrelated claim, and it is silent about whether C bounds either of
+them, because C cancels. **A guard built from two expressions that share a term cannot constrain
+that term.** The three-arm repair made `regret` and `comparator_headroom` different
+subtractions, which was the fix conflict M needed, and it left the oracle's validity unasserted.
+
+**THE REFUSAL THIS AMENDMENT ADDS.** `uplift/regret.py::_measure` now reports
+`status: unavailable` and exits 2 when the measured `regret` is negative, naming the arm costs
+in its reason. This is deliberately the same shape as the existing `headroom >= regret` refusal,
+for the same reason that guard gives: a measurement whose comparator has been invalidated is
+**not** handed to a classifier as a verdict. It fails loudly rather than returning
+`inconclusive`, which is what it would otherwise return today.
+
+**And that is why the refusal is not cosmetic.** With both E2c sensitivity flips landed (tasks
+12.3 and 13.3), `classify_regret` would map this same negative regret to **`sub-margin`** — the
+one verdict that *licenses reading the result as consistent with Finding 4*. Conflict M's defect
+forced `material`, which stops the spec loudly; this one would have **confirmed** the premise
+quietly, on a comparator that loses to its own subject. **A false stop is recoverable; a false
+confirmation is the outcome this entire spec exists to prevent.**
+
+**What is NOT claimed.** That the `(s, S)` policy is near-optimal — nothing here measures that.
+That `stockout_rate` is the culprit — see the falsifier above. That the objective's weights are
+wrong: D2.3 records them as committed decision-relevance choices, and a term that counts empty
+shelves may well be *intended* to be costly. What is claimed is narrower and is measured: **the
+arm currently labelled `perfect_foresight` does not bound the arm it is subtracted from, so no
+verdict about `(s, S)` regret can be read from their difference.**
 
 ### D3 - Per-KPI observable sensitivity (R5.34)
 
