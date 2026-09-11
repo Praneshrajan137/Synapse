@@ -170,6 +170,37 @@ run `34570166681`'s own arm means. Verified at `heavy` (100) then `ci` (500): 9 
 **Third consecutive session in which `heavy` or `ci` failed what `dev` passed.** A scoped
 pure-arithmetic file at 500 examples costs about five seconds.
 
+### 57 — the construction guard is confirmed, and the assertion behind it is a false positive
+
+Run `34578002704` (sha `4539b91`): step 5 back to **`success`**, and **step 6 RAN**.
+**`guard.paid_client_attempts == []` passes for the first time since that property first
+executed**, so the construction guard is verified by the job that owns the assertion rather than
+by the probe that predicted it. Finding 52's walk to the constructor was right; there was no
+second site.
+
+**The next assertion fails instead:**
+`real-data file read: ['.../site-packages/codecarbon/data/hardware/cpu_power.csv']` — a
+dependency's **bundled hardware lookup table**, not a real, scraped or purchased dataset.
+
+**The mechanism is one operator.** `_ZeroCostGuard._recording_open` reads
+`if suffix in _DATA_SUFFIXES or under_data:`. The suffix clause alone flags any `.csv` **anywhere
+on the filesystem**, so the declared `_REAL_DATA_DIRS` constant is **inert** — it can never be the
+reason a path is recorded that the suffix clause has not already recorded. The assertion is about
+file extensions rather than about provenance.
+
+**This is the mirror of a shape this spec already carries.** "A level floor is a
+tolerated-exception disjunct — assert a clause unconditionally" is about an `or` producing a false
+**pass**; this is the same operator producing a false **failure**.
+
+**Why it was never seen:** `paid_client_attempts` is asserted *before* `data_file_reads` in the
+same test, so the property could not reach this line while the Pinecone construction stood.
+**Fixing assertion N revealed assertion N+1** — the six-obstruction chain, now inside one test
+function.
+
+**Recorded, not repaired.** Another owner's file, and the repair is a judgement:
+`... and under_data` would let a purchased CSV outside `data/` pass, which is a real narrowing and
+is forbidden. **Do not weaken the property to make the job green (R2.10).**
+
 ### Conflict P — the pin count in the prompt's stop conditions is arithmetically impossible
 It states `pin_extractor_truth` goes 14 → 15 → **16**. Three parked rows are in play, so it is
 14 → 15 → **17**. As written the stop condition would have halted a correct session, and the halt
@@ -259,11 +290,11 @@ approached.
 
 ### NOT executed. Must not be claimed.
 
-- **That `ci.yml::uplift-verify`'s slow step now passes.** The construction guard is landed and
-  proven in-process; the property that owns the assertion is `@pytest.mark.slow` and CI owns its
-  verdict. **At `446d5d5` step 6 was `skipped` behind finding 56's fast-step failure, so it still
-  has not judged the guard.** Commit `4539b91` repairs the fast step and **its run must be read
-  first thing** — both steps, not only the job's colour.
+- **That `ci.yml::uplift-verify`'s slow step now passes.** It does not — but **not** for the reason
+  it did all session. **The construction guard is CONFIRMED**: run `34578002704` (sha `4539b91`)
+  has step 5 back to `success` and **step 6 RAN**, and `guard.paid_client_attempts == []` passes
+  for the first time since that property first executed. The job is red on the **next** assertion,
+  which is **finding 57** — a false positive over a dependency's bundled `cpu_power.csv`.
 - **`quality-gates` at `daeb972` or `4539b91`.** Measured `success` at 26 of 26 at **`446d5d5`**,
   which is the commit that carries the construction guard, so `agents/` was judged. The two
   documentation commits after it were not read.

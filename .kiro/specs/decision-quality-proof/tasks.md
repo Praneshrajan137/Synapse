@@ -1813,6 +1813,47 @@ tests in the interim, and that is a stated sequencing gap, not an omission.
     A single scoped pure-arithmetic file at 500 examples costs about five seconds, which makes
     "verify at the budget that will judge you" affordable for exactly the files where it matters.
 
+    **FINDING 57 -- THE CONSTRUCTION GUARD IS CONFIRMED BY CI, AND THE ASSERTION BEHIND IT IS A
+    FALSE POSITIVE. THE CHAIN ADVANCED BY ONE.** Run `34578002704` (sha `4539b91`): step 5 back to
+    **`success`** (finding 56 repaired, confirmed at the 500-example budget that found it), and
+    **step 6 RAN** rather than being skipped.
+
+    **`paid client used` no longer fires.** `guard.paid_client_attempts == []` passes for the
+    first time since that property first executed in session 6, so **the construction guard at
+    `playbook_retriever.py` is verified by the job that owns the assertion** -- not by the
+    in-process probe that predicted it. Finding 52's walk to the constructor was correct and there
+    was no second site.
+
+    **The test still fails, on the NEXT assertion, and that one is the guard's own defect:**
+    `real-data file read: ['/opt/hostedtoolcache/Python/3.11.16/x64/lib/python3.11/site-packages/
+    codecarbon/data/hardware/cpu_power.csv']`. That is a dependency's **bundled hardware lookup
+    table**, shipped inside its own wheel -- not a real, scraped or purchased dataset, which is
+    what R10.1 is about.
+
+    **The mechanism is one operator.** `_ZeroCostGuard._recording_open` reads
+    `if suffix in _DATA_SUFFIXES or under_data:` -- an **OR**. The suffix clause alone flags any
+    `.csv` **anywhere on the filesystem**, which makes the declared `_REAL_DATA_DIRS` clause
+    redundant in the flagging direction: it can never be the reason a path is recorded that the
+    suffix clause has not already recorded. So the constant that encodes *where* real data lives
+    is inert, and the assertion is about file extensions rather than about provenance.
+
+    **This is the mirror of a defect shape this spec already carries.** The recorded lesson is "a
+    level floor is a tolerated-exception disjunct -- assert a clause unconditionally", which is
+    about a disjunct producing a false **pass**. This is the same operator producing a false
+    **failure**. Both come from an `or` whose second term was meant to narrow the first.
+
+    **Why it had never been seen:** `paid_client_attempts` is asserted **before**
+    `data_file_reads` in the same test, so the property could never reach this line while the
+    Pinecone construction stood. **Fixing assertion N revealed assertion N+1** -- the same
+    structure as the six-obstruction chain, now inside a single test function.
+
+    **Recorded, not repaired, and it is another owner's.** `tests/uplift/` is on `origin/main`.
+    The repair is a judgement rather than a mechanical fix: tightening to
+    `suffix in _DATA_SUFFIXES and under_data` would let a purchased CSV placed outside `data/`
+    pass, which is a real narrowing and is forbidden; excluding paths inside the installed-package
+    tree is probably right but is a decision about what R10.1 means. **Do not weaken the property
+    to make the job green (R2.10).**
+
     **WHY THIS LEAF IS NOT TICKED, stated as a decision rather than an omission.** The verdict
     the instrument would have produced is `inconclusive`, whose own wording is "regret below the
     margin" -- and recording that would tell a reader the `(s, S)` regret is small when it is

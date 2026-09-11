@@ -70,16 +70,16 @@ $log = gh api "repos/:owner/:repo/actions/jobs/<jobid>/logs" 2>$null
 
 1. **Is `quality-gates` still green at 26 of 26?** It is a green `required:` check. A regression
    here is the most important thing that can happen to this branch.
-2. **DID THE SLOW STEP'S SINGLE FAILURE CLEAR?** Session 7 landed the construction guard at
-   `agents/disruption_shield/inference/playbook_retriever.py` (commit `446d5d5`) and **CI has not
-   judged it.** At `446d5d5` step 6 was **skipped** behind a *fast*-step failure that was session
-   7's own new property (finding 56), repaired in `4539b91`. **So read BOTH steps:** step 5 must
-   be back to 0 failed, and step 6 must then run. The property is `@pytest.mark.slow`, so
-   `ci.yml::uplift-verify`'s **step 6** owns the verdict. Expect
-   `tests/uplift/test_preserved_baseline_regression.py`
-   `::test_reproduction_path_is_zero_cost_network_free_and_synthetic_only` to pass. **If it still reports `paid client used: ['pinecone.Pinecone']`, there is a SECOND
-   construction site and finding 52's walk missed it** — find it by walking to the constructor, not
-   by reading a docstring.
+2. **THE CONSTRUCTION GUARD IS CONFIRMED — READ WHAT FAILS NOW INSTEAD.** Run `34578002704`
+   (sha `4539b91`): step 5 `success`, **step 6 RAN**, and `guard.paid_client_attempts == []`
+   **passes** for the first time since that property first executed. So finding 50/52's defect is
+   closed and there was no second construction site. The job is red on the **next** assertion in
+   the same test — **finding 57**, a false positive over
+   `.../site-packages/codecarbon/data/hardware/cpu_power.csv`, caused by
+   `_recording_open`'s `if suffix in _DATA_SUFFIXES or under_data:` flagging any `.csv` anywhere
+   and leaving `_REAL_DATA_DIRS` inert. **Another owner's file, and the repair is a judgement:
+   `... and under_data` would let a purchased CSV outside `data/` pass. Do not weaken it (R2.10).**
+   **Confirm this is still the failure before acting** — assertion N+1 may itself be hiding N+2.
 3. **Task 11's disposition.** It is the operator's, it is costed in three options in task 11, and
    **E2c is blocked behind it.** See STEP 3.
 4. **`truth-gates.yml` step 5's own log.** Finding 51: steps 6–12 are `skipped` behind a
@@ -292,11 +292,12 @@ git merge-base --is-ancestor <sha> origin/main  # exit 1 => this branch's
 | 4 | steps 20–22 coverage / spec coverage / contract | **CLEARED** |
 | 5 | `uplift-verify` step 5, the fast surface | **CLEARED.** `850 passed`, 0 failed |
 | 6 | `uplift-verify` step 6, the slow surface | **EXECUTED.** 1 failed — `main`'s I-1 defect |
-| **7** | **the slow step's single failure** | **REPAIR LANDED (`446d5d5`), NOT YET JUDGED** — step 6 was skipped behind finding 56 |
-| **9** | **`uplift-verify` step 5, the fast surface** | **WENT RED at `446d5d5` on ONE test, session 7's own** — repaired in `4539b91`, unjudged |
+| **7** | **the slow step's Pinecone failure** | **CLEARED.** `paid_client_attempts == []` passes at `4539b91` — the guard is confirmed |
 | **8** | **`truth-gates.yml` steps 6–12** | **NEVER EXECUTED HERE** — skipped behind the C44/C69 red (finding 51) |
+| **9** | **`uplift-verify` step 5, the fast surface** | **CLEARED.** Went red at `446d5d5` on session 7's own property; repaired, `success` |
+| **10** | **the SAME test's next assertion** | **NEW.** `data_file_reads` false-positives on a dependency's bundled `.csv` (finding 57) |
 
-## HARD-WON LESSONS. Fifty-five findings and seventeen conflicts, each one paid for.
+## HARD-WON LESSONS. Fifty-seven findings and seventeen conflicts, each one paid for.
 
 ### The habits that caught the most
 
