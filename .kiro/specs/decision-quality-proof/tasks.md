@@ -1288,7 +1288,7 @@ tests in the interim, and that is a stated sequencing gap, not an omission.
       `uplift-proof`'s 350-minute budget.
     - _Requirements: 5.1, 5.37_
 
-  - [~] 10.4 Commit the materiality margin **after** the first run measures it
+  - [x] 10.4 Commit the materiality margin **after** the first run measures it
     - discharge: uplift.yml::twin-regret (checkpoint A)
     - **HALF LANDED, HALF OWED — read this before re-authoring anything.** Session 1r committed
       the *derivation rule*; the *value* is still `null` and is owed at checkpoint A. That split
@@ -1394,6 +1394,42 @@ tests in the interim, and that is a stated sequencing gap, not an omission.
       probes all eighteen rows (15 live + 3 parked) on both sides and reports live document-side
       failures; it found `0` after the repair. **That whole-table probe is what should be run
       before any commit that touches a pinned document**, and it is cheap and pure.
+
+    - **DISCHARGED. Run `34574731853` (sha `2d86899`), `uplift.yml::twin-regret` by label -- the
+      job this leaf's `discharge:` line names, reporting on the committed margin rather than on
+      an intention.** The evidence is one field:
+
+      | field | run 1 (`34570166681`) | run 2 (`34574731853`) |
+      |---|---|---|
+      | `margin_committed` | `null` | **`0.4`** |
+      | `margin_rule_derives` | `0.4` | `0.4` |
+      | `margin_rule_below_headroom` | `true` | `true` |
+      | `status` | `measured` | `unavailable` |
+
+      **`margin_committed: 0.4` is the whole discharge**, and it is stronger than "the file
+      contains 0.40": it means `policy.py::materiality_margin` **re-derived** the value from the
+      pre-registered rule and accepted it, and that the
+      `must_be_below_measured_headroom` guard ran against the measured
+      `8.937888952967558` and passed. A value the rule did not produce would have raised inside
+      that call instead of appearing here. The pre-registration is therefore enforced on this
+      run, not merely recorded.
+
+      **Every other number is identical to run 1 to every digit**, which confirms prediction 5:
+      seeds are fixed, so run 2 was a verdict *materialisation* and not a re-measurement. There
+      was no metric-shopping surface and none was used.
+
+      **The job is RED, and that is the honest outcome rather than a failure of this leaf.** Step
+      6 exits 2 on the new negative-regret refusal; steps 7 and 8 still ran under `if: always()`
+      and the artifact uploaded, so the measurement is readable. **No `verdict` key appears in
+      the artifact at all** -- the refusal returns before `classify_regret`, so nothing was
+      fabricated and no reader can mistake an absence for a null (I-7).
+
+      **A side confirmation worth recording, because it was authored blind in session 6.**
+      `set -o pipefail` on that step is now proven by a **real** failure rather than by
+      prediction: without it, `| tee` would have made this step report **success** with a
+      refusal sitting inside the artifact -- precisely the defect session 6 repaired after run
+      `34364879758` wrote a zero-byte artifact and reported green. The repair's first genuine
+      exercise was this run.
     - _Requirements: 5.2_
 
   - [x] 10.6 Write property test for regret totality and the insensitivity precedence
