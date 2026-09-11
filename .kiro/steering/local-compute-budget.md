@@ -73,7 +73,10 @@ category-2 load. Five is a throttle.
   Authoring does not heat the machine. Dispatch one per independent unit of work and state in
   the session opening how many and why. **This clause read "unlimited" for eight sessions and
   sessions used zero**, which is why it now reads as an obligation. `throughput-with-integrity.md`
-  G1–G3 carry the dispatch contract; an agent without one is not dispatched.
+  G1–G3 carry the dispatch contract, and **G7 makes parallel the DEFAULT: any wave with two or
+  more independent units dispatches two or more agents, and working serially requires a stated
+  reason.** G7 also covers the wider tool surface — code intelligence, symbol and reference
+  lookup, research powers — which sessions have left unused in favour of shell and text search.
 - **Sub-agents that execute code: exactly ONE at a time.** Not three, not two.
   When a batch needs a test run, exactly one agent in that batch gets the process
   budget and the rest are explicitly authoring-only.

@@ -97,6 +97,46 @@ recorded core-second reading. If missed, the progress ledger says **the reset fa
 which lever underperformed. A process change that cannot fail is not a process change — the same
 standard this spec applies to every number it publishes.
 
+### G7 — Full capability is the DEFAULT. Under-use is a reportable defect.
+
+**The operator's instruction, and the reason it is a guardrail rather than a preference:** use
+every available capability, for the whole session, not as a special measure when work looks large.
+Two consecutive sessions dispatched **zero** authoring agents while I-0 permitted unlimited, and
+neither noticed, because nothing made parallelism the *default*. **This clause inverts the
+default.**
+
+**Parallel is the default; serial is the exception and must be justified.**
+- **Any wave containing two or more independent units of work dispatches two or more authoring
+  agents.** Not "may" — does.
+- Choosing to work serially is allowed and must carry **a stated reason** in the session opening:
+  a single decisive read, one coupling closure that cannot be split (G2), or a step whose whole
+  content is one command.
+- **"Agents dispatched" is already one of the four reported numbers.** A session reporting zero
+  without a reason has a defect in its method, and the ledger says so.
+
+**Use the whole tool surface, not the two tools nearest to hand.** Sessions have defaulted to
+shell plus text search while leaving code intelligence, symbol and reference lookup, research
+powers and documentation retrieval unused. A grep that finds a name is not the same as a lookup
+that finds every caller — **finding 48 cost a CI run because a consumer was found by grep instead
+of by asking what translates a value.** Reach for the instrument that answers the question, and
+prefer the one whose answer is structural over the one whose answer is textual.
+
+**THREE LIMITS, and G7 does not touch any of them.** Read this before scaling anything:
+1. **Exactly ONE agent may execute code (G1).** G7 multiplies *authoring*, never executors. The
+   2026-08-01 throttle was caused by concurrent executors on entirely authorised load; "use all
+   your powers" is not licence to re-run that experiment.
+2. **`execution-routing.md` still decides WHERE a workload runs.** More agents do not make a
+   category-1 or category-3 workload local.
+3. **The metric is still DISCHARGE.** An agent dispatched to raise a count produces nothing; the
+   dispatch report names **what each agent produced**, not how many there were. Coordination is a
+   real cost, so a unit of work too small to hand over is not one.
+
+**And the honest self-check, because this clause was written by a session that violated it.**
+Session 8 installed these rules and dispatched **zero** agents. That is recorded in the progress
+ledger as a miss, not as a rounding error. **G7's first real test is the next session**, and the
+same standard applies: if it reports zero without a reason, the ledger says the reset failed here
+too.
+
 ## One document per fact
 
 One canonical home per finding: **the ADR** for design facts, **the task body** for ledger

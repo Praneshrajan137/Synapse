@@ -285,6 +285,16 @@ measure it.** Never run `ledger_gen` or `readme_gen` locally in any form.
 2. **Write findings into `tasks.md` and the ledger as you find them.**
 3. **Delegate reading, never execution.** Unlimited parallel sub-agents for reading, writing and
    analysis; **exactly ONE** that executes code. Keep every command in the main agent.
+   **G7 makes this a DEFAULT rather than an option: any wave with two or more independent units
+   dispatches two or more authoring agents, and working serially requires a stated reason in your
+   opening.** "Agents dispatched" is one of the four numbers you report, and a zero without a
+   reason is a defect in method. **G7 does not touch the one-executor cap, does not move any
+   workload's routing, and does not make the metric anything other than DISCHARGE** — an agent
+   dispatched to raise a count produces nothing, so report what each one produced.
+   **And use the whole tool surface**, not the two tools nearest to hand: code intelligence,
+   symbol and reference lookup, and research powers have gone unused while sessions defaulted to
+   shell and text search. Finding 48 cost a CI run because a consumer was found by grep instead
+   of by asking what *translates* a value.
 4. **Re-read the authority file for each wave's area before starting it.**
 
 **Spend `gh` reads first.** Free under I-0 and the highest-yield evidence in this repo. Session 5's
