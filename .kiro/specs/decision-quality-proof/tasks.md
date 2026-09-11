@@ -1889,6 +1889,40 @@ tests in the interim, and that is a stated sequencing gap, not an omission.
     before either repair is chosen. **The refusal makes the defect loud in the meantime; it does
     not choose between these, and it does not expire on its own.**
 
+  - **SESSION 8 -- OPTION (a) IS DISCHARGED, AND IT ANSWERED THE QUESTION. THE CANONICAL RECORD
+    IS ADR-055 D2.5.3; THIS IS THE LEDGER ENTRY AND THE DISPOSITION, NOT A SECOND COPY OF IT.**
+
+    Run `34590696403` (sha `e02c1c2`) reports the per-term decomposition. **Finding 58 is why it
+    could be had so cheaply and why it had not been:** `RegretObjective.contributions()` has
+    decomposed a cost into its five weighted terms since task 9 -- with a docstring saying "a
+    regret number whose composition cannot be inspected is a number nobody can argue with" --
+    and `_measure` called `cost()` and never `contributions()`. **Capability is not use.**
+
+    **FINDING 59 -- the hypothesis is right in direction and wrong about there being one
+    defect.** `stockout_rate` dominates at a **0.808** share, as predicted. But:
+    - **`stockout_rate` and `unmet_service` are the same measured quantity** -- identical to
+      every digit for all three arms -- each weighted `8.0`, so **one KPI is priced at 16.0**.
+      **D3 asserts they diverge; across 600 arm-replicates they never do.**
+    - **The oracle leaves 8.2% of demand unmet; the incumbent leaves exactly zero.** It orders
+      the shortfall "no more, no less" and therefore carries **no buffer**. Perfect foresight of
+      window totals is not perfect foresight of arrival order.
+
+    **THE DISPOSITION, decided by arithmetic rather than by preference.** Remove the
+    double-count and the regret is `-0.6566 + 0.4980 + 0.0027 = -0.1559` -- **still negative.**
+    So repairing the objective is **necessary but not sufficient**, and **option (b) -- replace
+    `ForesightPolicy` with an arm that minimises the committed objective over the known trace --
+    is the repair the measurement demands.** Option (a) is discharged; (c) remains owed but
+    cannot stand alone.
+
+    **E2c stays blocked, and the reason is now stronger rather than weaker.** Both defects sit
+    in the two terms tasks 12.3 and 13.3 do not touch, so nothing in E2c repairs either. The
+    refusal stands.
+
+    **A side benefit, recorded because it cost nothing:** the decomposition independently
+    confirms two of D3's insensitivity records -- `spoilage_rate` is identical across all three
+    arms and contributes exactly zero regret, and `delivery_latency` moves `0.0027` across arms
+    with radically different stocking behaviour.
+
 - [ ] 12. E2c — structures 1 and 2: non-stationary demand, and capacity that binds
   - Implements the first two of ADR-055's five structures. **Every structure names the agent
     decision it unlocks; nothing is added for realism's sake.**

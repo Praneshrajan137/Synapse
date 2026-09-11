@@ -47,6 +47,15 @@ is not a regret. This amendment states that measurement, records the excluded me
 the surviving hypothesis, and adds the non-negativity refusal that makes the defect loud. **It
 lands before the run judged against the amended text**, per the rule two paragraphs above.
 
+**Amendment, session 8 (2026-09-11) — D2.5.2's hypothesis is MEASURED. Its direction is
+confirmed, its mechanism is corrected, and it turns out to be two independent defects rather
+than one.** Run `34590696403` (sha `e02c1c2`) reports the per-term decomposition D2.5.2 named as
+its own falsifier. `stockout_rate` dominates at **80.8%** of the regret, as hypothesised — but
+the objective also **double-counts that same quantity**, and the arm labelled `perfect_foresight`
+turns out to leave **8.2% of demand unmet** while the incumbent leaves none. Removing the
+double-count alone leaves the regret **still negative**, so repairing the objective is not
+sufficient and repairing the comparator is necessary. Full record in **D2.5.3**.
+
 **This ADR is written to be falsifiable, and task 10 is the attempt.** Its central premise -
 that a base-stock `(s, S)` policy is near-optimal on today's twin, so intelligence cannot pay
 - is *analytical, not measured*. R5.1-R5.4 are the criteria that falsify it. If task 10
@@ -464,6 +473,82 @@ wrong: D2.3 records them as committed decision-relevance choices, and a term tha
 shelves may well be *intended* to be costly. What is claimed is narrower and is measured: **the
 arm currently labelled `perfect_foresight` does not bound the arm it is subtracted from, so no
 verdict about `(s, S)` regret can be read from their difference.**
+
+#### D2.5.3 The decomposition, measured — one hypothesis, two defects (session 8)
+
+**D2.5.2 named its own falsifier: "report the per-term contribution of each arm". Run
+`34590696403` did. This section is that measurement and what it settles.**
+
+Per-term mean weighted cost, 200 of 200 usable replicates, and the per-term attribution of the
+judged contrast:
+
+| term | foresight (C) | reference (B) | `regret_by_term` = B - C |
+|---|---|---|---|
+| `stockout_rate` | `0.6566` | **`0.0000`** | **`-0.6566`** |
+| `unmet_service` | `0.6566` | **`0.0000`** | **`-0.6566`** |
+| `on_hand` | `0.2402` | `0.7382` | `+0.4980` |
+| `delivery_latency` | `1.2849` | `1.2876` | `+0.0027` |
+| `spoilage_rate` | `0.0592` | `0.0592` | `0.0000` |
+
+The five terms sum to `-0.8125`, which is `regret` to rounding — **the decomposition identity
+holds on real data, not only in the property that asserts it.** `dominant_regret_term` is
+`stockout_rate` at a **0.808** share.
+
+**D2.5.2's hypothesis is confirmed in direction and corrected in mechanism.** It predicted that
+`stockout_rate`, at weight `8.0`, would dominate because it counts SKUs at zero stock rather
+than unmet demand, charging a just-in-time oracle for being efficient. **Direction: right, and
+by a wide margin.** But two things it did not predict are now measured, and they are separate
+defects with separate owners.
+
+**DEFECT 1 — `stockout_rate` and `unmet_service` are the same measured quantity, so the
+objective applies an effective weight of 16.0 to one KPI.** They are **identical to every digit
+for all three arms** — `0.6566`/`0.6566`, `5.1463`/`5.1463`, `0.0000`/`0.0000`. **D3 below
+asserts the opposite**: that `fill_rate` and `stockout_rate` "are related but not redundant
+after E2a: the first is delivered over demand events, the second is unmet over demand events,
+and they diverge whenever an order..." **Measured across 600 arm-replicates, they never
+diverge.** Both carry weight `8.0` in D2.3, so a single quantity is priced at `16.0` while the
+document records two independent terms. **A weight nobody intended is not a committed
+decision-relevance choice**, and the claim that they diverge is now falsified rather than
+merely unverified.
+
+**DEFECT 2 — the arm labelled `perfect_foresight` leaves 8.2% of demand unmet; the incumbent
+leaves none.** `0.6566 / 8.0 = 0.0821`. The reference arm's figure is **exactly zero**: a
+par-level policy holding 50–100 units never runs a shelf empty. `ForesightPolicy.decide` orders
+"the shortfall between foreseen demand and present stock — no more, no less", so it carries **no
+buffer at all**, and any within-window timing or granularity effect becomes unserved demand.
+**Perfect foresight of window TOTALS is not perfect foresight of arrival ORDER.** So the arm is
+not merely mis-scored by defect 1; on the objective's own service term it is **genuinely worse
+at serving demand** than the policy it is supposed to bound. A policy that leaves 8.2% of demand
+unmet cannot be a lower bound on achievable cost.
+
+**THE ARITHMETIC THAT SETTLES TASK 11's THREE OPTIONS, and it is why this decomposition was
+worth taking before choosing one.** Suppose defect 1 is repaired and the double-count removed —
+drop `unmet_service`, keep `stockout_rate`:
+
+```
+regret = -0.6566 + 0.4980 + 0.0027 + 0.0000 = -0.1559
+```
+
+**Still negative.** So option (c), repairing the objective's numerator, is **necessary and not
+sufficient**: the oracle would still lose. Option (b), replacing `ForesightPolicy` with an arm
+that actually minimises the committed objective over the known trace — which would give it a
+buffer and drive its service term toward the incumbent's zero — **is the repair the measurement
+demands.** Option (a) is now discharged: it was the cheapest and it bought the answer.
+
+**Two of D3's insensitivity records are independently confirmed here**, which is a side benefit
+worth recording because it cost nothing. `spoilage_rate` is `0.0592` for **all three arms** and
+contributes **exactly zero** regret — consistent with D3's statement that `_spoilage` reads
+neither inventory level nor order size. `delivery_latency` moves by `0.0027` across arms that
+differ enormously in stocking behaviour — consistent with an independent `uniform(10.0, 45.0)`
+draw. **The decomposition is therefore also evidence that D3's table is accurate where it claims
+insensitivity**, and the two flips tasks 12.3 and 13.3 owe are real work rather than
+bookkeeping.
+
+**What is still NOT claimed.** That the 8.2% unmet figure is caused by within-window arrival
+order specifically — that is the most plausible reading of a no-buffer policy, and the mechanism
+has not been isolated. That defect 1 was unintentional; D2.3 committed both weights and the
+record should be read before assuming an error rather than a choice. And that repairing arm C
+makes the regret positive: **that is the next measurement, not a prediction to act on.**
 
 ### D3 - Per-KPI observable sensitivity (R5.34)
 
