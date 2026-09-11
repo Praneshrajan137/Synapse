@@ -1576,6 +1576,58 @@ tests in the interim, and that is a stated sequencing gap, not an omission.
     but both mean the next reading of a `material` verdict happens against a tree whose gates
     report something.
 
+  - **SESSION 7 -- CHECKPOINT A IS BEING RUN. THIS BLOCK IS THE PRE-REGISTRATION AND IT IS
+    WRITTEN BEFORE THE LABEL WAS ADDED.** Its point is that a prediction recorded after the
+    number arrives is not a prediction. Session 6's own lesson is to prove the SHAPE of a
+    deviation rather than its size, so each clause below is falsifiable by run 1 alone.
+
+    **The deferral condition recorded in the session-6 block has expired, measured not assumed.**
+    At HEAD `5f55d3a`, run `34505290388`: `quality-gates` **`success`, 26 of 26** (so the whole
+    chain is still clear, and step 18's replay, 19's unit tests and 20-22's coverage/contract
+    gates all still report), and `uplift-verify`'s fast step is **`850 passed, 0 failed`**. The
+    slow step is red on exactly ONE test and it is `main`'s (finding 50). So a verdict read off
+    this tree is read off a tree whose gates report.
+
+    **PREDICTION 1 -- the comparator headroom does not move.** Arms A (`NoOpRecordingPolicy`) and
+    C (`ForesightPolicy` built from A's trace) are the same two arms run `34366766968` measured,
+    at the same fixed seeds `0..199`, the same 24.0 h per replicate and the same cadence; ADR-055
+    D2.5.1 adds arm B beside them rather than in front of them, and R2.1/R2.5 guarantee an
+    identical demand realisation per seed across arms. So `comparator_headroom` should return
+    **`8.937888952967558`** exactly. **If it moves, that is a finding about arm independence --
+    adding B perturbed A's or C's realisation -- and it forces the `bracketing.upper` correction
+    into the same D2.5 amendment.** It is not a licence to proceed as though it had not moved.
+
+    **PREDICTION 2 -- `verdict: unavailable`, and that is finding 16 rather than a fault.**
+    `materiality_margin` returns `None` at `committed is None` before the headroom guard is
+    reached, and `classify_regret` maps a `None` margin to `unavailable`. Reading a verdict off
+    run 1 would mean hand-computing one the instrument did not produce (I-7).
+
+    **PREDICTION 3 -- `regret` and `comparator_headroom` are now DIFFERENT numbers.** Under the
+    two-arm comparator they were the same expression to every digit, which is what made the
+    headroom guard vacuous (conflict M). `regret = B - C` and `comparator_headroom = A - C` are
+    now different subtractions over different pairs. **If run 1 reports them equal again, the
+    three-arm repair did not take effect and no margin may be committed** -- that is the exact
+    state conflict M forbids, and it would mean arm B is not being driven.
+
+    **PREDICTION 4 -- and this one can fail honestly, which is why it is written down.**
+    `_measure` reports `status: unavailable` and exits 2 if `headroom >= regret` fails. That
+    inequality is no longer a tautology but a claim about the world: doing nothing cannot cost
+    less than running the incumbent. `Par_Level_Reorder(s=50, S=100)` orders up to the opening
+    level on the comparator's cadence, so if it over-orders it can cost MORE than the no-op and
+    the job will go red with no verdict. **That would be a finding about the reference arm, not
+    a margin problem, and the repair would not be to the margin.**
+
+    **PREDICTION 5 -- run 2's verdict is fully determined by run 1's numbers.** Seeds are fixed
+    (`for seed in range(replicates)`) and the interval seed is committed, so run 2 is a verdict
+    *materialisation*. Once run 1 reports `regret` and `interval_low`, run 2 must return
+    `material` iff `regret >= 0.40` **and** `interval_low > 0.40`, else `inconclusive` while
+    `insensitive_kpis` is non-empty. **Run 2 disagreeing with that arithmetic is a determinism
+    defect, not a measurement.**
+
+    **What is NOT predicted, and must not be inferred.** The value of `regret` itself. No twin
+    measurement has ever been taken against the `(s, S)` reference arm. `material` remains an
+    admissible outcome and a good one; the pre-commitment binds either way.
+
 - [ ] 12. E2c — structures 1 and 2: non-stationary demand, and capacity that binds
   - Implements the first two of ADR-055's five structures. **Every structure names the agent
     decision it unlocks; nothing is added for realism's sake.**
@@ -2814,9 +2866,27 @@ data and scored against an external benchmark has no demonstrable value.
     exists so the number is projected, and the human step is *review*, not transcription.
   - _Requirements: 4.4, 4.5, 4.8, 4.11, 10.1, 10.7, 11.7_
 
-  - [~] 26.1 Author the dispatch-only regeneration job and land its couplings
+  - [x] 26.1 Author the dispatch-only regeneration job and land its couplings
     - discharge: regenerate-truth-docs.yml::regenerate (first dispatch, 26.2) for the job itself;
       ci.yml::uplift-verify fast step for the closure-parity property
+    - **DISCHARGED SESSION 7, and it had been earned for two sessions without being claimed.**
+      This leaf's `discharge:` line names TWO subjects and BOTH have now reported, which is the
+      whole reason that clause is written in two halves:
+      - the job itself: `regenerate-truth-docs.yml::regenerate` run `34372152090` (sha `0c0e971`),
+        all nine steps green, recorded under 26.2 in session 4;
+      - the closure-parity property: `ci.yml::uplift-verify`'s **fast** step at HEAD `5f55d3a`,
+        run `34505290388`, `850 passed, 1 skipped, 28 deselected, 2 xpassed`, **0 failed** -- and
+        the four test ids were read from the log individually rather than inferred from the
+        count, because that step also reports 28 deselected and a deselected test is not a pass:
+        `test_the_two_install_closures_are_identical`, `test_neither_closure_is_vacuous`,
+        `test_a_missing_job_is_refused_rather_than_read_as_agreement` and
+        `test_a_drifted_closure_is_reported_as_inequality`, all `PASSED`.
+    - **Why it went unclaimed, recorded because it is the transferable part.** Session 6's sweep
+      was scoped to what its waves changed, and this leaf's second subject is a property no wave
+      touched. That is finding 42's lesson in a new place: **verify what you already had, not only
+      what you touched.** A `[~]` whose discharge has silently arrived is indistinguishable, from
+      the ledger alone, from a `[~]` still waiting -- so the mark has to be re-read against the
+      newest run at session start, which is what STEP 0 is for.
     - **Landed and locally verified in session 2q. `[~]` and not `[x]` because the workflow has
       never executed** — a job that has never run is exactly the shape I-7 names, where reporting
       nothing is indistinguishable from passing.
@@ -3572,6 +3642,101 @@ data and scored against an external benchmark has no demonstrable value.
       and **reached its end**: both functional steps executed and neither was skipped behind the
       other. Properties 38–60's first full CI execution has been read. **So this spec's property
       surface is no longer local evidence only, and `HANDOFF.md` no longer has to say it is.**
+
+    - **SESSION 7 -- FINDING 51: THE THREE GENERATOR `--check` GATES AND `gate_surface --check`
+      HAVE NEVER EXECUTED IN CI ON THIS BRANCH. They are skipped behind a pre-existing red, and
+      nothing had noticed because the job's colour was already accounted for as "predicted red".**
+
+      `truth-gates.yml::truth-gates` at HEAD `5f55d3a`, run `34505290344`, job
+      `102965861607`, step by step: step 5 `Check_Registry gate` **failure**, and steps **6-12
+      all `skipped`** behind it. Those seven steps are C56 narrative-truth, `readme_gen --check`,
+      `ledger_gen --check`, `gate_surface --check`, `blocking-steps` propagation,
+      `required_checks_truth` and `sweep_budget_truth`. Step 5's own log names the cause and it
+      is not this spec's: `registry-gate: FAIL - 2 check(s) did not pass: C44=FAIL, C69=FAIL`,
+      with `Summary: PASS=55 FAIL=2 PARTIAL=0 SKIP=10 TOTAL=67 REGISTERED=67`.
+
+      **Why this is load-bearing for THIS session rather than a curiosity.** Task 26.5's owed
+      regeneration is verified by asking whether the generated documents still agree with a fresh
+      projection -- and the two gates that ask that question **cannot report on this branch.**
+      The surviving readings are `ci.yml::quality-gates` **step 17** (C56, `success` at this
+      HEAD, so C56 is PASS and is not among the two failures) and `gate_surface --check` run
+      locally, which is category 5 and sanctioned. So the regeneration's proof is one CI gate
+      plus one local gate, not three CI gates, and that must be stated rather than assumed.
+      **This is the "read what got SKIPPED behind a failure" habit paying out a fourth time:**
+      one pre-existing red at step 5 was hiding the execution status of seven gates, exactly as
+      one 101-character line once gated 18 steps and 3 jobs.
+
+      **Recorded, not repaired.** C44 and C69 are another owner's and predate this branch; the
+      registry red is the honest state of a tree with two failing checks, and clearing it by
+      excluding them would be the narrowing this spec exists to refuse.
+
+    - **SESSION 7 -- FINDING 52: FINDING 50's CONSTRUCTION SITE IS MISATTRIBUTED, IN FOUR
+      DOCUMENTS, AND THE SITE IT NAMES CONSTRUCTS NOTHING.** Read before acting on finding 50.
+
+      Finding 50, `HANDOFF.md`, `NEXT_SESSION_PROMPT.md` and this leaf all cite
+      `uplift/consensus_arm.py:618,655` -- `semantic_cache=SemanticDecisionCache(api_key=None)` --
+      as the construction the property objects to. **It is not.**
+      `orchestrator/llm/semantic_cache.py:39` reads `if api_key:` *before* the lazy
+      `from pinecone import Pinecone; pc = Pinecone(api_key=api_key)`, so at `api_key=None` that
+      branch is never entered and **no client is constructed there at all.** The comment at
+      `consensus_arm.py:655` is therefore accurate about its own line and the finding built the
+      wrong conclusion on top of it.
+
+      **The site that does construct one**, and it is reachable from the same assembly seam:
+      `agents/disruption_shield/inference/playbook_retriever.py:95-101` runs
+      `if _HAS_PINECONE: pc = Pinecone()` inside `PlaybookRetriever.__init__` -- **with no key
+      argument at all**, relying on the surrounding `except Exception` to swallow the failure.
+      The path is `build_consensus_arm` -> the eight agent handlers ->
+      `DisruptionShieldA2AHandler.__init__` (`handler.py:48`, `pipeline or
+      DisruptionShieldPipeline()`) -> `DisruptionShieldPipeline.__init__` (`pipeline.py:119`,
+      `retriever or PlaybookRetriever(...)`) -> the constructor above. The guard patches
+      `pinecone.Pinecone` and records on **call**, and `playbook_retriever` binds the name at
+      module import (line 20), so the attempt is recorded precisely because that module is first
+      imported *inside* the guarded region -- the agent handler imports being function-local is
+      what makes the patch visible to it.
+
+      **The transferable lesson is the one this spec keeps paying for.** Finding 50 was derived
+      from a COMMENT that described an intent, not from the code path that the assertion names.
+      A citation is not a mechanism. **Attribute a construction by walking to the constructor,
+      not by reading the docstring of the object that holds it.**
+
+    - **SESSION 7 -- FINDING 53: I-1 IS ENFORCED TWICE, BY TWO DIFFERENT DENY-LISTS, AND THE
+      SECOND ONE IS NARROWER AND ALMOST NEVER RUNS.** `.github/workflows/security.yml:98` carries
+      a second `No paid API imports (I-1)` grep. It differs from `ci.yml:102` on both axes:
+      - its pattern **omits `replicate` entirely** -- four clients where `ci.yml` greps five;
+      - its scope is `agents/ orchestrator/ packages/ --include="*.py"`, where `ci.yml` also
+        covers `api/ digital_twin/ data_fabric/ ml_pipelines/ scripts/`;
+      - and `required-checks.yaml:248-251` declares the `security` job **ineligible**, reason
+        `path-filtered`, because its `pull_request` is filtered to `**/requirements.txt`,
+        `**/package.json`, `**/Dockerfile`. A commit touching none of those never produces it.
+
+      So the same invariant has two enforcement points that disagree about what it forbids, and
+      the weaker one is the one that mostly does not fire. **A rule enforced over the wrong scope
+      is prose -- and a rule enforced twice, differently, is worse than either version alone,
+      because a reader who finds one will believe the invariant is covered.** Widening only
+      `ci.yml` would leave this divergence in place, so the wave-7 change lands in **both**
+      carriers for the `pinecone` cause; adding `replicate` to `security.yml` is a SECOND cause
+      and stays recorded here rather than folded into that diff (one diff, one cause).
+
+    - **SESSION 7 -- CONFLICT P: THE PIN COUNT IN THE HIGHEST-PRECEDENCE PROCEDURE IS
+      ARITHMETICALLY IMPOSSIBLE, AND IT IS WRITTEN AS A STOP CONDITION.**
+      `NEXT_SESSION_PROMPT.md` states: "`pin_extractor_truth` reports 14 declared today. It
+      becomes **15** when checkpoint A graduates the parked derived-margin pin, and **16** only
+      after the owed regeneration lands the two `s`/`S` pins. **Any other number is a defect.**"
+
+      `pending_pins:` holds three rows in play -- `materiality-margin-derived-value`,
+      `comparator-reference-reorder-point` and `comparator-reference-order-up-to`. Graduating one
+      and then **two** takes 14 to 15 to **17**, not to 16. (The fourth parked row,
+      `mutation-fast-required-job`, stays parked: its `activates_after` needs an operator
+      decision on `mutation.yml`'s trigger, which is not this session's.)
+
+      **Surfaced, not silently corrected, because of what it would have done.** A stop condition
+      is checked mechanically at session close, so as written it would have halted a session that
+      had done exactly the right thing -- and the halt would have looked like a pin defect rather
+      than a documentation defect. This is the same class as conflict O: **a count carried in
+      prose that no gate derives.** The durable repair is that the closing sweep should assert
+      `declared == len(pins:)` read from the file rather than against a transcribed integer;
+      recorded for whoever owns the prompt's regeneration.
     - _Requirements: —_
 
 ## Notes
