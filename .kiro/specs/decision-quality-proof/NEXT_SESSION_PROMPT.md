@@ -110,21 +110,28 @@ $log = gh api "repos/:owner/:repo/actions/jobs/<jobid>/logs" 2>$null
 ### STEP 1 — read these, in this order. Binding, not advisory.
 
 1. `.kiro/steering/local-compute-budget.md` — invariant **I-0**. Highest precedence.
-2. `.kiro/specs/decision-quality-proof/SESSION_PROTOCOL.md` — the ceiling, wave discipline, the
+2. `.kiro/steering/execution-routing.md` — **where** a workload runs, by table not by judgement.
+3. `.kiro/steering/throughput-with-integrity.md` — **the metric** (leaves DISCHARGED) and
+   guardrails **G1–G7**. G7 makes full capability the default.
+4. `.kiro/steering/standard-of-work.md` — **what "done well" means**, stated as tests rather than
+   adjectives: the reviewer bar, the three questions, intent-before-implementation, and the
+   methodology at its **measured** level (spec-driven PARTIAL, TDD PARTIAL, BDD ABSENT, DDD
+   PARTIAL, outcome verification PRESENT). **Read it before claiming a practice or a standard.**
+5. `.kiro/specs/decision-quality-proof/SESSION_PROTOCOL.md` — the ceiling, wave discipline, the
    **barrier stop**, the three marks, the four checkpoints, the batch table, the six cheap gates,
    the progress ledger. **Read row `7` in full.**
-3. `HANDOFF.md` (repo root) — the state of the tree, and **what is verified versus merely
+6. `HANDOFF.md` (repo root) — the state of the tree, and **what is verified versus merely
    authored**. Read its honesty ledger before believing any colour.
-4. `CLAUDE.md` — the 14 invariants, the honesty contract, the gate registry, the `E-S*` lessons.
+7. `CLAUDE.md` — the 14 invariants, the honesty contract, the gate registry, the `E-S*` lessons.
    **Its I-1 sentence is load-bearing and was misread for two sessions: the paid-client list is
    CLOSED at four names.**
-5. `.claude/skills/synapse-engineer/SKILL.md` + `references/`.
-6. `.cursorrules` + `docs/cursor/*.md`.
-7. `docs/adr/ADR-055-twin-decision-relevance.md` — **D2.5, D2.5.1, D2.5.2 and the amendment log.**
+8. `.claude/skills/synapse-engineer/SKILL.md` + `references/`.
+9. `.cursorrules` + `docs/cursor/*.md`.
+10. `docs/adr/ADR-055-twin-decision-relevance.md` — **D2.5, D2.5.1, D2.5.2 and the amendment log.**
    D2.5.2 is session 7's and it is where finding 54 lives.
-8. `docs/adr/ADR-018-pinecone-semantic-cache.md` — **Accepted, and it sanctions Pinecone as a
+11. `docs/adr/ADR-018-pinecone-semantic-cache.md` — **Accepted, and it sanctions Pinecone as a
    free-tier dependency.** This is what makes conflict Q a conflict.
-9. `.kiro/specs/decision-quality-proof/{requirements,design,tasks}.md`. `tasks.md` is the **ledger
+12. `.kiro/specs/decision-quality-proof/{requirements,design,tasks}.md`. `tasks.md` is the **ledger
    and your worklist**; tasks **10.4**, **11** and **27.5** carry sessions 5–7's findings in full.
 
 **Two invariant numberings disagree.** `references/14_invariants.md` and `.cursorrules` differ on

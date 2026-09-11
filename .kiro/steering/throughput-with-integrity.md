@@ -14,6 +14,10 @@ while I-0 permitted unlimited.
 
 ## Values, in precedence order
 
+**What "done well" means is `standard-of-work.md`, not this file.** That document carries the
+reviewer bar, intent-before-implementation, and the methodology at its **measured** level. This one
+carries the values that govern going *fast*.
+
 1. **An honest null outranks a fast pass.** A measurement that refuses to conclude is a result.
    The most valuable output of session 7 was *declining* to author eleven leaves.
 2. **A refusal is a deliverable.** A guard that makes a defect loud is progress, and removing
