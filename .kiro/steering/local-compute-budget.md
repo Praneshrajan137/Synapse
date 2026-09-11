@@ -6,13 +6,26 @@ inclusion: always
 
 Treat this as invariant **I-0**, ranking alongside the 14 in `.cursorrules`.
 
-Hardware: 16 GB laptop, RTX 3050, thermally throttling. The machine handles
-ordinary development work fine. What throttles it is **process type and process
-count**, not "running things" in general. This rule names both precisely, because
+Hardware, **measured 2026-09-11 with `Get-CimInstance` rather than asserted**: Lenovo 83GS,
+**15.71 GB** RAM physical and OS-visible (**6.86 GB free** at measurement), i5-12450HX with
+**8 physical / 12 logical** cores, RTX 3050 6 GB Laptop plus Intel UHD. Thermally throttling.
+**This corrects two figures that were both wrong**: this file said 16 GB and a session said
+14 GB. Only ~44% of RAM was free, so the binding limit is often *available* memory rather than
+total — and **no workload in this repository needs the GPU**, so reserve no budget for it.
+
+The machine handles ordinary development work fine. What throttles it is **process type and
+process count**, not "running things" in general. This rule names both precisely, because
 two earlier versions of it got the line in the wrong place — one banned almost all
 execution (costing unverified work), the other permitted five concurrent agents
 each cleared to run builds and browsers (which throttled the machine within
 minutes).
+
+**Where a workload runs is decided by `execution-routing.md`, which is an allow-list.** This
+file governs *how much*; that table governs *where*, and it is authority on kind. Unlisted or
+unmeasured means CI. The category taxonomy below remains as a set of fast heuristics, not as
+the definition — the primary cost metric is **cores × wall-seconds**, because throttling tracks
+sustained load and a kind-based list cannot distinguish a 3-second `ruff` from a 20-minute
+`pytest` at the same core count.
 
 ## What actually throttles this laptop — the taxonomy
 
@@ -56,12 +69,21 @@ The cost is the fan-out, not the individual test.
 **Process count multiplies everything above.** Three category-5 runs at once is a
 category-2 load. Five is a throttle.
 
-- **Parallel sub-agents for reading, writing, and analysis: unlimited.** Authoring
-  does not heat the machine. Use as many as the work justifies.
+- **Parallel sub-agents for reading, writing, and analysis: REQUIRED, not merely permitted.**
+  Authoring does not heat the machine. Dispatch one per independent unit of work and state in
+  the session opening how many and why. **This clause read "unlimited" for eight sessions and
+  sessions used zero**, which is why it now reads as an obligation. `throughput-with-integrity.md`
+  G1–G3 carry the dispatch contract; an agent without one is not dispatched.
 - **Sub-agents that execute code: exactly ONE at a time.** Not three, not two.
   When a batch needs a test run, exactly one agent in that batch gets the process
   budget and the rest are explicitly authoring-only.
 - One test process at a time within that agent, too. Serial, not concurrent.
+
+**The two clauses above are ONE design, not two rules in tension.** Wide authoring parallelism
+is affordable *because* exactly one agent holds the process budget; the cap is what makes the
+obligation safe. What may widen is the single executor's permitted **kind**, governed by
+`execution-routing.md`. **The count never widens** — see the 2026-08-01 precedent below, where
+relaxing it to three throttled the machine on load that was entirely authorised.
 
 ## Required local behaviour
 
@@ -76,9 +98,17 @@ category-2 load. Five is a throttle.
   those deliberately, one at a time, never as a side effect of a wide run.
 - Prefer `-x -q --tb=line -p no:randomly` for a fast, readable signal.
 - `HYPOTHESIS_PROFILE=dev` (10) locally; `heavy` (100) only for a single scoped
-  file you specifically need coverage on.
+  file you specifically need coverage on. **ALWAYS SET IT EXPLICITLY, IN THE SAME COMMAND.**
+  `conftest.py` loads `default` when the variable is unset, and `default` is **500** — a **50×**
+  load, measured 2026-09-11 by importing `conftest` itself (unset → 500, `dev` → 10,
+  `heavy` → 100, `ci` → 500). An unexported variable is the largest single accidental load
+  available on this machine. **The one exception is deliberate:** a scoped *pure-arithmetic*
+  file at `ci` costs seconds and catches what `dev` cannot — two consecutive findings were paid
+  for by CI that a local `ci` run would have caught first.
 - **Be honest about what ran.** "Authored and diagnostics-clean, not executed" is
   a legitimate result. "Should pass" reported as "passes" is not (I-7).
+- **Report core-seconds, not just invocation counts.** `cores × wall-seconds` is the cost;
+  the count is a proxy that cannot distinguish a 1-second gate from a 20-minute suite.
 
 ## Escalation path for heavy work
 
