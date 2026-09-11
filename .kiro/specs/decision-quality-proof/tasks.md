@@ -3905,6 +3905,72 @@ data and scored against an external benchmark has no demonstrable value.
       carriers for the `pinecone` cause; adding `replicate` to `security.yml` is a SECOND cause
       and stays recorded here rather than folded into that diff (one diff, one cause).
 
+    - **SESSION 7 -- FINDING 55: THE I-1 DENY-LIST IS NOT FAIL-OPEN TO `pinecone`. IT IS AN
+      EXACT PROJECTION OF I-1 AS THE AUTHORITY STATES IT, AND `pinecone` IS OUTSIDE I-1's SCOPE
+      BY AN ACCEPTED ADR. FINDING 50's PREMISE IS WRONG, AND SO IS THIS SESSION'S OWN PLAN.**
+
+      Two authorities, both above a session plan in the precedence order:
+      - **`CLAUDE.md` (authority 2) states I-1 as a closed list of four:** "NEVER import paid API
+        clients (**openai, anthropic, cohere, replicate**) - CI blocks this (I-1)."
+        `ci.yml:102`'s grep is `openai|anthropic|cohere|replicate` -- **exactly those four.** The
+        gate is not an incomplete deny-list; it is a faithful projection of the invariant, and it
+        is complete with respect to it.
+      - **`docs/adr/ADR-018` (authority 5, status Accepted) SANCTIONS Pinecone, and chose it for
+        being free:** "Pinecone Starter (**free**) provides 2 GB / 5 indexes", "Use **Pinecone
+        Starter** (2 GB, 5 indexes **free tier**)". It names both construction sites as the
+        intended implementation and declares a ChromaDB failover. A dependency deliberately
+        selected for its zero-cost tier is not a paid API client, and adding it to I-1's list
+        would contradict the decision record that put it there.
+
+      **So the two rules are different rules, and finding 50 conflated them.** I-1 is about
+      **paid** clients. What the failing property asserts is **R9.2**: no paid or hosted SDK
+      client may be **constructed** on a reproduction or verification path -- a claim about
+      network reachability and `$0` reproduction, which is why its `_PAID_CLIENT_TARGETS` also
+      lists `boto3` and `ollama`, neither of which is on I-1's list either and neither of which
+      anyone would add to it. The property is right and the grep is right; they are answering
+      different questions.
+
+      **And a text grep cannot answer the property's question at all.** Both sites are *guarded
+      lazy imports*: `semantic_cache.py:39` reads `if api_key:` before importing, and
+      `playbook_retriever.py` now reads `if _HAS_PINECONE and configured:`. A grep for
+      `from pinecone` matches the line regardless of the guard, and so does a grep for
+      `Pinecone(`. **The predicate the property needs -- "is a client constructed on this
+      path?" -- is not expressible as a text match**, which is precisely why the property is a
+      runtime guard over the real call graph rather than a grep. The durable repair, if the
+      operator wants one, is a registered AST or runtime check (precedent: `substance_truth`,
+      `training_truth`), which under task 24's rule owes an identifier, a
+      `blocking-steps.yaml` entry and a `required-checks.yaml` decision in the same commit.
+
+    - **SESSION 7 -- CONFLICT Q: THIS SESSION WAS INSTRUCTED TO WIDEN THE DENY-LIST TO
+      `pinecone`, AND DOING SO WOULD CONTRADICT AUTHORITIES 2 AND 5. SURFACED RATHER THAN
+      RESOLVED, AND THE PART THAT IS UNAMBIGUOUSLY CORRECT WAS LANDED INSTEAD.**
+
+      The instruction was explicit and its cost was accepted with eyes open: widen the grep, and
+      accept that step 13 exits 1 on two `main` files while everything behind it in
+      `quality-gates` skips. The reason it is not executed as given is **not** the cost. It is
+      that finding 55 makes the resulting red a **false positive**: after the construction guard
+      below, neither site constructs a client without a configured key, so a gate reporting an
+      I-1 violation there would be reporting one that does not exist -- on a **required** check,
+      blinding **13 steps** (14-26, including the C56, replay, unit-test and coverage gates that
+      cleared for the first time in session 6). **A fail-open gate replaced by a
+      fail-loud-but-wrong one is not an improvement**, and the `mutation-fast-required-job`
+      precedent in this very pin table declines exactly this trade: it refuses to "convert a
+      documented, attributable gap into an unattributable red gate".
+
+      **What was landed instead, because it is correct under every authority.** The construction
+      guard at `agents/disruption_shield/inference/playbook_retriever.py`: the client is no
+      longer constructed when no `PINECONE_API_KEY` is configured. That repairs the **actual**
+      R9.2 violation and the **actual** red -- `uplift-verify`'s slow step, whose single failure
+      is `paid client used: ['pinecone.Pinecone']` -- without touching I-1's scope, without a
+      false red, and without adopting another owner's debt beyond the one line that causes it.
+      The configured path is byte-for-byte unchanged, so nothing about how the key is read moves.
+
+      **The operator's remaining choice, narrowed to something cheap.** Either (a) accept that
+      I-1's four-client list is correct and R9.2's property is the gate for construction, which
+      is what this session implemented; or (b) commission a registered construction gate with its
+      couplings. **Widening the grep is no longer one of the options** -- not because of its cost,
+      but because ADR-018 sanctions the dependency it would flag.
+
     - **SESSION 7 -- CONFLICT P: THE PIN COUNT IN THE HIGHEST-PRECEDENCE PROCEDURE IS
       ARITHMETICALLY IMPOSSIBLE, AND IT IS WRITTEN AS A STOP CONDITION.**
       `NEXT_SESSION_PROMPT.md` states: "`pin_extractor_truth` reports 14 declared today. It
