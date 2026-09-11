@@ -23,7 +23,28 @@ against `main`.
 expected never to bind.** What stops you is a barrier or a phase boundary. Session 7 stopped at
 **four commits** because the measurement it took invalidated the work it had approval to author.
 
-### STEP 0 — CHECKPOINT A RAN, AND IT RETURNED A REFUSAL RATHER THAN A VERDICT.
+### STEP 0 — THE THROUGHPUT RESET IS INSTALLED AND UNTESTED. YOU ARE THE TEST.
+
+**Session 8 installed three steering documents, made the `[~]` harvest mechanical, and measured
+the decomposition that settles task 11. It discharged ZERO leaves and dispatched ZERO parallel
+agents — so `throughput-with-integrity.md`'s G6 target is missed by construction, because that
+session wrote the rules rather than ran under them.**
+
+**Read these three first; they are `inclusion: always` and they govern how you work:**
+`.kiro/steering/local-compute-budget.md` (I-0), `.kiro/steering/execution-routing.md` (where a
+workload runs), `.kiro/steering/throughput-with-integrity.md` (**the metric, and six guardrails**).
+
+**The metric you are judged on: leaves DISCHARGED. A `[~]` counts ZERO. Target: >= 11.** If you
+miss it, the progress ledger says the reset failed and names the lever — that is G6 and it is not
+optional.
+
+**Task 11's disposition is DECIDED: option (b).** ADR-055 **D2.5.3** is the canonical record; do
+not re-derive it. The measurement found two defects and the arithmetic shows repairing the
+objective alone leaves the regret negative.
+
+### STEP 0b — CHECKPOINT A RAN IN SESSION 7 AND RETURNED A REFUSAL, NOT A VERDICT.
+
+**Derive the state; never trust this document for it.**
 
 **Session 7 committed the materiality margin and discovered that the arm labelled
 `perfect_foresight` loses to the incumbent it is supposed to bound.** Runs `34570166681` and
@@ -203,6 +224,43 @@ Precedent cuts both ways: it fired on a `needs:` removal with 3 rows changed and
 measure it.** Never run `ledger_gen` or `readme_gen` locally in any form.
 
 #### Also owed, and smaller
+
+- **THE `uplift-verify` JOB SPLIT — specified in session 8, deliberately NOT landed, and the
+  reason is a risk judgement rather than a budget one.** It is the largest free throughput win
+  available and it touches a **required** check, so it gets a spec instead of a half-landing.
+
+  **The win:** one serial job runs ~880 fast tests in ~18 min then ~9 min of slow, plus ~3 min
+  install — about 30 min. GitHub runs jobs **in parallel at no extra cost**. Sharding the fast
+  step by path plus the slow selector as its own job gives roughly `3 + max(shard)` ≈ **8–13 min**,
+  a ~2.5–3.5× cut. Install cost is paid per shard, which is what bounds the gain; four shards is
+  near the knee.
+
+  **The trap, and it is why this is not a matrix.** `infrastructure/quality/required-checks.yaml`
+  declares `uplift-verify` **`required:`**. A matrix parameterises the job NAME, so the declared
+  check would stop resolving — `required_checks_truth` fails and the required check vanishes. That
+  is the "a required check that can only report `skipped` is not a gate" family, which session 5
+  spent a whole disposition removing.
+
+  **The shape that works:** keep `uplift-verify` as a **thin aggregator** with `needs:` on the new
+  shard jobs, `if: always()`, and a step that fails unless **every** `needs.*.result == 'success'`.
+  `if: always()` is load-bearing — without it a failing shard makes the aggregator `skipped`,
+  reintroducing the exact defect. The declared name and its pass/fail semantics are preserved.
+
+  **Couplings, all same-commit and all to be CHECKED not assumed:** `blocking-steps.yaml` entries
+  for every new step name; `gate_surface --write` (a job/step change; precedent cuts both ways);
+  `required-checks.yaml` only if a shard becomes genuinely eligible (conflict G).
+
+  **G5 applies:** assert the partition is **exhaustive and disjoint** and that total collected
+  equals the pre-split count — predicted, then measured. A split can silently drop a path or mask
+  a test that only passed because another ran first.
+
+- **Finding 57** — `_recording_open`'s `if suffix in _DATA_SUFFIXES or under_data:` flags any
+  `.csv` anywhere, so a dependency's bundled `cpu_power.csv` fails the slow step and
+  `_REAL_DATA_DIRS` is inert. Another owner's; the repair is a judgement (`... and under_data`
+  would let a purchased CSV outside `data/` pass). **Do not weaken it (R2.10).**
+- **Task 26.4 is authorable now** and is not behind either barrier.
+- **Thirteen of thirty-five audit gates are UNMEASURED** in `execution-routing.md` and therefore
+  routed to CI. Classifying one is a small, real contribution.
 
 - **Task 26.5**, the second regeneration by label, graduating the two `s`/`S` pins. **Its
   verification is weaker than it looks** (finding 51): the two gates that would confirm it are
@@ -578,7 +636,47 @@ to its own subject (finding 54).**
 
 ---
 
-## Session 7 handoff — regenerate this section each session
+## Session 8 handoff — the throughput reset, installed and untested
+
+**Five commits. ZERO leaves discharged, and that is reported rather than explained away: this
+session wrote the rules it will be judged by.** Census unchanged at `142/66/0/76`.
+
+| Commit | Subject |
+|---|---|
+| `e02c1c2` | task 11(a): the per-term decomposition — finding 54's falsifier |
+| `3bcea22` | steering: the throughput reset — measured hardware, an allow-list |
+| `5ef7a67` | **finding 59** — the decomposition answers task 11; two defects, not one |
+| `b61941b` | census: `[~]` harvest mechanical, ceiling 30 → 40 honestly |
+| *(fifth)* | `HANDOFF.md`, this prompt, the progress-ledger row |
+
+**What was measured.** `RegretObjective.contributions()` wired into `_measure` at last (**finding
+58** — the capability existed since task 9 and no run called it, which is the only reason finding
+54's cause was a hypothesis). The result, canonical in **ADR-055 D2.5.3**: `stockout_rate`
+dominates at **0.808** as hypothesised, but `stockout_rate` and `unmet_service` are the **same
+number** at weight `8.0` each, and the oracle leaves **8.2%** of demand unmet against the
+incumbent's zero. Removing the double-count leaves regret at **−0.1559, still negative**, so
+**option (b) is the repair** and option (c) alone is insufficient.
+
+**What was installed.** Three steering documents. The routing **allow-list** over all 35 audit
+gates with `cores × wall-seconds` as the metric; the six guardrails with **discharge** as the
+throughput unit; and I-0 corrected on hardware (**15.71 GB**, not 14 and not 16) with parallel
+authoring moved from *permitted* to **required** — the one-executor cap and both incident records
+untouched and verbatim. `spec_ledger_census` now **fails** on a `[~]` lacking a `last-checked:`
+run, proven by construction in Property 63 because the tree has `pending: 0` and nothing would
+exercise it.
+
+**Two footguns now recorded, both measured.** `HYPOTHESIS_PROFILE` unset loads **500** examples —
+a 50× local load one forgotten export away. And `testpaths` omits `digital_twin` while
+`uplift-verify` collects it, so a bare `pytest` and CI disagree about what the suite is.
+
+**NOT verified:** `uplift-verify` at any of the five commits — three runs were in flight at close,
+and **Properties 62 and 63 are new and run in the fast step at 500 examples**; finding 57's status;
+the job split, which is specified above and not landed; and `vitest`, at all.
+
+**The lesson, and it is the same shape twice.** `contributions()` could decompose a cost for eight
+sessions and no run called it. I-0 permitted unlimited parallel authoring agents for eight sessions
+and sessions used zero. **Capability is not use** — and the reset's largest change is not a new
+permission but turning an unused one into an obligation.
 
 **Six commits. Two leaves ticked, two registered. Census `140/64/2/74` -> `142/66/0/76`, and
 `pending: 0` for the first time in this spec's life.**
