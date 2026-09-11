@@ -533,6 +533,13 @@ Expected: **`0 / 0 / 0 / 2 / 1 / 0`** plus census 0. **Append `*> $null` and rea
 `$LASTEXITCODE`** — piping any of these through `Select-Object -First N` manufactures a non-zero
 exit.
 
+**The census gained a failing rule in session 8 and it is the mechanical form of G4.** It now
+reports `unharvested` and exits **2** for any `[~]` leaf that records no `last-checked:` run for
+its discharge job. It reads **0** today because the tree has `pending: 0` — so the first `[~]` you
+create owes that sub-bullet, and **checking without writing it down does not satisfy it.** If the
+census starts failing on `unharvested-pending`, the fix is to read the run and record it, never to
+drop the bullet.
+
 **And probe every pin anchored to any document you edited**, on both sides, before committing.
 `doc_truth.documented_value` requires **exactly one** matching line; zero and two are equally fatal,
 and `pin_extractor_truth` reports green through a document-side failure.
