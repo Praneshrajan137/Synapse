@@ -506,6 +506,9 @@ def _measure(replicates: int, hours: float) -> dict[str, object]:
     noop_terms: dict[str, list[float]] = {term: [] for term in OBJECTIVE_TERMS}
     reference_terms: dict[str, list[float]] = {term: [] for term in OBJECTIVE_TERMS}
     foresight_terms: dict[str, list[float]] = {term: [] for term in OBJECTIVE_TERMS}
+    #: Last replicate's counters per arm. Provenance for the complement identity, not an
+    #: aggregate: the identity is structural, so one replicate exhibits it or none do.
+    arm_counters: dict[str, dict[str, int]] = {}
 
     def _observation(sim: object) -> dict[str, float]:
         """The five KPI arguments, read once so cost and contributions cannot diverge."""
@@ -518,6 +521,20 @@ def _measure(replicates: int, hours: float) -> dict[str, object]:
                 sim.sim_time_min  # type: ignore[attr-defined]
             ),
             "avg_delivery_time_min": metrics.avg_delivery_time_min,
+        }
+
+    def _counters(sim: object) -> dict[str, int]:
+        """The two counters that decide whether the service terms are one quantity.
+
+        Reported per arm so a reader can verify the complement identity from the artifact
+        rather than trusting this module's word for it (finding 60).
+        """
+        metrics = sim.metrics  # type: ignore[attr-defined]
+        return {
+            "demand_events": int(metrics.demand_events),
+            "unmet_demand_events": int(metrics.unmet_demand_events),
+            "orders_created": int(metrics.orders_created),
+            "orders_delivered": int(metrics.orders_delivered),
         }
 
     def _cost(sim: object) -> float:
@@ -548,6 +565,11 @@ def _measure(replicates: int, hours: float) -> dict[str, object]:
         _accumulate(result.noop, noop_terms)
         _accumulate(result.reference, reference_terms)
         _accumulate(result.foresight, foresight_terms)
+        arm_counters = {
+            "noop": _counters(result.noop),
+            "reference": _counters(result.reference),
+            "foresight": _counters(result.foresight),
+        }
 
     if not reference_costs:
         return {
@@ -622,6 +644,21 @@ def _measure(replicates: int, hours: float) -> dict[str, object]:
         "dominant_regret_term": dominant_term,
         "dominant_regret_share": (
             regret_by_term[dominant_term] / measured if measured != 0.0 else None
+        ),
+        # PROVENANCE FOR THE COMPLEMENT IDENTITY (finding 60). `stockout_rate` and
+        # `unmet_service` are ONE quantity on this path, by construction rather than by
+        # coincidence: `SimulationMetrics.fill_rate` is
+        # `(demand_events - unmet_demand_events) / demand_events` and its own docstring calls
+        # itself "the exact complement of stockout_rate", which is
+        # `unmet_demand_events / demand_events`. So `1 - fill_rate == stockout_rate` over one
+        # shared denominator, and both carry weight 8.0. These counters are reported so a
+        # reader can re-derive that from the artifact instead of trusting this comment.
+        "arm_counters": arm_counters,
+        "service_terms_are_one_quantity": all(
+            math.isclose(
+                by_term["stockout_rate"], by_term["unmet_service"], rel_tol=0.0, abs_tol=0.0
+            )
+            for by_term in (noop_by_term, reference_by_term, foresight_by_term)
         ),
         "note": (
             "regret_by_term sums to `regret` by construction (a difference of two weighted "

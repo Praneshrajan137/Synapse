@@ -500,16 +500,38 @@ than unmet demand, charging a just-in-time oracle for being efficient. **Directi
 by a wide margin.** But two things it did not predict are now measured, and they are separate
 defects with separate owners.
 
-**DEFECT 1 — `stockout_rate` and `unmet_service` are the same measured quantity, so the
-objective applies an effective weight of 16.0 to one KPI.** They are **identical to every digit
-for all three arms** — `0.6566`/`0.6566`, `5.1463`/`5.1463`, `0.0000`/`0.0000`. **D3 below
-asserts the opposite**: that `fill_rate` and `stockout_rate` "are related but not redundant
-after E2a: the first is delivered over demand events, the second is unmet over demand events,
-and they diverge whenever an order..." **Measured across 600 arm-replicates, they never
-diverge.** Both carry weight `8.0` in D2.3, so a single quantity is priced at `16.0` while the
-document records two independent terms. **A weight nobody intended is not a committed
-decision-relevance choice**, and the claim that they diverge is now falsified rather than
-merely unverified.
+**DEFECT 1 — `stockout_rate` and `unmet_service` are ONE quantity, by construction on this path,
+so the objective applies an effective weight of 16.0 to unmet demand.** The decomposition reports
+them **bit-identical** for all three arms — verified by `==` on the raw artifact values, not read
+off rounded output.
+
+**And the mechanism is structural rather than horizon-specific, which is a correction to this
+section's own first draft.** That draft called the identity conditional, reasoning from
+`uplift/kpi.py`'s `fill_rate = orders_delivered / max(1, orders_created)`, which shares no
+denominator with `stockout_rate = unmet_demand_events / demand_events` and would collapse only
+when `orders_created == demand_events`. **That cited the wrong derivation.**
+`uplift/regret.py::_measure` reads `SimulationMetrics.fill_rate`, the **engine property**, which is
+`(demand_events - unmet_demand_events) / demand_events` and whose own docstring states it is "the
+exact complement of `stockout_rate`". Over one shared denominator, `1 - fill_rate == stockout_rate`
+identically. **A citation is not a mechanism; read the code path the assertion names.**
+
+**FINDING 60 — `fill_rate` HAS TWO INEQUIVALENT DEFINITIONS IN THIS TREE, and which one a
+measurement inherits depends on its read path.** The engine metric is the complement of
+`stockout_rate`; `KpiExtractor`'s is `orders_delivered / orders_created` and is not. Task 9.1 kept
+`orders_created` and `demand_events` as separate counters precisely because they can differ, so the
+two definitions genuinely diverge — asserted by construction in
+`tests/uplift/test_service_term_identity_property.py` (**Property 64**) rather than left to a
+horizon to exhibit. **One domain term, two meanings, one of them silently doubling a committed
+weight.** The counters are now reported per arm in `twin-regret.json` so a reader can re-derive the
+identity from the artifact instead of trusting this section.
+
+**D3 IS NOT FALSIFIED, and the first draft of this section over-reached in saying so.** D3's claim
+that the two "diverge whenever an order..." is about `KpiExtractor`'s derivation, where it is
+**true**. D3 and this section were describing different `fill_rate`s. The defect is not that D3 is
+wrong; it is that **the term is defined twice and the objective consumes the definition under which
+two of its five weights collapse into one.** Both carry `8.0` in D2.3, so a single quantity is
+priced at `16.0` while the record describes two independent terms — **and a weight nobody intended
+is not a committed decision-relevance choice.**
 
 **DEFECT 2 — the arm labelled `perfect_foresight` leaves 8.2% of demand unmet; the incumbent
 leaves none.** `0.6566 / 8.0 = 0.0821`. The reference arm's figure is **exactly zero**: a

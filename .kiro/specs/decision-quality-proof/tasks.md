@@ -2085,6 +2085,33 @@ tests in the interim, and that is a stated sequencing gap, not an omission.
 - [ ] 14. Checkpoint — is consensus provably unnecessary?
   - discharge: uplift.yml, task 13.7's E2c measurement steps (checkpoint B)
   - Ensure all tests pass, ask the user if questions arise.
+  - **PRECONDITION ADDED IN SESSION 9, AND IT IS A SEQUENCING DECISION RATHER THAN A
+    MEASUREMENT ONE. This checkpoint MUST NOT RUN until finding 60's double-count is
+    dispositioned.**
+
+    Task 13.5 defines dominance over "every KPI named in the R5.33 objective". Finding 60
+    establishes that **two of those five are one quantity** on the path `_measure` uses —
+    `SimulationMetrics.fill_rate` is the exact complement of `stockout_rate` by construction, so
+    `unmet_service` and `stockout_rate` are the same number, each weighted `8.0`. The objective
+    therefore has **four effective dimensions with one double-weighted**, not five independent
+    ones. **A Pareto verdict computed over it is a verdict about a different objective than R5.28
+    names** — which is conflict M's shape a third time: a gate answering correctly about the
+    wrong subject. Canonical record: ADR-055 **D2.5.3**.
+
+    **This is NOT a prediction about which way the verdict would go, and it must not become
+    one.** Dimensionality changes what dominance means in both directions, and interval widths
+    decide it — those are unmeasured. Whoever runs this checkpoint records the verdict the
+    instrument produces, after the objective it is computed over is the one the requirement
+    names.
+
+  - **AND THE SCHEDULING TEMPTATION IS NAMED HERE SO IT CANNOT OPERATE SILENTLY.** This
+    checkpoint firing would delete E3's twenty-one leaves, which makes it the single largest
+    schedule saving available in the remaining plan. **It would also mean any single-objective
+    policy is Pareto-optimal — consensus is provably unnecessary — and SYNAPSE's central
+    claim is FALSE.** Those are the same event. **Preferring the cancellation because it is
+    faster is preferring the project to fail**, and a session that reaches this checkpoint under
+    schedule pressure should read this paragraph before reading the numbers. The pre-commitment
+    at task 25 binds here too: a result is reported as it comes.
   - **Decision point with a stop condition.** If **any** single-objective policy is
     Pareto-optimal on the modified twin under R5.29's interval-aware dominance, then the
     consensus experiment is reported as **having no room to win and must NOT be run**. A
