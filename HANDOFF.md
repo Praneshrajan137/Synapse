@@ -1,34 +1,46 @@
 # HANDOFF — decision-quality-proof
 
-**State at end of session 6 (2026-09-10). Four commits pushed; the commit carrying this file is
+**State at end of session 7 (2026-09-11). Four commits pushed; the commit carrying this file is
 the fifth.** Derive the counts, never read them:
 
 ```powershell
 python -m scripts.audit.spec_ledger_census --files --next 30
 ```
 
-At the time of writing that reported **140 leaf tasks: 64 done, 2 authored-pending-discharge, 74
-open** — 69 authorable and **5** CI-gated. **One leaf was ticked — 27.5, and parent 27 with it —
-the first in three sessions, and it was earned on the naming job's own verdict.**
+At the time of writing that reported **142 leaf tasks: 66 done, 0 authored-pending-discharge, 76
+open** — 70 authorable and **6** CI-gated. **Two leaves ticked (26.1 and 10.4), two registered
+(26.4 and 26.5), and `pending: 0` for the first time in this spec's life.**
 
-> **THE WHOLE `quality-gates` CHAIN CLEARED IN ONE RUN, AND THE PROPERTY SURFACE THIS SPEC HAS BEEN
-> WRITING FOR SIX SESSIONS HAS NOW FULLY EXECUTED IN CI.** Run `34501159046`, sha `1f4e876`:
-> `quality-gates` **`success`, 26 of 26 steps** — obstructions 2.5, 3 and 4 cleared together, and
-> steps 20–22 had never executed on this branch **or on `main`**. `uplift-verify`'s fast step:
-> **`850 passed, 0 failed`**, against `9 failed, 838 passed` at the start of the session. Its slow
-> step **ran for the first time in this spec's life**.
+> **CHECKPOINT A RAN. THE MARGIN IS COMMITTED. AND THE MEASUREMENT FOUND THAT THE ARM LABELLED
+> `perfect_foresight` LOSES TO THE INCUMBENT IT IS SUPPOSED TO BOUND.**
 >
-> **`HANDOFF.md` no longer has to say this spec's property surface is local evidence only.** Task
-> 27.5's `discharge:` line asked for three things and all three are measured.
+> Run `34570166681` (sha `e94a1ac`) then run `34574731853` (sha `2d86899`), both by the
+> `measure-twin-regret` label, 200 of 200 replicates usable, `unusable_seeds: []`:
 >
-> **The one remaining red is `main`'s, proven on both sides, and it is an I-1 finding worth having.**
-> A slow property that had never run reports `paid client used: ['pinecone.Pinecone']` — and
-> `ci.yml`'s BLOCKING I-1 grep is a deny-list that does not contain `pinecone`. See finding 50.
+> | quantity | measured |
+> |---|---|
+> | `comparator_headroom` (A-C) | `8.937888952967558` — **unchanged from run `34366766968` to every digit** |
+> | `mean_noop_cost` (A) | `11.835228527152536` |
+> | `mean_foresight_cost` (C) | `2.897339574184977` |
+> | `mean_reference_cost` (B) | `2.0849871282327` |
+> | **`regret` (B-C)** | **`-0.8123524459522771`** |
+> | 95% interval | `[-0.8273245113311902, -0.7977944274457321]` — **excludes zero** |
+> | `margin_committed`, run 2 | **`0.4`** |
 >
-> **Checkpoint A was deliberately not run**, and the reason it was deferred has now expired.
-> Recorded in task 11 as a decision. Nothing was taken from it: no margin, no amendment, no pin
-> graduated, no label added. `pin_extractor_truth` reports **14** declared, which is the mechanical
-> statement of all three.
+> **That is finding 54.** A negative regret means the difference is not a regret: arm C sits
+> strictly between the other two, better than doing nothing and worse than `(s, S)`. Three
+> candidate mechanisms were excluded before a fourth was accepted. Full record in **ADR-055
+> D2.5.2**, landed this session.
+>
+> **Task 10.4 is `[x]`, discharged on run 2's own verdict — `margin_committed: 0.4` proves the
+> value was re-derived from the rule and accepted by the headroom guard. Task 11 is deliberately
+> still `[ ]`.**
+>
+> **E2c was NOT authored, and that is the session's most consequential decision.** The plan had
+> approval to author all eleven leaves on an `inconclusive` verdict. Tasks 12.3 and 13.3 are the
+> two flips that empty the insensitive set, and with them landed this same negative regret
+> becomes **`sub-margin`** — the one verdict that **confirms** Finding 4. E2c is precisely the
+> work that would convert this defect from a wrong verdict into a false confirmation.
 >
 > The working agreement is `.kiro/specs/decision-quality-proof/SESSION_PROTOCOL.md`.
 > The prompt to paste in a new session is
@@ -39,281 +51,248 @@ as it *is*, not as a diff against how it was.
 
 ---
 
-## THE CHAIN, MEASURED. Six obstructions cleared; the seventh has finally reported.
+## The chain: still clear, and one red now has a landed repair awaiting CI
 
-| # | Obstruction | State at close |
-|---|---|---|
-| 0 | the runner itself — billing | **CLEARED** — repository made public |
-| 1 | step 8 `mypy --strict orchestrator/` | **CLEARED** (2r), `success` |
-| 2 | step 17 **C56** narrative-truth | **CLEARED** — regressed by this session's own C71 defect (finding 48), repaired, `success` |
-| **2.5** | **step 18 golden-trace replay** | **CLEARED.** Its first execution ever, and it exits 0 |
-| **3** | **step 19 unit tests → `test_cognition_phase`** | **CLEARED.** `success` — the repair on disk since `bf8693f` is judged at last |
-| **4** | **steps 20–22 coverage / spec coverage / contract** | **CLEARED.** `success` — and they had never executed on this branch **or on `main`** |
-| **5** | **`uplift-verify` step 5, the fast surface** | **CLEARED.** `850 passed, 1 skipped, 28 deselected, 2 xpassed`, **0 failed** |
-| **6** | **`uplift-verify` step 6, the slow surface** | **EXECUTED, FOR THE FIRST TIME EVER.** `1 failed, 59 passed, 936 deselected` in 421s. The one failure is **`main`'s on both sides** |
+At HEAD `5f55d3a` (session 7's STEP 0), run `34505290388`:
 
-**Session 2r's lesson held to the very end, and it fired five times.** Four of these six could only be
-read once the one in front of it moved, and the fifth firing was self-inflicted: a repair aimed at
-step 18 reddened step 17. **Nothing before this run could have said what steps 20–22 would report.**
-They reported green.
+| Job | Result |
+|---|---|
+| `ci.yml::quality-gates` | **`success`, 26 of 26 steps** — no regression from session 6 |
+| `ci.yml::uplift-verify` step 5, fast | **`850 passed, 1 skipped, 28 deselected, 2 xpassed`, 0 failed** |
+| `ci.yml::uplift-verify` step 6, slow | `1 failed, 59 passed, 936 deselected` — the one failure is `main`'s |
+| `truth-gates.yml::truth-gates` | step 5 **failure** (`C44=FAIL, C69=FAIL`), **steps 6–12 skipped** |
+| `truth-gates.yml::falsification-sweep` | steps 5 and 6 failure, pre-existing |
 
-**PR #84's `quality-gates` required check is GREEN.** `uplift-verify` is red on `main`'s I-1 defect,
-so the merge is still blocked — but by a fully diagnosed defect belonging to another owner, not by
-an unknown.
+The slow step's single failure is
+`test_reproduction_path_is_zero_cost_network_free_and_synthetic_only`, reporting
+`paid client used: ['pinecone.Pinecone']`. **Session 7 landed the repair** (the
+construction guard, commit `446d5d5`); **CI has not yet judged it**, and that property is
+`@pytest.mark.slow`, so `ci.yml::uplift-verify`'s slow step owns the verdict.
 
-### The arithmetic on the fast step, because a count that moves by exactly what was added is the proof
-
-| Delta | Measured | Meaning |
-|---|---|---|
-| failed | `9 → 0` | every one of the nine repaired |
-| passed | `838 → 850` (**+12**) | `9` repaired + `3` new clauses (declaration property, committed-declaration read, registry-translation totality) |
-| skipped / deselected / xpassed | `1 / 28 → 1 / 28`, `2 → 2` | unchanged: nothing was newly excluded to achieve it |
-
-**The two `test_ledger_gen_property.py` repairs were authored blind** — I-0 forbids running that
-module locally in any form — so this run is the only thing that could ever have judged them, and it
-did.
-
-### Step 18's own output, and it matches the hermetic prediction
-
-The tier-routing number is now a **real** 200-trace replay rather than a substituted one:
-
-```
-replay-metrics: 200 golden traces from tests/eval/golden_traces (seed 0xCAFEBABE)
-[SKIP] kv_cache_hit_rate: measured DECLARED UNMEASURABLE, floor 0.7000 -- ... declared
-       unmeasurable in CI -- blocked on A GitHub-hosted runner has no Ollama ...
-[OK]   tier_routing_accuracy: measured 1.0000 >= floor 0.8000 (200/200 traces classified)
-[SKIP] replay-metrics: every MEASURED value is at or above its floor; at least one floor is
-       declared unmeasurable in CI with its reason and procedure. A SKIP is not a PASS (I-7)
-```
+**The registry baseline, read from step 5's own verdict line:**
+`PASS=55 FAIL=2 PARTIAL=0 SKIP=10 TOTAL=67 REGISTERED=67`, failing on C44 and C69. C56 is
+**absent from the failure list**, so C56 is PASS.
 
 ---
 
-## Findings 43–50, and conflict O
+## Findings 51–55, and conflicts P and Q
 
-### 43 — a gate defect whose shape is the pair R6.14 exists to catch
+### 51 — the three generator `--check` gates and `gate_surface --check` have never executed here
 
-Hypothesis named `scripts/audit/command_path_truth.py:554` as the line run only by failing cases.
-`_MODULE_RE`'s negative lookbehind `(?<![\w./-])` refuses to match `python` behind a `-`, and the
-Makefile branch of `collect_named_commands` handed `named_commands_in` the **raw** recipe line while
-`_makefile_discarding_construct` was already prefix-aware. So on a `-`-prefixed recipe the gate
-reported the discarded exit status and extracted **zero commands**: R6.14's two independent clauses
-collapsed, and **Make's ignore-errors prefix concealed the unresolvable command it was ignoring.**
-That is the exact pair of defects the audit found at `Makefile::deploy-gcp-verify`.
+`truth-gates.yml` step 5 fails on the pre-existing C44/C69 registry red, and **steps 6–12 are all
+`skipped` behind it**: C56 narrative-truth, `readme_gen --check`, `ledger_gen --check`,
+`gate_surface --check`, blocking-steps propagation, `required_checks_truth` and
+`sweep_budget_truth`. Nothing had noticed because the job's colour was already accounted for as
+"predicted red".
 
-Repaired with one reading of Make's prefix grammar (`split_make_prefix`) shared by both consumers,
-which also makes `-@`, `+-` and `@+-` read as swallows. `_MODULE_RE` is untouched. **`@` never had
-the defect** — checked, not assumed, because the opposite would have been a much larger finding.
-Committed report **unchanged at 37 commands / 0 findings / pass**, predicted then measured.
+**Why it matters for the owed regeneration:** the two gates that would verify it *cannot report on
+this branch*. The surviving readings are `ci.yml::quality-gates` step 17 (C56) and a **local**
+`gate_surface --check`. One pre-existing red was hiding the execution status of seven gates —
+the "read what got SKIPPED behind a failure" habit paying out a fourth time.
 
-### 44 — the property that should have caught 43 was vacuous on exactly that input
+### 52 — finding 50's construction site is misattributed, in four documents
 
-The Makefile test asserted the findings **set** and never the command set, so a `-`-prefixed line
-contributing nothing passed whenever every named command happened to resolve. Both are asserted now,
-plus `report.commands` non-empty.
+`semantic_cache.py:39` reads `if api_key:` **before** its lazy `from pinecone import Pinecone`, so
+`consensus_arm.py:655`'s `SemanticDecisionCache(api_key=None)` **constructs nothing**. The site
+that did is `agents/disruption_shield/inference/playbook_retriever.py:95-101` — `pc = Pinecone()`
+with **no key argument at all** — reached by `build_consensus_arm` →
+`DisruptionShieldA2AHandler.__init__` → `DisruptionShieldPipeline()` → `PlaybookRetriever(...)`.
+Finding 50 was derived from a **comment describing an intent**, not from the call path the
+assertion names. **A citation is not a mechanism.**
 
-### 45 — session 1's own repair created the `stryker-break` red, and the coordinated change was half-applied
+### 53 — I-1 is enforced twice, by two different deny-lists
 
-`verify_claims.py`'s C16 docstring names the four sites its repair must touch — including that
-property module — and still describes the hole as live ("**Expected FAIL on landing**"), while
-`doc-number-pins.yaml`'s comment already called the remediation "COMPLETE and verified
-mechanically". Two sites moved, two did not. **That prose is recorded, not edited:** it is another
-spec's and `doc_truth` reads it.
+`security.yml:98` carries a second `No paid API imports (I-1)` grep. It **omits `replicate`**,
+covers three trees instead of eight, and `required-checks.yaml:248-251` declares its job
+**ineligible, reason `path-filtered`** (`**/requirements.txt`, `**/package.json`,
+`**/Dockerfile`), so a commit touching none of those never produces it.
 
-### 46 — a recorded hypothesis refuted by reading rather than by running
+### 54 — the regret is negative: the oracle does not bound its subject
 
-The ledger-gen `'unavailable' == 'fail'` had nothing to do with the inverted
-`ledger_gen`/`readme_gen` order. `mutations[1]` was `clean.replace(f"\n{GENERATED_END}", "", 1)`,
-which deletes the **end marker** — so `probe_text` correctly answered `unavailable` and the test
-demanded `fail`. **The fast step's green now confirms the repair.**
+The headline finding, recorded in full at **ADR-055 D2.5.2** and task 11.
 
-### 47 — the ninth failure was `main`'s, and repairing our eight was necessary but not sufficient
+- **Three mechanisms excluded before a fourth was accepted**, and excluding them is what makes the
+  survivor more than a guess. **Unequal footing** — excluded by construction: `run_three_pass`
+  imports `observe`, `_apply_reorders` and `_derive_unit_costs` from `uplift/harness.py` and drives
+  every arm on one cadence with one `restock_threshold`. **Lead time** — excluded:
+  `_apply_reorders` applies stock through `sim.add_stock`, which is **instantaneous**. **The
+  `Mapping[str, int]` truncation D2.5.1 records** — excluded, and *checked rather than assumed*
+  because the ADR predicted an effect of the right order (~0.24 units) in the right direction: arm
+  C is genuinely not routed through `_drive`.
+- **The surviving explanation is a HYPOTHESIS with a named falsifier.** `stockout_rate` carries
+  weight **8.0** — equal to `unmet_service`, eight times `on_hand` — and **ADR-055 D3 already
+  records that its numerator counts SKUs at zero stock and "does not count unmet demand".**
+  `ForesightPolicy.decide` orders the shortfall "no more, no less", driving on-hand to zero every
+  window; `Par_Level_Reorder(s=50, S=100)` holds a 50–100 unit buffer. The objective charges the
+  efficient arm 8.0 for being efficient. **The per-term decomposition was not measured**, so the
+  falsifier is owed: report each arm's per-term contribution in `twin-regret.json`.
+- **Why the D2.5.1 guard could not have caught it.** `headroom >= regret` substitutes to
+  `(A - C) >= (B - C)`, which reduces to **`A >= B`** and is silent about C, because **C cancels**.
+  A guard built from two expressions that share a term cannot constrain that term. **Nothing
+  anywhere asserted `regret >= 0`.**
+- **The refusal added.** `uplift/regret.py::negative_regret_refusal`, a module-level pure function
+  so the path is provable by construction rather than only by never firing. `_measure` reports
+  `status: unavailable` and exits 2, naming both arm costs. **Property 61** (8 tests, fast step)
+  proves the hole is real: on the measured numbers with the committed margin, `classify_regret`
+  returns `inconclusive` today and **`sub-margin`, whose `confirms_finding_4` is `True`**, with an
+  empty insensitive set. Conflict M's defect forced `material`, which stops the spec loudly. **This
+  one would have confirmed the premise quietly.**
 
-One red anywhere in the fast step keeps step 6 skipped, so the slow surface could never have run
-while it stood. Adopted by explicit operator decision. `aggregate_arm` sorts by `(seed, arm)` for
-R2.5 and the test's reference reduced in **arrival** order; the falsifying case is three runs at
-**seed 0** whose **arms** reorder them. Exact `==` retained, no tolerance introduced, no production
-file touched — and order-invariance is now asserted directly, because a mirrored sort would
-otherwise **mask** a subject that stopped canonicalising.
+### 55 — the I-1 deny-list is not fail-open; `pinecone` is outside I-1's scope
 
-### 48 — the fourth outcome reddened C56 one gate *earlier*, and the trap was documented two lines above the table
+- **`CLAUDE.md` states I-1 as a closed list of four:** "NEVER import paid API clients (openai,
+  anthropic, cohere, replicate) — CI blocks this (I-1)." `ci.yml:102` greps exactly those four, so
+  the gate is a **faithful projection** of the invariant.
+- **ADR-018 (Accepted) sanctions Pinecone and chose it for being free:** "Pinecone Starter (free)
+  provides 2 GB / 5 indexes", naming both construction sites as the intended implementation.
 
-**Self-inflicted, found by CI on the first push, repaired the same session.** Run `34448902996`:
-step 17 **C56 failure**, step 18 **skipped behind it**. The obstruction moved *backwards*.
+Finding 50 conflated two rules. I-1 is about **paid** clients; the failing property asserts
+**R9.2** — no paid or hosted SDK client may be **constructed** on a reproduction path — which is
+why its `_PAID_CLIENT_TARGETS` also lists `boto3` and `ollama`. **And a text grep cannot answer
+the property's question**: both sites are guarded lazy imports, and a grep matches the line
+regardless of the guard.
 
-`doc_truth` gave the drift — `headline-counts … FAIL (README claims 2, suite reports 3); SKIP
-(README claims 11, suite reports 10)` — and every pin, **including both `replay-floors.yaml` pins**,
-reported `[OK]`, ruling out the obvious suspect. The failing step's log does not name the check; the
-**`SYNAPSE Truth Gates` run for the same sha** does: `C71 … check raised KeyError:
-'declared-unmeasurable'`.
+### Conflict P — the pin count in the prompt's stop conditions is arithmetically impossible
 
-`replay_metrics` is registered as **C71**, and `verify_claims.GATE_STATUS` is the table **nineteen**
-registry rows use to translate a verdict into `PASS`/`FAIL`/`SKIP`. A new `Outcome` member is a
-schema change and that table is one of the fixtures carrying it (**coupling 3**). The wave-2 sweep
-grepped for consumers of the artifact and of `Outcome` *inside* the gate and its property test, and
-never for a *verdict translation*. **The comment block immediately above `GATE_STATUS` already
-describes this exact failure mode.**
+It states `pin_extractor_truth` goes 14 → 15 → **16**. Three parked rows are in play, so it is
+14 → 15 → **17**. As written the stop condition would have halted a correct session, and the halt
+would have looked like a pin defect rather than a documentation defect.
 
-Repaired at the declaration, never at the call site: `"declared-unmeasurable": "SKIP"`, **stricter
-than the gate's own exit code deliberately** — the step exits 0 to gate on the floors it can
-measure; the registry row says the other went unmeasured, so the published PASS count never absorbs
-a declared absence. And the obligation is now mechanical:
-`test_every_outcome_this_gate_can_report_is_translatable_by_the_registry`.
+### Conflict Q — the instruction to widen the deny-list contradicts authorities 2 and 5
 
-### 49 — the full depth of the chain is now known
-
-Six obstructions cleared across sessions 2r–6, each revealing the next. The last two had never
-executed anywhere, so **nothing before this run could have said what they would report.** The lesson
-is not that predictions were right; it is that four of the six could only be read once the one in
-front of it moved.
-
-### 50 — the BLOCKING I-1 gate is fail-open to `pinecone`, and the only thing that saw it had never run
-
-`ci.yml::quality-gates` step 13 ("No paid API imports (I-1 — BLOCKING)") greps a **deny-list**:
-`openai|anthropic|cohere|replicate`. **`pinecone` is not in it.** The slow property asserts the
-stricter and correct I-1 reading — that no paid SDK client is **constructed** on a reproduction path
-— and reports `paid client used: ['pinecone.Pinecone']`. `uplift/consensus_arm.py:618,655` records
-the intent as an honest degrade ("the semantic cache is constructed without a Pinecone key", "no
-Pinecone key → the cache reports itself unavailable"), so the *degradation* is deliberate; what the
-property objects to is that the paid client is constructed at all.
-
-**A deny-list is fail-open by construction** — the same lesson this spec already carries about
-workflow triggers, now on an invariant gate.
-
-**Ownership, proven on both sides:** `tests/uplift/test_preserved_baseline_regression.py` is on
-`origin/main` and this branch's 45/16-line diff **touches no `pinecone` line and no
-`_PAID_CLIENT_TARGETS` line**; `uplift/consensus_arm.py` is on `origin/main` with an **empty**
-`git diff origin/main`. **Recorded, not repaired:** I-1 is the highest-precedence invariant after
-I-0, and the choice between widening the grep, moving to an allow-list, and changing what
-`consensus_arm` constructs is the operator's.
-
-### Conflict O — CF-13 is enforced over a scope that excludes every one of its violations
-
-The authority documents say "**three**". Measured by **AST** over all **354** `test_*.py`: **41
-files, 56 hardcoded `@settings(max_examples=…)` sites** — 37 under `tests/uplift/`, 4 under
-`tests/verify/`. The worst is `tests/uplift/test_reproduction_stability_property.py`, pinned at **4**
-examples against CI's 500 and the ≥100 obligation. `test_property_inventory_consistency.py` **does**
-carry a mechanical CF-13 check, but it walks `DECLARED_INVENTORY`'s 37 declared paths and **the
-intersection with the 41 offenders is empty**.
-
-**And the method note is the same defect one level up.** The first draft of that count was a regex
-over raw text and reported 62 sites in 43 files — having matched the assignments that
-`tests/verify/test_inventory_budget_rule_property.py` **quotes as test data**, the file written to
-warn about precisely that.
+The instruction was explicit and its cost accepted. It is not executed as given, and **the reason
+is not the cost**: after the construction guard, neither site constructs a client without a
+configured key, so a widened grep would report a violation **that does not exist** — a false
+positive on a **required** check, blinding **13 steps** (14–26). A fail-open gate replaced by a
+fail-loud-but-wrong one is not an improvement, and the `mutation-fast-required-job` precedent in
+this repo's own pin table declines exactly this trade. **The construction guard was landed
+instead**, which repairs the actual R9.2 violation without touching I-1's scope.
 
 ---
 
 ## What is still owed, and who owns it
 
-- **Checkpoint A, on the three-arm comparator.** The reason session 6 deferred it — that the
-  instrument sat in a tree whose property surface was red in nine places — **has expired.** Run 1 by
-  label, then the D2.5 amendment stating the derived literal, then the margin commit, then run 2.
-  **The verdict may still be `material`**, which would be an **admissible** falsification about the
-  right subject.
-- **Finding 50, the I-1 deny-list.** `pinecone` reaches a constructed client on a reproduction path
-  and the blocking gate cannot see it. Another owner's, and an invariant.
-- **A second regeneration**, owed by the generator order itself (`readme_gen` → README → C56 →
-  `ledger_gen`; the committed order inverts it). The two parked `s`/`S` pins graduate in the same
-  data edit, after it. So does finding 45's stale C16 docstring.
-- **`workflow_shape_truth` cannot see an unguarded pipeline** (finding 35). Registered-check change.
-- **CI's ruff scope** excludes nine trees including `uplift/` and `digital_twin/`: **530 lint, 254
-  format (upper bound).**
+- **Task 11's disposition, and it is the operator's.** Three options, costed in task 11: repair the
+  objective's `stockout_rate` numerator so it counts unserved demand; replace `ForesightPolicy`
+  with an arm that actually minimises the committed objective over the known trace; or **report
+  the per-term decomposition first**, which is cheapest and is the falsifier the hypothesis needs
+  before either repair is chosen. **The refusal makes the defect loud in the meantime; it does not
+  expire on its own.**
+- **E2c (11 leaves) is blocked behind that disposition**, for the reason in task 11: 12.3 and 13.3
+  empty the insensitive set and turn this defect into a false confirmation.
+- **Tasks 26.4 and 26.5**, registered this session: swap the two generator `--write` steps, then
+  dispatch the regeneration and graduate the two `s`/`S` pins (15 → **17**).
+- **Finding 45's stale C16 docstring** at `verify_claims.py:2406-2408`, which still calls the
+  closed `stryker-break` hole live. **Its recorded reason for not being edited is measurably
+  wrong:** the whole-table probe shows the 18 pins anchor to CLAUDE.md (9), ADR-055 (8) and
+  `docs/state/CURRENT.md` (1) — **no pin anchors to `verify_claims.py`**, so `doc_truth` does not
+  read it.
+- **`workflow_shape_truth` cannot see an unguarded pipeline** (finding 35).
+- **CI's ruff scope** excludes nine trees: 530 lint, 254 format (upper bound).
 - **Conflict O — CF-13's enforcement scope.** 41 files, 56 sites, none inside the checked inventory.
-- **`scipy` is pinned in NO requirements file** and arrives transitively (finding 41).
+- **`scipy` is pinned in no requirements file** and arrives transitively (finding 41).
 
 ---
 
 ## Honesty ledger — verified vs merely authored
 
-### Executed and measured, session 6
+### Executed and measured, session 7
 
 | What | Result |
 |---|---|
-| STEP 0 at the real HEAD (`58fc4e1`, 44 ahead) | `quality-gates` 1–17 success, **18 failure**; `uplift-verify` step 5 **failure**, step 6 skipped |
-| The step-5 log, read for falsifying examples | **eleven** defects across nine test functions; two `ExceptionGroup`s of two |
-| Barriers 11 and 14 | both named; batch **depends on both**; authorable offer truncates to **zero** |
-| Ownership, three times, mechanically | the aggregation reference (`main`'s, byte-identical); the preserved-baseline assertion (`main`'s, untouched by this branch's diff); `consensus_arm.py` (`main`'s, empty diff) |
-| `command_path_truth` over the committed tree | **37 commands / 0 findings / pass**, before **and** after the gate repair |
-| `ratchet_truth` over the committed file | `stryker-break` **PASS**, no findings; aggregate **SKIP**/exit 2 over **22** rows — 16 `unmeasured` + **6** `measured` with `measured_at: null` |
-| Step 18 predicted, then measured | hermetic prediction exit 0; **CI: `success`**, with a real 200/200 replay |
-| C71 → `GATE_STATUS` after the repair | every `Outcome` member translatable; `declared-unmeasurable → SKIP` |
-| C56 predicted, then measured | predicted `FAIL 3→2`, `SKIP 10→11`, C56 → PASS; **CI: `success`** |
-| **`quality-gates`** | **`success`, 26 of 26 steps** — first time ever on this branch |
-| **`uplift-verify` step 5** | **`850 passed, 0 failed`**; delta `+12 = 9 repaired + 3 new`, nothing newly excluded |
-| **`uplift-verify` step 6** | **RAN.** `1 failed, 59 passed, 936 deselected`; the failure is `main`'s |
-| CF-13, by AST over 354 files | **41 files / 56 sites**; intersection with `DECLARED_INVENTORY` **empty** |
-| Bounded `pytest`, six invocations, serial, `dev` | **35 tests green** locally: 8 + 11 + 2 + 14 |
-| `mypy --strict --no-incremental` | clean on `scripts.audit.command_path_truth` and `scripts.audit.replay_metrics` |
-| Lint/format ownership | committed blobs materialised and re-checked: **9 before / 9 after** on wave 1's five files, **3/3** on wave 2's two, **6/6** on wave 4's two. **Zero added** |
-| Coupling 4 | `gate_surface --check` **0** — a comment-only workflow edit whose step NAME did not change moved nothing. Checked, not assumed |
+| STEP 0 at the real HEAD (`5f55d3a`, 49 ahead) | `quality-gates` **26/26 success**; `uplift-verify` fast success, slow failure |
+| The slow step's log, read for the failure | exactly **1 failed, 59 passed**, `pinecone.Pinecone`, still `main`'s |
+| 26.1's four closure-parity test ids | read **individually** from the fast-step log, all `PASSED` |
+| `truth-gates.yml` step list **and** step-5 log | steps 6–12 `skipped`; `PASS=55 FAIL=2 SKIP=10 TOTAL=67`, C44/C69 |
+| Checkpoint A run 1 (`34570166681`) | **8/8 success**, `status: measured`, 200/200 usable |
+| Checkpoint A run 2 (`34574731853`) | step 6 **failure** (refusal, exit 2), steps 7–8 ran, artifact uploaded |
+| Predictions 1–5, written **before** the label | 1, 2, 3 confirmed; 4 did not fire; 5 confirmed by run 2 |
+| `comparator_headroom` across two runs | `8.937888952967558` **to every digit** — arm A unperturbed by adding B |
+| Run 2's `margin_committed` | **`0.4`** — the rule re-derived it and the headroom guard passed |
+| Determinism of run 2 vs run 1 | every field identical; a materialisation, not a re-measurement |
+| Anchor probe, validated **before** trusted | reported **zero** matches on the unamended ADR, then `'0.40'` on one line |
+| Whole-table pin probe (18 rows, both sides) | **0** live document-side failures; 9 CLAUDE.md, 8 ADR-055, 1 CURRENT.md |
+| `pin_extractor_truth` | **15 declared / 15 probed / 15 both sides**, exit 0 — the predicted 15 |
+| `policy.py::materiality_margin` | `0.4` bare, and `0.4` with `measured_headroom=8.937888952967558` |
+| The construction guard, behaviourally | unconfigured → `constructions=[]`; configured → `['pinecone.Pinecone']` |
+| Property 61 | **8 tests green** at `dev`, including the `sub-margin`/`confirms_finding_4` clause |
+| Bounded `pytest`, **2** invocations, serial, `dev` | **38 green** (8 + 13 + 17), then **13 green** after the precondition correction |
+| `ruff check` | **0** on all four changed Python files |
+| `ruff format` ownership | `test_materiality_margin_rule.py`'s deviation proven **PRE-EXISTING** by materialising HEAD's blob; **zero added** |
+| `mypy --strict -m uplift.regret` | 6 errors, **all** in `uplift/fidelity.py` and `uplift/consensus_arm.py`; **zero** in the changed module |
+| Ownership of those 6 | both files on `origin/main` with **empty** `git diff origin/main` |
 | Six cheap gates | **0 / 0 / 0 / 2 / 1 / 0**, unchanged across all four commits |
-| Census, predicted then measured | `140/63/2/75` → **`140/64/2/74`** (69 authorable, **5** CI-gated) — exactly the predicted delta for one CI-gated tick |
-| `pin_extractor_truth` | **14 declared / 14 probed / 14 both-sides** — not 15, not 16 |
-| Line endings / bytes | the trap fired on **eight** files across the session, each normalised by dominant **worktree** byte count; no BOM, no U+FFFD |
+| Census, predicted then measured | `140/64/2/74` → `140/65/1/74` → `140/66/0/74` → **`142/66/0/76`** |
+| `task_claim_truth` | still exit **1**, same two `core-purpose-uplift` claims — no new claim created |
+| Line endings / bytes | the `w/mixed` trap fired on **one** file, normalised to its dominant **worktree** ending (CRLF 157 vs LF 48); no BOM, no U+FFFD, no line over 100 chars |
 
-**Budget, honestly counted.** **Six** bounded `pytest` invocations against a protocol figure of
-three: three verification, one re-verify after a *derived* expectation proved wrong, one for the new
-property, one after finding 48's repair. Each scoped to at most three named files, serial, `-m "not
-slow"`, at `dev`. **`mypy --strict` over the four changed TEST modules exceeded the 120s ceiling
-twice and was abandoned** rather than retried a third time; an orphaned `python` was swept after
-each and the count confirmed 0. `ledger_gen`, `readme_gen`, `verify_claims` and `doc_truth` were
-never *run*; `verify_claims` was **imported** for one dict, which the two sibling tests already do.
-`tests/verify/test_ledger_gen_property.py` was never executed locally.
+**Budget, honestly counted.** **Two** bounded `pytest` invocations against a protocol figure of
+three — the second was a re-verify after the designed precondition failure. **Two** `mypy --strict`
+runs, both `-m uplift.regret`. No `pytest` at `heavy`, no repo-wide run, no `--cov`, no `-n auto`.
+`ledger_gen`, `readme_gen`, `verify_claims` and `doc_truth` were **never run**; `doc_truth` was
+imported for `documented_value` and `extract_source_values` as pure functions, which is the
+sanctioned use. `tests/verify/test_ledger_gen_property.py` was never executed. No background
+process was started. **Conflict T did not arise:** the seven-wave plan that would have needed six
+to eight invocations stopped at four commits, so the protocol's figure of three was never
+approached.
 
 ### NOT executed. Must not be claimed.
 
-- **Task 11's verdict.** No margin committed, no run made against the three-arm comparator.
-- **The `(s, S)` regret itself.** No twin measurement has been taken since the comparator landed.
-- **That the next `twin-regret` run uploads a parseable artifact.** Asserted locally; CI's to report.
-- **`mypy --strict` on the four changed test modules.** Attempted twice, exceeded the local ceiling,
-  abandoned. No CI step type-checks `tests/`.
-- **`sprint6-verify` and `training-smoke`.** Still `skipped` — and **not** because of `needs:`. Their
-  `if:` restricts them to `main`/`develop`/`sprint-*`, so a feature branch correctly never runs them.
+- **That `ci.yml::uplift-verify`'s slow step now passes.** The construction guard is landed and
+  proven in-process; the property that owns the assertion is `@pytest.mark.slow` and CI owns its
+  verdict. **The next session's STEP 0 must read it.**
+- **Task 11's verdict.** Refused, not measured — and that refusal is itself the finding.
+- **The per-term decomposition of any arm's cost.** The `stockout_rate` hypothesis is inference
+  from the weights plus ADR-055 D3's statement of the numerator, **not a measurement**.
+- **That `Par_Level_Reorder(s=50, S=100)` reproduces the twin's endogenous restock.** Unchanged
+  from session 5: unproven.
+- **`mypy --strict` on any changed test module.** Not attempted; no CI step type-checks `tests/`.
+- **`quality-gates` at the new HEAD `446d5d5`.** The four commits are pushed; their runs were not
+  read. Session 7's readings are at `5f55d3a`, `e94a1ac` and `2d86899`.
 - **`vitest`. At all.**
 
 ### The lesson from this session
 
-**A repair aimed at one gate can redden an earlier one, and the only thing that told me was a job
-log.** Disposition (b) was authored, verified against every clause a property could carry, predicted
-through the gate's own seam — and still broke `quality-gates` at step 17, because a new enum member
-reached a registry row before it reached the table that translates verdicts, whose failure mode was
-documented two lines above it. **Enumerating a schema change's consumers by grepping the module and
-its test is not enumerating them. Ask what TRANSLATES the value, not only what reads it.**
+**The instrument that can end this project was pointed at the wrong quantity for a second time,
+in the opposite direction, and the guard installed to fix the first case was structurally
+incapable of seeing the second.** Conflict M was "the verdict can only be `material`". This is
+"the verdict would be `sub-margin`, and `sub-margin` is the one that **confirms** the premise".
+The three-arm repair made `regret` and `comparator_headroom` different subtractions — which was
+the right fix for conflict M — and left the oracle's own validity unasserted, because
+`headroom >= regret` reduces to `A >= B` and **C cancels**.
 
-**And the payoff of reading logs rather than colours:** nine summary lines were eleven defects; the
-`arm`-driven reorder and the marker deletion were invisible from the summary and obvious from the
-falsifying example; and C71 was named by a *different workflow's* log for the same sha.
+**Two habits paid for themselves outright.** Writing five falsifiable predictions *before* adding
+the label is what made a negative regret legible as a defect rather than as a number to interpret;
+and probing the anchor as a pure function caught a defect **in the sibling pin**, because eight of
+the fifteen pins anchor to the document I amended. **A document edit's blast radius is every pin
+anchored to that document** — probing only the pin you are adding is finding 48 in a new place.
+
+**And a citation is not a mechanism.** Finding 50 named a construction site read off a comment
+describing an intent. The line constructs nothing; the real site was two modules away, behind a
+lazy import, reachable only through the agent handler the consensus arm stands up.
 
 ---
 
 ## Environment notes and traps
 
-- **`Select-Object -First N` on a native command makes `$LASTEXITCODE` non-zero.** The census
-  printed `status: pass (exit 0)` while the shell reported 1. Re-run with `*> $null`.
-- **`mypy --strict` over `tests/verify`/`tests/uplift` modules exceeds a 120s command budget** — the
-  closure drags `uplift/__init__` → `scipy`, numpy and hypothesis. Type-check changed **non-test**
-  modules by dotted name (`-m scripts.audit.<mod>`, ~13s). **Mixing `scripts/audit/*.py` and
-  `tests/**` in one invocation fails instantly** with "Source file found twice".
-- **`str_replace` on prose containing em dashes is brittle under this repo's encoding.** Patch by
-  line slice from Python at `encoding='utf-8', newline=''`.
-- **A `ruff format --check` diff whose two sides look identical is a LINE-ENDING diff.** Eighth
-  session running; it fired on **eight** files here. Normalise to each file's **dominant** ending
-  with Python at `newline=''`, counting **worktree** bytes.
-- **`tests/` and `scripts/` are outside CI's ruff scope**, so their debt is real and is not yours.
-  **Attribute by materialising the committed blob** with Python `write_bytes` and re-running the
-  checker; PowerShell's `>` writes UTF-16 and `Set-Content -Encoding utf8` adds a BOM.
-- **`git log -1 -- <file>` is last-touch, not authorship.** Use `git cat-file -e origin/main:<f>`
-  then `git diff origin/main -- <f>` — and for a file this branch DID modify, check whether the
-  diff touches the failing lines.
-- **PowerShell 5.1's `ConvertFrom-Json` returns an array unenumerated.** Assign, then `foreach`.
-- **There are no heredocs.** Write a temp `.py` under `.tmp/` (git-ignored), run it, delete it.
-- **`git push` writes progress to stderr**, so PowerShell reports a non-zero `$LASTEXITCODE` on a
-  **successful** push. Read the `old..new ref` line.
+- **`Select-Object -First N` on a native command makes `$LASTEXITCODE` non-zero.** Use `*> $null`.
+- **PowerShell 5.1's `ConvertFrom-Json` returns the array unenumerated.** Assign, then `foreach` —
+  this fired again in session 7 and printed `System.Object[]` five times.
+- **Complex inline `python -c` breaks on quoting.** Write a temp `.py` under `.tmp/` (git-ignored).
+  There are no heredocs. Session 7 lost one call to a nested-quote `SyntaxError`.
+- **An editor writing LF into a CRLF worktree file leaves `w/mixed`.** Normalise to the file's
+  **dominant worktree** ending from Python at `newline=''`; the `i/` column is always `lf` here and
+  cannot tell you what is on disk. `.tmp/normalise_eol.py` does it and reports the counts.
+- **`mypy --strict` over `tests/**` exceeds a 120s budget**; `-m <dotted non-test module>` is fine.
+  Mixing `scripts/audit/*.py` and `tests/**` in one invocation fails instantly.
+- **`git push` writes progress to stderr**, so `$LASTEXITCODE` is non-zero on a **successful** push.
+  Read the `old..new ref` line.
 - **Identify a CI run by `head_sha`, NEVER by timestamp.**
-- **A failing step's log does not always name the failing check.** C71 was named by the
-  `SYNAPSE Truth Gates` run for the same sha, not by `quality-gates` step 17.
-- **Do not run `pre-commit install`** — it installs `types-PyYAML` and unmasks pre-existing errors
-  under `uplift/`.
-- Python 3.14.0, mypy 1.19.1 locally, pytest 8.4.2, hypothesis 6.151.11. `gh` 2.82.0.
+- **A failing step's log does not always name the failing check**, and a job's colour is not a
+  step's verdict. Read the step list, then the log.
+- **`gh run download <id> -n <name> -D <dir>`** is cleaner than parsing a `| tee`'d log.
+- **Do not run `pre-commit install`** — it installs `types-PyYAML` and unmasks pre-existing errors.
+- Python 3.14.0, mypy 1.19.1, pytest 8.4.2, hypothesis 6.151.11. `gh` 2.82.0.
   **Repository is PUBLIC — Actions minutes are unmetered on standard runners.**
 
 ---
@@ -326,13 +305,13 @@ anything binding a port; fan-out execution (`-n auto`, `-j`, repo-wide bare `pyt
 
 **Never run, specific to this spec:** `scripts.audit.verify_claims`, `scripts.audit.doc_truth`,
 bare `readme_gen --check`, **`ledger_gen --check` or `--write`**, `gate_fault_injection --sweep`,
-`pnpm` anything — **and `tests/verify/test_ledger_gen_property.py`, which names a registry
-execution.** `regenerate-truth-docs.yml` is the sanctioned route for the generators.
+`pnpm` anything — **and `tests/verify/test_ledger_gen_property.py`.**
+`regenerate-truth-docs.yml` is the sanctioned route for the generators.
 
 **Cheap and encouraged:** file reads, `grep`, `ruff`/`mypy` on changed files, bounded scoped
 `pytest`, `spec_ledger_census`, the six cheap gates, `command_path_truth` and `ratchet_truth` over
-the committed tree (pure static readers), `replay_metrics` through its `measurers` seam,
-`doc_truth.documented_value` as a pure function, importing `verify_claims` for a constant, and
+the committed tree, `replay_metrics` through its `measurers` seam, **`doc_truth.documented_value`
+and `extract_source_values` as pure functions**, importing `verify_claims` for a constant, and
 **`gh` API reads — free, and the highest-yield evidence in this repo.**
 
 **Concurrency is the load-bearing half.** Parallel sub-agents for reading, writing and analysis:
@@ -342,17 +321,19 @@ unlimited. **Sub-agents that execute code: exactly ONE at a time.**
 
 ## Two decision points can end this spec early, on purpose
 
-**Checkpoint A, task 11** — if measured `(s, S)` regret is at or above the R5.2 margin **with its
-interval excluding it**, Finding 4 is falsified. Session 5 repaired the instrument so that this
-verdict, if it comes, is about the arm R5.1 names. Session 6 deliberately did not run it and
-recorded why; **that reason has now expired.**
+**Checkpoint A, task 11** — **ran in session 7, and returned a refusal rather than a verdict.** The
+margin is committed and valid; the comparator it would be judged through is not. Task 11's three
+dispositions are the operator's.
 
 **Checkpoint B, task 14** — if **any** single-objective policy is Pareto-optimal under
 interval-aware dominance, consensus is provably unnecessary and the experiment must NOT be run.
+**Blocked behind task 11's disposition**, because all four of task 13.7's measurements are regret
+against the comparator finding 54 invalidated.
 
 ### The pre-commitment, binding before the number is known
 
 If the measured uplift is null or negative, **it is reported as null or negative.** The floor stays
 at `0.0`, no headline is published as a gain, and the result is written up as a finding — not
 reframed, not re-run at a different replicate count until it moves. **A number that cannot fail is
-not a number, and a verdict that cannot be anything else is not a verdict.**
+not a number, a verdict that cannot be anything else is not a verdict — and a regret measured
+against a comparator that loses to its own subject is neither.**

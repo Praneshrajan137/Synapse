@@ -3192,6 +3192,47 @@ data and scored against an external benchmark has no demonstrable value.
       README whose contents C56 reads.
     - _Requirements: 4.4, 4.5, 4.8, 4.11, 10.1, 10.7_
 
+  - [ ] 26.4 Swap the two generator `--write` steps, and move the enforcement spine with them
+    - Files: `.github/workflows/regenerate-truth-docs.yml`,
+      `.github/workflows/truth-gates.yml`, `docs/state/GATE_SURFACE.md`
+    - **REGISTERED IN SESSION 7 for work the generator ORDER itself owes, measured in session 4
+      and never given a leaf.** `regenerate-truth-docs.yml` runs `ledger_gen --write` at step 6
+      and `readme_gen --write` at step 7. `ledger_gen` projects a top-level Check_Registry
+      execution **in which C56 is evaluated**, and C56 reads the README that `readme_gen`
+      rewrites **afterwards**. So `docs/state/CURRENT.md`'s C56 row can be stale against the
+      README committed beside it, out of one run. The durable repair is to swap the two steps
+      and move `truth-gates.yml`'s matching `--check` order with them.
+    - **Same-commit coupling 4, and it must be CHECKED rather than assumed.** A step **order**
+      change moves rows in `docs/state/GATE_SURFACE.md`, so `gate_surface --write` belongs in
+      the same commit. Precedent cuts both ways: it fired on a `needs:` removal with 3 rows
+      changed and zero added, and did **not** fire on a `run:`-only edit whose step name did not
+      change. Predict the row delta, then measure it.
+    - **`gate_surface` is the one generator of the three that is cheap** (pure workflow parsing,
+      ~1s, no registry execution), which is why this leaf is authorable at all while 26.5 is
+      not. `ledger_gen` and `readme_gen` must never be run locally in any form (I-0).
+    - _Requirements: 4.4, 4.5, 10.1, 11.7_
+
+  - [ ] 26.5 Dispatch the second regeneration and commit its artifact unedited
+    - discharge: regenerate-truth-docs.yml::regenerate
+    - Files: `docs/state/CURRENT.md`, `README.md`,
+      `infrastructure/quality/doc-number-pins.yaml`
+    - **CI-gated: the only sanctioned route to the `--write` form is the label**
+      (`regenerate-truth-docs`), added then removed. Download the artifact, read the diff against
+      the job's own `--stat`, and commit the documents **unedited** -- hand-editing a projected
+      count is an absolute I-7 violation, not a shortcut.
+    - **The two parked `s`/`S` pins graduate in this same data edit**, per their own
+      `activates_after`. Both anchors and both sources already resolve, verified in session 7 by
+      whole-table probe: `comparator-reference-reorder-point` doc `50` / src `50`, and
+      `comparator-reference-order-up-to` doc `100` / src `100`. So
+      `pin_extractor_truth` goes **15 -> 17** -- not 16, which is conflict P.
+    - **ITS VERIFICATION IS WEAKER THAN IT LOOKS, AND FINDING 51 IS WHY.** The two gates that
+      would confirm a regeneration -- `ledger_gen --check` and `readme_gen --check` in
+      `truth-gates.yml` -- are **steps 8 and 7 of a job whose step 5 fails**, so they are
+      `skipped` on this branch and have never executed here. The surviving readings are
+      `ci.yml::quality-gates` **step 17** (C56) and a **local** `gate_surface --check`. Plan the
+      discharge around those two, and do not record a confirmation the skipped steps did not give.
+    - _Requirements: 4.4, 4.5, 10.1, 11.7_
+
 - [x] 27. `mypy --strict orchestrator/` — the debt that gates every property this spec has written
   - **Adopted into scope by explicit operator decision in session 2q**, from three options: file it
     against its author, take it as a named batch, or split it. The batch was chosen.
