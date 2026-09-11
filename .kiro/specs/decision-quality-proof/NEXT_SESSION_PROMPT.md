@@ -19,7 +19,7 @@ You are continuing the `decision-quality-proof` spec in the SYNAPSE repo at
 `C:\Users\Pranesh\Projects\synapse`, on branch `feat/decision-quality-proof`. PR **#84** is open
 against `main`.
 
-**Your session cap is THIRTY leaf tasks, in three waves of about ten. It is a ceiling and it is
+**Your session cap is FORTY leaf tasks, in waves of about ten. It is a ceiling and it is
 expected never to bind.** What stops you is a barrier or a phase boundary. Session 7 stopped at
 **four commits** because the measurement it took invalidated the work it had approval to author.
 
@@ -118,7 +118,7 @@ operator gave, on the strength of an Accepted ADR.** Expect more.
 ### STEP 2 — derive the batch, then ANSWER THE BARRIERS
 
 ```powershell
-python -m scripts.audit.spec_ledger_census --files --next 30
+python -m scripts.audit.spec_ledger_census --files --next 40
 ```
 
 At handoff: **142 leaf tasks — 66 done, 0 authored-pending-discharge, 76 open** (70 authorable,

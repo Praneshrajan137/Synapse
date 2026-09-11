@@ -4,7 +4,7 @@
 the fifth.** Derive the counts, never read them:
 
 ```powershell
-python -m scripts.audit.spec_ledger_census --files --next 30
+python -m scripts.audit.spec_ledger_census --files --next 40
 ```
 
 At the time of writing that reported **142 leaf tasks: 66 done, 0 authored-pending-discharge, 76

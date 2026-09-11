@@ -26,7 +26,9 @@ Three marks, because the honesty contract has three states (I-7)
 ``[~]``    authored, **discharge pending**: the work is on disk, and the proof
            that it works is owed by the job named in its ``discharge:`` line.
            Not a pass. "Authored and diagnostics-clean, not executed" is a
-           legitimate result; recording it as ``[x]`` is not.
+           legitimate result; recording it as ``[x]`` is not. **A ``[~]`` also
+           owes a ``last-checked:`` sub-bullet naming the run its discharge job
+           was last read at** -- see ``unharvested-pending`` below.
 ``[x]``    done **and** discharged
 =========  ==================================================================
 
@@ -55,6 +57,15 @@ rule                      verdict what it means
                                   will not guess
 ``duplicate-id``          2       two records share one task id, so a count over
                                   ids is not a count over records
+``unharvested-pending``   2       a ``[~]`` records no ``last-checked:`` run for
+                                  its discharge job. A mark whose proof has
+                                  silently arrived is indistinguishable, from the
+                                  ledger alone, from one still waiting -- task
+                                  26.1 sat dischargeable for two sessions while
+                                  every sweep reported green (steering guardrail
+                                  G4). Static by design: asking GitHub instead
+                                  would move this census out of the LOCAL
+                                  allow-list it sits in as a ~1s file reader
 ``ledger-unreadable``     2       the tasks file cannot be read
 ========================  ======  ===============================================
 
@@ -79,7 +90,7 @@ Run::
     python -m scripts.audit.spec_ledger_census --json             # canonical JSON
     python -m scripts.audit.spec_ledger_census --check            # exit 0/2
     python -m scripts.audit.spec_ledger_census --files            # + disk observations
-    python -m scripts.audit.spec_ledger_census --next 30          # the next batch
+    python -m scripts.audit.spec_ledger_census --next 40          # the next batch
     python -m scripts.audit.spec_ledger_census --spec other-spec
 """
 
@@ -121,7 +132,7 @@ ROOT: Final[Path] = Path(__file__).resolve().parents[2]
 SPECS_DIR: Final[str] = ".kiro/specs"
 TASKS_FILENAME: Final[str] = "tasks.md"
 DEFAULT_SPEC: Final[str] = "decision-quality-proof"
-DEFAULT_BATCH: Final[int] = 30
+DEFAULT_BATCH: Final[int] = 40
 
 MARK_OPEN: Final[str] = " "
 MARK_PENDING: Final[str] = "~"
@@ -134,6 +145,24 @@ _RECORD_RE: Final[re.Pattern[str]] = re.compile(
 
 #: ``- discharge: uplift.yml::twin-regret`` after markdown emphasis is stripped.
 _DISCHARGE_RE: Final[re.Pattern[str]] = re.compile(r"^discharge:\s*(?P<job>\S.*?)\s*$", re.I)
+
+#: A ``[~]`` leaf's harvest record: the run its discharge job was last read at (G4).
+#:
+#: WHY THIS IS A STATIC CONVENTION AND NOT A NETWORK CALL. The obligation is "no session
+#: closes with an unharvested ``[~]``", and the tempting implementation is for this module
+#: to ask GitHub whether each discharge job has reported. That would move this census out
+#: of the LOCAL allow-list in `.kiro/steering/execution-routing.md`: it is a pure file
+#: reader costing ~1s, and a network call would make a cheap gate an expensive one and
+#: couple a local hygiene check to an API's availability.
+#:
+#: So the harvest leaves an ARTIFACT instead. A ``[~]`` leaf records the run it was last
+#: checked against, exactly as it records the job that owes its proof, and this module
+#: asserts the artifact exists. That is derivable from the file alone, and it converts
+#: "remember to check" into a thing a reader can audit -- which is the difference between
+#: task 26.1 sitting dischargeable for two sessions and it being caught on the next open.
+_HARVEST_RE: Final[re.Pattern[str]] = re.compile(
+    r"^last-checked:\s*(?P<run>\S.*?)\s*$", re.I
+)
 
 _EMPHASIS: Final[str] = "-*_` \t"
 
@@ -183,7 +212,12 @@ _PATH_SUFFIXES: Final[frozenset[str]] = frozenset(
     }
 )
 
-RULES: Final[tuple[str, ...]] = ("unknown-mark", "duplicate-id", "ledger-unreadable")
+RULES: Final[tuple[str, ...]] = (
+    "unknown-mark",
+    "duplicate-id",
+    "unharvested-pending",
+    "ledger-unreadable",
+)
 
 
 class CensusOutcome(str, Enum):
@@ -216,6 +250,9 @@ class LedgerRecord(BaseModel):
     line: int
     #: The job owed the proof, from a ``discharge:`` sub-bullet. ``None`` = no gate.
     discharge: str | None = None
+    #: The run a ``[~]``'s discharge job was last read at, from a ``last-checked:``
+    #: sub-bullet. ``None`` on a ``[~]`` is the unharvested state G4 forbids at close.
+    last_checked: str | None = None
     #: Populated by the id tree, not by indentation.
     is_leaf: bool = True
 
@@ -238,6 +275,15 @@ class LedgerRecord(BaseModel):
     def is_gated(self) -> bool:
         """CI-gated: the discharge line names the job that owes the proof."""
         return self.discharge is not None
+
+    @property
+    def is_unharvested(self) -> bool:
+        """A ``[~]`` that records no run its discharge job was read at (G4).
+
+        Only ``[~]`` can be unharvested. An open leaf owes no proof yet and a done leaf
+        has already had one, so neither carries the obligation.
+        """
+        return self.is_pending and self.last_checked is None
 
     @property
     def name(self) -> str:
@@ -290,6 +336,11 @@ class LedgerCensus(BaseModel):
     gated_jobs: dict[str, str]
     #: Every ``[~]`` leaf and the job that owes its proof.
     pending_discharges: tuple[str, ...]
+    #: ``[~]`` leaves recording no run their discharge job was read at (G4). Non-passing:
+    #: a mark whose discharge has silently arrived is indistinguishable, from the ledger
+    #: alone, from one still waiting -- which is how task 26.1 sat dischargeable for two
+    #: sessions while every sweep reported green.
+    unharvested: tuple[str, ...]
     observations: tuple[DiskObservation, ...]
     findings: tuple[CensusFinding, ...]
     outcome: CensusOutcome
@@ -357,6 +408,15 @@ def _discharge_of(body: tuple[str, ...]) -> str | None:
     return None
 
 
+def _last_checked_of(body: tuple[str, ...]) -> str | None:
+    """The run a ``[~]``'s discharge job was last read at, or ``None`` (G4)."""
+    for entry in body:
+        match = _HARVEST_RE.match(entry.strip(_EMPHASIS))
+        if match is not None:
+            return match.group("run").strip(_EMPHASIS)
+    return None
+
+
 def parse_records(text: str) -> tuple[LedgerRecord, ...]:
     """Every task record in one ``tasks.md``, with leaf status from the id tree.
 
@@ -392,6 +452,7 @@ def parse_records(text: str) -> tuple[LedgerRecord, ...]:
                 body=frozen_body,
                 line=index + 1,
                 discharge=_discharge_of(frozen_body),
+                last_checked=_last_checked_of(frozen_body),
             )
         )
         index = cursor
@@ -506,6 +567,30 @@ def census(
         f"{record.task_id} -> {record.discharge or '(no discharge declared)'}"
         for record in pending
     )
+    unharvested = tuple(
+        f"{record.task_id} -> {record.discharge or '(no discharge declared)'}"
+        for record in pending
+        if record.is_unharvested
+    )
+    for record in pending:
+        if not record.is_unharvested:
+            continue
+        findings.append(
+            CensusFinding(
+                rule="unharvested-pending",
+                outcome=CensusOutcome.UNAVAILABLE,
+                subject=record.name,
+                detail=(
+                    f"line {record.line} is `[~]` and records no `last-checked:` run for its "
+                    f"discharge job ({record.discharge or 'no discharge declared'}). A mark "
+                    "whose discharge has silently arrived is indistinguishable, from the "
+                    "ledger alone, from one still waiting -- task 26.1 sat dischargeable for "
+                    "two sessions while every sweep reported green. Read the newest run that "
+                    "names that job, then record it as a `last-checked:` sub-bullet. This is "
+                    "NOT satisfied by checking and not writing it down (G4)"
+                ),
+            )
+        )
 
     ordered = tuple(
         sorted(
@@ -543,6 +628,7 @@ def census(
         open_order=open_order,
         gated_jobs=gated_jobs,
         pending_discharges=pending_discharges,
+        unharvested=unharvested,
         observations=observations,
         findings=ordered,
         outcome=outcome,
@@ -655,6 +741,7 @@ def format_report(report: LedgerCensus, *, batch: int = DEFAULT_BATCH) -> list[s
         f"  open          : {report.open_count}",
         f"  authorable    : {len(report.authorable)}",
         f"  CI-gated open : {len(report.gated)}",
+        f"  unharvested   : {len(report.unharvested)}   (`[~]` with no last-checked: run - G4)",
         f"  status        : {report.outcome.value}  (exit {report.exit_code})",
         f"  reason        : {report.detail}",
     ]
@@ -675,6 +762,11 @@ def format_report(report: LedgerCensus, *, batch: int = DEFAULT_BATCH) -> list[s
         lines.append(f"  [--] CI-gated : {entry}")
     for entry in report.pending_discharges:
         lines.append(f"  [~~] pending  : {entry}")
+    for entry in report.unharvested:
+        lines.append(
+            f"  [!!] UNHARVESTED: {entry} -- read the newest run naming that job, then "
+            "record it as a `last-checked:` sub-bullet (G4)"
+        )
     for finding in report.findings:
         lines.append(f"  {_MARKER[finding.outcome]} {finding.rule}: {finding.detail}")
     for observation in report.observations:

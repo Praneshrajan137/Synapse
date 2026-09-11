@@ -9,7 +9,7 @@ context window. Work is therefore batched, and **the batch boundary is a hard st
 
 ## The rule
 
-> **At most THIRTY leaf tasks per session. Stop earlier at a barrier or a phase boundary — which
+> **At most FORTY leaf tasks per session. Stop earlier at a barrier or a phase boundary — which
 > is what will actually stop you. Then regenerate the handoff and tell the user to start a new
 > session.**
 
@@ -52,7 +52,7 @@ does not. The count was never the thing that mattered.
 
 ### The barrier stop — the one rule that had to become mechanical
 
-**At ten, this rule was satisfied by accident. At thirty it is not.** `--next 30` offers
+**At ten, this rule was satisfied by accident. At forty it is not.** `--next 40` offers
 `12.1 … 13.7` and then jumps straight to `15.1`, stepping over **checkpoint B** — whose own task
 says the consensus experiment "**must NOT be run**. Do not proceed to E3." `next_batch` filters
 gated leaves out, so the batch could not see what it crossed.
@@ -132,11 +132,21 @@ a finding.
 2. Confirm the last wave is committed. **An uncommitted wave is not a bisect unit.**
 3. Run the closing verification sweep (below) and record real numbers.
 4. Answer every `[!!] barrier` line the census printed: did the batch depend on it?
-5. Regenerate `HANDOFF.md` — overwrite it, do not append. It must describe the tree as it is
-   **now**, not as a diff against how it was.
-6. Append a row to `## Progress ledger`. **Never edit a past row.** Record the wave structure —
-   how many waves, how many leaves in each, and which wave any red came from.
-7. Tell the user, explicitly: **"Session complete. Start a new session and paste
+5. **Answer every `[!!] UNHARVESTED` line, and there should be none by then (steering G4).**
+   A `[~]` must carry a `last-checked:` sub-bullet naming the run its discharge job was last
+   read at, and the census is now **non-passing** while one does not. This is mechanical
+   because it was not remembered: task 26.1's discharge had arrived and sat unclaimed for two
+   sessions while every sweep reported green. **Checking without writing it down does not
+   satisfy it** — the artifact is the point.
+6. Regenerate `HANDOFF.md` — overwrite it, do not append. It must describe the tree as it is
+   **now**, not as a diff against how it was. **Keep it derived: state, pointers and the
+   honesty ledger.** One canonical home per finding (the ADR for design facts, the task body
+   for ledger facts); a finding restated here is the fifth copy the throughput reset removed.
+7. Append a row to `## Progress ledger`. **Never edit a past row.** Record the wave structure —
+   how many waves, how many leaves in each, and which wave any red came from. **Report the four
+   throughput numbers: leaves DISCHARGED, core-seconds, CI critical-path wall-clock, and
+   parallel agents dispatched.**
+8. Tell the user, explicitly: **"Session complete. Start a new session and paste
    `NEXT_SESSION_PROMPT.md`."**
 
 ### The one permitted overrun
@@ -160,7 +170,7 @@ There is no count in this document, and there should never be one again. Three d
 carry the same three numbers by hand.
 
 ```powershell
-python -m scripts.audit.spec_ledger_census --next 30
+python -m scripts.audit.spec_ledger_census --next 40
 ```
 
 That command **is** the census. It reports the leaf total, the three mark buckets, the CI-gated
@@ -170,7 +180,7 @@ already exist, which is exactly the session-1 failure mode. `--json` for a paylo
 exit code (`0` pass, `2` unavailable — an unclassifiable mark or a duplicated id is non-passing,
 never a guess).
 
-`DEFAULT_BATCH` lives in `scripts/audit/spec_ledger_census.py` and is **30**. It is the single
+`DEFAULT_BATCH` lives in `scripts/audit/spec_ledger_census.py` and is **40** (raised from 30 in session 8). **It has never been the binding constraint** -- this document's own ledger records a mean of 5.25 leaves across eight sessions and a maximum of ~34, so the cap bound in ZERO of them. It was raised because the operator asked and it costs one line; the throughput levers are in `.kiro/steering/throughput-with-integrity.md`, and moving a number is not one of them. It is the single
 place the ceiling is written down; when it moves, the code and the four documents that name it move
 in the same commit. It is not a registered check and no gate reads it, so changing it moves no
 registry count — verified before it was changed.
@@ -368,8 +378,8 @@ record the headroom it was checked against, and pin the derived value.
 
 ## The batch plan
 
-Sessions are sized by **barriers and phase boundaries**, under a ceiling of thirty. Re-derive
-membership with `--next 30`; this table says where the boundaries are and why. **The ceiling binds
+Sessions are sized by **barriers and phase boundaries**, under a ceiling of forty. Re-derive
+membership with `--next 40`; this table says where the boundaries are and why. **The ceiling binds
 in none of the remaining sessions — that is the test of whether it was set correctly.**
 
 | Session | Tasks | n | Bound by |

@@ -45,6 +45,7 @@ _LEDGER = """# Plan
   - [~] 3.1 Authored, discharge owed
     - File: `uplift/regret.py`
     - discharge: ci.yml::uplift-verify slow step
+    - last-checked: 34590696403
   - [ ] 3.2 Open and authorable
     - Files: `digital_twin/simulation/engine.py`
   - [ ] 3.3 Open but CI-gated
@@ -192,9 +193,21 @@ def test_the_report_names_every_barrier_the_batch_crosses() -> None:
     assert "Ledger order is not execution order" in text
 
 
-def test_the_default_batch_is_thirty() -> None:
-    """The cap lives in ONE place. Three documents used to transcribe it by hand."""
-    assert DEFAULT_BATCH == 30
+def test_the_default_batch_is_the_committed_ceiling() -> None:
+    """The cap lives in ONE place. Three documents used to transcribe it by hand.
+
+    **Raised 30 -> 40 in session 8, and the honest note belongs beside the assertion rather
+    than in a commit message nobody re-reads: the ceiling has never been the binding
+    constraint.** This document's own eight-session evidence records a mean of 5.25 leaves
+    and a maximum of ~34, so the cap bound in **zero** sessions. It was raised because the
+    operator asked and it costs one line; it is not the throughput fix. The levers that are
+    live in `.kiro/steering/throughput-with-integrity.md`: mandatory parallel authoring,
+    `[~]` harvesting, single-source documentation, and CI job parallelism.
+
+    Moving a number and calling it progress is what this project exists to refuse, so the
+    number moves and the claim does not.
+    """
+    assert DEFAULT_BATCH == 40
 
 
 # --- path extraction -------------------------------------------------------
