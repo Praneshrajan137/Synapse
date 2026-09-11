@@ -72,7 +72,9 @@ $log = gh api "repos/:owner/:repo/actions/jobs/<jobid>/logs" 2>$null
    here is the most important thing that can happen to this branch.
 2. **DID THE SLOW STEP'S SINGLE FAILURE CLEAR?** Session 7 landed the construction guard at
    `agents/disruption_shield/inference/playbook_retriever.py` (commit `446d5d5`) and **CI has not
-   judged it.** The property is `@pytest.mark.slow`, so
+   judged it.** At `446d5d5` step 6 was **skipped** behind a *fast*-step failure that was session
+   7's own new property (finding 56), repaired in `4539b91`. **So read BOTH steps:** step 5 must
+   be back to 0 failed, and step 6 must then run. The property is `@pytest.mark.slow`, so
    `ci.yml::uplift-verify`'s **step 6** owns the verdict. Expect
    `tests/uplift/test_preserved_baseline_regression.py`
    `::test_reproduction_path_is_zero_cost_network_free_and_synthetic_only` to pass. **If it still reports `paid client used: ['pinecone.Pinecone']`, there is a SECOND
@@ -290,7 +292,8 @@ git merge-base --is-ancestor <sha> origin/main  # exit 1 => this branch's
 | 4 | steps 20–22 coverage / spec coverage / contract | **CLEARED** |
 | 5 | `uplift-verify` step 5, the fast surface | **CLEARED.** `850 passed`, 0 failed |
 | 6 | `uplift-verify` step 6, the slow surface | **EXECUTED.** 1 failed — `main`'s I-1 defect |
-| **7** | **the slow step's single failure** | **REPAIR LANDED (`446d5d5`), CI HAS NOT JUDGED IT** |
+| **7** | **the slow step's single failure** | **REPAIR LANDED (`446d5d5`), NOT YET JUDGED** — step 6 was skipped behind finding 56 |
+| **9** | **`uplift-verify` step 5, the fast surface** | **WENT RED at `446d5d5` on ONE test, session 7's own** — repaired in `4539b91`, unjudged |
 | **8** | **`truth-gates.yml` steps 6–12** | **NEVER EXECUTED HERE** — skipped behind the C44/C69 red (finding 51) |
 
 ## HARD-WON LESSONS. Fifty-five findings and seventeen conflicts, each one paid for.
@@ -576,7 +579,7 @@ to its own subject (finding 54).**
 
 ## Session 7 handoff — regenerate this section each session
 
-**Four commits. Two leaves ticked, two registered. Census `140/64/2/74` -> `142/66/0/76`, and
+**Six commits. Two leaves ticked, two registered. Census `140/64/2/74` -> `142/66/0/76`, and
 `pending: 0` for the first time in this spec's life.**
 
 | Commit | Subject |
@@ -585,6 +588,8 @@ to its own subject (finding 54).**
 | `2d86899` | the margin lands, and the oracle turns out not to bound its subject |
 | `827ffc0` | 10.4 discharged on run 2's own verdict; task 11 deliberately not |
 | `446d5d5` | I-1: guard the construction, and do NOT widen the deny-list |
+| `daeb972` | the session ledger: findings 51-55, conflicts P and Q, two leaves registered |
+| `4539b91` | fix(Property 61): an algebraic identity is not a floating-point identity |
 
 **What was earned.** Checkpoint A ran, twice, by label. The materiality margin is committed,
 re-derived from its pre-registered rule and accepted by the headroom guard on the job's own run
@@ -611,7 +616,14 @@ tasks 26.4 and 26.5; finding 45's stale docstring; finding 53's second deny-list
 `workflow_shape_truth`'s pipeline blindness; CI's ruff scope; conflict O; `scipy`.
 
 **NOT verified, and must not be claimed:** that `uplift-verify`'s slow step now passes — the guard
-is landed and **CI owns that verdict, so STEP 0 must read it**; task 11's verdict, which was
-refused rather than measured; any arm's per-term cost decomposition; that
+is landed and **CI owns that verdict; at `446d5d5` step 6 was skipped behind finding 56's
+fast-step failure, so STEP 0 must read BOTH steps of `4539b91`'s run**; task 11's verdict, which
+was refused rather than measured; any arm's per-term cost decomposition; that
 `Par_Level_Reorder(s=50, S=100)` reproduces the twin's endogenous restock; `mypy --strict` on any
-test module; `quality-gates` at the new HEAD; and `vitest`, at all.
+test module; `quality-gates` at `daeb972` or `4539b91` (**measured `success` at 26 of 26 at
+`446d5d5`**, the commit carrying the guard); and `vitest`, at all.
+
+**One more lesson, and it is session 7's cheapest.** `heavy` or `ci` failed what `dev` passed for
+the third session running — and a scoped pure-arithmetic file at the `ci` profile's 500 examples
+costs about **five seconds**. **Verify at the budget that will judge you**, for the files where a
+generator can reach a subnormal.

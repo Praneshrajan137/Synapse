@@ -139,7 +139,6 @@ The headline finding, recorded in full at **ADR-055 D2.5.2** and task 11.
   one would have confirmed the premise quietly.**
 
 ### 55 — the I-1 deny-list is not fail-open; `pinecone` is outside I-1's scope
-
 - **`CLAUDE.md` states I-1 as a closed list of four:** "NEVER import paid API clients (openai,
   anthropic, cohere, replicate) — CI blocks this (I-1)." `ci.yml:102` greps exactly those four, so
   the gate is a **faithful projection** of the invariant.
@@ -152,8 +151,26 @@ why its `_PAID_CLIENT_TARGETS` also lists `boto3` and `ollama`. **And a text gre
 the property's question**: both sites are guarded lazy imports, and a grep matches the line
 regardless of the guard.
 
-### Conflict P — the pin count in the prompt's stop conditions is arithmetically impossible
+### 56 — Property 61's own first draft was falsified by CI, and the defect was floating point
 
+`uplift-verify` step **5** — the *fast* surface, `850 passed, 0 failed` all session — went red at
+`446d5d5` on **one** test, mine, with step 6 skipped behind it. Hypothesis's counterexample at
+CI's 500-example budget: `noop=0.0`, `reference=2.2722106724604736e-180`, `foresight=1.0`. Both
+subtractions round to exactly `-1.0`, so `headroom >= regret` is **true** while
+`noop >= reference` is **false**. **`(A − C) >= (B − C)` reduces to `A >= B` over the reals and
+not over IEEE 754.**
+
+**Repaired by correcting the claim's DOMAIN, not by adding a tolerance** (`Fraction`, where the
+reduction is a theorem). And the repair exposed a second defect: once the reduction is exact, the
+float branch that followed it became a **restatement** of the function's own contract. Its real
+content was an **existence** claim — that the guard passing and the comparator being invalid are
+simultaneously reachable — which a `@given` body cannot assert, so it is now made concretely on
+run `34570166681`'s own arm means. Verified at `heavy` (100) then `ci` (500): 9 and 22 green.
+
+**Third consecutive session in which `heavy` or `ci` failed what `dev` passed.** A scoped
+pure-arithmetic file at 500 examples costs about five seconds.
+
+### Conflict P — the pin count in the prompt's stop conditions is arithmetically impossible
 It states `pin_extractor_truth` goes 14 → 15 → **16**. Three parked rows are in play, so it is
 14 → 15 → **17**. As written the stop condition would have halted a correct session, and the halt
 would have looked like a pin defect rather than a documentation defect.
@@ -225,6 +242,10 @@ instead**, which repairs the actual R9.2 violation without touching I-1's scope.
 | Census, predicted then measured | `140/64/2/74` → `140/65/1/74` → `140/66/0/74` → **`142/66/0/76`** |
 | `task_claim_truth` | still exit **1**, same two `core-purpose-uplift` claims — no new claim created |
 | Line endings / bytes | the `w/mixed` trap fired on **one** file, normalised to its dominant **worktree** ending (CRLF 157 vs LF 48); no BOM, no U+FFFD, no line over 100 chars |
+| **`quality-gates` at `446d5d5`** | **`success`, 26 of 26** - the commit carrying the construction guard, so `agents/` was judged |
+| CI's exact ruff commands, at CI's exact scope | `check` 0 and `format --check` **386 files already formatted**; the I-1 grep finds no matches |
+| `uplift-verify` step 5 at `446d5d5` | **failure on ONE test, mine** (finding 56); step 6 skipped behind it |
+| Property 61 after repair | **9 green at `heavy`**, **22 green at `ci` (500)** - the budget that found the defect |
 
 **Budget, honestly counted.** **Two** bounded `pytest` invocations against a protocol figure of
 three — the second was a re-verify after the designed precondition failure. **Two** `mypy --strict`
@@ -240,15 +261,18 @@ approached.
 
 - **That `ci.yml::uplift-verify`'s slow step now passes.** The construction guard is landed and
   proven in-process; the property that owns the assertion is `@pytest.mark.slow` and CI owns its
-  verdict. **The next session's STEP 0 must read it.**
+  verdict. **At `446d5d5` step 6 was `skipped` behind finding 56's fast-step failure, so it still
+  has not judged the guard.** Commit `4539b91` repairs the fast step and **its run must be read
+  first thing** — both steps, not only the job's colour.
+- **`quality-gates` at `daeb972` or `4539b91`.** Measured `success` at 26 of 26 at **`446d5d5`**,
+  which is the commit that carries the construction guard, so `agents/` was judged. The two
+  documentation commits after it were not read.
 - **Task 11's verdict.** Refused, not measured — and that refusal is itself the finding.
 - **The per-term decomposition of any arm's cost.** The `stockout_rate` hypothesis is inference
   from the weights plus ADR-055 D3's statement of the numerator, **not a measurement**.
 - **That `Par_Level_Reorder(s=50, S=100)` reproduces the twin's endogenous restock.** Unchanged
   from session 5: unproven.
 - **`mypy --strict` on any changed test module.** Not attempted; no CI step type-checks `tests/`.
-- **`quality-gates` at the new HEAD `446d5d5`.** The four commits are pushed; their runs were not
-  read. Session 7's readings are at `5f55d3a`, `e94a1ac` and `2d86899`.
 - **`vitest`. At all.**
 
 ### The lesson from this session
