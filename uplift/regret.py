@@ -495,15 +495,38 @@ def _measure(replicates: int, hours: float) -> dict[str, object]:
     foresight_costs: list[float] = []
     unusable: list[int] = []
 
-    def _cost(sim: object) -> float:
+    # PER-TERM ACCUMULATORS, AND THE MACHINERY FOR THEM WAS ALWAYS THERE (finding 58).
+    # `RegretObjective.contributions` has decomposed an observation into its five weighted
+    # terms since task 9, and its own docstring says why: "a regret number whose composition
+    # cannot be inspected is a number nobody can argue with -- and the whole point of
+    # committing the weights was to make the composition arguable." `_measure` called
+    # `cost()` and never `contributions()`, so every run this spec has ever taken reported a
+    # scalar whose composition was unavailable. That is why finding 54's explanation had to
+    # be left as a HYPOTHESIS: the number that would confirm or kill it was one call away.
+    noop_terms: dict[str, list[float]] = {term: [] for term in OBJECTIVE_TERMS}
+    reference_terms: dict[str, list[float]] = {term: [] for term in OBJECTIVE_TERMS}
+    foresight_terms: dict[str, list[float]] = {term: [] for term in OBJECTIVE_TERMS}
+
+    def _observation(sim: object) -> dict[str, float]:
+        """The five KPI arguments, read once so cost and contributions cannot diverge."""
         metrics = sim.metrics  # type: ignore[attr-defined]
-        return objective.cost(
-            stockout_rate=metrics.stockout_rate,
-            spoilage_rate=metrics.spoilage_rate,
-            fill_rate=metrics.fill_rate,
-            avg_on_hand_units=metrics.avg_on_hand_units(sim.sim_time_min),  # type: ignore[attr-defined]
-            avg_delivery_time_min=metrics.avg_delivery_time_min,
-        )
+        return {
+            "stockout_rate": metrics.stockout_rate,
+            "spoilage_rate": metrics.spoilage_rate,
+            "fill_rate": metrics.fill_rate,
+            "avg_on_hand_units": metrics.avg_on_hand_units(
+                sim.sim_time_min  # type: ignore[attr-defined]
+            ),
+            "avg_delivery_time_min": metrics.avg_delivery_time_min,
+        }
+
+    def _cost(sim: object) -> float:
+        return objective.cost(**_observation(sim))
+
+    def _accumulate(sim: object, into: dict[str, list[float]]) -> None:
+        """Record each term's weighted contribution for this replicate."""
+        for contribution in objective.contributions(**_observation(sim)):
+            into[contribution.term].append(contribution.weighted)
 
     for seed in range(replicates):
         result = run_three_pass(
@@ -522,6 +545,9 @@ def _measure(replicates: int, hours: float) -> dict[str, object]:
         noop_costs.append(_cost(result.noop))
         reference_costs.append(_cost(result.reference))
         foresight_costs.append(_cost(result.foresight))
+        _accumulate(result.noop, noop_terms)
+        _accumulate(result.reference, reference_terms)
+        _accumulate(result.foresight, foresight_terms)
 
     if not reference_costs:
         return {
@@ -550,6 +576,62 @@ def _measure(replicates: int, hours: float) -> dict[str, object]:
     # `headroom >= regret` holds because doing nothing cannot cost less than running the
     # incumbent. That inequality is asserted below rather than assumed.
     headroom = mean_noop - mean_foresight
+
+    # THE PER-TERM ATTRIBUTION OF THE REGRET. This is finding 54's falsifier and it is the
+    # reason this block exists (ADR-055 D2.5.2).
+    #
+    # `regret` is a scalar difference of two weighted sums over the same five terms, so it
+    # decomposes EXACTLY into per-term differences: sum(regret_by_term) == regret, up to
+    # floating-point association. That identity is what makes these numbers evidence rather
+    # than commentary, and `tests/uplift/test_regret_decomposition_property.py` asserts it.
+    #
+    # What it decides: finding 54 records that the `(s, S)` arm outperforms the arm labelled
+    # `perfect_foresight`, and offers ONE surviving hypothesis -- that `stockout_rate`, at
+    # weight 8.0, counts SKUs at zero stock rather than unmet demand (ADR-055 D3), so a
+    # just-in-time oracle is charged for being efficient while a par-level buffer is not.
+    # If that hypothesis is right, `regret_by_term["stockout_rate"]` is large and negative and
+    # dominates the sum. If it is wrong, some other term does, and the hypothesis is killed by
+    # its own falsifier rather than argued about. Either way the answer is now measured.
+    def _term_means(accumulated: dict[str, list[float]]) -> dict[str, float]:
+        return {
+            term: objective.aggregate(values) if values else 0.0
+            for term, values in accumulated.items()
+        }
+
+    noop_by_term = _term_means(noop_terms)
+    reference_by_term = _term_means(reference_terms)
+    foresight_by_term = _term_means(foresight_terms)
+    regret_by_term = {
+        term: reference_by_term[term] - foresight_by_term[term] for term in OBJECTIVE_TERMS
+    }
+    headroom_by_term = {
+        term: noop_by_term[term] - foresight_by_term[term] for term in OBJECTIVE_TERMS
+    }
+    # Reported so a reader can see WHICH term dominates without sorting five numbers, and
+    # named by magnitude rather than by sign so it is meaningful whichever way the regret goes.
+    dominant_term = max(OBJECTIVE_TERMS, key=lambda term: abs(regret_by_term[term]))
+
+    decomposition: dict[str, object] = {
+        "mean_weighted_cost_by_term": {
+            "noop": noop_by_term,
+            "reference": reference_by_term,
+            "foresight": foresight_by_term,
+        },
+        "regret_by_term": regret_by_term,
+        "headroom_by_term": headroom_by_term,
+        "dominant_regret_term": dominant_term,
+        "dominant_regret_share": (
+            regret_by_term[dominant_term] / measured if measured != 0.0 else None
+        ),
+        "note": (
+            "regret_by_term sums to `regret` by construction (a difference of two weighted "
+            "sums over the same terms), so these are the exact attribution of the judged "
+            "contrast rather than a commentary on it. ADR-055 D2.5.2 states the hypothesis "
+            "this decomposition exists to falsify: that stockout_rate, at weight 8.0, counts "
+            "SKUs at zero stock rather than unmet demand (D3), which would charge a "
+            "just-in-time oracle for being efficient"
+        ),
+    }
 
     # THE INTERVAL, AND WHY IT IS NOT OPTIONAL HERE (design E3.1, R6.13, R7.14).
     #
@@ -693,6 +775,12 @@ def _measure(replicates: int, hours: float) -> dict[str, object]:
             "margin_rule_derives": rule.derived,
             "margin_rule_below_headroom": rule.derived < headroom,
             "insensitive_kpis": [item.term for item in objective.insensitive],
+            # THE DECOMPOSITION IS REPORTED ON THE REFUSAL PATH TOO, and that is deliberate
+            # rather than incidental: this is the payload a reader actually lands on today,
+            # and it is the one where the question "which term inverted the sign?" is live.
+            # A refusal that withholds the evidence for its own cause would be a worse
+            # instrument than the one it replaced.
+            "cost_decomposition": decomposition,
         }
 
     verdict = classify_regret(
@@ -724,6 +812,10 @@ def _measure(replicates: int, hours: float) -> dict[str, object]:
         # recomputing them. Under the two-arm comparator this was 0.0 by identity, which is
         # what conflict M was.
         "headroom_minus_regret": headroom - measured,
+        # THE COMPOSITION OF THE JUDGED CONTRAST, per term. Reported beside the scalar
+        # because `contributions()` has been able to produce it since task 9 and no run
+        # ever asked (finding 58), which is why finding 54's cause had to be a hypothesis.
+        "cost_decomposition": decomposition,
         "interval": interval.describe(),
         "interval_low": interval.low,
         "interval_high": interval.high,
