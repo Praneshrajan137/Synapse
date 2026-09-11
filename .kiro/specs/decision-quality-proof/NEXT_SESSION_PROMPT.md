@@ -42,6 +42,18 @@ optional.
 not re-derive it. The measurement found two defects and the arithmetic shows repairing the
 objective alone leaves the regret negative.
 
+**Checkpoint B (task 14) is GATED on the same defect, by a sequencing decision recorded in its
+body.** Task 13.5 defines dominance over the objective finding 60 shows has four effective
+dimensions with one double-weighted, so a Pareto verdict over it answers about a different
+objective than R5.28 names. **Read task 14's own precondition before planning any session that
+reaches it** — including the paragraph naming the scheduling temptation, because checkpoint B
+firing would delete 21 leaves *and* mean this project's central claim is false, and those are the
+same event.
+
+**The schedule is FOUR sessions, not three.** Session 8's "three if checkpoint B cancels E3" is
+withdrawn: a schedule contingent on a measurement is not a schedule. Compress with process — the
+job split and G7 — never with scope.
+
 ### STEP 0b — CHECKPOINT A RAN IN SESSION 7 AND RETURNED A REFUSAL, NOT A VERDICT.
 
 **Derive the state; never trust this document for it.**

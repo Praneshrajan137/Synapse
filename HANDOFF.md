@@ -42,12 +42,14 @@ one-executor cap intact and verbatim**, verified by diff.
 ## The single most important thing to read next
 
 **Task 11's disposition is decided, by arithmetic rather than preference: option (b).** ADR-055
-**D2.5.3** carries the measurement. In short — the per-term decomposition shows **two** defects,
-not one:
+**D2.5.3** carries the measurement and **finding 60**. In short — the per-term decomposition shows
+**two** defects, not one:
 
-- `stockout_rate` and `unmet_service` are the **same measured quantity** for all three arms, each
-  weighted `8.0`, so **one KPI is priced at 16.0**. D3 asserts they diverge; across 600
-  arm-replicates they never do.
+- `stockout_rate` and `unmet_service` are **one quantity, by construction**, each weighted `8.0`,
+  so **one KPI is priced at 16.0**. `SimulationMetrics.fill_rate` is the exact complement of
+  `stockout_rate` over one shared denominator, and its own docstring says so. **`fill_rate` has two
+  inequivalent definitions in this tree** (`KpiExtractor`'s is not the complement), so a
+  measurement inherits whichever its read path used — Property 64 asserts the divergence.
 - The arm labelled `perfect_foresight` leaves **8.2% of demand unmet**; the incumbent leaves
   **exactly zero**. It orders "no more, no less" and carries no buffer.
 
@@ -55,8 +57,20 @@ not one:
 objective is necessary but **not sufficient**, and replacing `ForesightPolicy` with an arm that
 minimises the committed objective over the known trace is the repair the measurement demands.
 
-**E2c stays blocked, and the reason is stronger than before:** both defects sit in the two terms
-tasks 12.3 and 13.3 do not touch.
+**E2c stays blocked**, and **checkpoint B is now gated too**: task 13.5 defines dominance over the
+same objective, so a Pareto verdict over four effective dimensions answers about a different
+objective than R5.28 names.
+
+## The schedule: FOUR sessions, and three was never honest
+
+Session 8's close said three sessions "if checkpoint B cancels E3". **That is withdrawn.** A
+schedule contingent on a measurement outcome is not a schedule, and the contingency had a direction:
+checkpoint B firing deletes 21 leaves **and** means consensus is provably unnecessary — SYNAPSE's
+central claim false. **Those are the same event, so hoping for the saving is hoping the project
+fails.** Task 14 now names that temptation in its own body so it cannot operate silently.
+
+**Four sessions, and the levers that compress them are process, not scope:** the `uplift-verify`
+job split (specified, unlanded) and G7's parallel authoring (mandated, never yet used).
 
 ---
 
