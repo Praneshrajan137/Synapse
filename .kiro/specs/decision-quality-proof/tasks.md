@@ -1448,7 +1448,7 @@ tests in the interim, and that is a stated sequencing gap, not an omission.
     - Locus: `ci.yml::uplift-verify` fast step.
     - _Requirements: 5.1, 5.3, 5.14, 5.33, 5.34, 5.35_
 
-- [ ] 11. Checkpoint — did the regret test falsify Finding 4?
+- [x] 11. Checkpoint — did the regret test falsify Finding 4?
   - discharge: uplift.yml::twin-regret (checkpoint A)
   - Ensure all tests pass, ask the user if questions arise.
   - **Decision point, not a status report.** If the measured `(s, S)` regret on the unmodified
@@ -1999,6 +1999,80 @@ tests in the interim, and that is a stated sequencing gap, not an omission.
 
     **NOT PREDICTED, and must not be inferred:** arm D's absolute `on_hand` figure, the interval's
     width, and whether `spoilage_rate` stays identical across four arms rather than three.
+
+  - **SESSION 9 -- RUN 2 IS IN. ALL SIX PREDICTIONS RESOLVED AND ALL SIX CONFIRMED. THE VERDICT IS
+    `material`: FINDING 4 IS FALSIFIED, ABOUT THE RIGHT SUBJECT, AGAINST AN ORACLE THAT BOUNDS IT.
+    THIS LEAF IS `[x]`, DISCHARGED ON THE NAMING JOB'S OWN VERDICT.**
+
+    Run `34685048665` (sha `c746463`), `uplift.yml::twin-regret` by the `measure-twin-regret`
+    label, **`status: measured`**, **200 of 200** replicates usable, `unusable_seeds: []`.
+
+    | field | measured | prediction |
+    |---|---|---|
+    | `comparator_headroom_vs_foresight` | `8.937888952967558` | **1: confirmed to every digit** |
+    | `regret_vs_foresight` | `-0.8123524459522771` | **1: confirmed to every digit** |
+    | `hindsight_attains_zero_unmet` | `True` (**0** unmet of **560,858**) | **2: confirmed** |
+    | `reference_attains_zero_unmet` | `True` (**0** unmet) | — |
+    | foresight arm's unmet | `46,032` of `560,858` = **8.2%** | matches finding 59 exactly |
+    | no-op arm's unmet | `360,858` of `560,858` | — |
+    | `hindsight_arm_is_pointwise_best` | `True` | **3: confirmed** |
+    | `regret_vs_hindsight_min` | `0.4533668749999997` — **equals `regret`** | **3: confirmed** |
+    | `status` | `measured`, refusal did not fire | **4: confirmed** |
+    | **`regret` (B − D)** | **`0.4533668749999997`** | **5: confirmed, inside 0.33–0.49** |
+    | 95% interval | `[0.4524633333333333, 0.45426833333333333]` | excludes the margin |
+    | `comparator_headroom` (A − D) | `10.203608273919835` | — |
+    | `margin_committed` | `0.4` | — |
+    | **`verdict`** | **`material`** | **6: confirmed, and the arithmetic AGREES** |
+
+    **Prediction 1 confirmed to sixteen significant figures, for the third consecutive session.**
+    Adding arm D perturbed neither arm A nor arm C, so `bracketing.upper` needs no correction and
+    all three runs remain comparable. **Prediction 5's arithmetic was derived from D2.5.3's own
+    per-term numbers before the run and landed inside the predicted band**, which is what makes
+    this a measurement rather than a number to interpret.
+
+    **THE PER-TERM ATTRIBUTION IS THE RESULT, and it is unambiguous.** The judged contrast is now
+    **entirely `on_hand`**: `dominant_regret_share = 1.0000000000000009`, and every other term is
+    **exactly `0.0`**.
+
+    | term | regret (B − D) | regret (B − C), pre-repair |
+    |---|---|---|
+    | `stockout_rate` | **`0.0`** | `-0.6565601472286673` |
+    | `unmet_service` | **`0.0`** | `-0.6565601472286673` |
+    | `on_hand` | **`0.4533668750000001`** | `0.4980411141416081` |
+    | `spoilage_rate` | `0.0` | `0.0` |
+    | `delivery_latency` | **`0.0`** | `0.0027267343634498342` |
+
+    **So finding 60's double-count contributes EXACTLY NOTHING to this verdict, measured rather
+    than argued.** D2.5.4 predicted that sentence and the artifact proves it: with arm D and the
+    incumbent both at zero unmet demand the service terms cancel, so `material` is not an artefact
+    of the 16.0 weighting. The exact zeros on `delivery_latency` and `spoilage_rate` are
+    explicable rather than suspicious and they independently confirm arm comparability: both arms
+    serve all 560,858 demand events, so the same fulfilment count draws the same travel times,
+    and `_spoilage` reads neither inventory nor order size (D3).
+
+    **WHAT THE NUMBER MEANS, in the units D2.5 chose so a supply-chain reader can evaluate it.**
+    The incumbent holds `0.7382` objective units of inventory; the hindsight-optimal arm holds
+    `0.2849`. That gap alone is `0.4534`, which at `0.08` units per service point is about **5.7
+    service-point equivalents** against a pre-registered margin of **5.0**. The incumbent buys its
+    perfect service with a 50-100 unit par band that hindsight shows was not needed.
+
+    **EVERY GUARD THIS VERDICT HAD TO CLEAR, checked rather than assumed.** Conflict M's identity
+    defect: `regret` `0.4534` and `comparator_headroom` `10.2036` are different subtractions over
+    different pairs. Finding 54's oracle defect: `regret >= 0` **and**
+    `hindsight_arm_is_pointwise_best` is `True`, so the comparator is the family's minimum at
+    every replicate. The interval clause: `[0.45246, 0.45427]` excludes `0.40`. The margin was
+    committed in session 7, **before** this run, and re-derived from its rule by
+    `policy.py::materiality_margin`. `must_be_below_measured_headroom`: `0.40 < 10.2036`, against
+    an independent quantity. And D2.5.4 records the arm as a **conservative** bound, so the true
+    regret is at least this — `material` is robust in the safe direction.
+
+    **CONSEQUENCES, AND THEY ARE BINDING.** Task 12's precondition is "checkpoint A has run and
+    task 11's verdict is **not** `material`". It **is** `material`. **E2c is therefore NOT
+    authorable and tasks 12 and 13 are not authored.** R5 must be **re-cut** (R5.3, R5.4), and
+    checkpoint B (task 14) is downstream of E2c and moves with it. **This removes eleven leaves
+    from session 9's batch, which was pre-registered above as the cost of this branch and is not a
+    reason to reread the number.** Reported plainly: it is a good outcome, and it is what the
+    pre-commitment at task 25 binds either way.
 
 - [ ] 12. E2c — structures 1 and 2: non-stationary demand, and capacity that binds
   - Implements the first two of ADR-055's five structures. **Every structure names the agent
