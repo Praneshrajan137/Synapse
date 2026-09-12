@@ -1923,6 +1923,83 @@ tests in the interim, and that is a stated sequencing gap, not an omission.
     arms and contributes exactly zero regret, and `delivery_latency` moves `0.0027` across arms
     with radically different stocking behaviour.
 
+  - **SESSION 9 -- OPTION (b) IS LANDED AND THIS BLOCK IS THE PRE-REGISTRATION. IT IS WRITTEN
+    BEFORE THE LABEL WAS ADDED.** The canonical design record is ADR-055 **D2.5.4**; this is the
+    ledger entry and the falsifiable predictions, not a second copy of the argument.
+
+    **What landed.** `uplift/foresight.py::HindsightOraclePolicy` -- arm D, and from this session
+    the JUDGED comparator. It sizes each order against **cumulative** generated-but-not-yet-
+    consumed demand rather than per-window totals, which reduces in closed form to
+    `cumulative supply through t + w = max(opening_stock, generated_before(t + w))`. Arm C is
+    **retained** and still measured, so one run reports both oracles; the comparator now runs four
+    arms at +33% twin cost. `uplift/regret.py::hindsight_min` is a new module-level pure function
+    supplying the per-run falsifier, and **Property 80**
+    (`tests/uplift/test_hindsight_oracle_admissibility_property.py`) asserts coverage, minimality,
+    the non-negativity theorem over `Fraction`, and -- so the theorem cannot be read as a
+    tautology -- that a family EXCLUDING the subject can still go negative.
+
+    **`negative_regret_refusal` is RETAINED and not relaxed.** With an oracle that attains the
+    service terms' floor by construction it becomes a guard that can only fire on a bug. Removing
+    it because the number is now expected to be positive would delete the only thing that would
+    say so if it were not.
+
+    **PREDICTION 1 -- ARM C AND ARM A ARE UNPERTURBED, to every digit.** Arm D is constructed
+    after arms A, B and C and from arm A's completed trace; each `_make()` builds an independent
+    `SupplyChainSimulation(seed=seed)`. So `comparator_headroom_vs_foresight` must read
+    **`8.937888952967558`** and `regret_vs_foresight` must read **`-0.8123524459522771`**, both
+    exactly. **If either moves, adding arm D perturbed an arm it was supposed to sit beside**, and
+    that is a finding about arm independence rather than a licence to read the new numbers.
+
+    **PREDICTION 2 -- `hindsight_attains_zero_unmet` is `True`.** This is D2.5.4's construction
+    argument reduced to one boolean. A `False` means the coverage inequality was violated -- a
+    coverage hole, an arm pair that did not share a demand path, or a decision cadence wider than
+    the window -- and it falsifies the repair rather than merely looking wrong.
+
+    **PREDICTION 3 -- `hindsight_arm_is_pointwise_best` is `True`.** An arm optimal by
+    construction must BE the pointwise minimum of the declared family at every replicate. A
+    `False` says another arm beat the arm this verdict is read against, on this run's own numbers.
+
+    **PREDICTION 4 -- `status: measured`, and the refusal does NOT fire.** `regret > 0`, so
+    `negative_regret_refusal` returns `None`. **This is the prediction that can fail honestly and
+    it is why the guard stays**: if the sign is still negative, option (b) did not repair what
+    D2.5.3 said it would and the disposition is wrong, not the arm.
+
+    **PREDICTION 5 -- THE MAGNITUDE STRADDLES THE MARGIN, AND THE ARITHMETIC IS SHOWN SO IT CAN
+    FAIL.** Derived from D2.5.3's own per-term numbers, not guessed. Arm C leaves 8.2% of demand
+    unmet at weight 8.0 per service term, so its two service terms cost `0.082 * 8.0 = 0.656`
+    each, which is the `-0.6566` the decomposition reports; the reference arm's are **zero**.
+    Backing the rest out of the reported means -- `mean_reference_cost = 2.0850`,
+    `mean_foresight_cost = 2.8973`, `spoilage = 0.0592` for all arms -- leaves the reference arm
+    holding about `0.73` objective units of `on_hand` against arm C's `0.24`, which is the
+    `+0.4980` reported. Arm D attains the service floor like the reference arm, so **the service
+    terms cancel in the judged contrast** and the regret is essentially the holding difference:
+
+    ```
+    regret(B - D) ~ on_hand_B - on_hand_D  ~ 0.73 - [0.24 .. 0.40]  ~ 0.33 .. 0.49
+    ```
+
+    with `delivery_latency` contributing near zero because both arms serve every demand event and
+    that KPI accumulates only on fulfilled deliveries. **The committed margin is `0.40`, which
+    sits inside that band.** So this run's verdict is genuinely undecided in advance, which is
+    what a gate is supposed to look like.
+
+    **PREDICTION 6 -- THE VERDICT IS `material` OR `inconclusive`, AND NOTHING ELSE.**
+    `unavailable` is excluded because the margin is committed at `0.40`; `sub-margin` is excluded
+    because `insensitive_kpis` is non-empty (`spoilage_rate`, `delivery_latency`) until tasks 12.3
+    and 13.3 land. So `classify_regret` returns **`material`** iff `regret >= 0.40` **and**
+    `interval_low > 0.40`, else **`inconclusive`**.
+
+    **WHAT EACH LICENSES, PRE-COMMITTED BEFORE THE NUMBER IS KNOWN.** `material` means **Finding 4
+    is FALSIFIED** about the right subject, against an oracle that bounds it: task 12 must NOT be
+    authored, R5 is re-cut (R5.3, R5.4), and it is reported plainly as a good outcome.
+    `inconclusive` licenses proceeding to task 12 on this task's own words that "the repair is to
+    the instrument". **Neither reading is preferred here, and the session's leaf count is not a
+    reason** -- `material` removes E2c's eleven leaves from the batch, which is the same shape as
+    the scheduling temptation task 14 names in its own body.
+
+    **NOT PREDICTED, and must not be inferred:** arm D's absolute `on_hand` figure, the interval's
+    width, and whether `spoilage_rate` stays identical across four arms rather than three.
+
 - [ ] 12. E2c — structures 1 and 2: non-stationary demand, and capacity that binds
   - Implements the first two of ADR-055's five structures. **Every structure names the agent
     decision it unlocks; nothing is added for realism's sake.**

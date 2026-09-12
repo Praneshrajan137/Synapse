@@ -36,17 +36,24 @@ from __future__ import annotations
 import dataclasses
 import math
 import statistics
-from typing import Final, Literal
+from typing import TYPE_CHECKING, Final, Literal
 
 from digital_twin.simulation.policy import POLICY_PATH, PolicyUnavailableError, load_policy, require
 
+if TYPE_CHECKING:  # annotation-only, so the fast property suite pays nothing for them
+    from collections.abc import Mapping, Sequence
+
 __all__ = [
+    "ARM_LABELS",
+    "JUDGED_CONTRAST",
     "OBJECTIVE_TERMS",
+    "ORACLE_ARM",
     "InsensitiveKpi",
     "RegretObjective",
     "RegretVerdict",
     "TermContribution",
     "classify_regret",
+    "hindsight_min",
     "negative_regret_refusal",
     "load_objective",
 ]
@@ -62,6 +69,24 @@ OBJECTIVE_TERMS: Final[tuple[str, ...]] = (
     "delivery_latency",
     "unmet_service",
 )
+
+#: The comparator's arm labels, in the order this module tables them (ADR-055 D2.5.1, D2.5.4).
+#: Declared once so the per-arm counter totals, the cost decomposition and the
+#: hindsight-minimum family cannot drift apart -- three places naming four arms by hand is how
+#: an arm gets silently dropped from one of them.
+ARM_LABELS: Final[tuple[str, ...]] = ("noop", "reference", "foresight", "hindsight")
+
+#: Which of :data:`ARM_LABELS` supplies the oracle that `regret` and `comparator_headroom` are
+#: computed against. It moved from ``foresight`` to ``hindsight`` in session 9, and it is named
+#: here -- and reported in the artifact -- because a reader comparing this run with
+#: ``34570166681`` or ``34590696403`` must be able to see WHICH arm those two keys are about
+#: rather than infer it (ADR-055 D2.5.4).
+ORACLE_ARM: Final[str] = "hindsight"
+
+#: What ``regret`` is the difference OF, stated in the artifact's own key names. Reported rather
+#: than left to be matched up, because the same key named a different subtraction in each of the
+#: last two runs and a reader should not have to reconstruct which one from a prose field.
+JUDGED_CONTRAST: Final[str] = "mean_reference_cost - mean_hindsight_cost"
 
 Verdict = Literal["material", "sub-margin", "inconclusive", "unavailable"]
 
@@ -287,6 +312,67 @@ class RegretVerdict:
         return self.verdict == "sub-margin"
 
 
+def hindsight_min(arm_costs: Mapping[str, Sequence[float]]) -> list[float]:
+    """The pointwise-minimum cost across a DECLARED family of arms, replicate by replicate.
+
+    **What this buys, and it is the one guarantee arm C never had.** Regret is "how much better a
+    policy could have done given perfect information", so it is bounded below by zero -- and run
+    ``34570166681`` measured ``-0.8123524459522771`` because the arm it was subtracted from was
+    not an optimum (ADR-055 D2.5.2, D2.5.3). A hindsight minimum over a family that **contains
+    the subject** cannot have that defect: ``min_i <= subject_i`` at every replicate by
+    construction, so the aggregated difference is non-negative for every finite input. The
+    guarantee is a property of the **family**, not of the arithmetic -- over a family that
+    excludes the subject the minimum can be strictly worse than the subject and the difference
+    goes negative, which
+    ``tests/uplift/test_hindsight_oracle_admissibility_property.py`` asserts rather than assumes
+    so this docstring cannot be read as claiming more than it does.
+
+    **Why it is not the comparator, and this matters.** A best-of-the-arms-we-ran floor is a
+    *within-sample* bound: it can only ever be as good as the best arm present, so it would
+    report zero regret against a family of bad policies and would rise if a worse arm were added.
+    ``HindsightOraclePolicy`` is the comparator because it is optimal by construction over the
+    world's own realised demand, independent of which arms happen to be in the run.
+    ``_measure`` reports both, and the pair answers a question neither answers alone: whether the
+    oracle arm was in fact the best arm at **every** replicate, which is the oracle claim's
+    per-run falsifier.
+
+    Args:
+        arm_costs: One per-replicate cost sequence per arm name, all of equal length because the
+            objective is paired on seeds (D2.4). Iterated in sorted name order so the result
+            cannot depend on the caller's dict ordering.
+
+    Returns:
+        One cost per replicate: the least cost any declared arm achieved on that replicate.
+
+    Raises:
+        ValueError: On an empty family, on an arm with no replicates, or on ragged lengths.
+            Refused rather than truncated to the shortest: an unpaired minimum is a different
+            estimator over a different replicate set, exactly as
+            :meth:`RegretObjective.regret` refuses an unpaired difference.
+    """
+    if not arm_costs:
+        raise ValueError(
+            "cannot take a hindsight minimum over an empty family of arms; the family is what "
+            "supplies the guarantee, so an empty one guarantees nothing"
+        )
+    lengths = {name: len(costs) for name, costs in arm_costs.items()}
+    if len(set(lengths.values())) != 1:
+        raise ValueError(
+            f"a hindsight minimum needs equal replicate counts, got {lengths!r}; an unpaired "
+            "minimum is a different estimator over a different replicate set"
+        )
+    # Sorted by arm name so the result cannot depend on the caller's dict ordering. `min` is
+    # order-invariant anyway; the sort makes that independence structural rather than incidental.
+    ordered: list[Sequence[float]] = [arm_costs[name] for name in sorted(arm_costs)]
+    paired = len(ordered[0])
+    if paired == 0:
+        raise ValueError(
+            "every arm in the family reported zero replicates, so there is nothing to minimise; "
+            "an empty result would be read as a measurement of nothing (I-7)"
+        )
+    return [min(costs[index] for costs in ordered) for index in range(paired)]
+
+
 def negative_regret_refusal(
     *, regret: float, mean_reference: float, mean_foresight: float
 ) -> str | None:
@@ -326,11 +412,22 @@ def negative_regret_refusal(
     ``tests/uplift/test_regret_comparator_admissibility_property.py`` asserts that rather than
     leaving it to the reader.
 
+    **This refusal is RETAINED, not relaxed, now that the comparator has been repaired
+    (D2.5.4).** Its red was the finding; with an oracle that attains the service terms' floor by
+    construction it becomes a guard that can only fire on a bug -- a coverage hole in the
+    hindsight arm, an arm pair that did not share a demand path, or an objective sign error.
+    Removing it because the number is expected to be positive would delete the only thing that
+    would say so if it were not.
+
     Args:
-        regret: The measured judged contrast, ``mean_reference - mean_foresight``.
+        regret: The measured judged contrast, ``mean_reference - mean_<oracle>``.
         mean_reference: Arm B's mean objective cost, named in the reason so the refusal is
             attributable without re-running anything.
-        mean_foresight: Arm C's mean objective cost.
+        mean_foresight: The ORACLE arm's mean objective cost. **The parameter keeps this name
+            although the oracle is arm D from session 9 on** (ADR-055 D2.5.4): it is passed by
+            keyword from ``tests/uplift/test_regret_comparator_admissibility_property.py``, a
+            landed property file, and renaming it would edit that file to no measurable end. The
+            predicate below is unchanged -- only which arm's cost the caller supplies has moved.
 
     Returns:
         ``None`` when the comparator bounds the subject, so the regret may be classified.
@@ -340,7 +437,7 @@ def negative_regret_refusal(
         return None
     return (
         f"measured regret {regret!r} is NEGATIVE: the (s, S) reference arm (mean objective "
-        f"cost {mean_reference!r}) outperforms the perfect-foresight arm it is subtracted from "
+        f"cost {mean_reference!r}) outperforms the ORACLE arm it is subtracted from "
         f"(mean objective cost {mean_foresight!r}), so that arm does not bound the subject and "
         "their difference is not a regret. No verdict is read from it (ADR-055 D2.5.2). This is "
         "refused rather than classified because the same number returns `inconclusive` today "
@@ -453,14 +550,15 @@ def classify_regret(
 # Measurement CLI -- the entry point `uplift.yml::twin-regret` invokes (task 10.3)
 # ---------------------------------------------------------------------------
 #
-# CI ONLY. The two-pass protocol doubles the twin cost of every replicate, and a run at
-# `MIN_SCENARIOS` scale is a category-4 workload under I-0 that must never execute on a
-# development machine. `--replicates` defaults small so an accidental local invocation is
-# cheap and obvious rather than thermally expensive.
+# CI ONLY. The protocol runs FOUR arms per replicate, so it costs four twin replicates per
+# seed -- +33% on the three-arm form, paid so one run reports both the retired and the current
+# oracle (ADR-055 D2.5.4). A run at `MIN_SCENARIOS` scale is a category-4 workload under I-0
+# that must never execute on a development machine. `--replicates` defaults small so an
+# accidental local invocation is cheap and obvious rather than thermally expensive.
 
 
 def _measure(replicates: int, hours: float) -> dict[str, object]:
-    """Run the two-pass comparator over ``replicates`` seeds and report, without judging."""
+    """Run the four-arm comparator over ``replicates`` seeds and report, without judging."""
     # Imported here, not at module scope: `regret.py` is imported by the fast property suite,
     # and pulling the engine in at import time would drag SimPy into every one of those runs.
     from digital_twin.simulation.policy import (
@@ -493,6 +591,8 @@ def _measure(replicates: int, hours: float) -> dict[str, object]:
     noop_costs: list[float] = []
     reference_costs: list[float] = []
     foresight_costs: list[float] = []
+    #: Arm D, the hindsight oracle -- the JUDGED comparator from session 9 (ADR-055 D2.5.4).
+    hindsight_costs: list[float] = []
     unusable: list[int] = []
 
     # PER-TERM ACCUMULATORS, AND THE MACHINERY FOR THEM WAS ALWAYS THERE (finding 58).
@@ -506,9 +606,23 @@ def _measure(replicates: int, hours: float) -> dict[str, object]:
     noop_terms: dict[str, list[float]] = {term: [] for term in OBJECTIVE_TERMS}
     reference_terms: dict[str, list[float]] = {term: [] for term in OBJECTIVE_TERMS}
     foresight_terms: dict[str, list[float]] = {term: [] for term in OBJECTIVE_TERMS}
+    hindsight_terms: dict[str, list[float]] = {term: [] for term in OBJECTIVE_TERMS}
     #: Last replicate's counters per arm. Provenance for the complement identity, not an
     #: aggregate: the identity is structural, so one replicate exhibits it or none do.
     arm_counters: dict[str, dict[str, int]] = {}
+    #: RUN-LEVEL counter totals per arm, and unlike `arm_counters` these MUST be aggregated.
+    #: The hindsight arm's claim is that it leaves ZERO unmet demand by construction; one
+    #: replicate exhibiting zero is not that claim, so the falsifier is summed over every
+    #: usable replicate and reported as a boolean the reader does not have to derive.
+    counter_totals: dict[str, dict[str, int]] = {
+        arm: {
+            "demand_events": 0,
+            "unmet_demand_events": 0,
+            "orders_created": 0,
+            "orders_delivered": 0,
+        }
+        for arm in ARM_LABELS
+    }
 
     def _observation(sim: object) -> dict[str, float]:
         """The five KPI arguments, read once so cost and contributions cannot diverge."""
@@ -554,50 +668,99 @@ def _measure(replicates: int, hours: float) -> dict[str, object]:
                 s=reference_spec.reorder_point, S=reference_spec.order_up_to, seed=seed
             ),
         )
-        if not result.usable:
-            # A replicate whose arms saw different demand is not evidence. Recorded and
+        if not result.usable_for_judged_contrast:
+            # A replicate whose arms saw different demand is not evidence, and neither is one
+            # missing the oracle arm the judged contrast is computed against. Recorded and
             # excluded rather than silently averaged in (I-7).
+            unusable.append(seed)
+            continue
+        hindsight_arm = result.hindsight
+        # `usable_for_judged_contrast` already required arm D; this restates the clause so the
+        # type checker can narrow the Optional, and it cannot fire on its own.
+        if hindsight_arm is None:
             unusable.append(seed)
             continue
         noop_costs.append(_cost(result.noop))
         reference_costs.append(_cost(result.reference))
         foresight_costs.append(_cost(result.foresight))
+        hindsight_costs.append(_cost(hindsight_arm))
         _accumulate(result.noop, noop_terms)
         _accumulate(result.reference, reference_terms)
         _accumulate(result.foresight, foresight_terms)
+        _accumulate(hindsight_arm, hindsight_terms)
         arm_counters = {
             "noop": _counters(result.noop),
             "reference": _counters(result.reference),
             "foresight": _counters(result.foresight),
+            "hindsight": _counters(hindsight_arm),
         }
+        for arm, counts in arm_counters.items():
+            for counter, value in counts.items():
+                counter_totals[arm][counter] += value
 
     if not reference_costs:
         return {
             "status": "unavailable",
             "reason": (
-                "no replicate produced usable evidence: every arm triple disagreed on the "
+                "no replicate produced usable evidence: every arm quadruple disagreed on the "
                 "demand path, so nothing was measured"
             ),
             "unusable_seeds": unusable,
         }
 
-    # THE JUDGED CONTRAST IS THE REFERENCE ARM AGAINST THE ORACLE. That is the `(s, S)`
-    # regret R5.1, Finding 4 and task 11 are about, and until session 5 it was not what this
-    # function computed (conflict M).
-    measured = objective.regret(reference_costs, foresight_costs)
+    # THE JUDGED CONTRAST IS THE REFERENCE ARM AGAINST THE ORACLE, AND THE ORACLE IS ARM D
+    # FROM SESSION 9 ON (ADR-055 D2.5.4). That is the `(s, S)` regret R5.1, Finding 4 and task
+    # 11 are about; until session 5 it was not what this function computed (conflict M), and
+    # until session 9 the arm it was computed against was not an oracle (findings 54, 59).
+    #
+    # `regret` AND `comparator_headroom` KEEP THEIR NAMES AND CHANGE WHICH ORACLE THEY NAME.
+    # Both keep their FORM -- `mean_reference - mean_<oracle>` and `mean_noop - mean_<oracle>` --
+    # and `oracle_arm` below states which arm that is, so no reader has to infer it. The two
+    # quantities runs 34570166681 and 34590696403 reported under these names are retained under
+    # `regret_vs_foresight` and `comparator_headroom_vs_foresight`, so nothing a reader wants to
+    # compare across runs has to be recomputed and no key silently carries two meanings.
+    measured = objective.regret(reference_costs, hindsight_costs)
     mean_noop = objective.aggregate(noop_costs)
     mean_reference = objective.aggregate(reference_costs)
     mean_foresight = objective.aggregate(foresight_costs)
+    mean_hindsight = objective.aggregate(hindsight_costs)
+    regret_vs_foresight = objective.regret(reference_costs, foresight_costs)
     # THE BOUND IS THE NO-OP ARM AGAINST THE ORACLE, AND ITS INDEPENDENCE IS THE WHOLE
     # POINT. `must_be_below_measured_headroom` exists to refuse a margin so large that
     # `material` is unreachable. While the comparator had two arms this was
     # `mean_baseline - mean_foresight` over the SAME pair `regret` was computed from -- the
     # identical subtraction -- so the guard admitted exactly the margins below the regret
     # they would be judged against, and every margin in D2.5's bracket forced `material`.
-    # With three arms the bound is a different subtraction over a different pair, and
+    # With three arms the bound became a different subtraction over a different pair, and
     # `headroom >= regret` holds because doing nothing cannot cost less than running the
     # incumbent. That inequality is asserted below rather than assumed.
-    headroom = mean_noop - mean_foresight
+    headroom = mean_noop - mean_hindsight
+    headroom_vs_foresight = mean_noop - mean_foresight
+
+    # THE WITHIN-SAMPLE FLOOR, AND WHY IT IS REPORTED BESIDE THE ORACLE RATHER THAN INSTEAD OF
+    # IT. `hindsight_min` takes the least cost any declared arm achieved at each replicate, so
+    # `mean_reference - mean(hindsight_min(family))` is non-negative for EVERY finite input
+    # whenever the family contains the reference arm -- which this one does. That makes it a
+    # sanity floor rather than a comparator: it can only ever be as good as the best arm
+    # present, and it would report zero regret against a family of bad policies.
+    #
+    # What it buys is the oracle claim's PER-RUN FALSIFIER. If arm D is optimal by construction
+    # it must be the pointwise minimum of the family at every replicate, so
+    # `hindsight_arm_is_pointwise_best` is `True` -- and if it is `False`, some other arm beat
+    # the arm this run's verdict is read against, on the run's own numbers, and D2.5.4's
+    # construction argument has failed rather than merely looked wrong.
+    arm_cost_family: dict[str, list[float]] = {
+        "noop": noop_costs,
+        "reference": reference_costs,
+        "foresight": foresight_costs,
+        "hindsight": hindsight_costs,
+    }
+    pointwise_best = hindsight_min(arm_cost_family)
+    mean_pointwise_best = objective.aggregate(pointwise_best)
+    regret_vs_pointwise_best = objective.regret(reference_costs, pointwise_best)
+    # Exact equality, not a closeness test: `min` returns one of its arguments unchanged, so
+    # the two lists are bit-identical when arm D is the minimum at every replicate.
+    hindsight_is_pointwise_best = pointwise_best == hindsight_costs
 
     # THE PER-TERM ATTRIBUTION OF THE REGRET. This is finding 54's falsifier and it is the
     # reason this block exists (ADR-055 D2.5.2).
@@ -607,13 +770,16 @@ def _measure(replicates: int, hours: float) -> dict[str, object]:
     # floating-point association. That identity is what makes these numbers evidence rather
     # than commentary, and `tests/uplift/test_regret_decomposition_property.py` asserts it.
     #
-    # What it decides: finding 54 records that the `(s, S)` arm outperforms the arm labelled
-    # `perfect_foresight`, and offers ONE surviving hypothesis -- that `stockout_rate`, at
+    # What it decided: finding 54 recorded that the `(s, S)` arm outperforms the arm labelled
+    # `perfect_foresight`, and offered ONE surviving hypothesis -- that `stockout_rate`, at
     # weight 8.0, counts SKUs at zero stock rather than unmet demand (ADR-055 D3), so a
-    # just-in-time oracle is charged for being efficient while a par-level buffer is not.
-    # If that hypothesis is right, `regret_by_term["stockout_rate"]` is large and negative and
-    # dominates the sum. If it is wrong, some other term does, and the hypothesis is killed by
-    # its own falsifier rather than argued about. Either way the answer is now measured.
+    # just-in-time oracle is charged for being efficient while a par-level buffer is not. Run
+    # 34590696403 measured it: direction right, mechanism wrong in one respect and doubled in
+    # another (findings 59 and 60, ADR-055 D2.5.3). The decomposition is retained -- now over
+    # the hindsight arm -- because it is the same falsifier for the repair: with arm D attaining
+    # the service terms' floor, `regret_by_term["stockout_rate"]` and `["unmet_service"]` must
+    # be non-negative, and `regret_by_term_vs_foresight` keeps the pre-repair attribution
+    # visible in the same artifact so the effect of the repair is one subtraction away.
     def _term_means(accumulated: dict[str, list[float]]) -> dict[str, float]:
         return {
             term: objective.aggregate(values) if values else 0.0
@@ -623,11 +789,15 @@ def _measure(replicates: int, hours: float) -> dict[str, object]:
     noop_by_term = _term_means(noop_terms)
     reference_by_term = _term_means(reference_terms)
     foresight_by_term = _term_means(foresight_terms)
+    hindsight_by_term = _term_means(hindsight_terms)
     regret_by_term = {
+        term: reference_by_term[term] - hindsight_by_term[term] for term in OBJECTIVE_TERMS
+    }
+    regret_by_term_vs_foresight = {
         term: reference_by_term[term] - foresight_by_term[term] for term in OBJECTIVE_TERMS
     }
     headroom_by_term = {
-        term: noop_by_term[term] - foresight_by_term[term] for term in OBJECTIVE_TERMS
+        term: noop_by_term[term] - hindsight_by_term[term] for term in OBJECTIVE_TERMS
     }
     # Reported so a reader can see WHICH term dominates without sorting five numbers, and
     # named by magnitude rather than by sign so it is meaningful whichever way the regret goes.
@@ -638,8 +808,13 @@ def _measure(replicates: int, hours: float) -> dict[str, object]:
             "noop": noop_by_term,
             "reference": reference_by_term,
             "foresight": foresight_by_term,
+            "hindsight": hindsight_by_term,
         },
         "regret_by_term": regret_by_term,
+        # The pre-repair attribution, under its own name. This is the column ADR-055 D2.5.3
+        # tables, so a reader can confirm from ONE run that the repair moved the service terms
+        # and left the others alone, instead of comparing two runs at two shas.
+        "regret_by_term_vs_foresight": regret_by_term_vs_foresight,
         "headroom_by_term": headroom_by_term,
         "dominant_regret_term": dominant_term,
         "dominant_regret_share": (
@@ -654,19 +829,39 @@ def _measure(replicates: int, hours: float) -> dict[str, object]:
         # shared denominator, and both carry weight 8.0. These counters are reported so a
         # reader can re-derive that from the artifact instead of trusting this comment.
         "arm_counters": arm_counters,
+        # RUN-LEVEL TOTALS, AND THE ORACLE'S FALSIFIER READ OFF THEM (ADR-055 D2.5.4).
+        # `hindsight_attains_zero_unmet` is the whole construction argument reduced to one
+        # boolean: arm D covers cumulative outstanding demand at every decision, so it can
+        # only stock out if the coverage inequality was violated -- a coverage hole, an arm
+        # pair that did not share a demand path, or a window shorter than the cadence. A
+        # `False` here means D2.5.4's argument has FAILED, not that the number looks wrong.
+        # `reference_attains_zero_unmet` is reported beside it because it is what makes the
+        # service terms cancel: with both arms at zero unmet demand, `regret` is a pure
+        # holding-plus-latency difference and the finding-60 double-count contributes exactly
+        # nothing to the judged contrast.
+        "arm_counters_total": counter_totals,
+        "hindsight_attains_zero_unmet": counter_totals["hindsight"]["unmet_demand_events"] == 0,
+        "reference_attains_zero_unmet": counter_totals["reference"]["unmet_demand_events"] == 0,
         "service_terms_are_one_quantity": all(
             math.isclose(
                 by_term["stockout_rate"], by_term["unmet_service"], rel_tol=0.0, abs_tol=0.0
             )
-            for by_term in (noop_by_term, reference_by_term, foresight_by_term)
+            for by_term in (
+                noop_by_term,
+                reference_by_term,
+                foresight_by_term,
+                hindsight_by_term,
+            )
         ),
         "note": (
             "regret_by_term sums to `regret` by construction (a difference of two weighted "
             "sums over the same terms), so these are the exact attribution of the judged "
-            "contrast rather than a commentary on it. ADR-055 D2.5.2 states the hypothesis "
-            "this decomposition exists to falsify: that stockout_rate, at weight 8.0, counts "
-            "SKUs at zero stock rather than unmet demand (D3), which would charge a "
-            "just-in-time oracle for being efficient"
+            "contrast rather than a commentary on it. `regret_by_term` is now the reference "
+            "arm against the HINDSIGHT arm (ADR-055 D2.5.4) and "
+            "`regret_by_term_vs_foresight` is the pre-repair column D2.5.3 tables, so the "
+            "effect of replacing the comparator is legible from one run: the two service "
+            "terms should move from -0.6566 each to non-negative, and no other term should "
+            "move for a reason this repair explains"
         ),
     }
 
@@ -710,6 +905,8 @@ def _measure(replicates: int, hours: float) -> dict[str, object]:
             "mean_noop_cost": mean_noop,
             "mean_reference_cost": mean_reference,
             "mean_foresight_cost": mean_foresight,
+            "mean_hindsight_cost": mean_hindsight,
+            "oracle_arm": ORACLE_ARM,
         }
 
     # `alpha` is READ from the committed Metric_Contract; "95%" is `1 - alpha` and appears
@@ -719,11 +916,13 @@ def _measure(replicates: int, hours: float) -> dict[str, object]:
     try:
         # OVER THE JUDGED CONTRAST, not the bound. `material` requires the interval to
         # exclude the margin, so the interval must be about the same quantity the margin is
-        # compared against -- the reference arm's regret. An interval over the no-op contrast
-        # would be dispersion for a number nothing is judged on.
+        # compared against -- the reference arm's regret against the ORACLE arm, which is arm D
+        # from session 9 (ADR-055 D2.5.4). An interval over the no-op contrast would be
+        # dispersion for a number nothing is judged on, and an interval over the retired
+        # foresight contrast would be dispersion for a number nothing is judged on either.
         interval = paired_difference_interval(
             reference_costs,
-            foresight_costs,
+            hindsight_costs,
             alpha=alpha,
             resamples=resamples,
             seed=INTERVAL_SEED,
@@ -746,6 +945,8 @@ def _measure(replicates: int, hours: float) -> dict[str, object]:
             "unusable_seeds": unusable,
             "regret": measured,
             "comparator_headroom": headroom,
+            "mean_hindsight_cost": mean_hindsight,
+            "oracle_arm": ORACLE_ARM,
         }
 
     # The interval's own point estimate is PINNED against the objective's, not trusted to
@@ -769,6 +970,8 @@ def _measure(replicates: int, hours: float) -> dict[str, object]:
             "regret": measured,
             "comparator_headroom": headroom,
             "interval_point": interval.point,
+            "mean_hindsight_cost": mean_hindsight,
+            "oracle_arm": ORACLE_ARM,
         }
 
     # `margin` is READ, not hardcoded. It is `None` until task 10.4 instantiates it, which
@@ -787,7 +990,7 @@ def _measure(replicates: int, hours: float) -> dict[str, object]:
     # committed rule, and reporting it here is what lets checkpoint A discharge task 10.4 on
     # this run even though no verdict may be read from it. Two defects, two owners.
     inadmissible = negative_regret_refusal(
-        regret=measured, mean_reference=mean_reference, mean_foresight=mean_foresight
+        regret=measured, mean_reference=mean_reference, mean_foresight=mean_hindsight
     )
     if inadmissible is not None:
         return {
@@ -800,8 +1003,17 @@ def _measure(replicates: int, hours: float) -> dict[str, object]:
             "mean_noop_cost": mean_noop,
             "mean_reference_cost": mean_reference,
             "mean_foresight_cost": mean_foresight,
+            "mean_hindsight_cost": mean_hindsight,
+            "oracle_arm": ORACLE_ARM,
+            "judged_contrast": JUDGED_CONTRAST,
             "comparator_headroom": headroom,
+            "comparator_headroom_vs_foresight": headroom_vs_foresight,
             "regret": measured,
+            "regret_vs_foresight": regret_vs_foresight,
+            "mean_hindsight_min_cost": mean_pointwise_best,
+            "regret_vs_hindsight_min": regret_vs_pointwise_best,
+            "hindsight_min_arms": sorted(arm_cost_family),
+            "hindsight_arm_is_pointwise_best": hindsight_is_pointwise_best,
             "headroom_minus_regret": headroom - measured,
             "interval": interval.describe(),
             "interval_low": interval.low,
@@ -834,17 +1046,42 @@ def _measure(replicates: int, hours: float) -> dict[str, object]:
         "reference_policy_name": reference_spec.name,
         "reference_reorder_point_s": reference_spec.reorder_point,
         "reference_order_up_to_S": reference_spec.order_up_to,
-        # THREE ARMS, THREE MEANS. `mean_baseline_cost` was renamed to `mean_noop_cost`
-        # rather than kept and repurposed: it named the arm the regret was computed FROM, and
-        # that arm is no longer the subject. A reader comparing this report with run
-        # 34366766968's would otherwise read two different quantities under one key.
+        # FOUR ARMS, FOUR MEANS. `mean_baseline_cost` was renamed to `mean_noop_cost` in
+        # session 5 rather than kept and repurposed: it named the arm the regret was computed
+        # FROM, and that arm was no longer the subject. A reader comparing this report with run
+        # 34366766968's would otherwise read two different quantities under one key. Session 9
+        # adds `mean_hindsight_cost` for arm D and CHANGES NEITHER of the other three.
         "mean_noop_cost": mean_noop,
         "mean_reference_cost": mean_reference,
         "mean_foresight_cost": mean_foresight,
+        "mean_hindsight_cost": mean_hindsight,
+        # WHICH ARM THE TWO SUBTRACTIONS BELOW ARE AGAINST. Reported rather than implied: the
+        # oracle moved from arm C to arm D in session 9 (ADR-055 D2.5.4), so `regret` and
+        # `comparator_headroom` keep their FORM and change which arm supplies the subtrahend.
+        "oracle_arm": ORACLE_ARM,
+        "judged_contrast": JUDGED_CONTRAST,
         # The BOUND: no-op against the oracle. Independent of `regret` by construction now.
         "comparator_headroom": headroom,
         # The JUDGED quantity: the committed (s, S) reference arm against the oracle.
         "regret": measured,
+        # THE TWO PRE-REPAIR QUANTITIES, UNDER NAMES OF THEIR OWN. These are exactly what runs
+        # 34570166681 and 34590696403 reported as `regret` and `comparator_headroom`, so both
+        # remain comparable across runs without a reader recomputing anything -- and
+        # `comparator_headroom_vs_foresight` is session 7's prediction-1 check: it must still
+        # read 8.937888952967558, which is what proves adding arm D perturbed neither arm A nor
+        # arm C, exactly as adding arm B perturbed neither.
+        "regret_vs_foresight": regret_vs_foresight,
+        "comparator_headroom_vs_foresight": headroom_vs_foresight,
+        # THE WITHIN-SAMPLE FLOOR AND THE ORACLE CLAIM'S PER-RUN FALSIFIER. `hindsight_min`
+        # takes the least cost any declared arm achieved at each replicate, so
+        # `regret_vs_hindsight_min` is non-negative for every finite input (the family contains
+        # the reference arm). `hindsight_arm_is_pointwise_best` is the load-bearing one: arm D
+        # is optimal by construction, so it must BE that minimum at every replicate. `False`
+        # means another arm beat the arm this verdict is read against, on this run's numbers.
+        "mean_hindsight_min_cost": mean_pointwise_best,
+        "regret_vs_hindsight_min": regret_vs_pointwise_best,
+        "hindsight_min_arms": sorted(arm_cost_family),
+        "hindsight_arm_is_pointwise_best": hindsight_is_pointwise_best,
         # Reported so a reader can see the two are no longer the same subtraction without
         # recomputing them. Under the two-arm comparator this was 0.0 by identity, which is
         # what conflict M was.
@@ -873,16 +1110,26 @@ def _measure(replicates: int, hours: float) -> dict[str, object]:
         "reason": verdict.reason,
         "insensitive_kpis": [item.term for item in objective.insensitive],
         "comparator": (
-            "THREE ARMS. regret = (s, S) reference - perfect foresight, which is the "
-            "quantity R5.1, Finding 4 and task 11 are about. comparator_headroom = no-op - "
-            "perfect foresight, retained as an INDEPENDENT bound so the margin guard "
+            "FOUR ARMS, and the ORACLE MOVED. regret = (s, S) reference - hindsight oracle, "
+            "which is the quantity R5.1, Finding 4 and task 11 are about. comparator_headroom "
+            "= no-op - hindsight oracle, retained as an INDEPENDENT bound so the margin guard "
             "`must_be_below_measured_headroom` is not checking the margin against the very "
-            "quantity it judges. The reference arm is Par_Level_Reorder from "
-            "uplift/baselines/, owned by decision-integrity-uplift-proof (its task 2.1) and "
-            "LANDED -- four documents had recorded it as unlanded, which was conflict N. Its "
-            "s and S are read from the twin's own restock threshold and opening stock; the "
-            "claim that it REPRODUCES the twin's endogenous restock is not proven, because "
-            "the mechanisms differ, and policy.yaml records that limit"
+            "quantity it judges. THE KEY MEANINGS THAT CHANGED, stated rather than left to be "
+            "discovered: `regret` and `comparator_headroom` were computed against the "
+            "perfect-foresight arm in runs 34570166681 and 34590696403, and are now computed "
+            "against the hindsight arm; both prior quantities are reported under "
+            "`regret_vs_foresight` and `comparator_headroom_vs_foresight`. The foresight arm "
+            "is RETAINED and still measured, because two committed runs were judged against it "
+            "and deleting it would make them unreadable. WHY the oracle moved: the foresight "
+            "arm left 8.2% of demand unmet while the incumbent left none, so it did not bound "
+            "its own subject (findings 54, 59); the hindsight arm covers cumulative outstanding "
+            "demand and attains the service terms' floor by construction. Full argument, "
+            "domain and falsifier in ADR-055 D2.5.4 -- not restated here. The reference arm is "
+            "Par_Level_Reorder from uplift/baselines/, owned by decision-integrity-uplift-proof "
+            "(its task 2.1) and LANDED -- four documents had recorded it as unlanded, which was "
+            "conflict N. Its s and S are read from the twin's own restock threshold and opening "
+            "stock; the claim that it REPRODUCES the twin's endogenous restock is not proven, "
+            "because the mechanisms differ, and policy.yaml records that limit"
         ),
     }
 
@@ -939,7 +1186,7 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
         prog="uplift.regret",
         description=(
-            "Measure (s, S)-class regret against the perfect-foresight comparator using the "
+            "Measure (s, S)-class regret against the hindsight-oracle comparator using the "
             "objective committed in digital_twin/simulation/policy.yaml. CI only."
         ),
     )

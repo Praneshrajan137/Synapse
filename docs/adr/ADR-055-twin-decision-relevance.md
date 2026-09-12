@@ -56,6 +56,19 @@ turns out to leave **8.2% of demand unmet** while the incumbent leaves none. Rem
 double-count alone leaves the regret **still negative**, so repairing the objective is not
 sufficient and repairing the comparator is necessary. Full record in **D2.5.3**.
 
+**Amendment, session 9 — the oracle arm is REPLACED by an arm that is an oracle by
+construction, and `regret` and `comparator_headroom` are now computed against it. The retired
+arm is retained beside it rather than deleted.** D2.5.3 established by arithmetic that removing
+the objective's double-count leaves the regret **still negative**, so task 11's option (b) — an
+arm that actually minimises the committed objective over the known trace — was the repair the
+measurement demanded. `uplift/foresight.py::HindsightOraclePolicy` sizes each order against
+**cumulative** generated-but-not-yet-consumed demand instead of per-window totals, which drives
+its unmet demand to zero — the attainable floor of the two terms that inverted the sign — while
+holding strictly less than the incumbent's 50–100 unit par band. Full record in **D2.5.4**. **This
+amendment lands before the run judged against it**, per the rule at the head of this log; it
+changes no threshold and in particular does not touch
+`regret_objective.materiality_margin.value`, which stays at the value session 7 instantiated.
+
 **This ADR is written to be falsifiable, and task 10 is the attempt.** Its central premise -
 that a base-stock `(s, S)` policy is near-optimal on today's twin, so intelligence cannot pay
 - is *analytical, not measured*. R5.1-R5.4 are the criteria that falsify it. If task 10
@@ -571,6 +584,117 @@ order specifically — that is the most plausible reading of a no-buffer policy,
 has not been isolated. That defect 1 was unintentional; D2.3 committed both weights and the
 record should be read before assuming an error rather than a choice. And that repairing arm C
 makes the regret positive: **that is the next measurement, not a prediction to act on.**
+
+#### D2.5.4 The hindsight oracle - an oracle by construction rather than by label (session 9)
+
+**Added by amendment in session 9, and it lands before the run judged against it** per D2.5's own
+ordering rule. It exists because D2.5.3 settled task 11's three options by arithmetic: removing the
+objective's double-count leaves the regret at `-0.1559`, still negative, so option (c) is necessary
+and not sufficient and **option (b) is the repair the measurement demands.**
+
+**WHY ARM C's RULE CANNOT SERVE, walked to the code rather than cited.** `DemandTrace.record` is
+called at demand **generation** time. Stock is decremented, and `unmet_demand_events` incremented,
+at the bottom of `engine.py::_delivery` - **after** `_pick_pack_dispatch`'s `normal(8.0, 2.0)`
+timeout and `_delivery`'s own `uniform(10.0, 45.0)` travel timeout. So fulfilment lags generation
+by a mean of about `8.0 + 27.5 = 35.5` simulated minutes: roughly **59% of a 60-minute window, and
+on a single draw it can exceed the window entirely.** `ForesightPolicy` sizes stock against the
+units *generated* in `[t, t + w)` and holds nothing back, while the units actually *consumed* in
+that interval were generated in roughly `[t - 35.5, t + w - 35.5)`. The two sets differ, the arm
+carries no buffer to absorb the difference, and the shortfall is charged at weight `8.0` **twice**
+(defect 1 above). **Perfect foresight of window totals is not perfect foresight of arrival order** -
+which is the mechanism D2.5.3 explicitly declined to claim, now isolated.
+
+**THE RULE, AND WHY IT NEEDS NO INVENTORY READING AND NO CHOSEN CONSTANT.** Let `G(x)` be the units
+the trace records as generated strictly before `x`, `I` the opening stock, and `w` the interval until
+this arm's next decision. Every unit consumed in `[t, t + w)` was generated before `t + w`, so
+holding `G(t + w) - consumed(t)` units at `t` is **sufficient** to serve every fulfilment that can
+arrive before the next decision. Because `add_stock` is instantaneous and the only other mover of
+stock is `_delivery`'s decrement, `on_hand(t) = I + supplied(t) - consumed(t)`; substituting it,
+**`consumed` and `on_hand` both cancel** and the target reduces to
+
+```
+cumulative supply through t + w = max(I, G(t + w))
+```
+
+a function of the recorded trace and the opening stock **alone**. Two consequences carry the whole
+design:
+
+* **It reads no inventory.** The `Mapping[str, int]` truncation D2.5.1 records therefore cannot bias
+  it in either direction, so unlike arm C it can be driven through the **same**
+  observe-decide-apply loop as arms A and B. D2.5.1 recorded that asymmetry as accepted debt for
+  its owner; this arm **closes** it rather than documenting it again.
+* **It contains no additive buffer term at all.** `max(I, G)` is the pointwise-least cumulative
+  supply satisfying coverage: `I` is forced because `add_stock` cannot remove stock, and `G(t + w)`
+  is the coverage requirement itself. A materiality margin is allowed exactly one irreducible
+  choice (D2.5); **a comparator is allowed none**, and
+  `tests/uplift/test_hindsight_oracle_admissibility_property.py` asserts the absence rather than
+  promising it.
+
+**WHY `regret >= 0` IS NOW STRUCTURAL, and what it reduces to.** The service terms are
+`stockout_rate = unmet/demand` and `unmet_service = 1 - fill_rate`, which defect 1 establishes are
+the same quantity; this arm attains their **exact floor**, zero, so their contribution to
+`regret = B - D` is `cost_B(service) - 0 >= 0`. The remaining terms are holding and latency, where
+the arm holds at most `max(I, G)` against the incumbent's 50-100 unit par band. The old guard
+`headroom >= regret` substituted to `(A - C) >= (B - C)` and reduced to `A >= B`, in which **the
+oracle cancels** - which is precisely why it was silent about C. Nothing reduces away here: the
+claim is about arm D's own attained floor, not about a difference in which it appears twice.
+
+**THE DOMAIN THE OPTIMALITY CLAIM HOLDS OVER, stated so it is not overclaimed.** The arm is optimal
+given **instantaneous replenishment and no ordering lead time**, which is the twin's committed
+comparator configuration (`comparator.restock_threshold: 0.0` disables the engine's own `_restock`
+lead time, and `_apply_reorders` applies through `sim.add_stock`). Under a non-zero lead time the
+true optimum would order earlier. And the trace records **generation** times only - never the
+pick/pack and travel draws that decide *when* a unit is consumed - so a policy able to observe
+fulfilment times could hold strictly less. This arm is therefore a **lower bound on achievable
+performance** and the regret it induces is **conservative**: it can only understate how much room
+intelligence has, never overstate it. That is the safe direction. Unlike arm C's identical claim,
+it is not contradicted by the arm losing to its own subject on the service terms.
+
+**WHAT WOULD MAKE THIS WRONG - two falsifiers, both mechanical rather than remembered.**
+
+1. **`hindsight_attains_zero_unmet` is `False`.** Arm D covers cumulative outstanding demand at
+   every decision, so it can only stock out if the coverage inequality was violated: a coverage
+   hole, an arm pair that did not share a demand path, or a decision cadence wider than the window.
+   A `False` means this subsection's construction argument has **failed**, not that a number looks
+   wrong. `_measure` sums the counter over every usable replicate and reports the boolean, because
+   one replicate exhibiting zero is not the claim.
+2. **`hindsight_arm_is_pointwise_best` is `False`.** `regret.py::hindsight_min` takes the least cost
+   any declared arm achieved at each replicate. An arm optimal by construction must **be** that
+   minimum at every replicate, so a `False` says another arm beat the arm the verdict is read
+   against, on the run's own numbers. The two together are a per-run test of the claim rather than a
+   re-reading of this document.
+
+**`hindsight_min` IS NOT THE COMPARATOR, and the distinction matters.** A best-of-the-arms-we-ran
+floor is a **within-sample** bound: it can only ever be as good as the best arm present, would
+report zero regret against a family of uniformly bad policies, and would *rise* if a worse arm were
+added. It is reported as a sanity floor and as falsifier 2, never as the subject.
+
+**ARM C IS RETAINED, NOT DELETED, and the fourth arm's cost is paid rather than avoided.** Runs
+`34570166681` and `34590696403` were judged against arm C; deleting it would make both unreadable,
+and `ForesightPolicy` would become the "declared but instantiated nowhere" defect finding 39
+recorded. The comparator therefore runs **four** arms, at **+33%** on the dominant term of
+`uplift.yml::twin-regret`. What that buys: one run reports both the retired and the current oracle,
+so the repair's effect is measurable **within a single run** rather than across two runs at two
+shas, and `comparator_headroom_vs_foresight` remains available as session 7's prediction-1 check -
+it must still read `8.937888952967558`, which is what would prove adding arm D perturbed neither
+arm A nor arm C, exactly as adding arm B perturbed neither.
+
+**KEY MEANINGS THAT MOVED, recorded because a silent one would be the defect.** `regret` and
+`comparator_headroom` keep their **form** - `mean_reference - mean_<oracle>` and
+`mean_noop - mean_<oracle>` - and change **which arm** supplies the subtrahend. `oracle_arm` and
+`judged_contrast` are reported in the artifact so no reader has to infer it, and both prior
+quantities are retained under `regret_vs_foresight` and `comparator_headroom_vs_foresight`.
+
+**DEFECT 1 IS ORTHOGONAL AND STILL OWED TO THE OPERATOR.** Repairing this comparator does not
+repair the objective, and this subsection deliberately does not touch
+`regret_objective.weights`: moving a committed weight's meaning is a D4-class change affecting
+D2.3, D3 and every historical value quoting them. **The two interact in one direction only, and it
+is favourable:** with arm D and the incumbent both at zero unmet demand, the service terms **cancel
+in the judged contrast**, so the 16.0 double-count contributes exactly nothing to `regret` even
+while it stands. That is why `reference_attains_zero_unmet` is reported beside
+`hindsight_attains_zero_unmet` - the pair is what licenses that sentence on the run's own numbers.
+Defect 1 still gates **checkpoint B**, whose task 13.5 defines dominance over every KPI the R5.33
+objective names, and there the double-count does not cancel.
 
 ### D3 - Per-KPI observable sensitivity (R5.34)
 
