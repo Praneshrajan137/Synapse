@@ -126,6 +126,30 @@ const SPECS = {
     dataClass: "client-window",
     syntheticSource: "world",
   },
+  /**
+   * R9.16, and the reason it is a SEPARATE row from `agent-streams` above.
+   *
+   * R9.16 is an obligation about the Demand_Forecaster specifically: while that
+   * agent reports `degraded` true, the console must render that degradation on
+   * every surface displaying its output. One combined row for three agents
+   * cannot discharge it - a signal arriving for the demand stream would have
+   * been rendered on a notice that also speaks for pricing and freshness, so
+   * the operator could not tell which agent it was about, and a page-level
+   * notice does not sit on the panel that draws the forecasts.
+   *
+   * The signal is `null` today and that is not an oversight: `DemandForecast`
+   * (proto/domain/demand_forecast.schema.json, mirrored in
+   * frontend/src/domain/demand-forecast.ts) carries no `degraded` field, so the
+   * flag does not arrive. The resolver is fail-closed, so `null` renders "read
+   * state unknown" and never "live" - absence of a degradation flag is not
+   * evidence of a live model (I-7). Closing the upstream gap turns this notice
+   * affirmative with no change to this row.
+   */
+  "live-markets.demand-forecast": {
+    endpoint: "WS /ws/firehose (demand)",
+    dataClass: "client-window",
+    syntheticSource: "world",
+  },
 
   // ── Agent Council ─────────────────────────────────────────────────────────
   /**
@@ -161,6 +185,24 @@ export function surfaceDataPath(
 ): DataPathNoticeState {
   return resolveDataPath(SURFACE_DATA_PATHS[id], signals);
 }
+
+/**
+ * The R9.16 subset: registered ids whose panel displays Demand_Forecaster output.
+ *
+ * Exported as a named subset rather than left implicit so the console-degradation
+ * property can quantify over "every surface that displays the agent's output"
+ * instead of over a hand-picked panel. A panel added to this list is covered by
+ * that property on the next run; a panel that displays the forecast and is NOT
+ * listed here is the residual hole, and it is the same hole `SPECS`' own docstring
+ * names above - nothing forces a new panel to call `surfaceDataPath` at all.
+ *
+ * Every entry must be a registered id with an endpoint: a panel that displays the
+ * agent's output is by definition reading something.
+ */
+export const DEMAND_FORECASTER_DATA_PATH_IDS: ReadonlyArray<SurfaceDataPathId> = [
+  "live-markets.agent-streams",
+  "live-markets.demand-forecast",
+];
 
 /** The R13.6 subset: panels that have no data endpoint at all. */
 export const ABSENT_DATA_PATH_IDS: ReadonlyArray<SurfaceDataPathId> = SURFACE_DATA_PATH_IDS.filter(

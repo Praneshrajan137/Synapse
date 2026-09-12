@@ -34,13 +34,13 @@ the same pair.
 
 ## Summary
 
-Parsed 18 workflow file(s), 60 job(s), 403 step(s).
+Parsed 18 workflow file(s), 61 job(s), 413 step(s).
 
 | Trigger | Jobs executing | Jobs conditional | Jobs NOT EXECUTED | Steps blocking | Steps advisory | Steps conditional |
 |---|---|---|---|---|---|---|
-| push:main | 4 | 27 | 29 | 31 | 0 | 166 |
-| pull_request | 16 | 24 | 20 | 96 | 4 | 155 |
-| tag:v* | 3 | 3 | 54 | 18 | 0 | 29 |
+| push:main | 4 | 28 | 29 | 31 | 0 | 176 |
+| pull_request | 17 | 24 | 20 | 106 | 4 | 155 |
+| tag:v* | 3 | 3 | 55 | 18 | 0 | 29 |
 
 ## Job selection
 
@@ -68,6 +68,7 @@ Why each job runs, does not run, or runs conditionally under each trigger. `need
 | push:main | .github/workflows/ci.yml::v4-compliance | CONDITIONAL | path-filtered (paths-ignore: **.md, docs/**, plans/**, notebooks/**) |
 | push:main | .github/workflows/ci.yml::chromatic-color-gates | CONDITIONAL | path-filtered (paths-ignore: **.md, docs/**, plans/**, notebooks/**) |
 | push:main | .github/workflows/ci.yml::training-smoke | CONDITIONAL | path-filtered (paths-ignore: **.md, docs/**, plans/**, notebooks/**); needs 'quality-gates', which is conditional |
+| push:main | .github/workflows/ci.yml::e4-published-artifact | CONDITIONAL | path-filtered (paths-ignore: **.md, docs/**, plans/**, notebooks/**) |
 | push:main | .github/workflows/eval-llm-judge.yml::llm-judge | NOT EXECUTED | workflow on: has no push trigger |
 | push:main | .github/workflows/frontend.yml::quality | CONDITIONAL | path-filtered (paths: frontend/**, proto/domain/**, .github/workflows/frontend.yml) |
 | push:main | .github/workflows/frontend.yml::spec-typecheck | CONDITIONAL | path-filtered (paths: frontend/**, proto/domain/**, .github/workflows/frontend.yml) |
@@ -128,6 +129,7 @@ Why each job runs, does not run, or runs conditionally under each trigger. `need
 | pull_request | .github/workflows/ci.yml::v4-compliance | EXECUTES | - |
 | pull_request | .github/workflows/ci.yml::chromatic-color-gates | EXECUTES | - |
 | pull_request | .github/workflows/ci.yml::training-smoke | NOT EXECUTED | if: false in pull_request |
+| pull_request | .github/workflows/ci.yml::e4-published-artifact | EXECUTES | - |
 | pull_request | .github/workflows/eval-llm-judge.yml::llm-judge | NOT EXECUTED | workflow on: has no pull_request trigger |
 | pull_request | .github/workflows/frontend.yml::quality | CONDITIONAL | path-filtered (paths: frontend/**, proto/domain/**, .github/workflows/frontend.yml) |
 | pull_request | .github/workflows/frontend.yml::spec-typecheck | CONDITIONAL | path-filtered (paths: frontend/**, proto/domain/**, .github/workflows/frontend.yml) |
@@ -188,6 +190,7 @@ Why each job runs, does not run, or runs conditionally under each trigger. `need
 | tag:v* | .github/workflows/ci.yml::v4-compliance | NOT EXECUTED | on: push is branch-scoped (no tags: filter), so a tag push is excluded |
 | tag:v* | .github/workflows/ci.yml::chromatic-color-gates | NOT EXECUTED | on: push is branch-scoped (no tags: filter), so a tag push is excluded |
 | tag:v* | .github/workflows/ci.yml::training-smoke | NOT EXECUTED | on: push is branch-scoped (no tags: filter), so a tag push is excluded |
+| tag:v* | .github/workflows/ci.yml::e4-published-artifact | NOT EXECUTED | on: push is branch-scoped (no tags: filter), so a tag push is excluded |
 | tag:v* | .github/workflows/eval-llm-judge.yml::llm-judge | NOT EXECUTED | workflow on: has no push trigger |
 | tag:v* | .github/workflows/frontend.yml::quality | NOT EXECUTED | on: push is branch-scoped (no tags: filter), so a tag push is excluded |
 | tag:v* | .github/workflows/frontend.yml::spec-typecheck | NOT EXECUTED | on: push is branch-scoped (no tags: filter), so a tag push is excluded |
@@ -340,6 +343,16 @@ Why each job runs, does not run, or runs conditionally under each trigger. `need
 | push:main | .github/workflows/ci.yml::training-smoke | R3.2 serving-resolution proof (recorded entry resolves, BLOCKING) | CONDITIONAL | conditional - blocking |
 | push:main | .github/workflows/ci.yml::training-smoke | Measure per-package coverage under full ML stack (ADVISORY - binds the 0.0 floors) | CONDITIONAL | conditional - advisory (named) |
 | push:main | .github/workflows/ci.yml::training-smoke | Upload full-stack coverage (for floor binding) | CONDITIONAL | conditional - blocking |
+| push:main | .github/workflows/ci.yml::e4-published-artifact | uses: actions/checkout@v4 | CONDITIONAL | conditional - blocking |
+| push:main | .github/workflows/ci.yml::e4-published-artifact | Set up Python 3.11 | CONDITIONAL | conditional - blocking |
+| push:main | .github/workflows/ci.yml::e4-published-artifact | Install the registry reader (no ML stack) | CONDITIONAL | conditional - blocking |
+| push:main | .github/workflows/ci.yml::e4-published-artifact | Published-checkpoint record resolves, or this job states that it does not (R9.15) | CONDITIONAL | conditional - blocking |
+| push:main | .github/workflows/ci.yml::e4-published-artifact | Materialise the published checkpoint and its sidecar at the serving path (R9.15) | CONDITIONAL | conditional - blocking |
+| push:main | .github/workflows/ci.yml::e4-published-artifact | Install the ML stack so C45 cannot SKIP for want of torch (R9.15) | CONDITIONAL | conditional - blocking |
+| push:main | .github/workflows/ci.yml::e4-published-artifact | Checkpoint-truth gate against the materialised artifact (C38) | CONDITIONAL | conditional - blocking |
+| push:main | .github/workflows/ci.yml::e4-published-artifact | Calibration-truth gate against the materialised artifact (C40) | CONDITIONAL | conditional - blocking |
+| push:main | .github/workflows/ci.yml::e4-published-artifact | Runtime-substance gate against the materialised artifact (C45) | CONDITIONAL | conditional - blocking |
+| push:main | .github/workflows/ci.yml::e4-published-artifact | A SKIP is not a flip - the three gates read a materialised artifact (R9.15) | CONDITIONAL | conditional - blocking |
 | push:main | .github/workflows/eval-llm-judge.yml::llm-judge | - | NOT EXECUTED | workflow on: has no push trigger |
 | push:main | .github/workflows/frontend.yml::quality | uses: actions/checkout@v4 | CONDITIONAL | conditional - blocking |
 | push:main | .github/workflows/frontend.yml::quality | Setup pnpm | CONDITIONAL | conditional - blocking |
@@ -530,6 +543,16 @@ Why each job runs, does not run, or runs conditionally under each trigger. `need
 | pull_request | .github/workflows/ci.yml::chromatic-color-gates | Build determinism - dist matches a fresh build (INV-CLR-010) | yes | blocking |
 | pull_request | .github/workflows/ci.yml::chromatic-color-gates | No raw colour literals in components (INV-CLR-009) | yes | blocking |
 | pull_request | .github/workflows/ci.yml::training-smoke | - | NOT EXECUTED | if: false in pull_request |
+| pull_request | .github/workflows/ci.yml::e4-published-artifact | uses: actions/checkout@v4 | yes | blocking |
+| pull_request | .github/workflows/ci.yml::e4-published-artifact | Set up Python 3.11 | yes | blocking |
+| pull_request | .github/workflows/ci.yml::e4-published-artifact | Install the registry reader (no ML stack) | yes | blocking |
+| pull_request | .github/workflows/ci.yml::e4-published-artifact | Published-checkpoint record resolves, or this job states that it does not (R9.15) | yes | blocking |
+| pull_request | .github/workflows/ci.yml::e4-published-artifact | Materialise the published checkpoint and its sidecar at the serving path (R9.15) | yes | blocking |
+| pull_request | .github/workflows/ci.yml::e4-published-artifact | Install the ML stack so C45 cannot SKIP for want of torch (R9.15) | yes | blocking |
+| pull_request | .github/workflows/ci.yml::e4-published-artifact | Checkpoint-truth gate against the materialised artifact (C38) | yes | blocking |
+| pull_request | .github/workflows/ci.yml::e4-published-artifact | Calibration-truth gate against the materialised artifact (C40) | yes | blocking |
+| pull_request | .github/workflows/ci.yml::e4-published-artifact | Runtime-substance gate against the materialised artifact (C45) | yes | blocking |
+| pull_request | .github/workflows/ci.yml::e4-published-artifact | A SKIP is not a flip - the three gates read a materialised artifact (R9.15) | yes | blocking |
 | pull_request | .github/workflows/eval-llm-judge.yml::llm-judge | - | NOT EXECUTED | workflow on: has no pull_request trigger |
 | pull_request | .github/workflows/frontend.yml::quality | uses: actions/checkout@v4 | CONDITIONAL | conditional - blocking |
 | pull_request | .github/workflows/frontend.yml::quality | Setup pnpm | CONDITIONAL | conditional - blocking |
@@ -795,6 +818,7 @@ Why each job runs, does not run, or runs conditionally under each trigger. `need
 | tag:v* | .github/workflows/ci.yml::v4-compliance | - | NOT EXECUTED | on: push is branch-scoped (no tags: filter), so a tag push is excluded |
 | tag:v* | .github/workflows/ci.yml::chromatic-color-gates | - | NOT EXECUTED | on: push is branch-scoped (no tags: filter), so a tag push is excluded |
 | tag:v* | .github/workflows/ci.yml::training-smoke | - | NOT EXECUTED | on: push is branch-scoped (no tags: filter), so a tag push is excluded |
+| tag:v* | .github/workflows/ci.yml::e4-published-artifact | - | NOT EXECUTED | on: push is branch-scoped (no tags: filter), so a tag push is excluded |
 | tag:v* | .github/workflows/eval-llm-judge.yml::llm-judge | - | NOT EXECUTED | workflow on: has no push trigger |
 | tag:v* | .github/workflows/frontend.yml::quality | - | NOT EXECUTED | on: push is branch-scoped (no tags: filter), so a tag push is excluded |
 | tag:v* | .github/workflows/frontend.yml::spec-typecheck | - | NOT EXECUTED | on: push is branch-scoped (no tags: filter), so a tag push is excluded |
@@ -838,7 +862,7 @@ Why each job runs, does not run, or runs conditionally under each trigger. `need
 
 ## Declared-blocking anchors (R11.8)
 
-Every step `infrastructure/quality/blocking-steps.yaml` declares blocking, annotated with the command it runs so a governance claim can be pinned to a row. Source: 16 declared-blocking entries from infrastructure/quality/blocking-steps.yaml.
+Every step `infrastructure/quality/blocking-steps.yaml` declares blocking, annotated with the command it runs so a governance claim can be pinned to a row. Source: 17 declared-blocking entries from infrastructure/quality/blocking-steps.yaml.
 
 | Trigger | Job | Step | Propagates | Note |
 |---|---|---|---|---|
@@ -879,6 +903,14 @@ Every step `infrastructure/quality/blocking-steps.yaml` declares blocking, annot
 | push:main | .github/workflows/ci.yml::uplift-verify-slow | Selected count is non-empty and reported (slow selection) | CONDITIONAL | declared blocking (R1.8) - conditional (path-filtered (paths-ignore: **.md, docs/**, plans/**, notebooks/**)) |
 | push:main | .github/workflows/ci.yml::uplift-verify-slow | Property + regression tests (slow - 100-example budget) | CONDITIONAL | declared blocking (R1.8) - conditional (path-filtered (paths-ignore: **.md, docs/**, plans/**, notebooks/**)) |
 | push:main | .github/workflows/ci.yml::training-smoke | R3.2 serving-resolution proof (recorded entry resolves, BLOCKING) [tests/integration/test_published_entry_serving_resolution.py] | CONDITIONAL | declared blocking (R3.2) - conditional (path-filtered (paths-ignore: **.md, docs/**, plans/**, notebooks/**); needs 'quality-gates', which is conditional) |
+| push:main | .github/workflows/ci.yml::e4-published-artifact | Install the registry reader (no ML stack) | CONDITIONAL | declared blocking (R9.15) - conditional (path-filtered (paths-ignore: **.md, docs/**, plans/**, notebooks/**)) |
+| push:main | .github/workflows/ci.yml::e4-published-artifact | Published-checkpoint record resolves, or this job states that it does not (R9.15) [scripts.audit.published_checkpoint_truth] | CONDITIONAL | declared blocking (R9.15) - conditional (path-filtered (paths-ignore: **.md, docs/**, plans/**, notebooks/**)) |
+| push:main | .github/workflows/ci.yml::e4-published-artifact | Materialise the published checkpoint and its sidecar at the serving path (R9.15) | CONDITIONAL | declared blocking (R9.15) - conditional (path-filtered (paths-ignore: **.md, docs/**, plans/**, notebooks/**)) |
+| push:main | .github/workflows/ci.yml::e4-published-artifact | Install the ML stack so C45 cannot SKIP for want of torch (R9.15) [//download.py] | CONDITIONAL | declared blocking (R9.15) - conditional (path-filtered (paths-ignore: **.md, docs/**, plans/**, notebooks/**)) |
+| push:main | .github/workflows/ci.yml::e4-published-artifact | Checkpoint-truth gate against the materialised artifact (C38) [scripts.audit.checkpoint_truth] | CONDITIONAL | declared blocking (R9.15) - conditional (path-filtered (paths-ignore: **.md, docs/**, plans/**, notebooks/**)) |
+| push:main | .github/workflows/ci.yml::e4-published-artifact | Calibration-truth gate against the materialised artifact (C40) [scripts.audit.calibration_truth] | CONDITIONAL | declared blocking (R9.15) - conditional (path-filtered (paths-ignore: **.md, docs/**, plans/**, notebooks/**)) |
+| push:main | .github/workflows/ci.yml::e4-published-artifact | Runtime-substance gate against the materialised artifact (C45) [scripts.audit.runtime_substance] | CONDITIONAL | declared blocking (R9.15) - conditional (path-filtered (paths-ignore: **.md, docs/**, plans/**, notebooks/**)) |
+| push:main | .github/workflows/ci.yml::e4-published-artifact | A SKIP is not a flip - the three gates read a materialised artifact (R9.15) | CONDITIONAL | declared blocking (R9.15) - conditional (path-filtered (paths-ignore: **.md, docs/**, plans/**, notebooks/**)) |
 | push:main | .github/workflows/frontend.yml::e2e | uses: actions/checkout@v4 | NOT EXECUTED | declared blocking (R8.9) - if: false in push:main |
 | push:main | .github/workflows/frontend.yml::e2e | uses: pnpm/action-setup@v4 | NOT EXECUTED | declared blocking (R8.9) - if: false in push:main |
 | push:main | .github/workflows/frontend.yml::e2e | uses: actions/setup-node@v4 | NOT EXECUTED | declared blocking (R8.9) - if: false in push:main |
@@ -960,6 +992,14 @@ Every step `infrastructure/quality/blocking-steps.yaml` declares blocking, annot
 | pull_request | .github/workflows/ci.yml::uplift-verify-slow | Selected count is non-empty and reported (slow selection) | yes | declared blocking (R1.8) |
 | pull_request | .github/workflows/ci.yml::uplift-verify-slow | Property + regression tests (slow - 100-example budget) | yes | declared blocking (R1.8) |
 | pull_request | .github/workflows/ci.yml::training-smoke | R3.2 serving-resolution proof (recorded entry resolves, BLOCKING) [tests/integration/test_published_entry_serving_resolution.py] | NOT EXECUTED | declared blocking (R3.2) - if: false in pull_request |
+| pull_request | .github/workflows/ci.yml::e4-published-artifact | Install the registry reader (no ML stack) | yes | declared blocking (R9.15) |
+| pull_request | .github/workflows/ci.yml::e4-published-artifact | Published-checkpoint record resolves, or this job states that it does not (R9.15) [scripts.audit.published_checkpoint_truth] | yes | declared blocking (R9.15) |
+| pull_request | .github/workflows/ci.yml::e4-published-artifact | Materialise the published checkpoint and its sidecar at the serving path (R9.15) | yes | declared blocking (R9.15) |
+| pull_request | .github/workflows/ci.yml::e4-published-artifact | Install the ML stack so C45 cannot SKIP for want of torch (R9.15) [//download.py] | yes | declared blocking (R9.15) |
+| pull_request | .github/workflows/ci.yml::e4-published-artifact | Checkpoint-truth gate against the materialised artifact (C38) [scripts.audit.checkpoint_truth] | yes | declared blocking (R9.15) |
+| pull_request | .github/workflows/ci.yml::e4-published-artifact | Calibration-truth gate against the materialised artifact (C40) [scripts.audit.calibration_truth] | yes | declared blocking (R9.15) |
+| pull_request | .github/workflows/ci.yml::e4-published-artifact | Runtime-substance gate against the materialised artifact (C45) [scripts.audit.runtime_substance] | yes | declared blocking (R9.15) |
+| pull_request | .github/workflows/ci.yml::e4-published-artifact | A SKIP is not a flip - the three gates read a materialised artifact (R9.15) | yes | declared blocking (R9.15) |
 | pull_request | .github/workflows/frontend.yml::e2e | uses: actions/checkout@v4 | CONDITIONAL | declared blocking (R8.9) - conditional (path-filtered (paths: frontend/**, proto/domain/**, .github/workflows/frontend.yml); needs 'build', which is conditional) |
 | pull_request | .github/workflows/frontend.yml::e2e | uses: pnpm/action-setup@v4 | CONDITIONAL | declared blocking (R8.9) - conditional (path-filtered (paths: frontend/**, proto/domain/**, .github/workflows/frontend.yml); needs 'build', which is conditional) |
 | pull_request | .github/workflows/frontend.yml::e2e | uses: actions/setup-node@v4 | CONDITIONAL | declared blocking (R8.9) - conditional (path-filtered (paths: frontend/**, proto/domain/**, .github/workflows/frontend.yml); needs 'build', which is conditional) |
@@ -1041,6 +1081,14 @@ Every step `infrastructure/quality/blocking-steps.yaml` declares blocking, annot
 | tag:v* | .github/workflows/ci.yml::uplift-verify-slow | Selected count is non-empty and reported (slow selection) | NOT EXECUTED | declared blocking (R1.8) - on: push is branch-scoped (no tags: filter), so a tag push is excluded |
 | tag:v* | .github/workflows/ci.yml::uplift-verify-slow | Property + regression tests (slow - 100-example budget) | NOT EXECUTED | declared blocking (R1.8) - on: push is branch-scoped (no tags: filter), so a tag push is excluded |
 | tag:v* | .github/workflows/ci.yml::training-smoke | R3.2 serving-resolution proof (recorded entry resolves, BLOCKING) [tests/integration/test_published_entry_serving_resolution.py] | NOT EXECUTED | declared blocking (R3.2) - on: push is branch-scoped (no tags: filter), so a tag push is excluded |
+| tag:v* | .github/workflows/ci.yml::e4-published-artifact | Install the registry reader (no ML stack) | NOT EXECUTED | declared blocking (R9.15) - on: push is branch-scoped (no tags: filter), so a tag push is excluded |
+| tag:v* | .github/workflows/ci.yml::e4-published-artifact | Published-checkpoint record resolves, or this job states that it does not (R9.15) [scripts.audit.published_checkpoint_truth] | NOT EXECUTED | declared blocking (R9.15) - on: push is branch-scoped (no tags: filter), so a tag push is excluded |
+| tag:v* | .github/workflows/ci.yml::e4-published-artifact | Materialise the published checkpoint and its sidecar at the serving path (R9.15) | NOT EXECUTED | declared blocking (R9.15) - on: push is branch-scoped (no tags: filter), so a tag push is excluded |
+| tag:v* | .github/workflows/ci.yml::e4-published-artifact | Install the ML stack so C45 cannot SKIP for want of torch (R9.15) [//download.py] | NOT EXECUTED | declared blocking (R9.15) - on: push is branch-scoped (no tags: filter), so a tag push is excluded |
+| tag:v* | .github/workflows/ci.yml::e4-published-artifact | Checkpoint-truth gate against the materialised artifact (C38) [scripts.audit.checkpoint_truth] | NOT EXECUTED | declared blocking (R9.15) - on: push is branch-scoped (no tags: filter), so a tag push is excluded |
+| tag:v* | .github/workflows/ci.yml::e4-published-artifact | Calibration-truth gate against the materialised artifact (C40) [scripts.audit.calibration_truth] | NOT EXECUTED | declared blocking (R9.15) - on: push is branch-scoped (no tags: filter), so a tag push is excluded |
+| tag:v* | .github/workflows/ci.yml::e4-published-artifact | Runtime-substance gate against the materialised artifact (C45) [scripts.audit.runtime_substance] | NOT EXECUTED | declared blocking (R9.15) - on: push is branch-scoped (no tags: filter), so a tag push is excluded |
+| tag:v* | .github/workflows/ci.yml::e4-published-artifact | A SKIP is not a flip - the three gates read a materialised artifact (R9.15) | NOT EXECUTED | declared blocking (R9.15) - on: push is branch-scoped (no tags: filter), so a tag push is excluded |
 | tag:v* | .github/workflows/frontend.yml::e2e | uses: actions/checkout@v4 | NOT EXECUTED | declared blocking (R8.9) - on: push is branch-scoped (no tags: filter), so a tag push is excluded |
 | tag:v* | .github/workflows/frontend.yml::e2e | uses: pnpm/action-setup@v4 | NOT EXECUTED | declared blocking (R8.9) - on: push is branch-scoped (no tags: filter), so a tag push is excluded |
 | tag:v* | .github/workflows/frontend.yml::e2e | uses: actions/setup-node@v4 | NOT EXECUTED | declared blocking (R8.9) - on: push is branch-scoped (no tags: filter), so a tag push is excluded |

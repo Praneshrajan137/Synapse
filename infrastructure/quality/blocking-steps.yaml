@@ -559,6 +559,93 @@ steps:
     match: exact
     requirement: "R3.2"
 
+  # -------------------------------------------------------------------------
+  # decision-quality-proof task 20.4 (R9.15). Declared in the SAME COMMIT as the job,
+  # because `workflow_shape_truth` resolves every declaration against the workflow tree
+  # and a declaration that resolves to nothing FAILs as `blocking-unresolved`: either
+  # half alone is a red gate. `required-checks.yaml::candidates` gains this job's
+  # `name:` in that same commit, for the same reason on the other axis.
+  #
+  # WHAT THE JOB IS. C38, C40 and C45 all read LOCAL files -- `artifacts/training/*.json`
+  # for the first two, `artifacts/checkpoints/<name>.pt` for the third, whose per-agent
+  # probe tests `ckpt.is_file()` BEFORE constructing `ModelRegistry` -- so publishing a
+  # checkpoint to the declared zero-cost remote leaves all three SKIPped. This job
+  # materialises the published artifact at those paths first, and its last step asserts
+  # the correspondence between the registry's state and what was actually read, so a SKIP
+  # can never be reported as a flip (R9.15, I-7).
+  #
+  # `step_names` RATHER THAN `all_steps: true`, and the reason is the same one the
+  # `uplift-verify` shards give: these names are the ones a reader will cite when they
+  # ask which step proved what, so a rename should be LOUD, and only a name list makes it
+  # so. `all_steps` cannot notice a rename -- it resolves whatever the job happens to
+  # hold. The two `uses:` steps (`actions/checkout@v4`, `actions/setup-python@v5`) are
+  # left to the R11.3 name rule deliberately, for the reason recorded on the shard
+  # entries: declaring them by their synthetic `uses: <action>@<version>` display name
+  # would make a routine action version bump FAIL as `blocking-unresolved`, a cost with
+  # no protection behind it. A job-scoped `continue-on-error` would still be caught,
+  # because it sets `discarding_construct` on every step of the job including the eight
+  # named here.
+  #
+  # BOTH INSTALL STEPS ARE DECLARED, and that is the `truth-gates` argument sharpened.
+  # The published-checkpoint stack reports UNAVAILABLE when an optional import is
+  # missing, and C45's probe returns `skip` when torch is absent -- so a swallowed `pip
+  # install` here would not redden the job, it would turn the job's whole verdict into
+  # "could not look" while it stayed green. That is the SKIP-read-as-a-flip failure this
+  # job exists to prevent, arriving through the environment instead of the artifact.
+  #
+  # THE STEP-LEVEL `if:` IS NOT A DISCARDING CONSTRUCT, stated because it is the first
+  # thing a reader will suspect. `classify_step` reads `continue-on-error` at step and
+  # job scope plus the four terminal constructs (`|| true`, `|| echo`, `; exit 0`, and
+  # the `continue-on-error` pair); a step `if:` is none of them, and every step in this
+  # job still propagates its exit status. What the `if:` buys is that the CPU torch wheel
+  # and the HF download are paid for only when there is something to materialise -- an
+  # I-0 category-2 workload that would otherwise land on every pull request to read one
+  # JSON file. The correspondence step below carries `if: always()` precisely so the
+  # skipped case is STATED rather than silent.
+  #
+  # ORDERED, and the order is a precondition chain rather than a data pipeline. The
+  # record step decides whether anything can be materialised; materialisation must
+  # precede all three gates, which is R9.15's whole content; and the correspondence step
+  # is last because it judges what the others did. `step_order` is a declaration for
+  # readers -- the gate reads only `workflow`, `job`, `step_names`, `all_steps`, `match`
+  # and `requirement` -- and the MECHANICAL enforcement is that each step propagates, so
+  # a failed materialisation stops the job before a gate can report against an absent
+  # artifact.
+  #
+  # `match: exact`: none of these names carries a dash or section character that
+  # normalisation would fold, so exact buys strictness for free and makes a rename loud.
+  # Every string is quoted byte-for-byte from `.github/workflows/ci.yml`.
+  - workflow: .github/workflows/ci.yml
+    job: e4-published-artifact
+    step_names:
+      - "Install the registry reader (no ML stack)"
+      - "Published-checkpoint record resolves, or this job states that it does not (R9.15)"
+      - "Materialise the published checkpoint and its sidecar at the serving path (R9.15)"
+      - "Install the ML stack so C45 cannot SKIP for want of torch (R9.15)"
+      - "Checkpoint-truth gate against the materialised artifact (C38)"
+      - "Calibration-truth gate against the materialised artifact (C40)"
+      - "Runtime-substance gate against the materialised artifact (C45)"
+      - "A SKIP is not a flip - the three gates read a materialised artifact (R9.15)"
+    match: exact
+    requirement: "R9.15"
+    step_order:
+      - step: "Published-checkpoint record resolves, or this job states that it does not (R9.15)"
+        role: precondition
+        emits: "steps.record.outputs.published/state/repo/sha/checkpoint/sidecar"
+        requirement: "R9.15"
+      - step: "Materialise the published checkpoint and its sidecar at the serving path (R9.15)"
+        role: producer
+        emits: >-
+          artifacts/checkpoints/<name>.pt + <name>.serving.json (C45's read path) and
+          artifacts/training/<name>.train.json (C38's and C40's read path), fetched from
+          the declared zero-cost source only - never resolved through ModelRegistry,
+          which prefers a local candidate and would certify the smoke build (R9.7)
+        requirement: "R9.15"
+      - step: "A SKIP is not a flip - the three gates read a materialised artifact (R9.15)"
+        role: disclosure
+        consumes: "the record's state plus the materialised paths"
+        requirement: "R9.15"
+
 # ---------------------------------------------------------------------------
 # Steps declared blocking ONLY after their remediation lands.
 #

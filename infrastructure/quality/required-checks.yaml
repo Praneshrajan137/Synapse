@@ -163,6 +163,59 @@ candidates:
     check_name: "End-to-end integration (base stack)"
     reason: "Eligible; not called blocking. 40-minute timeout makes it a costly required check."
 
+  # Declared by decision-quality-proof task 20.4 (R9.15), in the SAME COMMIT as the job
+  # and as its eight `blocking-steps.yaml` step entries.
+  #
+  # WHY `candidates:` AND NOT `required:` OR `ineligible:` -- argued from this file's own
+  # rules and from its schema, in that order.
+  #
+  # It is NOT ineligible. `ineligibleEntry.reason` is a closed six-value enum
+  # (`path-filtered`, `path-filtered-and-conditioned`, `branch-push-only`,
+  # `conditioned-off-pull-request`, `self-labelled-informational`, `post-merge`) and this
+  # job satisfies none of them: `ci.yml`'s `pull_request: branches: [main]` carries no
+  # path filter, the job carries no per-job `if:` and no `needs:`, and its name claims
+  # nothing informational. So it reports on every pull request to `main`, which is exactly
+  # this file's ELIGIBILITY RULE. Filing it as ineligible would need a reason the enum
+  # does not have, and inventing one to fit would be the hand-maintained-mirror defect
+  # this file exists to remove.
+  #
+  # It is NOT required, and that is a judgement this file is designed to record rather
+  # than make. The `required:` section's own contract is "executes gates that governance
+  # documents describe as blocking (R14.3)". C38, C40 and C45 are not among them: what
+  # `blocking-steps.yaml` and CLAUDE.md call blocking in the intelligence family is the
+  # STATIC trio (C37/C39/C41, the `quality-gates` step named "Intelligence gates -
+  # static"), and C38/C40/C45's existing call site is `training-smoke`, which this file
+  # already records as `branch-push-only`. Promoting this job would also make branch
+  # protection wait on a check that, while the registry holds `__placeholder__`, reports
+  # honestly that it measured nothing -- a green required check whose content is "there
+  # was nothing to check". That is over-claiming through the declaration rather than
+  # through the run, and `candidates:`' own note says the promotion is "an operator policy
+  # decision, not an audit finding".
+  #
+  # WHAT IS STILL ENFORCED WITHOUT `required:`, so this entry is not an exemption: the
+  # job's own run goes red on a failed materialisation, on a non-passing C38/C40/C45, and
+  # on a failed correspondence assertion, and its eight steps are declared in
+  # `blocking-steps.yaml` so a `continue-on-error` on any of them FAILs
+  # `workflow_shape_truth` by declaration rather than only by the R11.3 name rule.
+  #
+  # PROMOTION CONDITION, stated so the decision is revisitable rather than permanent: once
+  # a validated non-placeholder entry lands in `infrastructure/ml/published_checkpoints.json`
+  # (task 20.3) this job begins reporting a real verdict about a published model on every
+  # pull request, and at that point R14.3's test is met and promotion to `required:` is the
+  # obvious move. It is not made pre-emptively, because a required check that has never
+  # yet measured anything is a claim with no mechanism behind it.
+  - job: e4-published-artifact
+    workflow: .github/workflows/ci.yml
+    check_name: "E4 published-artifact materialisation (C38/C40/C45)"
+    reason: >-
+      Runs on every pull request to main with no path filter and no per-job if:, so it is
+      eligible. Not declared required: no governance document calls C38, C40 or C45
+      blocking, and while the published-checkpoint registry holds __placeholder__ this job
+      reports honestly that it materialised nothing and executed none of the three -- a
+      required status check whose content is "there was nothing to check" would be an
+      over-claim by declaration. Promote it once task 20.3 lands a validated entry and the
+      job begins reporting a real verdict about a published model (R9.15, R14.3).
+
 # ---------------------------------------------------------------------------
 # Ineligible: cannot be a required status check as currently triggered. This is NOT an
 # exemption from being a gate -- each still turns its own run red. It is a statement that

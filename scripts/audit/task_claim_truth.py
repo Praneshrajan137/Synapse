@@ -15,6 +15,22 @@ holds no validated non-placeholder entry, fail naming the task record.** So the 
 message carries the spec, the task id, the file and line, and the record's own words --
 a reader should never have to hunt for which claim broke.
 
+**R9.10 (decision-quality-proof task 20.5): it now reads the registry it is TOLD about.**
+The defect this repairs was fail-open by construction. :func:`evaluate` accepts an
+injected ``checkpoint_policy`` and an injected ``root``, but it resolved the registry
+through ``published_checkpoint_truth.registry_status(None, ...)``, which reads the
+module-level ``REGISTRY`` constant -- ``ROOT / policy().registry_file``, bound at import
+from the *committed* policy. So a caller pointed at another tree got a verdict about
+**this** repository's registry: a constructed registry holding a landed entry would still
+have been judged against the committed placeholder, and a constructed placeholder would
+have been judged against a landed committed file and PASSED. The repair is one line at the
+declaration -- :func:`read_registry` resolves ``root / active.registry_file`` -- rather
+than at the call sites, which is the same shape as the recorded I-5 near-miss where 21
+call sites were nearly given a default instead of one declaration being fixed. The
+committed behaviour is unchanged (``root / active.registry_file`` *is* ``REGISTRY`` for the
+committed policy), and what becomes possible is asserting R9.10 end to end over a tree a
+test built, instead of only through the pure :func:`judge` seam.
+
 What counts as a claim
 ----------------------
 
@@ -99,6 +115,7 @@ __all__ = [
     "judge",
     "main",
     "parse_task_records",
+    "read_registry",
     "run",
 ]
 
@@ -494,6 +511,35 @@ def _relative(path: Path) -> str:
         return path.as_posix()
 
 
+def read_registry(path: Path) -> tuple[dict[str, Any] | None, str]:
+    """Read the Published_Checkpoint_Registry file this gate was TOLD to read (R9.10).
+
+    The declaration is the only source of the path: callers pass ``root /
+    active.registry_file``, so a gate pointed at another tree judges *that* tree's
+    registry. Reading a module-level constant instead was fail-open by construction --
+    see this module's docstring.
+
+    Returns:
+        ``(payload, problem)``. ``payload`` is ``None`` exactly when ``problem`` is
+        non-empty. A problem names the resolved path, because "the registry holds no
+        validated entry" and "the file the declaration names could not be read" are
+        different repairs and an operator must be able to tell them apart (I-7).
+        ``encoding='utf-8'`` on the read (E-S13-07).
+    """
+    if not path.is_file():
+        return None, f"the declared registry file {_relative(path)} does not exist"
+    try:
+        parsed: Any = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError) as error:
+        return None, f"the declared registry file {_relative(path)} is unreadable: {error}"
+    if not isinstance(parsed, dict):
+        return None, (
+            f"the declared registry file {_relative(path)} is not a JSON object "
+            f"(got {type(parsed).__name__}), so it holds no entry to validate"
+        )
+    return parsed, ""
+
+
 def _unavailable(
     *, specs_dir: str, registry_file: str, rule: str, subject: str, detail: str
 ) -> TaskClaimReport:
@@ -534,7 +580,8 @@ def evaluate(
     Args:
         checkpoint_policy: Injected policy (default: the committed one).
         specs_root: Injected specs root (default: the policy's ``specs_dir``).
-        registry: Injected registry payload (default: read from the committed file).
+        registry: Injected registry payload (default: read from the file the ACTIVE
+            policy declares, resolved against ``root`` -- see :func:`read_registry`).
         root: Tree root the policy's relative paths resolve against.
     """
     try:
@@ -575,11 +622,25 @@ def evaluate(
             detail=f"the declared specs root {specs_dir} could not be listed: {error}",
         )
 
-    status = registry_status(
-        registry,
-        name=active.serving_name,
-        coverage_floor=active.floors.coverage_p90.value,
-    )
+    # R9.10: read the registry the ACTIVE policy declares, resolved against `root`.
+    # `registry_status`'s own default would read the committed module-level constant
+    # instead, which is a verdict about a file this call may not be about.
+    if registry is not None:
+        status = registry_status(
+            registry,
+            name=active.serving_name,
+            coverage_floor=active.floors.coverage_p90.value,
+        )
+    else:
+        payload, problem = read_registry(root / active.registry_file)
+        if payload is None:
+            status = RegistryStatus(status="missing", problems=(problem,))
+        else:
+            status = registry_status(
+                payload,
+                name=active.serving_name,
+                coverage_floor=active.floors.coverage_p90.value,
+            )
     return judge(
         records,
         active=active,

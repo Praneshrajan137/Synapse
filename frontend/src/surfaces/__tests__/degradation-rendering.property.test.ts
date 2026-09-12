@@ -94,6 +94,7 @@ import { createElement } from "react";
 import { afterEach, describe, expect, it } from "vitest";
 import {
   ABSENT_DATA_PATH_IDS,
+  DEMAND_FORECASTER_DATA_PATH_IDS,
   SURFACE_DATA_PATHS,
   SURFACE_DATA_PATH_IDS,
   type SurfaceDataPathId,
@@ -123,6 +124,16 @@ const TRI_STATES: ReadonlyArray<boolean | null> = [true, false, null];
 const PRESENT_DATA_PATH_IDS: ReadonlyArray<SurfaceDataPathId> = SURFACE_DATA_PATH_IDS.filter(
   (id) => SURFACE_DATA_PATHS[id].endpoint !== null,
 );
+
+/**
+ * The R9.16 population: every registered panel that displays Demand_Forecaster output.
+ *
+ * A named subset rather than a literal here, so "every surface displaying the agent's
+ * output" is answered by the registry that the surfaces themselves read rather than by a
+ * list this test maintains. A panel added to `DEMAND_FORECASTER_DATA_PATH_IDS` is covered
+ * by Property 75 on the next run without touching this file.
+ */
+const DEMAND_IDS: ReadonlyArray<SurfaceDataPathId> = DEMAND_FORECASTER_DATA_PATH_IDS;
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Non-vacuity oracle
@@ -160,6 +171,7 @@ for (const id of SURFACE_DATA_PATH_IDS) {
 const idArb = fc.constantFrom<SurfaceDataPathId>(...SURFACE_DATA_PATH_IDS);
 const presentIdArb = fc.constantFrom<SurfaceDataPathId>(...PRESENT_DATA_PATH_IDS);
 const absentIdArb = fc.constantFrom<SurfaceDataPathId>(...ABSENT_DATA_PATH_IDS);
+const demandIdArb = fc.constantFrom<SurfaceDataPathId>(...DEMAND_IDS);
 
 const triStateArb = fc.constantFrom<boolean | null>(...TRI_STATES);
 const syntheticSourceArb = fc.constantFrom<SyntheticSource>(...ALL_SYNTHETIC_SOURCES);
@@ -515,5 +527,152 @@ describe("Property 31: Degradation is rendered wherever degraded data is shown",
         expect(rendered.text).not.toContain(copy("datapath.live_detail"));
       }),
     );
+  });
+});
+
+
+/**
+ * Feature: decision-quality-proof, Property 75: The console renders degradation on every
+ * surface displaying the agent's output
+ *
+ * Validates: Requirements 9.16
+ *
+ * R9.16 is a DIFFERENT subject from R9.9, which is why it is a different property in a
+ * different file's requirement set: R9.9 says when the Demand_Forecaster must REPORT
+ * `degraded`, and R9.16 says what the Atlas_Console must DRAW when it does. The two are
+ * separately falsifiable - a correct agent behind a silent console satisfies R9.9 and
+ * violates R9.16 - so a single property covering both would be unable to say which one
+ * broke.
+ *
+ * Why this is not already covered by Property 31 above. That property quantifies over the
+ * WHOLE registry, which makes it total but not attributable: it cannot say that the
+ * panels displaying the flagship agent's output are covered, because it does not know
+ * which ones those are. R9.16's population is a named subset
+ * (`DEMAND_FORECASTER_DATA_PATH_IDS`), and the facets below are the ones that would fail
+ * if a demand panel were added to the console without a notice, or if one that has a
+ * notice stopped rendering the degraded state. Property 31 would stay green through both.
+ *
+ * "EVERY surface, not the primary one" is discharged by ENUMERATION over that subset
+ * rather than by sampling it, because a sampled facet over a two-element population
+ * proves "at least one" and R9.16 says "every".
+ *
+ * The honest limit, asserted rather than omitted (facet 4). `DemandForecast` carries no
+ * `degraded` field, so today the signal arrives `null` on these panels and the notice
+ * resolves to "read state unknown". Facet 4 pins that this is what a `null` renders -
+ * distinctly from `live` - so the console is never showing health it was not told about
+ * (I-7), and so a schema change that starts delivering the flag shows up as a change in
+ * the reachable states of this property rather than passing unnoticed.
+ *
+ * Budget: inherited from `fc.configureGlobal` in `frontend/src/test/setup.ts`. No per-call
+ * `{ numRuns }` appears here or anywhere in this file - one would silently override the
+ * global for the WHOLE file and undo the removal that made the global effective.
+ */
+describe("Property 75: The console renders degradation on every surface displaying the agent's output", () => {
+  // Feature: decision-quality-proof, Property 75: The console renders degradation on every surface displaying the agent's output
+  it("names a non-empty, registered, endpoint-bearing subset of panels that show the agent", () => {
+    // Non-vacuity first: an empty subset would make every facet below prove nothing, and
+    // `fc.constantFrom(...)` over an empty list throws at module load, so a silent
+    // emptying is impossible - but an assertion here is what makes the requirement's
+    // population explicit rather than incidental.
+    expect(DEMAND_IDS.length).toBeGreaterThan(0);
+
+    const registry = new Set<SurfaceDataPathId>(SURFACE_DATA_PATH_IDS);
+    const present = new Set<SurfaceDataPathId>(PRESENT_DATA_PATH_IDS);
+    for (const id of DEMAND_IDS) {
+      // Registered, so the panel gets its notice from the one registry the surfaces read.
+      expect(registry.has(id)).toBe(true);
+      // A panel that displays the agent's output is by definition reading something, so
+      // an endpoint-less entry here would be a category error rather than an R13.6 case.
+      expect(present.has(id)).toBe(true);
+      expect(SURFACE_DATA_PATHS[id].endpoint).not.toBeNull();
+    }
+
+    // A strict subset: if it were the whole registry, this property would be a second
+    // copy of Property 31 and could not attribute a failure to the agent's surfaces.
+    expect(DEMAND_IDS.length).toBeLessThan(SURFACE_DATA_PATH_IDS.length);
+    expect(new Set(DEMAND_IDS).size).toBe(DEMAND_IDS.length);
+  });
+
+  // R9.16 forward, by enumeration over the whole subset: while the agent reports degraded,
+  // EVERY panel that displays its output renders the declared degraded state.
+  // Feature: decision-quality-proof, Property 75: The console renders degradation on every surface displaying the agent's output
+  it("every panel displaying the agent renders the degraded state when the read is degraded", () => {
+    const covered: Array<SurfaceDataPathId> = [];
+    for (const id of DEMAND_IDS) {
+      for (const synthetic of TRI_STATES) {
+        const state = surfaceDataPath(id, { degraded: true, synthetic });
+        expect(state.kind).toBe("degraded");
+
+        const rendered = renderNotice(state);
+        expect(rendered.count).toBe(1);
+        expect(rendered.kind).toBe("degraded");
+        // Prose on the surface, not merely an attribute a test can read.
+        expect(rendered.text).toContain(copy("datapath.degraded"));
+        expect(rendered.text).toContain(copy("datapath.degraded_detail"));
+        expect(rendered.text).not.toContain(copy("datapath.live"));
+      }
+      covered.push(id);
+    }
+    // Enumeration discharged over the whole population, not a sample of it.
+    expect(covered).toEqual([...DEMAND_IDS]);
+  });
+
+  // R9.16 + I-7, the total form over the signal space: no combination of signals renders a
+  // degraded or unproven read of the agent's output as live.
+  // Feature: decision-quality-proof, Property 75: The console renders degradation on every surface displaying the agent's output
+  it("no signal combination renders the agent's output as live unless the read said so", () => {
+    fc.assert(
+      fc.property(demandIdArb, signalsArb, (id, signals) => {
+        const rendered = renderNotice(surfaceDataPath(id, signals));
+        expect(rendered.count).toBe(1);
+
+        // Live is reachable ONLY from an affirmative "this read was not degraded".
+        if (rendered.kind === "live") {
+          expect(signals.degraded).toBe(false);
+        }
+        // Contrapositive, asserted directly so the implication above cannot be satisfied
+        // by a resolver that never renders "live" at all.
+        if (signals.degraded === true) {
+          expect(rendered.kind).not.toBe("live");
+        }
+      }),
+    );
+  });
+
+  // I-7, and the state these panels are actually in today: the forecast payload carries no
+  // `degraded` field, so the signal arrives `null` and must render as unknown - never as
+  // health, and distinctly from it.
+  // Feature: decision-quality-proof, Property 75: The console renders degradation on every surface displaying the agent's output
+  it("a forecast payload carrying no degradation flag renders unknown on every such panel", () => {
+    fc.assert(
+      fc.property(demandIdArb, triStateArb, (id, synthetic) => {
+        const state = surfaceDataPath(id, { degraded: null, synthetic });
+        expect(state.kind).toBe("unknown");
+
+        const rendered = renderNotice(state);
+        expect(rendered.count).toBe(1);
+        expect(rendered.kind).toBe("unknown");
+        expect(rendered.kind).not.toBe("live");
+        expect(rendered.text).toContain(copy("datapath.unknown"));
+        expect(rendered.text).toContain(copy("datapath.unknown_detail"));
+        expect(rendered.text).not.toContain(copy("datapath.live"));
+        expect(rendered.text).not.toContain(copy("datapath.live_detail"));
+      }),
+    );
+  });
+
+  // The other direction, without which the two facets above would pass on a resolver that
+  // rendered every demand panel as degraded regardless of the read. An affirmative
+  // "not degraded" must be able to reach `live`, or "degraded is rendered" would be
+  // unfalsifiable on this population.
+  // Feature: decision-quality-proof, Property 75: The console renders degradation on every surface displaying the agent's output
+  it("an affirmatively healthy read of the agent's output can render live on every such panel", () => {
+    for (const id of DEMAND_IDS) {
+      const rendered = renderNotice(surfaceDataPath(id, { degraded: false, synthetic: false }));
+      expect(rendered.count).toBe(1);
+      expect(rendered.kind).toBe("live");
+      expect(rendered.text).toContain(copy("datapath.live"));
+      expect(rendered.text).not.toContain(copy("datapath.degraded"));
+    }
   });
 });

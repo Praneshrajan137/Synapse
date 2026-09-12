@@ -194,6 +194,18 @@ export function LiveMarkets() {
     synthetic: null,
   });
 
+  // R9.16: the Demand Prophet panel carries its OWN notice, on the panel that
+  // draws the forecasts. The page-level notice above speaks for three agents at
+  // once, so it cannot discharge an obligation about this one - an operator
+  // reading the forecast table would not be able to tell which stream a
+  // degradation statement was about. Same fail-closed resolver, same honest
+  // `unknown`: `DemandForecast` carries no `degraded` field, so the flag does
+  // not arrive and absence of it is never rendered as health (I-7).
+  const demandPath = surfaceDataPath("live-markets.demand-forecast", {
+    degraded: null,
+    synthetic: null,
+  });
+
   return (
     <section className="space-y-4">
       <PageHeader
@@ -310,6 +322,7 @@ export function LiveMarkets() {
             {demandRows.length}
           </span>
         </header>
+        <DataPathNotice state={demandPath} className="border-border border-b px-3 py-2" />
         <div className="overflow-x-auto">
           <table className="w-full text-left text-sm">
             <thead className="bg-surface-raised text-2xs text-ink-muted uppercase tracking-wide">

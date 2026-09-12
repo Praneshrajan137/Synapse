@@ -1141,3 +1141,234 @@ jobs:
           path: coverage-full.xml
           if-no-files-found: ignore
 
+
+
+  # ===========================================================================
+  # E4 PUBLISHED-ARTIFACT MATERIALISATION (decision-quality-proof task 20.4; R9.15).
+  #
+  # WHAT THIS JOB IS FOR, in one sentence: C38, C40 and C45 all read LOCAL files, so
+  # publishing a checkpoint to the declared zero-cost remote does NOT flip them -- it
+  # leaves them SKIPped, and a SKIP read as a flip would over-claim (I-7).
+  #
+  # THE COUNT CORRECTION THIS JOB EXISTS TO HONOUR. Finding 2's "five gates" is the
+  # number the ABSENT artifact collapses, not the number publication repairs.
+  #   C38  checkpoint_truth.ARTIFACTS_DIR   = artifacts/training   (local *.json)
+  #   C40  calibration_truth.ARTIFACTS_DIR  = artifacts/training   (local *.json)
+  #   C45  runtime_substance.CHECKPOINT_DIR = artifacts/checkpoints (local *.pt), and its
+  #        per-agent probe tests `ckpt.is_file()` BEFORE importing or constructing
+  #        ModelRegistry, so it skips before any download could occur.
+  # Publishing to the remote flips only C46 and C69. R9.15 is the difference, and this
+  # job is where it is discharged.
+  #
+  # WHY IT IS NOT `training-smoke`. That job produces a SMOKE artifact
+  # (`SYNAPSE_SMOKE_RUN=1`, `train.py` writes `version="smoke_<sha7>"`) and then runs
+  # C38/C40/C45 against it. A green `training-smoke` is therefore NOT evidence about a
+  # published model, and `checkpoint-truth.yaml` says so in its own words: the smoke job
+  # writes into `local_candidate_dir: artifacts/checkpoints` and
+  # `ModelRegistry._resolve_checkpoint_path` prefers that local file over the remote, so a
+  # gate resolving through the registry would certify the smoke build as the published
+  # model. This job materialises from the DECLARED SOURCE and nowhere else.
+  #
+  # WHY THE HEAVY STEPS ARE GATED ON A RESOLVED RECORD, and why that is not a swallow.
+  # `infrastructure/ml/published_checkpoints.json` holds `__placeholder__` today, so there
+  # is nothing to materialise and nothing to report about C38/C40/C45. The gate steps carry
+  # `if: steps.record.outputs.published == 'true'` -- a step-level `if:` is NOT a
+  # discarding construct (`workflow_shape_truth.classify_step` reads `continue-on-error` and
+  # the four terminal constructs, none of which this is), so every step here still
+  # propagates its exit status. The final step runs `if: always()` and asserts the
+  # CORRESPONDENCE between the record's state and what was actually read, so "the gates did
+  # not run" is a statement this job makes out loud rather than a silence a reader could
+  # mistake for a pass.
+  #
+  # NO `continue-on-error`, no `|| true`, no `|| echo`, no `; exit 0`. `set -euo pipefail`
+  # opens every multi-line `run:` here; `workflow_shape_truth`'s discarding-construct list
+  # is four literals and an unguarded pipeline is none of them, so the guard is set
+  # explicitly rather than relied upon to be noticed.
+  #
+  # THE REFUSAL THIS JOB WILL PERFORM, stated now so its first red is read correctly.
+  # C38 asserts a recorded `checkpoint_sha` matches the on-disk sha256 of the file it
+  # names, and C40 reads `metrics.coverage_p90` -- both out of a TrainResult JSON under
+  # `artifacts/training`. The publication runbook's step 5 uploads the checkpoint and the
+  # serving sidecar and NOTHING ELSE, so that JSON is not published. This job therefore
+  # FETCHES it and fails naming it when it is absent; it does NOT synthesise one. A
+  # materialisation step that computed the sha256 of the file it had just downloaded and
+  # wrote it into a record C38 then "verified" would be a fabricated pass (I-7), and
+  # C38's determinism assertion would be comparing a number to itself.
+  #
+  # DECLARATIONS LAND IN THE SAME COMMIT (R9.15's coupling): eight step names into
+  # `infrastructure/quality/blocking-steps.yaml::steps`, and this job's `name:` into
+  # `infrastructure/quality/required-checks.yaml::candidates` (argued there from that
+  # file's own eligibility rule and its schema, not from intuition). Either half alone is
+  # a red gate -- `workflow_shape_truth` resolves declared step names against the tree and
+  # `required_checks_truth` resolves declared jobs against it.
+  # ===========================================================================
+  e4-published-artifact:
+    name: E4 published-artifact materialisation (C38/C40/C45)
+    runs-on: ubuntu-latest
+    # Two bounds in one number. On the unpublished path the job is a light install plus a
+    # registry read (~2 min). On the published path it adds an HF download and the CPU
+    # torch wheel, which `training-smoke` measures at well inside its own 25. A timeout is
+    # a FAILED job (I-7), never a skip, so this is a real bound in both cases.
+    timeout-minutes: 25
+    # No per-job `if:` and no `needs:`, deliberately, and both halves matter.
+    # `ci.yml`'s `pull_request: branches: [main]` carries no path filter, so with no `if:`
+    # this job reports on every pull request to `main` -- which is what makes the
+    # `required-checks.yaml` entry eligible rather than ineligible. No `needs:` because
+    # nothing it does depends on `quality-gates`, and waiting 15 minutes to read one JSON
+    # file would buy nothing.
+    env:
+      # `scripts.audit.*` and `agents.*` are imported as top-level packages.
+      PYTHONPATH: .
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+      - name: Install the registry reader (no ML stack)
+        # Declared blocking for the reason `truth-gates`' entry gives, sharpened here: the
+        # published-checkpoint stack reports UNAVAILABLE when an optional import is
+        # missing, so a swallowed install would turn this job's verdict into "could not
+        # look" while the job stayed green. The ML stack is deliberately NOT installed
+        # here -- it is only needed on the published path, and paying for the torch wheel
+        # on every pull request to read one JSON file would be an I-0 category-2 workload
+        # bought for nothing.
+        run: |
+          set -euo pipefail
+          pip install -r packages/requirements.txt
+          pip install -e packages/
+          pip install jsonschema pyyaml "huggingface_hub>=0.23,<1.0"
+      - name: Published-checkpoint record resolves, or this job states that it does not (R9.15)
+        id: record
+        # Two things, in this order. First `--validate-registry --check`, which exits 1 on
+        # an INVALID record: a half-written entry is an error, not an absence, and it must
+        # redden here rather than silently route to the unpublished path. Then the record's
+        # state is written to this step's outputs.
+        #
+        # The outputs are written by Python opening $GITHUB_OUTPUT directly rather than by
+        # redirecting stdout into it. `published_checkpoint_truth` configures structlog, and
+        # one log line on stdout would land inside the outputs file as a malformed key.
+        run: |
+          set -euo pipefail
+          python -m scripts.audit.published_checkpoint_truth --validate-registry --check
+          python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          from scripts.audit.published_checkpoint_truth import policy, registry_status
+
+          active = policy()
+          status = registry_status(name=active.serving_name)
+          repo = ""
+          sha = ""
+          if status.ok:
+              payload = json.loads(Path(active.registry_file).read_text(encoding="utf-8"))
+              entry = payload[active.serving_name]
+              repo = str(entry["repo"])
+              sha = str(entry["sha"])
+          lines = [
+              f"state={status.status}",
+              f"published={'true' if status.ok else 'false'}",
+              f"repo={repo}",
+              f"sha={sha}",
+              "checkpoint="
+              + active.source.checkpoint_filename.format(name=active.serving_name),
+              "sidecar=" + active.source.sidecar_filename.format(name=active.serving_name),
+          ]
+          with Path(os.environ["GITHUB_OUTPUT"]).open("a", encoding="utf-8") as handle:
+              for line in lines:
+                  handle.write(line + "\n")
+          print(f"registry {active.registry_file}: state={status.status}")
+          for problem in status.problems:
+              print(f"  {problem}")
+          PY
+      - name: Materialise the published checkpoint and its sidecar at the serving path (R9.15)
+        if: steps.record.outputs.published == 'true'
+        # Fetched from the DECLARED zero-cost source and from nowhere else. Nothing is
+        # resolved through `ModelRegistry`, which prefers a local candidate over the remote
+        # and would certify the CI smoke build as the published model (R9.7).
+        #
+        # The third download is the refusal this job's header describes. C38 needs a
+        # TrainResult JSON recording `checkpoint_path` + `checkpoint_sha`, and C40 needs
+        # `metrics.coverage_p90`, both under `artifacts/training`. The runbook publishes the
+        # checkpoint and the serving sidecar only, so this fetch is expected to fail until
+        # the publication step uploads that record too -- and failing is correct. Computing
+        # the sha256 here and writing it into a record C38 then "verifies" would make
+        # C38's determinism assertion compare a number with itself (I-7).
+        env:
+          REPO: ${{ steps.record.outputs.repo }}
+          CHECKPOINT: ${{ steps.record.outputs.checkpoint }}
+          SIDECAR: ${{ steps.record.outputs.sidecar }}
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/checkpoints artifacts/training
+          huggingface-cli download "$REPO" "$CHECKPOINT" --local-dir artifacts/checkpoints
+          huggingface-cli download "$REPO" "$SIDECAR" --local-dir artifacts/checkpoints
+          huggingface-cli download "$REPO" "${CHECKPOINT%.pt}.train.json" --local-dir artifacts/training
+      - name: Install the ML stack so C45 cannot SKIP for want of torch (R9.15)
+        if: steps.record.outputs.published == 'true'
+        # C45's probe returns `skip` when torch is absent, and a SKIP read as a flip is the
+        # exact over-claim R9.15 forbids. Paid for only on the published path.
+        run: |
+          set -euo pipefail
+          for req in agents/*/requirements.txt; do pip install -r "$req"; done
+          pip install --index-url https://download.pytorch.org/whl/cpu "torch>=2.2,<2.4"
+      - name: Checkpoint-truth gate against the materialised artifact (C38)
+        if: steps.record.outputs.published == 'true'
+        # No SYNAPSE_SMOKE_RUN here, and that absence is load-bearing: the artifact under
+        # test is the PUBLISHED one, and setting the smoke flag would put this job in the
+        # same evidentiary class as `training-smoke`.
+        run: |
+          set -euo pipefail
+          python -m scripts.audit.checkpoint_truth --check
+      - name: Calibration-truth gate against the materialised artifact (C40)
+        if: steps.record.outputs.published == 'true'
+        run: |
+          set -euo pipefail
+          python -m scripts.audit.calibration_truth --check
+      - name: Runtime-substance gate against the materialised artifact (C45)
+        if: steps.record.outputs.published == 'true'
+        # This is where R9.3 and R9.4 become observable on a published model: the probe
+        # boots the checkpoint through ModelRegistry -> load_serving_model ->
+        # DemandProphetPipeline and now requires at least two distinct confidence values at
+        # four decimal places over at least three SKUs whose feature vectors it proves
+        # distinct (task 20.1). A constant confidence above the 0.7 HITL threshold makes
+        # I-5 inoperative, so a flat spread fails here rather than reading as health.
+        run: |
+          set -euo pipefail
+          python -m scripts.audit.runtime_substance --check
+      - name: A SKIP is not a flip - the three gates read a materialised artifact (R9.15)
+        if: always()
+        # The correspondence step, and the reason this job cannot over-claim. Exit status
+        # propagates in both branches.
+        #
+        # Unpublished: it STATES that C38/C40/C45 were not run here, and asserts that the
+        # serving checkpoint path is empty -- so no locally built artifact can be sitting
+        # where a reader might take it for a published one (R9.5, R9.7).
+        #
+        # Published: it asserts each of the three could not have SKIPped for want of its
+        # input. C45's skip branches are exactly "no torch" and "no ckpt.is_file()"; C38
+        # and C40 both return early when `artifacts/training` holds no readable *.json.
+        # Asserting the inputs rather than parsing three verdicts keeps this step's claim
+        # to one a reader can check against the gate sources in a minute.
+        env:
+          PUBLISHED: ${{ steps.record.outputs.published }}
+          RECORD_STATE: ${{ steps.record.outputs.state }}
+          CHECKPOINT: ${{ steps.record.outputs.checkpoint }}
+          SIDECAR: ${{ steps.record.outputs.sidecar }}
+        run: |
+          set -euo pipefail
+          if [ "$PUBLISHED" != "true" ]; then
+            printf 'UNPUBLISHED (registry state=%s). C38/C40/C45 were NOT executed in this job and it asserts nothing about them: a SKIP is not a PASS (I-7).\n' "$RECORD_STATE"
+            test ! -e "artifacts/checkpoints/$CHECKPOINT"
+            test ! -e "artifacts/checkpoints/$SIDECAR"
+            printf 'No artifact sits at the serving checkpoint path, so nothing can be mistaken for a published model.\n'
+            exit 0
+          fi
+          test -f "artifacts/checkpoints/$CHECKPOINT"
+          test -f "artifacts/checkpoints/$SIDECAR"
+          test -f "artifacts/training/${CHECKPOINT%.pt}.train.json"
+          python -c "import torch; print('torch present:', torch.__version__)"
+          printf 'PUBLISHED (registry state=%s). C38, C40 and C45 each read a materialised published artifact in this job; none of them could have skipped for want of one.\n' "$RECORD_STATE"
