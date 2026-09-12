@@ -38,6 +38,26 @@ clause                       obligation
                              flipped is a FAIL, so the refusal cannot be configured away.
 ===========================  ==============================================================
 
+What decision-quality-proof task 18 added
+-----------------------------------------
+
+===========================  ==============================================================
+clause                       obligation
+===========================  ==============================================================
+``coverage-recompute``       ``coverage_p90`` is **recomputed** from the published held-out
+(R8.9, R8.10, R9.14)         actuals against the published **conformal-adjusted**
+                             ``lower_90``/``upper_90`` bounds over at least the committed
+                             minimum row count. The ``coverage`` clause above -- a *read*
+                             of ``calibrator.last_coverage_p90`` -- is retained as a
+                             cross-check; this is the verdict. Below the floor is a FAIL
+                             reporting the measured value and the floor; a block that is
+                             absent, short, or missing the adjusted bounds is
+                             ``unavailable``, never a pass. The bounds are read rather
+                             than derived from ``predictions``, because the declared
+                             ``quantile_levels`` span a nominal **80%** raw band and
+                             INV-DP-002 is about the adjusted **90%** one.
+===========================  ==============================================================
+
 Every threshold, marker, floor, and tolerance is read from
 ``infrastructure/quality/checkpoint-truth.yaml`` (validated against its committed
 draft-07 schema) rather than inlined here (AD-13). ``COVERAGE_FLOOR`` remains
@@ -46,22 +66,24 @@ importable, but it is now *derived from that file* instead of being a literal.
 Two verdict surfaces, deliberately
 ----------------------------------
 
-* :func:`assess` is the hardened gate: all six clauses, outcomes
+* :func:`assess` is the hardened gate: all seven clauses, outcomes
   ``pass / fail / skip / unavailable``, exit codes ``0 / 1 / 2 / 2``. This is what
-  ``python -m scripts.audit.published_checkpoint_truth --check`` runs and what task
-  12.1 should register.
-* :func:`evaluate` is the **narrower legacy probe** the currently-registered C46 calls
-  (``verify_claims.py:1151``). Its verdict is exactly the R5.3-R5.6 triad of the
-  ``core-purpose-uplift`` spec -- non-smoke, coverage at-or-above the floor, recorded
-  sha pinned -- and it is pinned by
-  ``tests/verify/test_published_checkpoint_gate_property.py``. It shares every clause
+  ``python -m scripts.audit.published_checkpoint_truth --check`` runs and, since
+  decision-quality-proof task 18.3 (AD-19, R9.14), what **C46 registers**
+  (``verify_claims.py::check_published_checkpoint``).
+* :func:`evaluate` is the **narrower legacy probe** C46 called until that re-point. Its
+  verdict is exactly the R5.3-R5.6 triad of the ``core-purpose-uplift`` spec --
+  non-smoke, coverage at-or-above the floor, recorded sha pinned. It shares every clause
   helper with :func:`assess`, so there is one implementation of each rule and two
-  projections of it. Where the two projections differ, :func:`assess` is the stricter:
-  it also refuses an ``indeterminate`` artifact and demands the ``final_crps``
-  recompute. **A conflict worth naming:** for a landed entry whose sidecar publishes no
-  held-out block, :func:`assess` reports ``unavailable`` while the legacy triad reports
-  ``ok``. Re-pointing C46 at :func:`assess` (and retiring the Property-16 test in favour
-  of Property 17) is task 12.1's call, not this task's.
+  projections of it. It is **retained, not deleted**: it is the legacy triad's surface
+  and static reading did not enumerate its callers. **Do not point a gate at it.** Its
+  three-valued ``ok / fail / skip`` vocabulary cannot express "nothing was recomputed",
+  and it resolves that ambiguity in the direction I-7 forbids: it acts on
+  ``Outcome.FAIL`` alone, so an ``UNAVAILABLE`` recompute falls through to ``ok``. For a
+  landed entry whose sidecar publishes no held-out block -- every artifact ``train.py``
+  produced before R9.13 -- :func:`assess` reports ``unavailable`` while the legacy triad
+  reports ``ok``. That divergence is the finding task 18.3 closes, not a tolerated
+  difference of opinion.
 
 It is **$0-safe and never fabricates a pass**:
 
@@ -72,6 +94,7 @@ It is **$0-safe and never fabricates a pass**:
   * coverage below the committed floor     -> FAIL, reporting measured and floor
   * recorded sha != published version      -> FAIL  (drift between record and remote)
   * ``final_crps`` off beyond tolerance    -> FAIL, reporting recorded and recomputed
+  * no held-out block to recompute from    -> UNAVAILABLE, naming what is missing
 
 A second, network-free entry point validates the *record* the operator commits
 (``--validate-registry``): the entry must carry every required key with a sane value
@@ -140,8 +163,22 @@ _DATE_RE: Final[re.Pattern[str]] = re.compile(r"^\d{4}-\d{2}-\d{2}")
 _MIN_SHA_LEN: Final[int] = 7
 _PLACEHOLDER_KEY: Final[str] = "__placeholder__"
 
+#: The published held-out keys carrying the **conformal-adjusted 90%** band, written by
+#: ``agents/demand_prophet/training/train.py::HeldoutHorizon`` (R9.13). The coverage
+#: recompute reads these and never the ``predictions`` quantile columns: the declared
+#: ``quantile_levels`` ``[0.1, 0.5, 0.9]`` span a nominal **80%** raw band, so comparing
+#: actuals against those columns would measure a different interval from the one
+#: INV-DP-002 declares. They are literals here for the same reason ``"predictions"`` and
+#: ``"actuals"`` already are -- they are the block's structure, not a threshold - and
+#: ``checkpoint-truth.yaml``'s committed schema is ``additionalProperties: false`` at
+#: every level, so the policy file cannot carry them without a schema change.
+HELDOUT_LOWER_KEY: Final[str] = "lower_90"
+HELDOUT_UPPER_KEY: Final[str] = "upper_90"
+
 __all__ = [
     "COVERAGE_FLOOR",
+    "HELDOUT_LOWER_KEY",
+    "HELDOUT_UPPER_KEY",
     "POLICY_FILE",
     "POLICY_SCHEMA_FILE",
     "REGISTRY",
@@ -167,6 +204,7 @@ __all__ = [
     "load_policy",
     "main",
     "policy",
+    "recompute_coverage_p90",
     "recompute_final_crps",
     "refused_local_candidates",
     "registry_status",
@@ -453,6 +491,11 @@ class Clause(str, Enum):
     COVERAGE = "coverage"
     SHA_PIN = "sha-pin"
     CRPS_RECOMPUTE = "crps-recompute"
+    #: The R8.9/R8.10 recompute of held-out coverage, kept separate from ``COVERAGE``
+    #: for the same reason ``CRPS_RECOMPUTE`` is separate: reading a recorded number
+    #: and recomputing it are two different claims, and a report that folded them
+    #: into one clause could not say which of the two failed.
+    COVERAGE_RECOMPUTE = "coverage-recompute"
 
 
 _EXIT_BY_OUTCOME: Final[dict[Outcome, int]] = {
@@ -513,7 +556,23 @@ class Finding(BaseModel):
 
 
 class CoverageComparison(BaseModel):
-    """The R3.3 comparison, reporting **both** the measured value and the floor."""
+    """The R3.3 comparison, reporting **both** the measured value and the floor.
+
+    One model, **two bases**, named by :attr:`basis` (R8.9, AD-19):
+
+    * ``"read"`` -- :func:`compare_coverage` reads ``calibrator.last_coverage_p90`` at
+      the committed ``sidecar_path``. Retained as a **cross-check**.
+    * ``"recompute"`` -- :func:`recompute_coverage_p90` recomputes empirical coverage
+      from the published held-out actuals against the published conformal-adjusted
+      bounds. This is the **verdict**: a recorded number nobody recomputed is not
+      evidence.
+
+    :attr:`outcome` carries what ``holds`` cannot. ``holds`` is two-valued, so it
+    collapses "measured, and below the floor" into the same answer as "never measured
+    at all" -- the exact three-versus-four-state collapse that let an ``UNAVAILABLE``
+    read as a pass on the CRPS side (R9.14). ``outcome`` keeps them apart:
+    ``FAIL`` for measured-and-below, ``UNAVAILABLE`` for nothing-to-measure.
+    """
 
     model_config = ConfigDict(frozen=True)
 
@@ -524,6 +583,25 @@ class CoverageComparison(BaseModel):
     sidecar_path: str
     holds: bool
     detail: str
+    #: ``"read"`` or ``"recompute"`` -- which surface produced :attr:`measured`.
+    basis: str
+    #: Four-valued, so an unmeasurable coverage is never a pass (I-7).
+    outcome: Outcome
+    #: Held-out rows the recompute consumed, summed across horizons (0 for a read).
+    rows: int = 0
+    #: The committed minimum :attr:`rows` was judged against (0 for a read).
+    min_rows: int = 0
+    #: The horizons recomputed over, in sorted order (empty for a read).
+    horizons: tuple[str, ...] = ()
+    #: Per-horizon coverage, positionally aligned with :attr:`horizons`.
+    per_horizon_coverage: tuple[float, ...] = ()
+    #: The recorded value read at :attr:`sidecar_path`, for the recompute's
+    #: cross-check (``None`` for a read, whose :attr:`measured` *is* that value).
+    cross_check: float | None = None
+    #: ``|recomputed - recorded|``. Reported, and deliberately **not** gated: the
+    #: committed policy declares no coverage allowance and its schema admits no new
+    #: key, so a threshold here would be the ungated number AD-13 forbids.
+    divergence: float | None = None
 
 
 class CrpsRecompute(BaseModel):
@@ -561,6 +639,10 @@ class CheckpointTruthReport(BaseModel):
     version: str | None
     recorded_sha: str | None
     coverage: CoverageComparison | None
+    #: The R8.9 recompute. Separate from :attr:`coverage`, which stays the *read*, so
+    #: a reader can see the recorded number and the recomputed one side by side
+    #: instead of one having quietly replaced the other.
+    coverage_recompute: CoverageComparison | None
     crps: CrpsRecompute | None
     refused_local_candidates: tuple[str, ...]
     outcome: Outcome
@@ -813,10 +895,17 @@ def classify(
 def compare_coverage(
     sidecar: Mapping[str, Any] | None, floor: CoverageFloorPolicy
 ) -> CoverageComparison:
-    """Compare the published held-out ``coverage_p90`` against the committed floor.
+    """READ the published held-out ``coverage_p90`` and compare it against the floor.
 
     R3.3 requires the report to carry **both** numbers, so the detail states the
     measured value (or ``null``) and the floor on every branch.
+
+    This is the **cross-check**, not the verdict (R8.9, task 18.2). It reads
+    ``calibrator.last_coverage_p90`` at the committed ``sidecar_path`` -- a number the
+    training run recorded about itself. :func:`recompute_coverage_p90` recomputes the
+    same quantity from the published raw material and is what decides. Both are kept:
+    a recorded number nobody recomputed is not evidence, and a recompute with nothing
+    to disagree with cannot catch a stale record.
     """
     raw = None if sidecar is None else _read_dotted(sidecar, floor.sidecar_path)
     measured = _finite(raw)
@@ -828,6 +917,8 @@ def compare_coverage(
             invariant=floor.invariant,
             sidecar_path=floor.sidecar_path,
             holds=False,
+            basis="read",
+            outcome=Outcome.FAIL,
             detail=(
                 f"measured coverage_p90=null (sidecar path {floor.sidecar_path!r} carries "
                 f"{raw!r}) against floor {floor.value} ({floor.invariant}, {floor.direction}); "
@@ -844,6 +935,8 @@ def compare_coverage(
         invariant=floor.invariant,
         sidecar_path=floor.sidecar_path,
         holds=holds,
+        basis="read",
+        outcome=Outcome.PASS if holds else Outcome.FAIL,
         detail=(
             f"measured coverage_p90={measured} against floor {floor.value} "
             f"({floor.invariant}, {floor.direction}) {verdict}"
@@ -896,12 +989,20 @@ def _pinball_mean(errors: Sequence[float], level: float) -> float:
     return total / len(errors)
 
 
-def _horizon_blocks(block: Mapping[str, Any]) -> dict[str, Any] | None:
-    """Normalise the two accepted held-out shapes into ``{horizon: payload}``."""
+def _horizon_blocks(
+    block: Mapping[str, Any], *, marker: str = "predictions"
+) -> dict[str, Any] | None:
+    """Normalise the two accepted held-out shapes into ``{horizon: payload}``.
+
+    ``marker`` is the key whose presence identifies the *flat* single-horizon form.
+    The CRPS recompute recognises it by ``predictions``; the coverage recompute by
+    ``actuals``, since a block could in principle publish bounds and actuals without
+    the raw quantile columns. One normalisation rule, two projections of it.
+    """
     horizons = block.get("horizons")
     if isinstance(horizons, dict):
         return {str(key): value for key, value in horizons.items()}
-    if "predictions" in block:
+    if marker in block:
         return {"*": block}
     return None
 
@@ -1107,6 +1208,235 @@ def recompute_final_crps(
 
 
 # ---------------------------------------------------------------------------
+# Recomputing held-out coverage (R8.9, R8.10, R9.8, R9.14 - task 18.2)
+# ---------------------------------------------------------------------------
+
+
+def _parse_bounds(payload: Any) -> tuple[list[float], list[float], list[float]] | str:
+    """Parse one horizon's ``(actuals, lower_90, upper_90)`` or say why it cannot be used.
+
+    The refusal to fall back to the ``predictions`` quantile columns is deliberate and
+    is the whole point of reading these two keys: with levels ``[0.1, 0.5, 0.9]`` those
+    columns span a nominal **80%** band, and scoring actuals against them would report
+    a *different interval's* coverage against INV-DP-002's 90% floor. An absent bound
+    is therefore unavailable, never a substituted number.
+    """
+    if not isinstance(payload, dict):
+        return f"horizon payload must be an object, got {type(payload).__name__}"
+    columns: dict[str, list[float]] = {}
+    for key in ("actuals", HELDOUT_LOWER_KEY, HELDOUT_UPPER_KEY):
+        raw = payload.get(key)
+        if not isinstance(raw, list):
+            return (
+                f"horizon payload must carry a list {key!r}, got {type(raw).__name__}; the "
+                f"conformal-adjusted {HELDOUT_LOWER_KEY!r}/{HELDOUT_UPPER_KEY!r} bounds are "
+                "the interval INV-DP-002 is about, and the raw quantile columns are a "
+                "narrower one, so they are never substituted for them"
+            )
+        parsed: list[float] = []
+        for value in raw:
+            numeric = _finite(value)
+            if numeric is None:
+                return f"{key} value {value!r} is not a finite number"
+            parsed.append(numeric)
+        columns[key] = parsed
+
+    actuals = columns["actuals"]
+    lower = columns[HELDOUT_LOWER_KEY]
+    upper = columns[HELDOUT_UPPER_KEY]
+    if not actuals:
+        return "horizon payload carries no held-out rows"
+    if not len(actuals) == len(lower) == len(upper):
+        return (
+            f"actuals ({len(actuals)}), {HELDOUT_LOWER_KEY} ({len(lower)}) and "
+            f"{HELDOUT_UPPER_KEY} ({len(upper)}) have different lengths"
+        )
+    return actuals, lower, upper
+
+
+def _unavailable_coverage(
+    floor: CoverageFloorPolicy,
+    *,
+    detail: str,
+    cross_check: float | None,
+    min_rows: int,
+    rows: int = 0,
+) -> CoverageComparison:
+    """Nothing was recomputed, so nothing is reported as measured (I-7)."""
+    return CoverageComparison(
+        measured=None,
+        floor=floor.value,
+        direction=floor.direction,
+        invariant=floor.invariant,
+        sidecar_path=floor.sidecar_path,
+        holds=False,
+        basis="recompute",
+        outcome=Outcome.UNAVAILABLE,
+        rows=rows,
+        min_rows=min_rows,
+        cross_check=cross_check,
+        detail=detail,
+    )
+
+
+def recompute_coverage_p90(
+    sidecar: Mapping[str, Any] | None,
+    floor: CoverageFloorPolicy,
+    *,
+    block: str,
+    min_rows: int,
+) -> CoverageComparison:
+    """RECOMPUTE held-out ``coverage_p90`` from the published block (R8.9, R8.10).
+
+    The fraction of published held-out actuals falling inside the published
+    **conformal-adjusted** ``lower_90``/``upper_90`` bounds, per horizon, then the mean
+    over horizons. That aggregation is not a choice made here: it mirrors
+    ``ConformalCalibrator.fit``, which sets ``last_coverage_p90`` to the mean of its
+    per-horizon coverages. The two therefore measure the same quantity, which is what
+    makes the cross-check below meaningful rather than a comparison of two definitions.
+
+    Args:
+        sidecar: The fetched serving sidecar, or ``None`` when nothing was fetched.
+        floor: The committed ``coverage_p90`` floor (value, direction, invariant, and
+            the dotted path the cross-check is read from).
+        block: The sidecar key holding the held-out block. Read by the caller from
+            ``checkpoint-truth.yaml::tolerances.final_crps.sidecar_block``.
+        min_rows: The committed minimum published row count, summed across horizons.
+            Read by the caller from ``tolerances.final_crps.min_samples``. Both facts
+            live under the CRPS tolerance because that file's committed schema is
+            ``additionalProperties: false`` at every level and so admits no coverage-
+            side sibling; they are passed explicitly rather than re-read here so this
+            function states exactly what it consumes.
+
+    Returns:
+        A comparison whose :attr:`~CoverageComparison.outcome` is ``PASS`` only when the
+        coverage was actually recomputed from at least ``min_rows`` rows **and** lands
+        at or above the floor; ``FAIL`` when it was recomputed and is below the floor,
+        reporting the measured value and the floor (R8.10); and ``UNAVAILABLE`` when
+        the block is absent, malformed, shorter than ``min_rows``, or omits the
+        adjusted bounds -- a number nobody could recompute is not evidence, and
+        UNAVAILABLE is never a pass (I-7).
+    """
+    cross_check = None if sidecar is None else _finite(_read_dotted(sidecar, floor.sidecar_path))
+    if sidecar is None:
+        return _unavailable_coverage(
+            floor,
+            cross_check=None,
+            min_rows=min_rows,
+            detail=(
+                f"no artifact was fetched, so coverage_p90 could not be recomputed against "
+                f"floor {floor.value} ({floor.invariant}); an unrecomputed number is not "
+                "evidence"
+            ),
+        )
+
+    payload = sidecar.get(block)
+    if not isinstance(payload, dict):
+        return _unavailable_coverage(
+            floor,
+            cross_check=cross_check,
+            min_rows=min_rows,
+            detail=(
+                f"the published sidecar carries no {block!r} block, so coverage_p90 could not "
+                f"be recomputed against floor {floor.value} ({floor.invariant}); the recorded "
+                f"read at {floor.sidecar_path!r} is {cross_check!r} and stands uncorroborated. "
+                "Publishing the held-out block is a step of "
+                "docs/runbooks/train-and-publish-checkpoint.md"
+            ),
+        )
+
+    grouped = _horizon_blocks(payload, marker="actuals")
+    if not grouped:
+        return _unavailable_coverage(
+            floor,
+            cross_check=cross_check,
+            min_rows=min_rows,
+            detail=(
+                f"the {block!r} block declares neither a 'horizons' mapping nor a flat "
+                "'actuals' list, so no coverage could be recomputed against floor "
+                f"{floor.value} ({floor.invariant})"
+            ),
+        )
+
+    per_horizon: dict[str, float] = {}
+    rows = 0
+    for horizon in sorted(grouped):
+        parsed = _parse_bounds(grouped[horizon])
+        if isinstance(parsed, str):
+            return _unavailable_coverage(
+                floor,
+                cross_check=cross_check,
+                min_rows=min_rows,
+                rows=rows,
+                detail=(
+                    f"the {block!r} block is unusable at horizon {horizon!r}: {parsed}; "
+                    f"coverage_p90 was not recomputed against floor {floor.value} "
+                    f"({floor.invariant})"
+                ),
+            )
+        actuals, lower, upper = parsed
+        covered = sum(
+            1
+            for actual, low, high in zip(actuals, lower, upper, strict=True)
+            if low <= actual <= high
+        )
+        per_horizon[horizon] = covered / len(actuals)
+        rows += len(actuals)
+
+    if rows < min_rows:
+        return _unavailable_coverage(
+            floor,
+            cross_check=cross_check,
+            min_rows=min_rows,
+            rows=rows,
+            detail=(
+                f"the published held-out set holds {rows} row(s), below the committed minimum "
+                f"of {min_rows}; a coverage estimate that noisy is not evidence against floor "
+                f"{floor.value} ({floor.invariant})"
+            ),
+        )
+
+    horizons = tuple(sorted(per_horizon))
+    recomputed = sum(per_horizon.values()) / len(per_horizon)
+    holds = recomputed >= floor.value
+    divergence = None if cross_check is None else abs(recomputed - cross_check)
+    verdict = "holds" if holds else "is BELOW the floor (uncalibrated as published)"
+    if cross_check is None:
+        agreement = (
+            f"the recorded read at {floor.sidecar_path!r} is null, so the recompute stands "
+            "alone"
+        )
+    else:
+        agreement = (
+            f"the recorded read at {floor.sidecar_path!r} is {cross_check}, a divergence of "
+            f"{divergence:.6f} from the recompute (reported, not gated: the committed policy "
+            "declares no coverage allowance)"
+        )
+    return CoverageComparison(
+        measured=recomputed,
+        floor=floor.value,
+        direction=floor.direction,
+        invariant=floor.invariant,
+        sidecar_path=floor.sidecar_path,
+        holds=holds,
+        basis="recompute",
+        outcome=Outcome.PASS if holds else Outcome.FAIL,
+        rows=rows,
+        min_rows=min_rows,
+        horizons=horizons,
+        per_horizon_coverage=tuple(per_horizon[horizon] for horizon in horizons),
+        cross_check=cross_check,
+        divergence=divergence,
+        detail=(
+            f"recomputed coverage_p90={recomputed:.6f} from {rows} published held-out row(s) "
+            f"over horizon(s) {list(horizons)}, scoring actuals against the conformal-adjusted "
+            f"{HELDOUT_LOWER_KEY}/{HELDOUT_UPPER_KEY} bounds, against floor {floor.value} "
+            f"({floor.invariant}, {floor.direction}) {verdict}; {agreement}"
+        ),
+    )
+
+
+# ---------------------------------------------------------------------------
 # Fetching the published sidecar from the declared zero-cost source
 # ---------------------------------------------------------------------------
 
@@ -1133,8 +1463,27 @@ def fetch_from_hub(repo_id: str, filename: str) -> str:
 
 
 def _read_sidecar(fetcher: SidecarFetcher, repo_id: str, filename: str) -> dict[str, Any]:
-    """Fetch and parse the published sidecar."""
-    path = fetcher(repo_id, filename)
+    """Fetch and parse the published sidecar.
+
+    **The fetch is wrapped, and this is a repair rather than defensiveness.**
+    :func:`fetch_from_hub` already converts every remote failure into
+    :class:`_FetchError` -- its own comment says "any remote failure is honest
+    unavailability" -- but that conversion lived in the DEFAULT fetcher only, so an
+    injected fetcher, or a future `huggingface_hub` that raised below that wrapper,
+    escaped it and the exception propagated out of :func:`assess`. A gate that RAISES
+    is not a gate that REPORTS: C46 would have surfaced a traceback where a verdict
+    belongs, which is the C44 defect (a `FileNotFoundError` standing in for a check's
+    finding) in a new place. I-7 requires unavailability to be a reported state.
+    Found by ``tests/verify/test_smoke_artifact_distinction_property.py``'s
+    unfetchable-sha clause, which is the point of asserting the refusal path by
+    construction rather than waiting for a generated example to reach it.
+    """
+    try:
+        path = fetcher(repo_id, filename)
+    except _FetchError:
+        raise
+    except Exception as error:  # noqa: BLE001 - any remote failure is honest unavailability
+        raise _FetchError(f"cannot fetch {filename} from {repo_id}: {error}") from error
     try:
         parsed: Any = json.loads(Path(path).read_text(encoding="utf-8"))
     except (OSError, UnicodeDecodeError, json.JSONDecodeError) as error:
@@ -1180,7 +1529,9 @@ def assess(
     Returns:
         A report whose outcome is ``PASS`` only when a landed record resolves to a real,
         calibrated, sha-pinned artifact whose recorded ``final_crps`` survives its own
-        recompute. Every other state is ``FAIL``, ``SKIP``, or ``UNAVAILABLE``.
+        recompute **and** whose held-out ``coverage_p90`` was recomputed from the
+        published conformal-adjusted bounds and lands at or above the committed floor.
+        Every other state is ``FAIL``, ``SKIP``, or ``UNAVAILABLE``.
     """
     try:
         active = policy() if checkpoint_policy is None else checkpoint_policy
@@ -1202,6 +1553,7 @@ def assess(
             version=None,
             recorded_sha=None,
             coverage=None,
+            coverage_recompute=None,
             crps=None,
             refused_local_candidates=(),
             outcome=Outcome.UNAVAILABLE,
@@ -1298,6 +1650,7 @@ def assess(
             version=None,
             recorded_sha=None,
             coverage=None,
+            coverage_recompute=None,
             crps=None,
             refused_local_candidates=refused,
             outcome=aggregate,
@@ -1378,6 +1731,7 @@ def assess(
         )
 
     coverage: CoverageComparison | None = None
+    coverage_recompute: CoverageComparison | None = None
     crps: CrpsRecompute | None = None
     version: str | None = None
 
@@ -1393,6 +1747,26 @@ def assess(
                     requirement="R3.3",
                     outcome=Outcome.FAIL,
                     detail=coverage.detail,
+                )
+            )
+
+        # -- clause `coverage-recompute`: the read above is the cross-check, this is the
+        # verdict. A recorded coverage nobody recomputed is not evidence (R8.9, R8.10),
+        # and a block that cannot be recomputed is UNAVAILABLE rather than a pass so the
+        # coverage side cannot repeat the CRPS side's fall-through (R9.14).
+        coverage_recompute = recompute_coverage_p90(
+            sidecar,
+            active.floors.coverage_p90,
+            block=active.tolerances.final_crps.sidecar_block,
+            min_rows=active.tolerances.final_crps.min_samples,
+        )
+        if coverage_recompute.outcome is not Outcome.PASS:
+            findings.append(
+                Finding(
+                    clause=Clause.COVERAGE_RECOMPUTE,
+                    requirement="R8.9",
+                    outcome=coverage_recompute.outcome,
+                    detail=coverage_recompute.detail,
                 )
             )
 
@@ -1428,11 +1802,12 @@ def assess(
     aggregate = _aggregate(findings)
     if aggregate is Outcome.PASS:
         measured = "unknown" if coverage is None else coverage.measured
+        recomputed = "unknown" if coverage_recompute is None else coverage_recompute.measured
         detail = (
             f"published {serving_name} @ {repo}: {classification.value} artifact "
-            f"version={version}, coverage_p90={measured} at-or-above floor "
-            f"{active.floors.coverage_p90.value}, recorded sha {recorded_sha!r} pinned, "
-            f"final_crps recomputed within tolerance"
+            f"version={version}, coverage_p90 recomputed as {recomputed} (recorded "
+            f"{measured}) at-or-above floor {active.floors.coverage_p90.value}, recorded sha "
+            f"{recorded_sha!r} pinned, final_crps recomputed within tolerance"
         )
     else:
         detail = next(
@@ -1453,6 +1828,7 @@ def assess(
         version=version,
         recorded_sha=recorded_sha or None,
         coverage=coverage,
+        coverage_recompute=coverage_recompute,
         crps=crps,
         refused_local_candidates=refused,
         outcome=aggregate,
@@ -1462,20 +1838,34 @@ def assess(
 
 
 # ---------------------------------------------------------------------------
-# The narrower legacy probe C46 consumes
+# The narrower legacy probe C46 consumed until task 18.3 re-pointed it at `assess`
 # ---------------------------------------------------------------------------
 
 
 def evaluate(*, name: str = SERVING_NAME) -> PublishProbe:
     """Verify the published checkpoint on the R5.3-R5.6 triad; SKIP when unverifiable.
 
-    This is the surface C46 (``verify_claims.py:1151``) calls and the surface
-    ``tests/verify/test_published_checkpoint_gate_property.py`` pins: with the registry
-    populated and the remote reachable, ``ok`` iff the sidecar is non-smoke **and** its
-    held-out coverage is at or above the committed floor **and** the recorded sha
-    appears in the published version. It shares every clause helper with :func:`assess`,
-    which is stricter: it additionally refuses an ``indeterminate`` artifact and demands
-    the ``final_crps`` recompute. Re-pointing C46 at :func:`assess` is task 12.1's call.
+    **This is no longer the registered surface.** C46
+    (``verify_claims.py::check_published_checkpoint``) called it until
+    decision-quality-proof task 18.3 re-pointed the check at :func:`assess` (AD-19,
+    R9.14). It is retained because static reading did not enumerate its callers, and it
+    is pinned as a legacy projection rather than as a gate.
+
+    With the registry populated and the remote reachable: ``ok`` iff the sidecar is
+    non-smoke **and** its held-out coverage is at or above the committed floor **and**
+    the recorded sha appears in the published version. It shares every clause helper
+    with :func:`assess`, which is strictly stricter -- it also refuses an
+    ``indeterminate`` artifact, folds a smoke version *prefix* into the smoke rule,
+    carries the two policy pins, and demands both recomputes.
+
+    **The defect this surface cannot express, stated so nobody re-points a gate at it.**
+    It acts on ``Outcome.FAIL`` alone below, so an ``UNAVAILABLE`` recompute -- the
+    outcome for a sidecar with no held-out block, and for an entry recording no
+    ``final_crps`` at all, since this function never calls :func:`validate_entry` --
+    falls through to ``ok``. A three-valued vocabulary cannot distinguish "nothing was
+    recomputed" from "the subject is absent", and absence of proof is never a pass
+    (I-7). Fixing it here would change a long-pinned legacy verdict; the repair was to
+    move the gate, not to widen the triad.
     """
     try:
         active = policy()
@@ -1576,7 +1966,12 @@ def format_report(report: CheckpointTruthReport) -> list[str]:
         f"  detail         : {report.classification_detail}",
     ]
     if report.coverage is not None:
-        lines.append(f"  coverage       : {report.coverage.detail}")
+        lines.append(f"  coverage read  : {report.coverage.detail}")
+    if report.coverage_recompute is not None:
+        lines.append(
+            f"  coverage recomp: [{report.coverage_recompute.outcome.value}] "
+            f"{report.coverage_recompute.detail}"
+        )
     if report.crps is not None:
         lines.append(f"  final_crps     : [{report.crps.outcome.value}] {report.crps.detail}")
     if report.refused_local_candidates:

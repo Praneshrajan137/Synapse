@@ -97,6 +97,27 @@ floors:
       scripts/audit/published_checkpoint_truth.py; moved here under AD-13. An
       absent measurement is reported with measured=null against this floor and is
       never a pass.
+      TWO SURFACES, ONE FLOOR (decision-quality-proof R8.9, R8.10, R9.14, AD-19).
+      `sidecar_path` above is READ by `compare_coverage`, which is retained as a
+      CROSS-CHECK. The VERDICT is `recompute_coverage_p90`, which recomputes
+      empirical coverage from the published held-out actuals against the published
+      conformal-adjusted bounds -- a recorded number nobody recomputed is not
+      evidence. Read the two band widths carefully: the `quantile_levels` declared
+      under `tolerances.final_crps` below are [0.1, 0.5, 0.9] and so span a nominal
+      EIGHTY percent RAW-quantile band, which is NOT the conformal-adjusted NINETY
+      percent band this floor is about. The recompute therefore reads the sidecar's
+      `lower_90` / `upper_90` lists and never the quantile columns; comparing
+      actuals against the raw band would measure a different interval from the one
+      INV-DP-002 declares and would under-report against 0.85. The minimum row
+      count both recomputes require is `tolerances.final_crps.min_samples` -- ONE
+      committed minimum shared by both, not two. It is not declared as a key under
+      this floor because infrastructure/quality/schemas/checkpoint-truth.schema.json
+      is `additionalProperties: false` at every level, so this file admits no new
+      key without a schema change. A dedicated `coverage_p90` allowance for the
+      recompute-versus-read divergence is OWED for the same reason and does not
+      exist yet: the divergence is therefore REPORTED with both numbers and is not
+      itself a FAIL, because inventing a tolerance here would be exactly the
+      ungated number AD-13 forbids.
 
 # ---------------------------------------------------------------------------
 # Tolerances (R3.9)
@@ -124,12 +145,33 @@ tolerances:
       no `heldout` block cannot be recomputed and is UNAVAILABLE, never a pass --
       publishing the block is a runbook step (docs/runbooks/train-and-publish-
       checkpoint.md step 5).
-      Required `heldout` shape, canonical JSON, all lists the same length:
+      `min_samples` is THE committed minimum row count, shared by BOTH recomputes
+      (final_crps and coverage_p90): a block shorter than it is UNAVAILABLE rather
+      than a pass, for either. It is counted across horizons, matching the way both
+      recomputes aggregate. agents/demand_prophet/training/train.py mirrors it as
+      `HELDOUT_MIN_ROWS`, and the equality of the two declarations is pinned by
+      tests/verify/test_recompute_or_unavailable_property.py -- a mirror nothing
+      compares is a second source of truth, not a declaration.
+      Required `heldout` shape, canonical JSON, all lists the same length, written
+      by train.py::HeldoutBlock (decision-quality-proof R9.13):
         {"heldout": {"quantile_levels": [0.1, 0.5, 0.9],
+                     "raw_quantile_band": 0.8,
+                     "conformal_adjusted_band": 0.9,
+                     "rows": 160, "min_rows": 32,
                      "horizons": {"1h": {"predictions": [[lo, mid, hi], ...],
-                                         "actuals": [y, ...]}}}}
+                                         "actuals": [y, ...],
+                                         "lower_90": [l, ...],
+                                         "upper_90": [u, ...]}}}}
+      `predictions` carries the RAW quantile forecasts at `quantile_levels` and is
+      what the final_crps pinball recompute consumes. `lower_90` / `upper_90` carry
+      the CONFORMAL-ADJUSTED band (a single symmetric CQR radius widening both ends)
+      and are what the coverage recompute consumes. The two are different intervals
+      -- 80% nominal versus 90% nominal -- and neither is derivable from the other,
+      which is why both are published rather than one.
       A flat single-horizon form ({"heldout": {"predictions": [...],
-      "actuals": [...]}}) is accepted and reported under the horizon name "*".
+      "actuals": [...]}}) is accepted and reported under the horizon name "*"; the
+      coverage recompute requires `lower_90` / `upper_90` in that form too and
+      reports UNAVAILABLE without them rather than falling back to the raw band.
 
 # ---------------------------------------------------------------------------
 # Task-record claim scan (R3.6)

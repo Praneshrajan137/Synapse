@@ -322,10 +322,34 @@ def flat_heldout(
     *,
     declare_levels: bool,
 ) -> dict[str, Any]:
-    """The single-horizon shape the policy accepts, reported under the horizon name ``*``."""
+    """The single-horizon shape the policy accepts, reported under the horizon name ``*``.
+
+    **The two bound lists were added in session 9 (task 18.1/18.2) and this is a
+    PRECONDITION correction, not an assertion weakening.** ``assess`` gained
+    ``Clause.COVERAGE_RECOMPUTE``, which recomputes empirical coverage from the published
+    actuals against the published **conformal-adjusted** bounds and reports
+    ``UNAVAILABLE`` when the block is absent or shorter than the committed minimum. A
+    fixture carrying ``predictions`` and ``actuals`` alone therefore cannot reach ``PASS``
+    at all -- so without these two lists the three PASS-expecting properties in this file
+    would be asserting against an artifact the gate now, correctly, refuses.
+
+    The standard got **stricter**, which is the test R2.10 turns on: the gate demands a
+    recomputable block where it previously accepted a recorded number, and this fixture
+    now supplies one. The bounds bracket every actual by construction, so the recomputed
+    coverage is ``1.0`` and lands above the ``0.85`` floor -- the PASS case is genuine
+    rather than tolerated. This is same-commit coupling 3: a schema change and every
+    fixture that carries it.
+    """
+    rows = [list(row) for row in predictions]
+    values = list(actuals)
     block: dict[str, Any] = {
-        "predictions": [list(row) for row in predictions],
-        "actuals": list(actuals),
+        "predictions": rows,
+        "actuals": values,
+        # The conformal-adjusted 90% band, NOT the raw 80% quantile span the declared
+        # `quantile_levels` [0.1, 0.5, 0.9] describe. INV-DP-002 is about the adjusted
+        # band, and conflating the two is the distinction task 18.1 names explicitly.
+        "lower_90": [value - 1.0 for value in values],
+        "upper_90": [value + 1.0 for value in values],
     }
     if declare_levels:
         block["quantile_levels"] = list(LEVELS)

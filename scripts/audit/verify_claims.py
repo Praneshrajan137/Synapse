@@ -1268,15 +1268,32 @@ def check_published_checkpoint() -> CheckResult:
     C42 proves the serving *code path* is real on the CI smoke checkpoint. C46
     proves an operator actually published a genuine, non-smoke, adequately
     calibrated checkpoint to the $0 serving source (HF Hub) and recorded it.
-    SKIPs when DP_HF_REPO is unset or the registry is still a placeholder — never
-    fabricates a pass; FAILs only on a smoke/under-covered/drifted published model.
+
+    Registers ``assess``, not the narrower legacy ``evaluate`` (decision-quality-proof
+    task 18.3, AD-19, R9.14). ``evaluate`` acted on ``Outcome.FAIL`` alone and then
+    returned ``ok``, so ``Outcome.UNAVAILABLE`` — the outcome for a sidecar carrying no
+    held-out block, which is every artifact today's ``train.py`` produces — **fell
+    through to a pass**. It also never called ``validate_entry``, so an entry with no
+    ``final_crps`` yielded ``recorded=None`` and the same fall-through. ``assess``
+    returns a four-valued ``Outcome`` whose findings name their clause and requirement,
+    and ``GATE_STATUS`` already maps ``unavailable -> SKIP``: non-passing, excluded from
+    the published PASS count, never a pass (I-7).
+
+    ``assess`` is strictly STRICTER, and the cost is stated rather than discovered: it
+    refuses an ``indeterminate`` artifact, folds a smoke version *prefix* into the smoke
+    rule where ``evaluate`` used the sidecar flag alone, and adds the two policy-pin
+    clauses (``source.zero_cost`` true, ``source.allow_local_substitution`` false). C46's
+    row therefore reads differently from its long-pinned form. That cannot lose a real
+    PASS: the current row is ``DP_HF_REPO unset - no published model claimed`` and is a
+    SKIP. ``evaluate`` is RETAINED rather than deleted — it is the legacy triad's surface
+    and static reading did not enumerate its callers.
 
     Every branch reports ``cid="C46"``: this SKIP branch previously returned
     ``"C43"``, so an unavailable published-checkpoint probe landed on another
     check's row and left C46 with no result (R10.5, design AD-14).
     """
     try:
-        from scripts.audit.published_checkpoint_truth import evaluate as _eval_pub
+        from scripts.audit.published_checkpoint_truth import assess as _assess_pub
     except ImportError as exc:
         return CheckResult(
             "C46",
@@ -1284,9 +1301,9 @@ def check_published_checkpoint() -> CheckResult:
             "SKIP",
             f"published_checkpoint_truth import failed: {exc}",
         )
-    probe = _eval_pub()
-    status = GATE_STATUS[probe.status]
-    return CheckResult("C46", "Published checkpoint", status, probe.detail)
+    report = _assess_pub()
+    status = GATE_STATUS[report.outcome.value]
+    return CheckResult("C46", "Published checkpoint", status, report.detail)
 
 
 # ---------------------------------------------------------------------------
