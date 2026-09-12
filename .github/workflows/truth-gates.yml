@@ -38,12 +38,36 @@
 # runs the --write form"; that is no longer true - the committed record parses this file
 # and carries 49 rows for this job, so it was regenerated. What IS still true, and is
 # the reason the note is kept rather than deleted: `gate_surface` projects every step of
-# every workflow, so ADDING OR RENAMING A STEP IN THIS FILE makes
-# `docs/state/GATE_SURFACE.md` stale and flips registered check C63 to FAIL. C63's
-# status is inside the count `doc_truth` and `readme_gen` pin, so the drift cascades
-# into both. The repair is `python -m scripts.audit.gate_surface --write` (then
-# `ledger_gen --write`, then `readme_gen --write`) IN THE SAME CHANGE, in that order -
-# registration and wiring first, generation last. A failing generator diff is the
+# every workflow IN STEP ORDER, so ADDING, RENAMING, REORDERING OR REMOVING A STEP IN THIS
+# FILE makes `docs/state/GATE_SURFACE.md` stale and flips registered check C63 to FAIL.
+# REORDERING is named explicitly because it is the case a reader assumes is free: the
+# `Surface` and `Declared-blocking anchors` tables emit one row per step in the order the
+# file declares them, so a pure swap changes row CONTENT at fixed positions while changing
+# no count and no row total. C63's status is inside the count `doc_truth` and `readme_gen`
+# pin, so the drift cascades into both. The repair is
+# `python -m scripts.audit.gate_surface --write`, then `readme_gen --write`, then
+# `ledger_gen --write`, IN THE SAME CHANGE and IN THAT ORDER - registration and wiring
+# first, generation last, and WITHIN generation the README before the ledger.
+#
+# THAT LAST CLAUSE WAS BACKWARDS IN THIS HEADER UNTIL TASK 26.4, and this header is what
+# other documents copied. `ledger_gen` projects a TOP-LEVEL registry execution in which
+# C56 IS evaluated, and C56 reads the README headline `readme_gen` writes, so the true
+# dependency is `readme_gen` -> `README.md` -> C56 -> `ledger_gen` and the old wording
+# inverted it. Measured, not predicted: run `34372152090` generated `docs/state/CURRENT.md`
+# with `C56 | FAIL` against a README the next step then rewrote.
+# `regenerate-truth-docs.yml` executes the corrected order and carries the mechanism.
+# A declared repair order that disagrees with the executed one is a stale instruction
+# sitting in the enforcement spine, which is precisely the defect this spine exists to
+# remove - so the two files move in one commit.
+#
+# THE `--check` ORDER BELOW IS NOT THAT OBLIGATION, stated so nobody "fixes" it into
+# agreement. A `--check` writes nothing, so no check in this job can invalidate another's
+# subject: the two generator checks already run README-then-ledger, and
+# `gate_surface --check` sits after both, which costs nothing in this direction. The one
+# ordered pair here is `doc_truth --check --emit-nested-json` -> `readme_gen --check
+# --counts-json` (AD-21) and it is a producer/consumer edge, not a mirror of the repair
+# order: moving the consumer ahead of the producer makes it report `unavailable` for want
+# of a payload, which is non-passing and is not a fallback. A failing generator diff is the
 # mechanism working, not a defect to paper over; the counts must never be hand-edited to
 # match (I-7).
 
@@ -132,13 +156,21 @@ jobs:
         # regenerated. It goes red again whenever a check's STATUS moves, which is the
         # drift it exists to catch -- including a status moved by a change to this file
         # (see the header note on C63).
+        #
+        # AFTER the README check, mirroring the `--write` order
+        # `regenerate-truth-docs.yml` executes (README first, because C56 reads it and this
+        # generator's top-level execution evaluates C56). Here that is legibility, not a
+        # dependency -- `--check` writes nothing, so neither check can move the other's
+        # subject -- and the header says so, so a reader does not have to assume either way.
         run: python -m scripts.audit.ledger_gen --check
       - name: Gate-surface record matches the parsed workflow tree (R11.1, R11.2, R11.7, R11.9)
         # Also stale, and corrected: the committed record parses this workflow file (49
         # rows for this job) and mutation.yml's push trigger. It goes red whenever a step
-        # or trigger is added, renamed or removed anywhere under .github/workflows/ --
-        # which the step above this one did -- and the repair is `--write`, never a hand
-        # edit inside the markers.
+        # or trigger is added, renamed, REORDERED or removed anywhere under
+        # .github/workflows/ -- which the step above this one did -- and the repair is
+        # `--write`, never a hand edit inside the markers. Reordering counts because the
+        # generated tables emit one row per step in declaration order, so a swap moves row
+        # content without moving any total (task 26.4's own coupling).
         run: python -m scripts.audit.gate_surface --check
       - name: Declared-blocking steps propagate their exit status (R1.8, R6.13, R8.9, R11.3)
         run: python -m scripts.audit.workflow_shape_truth --check

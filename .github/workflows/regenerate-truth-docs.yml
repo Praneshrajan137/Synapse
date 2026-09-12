@@ -3,10 +3,13 @@
 #
 # WHY THIS WORKFLOW EXISTS, AND WHY IT IS NOT A GATE.
 #
-# `truth-gates.yml` runs `ledger_gen --check`, `readme_gen --check` and
-# `gate_surface --check`. Those DETECT drift between a committed generated document and a
-# fresh projection; none of them REPAIRS it. The repair is the `--write` form, and until
-# now the only place `--write` could run was a developer's machine.
+# `truth-gates.yml` runs `readme_gen --check`, `ledger_gen --check` and
+# `gate_surface --check` -- listed in the order that job executes them, because this file
+# is about generator ORDER and an enumeration that disagrees with a step list is the small
+# version of exactly the defect task 26.4 repaired. Those DETECT drift between a committed
+# generated document and a fresh projection; none of them REPAIRS it. The repair is the
+# `--write` form, and until now the only place `--write` could run was a developer's
+# machine.
 #
 # That was a problem specific to this repository's hardware. `ledger_gen` and `readme_gen`
 # each execute the entire Check_Registry in-process -- `ledger_gen`'s own docstring says
@@ -65,9 +68,20 @@
 # upload a stale or empty artifact that a reviewer then commits, which is repairing a
 # count by hand at one remove, and I-7 forbids that absolutely.
 #
+# THE THREE GENERATOR STEPS ARE ORDERED, AND THE ORDER IS A DEPENDENCY RATHER THAN A
+# STYLE: `gate_surface --check` (a precondition, and a hard gate), then
+# `readme_gen --write`, then `ledger_gen --write`. The second edge is the one that is easy
+# to get backwards and WAS committed backwards until task 26.4 -- C56 reads `README.md`
+# and `ledger_gen`'s top-level execution evaluates C56 -- so the two step comments below
+# carry the mechanism and the run that measured it, and this header does not restate it.
+# `truth-gates.yml`'s header declares the same repair order for the enforcement spine: the
+# two move together in one commit, or one of them is a stale instruction.
+#
 # EVERY STEP PROPAGATES ITS EXIT STATUS. No `continue-on-error`, no `|| true`, no
 # `|| echo`, no `; exit 0`. `scripts/audit/workflow_shape_truth.py` re-derives that from
-# this file on every run.
+# this file on every run. No step pipes anything -- the diff step uses `git --no-pager`
+# precisely so nothing is piped -- so there is no masked exit status for a
+# `set -o pipefail` to recover, and none is added for decoration.
 
 name: SYNAPSE Regenerate Truth Docs
 
@@ -196,14 +210,25 @@ jobs:
         # `gate_surface` is pure workflow parsing -- ~1s -- so this costs nothing.
         run: python -m scripts.audit.gate_surface --check
 
-      - name: Regenerate the Truth_Ledger (R10.1-R10.9)
-        # `docs/state/CURRENT.md`. One in-process Check_Registry execution; every row and
-        # every summary count is projected from that single verdict, which is what makes
-        # R10.1 hold structurally rather than by arithmetic that could disagree.
-        run: python -m scripts.audit.ledger_gen --write
-
       - name: Regenerate the README headline (R4.4, R4.5, R4.8, R4.11)
         # `README.md`'s generated region.
+        #
+        # FIRST OF THE TWO GENERATORS, AND THAT ORDER IS THE WHOLE OF TASK 26.4. This step
+        # ran SECOND until now, which inverted the only dependency the pair has. The step
+        # below projects a TOP-LEVEL Check_Registry execution -- one in which C56 IS
+        # evaluated rather than self-excluded -- and C56's subject is exactly the README
+        # headline this step rewrites. Under the old order the ledger recorded a C56 verdict
+        # about a README that the next step then replaced, so `docs/state/CURRENT.md` could
+        # ship STALE against the README committed beside it out of a SINGLE run. The true
+        # dependency is `readme_gen` -> `README.md` -> C56 -> `ledger_gen`.
+        #
+        # MEASURED, NOT PREDICTED, which is what makes this a repair rather than a taste.
+        # Run `34372152090` (sha `0c0e971`, this job's first execution ever) generated
+        # `CURRENT.md` against the pre-repair README and recorded `C56 | FAIL`: that
+        # artifact's registry verdict reads `C44=FAIL, C56=FAIL, C69=FAIL`, while
+        # `truth-gates.yml` on the very next commit reads `C44=FAIL, C69=FAIL`. The row was
+        # false the moment the following step rewrote the README. Parent 26 of
+        # decision-quality-proof carries the finding; this is the durable repair it names.
         #
         # DELIBERATELY WITHOUT `--counts-json`, and the reasoning is recorded because the
         # obvious alternative looks cheaper. `readme_gen` must project the NESTED
@@ -223,6 +248,25 @@ jobs:
         # ACCEPTED COST: one extra Check_Registry execution, which the 45-minute budget
         # above is sized for. REJECTED ALTERNATIVE: a discarding construct, for a saving.
         run: python -m scripts.audit.readme_gen --write
+
+      - name: Regenerate the Truth_Ledger (R10.1-R10.9)
+        # `docs/state/CURRENT.md`. One in-process Check_Registry execution; every row and
+        # every summary count is projected from that single verdict, which is what makes
+        # R10.1 hold structurally rather than by arithmetic that could disagree.
+        #
+        # SECOND, AS THE CONSUMER OF THE STEP ABOVE. That single execution is TOP-LEVEL, so
+        # C56 is evaluated in it, and C56 reads the README the step above has already made
+        # current. The ledger is therefore a projection of the tree the README describes,
+        # and the two documents in one artifact agree without a second dispatch -- the
+        # obligation parent 26 had to record and this order retires.
+        #
+        # THE COUPLING RUNS ONE WAY, which is why swapping RESOLVES it instead of rotating
+        # it, and is the first thing to check before re-reading this order. `readme_gen`
+        # projects the NESTED execution, in which the recursion guard makes C56 self-exclude
+        # and count as a SKIP, and it never reads `docs/state/CURRENT.md`. So the step above
+        # consumes nothing this step writes: there is no ordering that starves both, and no
+        # residual case in which one document describes a tree the other has moved past.
+        run: python -m scripts.audit.ledger_gen --write
 
       - name: Show what regeneration changed
         # Reviewable from the run page before the artifact is even downloaded, which is
