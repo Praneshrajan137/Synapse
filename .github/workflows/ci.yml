@@ -192,7 +192,7 @@ jobs:
         #   orchestrator/tests/consensus/test_confidence_gate_universality_property.py (Property 22)
         #   orchestrator/tests/consensus/test_selection_and_twin_consequence_property.py (Property 26, module-level pytestmark)
         #   digital_twin/tests/test_simulation.py (INV-TW-002, 1000 scenarios)
-        # All three now run in `uplift-verify`'s slow step at HYPOTHESIS_PROFILE=heavy
+        # All three now run in `uplift-verify-slow`'s test step at HYPOTHESIS_PROFILE=heavy
         # (100 examples) on a Linux runner, which is where the example budget is
         # meant to be spent (I-0). Nothing became unselected: see that step's path
         # list, which gained `orchestrator/tests/consensus` and `digital_twin/tests`
@@ -288,14 +288,49 @@ jobs:
   uplift-verify:
     name: Uplift Harness + Verification Properties (tests/)
     runs-on: ubuntu-latest
-    # 45 -> 60 (task 12.2): the slow step now also collects
-    # `orchestrator/tests/consensus` (Properties 22 and 26, the real four-tier
-    # protocol) and `digital_twin/tests` (INV-TW-002's 1000-scenario run). Both were
-    # previously executing inside the 15-minute `quality-gates` job at the `default`
-    # 500-example budget, so at `heavy`'s 100 the added work is strictly cheaper than
-    # what already fitted there -- but this job was already the longest one and the
-    # headroom was thin, so the bound moves with the load rather than after a timeout.
-    timeout-minutes: 60
+    # THIS JOB IS NOW A THIN AGGREGATOR, AND ITS `name:` IS THE REASON IT STAYED ONE.
+    #
+    # `infrastructure/quality/required-checks.yaml` declares this job `required:` with
+    # `check_name: "Uplift Harness + Verification Properties (tests/)"`, and
+    # `required_checks_truth.resolve_declared_jobs` compares that string BYTE FOR BYTE
+    # against the job's display name -- no casefold, no normalisation on that path. So the
+    # job id AND the display name are frozen. A `strategy.matrix` here would parameterise
+    # the display name into `... (1)`, `... (2)`, the declared check would resolve to
+    # nothing, and branch protection would sit waiting for a context that never reports:
+    # the same "a required check that can only report `skipped` is not a gate" family the
+    # disposition below spent a whole session removing. The work therefore moved to five
+    # separate jobs with their own ids, and this job aggregates their conclusions.
+    #
+    # WHAT MOVED, AND WHAT DID NOT. The two pytest selections are unchanged in content:
+    # the fast selection is partitioned BY PATH across four shards (never by `-k`, never
+    # by `--deselect`, never by a marker beyond the `-m "not slow"` it always carried) and
+    # the slow selection moved intact, same paths, same `-m "slow"`, same `heavy` profile.
+    # No floor moved, no scope narrowed, no exit status is discarded, and the finding-57
+    # failure in the slow selection stays selected and stays able to fail: repairing
+    # another owner's defect is not this change's business and hiding it would be worse.
+    needs:
+      - uplift-verify-fast-1
+      - uplift-verify-fast-2
+      - uplift-verify-fast-3
+      - uplift-verify-fast-4
+      - uplift-verify-slow
+    # `if: always()` IS LOAD-BEARING, NOT DEFENSIVE. Without it GitHub SKIPS a job whose
+    # `needs:` did not all succeed, and a skipped required check is reported to branch
+    # protection as satisfied. That is precisely the defect the `needs: quality-gates`
+    # disposition below removed, and reintroducing it through a shard edge would be worse
+    # than the original: the job would still be present in this file, so a reader would
+    # have no reason to look.
+    #
+    # It is also decidable rather than a hole in the generated record: `gate_surface`'s
+    # expression evaluator resolves `always()` to `True` (its `_TRUE_FUNCTIONS` set), so
+    # this job still renders EXECUTES on `pull_request` instead of CONDITIONAL.
+    if: always()
+    # Seconds of bash over five job results and six `find` counts -- no Python, no
+    # install, no test run. 10 minutes is far above the expected cost and is still a real
+    # bound: a timeout is a FAILED job (I-7), never a partial verdict the next reader may
+    # treat as a pass. The 60 minutes this job used to carry moved to the shards, which is
+    # where the work went; each states its own arithmetic.
+    timeout-minutes: 10
     # `needs: quality-gates` WAS HERE AND WAS REMOVED (decision-quality-proof session 5,
     # obstruction 2.5 disposition (a)). THE REASON IS THAT THE EDGE MADE A DECLARED
     # REQUIRED CHECK UNSATISFIABLE, NOT THAT IT WAS INCONVENIENT.
@@ -323,19 +358,31 @@ jobs:
     # exit status is discarded, and no `continue-on-error` is added. Two independent
     # required checks now report two independent verdicts instead of one masking the other.
     #
-    # THE COST, HONESTLY: this job now runs on pushes where the tree does not type-check,
-    # so a broken tree spends up to 60 runner-minutes. That is CI's cost and the repository
-    # is public with unmetered standard-runner minutes; the alternative was a required
-    # check that cannot report. Reds that appear here are NEWLY VISIBLE, NOT NEWLY BROKEN
-    # -- the same reading session 2p-green's five unblocked jobs required.
+    # THE COST, HONESTLY, AND THE FIGURE MOVED WHEN THE WORK DID: this job group now runs
+    # on pushes where the tree does not type-check. Before the shard split that was one
+    # job at `timeout-minutes: 60`; it is now five jobs bounded at 30, 30, 30, 30 and 20
+    # plus this aggregator at 10, so a pathological tree can spend 150 runner-minutes
+    # where it used to spend 60. The PREDICTED figure is far lower -- about 39
+    # runner-minutes against about 23 before, the difference being four extra copies of
+    # the ~3-minute install -- and that is a prediction from run 34609187697's step
+    # timings, not a measurement of this shape. It buys roughly 12 minutes off the wall
+    # clock of a REQUIRED check. That is CI's cost and the repository is public with
+    # unmetered standard-runner minutes; the alternative was a required check that cannot
+    # report. Reds that appear here are NEWLY VISIBLE, NOT NEWLY BROKEN -- the same
+    # reading session 2p-green's five unblocked jobs required.
     #
-    # THE INSTALL CLOSURE WAS PROVEN AT THE COMMAND THIS JOB RUNS, before the edge was
+    # THE INSTALL CLOSURE WAS PROVEN AT THE COMMAND THE SHARDS RUN, before the edge was
     # removed, because finding 36 is that a closure proof starting anywhere else is worth
     # nothing: `python -m pytest tests/uplift tests/verify` imports `uplift.*`, so
     # `uplift/__init__.py` runs first and drags `consensus_arm -> harness -> contract ->
     # scipy` in. A static walk over 117 seed modules and 304 first-party files reports
-    # every reachable third-party top-level import covered. Two flagged results, neither a
-    # gap: `psycopg2` is outside this closure but imported at FUNCTION scope inside
+    # every reachable third-party top-level import covered. That proof still holds after
+    # the split and did not have to be redone: each shard selects a SUBSET of those same
+    # paths, so its import closure is a subset of the proven one, and every shard copies
+    # the install step verbatim rather than thinning it to its own subset.
+    #
+    # Two flagged results, neither a gap: `psycopg2` is outside this closure but imported
+    # at FUNCTION scope inside
     # `try/except ImportError` with an honest degrade (`orchestrator/audit/
     # data_provenance.py:166`), and `scipy` is pinned in NO requirements file in the
     # repository yet arrives transitively via `scikit-learn` (five `agents/*/
@@ -346,12 +393,176 @@ jobs:
     # `packages/tests agents orchestrator digital_twin api` and every other workflow
     # targets a single subdirectory (tests/integration, tests/oracle,
     # tests/compliance, tests/security). So the uplift harness suite and the
-    # verification-gate suite executed nowhere in CI. This job closes that hole.
+    # verification-gate suite executed nowhere in CI. This job group closes that hole.
     #
     # It is also the ONLY place the expensive property tests are allowed to run:
     # per `.kiro/steering/local-compute-budget.md` (I-0) the dev laptop runs
     # `HYPOTHESIS_PROFILE=dev pytest -m "not slow"`, and the real example budget is
     # spent here on Linux runners.
+    steps:
+      # Checked out for ONE reason: the partition step below counts files on disk. It
+      # runs no Python and installs nothing, so this is ~10 seconds, and the alternative
+      # was a partition claim that lived only in a comment (G5 asks for a mechanism).
+      - uses: actions/checkout@v4
+      - name: Every uplift shard reported success (aggregate verdict, BLOCKING)
+        # THE TRUTH TABLE, because `needs.<job>.result` takes FOUR values and exactly one
+        # of them is a pass:
+        #
+        #   result      what happened                                   verdict here
+        #   success     the shard ran and every step passed             PASS
+        #   failure     the shard ran and a step failed                 FAIL
+        #   cancelled   the run was cancelled, or the shard timed out   FAIL
+        #   skipped     the shard never ran at all                      FAIL
+        #
+        # TWO SHORTER SPELLINGS ARE DELIBERATELY NOT USED, and each would lose something
+        # specific:
+        #
+        #   * `success()` alone reads all four values correctly, but says NOTHING in the
+        #     log about which shard was not successful. A verdict a reader cannot act on
+        #     sends them to five job pages to find out what this step already knew.
+        #   * `contains(needs.*.result, 'failure')` is FALSE when a shard is `cancelled`
+        #     or `skipped`, so it would pass a run in which a shard never reported. That
+        #     is the same shape as the `skipped` required check the disposition above
+        #     removed, one level down, and it is the reason this step enumerates the
+        #     results explicitly instead of testing for the failure case.
+        #
+        # The loop prints every shard's result before it judges any of them, so the log
+        # records the whole state even when the first shard is the one that failed.
+        env:
+          FAST_1: ${{ needs.uplift-verify-fast-1.result }}
+          FAST_2: ${{ needs.uplift-verify-fast-2.result }}
+          FAST_3: ${{ needs.uplift-verify-fast-3.result }}
+          FAST_4: ${{ needs.uplift-verify-fast-4.result }}
+          SLOW: ${{ needs.uplift-verify-slow.result }}
+        run: |
+          set -euo pipefail
+          status=0
+          for pair in "fast-1/4=$FAST_1" "fast-2/4=$FAST_2" "fast-3/4=$FAST_3" \
+            "fast-4/4=$FAST_4" "slow=$SLOW"; do
+            printf '%-10s %s\n' "${pair%%=*}" "${pair#*=}"
+            if [ "${pair#*=}" != "success" ]; then
+              status=1
+            fi
+          done
+          test "$status" -eq 0
+      - name: Fast shards partition tests/uplift + tests/verify exactly (G5 - BLOCKING)
+        # G5: PARTITION, NEVER FILTER -- and prove it mechanically rather than assert it
+        # in prose. The four fast shards select by first letter of the file name, two
+        # disjoint character classes over one directory each. Disjointness holds by
+        # construction (the classes share no letter); EXHAUSTIVENESS is the half that can
+        # rot, because a file added tomorrow lands in a shard only if its name starts with
+        # one of the 26 letters, and a new SUBDIRECTORY would land in no shard at all.
+        #
+        # The algebra this step relies on: each shard's set is a subset of the universe by
+        # construction, so `sum(shards) == |universe|` implies BOTH exhaustive and disjoint
+        # -- a file in two shards makes the sum exceed the universe, a file in none makes
+        # it fall short. One equality therefore carries both halves of G5's claim.
+        #
+        # The universe is deliberately WIDER than the shards in two ways, so drift fails
+        # closed rather than silently: it counts `*_test.py` as well as `test_*.py`
+        # (pytest's default `python_files`, which `pyproject.toml` does not override), and
+        # it recurses while the shard globs do not. Either kind of new file makes the
+        # universe larger than the assigned total, and this step reddens.
+        run: |
+          set -euo pipefail
+          lo='test_[abcdefghijklmno]*.py'
+          hi='test_[pqrstuvwxyz]*.py'
+          u1="$(find tests/uplift -maxdepth 1 -type f -name "$lo" | wc -l)"
+          u2="$(find tests/uplift -maxdepth 1 -type f -name "$hi" | wc -l)"
+          v1="$(find tests/verify -maxdepth 1 -type f -name "$lo" | wc -l)"
+          v2="$(find tests/verify -maxdepth 1 -type f -name "$hi" | wc -l)"
+          n_pre="$(find tests/uplift tests/verify -type f -name 'test_*.py' | wc -l)"
+          n_suf="$(find tests/uplift tests/verify -type f -name '*_test.py' | wc -l)"
+          universe=$(( n_pre + n_suf ))
+          assigned=$(( u1 + u2 + v1 + v2 ))
+          printf 'shard files %s/%s/%s/%s = %s; pytest universe = %s\n' \
+            "$u1" "$u2" "$v1" "$v2" "$assigned" "$universe"
+          test "$assigned" -eq "$universe"
+      - name: Fast shards selected the pre-split test set exactly (G5 - BLOCKING)
+        # The file-level step above proves the PATHS partition. This one proves the
+        # SELECTION does: that four shards of `-m "not slow"` still select the same tests
+        # the single pre-split step selected. The two fail for different reasons, which is
+        # why both exist -- a conftest change or a marker edit could keep every file in
+        # exactly one shard while changing what pytest picks out of them.
+        #
+        # THE MAINTENANCE CONSEQUENCE, STATED RATHER THAN DISCOVERED: adding a test to
+        # `tests/uplift` or `tests/verify` makes this step RED until the constant below is
+        # raised in the same change. That is the intended cost. Weakening the equality to
+        # `>=` would turn a partition proof into a floor, and a floor cannot notice a lost
+        # path once any test has been added -- which is the one thing this step is for.
+        env:
+          # 874 = 871 passed + 1 skipped + 2 xpassed: the tests the PRE-SPLIT fast step
+          # actually selected on run 34609187697 (sha 5bcfb03), whose summary line reads
+          # `871 passed, 1 skipped, 28 deselected, 2 xpassed ... in 807.68s (0:13:27)`.
+          # Collection saw 902; the 28 `slow`-marked items are deselected in every shard
+          # alike and are owned by `uplift-verify-slow`, so 874 -- not 902 -- is the
+          # number a partition of the FAST selection has to reproduce.
+          EXPECTED_FAST_SELECTED: "874"
+          FAST_1: ${{ needs.uplift-verify-fast-1.outputs.selected }}
+          FAST_2: ${{ needs.uplift-verify-fast-2.outputs.selected }}
+          FAST_3: ${{ needs.uplift-verify-fast-3.outputs.selected }}
+          FAST_4: ${{ needs.uplift-verify-fast-4.outputs.selected }}
+        run: |
+          set -euo pipefail
+          total=$(( FAST_1 + FAST_2 + FAST_3 + FAST_4 ))
+          printf 'shards selected %s/%s/%s/%s = %s; pre-split fast selection = %s\n' \
+            "$FAST_1" "$FAST_2" "$FAST_3" "$FAST_4" "$total" "$EXPECTED_FAST_SELECTED"
+          test "$total" -eq "$EXPECTED_FAST_SELECTED"
+
+  # ---------------------------------------------------------------------------
+  # THE FIVE SHARD JOBS (throughput-with-integrity G5).
+  #
+  # WHY FIVE JOBS AND NOT ONE. Measured on run 34609187697 the pre-split job spent
+  # 807.68s in the fast step and 352.22s in the slow one, serially, inside one install --
+  # about 23 minutes on the critical path of a REQUIRED check. GitHub runs jobs in
+  # parallel at no extra cost on a public repository, so the wall clock is the only thing
+  # being bought here and runner-minutes are the only thing being spent.
+  #
+  # WHY FOUR FAST SHARDS AND NOT EIGHT. The install closure below is paid PER JOB, about
+  # three minutes of it, so each shard adds a fixed cost to the total while dividing only
+  # the variable part. At four shards the fast content is ~3:22 each against ~3:00 of
+  # install: past that the install dominates and a fifth shard buys almost nothing. The
+  # slow selection is NOT sharded at all -- 5:52 is not the critical path, and sharding it
+  # four ways would pay three more three-minute installs to save under three minutes.
+  #
+  # WHY THE INSTALL STEP IS COPIED VERBATIM INTO ALL FIVE, and why it is not extracted.
+  # Its own comment says the consensus arm assembles all eight real agent A2A handlers
+  # plus the twin handler. A MISSING agent dependency does not crash that assembly, it
+  # degrades the arm to a stub -- so a thinner environment in any one shard would turn a
+  # real failure into a silent pass, which is the one outcome no amount of parallelism is
+  # worth. Extracting it into a composite action or a shared script would mean editing the
+  # steps of a REQUIRED status-check workflow to save four copies of fourteen lines; the
+  # copies are declared in `infrastructure/quality/blocking-steps.yaml` instead, so a
+  # thinned copy fails by declaration rather than by review.
+  #
+  # WHY EACH SHARD COUNTS ITS OWN SELECTION. `pytest` exits 5 on an empty selection, so a
+  # shard whose glob went stale already reddens -- but only the count makes the partition
+  # READABLE from the four logs alone, and only a reported count lets the aggregator do
+  # G5's arithmetic. `set -o pipefail` is set by hand in every step that pipes, because
+  # `workflow_shape_truth` cannot see an unguarded pipeline at all (finding 35: a single
+  # `|` is deliberately excluded from its list-separator set, so `a | tee b` reads as
+  # propagating while bash reports `tee`'s status) and this repository has a measured
+  # incident where exactly that made a producer step report success on an empty artifact.
+  # ---------------------------------------------------------------------------
+
+  uplift-verify-fast-1:
+    name: Uplift fast shard 1/4 - tests/uplift a-o
+    runs-on: ubuntu-latest
+    # Content bound: the WHOLE pre-split fast step was 807.68s (13:27) on run
+    # 34609187697, so no single shard of it can cost more than that. Add checkout and
+    # setup (~0:25), the install closure (~3:00) and the collection count (~0:30) and the
+    # worst conceivable case is ~17:30. 30 minutes leaves ~1.7x headroom on a bound that
+    # cannot be exceeded by content, and it is still a real bound: a timeout is a FAILED
+    # job (I-7). The four shards carry the same number because the partition's balance is
+    # a PREDICTION from file counts, not a measurement -- sizing them differently would
+    # dress that prediction up as knowledge.
+    timeout-minutes: 30
+    outputs:
+      # Read by `uplift-verify`'s partition-arithmetic step. A job output rather than an
+      # artifact, deliberately: `needs.<job>.outputs.<name>` is EMPTY for a shard that
+      # never ran, so a skipped or cancelled shard makes the aggregate sum wrong rather
+      # than absent, and the aggregator fails on it instead of reading nothing.
+      selected: ${{ steps.collect.outputs.selected }}
     steps:
       - uses: actions/checkout@v4
       - name: Set up Python 3.11
@@ -373,16 +584,248 @@ jobs:
           pip install simpy sse-starlette
           pip install -r agents/requirements-sprint3.txt
           pip install "starlette>=0.37.2,<0.38.0"
-      - name: Property + unit tests (fast — full 500-example budget)
+      - name: Selected count is non-empty and reported (fast shard 1/4)
+        id: collect
+        # The count is `grep -c '::'` over `--collect-only -q`, which prints one node id
+        # per SELECTED item: every test node id contains `::` and nothing else pytest
+        # prints in that mode does. So a format surprise yields zero, not a wrong number,
+        # and the `test ... -gt 0` below reddens instead of reporting a silent miscount.
+        #
+        # `-o addopts="--strict-markers"` replaces the ini `addopts` for this invocation
+        # only. `pyproject.toml` carries `--strict-markers -v --tb=short`, and that `-v`
+        # would cancel the `-q` below into verbosity 0, which switches pytest to the
+        # indented `<Module>`/`<Function>` tree form -- no `::`, count zero, red step for a
+        # reason that has nothing to do with the partition. `--strict-markers` is kept
+        # because dropping it would let this step accept a marker the run step rejects;
+        # nothing else in `addopts` affects WHAT is selected, which is the only property
+        # this count has to share with the run step below.
+        env:
+          HYPOTHESIS_PROFILE: ci
+        run: |
+          set -euo pipefail
+          pytest -o addopts="--strict-markers" -m "not slow" --collect-only -q \
+            tests/uplift/test_[abcdefghijklmno]*.py | tee "$RUNNER_TEMP/selected.txt"
+          selected="$(grep -c '::' "$RUNNER_TEMP/selected.txt")"
+          printf 'selected=%s\n' "$selected" >> "$GITHUB_OUTPUT"
+          printf 'fast shard 1/4: %s test(s) selected\n' "$selected"
+          test "$selected" -gt 0
+      - name: Property + unit tests (fast - full 500-example budget, shard 1/4)
         # Pure/synthetic properties: no twin, no consensus network, so the full
         # `ci` budget is cheap here. Scope is deliberately `tests/` only: the
         # non-slow tests under `orchestrator/` and `digital_twin/` are already run
         # by `quality-gates`, and running them twice would double the wall clock
         # without adding a single new assertion.
+        #
+        # The path expression is the partition and nothing else: a shell glob over file
+        # NAMES, with `-m "not slow"` unchanged from the pre-split step. No `-k`, no
+        # `--deselect`, no added marker -- each of those would be a filter, and a filter
+        # cannot be shown exhaustive (G5).
         env:
           HYPOTHESIS_PROFILE: ci
         run: |
-          pytest tests/uplift tests/verify -m "not slow" -v --tb=short
+          pytest tests/uplift/test_[abcdefghijklmno]*.py -m "not slow" -v --tb=short
+
+  uplift-verify-fast-2:
+    name: Uplift fast shard 2/4 - tests/uplift p-z
+    runs-on: ubuntu-latest
+    # See shard 1/4 for the arithmetic behind this bound.
+    timeout-minutes: 30
+    outputs:
+      selected: ${{ steps.collect.outputs.selected }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+      - name: Install dependencies
+        # The consensus arm assembles all eight real agent A2A handlers plus the
+        # twin handler, so this job needs the same dependency closure as the
+        # unit-test job: agent requirements (incl. the sprint-3 bundle that carries
+        # simpy) and the orchestrator stack.
+        run: |
+          pip install -r packages/requirements.txt -r packages/requirements-dev.txt
+          pip install -e packages/
+          pip install -r orchestrator/requirements.txt
+          pip install jsonschema pyyaml
+          for req in agents/*/requirements.txt; do pip install -r "$req"; done
+          pip install simpy sse-starlette
+          pip install -r agents/requirements-sprint3.txt
+          pip install "starlette>=0.37.2,<0.38.0"
+      - name: Selected count is non-empty and reported (fast shard 2/4)
+        id: collect
+        # See shard 1/4 for why the count is `grep -c '::'` and why `addopts` is replaced.
+        env:
+          HYPOTHESIS_PROFILE: ci
+        run: |
+          set -euo pipefail
+          pytest -o addopts="--strict-markers" -m "not slow" --collect-only -q \
+            tests/uplift/test_[pqrstuvwxyz]*.py | tee "$RUNNER_TEMP/selected.txt"
+          selected="$(grep -c '::' "$RUNNER_TEMP/selected.txt")"
+          printf 'selected=%s\n' "$selected" >> "$GITHUB_OUTPUT"
+          printf 'fast shard 2/4: %s test(s) selected\n' "$selected"
+          test "$selected" -gt 0
+      - name: Property + unit tests (fast - full 500-example budget, shard 2/4)
+        # See shard 1/4: same budget, same `-m "not slow"`, complementary path class.
+        env:
+          HYPOTHESIS_PROFILE: ci
+        run: |
+          pytest tests/uplift/test_[pqrstuvwxyz]*.py -m "not slow" -v --tb=short
+
+  uplift-verify-fast-3:
+    name: Uplift fast shard 3/4 - tests/verify a-o
+    runs-on: ubuntu-latest
+    # See shard 1/4 for the arithmetic behind this bound.
+    timeout-minutes: 30
+    outputs:
+      selected: ${{ steps.collect.outputs.selected }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+      - name: Install dependencies
+        # The consensus arm assembles all eight real agent A2A handlers plus the
+        # twin handler, so this job needs the same dependency closure as the
+        # unit-test job: agent requirements (incl. the sprint-3 bundle that carries
+        # simpy) and the orchestrator stack.
+        run: |
+          pip install -r packages/requirements.txt -r packages/requirements-dev.txt
+          pip install -e packages/
+          pip install -r orchestrator/requirements.txt
+          pip install jsonschema pyyaml
+          for req in agents/*/requirements.txt; do pip install -r "$req"; done
+          pip install simpy sse-starlette
+          pip install -r agents/requirements-sprint3.txt
+          pip install "starlette>=0.37.2,<0.38.0"
+      - name: Selected count is non-empty and reported (fast shard 3/4)
+        id: collect
+        # See shard 1/4 for why the count is `grep -c '::'` and why `addopts` is replaced.
+        env:
+          HYPOTHESIS_PROFILE: ci
+        run: |
+          set -euo pipefail
+          pytest -o addopts="--strict-markers" -m "not slow" --collect-only -q \
+            tests/verify/test_[abcdefghijklmno]*.py | tee "$RUNNER_TEMP/selected.txt"
+          selected="$(grep -c '::' "$RUNNER_TEMP/selected.txt")"
+          printf 'selected=%s\n' "$selected" >> "$GITHUB_OUTPUT"
+          printf 'fast shard 3/4: %s test(s) selected\n' "$selected"
+          test "$selected" -gt 0
+      - name: Property + unit tests (fast - full 500-example budget, shard 3/4)
+        # See shard 1/4: same budget, same `-m "not slow"`, complementary path class.
+        env:
+          HYPOTHESIS_PROFILE: ci
+        run: |
+          pytest tests/verify/test_[abcdefghijklmno]*.py -m "not slow" -v --tb=short
+
+  uplift-verify-fast-4:
+    name: Uplift fast shard 4/4 - tests/verify p-z
+    runs-on: ubuntu-latest
+    # See shard 1/4 for the arithmetic behind this bound.
+    timeout-minutes: 30
+    outputs:
+      selected: ${{ steps.collect.outputs.selected }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+      - name: Install dependencies
+        # The consensus arm assembles all eight real agent A2A handlers plus the
+        # twin handler, so this job needs the same dependency closure as the
+        # unit-test job: agent requirements (incl. the sprint-3 bundle that carries
+        # simpy) and the orchestrator stack.
+        run: |
+          pip install -r packages/requirements.txt -r packages/requirements-dev.txt
+          pip install -e packages/
+          pip install -r orchestrator/requirements.txt
+          pip install jsonschema pyyaml
+          for req in agents/*/requirements.txt; do pip install -r "$req"; done
+          pip install simpy sse-starlette
+          pip install -r agents/requirements-sprint3.txt
+          pip install "starlette>=0.37.2,<0.38.0"
+      - name: Selected count is non-empty and reported (fast shard 4/4)
+        id: collect
+        # See shard 1/4 for why the count is `grep -c '::'` and why `addopts` is replaced.
+        env:
+          HYPOTHESIS_PROFILE: ci
+        run: |
+          set -euo pipefail
+          pytest -o addopts="--strict-markers" -m "not slow" --collect-only -q \
+            tests/verify/test_[pqrstuvwxyz]*.py | tee "$RUNNER_TEMP/selected.txt"
+          selected="$(grep -c '::' "$RUNNER_TEMP/selected.txt")"
+          printf 'selected=%s\n' "$selected" >> "$GITHUB_OUTPUT"
+          printf 'fast shard 4/4: %s test(s) selected\n' "$selected"
+          test "$selected" -gt 0
+      - name: Property + unit tests (fast - full 500-example budget, shard 4/4)
+        # See shard 1/4: same budget, same `-m "not slow"`, complementary path class.
+        env:
+          HYPOTHESIS_PROFILE: ci
+        run: |
+          pytest tests/verify/test_[pqrstuvwxyz]*.py -m "not slow" -v --tb=short
+
+  uplift-verify-slow:
+    name: Uplift slow selection - twin, consensus, CLI
+    runs-on: ubuntu-latest
+    # NOT SHARDED, and the reason is arithmetic rather than caution: the slow step
+    # measured 352.22s (5:52) on run 34609187697, so it is not the critical path and
+    # splitting it would pay three more three-minute installs to save under three
+    # minutes. Bound: 5:52 of content plus ~3:55 of checkout, setup, install and
+    # collection is ~9:47, so 20 minutes is ~2x headroom on a measured cost. The 60 that
+    # `uplift-verify` used to carry was sized for BOTH selections plus one install, and
+    # the run step below records why it grew to that; only its slow half lives here now.
+    timeout-minutes: 20
+    outputs:
+      # Reported for readability, and NOT summed against a committed constant. The slow
+      # selection is unsharded, so there is no partition to prove here and a second
+      # pinned count would be a maintenance tax with no claim behind it. Its measured
+      # baseline is 60 selected (1 failed + 59 passed, 957 deselected) on run
+      # 34609187697; a reader compares the log line against that.
+      selected: ${{ steps.collect.outputs.selected }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+      - name: Install dependencies
+        # The consensus arm assembles all eight real agent A2A handlers plus the
+        # twin handler, so this job needs the same dependency closure as the
+        # unit-test job: agent requirements (incl. the sprint-3 bundle that carries
+        # simpy) and the orchestrator stack.
+        run: |
+          pip install -r packages/requirements.txt -r packages/requirements-dev.txt
+          pip install -e packages/
+          pip install -r orchestrator/requirements.txt
+          pip install jsonschema pyyaml
+          for req in agents/*/requirements.txt; do pip install -r "$req"; done
+          pip install simpy sse-starlette
+          pip install -r agents/requirements-sprint3.txt
+          pip install "starlette>=0.37.2,<0.38.0"
+      - name: Selected count is non-empty and reported (slow selection)
+        id: collect
+        # See fast shard 1/4 for why the count is `grep -c '::'` and why `addopts` is
+        # replaced. `HYPOTHESIS_PROFILE` is set to `heavy` here for the same reason it is
+        # set on the run step: collection runs no examples, but a selection step that
+        # differs from the run step in ANY selection-affecting way is not measuring the
+        # run step's selection.
+        env:
+          HYPOTHESIS_PROFILE: heavy
+        run: |
+          set -euo pipefail
+          pytest -o addopts="--strict-markers" -m "slow" --collect-only -q \
+            tests/uplift tests/verify orchestrator/tests/consensus \
+            digital_twin/tests | tee "$RUNNER_TEMP/selected.txt"
+          selected="$(grep -c '::' "$RUNNER_TEMP/selected.txt")"
+          printf 'selected=%s\n' "$selected" >> "$GITHUB_OUTPUT"
+          printf 'slow selection: %s test(s) selected\n' "$selected"
+          test "$selected" -gt 0
       - name: Property + regression tests (slow — 100-example budget)
         # Every example of these drives the real SimPy twin, the real four-tier
         # ConsensusProtocol, or the CLI end-to-end. `heavy` = 100 examples, the

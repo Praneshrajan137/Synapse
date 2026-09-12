@@ -85,10 +85,120 @@ steps:
       this file stays ASCII-only without weakening the match. The workflow is the
       source of truth for the literal text.
 
+  # -------------------------------------------------------------------------
+  # `uplift-verify` AND ITS FIVE SHARDS (decision-quality-proof, the `uplift-verify` job
+  # split). SIX ENTRIES WHERE THERE WAS ONE, declared in the SAME COMMIT as the jobs,
+  # because `workflow_shape_truth._declared_keys` resolves every declaration against the
+  # workflow tree and a declaration that resolves to nothing FAILs as
+  # `blocking-unresolved`. Either half alone is a red gate.
+  #
+  # THE TWO OLD STEP NAMES ARE MOVED, NOT DELETED, and the move is the whole point of
+  # reading this section rather than the diff. Before the split, this file's single
+  # `uplift-verify` entry named:
+  #
+  #   "Property + unit tests (fast - full 500-example budget)"
+  #   "Property + regression tests (slow - 100-example budget)"
+  #
+  # The first is now four steps, one per fast shard, each carrying its shard in the same
+  # name (`..., shard 1/4`). The second moved to `uplift-verify-slow` UNCHANGED -- the
+  # workflow's own bytes were not touched, em dash included -- so that declaration string
+  # is byte-for-byte the one it always was. `match: normalized` is kept on every entry:
+  # the workflow writes an em dash in the slow step's name and this file stays ASCII, and
+  # `normalize_step_name` folds U+2014/2013/2212/2010/2011 to `-` on BOTH sides before
+  # comparing. The new fast-shard names are written with an ASCII hyphen, so for them
+  # normalisation is the identity and nothing is weakened by it.
+  #
+  # `step_names` RATHER THAN `all_steps: true`, and this is a considered departure from
+  # the three entries below that use the wider form. `all_steps` cannot be evaded by a
+  # rename -- that is its virtue -- but it also cannot NOTICE one: it resolves whatever
+  # steps the job happens to hold. These six jobs are the ones whose step names carry the
+  # governance strings `required-checks.yaml` cites in its `gates:` block, so a rename
+  # here should be LOUD, and only a name list makes it so (`blocking-unresolved`).
+  #
+  # What `all_steps` would have added is covered anyway: a job-scoped
+  # `continue-on-error` sets `discarding_construct` on EVERY step of the job, including
+  # the three named here, so it still FAILs as `blocking-discards`. The two `uses:` steps
+  # (`actions/checkout@v4`, `actions/setup-python@v5`) are therefore left to the R11.3
+  # name rule deliberately: they carry no `run:` script, `classify_step` can only mark
+  # them non-propagating through a `continue-on-error` that the named steps would catch
+  # first, and declaring them by their synthetic `uses: <action>@<version>` display name
+  # would make a routine action version bump FAIL as `blocking-unresolved` -- a cost with
+  # no protection behind it.
+  #
+  # WHY `Install dependencies` IS DECLARED ON ALL SIX -- five copies of the same argument,
+  # made once here. Its own comment in `ci.yml` says the consensus arm assembles all eight
+  # real agent A2A handlers plus the twin handler, and a MISSING agent dependency does not
+  # crash that assembly: it degrades the arm to a STUB. So a swallowed `pip install` in any
+  # one shard would not redden that shard, it would make it pass in a thinner environment
+  # than the one the closure proof covers -- turning a real failure into a silent one. The
+  # `truth-gates` and `falsification-sweep` entries below make the same argument about
+  # SKIPs changing a count; here the swallow changes a VERDICT.
+  #
+  # WHY THE COUNT STEPS ARE DECLARED. `Selected count is non-empty and reported (...)` is
+  # what makes G5's partition arithmetic possible: it writes each shard's selected count to
+  # a job output the aggregator sums. A swallowed failure there would publish an EMPTY
+  # output, the aggregator's sum would fall short of the committed pre-split figure, and
+  # the aggregator would fail -- so the swallow is not silent today. It is declared anyway
+  # because that safety is second-hand: it depends on the aggregator's arithmetic staying
+  # in place, and a declaration does not.
+  #
+  # WHY THE AGGREGATOR'S THREE STEPS ARE DECLARED, INDIVIDUALLY. Each is the only
+  # mechanism behind one claim, and they fail for different reasons: the verdict step is
+  # the ONLY thing that turns a red shard into a red required check (nothing else reads
+  # `needs.*.result`); the file-level step is the only mechanism behind "the four shards
+  # partition tests/uplift + tests/verify"; the arithmetic step is the only mechanism
+  # behind "the partition selects what the single pre-split step selected". A
+  # `continue-on-error` on the first would restore, in one line, exactly the
+  # skipped-required-check defect the removal of `needs: quality-gates` was for.
+  # -------------------------------------------------------------------------
   - workflow: .github/workflows/ci.yml
     job: uplift-verify
     step_names:
-      - "Property + unit tests (fast - full 500-example budget)"
+      - "Every uplift shard reported success (aggregate verdict, BLOCKING)"
+      - "Fast shards partition tests/uplift + tests/verify exactly (G5 - BLOCKING)"
+      - "Fast shards selected the pre-split test set exactly (G5 - BLOCKING)"
+    match: normalized
+
+  - workflow: .github/workflows/ci.yml
+    job: uplift-verify-fast-1
+    step_names:
+      - "Install dependencies"
+      - "Selected count is non-empty and reported (fast shard 1/4)"
+      - "Property + unit tests (fast - full 500-example budget, shard 1/4)"
+    match: normalized
+
+  - workflow: .github/workflows/ci.yml
+    job: uplift-verify-fast-2
+    step_names:
+      - "Install dependencies"
+      - "Selected count is non-empty and reported (fast shard 2/4)"
+      - "Property + unit tests (fast - full 500-example budget, shard 2/4)"
+    match: normalized
+
+  - workflow: .github/workflows/ci.yml
+    job: uplift-verify-fast-3
+    step_names:
+      - "Install dependencies"
+      - "Selected count is non-empty and reported (fast shard 3/4)"
+      - "Property + unit tests (fast - full 500-example budget, shard 3/4)"
+    match: normalized
+
+  - workflow: .github/workflows/ci.yml
+    job: uplift-verify-fast-4
+    step_names:
+      - "Install dependencies"
+      - "Selected count is non-empty and reported (fast shard 4/4)"
+      - "Property + unit tests (fast - full 500-example budget, shard 4/4)"
+    match: normalized
+
+  # The one entry whose test step name is unchanged from before the split. The workflow
+  # writes an em dash there and this file writes the ASCII hyphen it always did, which is
+  # the `match: normalized` case the `quality-gates` note above describes.
+  - workflow: .github/workflows/ci.yml
+    job: uplift-verify-slow
+    step_names:
+      - "Install dependencies"
+      - "Selected count is non-empty and reported (slow selection)"
       - "Property + regression tests (slow - 100-example budget)"
     match: normalized
 

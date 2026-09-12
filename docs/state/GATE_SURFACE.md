@@ -34,13 +34,13 @@ the same pair.
 
 ## Summary
 
-Parsed 18 workflow file(s), 55 job(s), 379 step(s).
+Parsed 18 workflow file(s), 60 job(s), 403 step(s).
 
 | Trigger | Jobs executing | Jobs conditional | Jobs NOT EXECUTED | Steps blocking | Steps advisory | Steps conditional |
 |---|---|---|---|---|---|---|
-| push:main | 4 | 22 | 29 | 31 | 0 | 142 |
-| pull_request | 11 | 24 | 20 | 72 | 4 | 155 |
-| tag:v* | 3 | 3 | 49 | 18 | 0 | 29 |
+| push:main | 4 | 27 | 29 | 31 | 0 | 166 |
+| pull_request | 16 | 24 | 20 | 96 | 4 | 155 |
+| tag:v* | 3 | 3 | 54 | 18 | 0 | 29 |
 
 ## Job selection
 
@@ -58,7 +58,12 @@ Why each job runs, does not run, or runs conditionally under each trigger. `need
 | push:main | .github/workflows/cd.yml::promote-models | NOT EXECUTED | if: false in push:main |
 | push:main | .github/workflows/cd.yml::deploy-oracle-canary | NOT EXECUTED | if: false in push:main |
 | push:main | .github/workflows/ci.yml::quality-gates | CONDITIONAL | path-filtered (paths-ignore: **.md, docs/**, plans/**, notebooks/**) |
-| push:main | .github/workflows/ci.yml::uplift-verify | CONDITIONAL | path-filtered (paths-ignore: **.md, docs/**, plans/**, notebooks/**) |
+| push:main | .github/workflows/ci.yml::uplift-verify | CONDITIONAL | path-filtered (paths-ignore: **.md, docs/**, plans/**, notebooks/**); needs 'uplift-verify-fast-1', which is conditional; needs 'uplift-verify-fast-2', which is conditional; needs 'uplift-verify-fast-3', which is conditional; needs 'uplift-verify-fast-4', which is conditional; needs 'uplift-verify-slow', which is conditional |
+| push:main | .github/workflows/ci.yml::uplift-verify-fast-1 | CONDITIONAL | path-filtered (paths-ignore: **.md, docs/**, plans/**, notebooks/**) |
+| push:main | .github/workflows/ci.yml::uplift-verify-fast-2 | CONDITIONAL | path-filtered (paths-ignore: **.md, docs/**, plans/**, notebooks/**) |
+| push:main | .github/workflows/ci.yml::uplift-verify-fast-3 | CONDITIONAL | path-filtered (paths-ignore: **.md, docs/**, plans/**, notebooks/**) |
+| push:main | .github/workflows/ci.yml::uplift-verify-fast-4 | CONDITIONAL | path-filtered (paths-ignore: **.md, docs/**, plans/**, notebooks/**) |
+| push:main | .github/workflows/ci.yml::uplift-verify-slow | CONDITIONAL | path-filtered (paths-ignore: **.md, docs/**, plans/**, notebooks/**) |
 | push:main | .github/workflows/ci.yml::sprint6-verify | CONDITIONAL | path-filtered (paths-ignore: **.md, docs/**, plans/**, notebooks/**); needs 'quality-gates', which is conditional |
 | push:main | .github/workflows/ci.yml::v4-compliance | CONDITIONAL | path-filtered (paths-ignore: **.md, docs/**, plans/**, notebooks/**) |
 | push:main | .github/workflows/ci.yml::chromatic-color-gates | CONDITIONAL | path-filtered (paths-ignore: **.md, docs/**, plans/**, notebooks/**) |
@@ -114,6 +119,11 @@ Why each job runs, does not run, or runs conditionally under each trigger. `need
 | pull_request | .github/workflows/cd.yml::deploy-oracle-canary | NOT EXECUTED | workflow on: has no pull_request trigger |
 | pull_request | .github/workflows/ci.yml::quality-gates | EXECUTES | - |
 | pull_request | .github/workflows/ci.yml::uplift-verify | EXECUTES | - |
+| pull_request | .github/workflows/ci.yml::uplift-verify-fast-1 | EXECUTES | - |
+| pull_request | .github/workflows/ci.yml::uplift-verify-fast-2 | EXECUTES | - |
+| pull_request | .github/workflows/ci.yml::uplift-verify-fast-3 | EXECUTES | - |
+| pull_request | .github/workflows/ci.yml::uplift-verify-fast-4 | EXECUTES | - |
+| pull_request | .github/workflows/ci.yml::uplift-verify-slow | EXECUTES | - |
 | pull_request | .github/workflows/ci.yml::sprint6-verify | NOT EXECUTED | if: false in pull_request |
 | pull_request | .github/workflows/ci.yml::v4-compliance | EXECUTES | - |
 | pull_request | .github/workflows/ci.yml::chromatic-color-gates | EXECUTES | - |
@@ -169,6 +179,11 @@ Why each job runs, does not run, or runs conditionally under each trigger. `need
 | tag:v* | .github/workflows/cd.yml::deploy-oracle-canary | NOT EXECUTED | if: false in tag:v* |
 | tag:v* | .github/workflows/ci.yml::quality-gates | NOT EXECUTED | on: push is branch-scoped (no tags: filter), so a tag push is excluded |
 | tag:v* | .github/workflows/ci.yml::uplift-verify | NOT EXECUTED | on: push is branch-scoped (no tags: filter), so a tag push is excluded |
+| tag:v* | .github/workflows/ci.yml::uplift-verify-fast-1 | NOT EXECUTED | on: push is branch-scoped (no tags: filter), so a tag push is excluded |
+| tag:v* | .github/workflows/ci.yml::uplift-verify-fast-2 | NOT EXECUTED | on: push is branch-scoped (no tags: filter), so a tag push is excluded |
+| tag:v* | .github/workflows/ci.yml::uplift-verify-fast-3 | NOT EXECUTED | on: push is branch-scoped (no tags: filter), so a tag push is excluded |
+| tag:v* | .github/workflows/ci.yml::uplift-verify-fast-4 | NOT EXECUTED | on: push is branch-scoped (no tags: filter), so a tag push is excluded |
+| tag:v* | .github/workflows/ci.yml::uplift-verify-slow | NOT EXECUTED | on: push is branch-scoped (no tags: filter), so a tag push is excluded |
 | tag:v* | .github/workflows/ci.yml::sprint6-verify | NOT EXECUTED | on: push is branch-scoped (no tags: filter), so a tag push is excluded |
 | tag:v* | .github/workflows/ci.yml::v4-compliance | NOT EXECUTED | on: push is branch-scoped (no tags: filter), so a tag push is excluded |
 | tag:v* | .github/workflows/ci.yml::chromatic-color-gates | NOT EXECUTED | on: push is branch-scoped (no tags: filter), so a tag push is excluded |
@@ -271,10 +286,34 @@ Why each job runs, does not run, or runs conditionally under each trigger. `need
 | push:main | .github/workflows/ci.yml::quality-gates | Contract tests | CONDITIONAL | conditional - blocking |
 | push:main | .github/workflows/ci.yml::quality-gates | Upload coverage | CONDITIONAL | conditional - blocking |
 | push:main | .github/workflows/ci.yml::uplift-verify | uses: actions/checkout@v4 | CONDITIONAL | conditional - blocking |
-| push:main | .github/workflows/ci.yml::uplift-verify | Set up Python 3.11 | CONDITIONAL | conditional - blocking |
-| push:main | .github/workflows/ci.yml::uplift-verify | Install dependencies | CONDITIONAL | conditional - blocking |
-| push:main | .github/workflows/ci.yml::uplift-verify | Property + unit tests (fast - full 500-example budget) | CONDITIONAL | conditional - blocking |
-| push:main | .github/workflows/ci.yml::uplift-verify | Property + regression tests (slow - 100-example budget) | CONDITIONAL | conditional - blocking |
+| push:main | .github/workflows/ci.yml::uplift-verify | Every uplift shard reported success (aggregate verdict, BLOCKING) | CONDITIONAL | conditional - blocking |
+| push:main | .github/workflows/ci.yml::uplift-verify | Fast shards partition tests/uplift + tests/verify exactly (G5 - BLOCKING) | CONDITIONAL | conditional - blocking |
+| push:main | .github/workflows/ci.yml::uplift-verify | Fast shards selected the pre-split test set exactly (G5 - BLOCKING) | CONDITIONAL | conditional - blocking |
+| push:main | .github/workflows/ci.yml::uplift-verify-fast-1 | uses: actions/checkout@v4 | CONDITIONAL | conditional - blocking |
+| push:main | .github/workflows/ci.yml::uplift-verify-fast-1 | Set up Python 3.11 | CONDITIONAL | conditional - blocking |
+| push:main | .github/workflows/ci.yml::uplift-verify-fast-1 | Install dependencies | CONDITIONAL | conditional - blocking |
+| push:main | .github/workflows/ci.yml::uplift-verify-fast-1 | Selected count is non-empty and reported (fast shard 1/4) | CONDITIONAL | conditional - blocking |
+| push:main | .github/workflows/ci.yml::uplift-verify-fast-1 | Property + unit tests (fast - full 500-example budget, shard 1/4) | CONDITIONAL | conditional - blocking |
+| push:main | .github/workflows/ci.yml::uplift-verify-fast-2 | uses: actions/checkout@v4 | CONDITIONAL | conditional - blocking |
+| push:main | .github/workflows/ci.yml::uplift-verify-fast-2 | Set up Python 3.11 | CONDITIONAL | conditional - blocking |
+| push:main | .github/workflows/ci.yml::uplift-verify-fast-2 | Install dependencies | CONDITIONAL | conditional - blocking |
+| push:main | .github/workflows/ci.yml::uplift-verify-fast-2 | Selected count is non-empty and reported (fast shard 2/4) | CONDITIONAL | conditional - blocking |
+| push:main | .github/workflows/ci.yml::uplift-verify-fast-2 | Property + unit tests (fast - full 500-example budget, shard 2/4) | CONDITIONAL | conditional - blocking |
+| push:main | .github/workflows/ci.yml::uplift-verify-fast-3 | uses: actions/checkout@v4 | CONDITIONAL | conditional - blocking |
+| push:main | .github/workflows/ci.yml::uplift-verify-fast-3 | Set up Python 3.11 | CONDITIONAL | conditional - blocking |
+| push:main | .github/workflows/ci.yml::uplift-verify-fast-3 | Install dependencies | CONDITIONAL | conditional - blocking |
+| push:main | .github/workflows/ci.yml::uplift-verify-fast-3 | Selected count is non-empty and reported (fast shard 3/4) | CONDITIONAL | conditional - blocking |
+| push:main | .github/workflows/ci.yml::uplift-verify-fast-3 | Property + unit tests (fast - full 500-example budget, shard 3/4) | CONDITIONAL | conditional - blocking |
+| push:main | .github/workflows/ci.yml::uplift-verify-fast-4 | uses: actions/checkout@v4 | CONDITIONAL | conditional - blocking |
+| push:main | .github/workflows/ci.yml::uplift-verify-fast-4 | Set up Python 3.11 | CONDITIONAL | conditional - blocking |
+| push:main | .github/workflows/ci.yml::uplift-verify-fast-4 | Install dependencies | CONDITIONAL | conditional - blocking |
+| push:main | .github/workflows/ci.yml::uplift-verify-fast-4 | Selected count is non-empty and reported (fast shard 4/4) | CONDITIONAL | conditional - blocking |
+| push:main | .github/workflows/ci.yml::uplift-verify-fast-4 | Property + unit tests (fast - full 500-example budget, shard 4/4) | CONDITIONAL | conditional - blocking |
+| push:main | .github/workflows/ci.yml::uplift-verify-slow | uses: actions/checkout@v4 | CONDITIONAL | conditional - blocking |
+| push:main | .github/workflows/ci.yml::uplift-verify-slow | Set up Python 3.11 | CONDITIONAL | conditional - blocking |
+| push:main | .github/workflows/ci.yml::uplift-verify-slow | Install dependencies | CONDITIONAL | conditional - blocking |
+| push:main | .github/workflows/ci.yml::uplift-verify-slow | Selected count is non-empty and reported (slow selection) | CONDITIONAL | conditional - blocking |
+| push:main | .github/workflows/ci.yml::uplift-verify-slow | Property + regression tests (slow - 100-example budget) | CONDITIONAL | conditional - blocking |
 | push:main | .github/workflows/ci.yml::sprint6-verify | uses: actions/checkout@v4 | CONDITIONAL | conditional - blocking |
 | push:main | .github/workflows/ci.yml::sprint6-verify | Set up Python 3.11 | CONDITIONAL | conditional - blocking |
 | push:main | .github/workflows/ci.yml::sprint6-verify | Install dependencies | CONDITIONAL | conditional - blocking |
@@ -452,10 +491,34 @@ Why each job runs, does not run, or runs conditionally under each trigger. `need
 | pull_request | .github/workflows/ci.yml::quality-gates | Contract tests | yes | blocking |
 | pull_request | .github/workflows/ci.yml::quality-gates | Upload coverage | yes | blocking |
 | pull_request | .github/workflows/ci.yml::uplift-verify | uses: actions/checkout@v4 | yes | blocking |
-| pull_request | .github/workflows/ci.yml::uplift-verify | Set up Python 3.11 | yes | blocking |
-| pull_request | .github/workflows/ci.yml::uplift-verify | Install dependencies | yes | blocking |
-| pull_request | .github/workflows/ci.yml::uplift-verify | Property + unit tests (fast - full 500-example budget) | yes | blocking |
-| pull_request | .github/workflows/ci.yml::uplift-verify | Property + regression tests (slow - 100-example budget) | yes | blocking |
+| pull_request | .github/workflows/ci.yml::uplift-verify | Every uplift shard reported success (aggregate verdict, BLOCKING) | yes | blocking |
+| pull_request | .github/workflows/ci.yml::uplift-verify | Fast shards partition tests/uplift + tests/verify exactly (G5 - BLOCKING) | yes | blocking |
+| pull_request | .github/workflows/ci.yml::uplift-verify | Fast shards selected the pre-split test set exactly (G5 - BLOCKING) | yes | blocking |
+| pull_request | .github/workflows/ci.yml::uplift-verify-fast-1 | uses: actions/checkout@v4 | yes | blocking |
+| pull_request | .github/workflows/ci.yml::uplift-verify-fast-1 | Set up Python 3.11 | yes | blocking |
+| pull_request | .github/workflows/ci.yml::uplift-verify-fast-1 | Install dependencies | yes | blocking |
+| pull_request | .github/workflows/ci.yml::uplift-verify-fast-1 | Selected count is non-empty and reported (fast shard 1/4) | yes | blocking |
+| pull_request | .github/workflows/ci.yml::uplift-verify-fast-1 | Property + unit tests (fast - full 500-example budget, shard 1/4) | yes | blocking |
+| pull_request | .github/workflows/ci.yml::uplift-verify-fast-2 | uses: actions/checkout@v4 | yes | blocking |
+| pull_request | .github/workflows/ci.yml::uplift-verify-fast-2 | Set up Python 3.11 | yes | blocking |
+| pull_request | .github/workflows/ci.yml::uplift-verify-fast-2 | Install dependencies | yes | blocking |
+| pull_request | .github/workflows/ci.yml::uplift-verify-fast-2 | Selected count is non-empty and reported (fast shard 2/4) | yes | blocking |
+| pull_request | .github/workflows/ci.yml::uplift-verify-fast-2 | Property + unit tests (fast - full 500-example budget, shard 2/4) | yes | blocking |
+| pull_request | .github/workflows/ci.yml::uplift-verify-fast-3 | uses: actions/checkout@v4 | yes | blocking |
+| pull_request | .github/workflows/ci.yml::uplift-verify-fast-3 | Set up Python 3.11 | yes | blocking |
+| pull_request | .github/workflows/ci.yml::uplift-verify-fast-3 | Install dependencies | yes | blocking |
+| pull_request | .github/workflows/ci.yml::uplift-verify-fast-3 | Selected count is non-empty and reported (fast shard 3/4) | yes | blocking |
+| pull_request | .github/workflows/ci.yml::uplift-verify-fast-3 | Property + unit tests (fast - full 500-example budget, shard 3/4) | yes | blocking |
+| pull_request | .github/workflows/ci.yml::uplift-verify-fast-4 | uses: actions/checkout@v4 | yes | blocking |
+| pull_request | .github/workflows/ci.yml::uplift-verify-fast-4 | Set up Python 3.11 | yes | blocking |
+| pull_request | .github/workflows/ci.yml::uplift-verify-fast-4 | Install dependencies | yes | blocking |
+| pull_request | .github/workflows/ci.yml::uplift-verify-fast-4 | Selected count is non-empty and reported (fast shard 4/4) | yes | blocking |
+| pull_request | .github/workflows/ci.yml::uplift-verify-fast-4 | Property + unit tests (fast - full 500-example budget, shard 4/4) | yes | blocking |
+| pull_request | .github/workflows/ci.yml::uplift-verify-slow | uses: actions/checkout@v4 | yes | blocking |
+| pull_request | .github/workflows/ci.yml::uplift-verify-slow | Set up Python 3.11 | yes | blocking |
+| pull_request | .github/workflows/ci.yml::uplift-verify-slow | Install dependencies | yes | blocking |
+| pull_request | .github/workflows/ci.yml::uplift-verify-slow | Selected count is non-empty and reported (slow selection) | yes | blocking |
+| pull_request | .github/workflows/ci.yml::uplift-verify-slow | Property + regression tests (slow - 100-example budget) | yes | blocking |
 | pull_request | .github/workflows/ci.yml::sprint6-verify | - | NOT EXECUTED | if: false in pull_request |
 | pull_request | .github/workflows/ci.yml::v4-compliance | uses: actions/checkout@v4 | no | advisory (named at job level) |
 | pull_request | .github/workflows/ci.yml::v4-compliance | Compliance gate | no | advisory (named at job level) |
@@ -723,6 +786,11 @@ Why each job runs, does not run, or runs conditionally under each trigger. `need
 | tag:v* | .github/workflows/cd.yml::deploy-oracle-canary | - | NOT EXECUTED | if: false in tag:v* |
 | tag:v* | .github/workflows/ci.yml::quality-gates | - | NOT EXECUTED | on: push is branch-scoped (no tags: filter), so a tag push is excluded |
 | tag:v* | .github/workflows/ci.yml::uplift-verify | - | NOT EXECUTED | on: push is branch-scoped (no tags: filter), so a tag push is excluded |
+| tag:v* | .github/workflows/ci.yml::uplift-verify-fast-1 | - | NOT EXECUTED | on: push is branch-scoped (no tags: filter), so a tag push is excluded |
+| tag:v* | .github/workflows/ci.yml::uplift-verify-fast-2 | - | NOT EXECUTED | on: push is branch-scoped (no tags: filter), so a tag push is excluded |
+| tag:v* | .github/workflows/ci.yml::uplift-verify-fast-3 | - | NOT EXECUTED | on: push is branch-scoped (no tags: filter), so a tag push is excluded |
+| tag:v* | .github/workflows/ci.yml::uplift-verify-fast-4 | - | NOT EXECUTED | on: push is branch-scoped (no tags: filter), so a tag push is excluded |
+| tag:v* | .github/workflows/ci.yml::uplift-verify-slow | - | NOT EXECUTED | on: push is branch-scoped (no tags: filter), so a tag push is excluded |
 | tag:v* | .github/workflows/ci.yml::sprint6-verify | - | NOT EXECUTED | on: push is branch-scoped (no tags: filter), so a tag push is excluded |
 | tag:v* | .github/workflows/ci.yml::v4-compliance | - | NOT EXECUTED | on: push is branch-scoped (no tags: filter), so a tag push is excluded |
 | tag:v* | .github/workflows/ci.yml::chromatic-color-gates | - | NOT EXECUTED | on: push is branch-scoped (no tags: filter), so a tag push is excluded |
@@ -770,7 +838,7 @@ Why each job runs, does not run, or runs conditionally under each trigger. `need
 
 ## Declared-blocking anchors (R11.8)
 
-Every step `infrastructure/quality/blocking-steps.yaml` declares blocking, annotated with the command it runs so a governance claim can be pinned to a row. Source: 11 declared-blocking entries from infrastructure/quality/blocking-steps.yaml.
+Every step `infrastructure/quality/blocking-steps.yaml` declares blocking, annotated with the command it runs so a governance claim can be pinned to a row. Source: 16 declared-blocking entries from infrastructure/quality/blocking-steps.yaml.
 
 | Trigger | Job | Step | Propagates | Note |
 |---|---|---|---|---|
@@ -792,8 +860,24 @@ Every step `infrastructure/quality/blocking-steps.yaml` declares blocking, annot
 | push:main | .github/workflows/ci.yml::quality-gates | Per-package coverage floor (Sprint 13 Phase 2) [scripts/coverage_per_package.py] | CONDITIONAL | declared blocking (R1.8) - conditional (path-filtered (paths-ignore: **.md, docs/**, plans/**, notebooks/**)) |
 | push:main | .github/workflows/ci.yml::quality-gates | Spec coverage (Sprint 13 Phase 5) [scripts/check_spec_coverage.py] | CONDITIONAL | declared blocking (R1.8) - conditional (path-filtered (paths-ignore: **.md, docs/**, plans/**, notebooks/**)) |
 | push:main | .github/workflows/ci.yml::quality-gates | Contract tests [/tests/test_contracts.py] | CONDITIONAL | declared blocking (R1.8) - conditional (path-filtered (paths-ignore: **.md, docs/**, plans/**, notebooks/**)) |
-| push:main | .github/workflows/ci.yml::uplift-verify | Property + unit tests (fast - full 500-example budget) | CONDITIONAL | declared blocking (R1.8) - conditional (path-filtered (paths-ignore: **.md, docs/**, plans/**, notebooks/**)) |
-| push:main | .github/workflows/ci.yml::uplift-verify | Property + regression tests (slow - 100-example budget) | CONDITIONAL | declared blocking (R1.8) - conditional (path-filtered (paths-ignore: **.md, docs/**, plans/**, notebooks/**)) |
+| push:main | .github/workflows/ci.yml::uplift-verify | Every uplift shard reported success (aggregate verdict, BLOCKING) | CONDITIONAL | declared blocking (R1.8) - conditional (path-filtered (paths-ignore: **.md, docs/**, plans/**, notebooks/**); needs 'uplift-verify-fast-1', which is conditional; needs 'uplift-verify-fast-2', which is conditional; needs 'uplift-verify-fast-3', which is conditional; needs 'uplift-verify-fast-4', which is conditional; needs 'uplift-verify-slow', which is conditional) |
+| push:main | .github/workflows/ci.yml::uplift-verify | Fast shards partition tests/uplift + tests/verify exactly (G5 - BLOCKING) [_test.py] | CONDITIONAL | declared blocking (R1.8) - conditional (path-filtered (paths-ignore: **.md, docs/**, plans/**, notebooks/**); needs 'uplift-verify-fast-1', which is conditional; needs 'uplift-verify-fast-2', which is conditional; needs 'uplift-verify-fast-3', which is conditional; needs 'uplift-verify-fast-4', which is conditional; needs 'uplift-verify-slow', which is conditional) |
+| push:main | .github/workflows/ci.yml::uplift-verify | Fast shards selected the pre-split test set exactly (G5 - BLOCKING) | CONDITIONAL | declared blocking (R1.8) - conditional (path-filtered (paths-ignore: **.md, docs/**, plans/**, notebooks/**); needs 'uplift-verify-fast-1', which is conditional; needs 'uplift-verify-fast-2', which is conditional; needs 'uplift-verify-fast-3', which is conditional; needs 'uplift-verify-fast-4', which is conditional; needs 'uplift-verify-slow', which is conditional) |
+| push:main | .github/workflows/ci.yml::uplift-verify-fast-1 | Install dependencies | CONDITIONAL | declared blocking (R1.8) - conditional (path-filtered (paths-ignore: **.md, docs/**, plans/**, notebooks/**)) |
+| push:main | .github/workflows/ci.yml::uplift-verify-fast-1 | Selected count is non-empty and reported (fast shard 1/4) | CONDITIONAL | declared blocking (R1.8) - conditional (path-filtered (paths-ignore: **.md, docs/**, plans/**, notebooks/**)) |
+| push:main | .github/workflows/ci.yml::uplift-verify-fast-1 | Property + unit tests (fast - full 500-example budget, shard 1/4) | CONDITIONAL | declared blocking (R1.8) - conditional (path-filtered (paths-ignore: **.md, docs/**, plans/**, notebooks/**)) |
+| push:main | .github/workflows/ci.yml::uplift-verify-fast-2 | Install dependencies | CONDITIONAL | declared blocking (R1.8) - conditional (path-filtered (paths-ignore: **.md, docs/**, plans/**, notebooks/**)) |
+| push:main | .github/workflows/ci.yml::uplift-verify-fast-2 | Selected count is non-empty and reported (fast shard 2/4) | CONDITIONAL | declared blocking (R1.8) - conditional (path-filtered (paths-ignore: **.md, docs/**, plans/**, notebooks/**)) |
+| push:main | .github/workflows/ci.yml::uplift-verify-fast-2 | Property + unit tests (fast - full 500-example budget, shard 2/4) | CONDITIONAL | declared blocking (R1.8) - conditional (path-filtered (paths-ignore: **.md, docs/**, plans/**, notebooks/**)) |
+| push:main | .github/workflows/ci.yml::uplift-verify-fast-3 | Install dependencies | CONDITIONAL | declared blocking (R1.8) - conditional (path-filtered (paths-ignore: **.md, docs/**, plans/**, notebooks/**)) |
+| push:main | .github/workflows/ci.yml::uplift-verify-fast-3 | Selected count is non-empty and reported (fast shard 3/4) | CONDITIONAL | declared blocking (R1.8) - conditional (path-filtered (paths-ignore: **.md, docs/**, plans/**, notebooks/**)) |
+| push:main | .github/workflows/ci.yml::uplift-verify-fast-3 | Property + unit tests (fast - full 500-example budget, shard 3/4) | CONDITIONAL | declared blocking (R1.8) - conditional (path-filtered (paths-ignore: **.md, docs/**, plans/**, notebooks/**)) |
+| push:main | .github/workflows/ci.yml::uplift-verify-fast-4 | Install dependencies | CONDITIONAL | declared blocking (R1.8) - conditional (path-filtered (paths-ignore: **.md, docs/**, plans/**, notebooks/**)) |
+| push:main | .github/workflows/ci.yml::uplift-verify-fast-4 | Selected count is non-empty and reported (fast shard 4/4) | CONDITIONAL | declared blocking (R1.8) - conditional (path-filtered (paths-ignore: **.md, docs/**, plans/**, notebooks/**)) |
+| push:main | .github/workflows/ci.yml::uplift-verify-fast-4 | Property + unit tests (fast - full 500-example budget, shard 4/4) | CONDITIONAL | declared blocking (R1.8) - conditional (path-filtered (paths-ignore: **.md, docs/**, plans/**, notebooks/**)) |
+| push:main | .github/workflows/ci.yml::uplift-verify-slow | Install dependencies | CONDITIONAL | declared blocking (R1.8) - conditional (path-filtered (paths-ignore: **.md, docs/**, plans/**, notebooks/**)) |
+| push:main | .github/workflows/ci.yml::uplift-verify-slow | Selected count is non-empty and reported (slow selection) | CONDITIONAL | declared blocking (R1.8) - conditional (path-filtered (paths-ignore: **.md, docs/**, plans/**, notebooks/**)) |
+| push:main | .github/workflows/ci.yml::uplift-verify-slow | Property + regression tests (slow - 100-example budget) | CONDITIONAL | declared blocking (R1.8) - conditional (path-filtered (paths-ignore: **.md, docs/**, plans/**, notebooks/**)) |
 | push:main | .github/workflows/ci.yml::training-smoke | R3.2 serving-resolution proof (recorded entry resolves, BLOCKING) [tests/integration/test_published_entry_serving_resolution.py] | CONDITIONAL | declared blocking (R3.2) - conditional (path-filtered (paths-ignore: **.md, docs/**, plans/**, notebooks/**); needs 'quality-gates', which is conditional) |
 | push:main | .github/workflows/frontend.yml::e2e | uses: actions/checkout@v4 | NOT EXECUTED | declared blocking (R8.9) - if: false in push:main |
 | push:main | .github/workflows/frontend.yml::e2e | uses: pnpm/action-setup@v4 | NOT EXECUTED | declared blocking (R8.9) - if: false in push:main |
@@ -857,8 +941,24 @@ Every step `infrastructure/quality/blocking-steps.yaml` declares blocking, annot
 | pull_request | .github/workflows/ci.yml::quality-gates | Per-package coverage floor (Sprint 13 Phase 2) [scripts/coverage_per_package.py] | yes | declared blocking (R1.8) |
 | pull_request | .github/workflows/ci.yml::quality-gates | Spec coverage (Sprint 13 Phase 5) [scripts/check_spec_coverage.py] | yes | declared blocking (R1.8) |
 | pull_request | .github/workflows/ci.yml::quality-gates | Contract tests [/tests/test_contracts.py] | yes | declared blocking (R1.8) |
-| pull_request | .github/workflows/ci.yml::uplift-verify | Property + unit tests (fast - full 500-example budget) | yes | declared blocking (R1.8) |
-| pull_request | .github/workflows/ci.yml::uplift-verify | Property + regression tests (slow - 100-example budget) | yes | declared blocking (R1.8) |
+| pull_request | .github/workflows/ci.yml::uplift-verify | Every uplift shard reported success (aggregate verdict, BLOCKING) | yes | declared blocking (R1.8) |
+| pull_request | .github/workflows/ci.yml::uplift-verify | Fast shards partition tests/uplift + tests/verify exactly (G5 - BLOCKING) [_test.py] | yes | declared blocking (R1.8) |
+| pull_request | .github/workflows/ci.yml::uplift-verify | Fast shards selected the pre-split test set exactly (G5 - BLOCKING) | yes | declared blocking (R1.8) |
+| pull_request | .github/workflows/ci.yml::uplift-verify-fast-1 | Install dependencies | yes | declared blocking (R1.8) |
+| pull_request | .github/workflows/ci.yml::uplift-verify-fast-1 | Selected count is non-empty and reported (fast shard 1/4) | yes | declared blocking (R1.8) |
+| pull_request | .github/workflows/ci.yml::uplift-verify-fast-1 | Property + unit tests (fast - full 500-example budget, shard 1/4) | yes | declared blocking (R1.8) |
+| pull_request | .github/workflows/ci.yml::uplift-verify-fast-2 | Install dependencies | yes | declared blocking (R1.8) |
+| pull_request | .github/workflows/ci.yml::uplift-verify-fast-2 | Selected count is non-empty and reported (fast shard 2/4) | yes | declared blocking (R1.8) |
+| pull_request | .github/workflows/ci.yml::uplift-verify-fast-2 | Property + unit tests (fast - full 500-example budget, shard 2/4) | yes | declared blocking (R1.8) |
+| pull_request | .github/workflows/ci.yml::uplift-verify-fast-3 | Install dependencies | yes | declared blocking (R1.8) |
+| pull_request | .github/workflows/ci.yml::uplift-verify-fast-3 | Selected count is non-empty and reported (fast shard 3/4) | yes | declared blocking (R1.8) |
+| pull_request | .github/workflows/ci.yml::uplift-verify-fast-3 | Property + unit tests (fast - full 500-example budget, shard 3/4) | yes | declared blocking (R1.8) |
+| pull_request | .github/workflows/ci.yml::uplift-verify-fast-4 | Install dependencies | yes | declared blocking (R1.8) |
+| pull_request | .github/workflows/ci.yml::uplift-verify-fast-4 | Selected count is non-empty and reported (fast shard 4/4) | yes | declared blocking (R1.8) |
+| pull_request | .github/workflows/ci.yml::uplift-verify-fast-4 | Property + unit tests (fast - full 500-example budget, shard 4/4) | yes | declared blocking (R1.8) |
+| pull_request | .github/workflows/ci.yml::uplift-verify-slow | Install dependencies | yes | declared blocking (R1.8) |
+| pull_request | .github/workflows/ci.yml::uplift-verify-slow | Selected count is non-empty and reported (slow selection) | yes | declared blocking (R1.8) |
+| pull_request | .github/workflows/ci.yml::uplift-verify-slow | Property + regression tests (slow - 100-example budget) | yes | declared blocking (R1.8) |
 | pull_request | .github/workflows/ci.yml::training-smoke | R3.2 serving-resolution proof (recorded entry resolves, BLOCKING) [tests/integration/test_published_entry_serving_resolution.py] | NOT EXECUTED | declared blocking (R3.2) - if: false in pull_request |
 | pull_request | .github/workflows/frontend.yml::e2e | uses: actions/checkout@v4 | CONDITIONAL | declared blocking (R8.9) - conditional (path-filtered (paths: frontend/**, proto/domain/**, .github/workflows/frontend.yml); needs 'build', which is conditional) |
 | pull_request | .github/workflows/frontend.yml::e2e | uses: pnpm/action-setup@v4 | CONDITIONAL | declared blocking (R8.9) - conditional (path-filtered (paths: frontend/**, proto/domain/**, .github/workflows/frontend.yml); needs 'build', which is conditional) |
@@ -922,8 +1022,24 @@ Every step `infrastructure/quality/blocking-steps.yaml` declares blocking, annot
 | tag:v* | .github/workflows/ci.yml::quality-gates | Per-package coverage floor (Sprint 13 Phase 2) [scripts/coverage_per_package.py] | NOT EXECUTED | declared blocking (R1.8) - on: push is branch-scoped (no tags: filter), so a tag push is excluded |
 | tag:v* | .github/workflows/ci.yml::quality-gates | Spec coverage (Sprint 13 Phase 5) [scripts/check_spec_coverage.py] | NOT EXECUTED | declared blocking (R1.8) - on: push is branch-scoped (no tags: filter), so a tag push is excluded |
 | tag:v* | .github/workflows/ci.yml::quality-gates | Contract tests [/tests/test_contracts.py] | NOT EXECUTED | declared blocking (R1.8) - on: push is branch-scoped (no tags: filter), so a tag push is excluded |
-| tag:v* | .github/workflows/ci.yml::uplift-verify | Property + unit tests (fast - full 500-example budget) | NOT EXECUTED | declared blocking (R1.8) - on: push is branch-scoped (no tags: filter), so a tag push is excluded |
-| tag:v* | .github/workflows/ci.yml::uplift-verify | Property + regression tests (slow - 100-example budget) | NOT EXECUTED | declared blocking (R1.8) - on: push is branch-scoped (no tags: filter), so a tag push is excluded |
+| tag:v* | .github/workflows/ci.yml::uplift-verify | Every uplift shard reported success (aggregate verdict, BLOCKING) | NOT EXECUTED | declared blocking (R1.8) - on: push is branch-scoped (no tags: filter), so a tag push is excluded |
+| tag:v* | .github/workflows/ci.yml::uplift-verify | Fast shards partition tests/uplift + tests/verify exactly (G5 - BLOCKING) [_test.py] | NOT EXECUTED | declared blocking (R1.8) - on: push is branch-scoped (no tags: filter), so a tag push is excluded |
+| tag:v* | .github/workflows/ci.yml::uplift-verify | Fast shards selected the pre-split test set exactly (G5 - BLOCKING) | NOT EXECUTED | declared blocking (R1.8) - on: push is branch-scoped (no tags: filter), so a tag push is excluded |
+| tag:v* | .github/workflows/ci.yml::uplift-verify-fast-1 | Install dependencies | NOT EXECUTED | declared blocking (R1.8) - on: push is branch-scoped (no tags: filter), so a tag push is excluded |
+| tag:v* | .github/workflows/ci.yml::uplift-verify-fast-1 | Selected count is non-empty and reported (fast shard 1/4) | NOT EXECUTED | declared blocking (R1.8) - on: push is branch-scoped (no tags: filter), so a tag push is excluded |
+| tag:v* | .github/workflows/ci.yml::uplift-verify-fast-1 | Property + unit tests (fast - full 500-example budget, shard 1/4) | NOT EXECUTED | declared blocking (R1.8) - on: push is branch-scoped (no tags: filter), so a tag push is excluded |
+| tag:v* | .github/workflows/ci.yml::uplift-verify-fast-2 | Install dependencies | NOT EXECUTED | declared blocking (R1.8) - on: push is branch-scoped (no tags: filter), so a tag push is excluded |
+| tag:v* | .github/workflows/ci.yml::uplift-verify-fast-2 | Selected count is non-empty and reported (fast shard 2/4) | NOT EXECUTED | declared blocking (R1.8) - on: push is branch-scoped (no tags: filter), so a tag push is excluded |
+| tag:v* | .github/workflows/ci.yml::uplift-verify-fast-2 | Property + unit tests (fast - full 500-example budget, shard 2/4) | NOT EXECUTED | declared blocking (R1.8) - on: push is branch-scoped (no tags: filter), so a tag push is excluded |
+| tag:v* | .github/workflows/ci.yml::uplift-verify-fast-3 | Install dependencies | NOT EXECUTED | declared blocking (R1.8) - on: push is branch-scoped (no tags: filter), so a tag push is excluded |
+| tag:v* | .github/workflows/ci.yml::uplift-verify-fast-3 | Selected count is non-empty and reported (fast shard 3/4) | NOT EXECUTED | declared blocking (R1.8) - on: push is branch-scoped (no tags: filter), so a tag push is excluded |
+| tag:v* | .github/workflows/ci.yml::uplift-verify-fast-3 | Property + unit tests (fast - full 500-example budget, shard 3/4) | NOT EXECUTED | declared blocking (R1.8) - on: push is branch-scoped (no tags: filter), so a tag push is excluded |
+| tag:v* | .github/workflows/ci.yml::uplift-verify-fast-4 | Install dependencies | NOT EXECUTED | declared blocking (R1.8) - on: push is branch-scoped (no tags: filter), so a tag push is excluded |
+| tag:v* | .github/workflows/ci.yml::uplift-verify-fast-4 | Selected count is non-empty and reported (fast shard 4/4) | NOT EXECUTED | declared blocking (R1.8) - on: push is branch-scoped (no tags: filter), so a tag push is excluded |
+| tag:v* | .github/workflows/ci.yml::uplift-verify-fast-4 | Property + unit tests (fast - full 500-example budget, shard 4/4) | NOT EXECUTED | declared blocking (R1.8) - on: push is branch-scoped (no tags: filter), so a tag push is excluded |
+| tag:v* | .github/workflows/ci.yml::uplift-verify-slow | Install dependencies | NOT EXECUTED | declared blocking (R1.8) - on: push is branch-scoped (no tags: filter), so a tag push is excluded |
+| tag:v* | .github/workflows/ci.yml::uplift-verify-slow | Selected count is non-empty and reported (slow selection) | NOT EXECUTED | declared blocking (R1.8) - on: push is branch-scoped (no tags: filter), so a tag push is excluded |
+| tag:v* | .github/workflows/ci.yml::uplift-verify-slow | Property + regression tests (slow - 100-example budget) | NOT EXECUTED | declared blocking (R1.8) - on: push is branch-scoped (no tags: filter), so a tag push is excluded |
 | tag:v* | .github/workflows/ci.yml::training-smoke | R3.2 serving-resolution proof (recorded entry resolves, BLOCKING) [tests/integration/test_published_entry_serving_resolution.py] | NOT EXECUTED | declared blocking (R3.2) - on: push is branch-scoped (no tags: filter), so a tag push is excluded |
 | tag:v* | .github/workflows/frontend.yml::e2e | uses: actions/checkout@v4 | NOT EXECUTED | declared blocking (R8.9) - on: push is branch-scoped (no tags: filter), so a tag push is excluded |
 | tag:v* | .github/workflows/frontend.yml::e2e | uses: pnpm/action-setup@v4 | NOT EXECUTED | declared blocking (R8.9) - on: push is branch-scoped (no tags: filter), so a tag push is excluded |
