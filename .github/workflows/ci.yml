@@ -446,6 +446,19 @@ jobs:
           done
           test "$status" -eq 0
       - name: Fast shards partition tests/uplift + tests/verify exactly (G5 - BLOCKING)
+        # `if: always()` FOR THE SAME REASON THE JOB CARRIES IT, and this was found by
+        # reading a step list rather than a colour. On run 34685043779 the verdict step
+        # above failed (the slow selection is red on another owner's finding 57), so this
+        # step and the one after it reported `skipped` -- which means the G5 partition
+        # proof could only ever execute on a run that was already green, and would never
+        # execute at all while finding 57 stands. That is exactly "a deferred
+        # verification aimed at a gated step is not a deferred verification".
+        #
+        # The partition's exhaustiveness and disjointness are properties of the FILE TREE
+        # and the shard globs. They do not depend on whether a shard's tests passed, so
+        # gating them behind a test result was the defect. All three steps now always
+        # report and the job's conclusion is their conjunction.
+        if: always()
         # G5: PARTITION, NEVER FILTER -- and prove it mechanically rather than assert it
         # in prose. The four fast shards select by first letter of the file name, two
         # disjoint character classes over one directory each. Disjointness holds by
@@ -479,6 +492,12 @@ jobs:
             "$u1" "$u2" "$v1" "$v2" "$assigned" "$universe"
           test "$assigned" -eq "$universe"
       - name: Fast shards selected the pre-split test set exactly (G5 - BLOCKING)
+        # `if: always()` for the same reason as the step above. Its subject is the shards'
+        # own reported selection counts, which are set by a counting step that runs BEFORE
+        # each shard's test step -- so the counts exist whether or not the tests passed,
+        # and gating this proof behind the aggregate verdict withheld it precisely on the
+        # runs where a lost path would matter most.
+        if: always()
         # The file-level step above proves the PATHS partition. This one proves the
         # SELECTION does: that four shards of `-m "not slow"` still select the same tests
         # the single pre-split step selected. The two fail for different reasons, which is
