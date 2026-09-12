@@ -106,8 +106,16 @@ def _session_factory_returning(scalar_value: str | None = None) -> Any:
 
 
 def _last(factory: Any) -> _SessionRecorder:
-    """Convenience: most recently created recorder."""
-    return factory.recorders[-1]
+    """Convenience: most recently created recorder.
+
+    The `isinstance` check is the repair for a `no-any-return`: `factory` is
+    deliberately `Any` (it stands in for a session factory), so indexing it
+    yields `Any` and returning that silently asserted the declared type without
+    checking it. Now the claim is verified at the point it is made.
+    """
+    recorder = factory.recorders[-1]
+    assert isinstance(recorder, _SessionRecorder)
+    return recorder
 
 
 def _make_decision(confidence: float = 0.95) -> ConsensusDecision:
@@ -227,7 +235,7 @@ async def test_metric_increments_with_insert_count() -> None:
     logger = AuditLogger(factory)
     await logger.log_decision(_make_decision())
     # Pin that the gauge reflects an internal counter, not just any number
-    assert logger._insert_count == 1  # type: ignore[attr-defined]
+    assert logger._insert_count == 1
     # The gauge value should equal the insert count (1.0 after first insert)
     assert AUDIT_CHAIN_LENGTH._value.get() == 1.0
 

@@ -710,31 +710,60 @@ def test_reproduction_path_is_zero_cost_network_free_and_synthetic_only(tmp_path
 
 
 def test_c60_verification_path_is_network_free(tmp_path, monkeypatch) -> None:
-    """R9.2/R10.3: the C60 gate verifies from the committed artifact alone, no network."""
+    """R9.2/R10.3: the C60 gate verifies from its result artifact alone, no network.
+
+    Retargeted for the purpose-achievement-audit R2 remediation: the gate no longer reads
+    a bare ``headline_uplift``, so the fixture is a proof-grade
+    :class:`~uplift.harness.UpliftArtifact` -- complete, powered at
+    ``MIN_POWERED_REPLICATES``, within the twin fidelity bound, and attributed to the
+    evaluating run. The preserved claim is unchanged: verification touches no socket, no
+    paid client, and no real-data file.
+    """
     from scripts.audit import uplift_truth
-    from uplift.uplift_floor import UPLIFT_FLOOR
+    from uplift.harness import (
+        ArtifactFidelity,
+        UpliftArtifact,
+        UpliftProvenance,
+    )
+    from uplift.uplift_floor import MIN_POWERED_REPLICATES, UPLIFT_FLOOR
+
+    revision, run_id = "c0ffee", "run-4242"
+    monkeypatch.setenv("SYNAPSE_REVISION", revision)
+    monkeypatch.setenv("SYNAPSE_RUN_ID", run_id)
 
     artifact = tmp_path / "result.json"
-    artifact.write_text(
-        json.dumps(
-            {
-                "headline_uplift": float(UPLIFT_FLOOR),
-                "incomplete": False,
-                "fidelity": {"within_fidelity_bound": True},
-            }
+    UpliftArtifact(
+        headline_uplift=float(UPLIFT_FLOOR) + 1.0,
+        primary_kpi="fill_rate",
+        noise_tolerance_pp=1.0,
+        incomplete=False,
+        all_wins_warning=False,
+        replicates_per_arm=MIN_POWERED_REPLICATES,
+        fidelity=ArtifactFidelity(
+            kl_divergence=0.02,
+            threshold=0.1,
+            confidence="high",
+            within_fidelity_bound=True,
+            fidelity_bound_statement="bounded by twin fidelity",
         ),
-        encoding="utf-8",
-    )
-    monkeypatch.setattr(uplift_truth, "RESULT_ARTIFACT", artifact)
+        provenance=UpliftProvenance(
+            arms=("baseline-0", "consensus"),
+            replicates_per_arm=MIN_POWERED_REPLICATES,
+            revision=revision,
+            run_id=run_id,
+            seeds=(4001,),
+            written_at="2026-01-01T00:00:00Z",
+        ),
+    ).write(artifact)
 
     with _ZeroCostGuard() as guard:
-        measured = uplift_truth.read_measured_uplift(artifact)
         with redirect_stdout(io.StringIO()):
-            exit_code = uplift_truth.run(check=True)
+            exit_code = uplift_truth.run(
+                check=True, require_fresh_run=True, artifact=artifact
+            )
 
-    assert measured == pytest.approx(float(UPLIFT_FLOOR))
     assert exit_code == uplift_truth.EXIT_PASS
-    # The gate reads the committed artifact and nothing else: no dial at all, no paid
+    # The gate reads its result artifact and nothing else: no dial at all, no paid
     # client, no real-data file.
     assert guard.network_attempts == []
     assert guard.paid_client_attempts == []

@@ -64,7 +64,30 @@ jobs:
           exit-code: '0'
           format: 'table'
 
-      - name: Secret detection via gitleaks
+      - name: Secret detection via gitleaks (ADVISORY - not yet blocking)
+        # R11.3 (decision-quality-proof task 3.2). The `continue-on-error: true` below
+        # is unchanged; what changes is that the step now SAYS it does not propagate,
+        # which is the whole content of R11.3 -- an unlabelled non-propagating step is
+        # read as a gate by everyone except the shell.
+        #
+        # Labelled rather than made blocking, deliberately, and the label is a statement
+        # about propagation only -- never a claim that a leaked secret is acceptable.
+        # gitleaks-action@v2 exits non-zero on any finding in the commit range it is
+        # handed, and the range here is whatever `actions/checkout@v4` fetched at its
+        # default `fetch-depth: 1`. Whether this repository's history produces a clean
+        # run is an EMPIRICAL question that cannot be answered by reading the workflow,
+        # and flipping a scheduled security job to blocking on an unverified assumption
+        # is the kind of guess I-7 forbids: it would either block real PRs on
+        # pre-existing history or, worse, be reverted to `continue-on-error` at the
+        # first red run, which is how a gate becomes decoration.
+        #
+        # The obligation is recorded, not dropped: see the `pending:` entry for this
+        # step in `infrastructure/quality/blocking-steps.yaml`. Its precondition is
+        # exactly CF-6's shape -- one clean run of this job on the schedule, after which
+        # `continue-on-error` is deleted and the step moves into `steps:`. Nothing in
+        # that section excuses this step in the meantime; `workflow_shape_truth` reads
+        # only `steps:`, so the marker in the name is what makes today's state honest
+        # and the `pending:` entry is what stops the obligation being forgotten.
         uses: gitleaks/gitleaks-action@v2
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

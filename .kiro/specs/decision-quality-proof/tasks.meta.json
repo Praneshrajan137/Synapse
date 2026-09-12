@@ -1,0 +1,1067 @@
+{
+  "pbtResults": {},
+  "executionHistory": {
+    "1.1 Commit the five declared console property files": [
+      {
+        "executionId": "d25f3e36-ec89-4892-908c-f35686b6e228",
+        "chatSessionId": "sess_c9797eb0-b573-4905-bf9b-1013b66ec650",
+        "timestamp": 1787211575799
+      },
+      {
+        "executionId": "d25f3e36-ec89-4892-908c-f35686b6e228",
+        "chatSessionId": "sess_c9797eb0-b573-4905-bf9b-1013b66ec650",
+        "timestamp": 1787213003862
+      }
+    ],
+    "1.2 Add the fast-check budget resolver to the vitest setup file": [
+      {
+        "executionId": "d25f3e36-ec89-4892-908c-f35686b6e228",
+        "chatSessionId": "sess_c9797eb0-b573-4905-bf9b-1013b66ec650",
+        "timestamp": 1787211575934
+      },
+      {
+        "executionId": "d25f3e36-ec89-4892-908c-f35686b6e228",
+        "chatSessionId": "sess_c9797eb0-b573-4905-bf9b-1013b66ec650",
+        "timestamp": 1787213879052
+      }
+    ],
+    "1.3 Remove every per-call `numRuns` from the five declared files": [
+      {
+        "executionId": "d25f3e36-ec89-4892-908c-f35686b6e228",
+        "chatSessionId": "sess_c9797eb0-b573-4905-bf9b-1013b66ec650",
+        "timestamp": 1787211576052
+      },
+      {
+        "executionId": "d25f3e36-ec89-4892-908c-f35686b6e228",
+        "chatSessionId": "sess_c9797eb0-b573-4905-bf9b-1013b66ec650",
+        "timestamp": 1787213890480
+      }
+    ],
+    "1.4 Invert the inventory gate's TypeScript budget clause and give it a counting rule": [
+      {
+        "executionId": "d25f3e36-ec89-4892-908c-f35686b6e228",
+        "chatSessionId": "sess_c9797eb0-b573-4905-bf9b-1013b66ec650",
+        "timestamp": 1787211576197
+      },
+      {
+        "executionId": "d25f3e36-ec89-4892-908c-f35686b6e228",
+        "chatSessionId": "sess_c9797eb0-b573-4905-bf9b-1013b66ec650",
+        "timestamp": 1787217035865
+      }
+    ],
+    "1.5 Write property test for the fast-check budget resolver": [
+      {
+        "executionId": "d25f3e36-ec89-4892-908c-f35686b6e228",
+        "chatSessionId": "sess_c9797eb0-b573-4905-bf9b-1013b66ec650",
+        "timestamp": 1787211576339
+      },
+      {
+        "executionId": "d25f3e36-ec89-4892-908c-f35686b6e228",
+        "chatSessionId": "sess_c9797eb0-b573-4905-bf9b-1013b66ec650",
+        "timestamp": 1787223872024
+      }
+    ],
+    "1.6 Write property test for the inventory gate's budget rules": [
+      {
+        "executionId": "d25f3e36-ec89-4892-908c-f35686b6e228",
+        "chatSessionId": "sess_c9797eb0-b573-4905-bf9b-1013b66ec650",
+        "timestamp": 1787211576444
+      },
+      {
+        "executionId": "d25f3e36-ec89-4892-908c-f35686b6e228",
+        "chatSessionId": "sess_c9797eb0-b573-4905-bf9b-1013b66ec650",
+        "timestamp": 1787223888373
+      }
+    ],
+    "2.1 Make both type-check steps propagate, and the spec type-check job report honestly": [
+      {
+        "executionId": "d25f3e36-ec89-4892-908c-f35686b6e228",
+        "chatSessionId": "sess_c9797eb0-b573-4905-bf9b-1013b66ec650",
+        "timestamp": 1787211576553
+      },
+      {
+        "executionId": "d25f3e36-ec89-4892-908c-f35686b6e228",
+        "chatSessionId": "sess_c9797eb0-b573-4905-bf9b-1013b66ec650",
+        "timestamp": 1787213899718
+      }
+    ],
+    "2.2 Add the per-file executed-assertion reader with an `unavailable` state": [
+      {
+        "executionId": "d25f3e36-ec89-4892-908c-f35686b6e228",
+        "chatSessionId": "sess_c9797eb0-b573-4905-bf9b-1013b66ec650",
+        "timestamp": 1787211576664
+      },
+      {
+        "executionId": "d25f3e36-ec89-4892-908c-f35686b6e228",
+        "chatSessionId": "sess_c9797eb0-b573-4905-bf9b-1013b66ec650",
+        "timestamp": 1787219949193
+      }
+    ],
+    "2.3 Write property test for the run-record verdict": [
+      {
+        "executionId": "d25f3e36-ec89-4892-908c-f35686b6e228",
+        "chatSessionId": "sess_c9797eb0-b573-4905-bf9b-1013b66ec650",
+        "timestamp": 1787211576779
+      },
+      {
+        "executionId": "d25f3e36-ec89-4892-908c-f35686b6e228",
+        "chatSessionId": "sess_c9797eb0-b573-4905-bf9b-1013b66ec650",
+        "timestamp": 1787223902173
+      }
+    ],
+    "3.1 Correct `terminal_discarding_construct`'s continuation-joined reading": [
+      {
+        "executionId": "d25f3e36-ec89-4892-908c-f35686b6e228",
+        "chatSessionId": "sess_c9797eb0-b573-4905-bf9b-1013b66ec650",
+        "timestamp": 1787211576883
+      },
+      {
+        "executionId": "d25f3e36-ec89-4892-908c-f35686b6e228",
+        "chatSessionId": "sess_c9797eb0-b573-4905-bf9b-1013b66ec650",
+        "timestamp": 1787213014713
+      }
+    ],
+    "3.2 Resolve the six unrecorded non-propagating steps": [
+      {
+        "executionId": "d25f3e36-ec89-4892-908c-f35686b6e228",
+        "chatSessionId": "sess_c9797eb0-b573-4905-bf9b-1013b66ec650",
+        "timestamp": 1787211576984
+      },
+      {
+        "executionId": "d25f3e36-ec89-4892-908c-f35686b6e228",
+        "chatSessionId": "sess_c9797eb0-b573-4905-bf9b-1013b66ec650",
+        "timestamp": 1787213909174
+      }
+    ],
+    "3.3 Resolve the three recorded-and-still-findings steps and drop the over-stating entry": [
+      {
+        "executionId": "d25f3e36-ec89-4892-908c-f35686b6e228",
+        "chatSessionId": "sess_c9797eb0-b573-4905-bf9b-1013b66ec650",
+        "timestamp": 1787211577092
+      },
+      {
+        "executionId": "d25f3e36-ec89-4892-908c-f35686b6e228",
+        "chatSessionId": "sess_c9797eb0-b573-4905-bf9b-1013b66ec650",
+        "timestamp": 1787217051992
+      }
+    ],
+    "3.4 Write property test for the shape verdict and label scoping": [
+      {
+        "executionId": "d25f3e36-ec89-4892-908c-f35686b6e228",
+        "chatSessionId": "sess_c9797eb0-b573-4905-bf9b-1013b66ec650",
+        "timestamp": 1787211577203
+      },
+      {
+        "executionId": "d25f3e36-ec89-4892-908c-f35686b6e228",
+        "chatSessionId": "sess_c9797eb0-b573-4905-bf9b-1013b66ec650",
+        "timestamp": 1787223916966
+      }
+    ],
+    "3.5 Write property test for declared-step rename resolution": [
+      {
+        "executionId": "d25f3e36-ec89-4892-908c-f35686b6e228",
+        "chatSessionId": "sess_c9797eb0-b573-4905-bf9b-1013b66ec650",
+        "timestamp": 1787211577303
+      },
+      {
+        "executionId": "d25f3e36-ec89-4892-908c-f35686b6e228",
+        "chatSessionId": "sess_c9797eb0-b573-4905-bf9b-1013b66ec650",
+        "timestamp": 1787223938384
+      }
+    ],
+    "4.1 Promote the nested suite-counts helper to a public function": [
+      {
+        "executionId": "d25f3e36-ec89-4892-908c-f35686b6e228",
+        "chatSessionId": "sess_c9797eb0-b573-4905-bf9b-1013b66ec650",
+        "timestamp": 1787211577410
+      },
+      {
+        "executionId": "d25f3e36-ec89-4892-908c-f35686b6e228",
+        "chatSessionId": "sess_c9797eb0-b573-4905-bf9b-1013b66ec650",
+        "timestamp": 1787213024395
+      }
+    ],
+    "4.2 Add the README generator": [
+      {
+        "executionId": "d25f3e36-ec89-4892-908c-f35686b6e228",
+        "chatSessionId": "sess_c9797eb0-b573-4905-bf9b-1013b66ec650",
+        "timestamp": 1787211577515
+      },
+      {
+        "executionId": "d25f3e36-ec89-4892-908c-f35686b6e228",
+        "chatSessionId": "sess_c9797eb0-b573-4905-bf9b-1013b66ec650",
+        "timestamp": 1787217064185
+      }
+    ],
+    "4.3 Add the README generated region and wire the ordered steps": [
+      {
+        "executionId": "d25f3e36-ec89-4892-908c-f35686b6e228",
+        "chatSessionId": "sess_c9797eb0-b573-4905-bf9b-1013b66ec650",
+        "timestamp": 1787211577612
+      },
+      {
+        "executionId": "d25f3e36-ec89-4892-908c-f35686b6e228",
+        "chatSessionId": "sess_c9797eb0-b573-4905-bf9b-1013b66ec650",
+        "timestamp": 1787226237905
+      },
+      {
+        "executionId": "995577d1-aef4-4ac5-a9b7-a82c49cf293f",
+        "chatSessionId": "sess_c9797eb0-b573-4905-bf9b-1013b66ec650",
+        "timestamp": 1787239420100
+      }
+    ],
+    "4.4 Add the recursion-guard status test": [
+      {
+        "executionId": "d25f3e36-ec89-4892-908c-f35686b6e228",
+        "chatSessionId": "sess_c9797eb0-b573-4905-bf9b-1013b66ec650",
+        "timestamp": 1787211577727
+      },
+      {
+        "executionId": "995577d1-aef4-4ac5-a9b7-a82c49cf293f",
+        "chatSessionId": "sess_c9797eb0-b573-4905-bf9b-1013b66ec650",
+        "timestamp": 1787239436233
+      }
+    ],
+    "4.5 Write property test for the README region projection": [
+      {
+        "executionId": "d25f3e36-ec89-4892-908c-f35686b6e228",
+        "chatSessionId": "sess_c9797eb0-b573-4905-bf9b-1013b66ec650",
+        "timestamp": 1787211577822
+      },
+      {
+        "executionId": "995577d1-aef4-4ac5-a9b7-a82c49cf293f",
+        "chatSessionId": "sess_c9797eb0-b573-4905-bf9b-1013b66ec650",
+        "timestamp": 1787239446273
+      }
+    ],
+    "5.1 Commit the sweep cost budget as a pinned arithmetic claim": [
+      {
+        "executionId": "d25f3e36-ec89-4892-908c-f35686b6e228",
+        "chatSessionId": "sess_c9797eb0-b573-4905-bf9b-1013b66ec650",
+        "timestamp": 1787211577925
+      },
+      {
+        "executionId": "995577d1-aef4-4ac5-a9b7-a82c49cf293f",
+        "chatSessionId": "sess_c9797eb0-b573-4905-bf9b-1013b66ec650",
+        "timestamp": 1787239457522
+      }
+    ],
+    "5.2 Read the committed budget and refuse baseline suppression": [
+      {
+        "executionId": "d25f3e36-ec89-4892-908c-f35686b6e228",
+        "chatSessionId": "sess_c9797eb0-b573-4905-bf9b-1013b66ec650",
+        "timestamp": 1787211578029
+      },
+      {
+        "executionId": "995577d1-aef4-4ac5-a9b7-a82c49cf293f",
+        "chatSessionId": "sess_c9797eb0-b573-4905-bf9b-1013b66ec650",
+        "timestamp": 1787239467686
+      }
+    ],
+    "5.3 Register the budget-inequality check": [
+      {
+        "executionId": "d25f3e36-ec89-4892-908c-f35686b6e228",
+        "chatSessionId": "sess_c9797eb0-b573-4905-bf9b-1013b66ec650",
+        "timestamp": 1787211578143
+      }
+    ],
+    "5.4 Report per-operator outcomes, derive the counts, and never assert them": [
+      {
+        "executionId": "d25f3e36-ec89-4892-908c-f35686b6e228",
+        "chatSessionId": "sess_c9797eb0-b573-4905-bf9b-1013b66ec650",
+        "timestamp": 1787211578273
+      }
+    ],
+    "5.5 Make the C72 row project the counts of the run that produced it": [
+      {
+        "executionId": "d25f3e36-ec89-4892-908c-f35686b6e228",
+        "chatSessionId": "sess_c9797eb0-b573-4905-bf9b-1013b66ec650",
+        "timestamp": 1787211578380
+      }
+    ],
+    "5.6 Add the `falsification-sweep` job and its declarations in one commit": [
+      {
+        "executionId": "d25f3e36-ec89-4892-908c-f35686b6e228",
+        "chatSessionId": "sess_c9797eb0-b573-4905-bf9b-1013b66ec650",
+        "timestamp": 1787211578503
+      }
+    ],
+    "5.7 Write property test for sweep outcome classification": [
+      {
+        "executionId": "d25f3e36-ec89-4892-908c-f35686b6e228",
+        "chatSessionId": "sess_c9797eb0-b573-4905-bf9b-1013b66ec650",
+        "timestamp": 1787211578607
+      }
+    ],
+    "5.8 Write property test for derived counts and PASS-eligibility": [
+      {
+        "executionId": "d25f3e36-ec89-4892-908c-f35686b6e228",
+        "chatSessionId": "sess_c9797eb0-b573-4905-bf9b-1013b66ec650",
+        "timestamp": 1787211578716
+      }
+    ],
+    "5.9 Write property test for a sweep that could not observe": [
+      {
+        "executionId": "d25f3e36-ec89-4892-908c-f35686b6e228",
+        "chatSessionId": "sess_c9797eb0-b573-4905-bf9b-1013b66ec650",
+        "timestamp": 1787211578823
+      }
+    ],
+    "5.10 Write property test for the C72 row projection": [
+      {
+        "executionId": "d25f3e36-ec89-4892-908c-f35686b6e228",
+        "chatSessionId": "sess_c9797eb0-b573-4905-bf9b-1013b66ec650",
+        "timestamp": 1787211578934
+      }
+    ],
+    "6. Checkpoint — review the sweep's survivor list": [
+      {
+        "executionId": "d25f3e36-ec89-4892-908c-f35686b6e228",
+        "chatSessionId": "sess_c9797eb0-b573-4905-bf9b-1013b66ec650",
+        "timestamp": 1787211579039
+      }
+    ],
+    "7.1 Commit the feed licence artifact": [
+      {
+        "executionId": "d25f3e36-ec89-4892-908c-f35686b6e228",
+        "chatSessionId": "sess_c9797eb0-b573-4905-bf9b-1013b66ec650",
+        "timestamp": 1787211579147
+      }
+    ],
+    "7.2 Register the licence check": [
+      {
+        "executionId": "d25f3e36-ec89-4892-908c-f35686b6e228",
+        "chatSessionId": "sess_c9797eb0-b573-4905-bf9b-1013b66ec650",
+        "timestamp": 1787211579261
+      }
+    ],
+    "7.3 Add the ingestion record and the first-ingestion reporting rule": [
+      {
+        "executionId": "d25f3e36-ec89-4892-908c-f35686b6e228",
+        "chatSessionId": "sess_c9797eb0-b573-4905-bf9b-1013b66ec650",
+        "timestamp": 1787211579370
+      }
+    ],
+    "7.4 Extract the M5 aggregate statistics structure 1 will calibrate against": [
+      {
+        "executionId": "d25f3e36-ec89-4892-908c-f35686b6e228",
+        "chatSessionId": "sess_c9797eb0-b573-4905-bf9b-1013b66ec650",
+        "timestamp": 1787211579478
+      }
+    ],
+    "7.5 Write unit tests for licence schema totality and the ingestion record": [
+      {
+        "executionId": "d25f3e36-ec89-4892-908c-f35686b6e228",
+        "chatSessionId": "sess_c9797eb0-b573-4905-bf9b-1013b66ec650",
+        "timestamp": 1787211579589
+      }
+    ],
+    "8.1 Author and commit ADR-055": [
+      {
+        "executionId": "d25f3e36-ec89-4892-908c-f35686b6e228",
+        "chatSessionId": "sess_c9797eb0-b573-4905-bf9b-1013b66ec650",
+        "timestamp": 1787211579695
+      }
+    ],
+    "8.2 Create the twin policy file, pin it, and add its ratchet entry": [
+      {
+        "executionId": "d25f3e36-ec89-4892-908c-f35686b6e228",
+        "chatSessionId": "sess_c9797eb0-b573-4905-bf9b-1013b66ec650",
+        "timestamp": 1787211579796
+      }
+    ],
+    "8.3 Make pin extractors resolve, and verify each by running it": [
+      {
+        "executionId": "d25f3e36-ec89-4892-908c-f35686b6e228",
+        "chatSessionId": "sess_c9797eb0-b573-4905-bf9b-1013b66ec650",
+        "timestamp": 1787211579902
+      }
+    ],
+    "8.4 Write property test for pin extractor resolution": [
+      {
+        "executionId": "d25f3e36-ec89-4892-908c-f35686b6e228",
+        "chatSessionId": "sess_c9797eb0-b573-4905-bf9b-1013b66ec650",
+        "timestamp": 1787211580045
+      }
+    ],
+    "9.1 Make `_delivery` stock-conditional and add `unmet_demand_events`": [
+      {
+        "executionId": "d25f3e36-ec89-4892-908c-f35686b6e228",
+        "chatSessionId": "sess_c9797eb0-b573-4905-bf9b-1013b66ec650",
+        "timestamp": 1787211580155
+      }
+    ],
+    "9.2 Make demand events name the SKU they demand": [
+      {
+        "executionId": "d25f3e36-ec89-4892-908c-f35686b6e228",
+        "chatSessionId": "sess_c9797eb0-b573-4905-bf9b-1013b66ec650",
+        "timestamp": 1787211580259
+      }
+    ],
+    "9.3 Add the time-weighted on-hand inventory measure": [
+      {
+        "executionId": "d25f3e36-ec89-4892-908c-f35686b6e228",
+        "chatSessionId": "sess_c9797eb0-b573-4905-bf9b-1013b66ec650",
+        "timestamp": 1787211580360
+      }
+    ],
+    "9.4 Replace the single RNG with named substreams": [
+      {
+        "executionId": "d25f3e36-ec89-4892-908c-f35686b6e228",
+        "chatSessionId": "sess_c9797eb0-b573-4905-bf9b-1013b66ec650",
+        "timestamp": 1787211580478
+      }
+    ],
+    "9.5 Record the demand path as a replayable trace": [
+      {
+        "executionId": "d25f3e36-ec89-4892-908c-f35686b6e228",
+        "chatSessionId": "sess_c9797eb0-b573-4905-bf9b-1013b66ec650",
+        "timestamp": 1787211580613
+      }
+    ],
+    "9.6 Move the stockout numerator into the twin and disable the comparator's endogenous restock": [
+      {
+        "executionId": "d25f3e36-ec89-4892-908c-f35686b6e228",
+        "chatSessionId": "sess_c9797eb0-b573-4905-bf9b-1013b66ec650",
+        "timestamp": 1787211580715
+      }
+    ],
+    "9.7 Update every committed expectation these changes move, stating each new expectation": [
+      {
+        "executionId": "d25f3e36-ec89-4892-908c-f35686b6e228",
+        "chatSessionId": "sess_c9797eb0-b573-4905-bf9b-1013b66ec650",
+        "timestamp": 1787211580843
+      }
+    ],
+    "9.8 Write property test for the stockout cost and the instrumentation-only claim": [
+      {
+        "executionId": "d25f3e36-ec89-4892-908c-f35686b6e228",
+        "chatSessionId": "sess_c9797eb0-b573-4905-bf9b-1013b66ec650",
+        "timestamp": 1787211580971
+      }
+    ],
+    "9.9 Write property test for the on-hand integral": [
+      {
+        "executionId": "d25f3e36-ec89-4892-908c-f35686b6e228",
+        "chatSessionId": "sess_c9797eb0-b573-4905-bf9b-1013b66ec650",
+        "timestamp": 1787211581109
+      }
+    ],
+    "9.10 Write property test for demand-path replay": [
+      {
+        "executionId": "d25f3e36-ec89-4892-908c-f35686b6e228",
+        "chatSessionId": "sess_c9797eb0-b573-4905-bf9b-1013b66ec650",
+        "timestamp": 1787211581260
+      }
+    ],
+    "9.11 Write property test for substream independence": [
+      {
+        "executionId": "d25f3e36-ec89-4892-908c-f35686b6e228",
+        "chatSessionId": "sess_c9797eb0-b573-4905-bf9b-1013b66ec650",
+        "timestamp": 1787211581390
+      }
+    ],
+    "9.12 Write property test for the comparator's recorded restock configuration": [
+      {
+        "executionId": "d25f3e36-ec89-4892-908c-f35686b6e228",
+        "chatSessionId": "sess_c9797eb0-b573-4905-bf9b-1013b66ec650",
+        "timestamp": 1787211581522
+      }
+    ],
+    "10.1 Implement the scalar regret objective declared in ADR-055": [
+      {
+        "executionId": "d25f3e36-ec89-4892-908c-f35686b6e228",
+        "chatSessionId": "sess_c9797eb0-b573-4905-bf9b-1013b66ec650",
+        "timestamp": 1787211581628
+      }
+    ],
+    "10.2 Implement the two-pass foresight comparator": [
+      {
+        "executionId": "d25f3e36-ec89-4892-908c-f35686b6e228",
+        "chatSessionId": "sess_c9797eb0-b573-4905-bf9b-1013b66ec650",
+        "timestamp": 1787211581751
+      }
+    ],
+    "10.3 Add the regret measurement job": [
+      {
+        "executionId": "d25f3e36-ec89-4892-908c-f35686b6e228",
+        "chatSessionId": "sess_c9797eb0-b573-4905-bf9b-1013b66ec650",
+        "timestamp": 1787211581858
+      }
+    ],
+    "10.4 Commit the materiality margin **after** the first run measures it": [
+      {
+        "executionId": "d25f3e36-ec89-4892-908c-f35686b6e228",
+        "chatSessionId": "sess_c9797eb0-b573-4905-bf9b-1013b66ec650",
+        "timestamp": 1787211581980
+      }
+    ],
+    "10.5 Make an insensitive instrument outrank a null": [
+      {
+        "executionId": "d25f3e36-ec89-4892-908c-f35686b6e228",
+        "chatSessionId": "sess_c9797eb0-b573-4905-bf9b-1013b66ec650",
+        "timestamp": 1787211582087
+      }
+    ],
+    "10.6 Write property test for regret totality and the insensitivity precedence": [
+      {
+        "executionId": "d25f3e36-ec89-4892-908c-f35686b6e228",
+        "chatSessionId": "sess_c9797eb0-b573-4905-bf9b-1013b66ec650",
+        "timestamp": 1787211582193
+      }
+    ],
+    "11. Checkpoint — did the regret test falsify Finding 4?": [
+      {
+        "executionId": "d25f3e36-ec89-4892-908c-f35686b6e228",
+        "chatSessionId": "sess_c9797eb0-b573-4905-bf9b-1013b66ec650",
+        "timestamp": 1787211582315
+      }
+    ],
+    "12.1 Structure 1 — non-stationary demand calibrated from the real feed": [
+      {
+        "executionId": "d25f3e36-ec89-4892-908c-f35686b6e228",
+        "chatSessionId": "sess_c9797eb0-b573-4905-bf9b-1013b66ec650",
+        "timestamp": 1787211582420
+      }
+    ],
+    "12.2 Write property test for the demand-intensity shape": [
+      {
+        "executionId": "d25f3e36-ec89-4892-908c-f35686b6e228",
+        "chatSessionId": "sess_c9797eb0-b573-4905-bf9b-1013b66ec650",
+        "timestamp": 1787211582519
+      }
+    ],
+    "12.3 Structure 2 — a finite rider pool and finite pick stations that queue": [
+      {
+        "executionId": "d25f3e36-ec89-4892-908c-f35686b6e228",
+        "chatSessionId": "sess_c9797eb0-b573-4905-bf9b-1013b66ec650",
+        "timestamp": 1787211582637
+      }
+    ],
+    "12.4 Write property test for the utilisation-wait relationship": [
+      {
+        "executionId": "d25f3e36-ec89-4892-908c-f35686b6e228",
+        "chatSessionId": "sess_c9797eb0-b573-4905-bf9b-1013b66ec650",
+        "timestamp": 1787211582742
+      }
+    ],
+    "13.1 Structure 3 — correlated lead times and observable supplier state": [
+      {
+        "executionId": "d25f3e36-ec89-4892-908c-f35686b6e228",
+        "chatSessionId": "sess_c9797eb0-b573-4905-bf9b-1013b66ec650",
+        "timestamp": 1787211582843
+      }
+    ],
+    "13.2 Write property test for lead-time correlation and supplier attribution": [
+      {
+        "executionId": "d25f3e36-ec89-4892-908c-f35686b6e228",
+        "chatSessionId": "sess_c9797eb0-b573-4905-bf9b-1013b66ec650",
+        "timestamp": 1787211582951
+      }
+    ],
+    "13.3 Structures 4 and 5 — perishability coupling and substitution": [
+      {
+        "executionId": "d25f3e36-ec89-4892-908c-f35686b6e228",
+        "chatSessionId": "sess_c9797eb0-b573-4905-bf9b-1013b66ec650",
+        "timestamp": 1787211583065
+      }
+    ],
+    "13.4 Write property test for spoilage coupling and the substitution channel": [
+      {
+        "executionId": "d25f3e36-ec89-4892-908c-f35686b6e228",
+        "chatSessionId": "sess_c9797eb0-b573-4905-bf9b-1013b66ec650",
+        "timestamp": 1787211583181
+      }
+    ],
+    "13.5 Implement the four single-objective policies and interval-aware Pareto dominance": [
+      {
+        "executionId": "d25f3e36-ec89-4892-908c-f35686b6e228",
+        "chatSessionId": "sess_c9797eb0-b573-4905-bf9b-1013b66ec650",
+        "timestamp": 1787211583297
+      }
+    ],
+    "13.6 Write property test for interval-aware Pareto dominance": [
+      {
+        "executionId": "d25f3e36-ec89-4892-908c-f35686b6e228",
+        "chatSessionId": "sess_c9797eb0-b573-4905-bf9b-1013b66ec650",
+        "timestamp": 1787211583409
+      }
+    ],
+    "13.7 Wire E2c's comparative measurements into CI": [
+      {
+        "executionId": "d25f3e36-ec89-4892-908c-f35686b6e228",
+        "chatSessionId": "sess_c9797eb0-b573-4905-bf9b-1013b66ec650",
+        "timestamp": 1787211583526
+      }
+    ],
+    "14. Checkpoint — is consensus provably unnecessary?": [
+      {
+        "executionId": "d25f3e36-ec89-4892-908c-f35686b6e228",
+        "chatSessionId": "sess_c9797eb0-b573-4905-bf9b-1013b66ec650",
+        "timestamp": 1787211583637
+      }
+    ],
+    "15.1 Add the versioned interval block to `UpliftArtifact`": [
+      {
+        "executionId": "d25f3e36-ec89-4892-908c-f35686b6e228",
+        "chatSessionId": "sess_c9797eb0-b573-4905-bf9b-1013b66ec650",
+        "timestamp": 1787211583755
+      }
+    ],
+    "15.2 Implement the interval estimator and read `alpha` from the contract": [
+      {
+        "executionId": "d25f3e36-ec89-4892-908c-f35686b6e228",
+        "chatSessionId": "sess_c9797eb0-b573-4905-bf9b-1013b66ec650",
+        "timestamp": 1787211583860
+      }
+    ],
+    "15.3 Write property test for the interval estimator": [
+      {
+        "executionId": "d25f3e36-ec89-4892-908c-f35686b6e228",
+        "chatSessionId": "sess_c9797eb0-b573-4905-bf9b-1013b66ec650",
+        "timestamp": 1787211583972
+      }
+    ],
+    "15.4 Write property test for the interval-carrying artifact's canonical form": [
+      {
+        "executionId": "d25f3e36-ec89-4892-908c-f35686b6e228",
+        "chatSessionId": "sess_c9797eb0-b573-4905-bf9b-1013b66ec650",
+        "timestamp": 1787211584090
+      }
+    ],
+    "15.5 Make the comparator explicit and scope incompleteness by contrast": [
+      {
+        "executionId": "d25f3e36-ec89-4892-908c-f35686b6e228",
+        "chatSessionId": "sess_c9797eb0-b573-4905-bf9b-1013b66ec650",
+        "timestamp": 1787211584195
+      }
+    ],
+    "15.6 Write property test for comparator resolution": [
+      {
+        "executionId": "d25f3e36-ec89-4892-908c-f35686b6e228",
+        "chatSessionId": "sess_c9797eb0-b573-4905-bf9b-1013b66ec650",
+        "timestamp": 1787211584306
+      }
+    ],
+    "16.1 Implement the Oracle_Arm as the analytically optimal policy for the injected structure": [
+      {
+        "executionId": "d25f3e36-ec89-4892-908c-f35686b6e228",
+        "chatSessionId": "sess_c9797eb0-b573-4905-bf9b-1013b66ec650",
+        "timestamp": 1787211584412
+      }
+    ],
+    "16.2 Commit the control policy values and pin them before any run judged against them": [
+      {
+        "executionId": "d25f3e36-ec89-4892-908c-f35686b6e228",
+        "chatSessionId": "sess_c9797eb0-b573-4905-bf9b-1013b66ec650",
+        "timestamp": 1787211584523
+      }
+    ],
+    "16.3 Amend ADR-055 to declare the repetition count and the rate tolerance R6.15 reads": [
+      {
+        "executionId": "d25f3e36-ec89-4892-908c-f35686b6e228",
+        "chatSessionId": "sess_c9797eb0-b573-4905-bf9b-1013b66ec650",
+        "timestamp": 1787211584643
+      }
+    ],
+    "16.4 Implement control classification by interval position": [
+      {
+        "executionId": "d25f3e36-ec89-4892-908c-f35686b6e228",
+        "chatSessionId": "sess_c9797eb0-b573-4905-bf9b-1013b66ec650",
+        "timestamp": 1787211584824
+      }
+    ],
+    "16.5 Write property test for control classification and the repetition rate": [
+      {
+        "executionId": "d25f3e36-ec89-4892-908c-f35686b6e228",
+        "chatSessionId": "sess_c9797eb0-b573-4905-bf9b-1013b66ec650",
+        "timestamp": 1787211584945
+      }
+    ],
+    "16.6 Write property test for the oracle tolerance verdict": [
+      {
+        "executionId": "d25f3e36-ec89-4892-908c-f35686b6e228",
+        "chatSessionId": "sess_c9797eb0-b573-4905-bf9b-1013b66ec650",
+        "timestamp": 1787211585080
+      }
+    ],
+    "16.7 Add the `uplift-controls` job and its declarations in one commit": [
+      {
+        "executionId": "d25f3e36-ec89-4892-908c-f35686b6e228",
+        "chatSessionId": "sess_c9797eb0-b573-4905-bf9b-1013b66ec650",
+        "timestamp": 1787211585222
+      }
+    ],
+    "17.1 Implement the Power_Report as a generated, version-controlled artifact": [
+      {
+        "executionId": "d25f3e36-ec89-4892-908c-f35686b6e228",
+        "chatSessionId": "sess_c9797eb0-b573-4905-bf9b-1013b66ec650",
+        "timestamp": 1787211585367
+      }
+    ],
+    "17.2 Make the replicate floor a floor, and move its pin in the same change": [
+      {
+        "executionId": "d25f3e36-ec89-4892-908c-f35686b6e228",
+        "chatSessionId": "sess_c9797eb0-b573-4905-bf9b-1013b66ec650",
+        "timestamp": 1787211585511
+      }
+    ],
+    "17.3 Refuse publication while no Power_Report describes the revision under measurement": [
+      {
+        "executionId": "d25f3e36-ec89-4892-908c-f35686b6e228",
+        "chatSessionId": "sess_c9797eb0-b573-4905-bf9b-1013b66ec650",
+        "timestamp": 1787211585626
+      }
+    ],
+    "17.4 Write property test for the Power_Report's contract": [
+      {
+        "executionId": "d25f3e36-ec89-4892-908c-f35686b6e228",
+        "chatSessionId": "sess_c9797eb0-b573-4905-bf9b-1013b66ec650",
+        "timestamp": 1787211585733
+      }
+    ],
+    "17.5 Make the ratchet read the interval's lower bound": [
+      {
+        "executionId": "d25f3e36-ec89-4892-908c-f35686b6e228",
+        "chatSessionId": "sess_c9797eb0-b573-4905-bf9b-1013b66ec650",
+        "timestamp": 1787211585857
+      }
+    ],
+    "17.6 Write property test for the ratchet's source value": [
+      {
+        "executionId": "d25f3e36-ec89-4892-908c-f35686b6e228",
+        "chatSessionId": "sess_c9797eb0-b573-4905-bf9b-1013b66ec650",
+        "timestamp": 1787211585968
+      }
+    ],
+    "17.7 Report a proof older than the code it measured, on the pull request that ages it": [
+      {
+        "executionId": "d25f3e36-ec89-4892-908c-f35686b6e228",
+        "chatSessionId": "sess_c9797eb0-b573-4905-bf9b-1013b66ec650",
+        "timestamp": 1787211586078
+      }
+    ],
+    "17.8 Write property test for staleness reporting": [
+      {
+        "executionId": "d25f3e36-ec89-4892-908c-f35686b6e228",
+        "chatSessionId": "sess_c9797eb0-b573-4905-bf9b-1013b66ec650",
+        "timestamp": 1787211586189
+      }
+    ],
+    "17.9 Declare the `is_proven_uplift` operator and probe it inside the generating job": [
+      {
+        "executionId": "d25f3e36-ec89-4892-908c-f35686b6e228",
+        "chatSessionId": "sess_c9797eb0-b573-4905-bf9b-1013b66ec650",
+        "timestamp": 1787211586305
+      }
+    ],
+    "18.1 Write the held-out block into the published sidecar and declare its shape": [
+      {
+        "executionId": "d25f3e36-ec89-4892-908c-f35686b6e228",
+        "chatSessionId": "sess_c9797eb0-b573-4905-bf9b-1013b66ec650",
+        "timestamp": 1787211586412
+      }
+    ],
+    "18.2 Recompute coverage rather than reading it": [
+      {
+        "executionId": "d25f3e36-ec89-4892-908c-f35686b6e228",
+        "chatSessionId": "sess_c9797eb0-b573-4905-bf9b-1013b66ec650",
+        "timestamp": 1787211586529
+      }
+    ],
+    "18.3 Re-point C46 at `assess`, and move its pinning test in the same commit": [
+      {
+        "executionId": "d25f3e36-ec89-4892-908c-f35686b6e228",
+        "chatSessionId": "sess_c9797eb0-b573-4905-bf9b-1013b66ec650",
+        "timestamp": 1787211586637
+      }
+    ],
+    "18.4 Write property test for recompute-or-unavailable": [
+      {
+        "executionId": "d25f3e36-ec89-4892-908c-f35686b6e228",
+        "chatSessionId": "sess_c9797eb0-b573-4905-bf9b-1013b66ec650",
+        "timestamp": 1787211586740
+      }
+    ],
+    "18.5 Write property test for the smoke-versus-absent distinction": [
+      {
+        "executionId": "d25f3e36-ec89-4892-908c-f35686b6e228",
+        "chatSessionId": "sess_c9797eb0-b573-4905-bf9b-1013b66ec650",
+        "timestamp": 1787211586844
+      }
+    ],
+    "18.6 Correct the runbook's gate identifier and add the publication step the recompute needs": [
+      {
+        "executionId": "d25f3e36-ec89-4892-908c-f35686b6e228",
+        "chatSessionId": "sess_c9797eb0-b573-4905-bf9b-1013b66ec650",
+        "timestamp": 1787211586956
+      }
+    ],
+    "19.1 Reconcile E4a's artifacts onto the design's committed names": [
+      {
+        "executionId": "d25f3e36-ec89-4892-908c-f35686b6e228",
+        "chatSessionId": "sess_c9797eb0-b573-4905-bf9b-1013b66ec650",
+        "timestamp": 1787211587069
+      }
+    ],
+    "19.2 Write property test for licence schema totality": [
+      {
+        "executionId": "d25f3e36-ec89-4892-908c-f35686b6e228",
+        "chatSessionId": "sess_c9797eb0-b573-4905-bf9b-1013b66ec650",
+        "timestamp": 1787211587210
+      }
+    ],
+    "19.3 Write property test for provenanced ingestion": [
+      {
+        "executionId": "d25f3e36-ec89-4892-908c-f35686b6e228",
+        "chatSessionId": "sess_c9797eb0-b573-4905-bf9b-1013b66ec650",
+        "timestamp": 1787211587313
+      }
+    ],
+    "19.4 Record the benchmark score with its metric identity and a non-bare baseline": [
+      {
+        "executionId": "d25f3e36-ec89-4892-908c-f35686b6e228",
+        "chatSessionId": "sess_c9797eb0-b573-4905-bf9b-1013b66ec650",
+        "timestamp": 1787211587424
+      }
+    ],
+    "19.5 Generate the benchmark document rather than transcribing it": [
+      {
+        "executionId": "d25f3e36-ec89-4892-908c-f35686b6e228",
+        "chatSessionId": "sess_c9797eb0-b573-4905-bf9b-1013b66ec650",
+        "timestamp": 1787211587542
+      }
+    ],
+    "19.6 Commit the expected-outcome record at an ancestor revision, and check the ancestry": [
+      {
+        "executionId": "d25f3e36-ec89-4892-908c-f35686b6e228",
+        "chatSessionId": "sess_c9797eb0-b573-4905-bf9b-1013b66ec650",
+        "timestamp": 1787211587653
+      }
+    ],
+    "19.7 Commit the execution-environment run record and pin the zero-cost claim": [
+      {
+        "executionId": "d25f3e36-ec89-4892-908c-f35686b6e228",
+        "chatSessionId": "sess_c9797eb0-b573-4905-bf9b-1013b66ec650",
+        "timestamp": 1787211587772
+      }
+    ],
+    "19.8 Write property test for benchmark-record honesty": [
+      {
+        "executionId": "d25f3e36-ec89-4892-908c-f35686b6e228",
+        "chatSessionId": "sess_c9797eb0-b573-4905-bf9b-1013b66ec650",
+        "timestamp": 1787211587876
+      }
+    ],
+    "20.1 Make degradation the exact three-term disjunction, and make confidence move": [
+      {
+        "executionId": "d25f3e36-ec89-4892-908c-f35686b6e228",
+        "chatSessionId": "sess_c9797eb0-b573-4905-bf9b-1013b66ec650",
+        "timestamp": 1787211587987
+      }
+    ],
+    "20.2 Write property test for the degradation disjunction and confidence spread": [
+      {
+        "executionId": "d25f3e36-ec89-4892-908c-f35686b6e228",
+        "chatSessionId": "sess_c9797eb0-b573-4905-bf9b-1013b66ec650",
+        "timestamp": 1787211588089
+      }
+    ],
+    "20.3 Land the registry entry, and keep both substitution pins where they are": [
+      {
+        "executionId": "d25f3e36-ec89-4892-908c-f35686b6e228",
+        "chatSessionId": "sess_c9797eb0-b573-4905-bf9b-1013b66ec650",
+        "timestamp": 1787211588202
+      }
+    ],
+    "20.4 Materialise the published artifact for the three local-reading gates": [
+      {
+        "executionId": "d25f3e36-ec89-4892-908c-f35686b6e228",
+        "chatSessionId": "sess_c9797eb0-b573-4905-bf9b-1013b66ec650",
+        "timestamp": 1787211588310
+      }
+    ],
+    "20.5 Make the task-completion check read the registry it is told about": [
+      {
+        "executionId": "d25f3e36-ec89-4892-908c-f35686b6e228",
+        "chatSessionId": "sess_c9797eb0-b573-4905-bf9b-1013b66ec650",
+        "timestamp": 1787211588416
+      }
+    ],
+    "20.6 Write property test for task-record claims against the registry": [
+      {
+        "executionId": "d25f3e36-ec89-4892-908c-f35686b6e228",
+        "chatSessionId": "sess_c9797eb0-b573-4905-bf9b-1013b66ec650",
+        "timestamp": 1787211588543
+      }
+    ],
+    "20.7 Render degradation on every surface that shows the agent's output": [
+      {
+        "executionId": "d25f3e36-ec89-4892-908c-f35686b6e228",
+        "chatSessionId": "sess_c9797eb0-b573-4905-bf9b-1013b66ec650",
+        "timestamp": 1787211588653
+      }
+    ],
+    "20.8 Extend the console degradation property to every surface": [
+      {
+        "executionId": "d25f3e36-ec89-4892-908c-f35686b6e228",
+        "chatSessionId": "sess_c9797eb0-b573-4905-bf9b-1013b66ec650",
+        "timestamp": 1787211588769
+      }
+    ],
+    "21. Checkpoint — is the confidence contract actually live?": [
+      {
+        "executionId": "d25f3e36-ec89-4892-908c-f35686b6e228",
+        "chatSessionId": "sess_c9797eb0-b573-4905-bf9b-1013b66ec650",
+        "timestamp": 1787211588913
+      }
+    ],
+    "22.1 Regenerate the artifact in the generating job and co-locate the interval": [
+      {
+        "executionId": "d25f3e36-ec89-4892-908c-f35686b6e228",
+        "chatSessionId": "sess_c9797eb0-b573-4905-bf9b-1013b66ec650",
+        "timestamp": 1787211589021
+      }
+    ],
+    "22.2 Declare the job that is the only place C60 can pass": [
+      {
+        "executionId": "d25f3e36-ec89-4892-908c-f35686b6e228",
+        "chatSessionId": "sess_c9797eb0-b573-4905-bf9b-1013b66ec650",
+        "timestamp": 1787211589127
+      }
+    ],
+    "22.3 Ratchet `UPLIFT_FLOOR` to the measured lower bound, and move its pin with it": [
+      {
+        "executionId": "d25f3e36-ec89-4892-908c-f35686b6e228",
+        "chatSessionId": "sess_c9797eb0-b573-4905-bf9b-1013b66ec650",
+        "timestamp": 1787211589229
+      }
+    ],
+    "23.1 Write ADR-056 superseding ADR-033, before any anchor is published": [
+      {
+        "executionId": "d25f3e36-ec89-4892-908c-f35686b6e228",
+        "chatSessionId": "sess_c9797eb0-b573-4905-bf9b-1013b66ec650",
+        "timestamp": 1787211589334
+      }
+    ],
+    "23.2 Record the log coordinate on `AnchorRecord`, nullably": [
+      {
+        "executionId": "d25f3e36-ec89-4892-908c-f35686b6e228",
+        "chatSessionId": "sess_c9797eb0-b573-4905-bf9b-1013b66ec650",
+        "timestamp": 1787211589445
+      }
+    ],
+    "23.3 Add the external-entry freshness rule, preserving the fail-versus-unavailable split": [
+      {
+        "executionId": "d25f3e36-ec89-4892-908c-f35686b6e228",
+        "chatSessionId": "sess_c9797eb0-b573-4905-bf9b-1013b66ec650",
+        "timestamp": 1787211589560
+      }
+    ],
+    "23.4 Write property test for external anchor freshness": [
+      {
+        "executionId": "d25f3e36-ec89-4892-908c-f35686b6e228",
+        "chatSessionId": "sess_c9797eb0-b573-4905-bf9b-1013b66ec650",
+        "timestamp": 1787211589662
+      }
+    ],
+    "23.5 Add the chain presentation a third party can actually be handed": [
+      {
+        "executionId": "d25f3e36-ec89-4892-908c-f35686b6e228",
+        "chatSessionId": "sess_c9797eb0-b573-4905-bf9b-1013b66ec650",
+        "timestamp": 1787211589777
+      }
+    ],
+    "23.6 Add `verify-export`, calling the same walker the DSN path calls": [
+      {
+        "executionId": "d25f3e36-ec89-4892-908c-f35686b6e228",
+        "chatSessionId": "sess_c9797eb0-b573-4905-bf9b-1013b66ec650",
+        "timestamp": 1787211589885
+      }
+    ],
+    "23.7 Write property test for the export round-trip and truncation detection": [
+      {
+        "executionId": "d25f3e36-ec89-4892-908c-f35686b6e228",
+        "chatSessionId": "sess_c9797eb0-b573-4905-bf9b-1013b66ec650",
+        "timestamp": 1787211589988
+      }
+    ],
+    "23.8 Write property test for offline verification totality": [
+      {
+        "executionId": "d25f3e36-ec89-4892-908c-f35686b6e228",
+        "chatSessionId": "sess_c9797eb0-b573-4905-bf9b-1013b66ec650",
+        "timestamp": 1787211590097
+      }
+    ],
+    "23.9 Add the `chain-export` job where a database exists": [
+      {
+        "executionId": "d25f3e36-ec89-4892-908c-f35686b6e228",
+        "chatSessionId": "sess_c9797eb0-b573-4905-bf9b-1013b66ec650",
+        "timestamp": 1787211590201
+      }
+    ],
+    "23.10 Make publication reachable, and prove the freshness check can fail": [
+      {
+        "executionId": "d25f3e36-ec89-4892-908c-f35686b6e228",
+        "chatSessionId": "sess_c9797eb0-b573-4905-bf9b-1013b66ec650",
+        "timestamp": 1787211590347
+      }
+    ],
+    "23.11 Write property test for same-run publication": [
+      {
+        "executionId": "d25f3e36-ec89-4892-908c-f35686b6e228",
+        "chatSessionId": "sess_c9797eb0-b573-4905-bf9b-1013b66ec650",
+        "timestamp": 1787211590450
+      }
+    ],
+    "24.1 Assign identifiers and complete the registrations": [
+      {
+        "executionId": "d25f3e36-ec89-4892-908c-f35686b6e228",
+        "chatSessionId": "sess_c9797eb0-b573-4905-bf9b-1013b66ec650",
+        "timestamp": 1787211590556
+      }
+    ],
+    "24.2 Regenerate the ledger, the gate surface and the README from one execution": [
+      {
+        "executionId": "d25f3e36-ec89-4892-908c-f35686b6e228",
+        "chatSessionId": "sess_c9797eb0-b573-4905-bf9b-1013b66ec650",
+        "timestamp": 1787211590663
+      }
+    ],
+    "25. Final checkpoint — state the claim, and state it honestly": [
+      {
+        "executionId": "d25f3e36-ec89-4892-908c-f35686b6e228",
+        "chatSessionId": "sess_c9797eb0-b573-4905-bf9b-1013b66ec650",
+        "timestamp": 1787211590782
+      }
+    ],
+    "1. Make the console property surface visible to CI and make its budget inherit a profile": [
+      {
+        "executionId": "d25f3e36-ec89-4892-908c-f35686b6e228",
+        "chatSessionId": "sess_c9797eb0-b573-4905-bf9b-1013b66ec650",
+        "timestamp": 1787223888511
+      }
+    ],
+    "2. Turn the console run record into a per-file verdict": [
+      {
+        "executionId": "d25f3e36-ec89-4892-908c-f35686b6e228",
+        "chatSessionId": "sess_c9797eb0-b573-4905-bf9b-1013b66ec650",
+        "timestamp": 1787223902310
+      }
+    ],
+    "3. Make the workflow-shape verdict green under every rule, not just one": [
+      {
+        "executionId": "d25f3e36-ec89-4892-908c-f35686b6e228",
+        "chatSessionId": "sess_c9797eb0-b573-4905-bf9b-1013b66ec650",
+        "timestamp": 1787223938507
+      }
+    ],
+    "4. Make the published headline a projection of the execution that enforces it": [
+      {
+        "executionId": "995577d1-aef4-4ac5-a9b7-a82c49cf293f",
+        "chatSessionId": "sess_c9797eb0-b573-4905-bf9b-1013b66ec650",
+        "timestamp": 1787239446445
+      }
+    ]
+  }
+}

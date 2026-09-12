@@ -1,6 +1,10 @@
 import type { SloResponse, SloTier } from "@domain/operations";
 import { render, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
+// Bootstrap i18n so the board's data-path notice copy resolves - the negative
+// assertion below ("nothing on this board reads as healthy") is only meaningful
+// against real copy, not against raw translation keys.
+import "@i18n/index";
 import { SloBurnBoard } from "../SloBurnBoard";
 
 function tier(severity: SloTier["severity"], fast: number | null, slow: number | null): SloTier {

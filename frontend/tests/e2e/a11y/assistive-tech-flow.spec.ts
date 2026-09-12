@@ -27,22 +27,22 @@ import { expect, test, type Page, type TestInfo } from "@playwright/test";
  * using a screen reader comprehends it. Real effectiveness requires real-user
  * (RITE) testing with 3–5 assistive-technology operators.
  *
- * ── Harness wiring (graceful-skip convention) ────────────────────────────────
- * Seeding a live escalation into the cockpit uses the same documented in-browser
- * harness global and graceful-skip convention as the other harness-dependent
- * e2e specs (spatial-visualization.spec.ts, firehose-stress.resilience.spec.ts):
+ * ── Harness wiring (REQUIRED — no graceful skip) ─────────────────────────────
+ * Seeding a live escalation into the cockpit uses the documented in-browser
+ * harness global implemented by `spec/effectiveness/harness.ts` (task 11.1):
  *
  *   interface AtlasHarness {
- *     seedScenario?(scenarioId: string): Promise<void>;
+ *     seedScenario(scenarioId: string): Promise<void>;
  *   }
  *   declare global { interface Window { __atlasHarness?: AtlasHarness } }
  *
+ * The global exists only in the e2e-mode build (AD-12), so this suite runs as
+ * `pnpm build:e2e && pnpm test:e2e:harness` (`playwright.harness.config.ts`).
  * The static-semantics check (the non-visual escalation channels exist and the
  * surface is axe-clean) runs against the cockpit as it renders today. The
- * seeded-escalation walkthrough (perceive the escalation + its violations, then
- * commit an override and hear the outcome announced) skips cleanly until the
- * harness seeds an escalation and its MSW worker answers the override POST, so
- * this spec is committed and ready the moment the harness lands.
+ * seeded-escalation walkthrough now FAILS when the harness cannot seed an
+ * escalation instead of skipping — an unwalked flow is not an operable one
+ * (I-7).
  */
 
 /**
@@ -158,12 +158,14 @@ test.describe("Assistive_Tech_Flow — Override Cockpit (Req 15)", () => {
     }
     await expect(page.locator("main")).toBeVisible();
 
-    // Seeding a LIVE escalation (and answering the override POST) needs the
-    // in-browser harness + its MSW worker; skip cleanly until wired (same
-    // graceful-skip convention as the other harness-dependent e2e specs).
-    if (!(await harnessReady(page)) || !(await canSeed(page))) {
-      test.skip(true, "escalation-seeding harness (window.__atlasHarness.seedScenario) not wired yet");
-    }
+    // Seeding a LIVE escalation (and answering the override POST) requires the
+    // in-browser harness + its MSW worker (task 11.1). Its absence FAILS this
+    // walkthrough rather than skipping it (I-7).
+    expect(
+      (await harnessReady(page)) && (await canSeed(page)),
+      "window.__atlasHarness.seedScenario is absent: run the harness suite against the e2e-mode " +
+        "build (pnpm build:e2e && pnpm test:e2e:harness)",
+    ).toBe(true);
     await seedScenario(page, SCENARIO_ID);
 
     // ── Perceive the escalation (Req 15.1) ────────────────────────────────────

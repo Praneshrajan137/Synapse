@@ -1,0 +1,483 @@
+# SYNAPSE -- Declarative document-number pins (AD-3; R7.5, R7.8, R7.10, R11.8, R14.3)
+#
+# `scripts/audit/doc_truth.py` reads this table instead of carrying one bespoke
+# claim function per number (task 2.5). Adding a pin is a data edit, which is
+# what makes Requirement 7's eight-number sweep affordable and R7.5/R7.10 total
+# rather than per-number.
+#
+# Read contract: `encoding='utf-8'` on every read (E-S13-07).
+#
+# Row shape:
+#   id         str  -- stable identifier, also the ClaimResult name
+#   kind       str  -- threshold | flag | blocking-gate | required-job
+#   required   bool -- a required pin that cannot be evaluated makes doc_truth
+#                      report UNAVAILABLE; an `ok` sibling never masks it (R1.6)
+#   document   str  -- repo-relative path of the governance document
+#   anchor     str  -- Python regex with a named group `value`, matched against
+#                      the document text. MUST match exactly one line.
+#   source     str  -- the mechanical source of truth
+#   extractor  str  -- yaml_path:<dotted> | json_path:<jsonpath> | regex:<pattern>
+#   compare    str  -- numeric | string | count
+#   scale      str  -- identity | percent_of_fraction (doc states 80, source 0.80)
+#
+# A pin whose document value and source value differ FAILs naming both sides.
+# Extraction is a pure regex/yaml/json read, hence idempotent -- which is what
+# design Property 5's round-trip clause asserts.
+#
+# Extractor semantics (scripts/audit/doc_truth.py, task 2.5). Every extractor
+# yields an ORDERED SET of raw source strings -- raw, so a failure detail can
+# quote the source byte-for-byte (`0.70`, not `0.7`):
+#   yaml_path:<dotted>   walks the YAML node tree; a `[]` segment fans out over a
+#                        sequence (`required[].job` -> every declared job name)
+#   json_path:$.<dotted> the same walk over a JSON document
+#   regex:<pattern>      every match of the pattern; the named group `value` when
+#                        present, else group 1, else the whole match
+#
+# Comparison semantics -- driven by `compare` ALONE, never by `kind`, so a pin's
+# verdict is readable from its own row:
+#   numeric  the documented value equals the single extracted value after `scale`
+#   string   the documented value is a member of the extracted set
+#   count    the documented value (digits, or an English number word such as
+#            `two`, since governance prose spells small counts) equals the number
+#            of DISTINCT extracted values. An empty extraction is the honest count
+#            `0` and FAILs against a non-zero claim -- it is never an unavailable.
+#
+# `kind` classifies which mechanical source family a pin resolves against and is
+# reported with the verdict: threshold/flag -> a config or workflow value;
+# blocking-gate -> the generated docs/state/GATE_SURFACE.md record (R11.8);
+# required-job -> infrastructure/quality/required-checks.yaml (R14.3).
+
+version: 1
+
+pins:
+  # -------------------------------------------------------------------------
+  # Coverage target (CLAUDE.md Testing Rules)
+  # -------------------------------------------------------------------------
+  - id: coverage-target
+    kind: threshold
+    required: true
+    document: CLAUDE.md
+    anchor: 'target \*\*(?P<value>[\d.]+)% line\+branch'
+    source: infrastructure/quality/coverage-floors.yaml
+    extractor: 'yaml_path:target'
+    compare: numeric
+    scale: identity
+
+  # -------------------------------------------------------------------------
+  # Spec-coverage threshold -- the one number the audit found genuinely pinned.
+  # Migrated verbatim from doc_truth.py::_claim_spec_threshold (task 2.5).
+  # -------------------------------------------------------------------------
+  - id: spec-coverage-threshold
+    kind: threshold
+    required: true
+    document: CLAUDE.md
+    anchor: 'CI gate `--threshold (?P<value>\d+)`'
+    source: .github/workflows/ci.yml
+    extractor: 'regex:check_spec_coverage\.py --threshold (?P<value>\d+)'
+    compare: numeric
+    scale: identity
+
+  # -------------------------------------------------------------------------
+  # Frontend Stryker break -- KNOWN DRIFT, see `drift:` below. R7.8.
+  # -------------------------------------------------------------------------
+  - id: stryker-break
+    kind: threshold
+    required: true
+    document: CLAUDE.md
+    anchor: 'Frontend Stryker `break: (?P<value>\d+)`'
+    source: frontend/stryker.conf.json
+    extractor: 'json_path:$.thresholds.break'
+    compare: numeric
+    scale: identity
+
+  # -------------------------------------------------------------------------
+  # Mutation survival ceilings (CLAUDE.md Testing Rules -> mutation.yml)
+  # -------------------------------------------------------------------------
+  - id: mutation-survival-rewards
+    kind: threshold
+    required: true
+    document: CLAUDE.md
+    anchor: 'Mutation survival: <(?P<value>\d+)% rewards'
+    source: .github/workflows/mutation.yml
+    extractor: 'regex:--threshold (?P<value>\d+) --label "rewards/'
+    compare: numeric
+    scale: identity
+
+  - id: mutation-survival-guardrails
+    kind: threshold
+    required: true
+    document: CLAUDE.md
+    anchor: 'Mutation survival: <\d+% rewards, <(?P<value>\d+)% guardrails/audit'
+    source: .github/workflows/mutation.yml
+    extractor: 'regex:--threshold (?P<value>\d+) --label "guardrails"'
+    compare: numeric
+    scale: identity
+
+  # -------------------------------------------------------------------------
+  # Replay floors -- the two numbers with no gate at all before this feature.
+  # Anchors are scoped to the Sprint-9 phrasing ("floor (gate added") so they
+  # cannot match the superseded Sprint-8 line "KV-cache 0.65 floor".
+  # -------------------------------------------------------------------------
+  - id: kv-cache-floor
+    kind: threshold
+    required: true
+    document: CLAUDE.md
+    anchor: 'KV-cache (?P<value>[\d.]+) floor \(gate added'
+    source: infrastructure/quality/replay-floors.yaml
+    extractor: 'yaml_path:floors.kv_cache_hit_rate.value'
+    compare: numeric
+    scale: identity
+
+  - id: tier-routing-floor
+    kind: threshold
+    required: true
+    document: CLAUDE.md
+    anchor: 'tier-routing (?P<value>\d+)% floor \(gate added'
+    source: infrastructure/quality/replay-floors.yaml
+    extractor: 'yaml_path:floors.tier_routing_accuracy.value'
+    compare: numeric
+    scale: percent_of_fraction
+
+  # -------------------------------------------------------------------------
+  # Flag pin (R7.10) -- KNOWN DRIFT, see `drift:` below.
+  # -------------------------------------------------------------------------
+  - id: cov-fail-under
+    kind: flag
+    required: true
+    document: docs/state/CURRENT.md
+    anchor: 'enforces `--cov-fail-under=(?P<value>\d+)`'
+    source: .github/workflows/ci.yml
+    extractor: 'regex:--cov-fail-under=(?P<value>\d+)'
+    compare: numeric
+    scale: identity
+
+  # -------------------------------------------------------------------------
+  # Blocking-gate pin (R11.8) -- activated by task 2.5 now that task 2.12 has
+  # generated docs/state/GATE_SURFACE.md.
+  #
+  # The extractor deliberately does NOT read the `Propagates` column. That column
+  # reports reachability and propagation JOINTLY by design, so these two steps
+  # render `CONDITIONAL` on `tag:v*` and `NOT EXECUTED` elsewhere: the deploy job
+  # is weekly / tag / dispatch only (CLAUDE.md's own deploy-cadence bullet), so no
+  # trigger can ever render `yes` for them. A pin reading that column could only
+  # be satisfied by weakening the generated record, which is forbidden.
+  #
+  # It resolves instead against the `Declared-blocking anchors` section, whose Step
+  # cells are annotated with the command each step runs for exactly this purpose.
+  # `verify_live.py` appears in a Step cell ONLY in that section, so requiring it
+  # scopes the match without parsing section headings; requiring `declared blocking`
+  # in the Note cell keeps the blocking declaration itself load-bearing. Six rows
+  # match (two steps x three triggers); the two DISTINCT step names are the count
+  # the CLAUDE.md line claims.
+  #
+  # Known tension, recorded not resolved: R11.8's literal clause asks the generated
+  # record to show a governance-declared blocking gate propagating on `push:main`.
+  # These steps cannot, by the deliberate weekly cadence. That gap is enforced by
+  # blocking-steps.yaml + workflow_shape_truth (the steps must not become
+  # warn-only) rather than by this pin.
+  - id: cd-gcp-blocking-verify-steps
+    kind: blocking-gate
+    required: true
+    document: CLAUDE.md
+    anchor: 'ends with (?P<value>two) BLOCKING verify steps'
+    source: docs/state/GATE_SURFACE.md
+    extractor: 'regex:\| (?P<value>Verify deploy truth [^|]*verify_live\.py[^|]*) \| [^|]* \| declared blocking'
+    compare: count
+    scale: identity
+
+  # -------------------------------------------------------------------------
+  # ADR-055 / twin decision-relevance (decision-quality-proof task 8.2).
+  #
+  # Source is `digital_twin/simulation/policy.yaml`, the single committed
+  # simulation-parameter file design E2c.2 names. The document side is ADR-055,
+  # the Decision_Relevance_Record. Only values ADR-055 ACTUALLY STATES are
+  # pinned here -- pinning a number the ADR does not state would create a pin
+  # whose document side can never resolve, which is precisely the dead-extractor
+  # shape C75 (`pin_extractor_truth`) exists to catch.
+  #
+  # The materiality margin, the utilisation ladder and the near-saturation band
+  # are DELIBERATELY ABSENT: R5.2 forbids pinning them before measurement, and
+  # they are listed under `deferred:` in the policy file with their owning task.
+  # -------------------------------------------------------------------------
+
+  # The shortage weight, read from newsvendor.py::cost_under rather than chosen.
+  - id: regret-weight-shortage
+    kind: threshold
+    required: true
+    document: docs/adr/ADR-055-twin-decision-relevance.md
+    anchor: '\|\s+`stockout_rate`\s+\|\s+(?P<value>[\d.]+)\s+\|'
+    source: digital_twin/simulation/policy.yaml
+    extractor: 'yaml_path:regret_objective.weights.stockout_rate'
+    compare: numeric
+    scale: identity
+
+  # The holding weight, read from newsvendor.py::cost_over rather than chosen.
+  # Together with the row above this pins the 8:1 critical ratio the objective
+  # inherits from the inventory agent's own reward.
+  - id: regret-weight-holding
+    kind: threshold
+    required: true
+    document: docs/adr/ADR-055-twin-decision-relevance.md
+    anchor: '\|\s+`avg_on_hand_units`\s+\(normalised\)\s+\|\s+(?P<value>[\d.]+)\s+\|'
+    source: digital_twin/simulation/policy.yaml
+    extractor: 'yaml_path:regret_objective.weights.on_hand'
+    compare: numeric
+    scale: identity
+
+  # R6.15 reads BOTH of the next two from the Decision_Relevance_Record. Without
+  # them declared there, R6.15 is unsatisfiable -- which is why ADR-055 D6
+  # declares them rather than leaving them to a later amendment.
+  - id: negative-control-seed-sets
+    kind: threshold
+    required: true
+    document: docs/adr/ADR-055-twin-decision-relevance.md
+    anchor: 'Independent seed sets: (?P<value>\d+)'
+    source: digital_twin/simulation/policy.yaml
+    extractor: 'yaml_path:negative_control.independent_seed_sets'
+    compare: numeric
+    scale: identity
+
+  - id: negative-control-rate-tolerance
+    kind: threshold
+    required: true
+    document: docs/adr/ADR-055-twin-decision-relevance.md
+    anchor: 'exceed `(?P<value>[\d.]+)`'
+    source: digital_twin/simulation/policy.yaml
+    extractor: 'yaml_path:negative_control.max_proven_gain_rate'
+    compare: numeric
+    scale: identity
+
+  # ADR-055 D2.5. The materiality margin's DERIVATION RULE was pre-registered before
+  # checkpoint A; its magnitude was instantiated afterwards from the measured
+  # distribution (R5.2). Both pins are therefore live as of session 7: the rule's one
+  # chosen input, and the derived value itself.
+  - id: materiality-margin-service-points
+    kind: threshold
+    required: true
+    document: docs/adr/ADR-055-twin-decision-relevance.md
+    anchor: 'service_points = (?P<value>[\d.]+)'
+    source: digital_twin/simulation/policy.yaml
+    extractor: 'yaml_path:regret_objective.materiality_margin.derivation.service_points'
+    compare: numeric
+    scale: identity
+
+  # GRADUATED FROM `pending_pins:` IN SESSION 7, at checkpoint A, once and only once BOTH
+  # conditions its parked entry named were met -- and they were verified in that order,
+  # because the document side is the one no cheap gate can see:
+  #
+  #   (a) DOCUMENT. ADR-055 D2.5 now states the derived value as a literal on EXACTLY ONE
+  #       line, landed as a D2.5 amendment with its own amendment-log line, and -- per
+  #       D2.5's own rule that an amendment lands before the run judged against it -- landed
+  #       BEFORE the second twin-regret run. Probed as a pure function before this row moved:
+  #       `doc_truth.documented_value(pin, text)` reports `ok -- value '0.40'` on one line.
+  #       That probe was validated against the UNAMENDED document first, where it correctly
+  #       reported zero matches, so the instrument was checked before its verdict was trusted
+  #       (session 5 lost a draft to a misplaced backtick that matched zero lines, and
+  #       `pin_extractor_truth` reports green through exactly that failure).
+  #   (b) SOURCE. `regret_objective.materiality_margin.value` is non-null, is `0.40`, and is
+  #       accepted by `policy.py::materiality_margin`, which re-derives it from the rule and
+  #       refuses a value the rule does not produce.
+  #
+  # NO ratchets.json ENTRY IS OWED, and that is a judgement rather than an omission: the
+  # derived value has no independent degree of freedom. It moves only when `service_points`
+  # moves, and that input already carries `direction: down`. A second entry would assert a
+  # second, separately-ratchetable threshold where there is only one.
+  - id: materiality-margin-derived-value
+    kind: threshold
+    required: true
+    document: docs/adr/ADR-055-twin-decision-relevance.md
+    # THE ANCHOR IS DISTINCTIVE ON PURPOSE, and this is a trap rather than a style note.
+    # D2.5 already contains the rule's own code-block line,
+    #   materiality_margin = service_points * 0.01 * weight(1 - fill_rate)
+    # so a naive anchor of `materiality_margin = (?P<value>[\d.]+)` is safe ONLY because
+    # `service_points` does not match `[\d.]+`. That is luck, not design, and the
+    # exactly-one-line contract means a second matching line is as fatal as none. The
+    # `derives` verb is what makes the match unambiguous, so the amendment writes the value
+    # in a sentence using it, on ONE line. Re-probed after the D2.5.2 amendment landed, to
+    # confirm that a second section discussing the margin had not created a second match.
+    anchor: 'derives `materiality_margin = (?P<value>[\d.]+)`'
+    source: digital_twin/simulation/policy.yaml
+    extractor: 'yaml_path:regret_objective.materiality_margin.value'
+    compare: numeric
+    scale: identity
+
+# ---------------------------------------------------------------------------
+# Pins whose resolution source does not exist yet.
+#
+# These are NOT evaluated by doc_truth. Listing them here keeps the AD-3 shape
+# recorded without standing up a pin whose verdict would describe a decision
+# nobody has taken yet. They move into `pins:` in the task named by
+# `activates_after`, which is a pure data edit: task 2.5 implements all four
+# kinds and all three extractor families, so no code change is needed to
+# activate one.
+#
+# `cd-gcp-blocking-verify-steps` graduated into `pins:` above when task 2.12
+# generated docs/state/GATE_SURFACE.md; its drafted `| yes |` extractor is
+# recorded in that entry's comment as the shape that could not resolve.
+#
+# This section is a work record, NOT a suppression: nothing reads it as a pass.
+# ---------------------------------------------------------------------------
+pending_pins:
+  # `activates_after` CORRECTED by task 12.5. It read "task 2.17", and 2.17 has
+  # landed -- so the next reader would have activated a pin that FAILs. The premise
+  # moved; the conclusion did not.
+  #
+  # 2.17 added `push: branches: [main]` to mutation.yml (R11.5), which closes the
+  # merge-commit hole: a regression on a gated target now fails the merge commit's
+  # run. It does NOT make the job eligible to be a required status check, because
+  # eligibility is decided by the `pull_request` trigger and that is still
+  # path-filtered -- a PR touching no mutation target never produces the check, so a
+  # required status would wait forever. required-checks.yaml's `ineligible:` entry for
+  # `mutation-fast` records exactly this and says so in its own detail.
+  #
+  # Activated today the pin resolves and FAILs: `yaml_path:required[].job` yields
+  # `[truth-gates, quality-gates, uplift-verify]` and `compare: string` asks whether
+  # `mutation-fast` is a member. It is not. That FAIL would convert a documented,
+  # attributable gap into an unattributable red gate, which is the trade this whole
+  # section exists to avoid.
+  #
+  # The alternative was rephrasing the claim this pin guards -- CLAUDE.md's "Python
+  # `mutmut` is PR-gated on changed ... via `mutation-fast` job (C30)". Not taken.
+  # The sentence is defensible at the level it speaks about: the job runs on pull
+  # requests and its exit status propagates, so its red run is a real signal. The gap
+  # is R14's boundary finding -- a red run blocks a merge only through branch
+  # protection, which is not in this tree. Rewording governance prose to dissolve a
+  # recorded gap is the same class of operator decision as promoting the job, and it
+  # would move the anchor this pin is written against. Left recorded in two files
+  # rather than argued away (I-7).
+  - id: mutation-fast-required-job
+    kind: required-job
+    required: true
+    document: CLAUDE.md
+    anchor: 'via `(?P<value>mutation-fast)` job \(C30\)'
+    source: infrastructure/quality/required-checks.yaml
+    extractor: 'yaml_path:required[].job'
+    compare: string
+    scale: identity
+    activates_after: >-
+      an operator decision that makes `mutation-fast` eligible AND promotes it into
+      `required:` -- concretely, widening `mutation.yml`'s `pull_request` trigger
+      beyond its path filter (or adding a no-op reporting path for a PR touching no
+      mutation target), then declaring the job in
+      infrastructure/quality/required-checks.yaml. This is NOT a task in this
+      feature: the declaration records the gap with its reasoning, and closing it is
+      a policy change rather than an audit finding.
+
+  # GRADUATED INTO `pins:` IN SESSION 7, at checkpoint A. The parked block that stood
+  # here -- finding 20's record of why a correct pin was parked rather than landed -- is
+  # not reproduced: its reasoning now lives beside the live entry, which is where a reader
+  # who finds the pin will look. Both graduation conditions were met and verified in the
+  # order that matters (document first, because no cheap gate can see that side), and the
+  # probe was validated against the unamended document before its verdict was trusted.
+
+  # ---------------------------------------------------------------------------
+  # DRAFTED AND PARKED IN SESSION 5 (conflict M's repair, conflict N's correction).
+  #
+  # `digital_twin/simulation/policy.yaml`'s own contract 2 says "Every value here is
+  # PINNED in infrastructure/quality/doc-number-pins.yaml", and session 5 committed two
+  # new values there: the reference arm's `(s, S)` levels. So two pins are owed.
+  #
+  # THEY ARE PARKED FOR THE REASON THE ENTRY ABOVE IS PARKED, and the precedent is
+  # deliberate rather than convenient. Landing a pin adds a claim to `doc_truth`'s set,
+  # which can move C56, whose PASS/FAIL/SKIP status sits inside the counts `ledger_gen`
+  # and `readme_gen` project into docs/state/CURRENT.md and README.md. A SECOND
+  # REGENERATION IS ALREADY OWED for an unrelated reason -- session 4 measured that
+  # `ledger_gen` projects a top-level execution in which C56 is evaluated while C56 reads
+  # the README `readme_gen` rewrites AFTERWARDS, so the committed repair order is
+  # inverted -- and landing these two pins now would compound that with a second cause,
+  # making the next regeneration's diff describe two changes at once. Parking keeps the
+  # six cheap gates at their known expected values, so `pin_extractor_truth` stays at 14
+  # declared and a deviation in the closing sweep remains a signal rather than noise.
+  #
+  # THE ANCHORS EXIST ALREADY, which is what makes this parking different from the entry
+  # above. That pin was parked because ADR-055 D2.5 stated no literal to match; these two
+  # anchors match lines the session-5 D2.5 amendment lands in the same commit as the
+  # values. So both graduate on a single data edit with no document work outstanding --
+  # they wait on the regeneration, not on a missing sentence.
+  #
+  # NO ratchets.json ENTRY IS OWED FOR EITHER, and the absence is a judgement rather
+  # than an omission. A ratchet asserts a monotone better-direction. `s` and `S` are
+  # policy PARAMETERS of the control arm, not thresholds a gate is judged against:
+  # raising `S` is not "safer" than lowering it, it is a different incumbent. This is
+  # the same reasoning ratchets.json's own `$note_on_absent_siblings` records for the
+  # two regret weights, and inventing a direction here would be fabrication (AD-13).
+  - id: comparator-reference-reorder-point
+    kind: threshold
+    required: true
+    document: docs/adr/ADR-055-twin-decision-relevance.md
+    # `reorder point` rather than a bare `s`: the anchor must match EXACTLY ONE line, and a
+    # one-letter token would match D2.5's `(s, S)` prose in several places. The value sits
+    # INSIDE backticks, matching the `materiality-margin-derived-value` sibling's style --
+    # and this was probed against the document before the pin was written, because the first
+    # draft placed the backtick before `s` instead of after `point`, which matched ZERO lines.
+    # Zero matches is a non-maskable `skip` for a `required: true` pin, so it would have taken
+    # C56 to SKIP while `pin_extractor_truth` reported green (finding 20's mechanism).
+    anchor: 'reference arm''s reorder point `s = (?P<value>[\d.]+)`'
+    source: digital_twin/simulation/policy.yaml
+    extractor: 'yaml_path:comparator.reference_policy.reorder_point_s'
+    compare: numeric
+    scale: identity
+    activates_after: >-
+      the second regeneration of docs/state/CURRENT.md and README.md through
+      regenerate-truth-docs.yml -- the one already owed for the inverted
+      `ledger_gen`/`readme_gen` order. Both this entry and its sibling below move into
+      `pins:` in the same data edit, because they were committed in the same change and
+      splitting them would make the count move twice for one cause. The ADR-055 D2.5
+      amendment their anchors match landed in session 5, in the same commit as the
+      values, per D2.5's rule that an amendment lands BEFORE the run judged against it.
+
+  - id: comparator-reference-order-up-to
+    kind: threshold
+    required: true
+    document: docs/adr/ADR-055-twin-decision-relevance.md
+    anchor: 'reference arm''s order-up-to level `S = (?P<value>[\d.]+)`'
+    source: digital_twin/simulation/policy.yaml
+    extractor: 'yaml_path:comparator.reference_policy.order_up_to_S'
+    compare: numeric
+    scale: identity
+    activates_after: >-
+      the same data edit as `comparator-reference-reorder-point` above. See that entry
+      for the reasoning; the two are a pair and neither is meaningful alone, because a
+      reorder point pinned without its order-up-to level describes half a policy.
+
+# ---------------------------------------------------------------------------
+# Known drift at the commit that introduced this file.
+#
+# Recorded so the pin failures are attributable, NOT to excuse them. doc_truth
+# does not read this section and does not skip these pins: they FAIL until the
+# document or the configuration is corrected in the task named below.
+# ---------------------------------------------------------------------------
+drift:
+  # RESOLVED, and retired from `drift:` per this block's own convention that it
+  # "records drift that is still live" (see the cov-fail-under note below for the
+  # precedent). Kept as a note because the finding is historically load-bearing:
+  # it is the R7.8 config-agreement hole that ratchets.json was built to make
+  # visible, and `gate-mutations.yaml` still cites the 26-vs-50 shape.
+  #
+  # WAS: `pin: stryker-break, document_value: 26, source_value: 50` -- CLAUDE.md
+  # said `break: 26` while frontend/stryker.conf.json shipped 50 (bumped
+  # 2026-05-29 after json-canonical.ts reached 96.30% kill rate), and the C16
+  # ratchet constant `STRYKER_BREAK_NOW = 26` sat below the shipped value, so a
+  # regression 50 -> 26 PASSED.
+  #
+  # The recorded remediation ("update CLAUDE.md and the ratchet constant to the
+  # shipped 50") is COMPLETE and verified mechanically, not by assertion:
+  #   * the `stryker-break` pin now resolves `ok` -- CLAUDE.md and
+  #     frontend/stryker.conf.json both read 50;
+  #   * `ratchet_truth` reports `stryker-break` with guard_symbol
+  #     `STRYKER_BREAK_NOW`, guard_value 50.0, agrees_with_shipped true,
+  #     outcome pass.
+  #
+  # Retired during decision-quality-proof task 8.3. Leaving it as a live entry
+  # made `test_every_recorded_drift_entry_is_still_mechanically_real` fail
+  # correctly: a record claiming a hole that has been closed is precisely the
+  # stale-claim class this spec exists to eliminate, and the honest repair is to
+  # retire the record rather than to relax the test (R2.10 -- fix the subject).
+
+  # RESOLVED in task 2.8 (ledger_gen). docs/state/CURRENT.md row C15 stated
+  # `--cov-fail-under=64` against a ci.yml that ships `--cov-fail-under=0` -- the
+  # number described a workflow step Sprint 13 removed when the per-package floors
+  # (row C28) superseded the aggregate gate (audit finding R7.10). The row now
+  # states the shipped `0` and says why it is inert, so the `cov-fail-under` pin
+  # resolves rather than failing. Kept as a note, not an entry: `drift:` records
+  # drift that is still live.

@@ -85,12 +85,12 @@ def _inv_norm_cdf(p: float) -> float:
     plow = 0.02425
     phigh = 1 - plow
     if p < plow:
-        q = (-2 * _ln(p)) ** 0.5
+        q = _sqrt(-2 * _ln(p))
         return (((((c[0] * q + c[1]) * q + c[2]) * q + c[3]) * q + c[4]) * q + c[5]) / (
             (((d_[0] * q + d_[1]) * q + d_[2]) * q + d_[3]) * q + 1
         )
     if p > phigh:
-        q = (-2 * _ln(1 - p)) ** 0.5
+        q = _sqrt(-2 * _ln(1 - p))
         return -(
             (((((c[0] * q + c[1]) * q + c[2]) * q + c[3]) * q + c[4]) * q + c[5])
             / ((((d_[0] * q + d_[1]) * q + d_[2]) * q + d_[3]) * q + 1)
@@ -108,6 +108,19 @@ def _ln(x: float) -> float:
     from math import log
 
     return log(x)
+
+
+def _sqrt(x: float) -> float:
+    """Typed square root, mirroring `_ln`.
+
+    `x ** 0.5` is typed `Any` by mypy, because a float base with a float exponent
+    may produce a complex result -- so every expression built from it leaked `Any`
+    into a `-> float` return (`no-any-return`, three sites). This returns `float`
+    and expresses the same intent the docstrings already state as the sqrt sign.
+    """
+    from math import sqrt
+
+    return sqrt(x)
 
 
 def conformal_bounds(
@@ -133,10 +146,17 @@ def reorder_point(
     lead_time_days: float,
     safety_multiplier: float,
 ) -> float:
-    """ROP = μ·L + safety_mult·σ·√L."""
+    """ROP = mu*L + safety_mult*sigma*sqrt(L).
+
+    `sqrt` via `_sqrt` rather than `lead_time_days ** 0.5`: the operator form is
+    typed `Any`, which leaked into this `-> float` return. One behavioural
+    difference, on input that is already invalid -- a negative lead time raised
+    `TypeError` from `max(0.0, <complex>)` before and raises `ValueError: math
+    domain error` now. Both fail; the second names the cause.
+    """
     return max(
         0.0,
-        forecast_mean * lead_time_days + safety_multiplier * forecast_std * (lead_time_days**0.5),
+        forecast_mean * lead_time_days + safety_multiplier * forecast_std * _sqrt(lead_time_days),
     )
 
 

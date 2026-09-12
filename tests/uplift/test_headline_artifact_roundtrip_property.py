@@ -16,10 +16,13 @@ Property 7: Headline uplift round-trips through the result artifact
     are written under a pytest temp directory, never to the repo's
     ``artifacts/uplift/result.json``.
 
-    Read-back is done through the C60 gate's own reader
-    (:func:`scripts.audit.uplift_truth.read_measured_uplift`), which returns ``None`` for
-    any unavailable measurement (missing / unreadable / non-numeric / non-finite), so the
-    round-trip is asserted against the exact consumer of the artifact.
+    Read-back is done through the artifact model the C60 gate actually consumes
+    (:meth:`uplift.harness.UpliftArtifact.read`), which rejects any payload that does not
+    carry a finite ``headline_uplift``, a boolean ``incomplete``, an integral
+    replicates-per-arm count, and a provenance record, so the round-trip is asserted
+    against the exact consumer of the artifact. (Before the purpose-achievement-audit R2
+    remediation this read went through ``uplift_truth.read_measured_uplift``, which looked
+    at ``headline_uplift`` alone; that reader is gone with the tautology it enabled.)
 
 **Validates: Requirements 2.3**
 """
@@ -31,13 +34,13 @@ import math
 from hypothesis import given, settings
 from hypothesis import strategies as st
 
-from scripts.audit.uplift_truth import read_measured_uplift
 from uplift.cli import _write_result_artifact
 from uplift.contract import load_contract
 from uplift.fidelity import FidelityReport
 from uplift.harness import (
     DEFAULT_CONSENSUS_ARM,
     HarnessResult,
+    UpliftArtifact,
     aggregate_arm,
     assemble_uplift_result,
     build_uplift_report,
@@ -152,9 +155,8 @@ def test_headline_uplift_round_trips_through_result_artifact(
     # The persisted completeness flag is exactly ``false`` for a non-incomplete run.
     assert payload["incomplete"] is False
 
-    # The C60 gate's own reader sees an AVAILABLE finite measurement, never ``None``.
-    measured = read_measured_uplift(written)
-    assert measured is not None
+    # The artifact model the C60 gate consumes parses it and sees the same finite value.
+    measured = UpliftArtifact.read(written).headline_uplift
     assert math.isfinite(measured)
     assert measured == float(result.headline_uplift)
 
@@ -187,4 +189,4 @@ def test_artifact_round_trip_example_positive_headline(tmp_path) -> None:
     payload = json.loads(written.read_text(encoding="utf-8"))
     assert payload["incomplete"] is False
     assert payload["headline_uplift"] > 0.0
-    assert read_measured_uplift(written) == payload["headline_uplift"]
+    assert UpliftArtifact.read(written).headline_uplift == payload["headline_uplift"]

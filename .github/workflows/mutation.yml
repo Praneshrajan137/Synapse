@@ -19,15 +19,45 @@ on:
       # re-exports and is covered by normal unit tests. The mutation gate
       # follows the implementation.
       - 'packages/synapse_common/audit_chain.py'
+      # purpose-achievement-audit task 12.2: the chain WALKER is the module that
+      # decides whether the audit chain is intact (design E4.1 / AD-8). It sits under
+      # the same <10% audit survival ceiling as the logger and the shared hash, and a
+      # mutant that survives there is a tamper class the verifier cannot see.
+      - 'orchestrator/audit/chain_walk.py'
+  # purpose-achievement-audit task 2.17 (R7.4, R11.5). The audit's finding: the
+  # full sweep is `if: github.event_name != 'pull_request'` and the fast gate was
+  # `if: github.event_name == 'pull_request'`, so NO mutation gate ran on a merge
+  # commit to `main` -- a regression could land through the seam between the two
+  # conditions. This push trigger closes it: `mutation-fast` now also runs on a
+  # push to `main` and mutates the lines that push changed, so R11.5's "a
+  # mutation-score regression introduced by a commit merged to main SHALL record a
+  # failed conclusion for that merge commit" has a mechanism.
+  #
+  # The `paths:` list mirrors the pull_request filter exactly, so the PR gate and
+  # the merge gate have identical scope. Known limitation, recorded rather than
+  # hidden: neither filter selects a commit that weakens a TEST file without
+  # touching its mutation target, and such a commit can lower survival. Only the
+  # Sunday whole-file sweep catches that.
+  push:
+    branches: [main]
+    paths:
+      - 'agents/*/training/rewards.py'
+      - 'orchestrator/guardrails/rules.py'
+      - 'orchestrator/audit/logger.py'
+      - 'packages/synapse_common/audit_chain.py'
+      - 'orchestrator/audit/chain_walk.py'
 
 env:
   PYTHONPATH: "."
 
 jobs:
   mutation:
-    # Full-matrix run — scheduled + manual dispatch only. NOT on pull_request
-    # (see mutation-fast below for the PR-blocking subset).
-    if: github.event_name != 'pull_request'
+    # Full-matrix run -- scheduled + manual dispatch only. NOT on pull_request and
+    # NOT on push (see mutation-fast below for the PR- and merge-blocking subset).
+    # Stated as a positive allowlist rather than `!= 'pull_request'`: task 2.17 added
+    # a `push: branches: [main]` trigger, and the old negative form would have put a
+    # 90-minute whole-file sweep on every merge commit.
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     timeout-minutes: 90
 
@@ -50,6 +80,12 @@ jobs:
           pip install -e packages/
           pip install --index-url https://download.pytorch.org/whl/cpu "torch>=2.2,<2.4"
           pip install -r orchestrator/requirements.txt
+          # `orchestrator/audit/chain_walk.py` imports `yaml` at module level
+          # (load_chain_bounds reads infrastructure/quality/audit-chain-bounds.yaml).
+          # It is currently satisfied only transitively via schemathesis; declare it
+          # so a dev-requirements change cannot turn the walker sweep into a
+          # collection error.
+          pip install pyyaml
           if [ -f agents/requirements-sprint2.txt ]; then pip install -r agents/requirements-sprint2.txt; fi
           if [ -f agents/requirements-sprint3.txt ]; then pip install -r agents/requirements-sprint3.txt; fi
 
@@ -128,6 +164,54 @@ jobs:
             mv .mutmut-cache .mutmut-cache-audit
           fi
 
+      - name: Run mutation tests — Audit chain walker (< 10% survival, CLAUDE.md gate)
+        # purpose-achievement-audit task 12.2. `orchestrator/audit/chain_walk.py` is the
+        # pure decision procedure behind `python -m orchestrator.audit.cli verify`: it
+        # recomputes each row's payload hash, compares stored `prev_hash` against the
+        # WALKED predecessor's `current_hash` (AD-8, the removed
+        # `row.prev_hash or prev_hash` fallback), separates legacy pre-boundary nulls
+        # from verified rows, and decides HEAD_UNREACHABLE. Every one of those is a
+        # tamper class R6.2-R6.8 names, so it belongs under the same <10% audit
+        # survival ceiling as the logger and the shared hash rather than outside the
+        # mutation surface entirely.
+        #
+        # Killer suite: Property 18 quantifies single-row perturbation detection over
+        # generated chains, and the chain_verified scope test pins the walker/row-hash
+        # distinction the API gateway depends on. Both live in `packages/tests/`.
+        #
+        # E-S13-05: `mutmut` is validated on CI Linux runners, never the Windows dev
+        # box -- this job is `runs-on: ubuntu-latest` and I-0 forbids running it
+        # locally at any scale.
+        #
+        # `env HYPOTHESIS_PROFILE=heavy` bounds each mutant's test run at 100 examples
+        # (the minimum any spec obligation requires) instead of the root conftest's
+        # `default` 500. mutmut re-runs the suite once per mutant, so 500 would
+        # multiply out past this job's 90-minute budget. The profile is selected, not
+        # hardcoded -- `max_examples` appears nowhere.
+        #
+        # Label is `audit/chain-walk`, deliberately NOT `audit`:
+        # `infrastructure/quality/ratchets.json` extracts the `audit` ceiling with the
+        # regex `--threshold (?P<value>\d+) --label "audit"`, and reusing that label
+        # would give the extractor two matching sites.
+        run: |
+          if [ -f "orchestrator/audit/chain_walk.py" ]; then
+            rm -rf .mutmut-cache
+            set +e
+            mutmut run \
+              --paths-to-mutate="orchestrator/audit/chain_walk.py" \
+              --tests-dir="packages/tests/" \
+              --runner="env HYPOTHESIS_PROFILE=heavy python -m pytest packages/tests/test_chain_walk_perturbation_property.py packages/tests/test_chain_verified_scope.py -x -q"
+            mutmut_status=$?
+            set -e
+            if [ $((mutmut_status & 1)) -ne 0 ]; then
+              exit "${mutmut_status}"
+            fi
+            mutmut results
+            python scripts/check_mutation_threshold.py \
+              --threshold 10 --label "audit/chain-walk"
+            mv .mutmut-cache .mutmut-cache-audit-chain-walk
+          fi
+
       - name: Upload mutation results
         if: always()
         uses: actions/upload-artifact@v4
@@ -147,7 +231,19 @@ jobs:
     # remains the whole-file sweep for full reward/audit/guardrail debt.
     # Sprint-9 reward-default work can legitimately touch six reward targets,
     # so the timeout covers the full changed-target sweep.
-    if: github.event_name == 'pull_request'
+    #
+    # purpose-achievement-audit task 2.17 (R11.5): also runs on a push to `main`, so a
+    # merge commit that regresses mutation survival on a gated target fails CI. The
+    # change-set base differs per event (`pull_request.base.sha` vs `event.before`) and
+    # is resolved once, in the `targets` step below, then reused by the mutmut patch
+    # file -- one resolution, so the detected set and the mutated set cannot diverge.
+    #
+    # purpose-achievement-audit task 12.2: `orchestrator/audit/chain_walk.py` joins the
+    # gated target set (both trigger filters, the intersection `case`, and its own
+    # runner/threshold `case` below). E-S13-05 is why both mutation jobs are
+    # `runs-on: ubuntu-latest` and why neither is ever reproduced on the Windows dev
+    # box: `mutmut` is validated on CI Linux runners only.
+    if: github.event_name == 'pull_request' || github.event_name == 'push'
     runs-on: ubuntu-latest
     timeout-minutes: 45
     permissions:
@@ -171,21 +267,49 @@ jobs:
           # exactly as ci.yml does so synapse_common imports survive collection.
           pip install -e packages/
           pip install -r orchestrator/requirements.txt
+          # See the whole-file sweep above: chain_walk.py imports `yaml` at module
+          # level and is otherwise satisfied only transitively.
+          pip install pyyaml
           for req in agents/*/requirements.txt; do pip install -r "$req"; done
 
       - name: Detect changed mutation targets
         id: targets
+        # The shas arrive through `env:` rather than being interpolated into the script
+        # body, so no context value is ever spliced into a shell command.
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          PUSH_BEFORE_SHA: ${{ github.event.before }}
         run: |
           set -e
-          BASE_REF="${{ github.event.pull_request.base.sha }}"
-          changed=$(git diff --name-only "${BASE_REF}" HEAD || true)
+          case "${EVENT_NAME}" in
+            pull_request) BASE_REF="${PR_BASE_SHA}" ;;
+            push)         BASE_REF="${PUSH_BEFORE_SHA}" ;;
+            *)            BASE_REF="" ;;
+          esac
+          # A base we cannot resolve (empty, the all-zero sha GitHub sends for a branch
+          # creation or a force push, or a commit missing from the fetched history) means
+          # the changed-target set is UNKNOWN. An unknown set would produce an empty
+          # `targets` output, which reads identically to "no gated target changed" and
+          # would silently skip the gate. Failing is the honest outcome: a gate that
+          # cannot run does not pass (I-7).
+          if [ -z "${BASE_REF}" ] \
+             || [ "${BASE_REF}" = "0000000000000000000000000000000000000000" ] \
+             || ! git cat-file -e "${BASE_REF}^{commit}" 2>/dev/null; then
+            echo "Cannot resolve a base commit for this ${EVENT_NAME} event (base='${BASE_REF}')."
+            echo "The changed-target set is unknown, so the mutation gate cannot decide"
+            echo "anything. Failing rather than reporting an empty target set (I-7)."
+            exit 1
+          fi
+          echo "base=${BASE_REF}" >> "${GITHUB_OUTPUT}"
+          changed=$(git diff --name-only "${BASE_REF}" HEAD)
           echo "Changed files:"
           echo "${changed}"
           # Intersect changed files with the gated mutation target set
           targets=""
           for f in ${changed}; do
             case "${f}" in
-              agents/*/training/rewards.py|orchestrator/guardrails/rules.py|orchestrator/audit/logger.py|packages/synapse_common/audit_chain.py)
+              agents/*/training/rewards.py|orchestrator/guardrails/rules.py|orchestrator/audit/logger.py|packages/synapse_common/audit_chain.py|orchestrator/audit/chain_walk.py)
                 targets="${targets} ${f}"
                 ;;
             esac
@@ -237,6 +361,17 @@ jobs:
                 threshold=10
                 label="audit/chain-shared"
                 ;;
+              orchestrator/audit/chain_walk.py)
+                # purpose-achievement-audit task 12.2. Same target and same <10%
+                # ceiling as the whole-file sweep above; see that step for why the
+                # walker is a mutation target and why the profile is `heavy`. The
+                # `env` prefix is scoped to THIS target so the other cases in this
+                # loop keep whatever budget they run at today.
+                test_path="packages/tests/test_chain_walk_perturbation_property.py"
+                runner="env HYPOTHESIS_PROFILE=heavy python -m pytest ${test_path} packages/tests/test_chain_verified_scope.py -x -q"
+                threshold=10
+                label="audit/chain-walk"
+                ;;
             esac
             if [ ! -f "${test_path}" ]; then
               echo "WARN: no matching test file at ${test_path} -- failing mutation for safety"
@@ -244,7 +379,7 @@ jobs:
             fi
             cache_label=$(echo "${label}" | tr '/' '-')
             patch_file=".mutmut-${cache_label}.patch"
-            git diff --unified=0 "${{ github.event.pull_request.base.sha }}" HEAD -- "${target}" > "${patch_file}"
+            git diff --unified=0 "${{ steps.targets.outputs.base }}" HEAD -- "${target}" > "${patch_file}"
             if [ ! -s "${patch_file}" ]; then
               echo "WARN: no patch hunks for ${target} -- failing mutation for safety"
               exit 1

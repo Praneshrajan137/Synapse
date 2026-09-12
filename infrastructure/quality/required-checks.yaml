@@ -1,0 +1,366 @@
+# SYNAPSE -- Declared required status checks for merges to `main` (E1.7; R14.1-R14.6)
+#
+# R14's finding: whether a red run BLOCKS a merge lives in GitHub branch-protection
+# settings, which are not in this working tree. Every "blocking" claim in CLAUDE.md and
+# the Truth_Ledger therefore rests on a fact the repository's own honesty apparatus
+# cannot check. This file is the in-repo half of the fix: the DECLARATION (R14.1).
+#
+# Consumers (both later tasks):
+#   scripts/audit/required_checks_truth.py            (task 2.14) -- in-repo consistency:
+#     validates this file against infrastructure/quality/schemas/required-checks.schema.json
+#     and resolves every `job` to a job defined in `workflow` (R14.2). A rename or removal
+#     FAILs naming the job.
+#   .github/workflows/required-checks-reconcile.yml   (task 2.14) -- the live half:
+#     reads `gh api repos/{owner}/{repo}/branches/main/protection` during the run, records
+#     the read timestamp, and fails on any difference OR on an unreadable response
+#     (R14.4-R14.6). It never reports a verified set it could not read (I-7).
+#
+# Read contract: `encoding='utf-8'` on every read (E-S13-07).
+#
+# `check_name` is what GitHub matches for a required status check: the job's `name:` when
+# it has one, otherwise the job id. Both are recorded so a rename of either is detectable.
+#
+# ELIGIBILITY RULE (why this list is short). A required status check must be produced by
+# EVERY pull request to `main`, or the merge blocks forever waiting for a check that never
+# reports. That excludes every path-filtered or `if:`-conditioned job, however important it
+# is. Those are recorded below with their reason -- naming them is the honest form of the
+# finding, and it is the same reasoning doc-number-pins.yaml already records for
+# `mutation-fast`.
+
+version: 1
+branch: main
+declared_by: "spec purpose-achievement-audit, task 1.1; truth-gates promoted by task 2.17"
+
+# ---------------------------------------------------------------------------
+# The declared required set (R14.1).
+#
+# Every entry: runs on `pull_request: branches: [main]` with no path filter and no
+# per-job `if:`, so it reports on every PR; and executes gates that governance
+# documents describe as blocking (R14.3).
+# ---------------------------------------------------------------------------
+required:
+  # Promoted out of `pending:` by task 2.17, which created the job. CF-2 was resolved by
+  # splitting the WORKFLOW rather than the job: `paths-ignore` is a property of
+  # `on.push`, a job has no `paths:` key and cannot opt out of its workflow's filter, so
+  # a truth-gates job inside `ci.yml` could not have run on a Markdown-only push while
+  # `ci.yml` kept its filter. The job therefore lives in its own file with no path
+  # filter of any kind, and `ci.yml`'s heavy jobs keep theirs.
+  - job: truth-gates
+    workflow: .github/workflows/truth-gates.yml
+    check_name: "Truth Gates (enforcement spine)"
+    gates:
+      - "registry_gate -- the Check_Registry's blocking call site (R1.1, R1.2, R1.7)"
+      - "doc_truth -- narrative truth on every commit, including doc-only (R11.4)"
+      - "readme_gen --check -- README.md's headline is a projection of the nested execution C56 enforces it against, not a transcription of CURRENT.md's top-level one (R4.4, R4.5, R4.8, R4.11); consumes the doc_truth step's payload, so the two are ordered"
+      - "ledger_gen --check -- docs/state/CURRENT.md is a projection (R10.7)"
+      - "gate_surface --check -- docs/state/GATE_SURFACE.md is a projection (R11.7)"
+      - "workflow_shape_truth -- declared-blocking steps propagate (R1.8, R11.3)"
+      - "required_checks_truth -- this declaration resolves (R14.1, R14.2)"
+    rationale: >-
+      The most load-bearing entry in this file. R1's finding was that the Check_Registry
+      -- the apparatus certifying the accountability half of the project's purpose -- had
+      no CI call site at all, so 26 of its checks could not fail a build. This job is
+      that call site, and its exit status is the registry's verdict. It runs on every
+      pull request to `main` with no path filter and no per-job `if:`, so it reports on
+      every PR and satisfies the eligibility rule above; it carries no
+      `continue-on-error` and no construct that discards an exit status, which
+      workflow_shape_truth re-derives from the workflow file on every run (R1.8).
+
+  # Declared by decision-quality-proof task 5.6 (R1.1, R1.14), in the SAME COMMIT as the
+  # job. It satisfies the eligibility rule above without a trade: `truth-gates.yml` carries
+  # an unfiltered `pull_request: branches: [main]` and this job has no per-job `if:`, so it
+  # reports on every pull request to `main`. That is CF-8 -- `ci.yml` could not have hosted
+  # it, because its `paths-ignore: ["**.md", ...]` makes R1.1 literally unsatisfiable there:
+  # a commit that changed only a declaration's notes would produce no sweep at all.
+  #
+  # EXPECT THIS CHECK RED BEFORE IT IS GREEN, and that is the point rather than a defect.
+  # `gate-mutations.yaml` discloses C28's `zero-a-floor` as a surviving mutation and records
+  # six checks whose baselines do not pass on this tree, so their probes report
+  # `indeterminate`. A survivor is a gate proven not to enforce, which invalidates every
+  # number that gate ever reported; the repair is to the gate, never to the mutation. Making
+  # this entry required is what converts "we have never checked whether our gates bite" into
+  # a merge-blocking fact.
+  - job: falsification-sweep
+    workflow: .github/workflows/truth-gates.yml
+    check_name: "Falsification Sweep (declared gate mutations)"
+    gates:
+      - "gate_fault_injection --sweep -- every declared mutation operator is probed out-of-process against a temporary tree copy, and a gate that survives its declared mutation FAILs naming the check and the operator (R1.1-R1.10, R1.15, R1.16)"
+      - "the C72 projection step -- the registry row reported by this job states the probed-operator count, the falsified-check count and the unproven count observed in this run (R1.12)"
+    rationale: >-
+      R1's finding, in one sentence: this repository had 64 mechanical checks and almost no
+      evidence that any of them bites. The harness that answers that existed, was tested,
+      and was called by nothing -- a search of every workflow and the Makefile for
+      `gate_fault_injection` or `--sweep` returned no match. This job is the call site, and
+      its exit status is the sweep's verdict. It runs on Linux runners only (R1.13): the
+      sweep copies the tree and spawns one gate subprocess per declared check plus one per
+      declared operator, which is a category-2/3 workload under I-0 and never a dev-box one
+      (precedent E-S13-05). Its cost is not a hope -- `sweep_budget` commits the
+      per-subprocess bound, the install allowance and this job's own `timeout-minutes`, and
+      C73 re-derives the inequality over the declaration's own operator set on every run.
+
+  - job: quality-gates
+    workflow: .github/workflows/ci.yml
+    check_name: "Lint + Type Check + Unit Tests"
+    gates:
+      - "I-1 no paid API imports (BLOCKING)"
+      - "I-2 reward isolation"
+      - "C33 substance gap"
+      - "C37/C39/C41 intelligence gates (static)"
+      - "C56 narrative-truth / doc_truth"
+      - "C28 per-package coverage floors"
+      - "spec coverage --threshold 99"
+    rationale: >-
+      The single job that carries the invariant gates CLAUDE.md calls BLOCKING. Its
+      steps are the ones enumerated in infrastructure/quality/blocking-steps.yaml, so a
+      discarding construct added to any of them is caught by workflow_shape_truth and
+      the job's required status is what turns that catch into a merge block.
+
+  - job: uplift-verify
+    workflow: .github/workflows/ci.yml
+    check_name: "Uplift Harness + Verification Properties (tests/)"
+    gates:
+      - "tests/verify + tests/uplift property suites (fast, 500-example budget)"
+      - "tests/verify + tests/uplift property suites (slow, 100-example budget)"
+    rationale: >-
+      Runs the property suites that carry this feature's correctness properties,
+      including the slow behavioural probes routed here under I-0. If it is not
+      required, a merge can land with a falsified property.
+
+# ---------------------------------------------------------------------------
+# Candidates: eligible (report on every PR to `main`, exit status propagates) but NOT
+# declared required, because no governance document calls them blocking. Promoting one
+# is an operator policy decision, not an audit finding, so this file records the option
+# instead of quietly making the choice.
+# ---------------------------------------------------------------------------
+candidates:
+  - job: chromatic-color-gates
+    workflow: .github/workflows/ci.yml
+    check_name: "Chromatic System \u2014 colour gates (ADR-025)"
+    reason: >-
+      Runs on every PR to main with no path filter. Not declared required: ADR-025 is a
+      design-system decision and no governance document calls the colour gate blocking.
+      Note the display name contains a non-ASCII em dash (recorded here as an escape so
+      this file stays ASCII); promoting it means reconciling that exact byte sequence
+      against the GitHub API response.
+
+  - job: schemathesis
+    workflow: .github/workflows/integration.yml
+    check_name: "API Fuzz (Schemathesis)"
+    reason: "Runs on every PR to main (integration.yml has no path filter). Layer-2 fuzz; not called blocking."
+
+  - job: contracts
+    workflow: .github/workflows/integration.yml
+    check_name: "Consumer-driven Contracts"
+    reason: "Eligible; not called blocking. Note its final step already normalises pytest exit code 5 (no tests collected) to success."
+
+  - job: metamorphic
+    workflow: .github/workflows/integration.yml
+    check_name: "Metamorphic Relations (12 MRs)"
+    reason: "Eligible; not called blocking."
+
+  - job: integration-e2e
+    workflow: .github/workflows/integration.yml
+    check_name: "End-to-end integration (base stack)"
+    reason: "Eligible; not called blocking. 40-minute timeout makes it a costly required check."
+
+  # Declared by decision-quality-proof task 20.4 (R9.15), in the SAME COMMIT as the job
+  # and as its eight `blocking-steps.yaml` step entries.
+  #
+  # WHY `candidates:` AND NOT `required:` OR `ineligible:` -- argued from this file's own
+  # rules and from its schema, in that order.
+  #
+  # It is NOT ineligible. `ineligibleEntry.reason` is a closed six-value enum
+  # (`path-filtered`, `path-filtered-and-conditioned`, `branch-push-only`,
+  # `conditioned-off-pull-request`, `self-labelled-informational`, `post-merge`) and this
+  # job satisfies none of them: `ci.yml`'s `pull_request: branches: [main]` carries no
+  # path filter, the job carries no per-job `if:` and no `needs:`, and its name claims
+  # nothing informational. So it reports on every pull request to `main`, which is exactly
+  # this file's ELIGIBILITY RULE. Filing it as ineligible would need a reason the enum
+  # does not have, and inventing one to fit would be the hand-maintained-mirror defect
+  # this file exists to remove.
+  #
+  # It is NOT required, and that is a judgement this file is designed to record rather
+  # than make. The `required:` section's own contract is "executes gates that governance
+  # documents describe as blocking (R14.3)". C38, C40 and C45 are not among them: what
+  # `blocking-steps.yaml` and CLAUDE.md call blocking in the intelligence family is the
+  # STATIC trio (C37/C39/C41, the `quality-gates` step named "Intelligence gates -
+  # static"), and C38/C40/C45's existing call site is `training-smoke`, which this file
+  # already records as `branch-push-only`. Promoting this job would also make branch
+  # protection wait on a check that, while the registry holds `__placeholder__`, reports
+  # honestly that it measured nothing -- a green required check whose content is "there
+  # was nothing to check". That is over-claiming through the declaration rather than
+  # through the run, and `candidates:`' own note says the promotion is "an operator policy
+  # decision, not an audit finding".
+  #
+  # WHAT IS STILL ENFORCED WITHOUT `required:`, so this entry is not an exemption: the
+  # job's own run goes red on a failed materialisation, on a non-passing C38/C40/C45, and
+  # on a failed correspondence assertion, and its eight steps are declared in
+  # `blocking-steps.yaml` so a `continue-on-error` on any of them FAILs
+  # `workflow_shape_truth` by declaration rather than only by the R11.3 name rule.
+  #
+  # PROMOTION CONDITION, stated so the decision is revisitable rather than permanent: once
+  # a validated non-placeholder entry lands in `infrastructure/ml/published_checkpoints.json`
+  # (task 20.3) this job begins reporting a real verdict about a published model on every
+  # pull request, and at that point R14.3's test is met and promotion to `required:` is the
+  # obvious move. It is not made pre-emptively, because a required check that has never
+  # yet measured anything is a claim with no mechanism behind it.
+  - job: e4-published-artifact
+    workflow: .github/workflows/ci.yml
+    check_name: "E4 published-artifact materialisation (C38/C40/C45)"
+    reason: >-
+      Runs on every pull request to main with no path filter and no per-job if:, so it is
+      eligible. Not declared required: no governance document calls C38, C40 or C45
+      blocking, and while the published-checkpoint registry holds __placeholder__ this job
+      reports honestly that it materialised nothing and executed none of the three -- a
+      required status check whose content is "there was nothing to check" would be an
+      over-claim by declaration. Promote it once task 20.3 lands a validated entry and the
+      job begins reporting a real verdict about a published model (R9.15, R14.3).
+
+# ---------------------------------------------------------------------------
+# Ineligible: cannot be a required status check as currently triggered. This is NOT an
+# exemption from being a gate -- each still turns its own run red. It is a statement that
+# the step from "run is red" to "merge is blocked" is unavailable for this job until its
+# trigger changes.
+# ---------------------------------------------------------------------------
+ineligible:
+  - job: v4-compliance
+    workflow: .github/workflows/ci.yml
+    reason: self-labelled-informational
+    detail: 'Job name ends with "(informational)". Declaring an informational job required would misstate its status.'
+
+  - job: sprint6-verify
+    workflow: .github/workflows/ci.yml
+    reason: branch-push-only
+    detail: "if: github.ref == refs/heads/main || develop || sprint-* -- produces no check on a pull_request event."
+
+  - job: training-smoke
+    workflow: .github/workflows/ci.yml
+    reason: branch-push-only
+    detail: "Same if: as sprint6-verify. Also the job that seeds the nine unmeasured coverage floors (CF-3)."
+
+  - job: mutation-fast
+    workflow: .github/workflows/mutation.yml
+    reason: path-filtered
+    detail: >-
+      CLAUDE.md calls Python mutation testing "PR-blocking on changed targets" (C30), but
+      the job is pull_request + path-filtered: a PR touching no mutation target never
+      produces the check, so a required status would block the merge forever. Task 2.17
+      landed the `push: branches: [main]` trigger (R11.5), which closes the merge-commit
+      hole -- a regression on a gated target now fails the merge commit's run. It does
+      NOT make the job eligible: the pull_request trigger is still path-filtered, which
+      is the condition this entry records. Promotion would need the PR trigger widened
+      (or a no-op reporting path), which is an operator decision, not an audit finding.
+      Consequence for doc-number-pins.yaml: the `mutation-fast-required-job` pending pin
+      records `activates_after: task 2.17`, but activating it now would compare
+      CLAUDE.md's `mutation-fast` claim against `required[].job` -- which still does not
+      contain it -- and FAIL. The premise moved; the conclusion did not.
+
+  - job: twin-oracle
+    workflow: .github/workflows/policy.yml
+    reason: path-filtered
+    detail: "policy.yml pull_request is filtered to agents/*/training, agents/*/models, digital_twin, orchestrator/guardrails, orchestrator/audit."
+
+  - job: dpdpa
+    workflow: .github/workflows/policy.yml
+    reason: path-filtered
+    detail: "Same filter as twin-oracle."
+
+  - job: audit-immutability
+    workflow: .github/workflows/policy.yml
+    reason: path-filtered
+    detail: >-
+      Enforces I-4 (append-only audit) and is one of the gates governance treats as
+      load-bearing, yet it cannot be required while path-filtered. Recorded so the gap is
+      attributable rather than invisible; widening the filter is an operator decision.
+
+  - job: license-policy
+    workflow: .github/workflows/policy.yml
+    reason: path-filtered
+    detail: "Same filter as twin-oracle."
+
+  - job: policy-summary
+    workflow: .github/workflows/policy.yml
+    reason: path-filtered
+    detail: "Also `if: always()`, so its conclusion is derived from its needs rather than produced independently."
+
+  - job: quality
+    workflow: .github/workflows/frontend.yml
+    reason: path-filtered
+    detail: "frontend.yml pull_request is filtered to frontend/**, proto/domain/**, .github/workflows/frontend.yml. Applies to every job in that workflow."
+
+  - job: fe-invariants
+    workflow: .github/workflows/frontend.yml
+    reason: path-filtered
+    detail: "Same filter. This is the FE-INV registry gate task 5.7 rewires to read executed assertions."
+
+  - job: mutation
+    workflow: .github/workflows/frontend.yml
+    reason: path-filtered-and-conditioned
+    detail: "Path-filtered plus `if: pull_request || tag v*`. Carries the Stryker break threshold that ratchets.json records as drifted (C16)."
+
+  - job: security
+    workflow: .github/workflows/security.yml
+    reason: path-filtered
+    detail: "pull_request filtered to **/requirements.txt, **/package.json, **/Dockerfile. Not branch-scoped to main either."
+
+  - job: validate
+    workflow: .github/workflows/terraform-validate.yml
+    reason: path-filtered
+    detail: "pull_request filtered to the GCP/Oracle terraform module paths."
+
+  - job: real-stack-run
+    workflow: .github/workflows/integration.yml
+    reason: conditioned-off-pull-request
+    detail: "if: github.event_name != 'pull_request' -- deliberately kept out of the PR gate so it cannot flake there (Req 5.3)."
+
+  - job: deploy-to-vm
+    workflow: .github/workflows/cd-gcp.yml
+    reason: post-merge
+    detail: >-
+      Carries the two verify steps CLAUDE.md calls BLOCKING, but runs after merge on a
+      weekly schedule / v* tag / dispatch. Its blocking property is enforced by C47 plus
+      blocking-steps.yaml, not by branch protection -- a required check cannot cover a
+      post-merge job.
+
+# ---------------------------------------------------------------------------
+# Pending: jobs that will join `required:` once they exist. Nothing reads this section as
+# a pass, and `required_checks_truth` does not resolve these job names (they would not
+# resolve yet -- that is the point).
+#
+# Empty as of task 2.17. The one entry that stood here -- `truth-gates` -- was created by
+# that task and moved into `required:` above, which is what a pending entry is for. It is
+# recorded as landed rather than deleted silently: the section's own contract is "jobs
+# that join `required` once they exist", so leaving an existing job here would make this
+# file describe an obligation it had already discharged, and a hand-maintained mirror
+# that lags reality is the exact defect RC-1 names.
+#
+# Its declared workflow also changed, from `.github/workflows/ci.yml` to
+# `.github/workflows/truth-gates.yml`. `paths-ignore` is a workflow-level filter on
+# `on.push` and a job cannot opt out of it, so CF-2's "split the triggers" is only
+# expressible by splitting the file. See the `required:` entry for the full reasoning.
+# ---------------------------------------------------------------------------
+pending: []
+
+# ---------------------------------------------------------------------------
+# Reconciliation state (R14.4-R14.6).
+#
+# `live_read` is null and `status` is `unverified` because no run has read the live
+# branch-protection configuration. Under I-7 that is the honest state: absence of a read
+# is not a verified match. The reconciliation workflow lands in task 2.14 and is the only
+# thing permitted to write this block.
+# ---------------------------------------------------------------------------
+reconciliation:
+  workflow: .github/workflows/required-checks-reconcile.yml
+  api_path: "repos/{owner}/{repo}/branches/main/protection"
+  artifact: required-checks-live
+  status: unverified
+  live_read:
+    read_at: null
+    contexts: null
+    strict: null
+  policy: >-
+    A difference between `required[]` and the live contexts is a non-passing conclusion
+    reporting each difference (R14.4). An unreadable response is also non-passing and is
+    reported as UNVERIFIED, never as a match (R14.5). The live set must be read during
+    the reporting run and recorded with that run's timestamp (R14.6) -- a cached or
+    committed copy is not a read.

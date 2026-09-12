@@ -1,0 +1,162 @@
+# SYNAPSE -- Named module-liveness baseline (E3.5; R13.1, R13.2, R13.3, R13.7, R13.9)
+#
+# R13.9: "WHEN the module-liveness baseline is recorded, THE baseline SHALL name each
+# dormant module ... and IF a module is removed from the baseline while still imported
+# by no non-test module, THEN THE liveness check SHALL fail naming that module."
+#
+# So the baseline stops being an integer. `scripts/audit/module_liveness.py` (task 8.11)
+# reads this file with `encoding='utf-8'` (E-S13-07) and derives `DEAD_BASELINE` as
+# `len(dormant)`, which makes the count a projection of the names rather than a number
+# anyone can nudge. Removing a name while its module is still unreachable FAILs.
+#
+# Ratcheted via `infrastructure/quality/ratchets.json` id `dead-modules-baseline`
+# (direction: down -- a ceiling; a new orphan is a regression).
+#
+# I-7: this file is NOT a suppression list. A name here is a declared, dated, reviewed
+# admission that a module is dormant. It never turns a FAIL into a PASS; it fixes the
+# count that a FAIL is measured against.
+
+version: 1
+
+# ---------------------------------------------------------------------------
+# Dormant modules (the DEAD set).
+#
+# Seeded from the value already committed at `scripts/audit/module_liveness.py`:
+#   DEAD_BASELINE = 0
+# -- ratcheted to zero by the module-liveness sweep (3 unmounted routers WIRED:
+# firehose/topology/telemetry; 6 orphans REMOVED: api/workers celery,
+# cold_start_tracker, agent_models, the data_fabric/etl backfill cluster,
+# api/routers/demo) and the offline batch jobs given `make` invocation paths.
+#
+# The set is therefore EMPTY, and `baseline: 0` below is its length -- not an
+# independent number. No name was invented to populate it.
+#
+# Row shape (for the first entry that ever lands here):
+#   path      str  -- repo-relative module path
+#   since     str  -- ISO date the module became dormant
+#   rationale str  -- why it is dormant and what would revive it
+#   revive_by str  -- the condition under which it must be wired or removed
+# ---------------------------------------------------------------------------
+dormant: []
+
+# Derived: MUST equal `len(dormant)`. Committed explicitly so a hand edit that
+# disagrees with the list is itself a detectable FAIL.
+baseline: 0
+
+# ---------------------------------------------------------------------------
+# Seam exemptions (R13.2).
+#
+# The ONLY exemption from the dead set is an in-source marker:
+#   # synapse: seam(reason="...", adr="ADR-0NN")
+# The marker lives in the module, not in this file, so the justification travels
+# with the code and cannot be lost in a config diff. This section records the
+# markers the analyzer found, for attribution only -- it grants nothing.
+#
+# The marker vocabulary now exists (task 8.11). `module_liveness.py` reads real
+# `#` comments via `tokenize`, not lines, so prose or a docstring quoting the form
+# is never mistaken for a marker. A marker that does not parse -- empty reason, or
+# an ADR id not of the form ADR-0NN -- exempts NOTHING and is itself a FAIL.
+#
+# Still empty: no module in the tree carries a marker.
+# ---------------------------------------------------------------------------
+seam_exemptions: []
+
+# ---------------------------------------------------------------------------
+# Dormant PROJECTIONS (R13.3, R13.7).
+#
+# Not dead modules -- live files whose *reachability* is test-only. The audit's
+# finding is that these are cited as capability evidence without distinguishing
+# "verified and reachable" from "verified and dormant". Task 8.11 adds the two
+# projections that report them; the subjects are recorded here so the obligation
+# is not lost, with the audit's own file:line evidence.
+#
+# `module_liveness.py` does NOT read this section as an allowlist. A subject here
+# is expected to be reported, not excused.
+# ---------------------------------------------------------------------------
+test_only_reachable:
+  # R13.7 -- a symbol encoding an invariant pre/postcondition that only tests invoke.
+  - symbol: uplift.uplift_floor.is_proven_uplift
+    invariant: "R2.4 -- the Uplift_Gate verdict must derive from this predicate"
+    importers: >-
+      tests/uplift/test_uplift_floor_data_gate.py,
+      tests/uplift/test_proven_uplift_predicate_property.py
+    production_callers: 1
+    wired_by: "task 10.3 (uplift_truth.verdict derives from it)"
+    requirement: R13.7
+    note: >-
+      DISCHARGED. The audit found this predicate reachable only from tests
+      (uplift_floor.py:204), while the C60 gate compared a bare headline_uplift to the
+      floor and reported PASS on an artifact declaring incomplete: true. Task 10.3
+      rewrote the verdict path: scripts/audit/uplift_truth.py imports is_proven_uplift
+      and verdict() returns EXIT_PASS iff it holds, so within_fidelity_bound in
+      (None, False) is non-zero irrespective of headline magnitude (R2.4).
+
+      The row stays here, with the count corrected, because module_liveness.py
+      recomputes reachability from the tree and compares it against this number: if the
+      gate ever stops deriving its verdict from the predicate, the recorded 1 against a
+      measured 0 is record drift and FAILs.
+
+  - symbol: uplift.uplift_floor.ratchet_to_measured
+    invariant: "R2.10 -- a floor raise is admitted only through this function"
+    importers: tests/uplift/test_uplift_floor_monotonic_ratchet_property.py
+    production_callers: 1
+    wired_by: "task 10.3"
+    requirement: R13.7
+    note: >-
+      DISCHARGED. scripts/audit/uplift_truth.py::admit_floor_raise is its production
+      caller: it passes the proof from an Admission, which is None unless the artifact
+      was admitted, so a raise can only ever be backed by a same-run powered proof
+      (R2.10). Exposed as `--propose-floor PP` on the gate CLI. The row and its count
+      stay as the record-drift ratchet.
+
+  - symbol: orchestrator.guardrails.rules.execute_consensus
+    invariant: "I-5 (@deal.pre confidence gate) / I-4 (@deal.post audit append)"
+    importers: >-
+      tests/dbc/test_guardrails_contracts.py,
+      orchestrator/tests/test_deal_contracts.py
+    production_callers: 1
+    wired_by: "task 8.5 (_ratify_and_dispatch is its production caller)"
+    requirement: R13.7
+    note: >-
+      DISCHARGED. The audit found this contract reachable only from tests
+      (rules.py:139-150). Task 8.5 landed the dispatch choke point, and
+      orchestrator/consensus/protocol.py now imports execute_consensus and calls it
+      inside _ratify_and_dispatch, so the @deal.pre (I-5) / @deal.post (I-4) contract
+      is on the production path.
+
+      The row stays here, with the count corrected, because module_liveness.py
+      recomputes reachability from the tree and compares it against this number: if
+      the choke point is ever removed, the recorded 1 against a measured 0 is record
+      drift and FAILs. Deleting the row would delete that ratchet.
+
+  # R13.3 -- property tests whose target is imported by no non-test module are
+  # reported as validating a MODEL, not the shipped implementation.
+  - symbol: frontend/src/lib/reconcile.ts
+    invariant: null
+    importers: >-
+      frontend/src/lib/__tests__/reconcile.property.test.ts,
+      frontend/src/lib/__tests__/reconnect-backoff.property.test.ts
+    production_callers: 0
+    wired_by: null
+    requirement: R13.3
+    note: >-
+      Verified by import search: no file under frontend/src outside __tests__
+      imports @lib/reconcile. Reported as validating a model. Honest labelling,
+      not a defect -- the module may legitimately be a reference implementation.
+      What is not honest is counting its property tests as evidence about
+      shipped behaviour.
+
+  - symbol: frontend/src/lib/virtual-window.ts::computeWindow
+    invariant: null
+    importers: frontend/src/lib/__tests__/virtual-window.property.test.ts
+    production_callers: 0
+    wired_by: null
+    requirement: R13.3
+    note: >-
+      SYMBOL-level, not module-level. The module IS production-reachable:
+      DecisionTheater.tsx and AuditVault.tsx both import ROW_OVERSCAN from it,
+      so the surfaces and this model share one overscan constant. Only
+      `computeWindow` is test-only -- it is the pure formalisation of the bound
+      the @tanstack/react-virtual runtime engine upholds. The projection must
+      therefore report the symbol, not the file; reporting the file would be a
+      false positive.

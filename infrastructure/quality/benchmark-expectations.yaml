@@ -1,0 +1,97 @@
+# Pre-registered benchmark expectation - R8.14 (decision-quality-proof task 19.6)
+#
+# Read by `scripts/audit/benchmark_truth.py`. Deliberately NOT beside
+# `infrastructure/ml/training_runs.json`: a prediction that shares a file with the result it
+# predicts is rewritten by the run it was supposed to predict, and the ancestry check would
+# then compare a revision against itself. The file split is what makes R8.14 enforceable
+# rather than aspirational.
+#
+# ---------------------------------------------------------------------------------------
+# WHAT THIS FILE IS FOR, AND WHY IT LANDS BEFORE THE RUN
+# ---------------------------------------------------------------------------------------
+# R8.14 has two halves and both matter. The ancestry half stops a result being rationalised
+# after the fact; the "record at all" half stops the criterion being satisfied by never
+# recording a prediction. This file is the second half, and `benchmark_truth`'s strict
+# ancestry check plus its read-back of the prediction as committed is the first.
+#
+# The gate checks TWO things about the sha below, not one. `git merge-base --is-ancestor`
+# says WHEN it was committed; `git show <rev>:<this file>` says WHAT the prediction said
+# there. Ancestry alone leaves a hole an old sha beside a rewritten statement walks straight
+# through, so editing `point_accuracy` after recording `revision` reddens the gate naming
+# both values.
+#
+# ---------------------------------------------------------------------------------------
+# WHY `revision` IS NULL TODAY, AND WHY THAT IS NOT A LOOPHOLE
+# ---------------------------------------------------------------------------------------
+# The commit sha this file lands at does not exist while the file is being written. Writing
+# a plausible-looking sha would be a fabricated fact that made the gate green, which is the
+# trade I-7 forbids. So `revision` is null - a positive assertion that it has not been
+# recorded yet - the gate reports `expectation-revision-unrecorded` -> unavailable -> SKIP,
+# and `revision_procedure` states exactly what an operator does about it. A SKIP is not a
+# PASS. The gate flips with no code change once the sha is recorded, and it cannot be used
+# to backdate a prediction because the read-back above compares the two.
+
+schema_version: 1
+
+expectations:
+  - expectation_id: "m5-uncertainty-2026"
+    # Null until the commit exists. See the header. This is the same
+    # required-but-nullable construction `infrastructure/data/dataset-licences.yaml` uses.
+    revision: null
+    revision_procedure: >-
+      After the commit that lands THIS FILE is pushed, record its full 40-character sha
+      here - the sha of the commit introducing this expectation, not of any later commit
+      that touches it. `git rev-parse HEAD` immediately after that commit gives it. Do not
+      record the sha of the scoring run: the gate requires a STRICT ancestor, so a
+      same-revision record is a named failure rather than a pass. Recording it later is
+      safe and cannot backdate the prediction, because `benchmark_truth` reads this file at
+      that revision with `git show` and fails if `point_accuracy` there differs from
+      `point_accuracy` here.
+    recorded_at: "2026-09-11"
+    # The one value R8.14 admits. The vocabulary carries three members
+    # (competitive-not-dominant / dominant / worse) so this field carries information and
+    # the gate's assertion can fail; editing it to `dominant` reddens the gate naming both
+    # the value and the requirement.
+    point_accuracy: "competitive-not-dominant"
+    statement: >-
+      The Demand_Forecaster is expected to be COMPETITIVE RATHER THAN DOMINANT on point
+      accuracy against the published M5 field. It is not expected to win, and a result that
+      merely matches the published field is a success against this prediction rather than a
+      disappointment. Where a coordinating multi-agent system plausibly has an edge is
+      decision quality under shocks, binding constraints and multi-objective tradeoffs -
+      which is a different measurement, owned by E2/E3 and the uplift harness, and NOT
+      evidence for or against this expectation.
+    falsifier: >-
+      This expectation is WRONG if the scored result lands materially ahead of the published
+      field on point accuracy on a like-for-like split, aggregation level and metric
+      definition. It is also wrong in the other direction if the result lands materially
+      behind a naive seasonal baseline computed on the same split - "competitive" excludes
+      that too, and an expectation that only forbids one direction is half an expectation.
+      Note that neither falsifier is currently reachable: the result is not
+      leaderboard-comparable (three distinct interval families, recorded in
+      `infrastructure/ml/training_runs.json`), so establishing a like-for-like comparison is
+      itself prerequisite work rather than a formality.
+    basis: >-
+      The Makridakis M-Competitions' central replicated result across four decades is that
+      statistically sophisticated methods do not necessarily beat simpler ones on point
+      accuracy, while combination methods do outperform their components
+      (`.kiro/specs/decision-quality-proof/requirements.md:128-131`). That source is
+      recorded there as corroborated for the competition STRUCTURE and the existence of the
+      two tracks, and explicitly NOT for the numeric leaderboard scores. This expectation
+      relies only on the structural half.
+
+notes:
+  - >-
+    Scope, stated so this record is not read as more than it is: this file predicts a
+    POINT-ACCURACY outcome, because that is what R8.14 names and what the M-Competitions'
+    replicated result speaks to. It predicts nothing about the Uncertainty-track quantile
+    metric, and it must not be cited as a prediction about interval quality. If a prediction
+    about interval quality is wanted, it needs its own entry committed at its own ancestor
+    revision - adding one later and pointing this entry's sha at it would be exactly the
+    backdating the read-back check refuses.
+  - >-
+    The limitation this record cannot repair: no like-for-like comparison to the published
+    field exists yet, and R8.18 makes the current result NOT leaderboard-comparable rather
+    than a rank. So this expectation is pre-registered against a comparison that is still
+    owed. That is recorded rather than resolved - a prediction about a measurement nobody
+    has taken is still worth committing early, and committing it late is worth nothing.

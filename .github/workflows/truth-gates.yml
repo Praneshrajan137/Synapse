@@ -1,0 +1,309 @@
+# SYNAPSE -- the blocking enforcement spine (spec purpose-achievement-audit, task 2.17)
+#
+# WHY THIS IS A SEPARATE WORKFLOW FILE (CF-2, resolved).
+#
+# The design records CF-2 as "split the triggers: a new lightweight `truth-gates` job
+# with no `paths-ignore`, while the heavy `quality-gates` keeps its filter". In GitHub
+# Actions a trigger is a property of a WORKFLOW, not of a job: `paths-ignore` lives under
+# `on.push`, a job has no `paths:`/`paths-ignore:` key, and a job cannot opt out of the
+# filter its workflow declares. So "split the triggers" is only expressible by splitting
+# the file -- which is what this is. `ci.yml` keeps
+# `paths-ignore: ["**.md", "docs/**", "plans/**", "notebooks/**"]` on its push trigger,
+# so its heavy jobs still cost nothing on a doc-only commit; this workflow carries NO
+# path filter of any kind, so a Markdown-only push to `main` still executes the
+# Check_Registry and the narrative-truth gate (R1.5, R11.4).
+#
+# The alternative -- dropping `ci.yml`'s workflow-level `paths-ignore` and gating the
+# heavy jobs with a changed-files job plus a job-level `if:` -- was rejected. It would
+# make `quality-gates` and `uplift-verify` (both declared REQUIRED status checks in
+# `infrastructure/quality/required-checks.yaml`) depend on a filter job and carry a
+# conditional `if:`. A skipped job reports its required status check as satisfied, so any
+# failure or mis-evaluation of the filter job would silently excuse the two most
+# load-bearing gates in the repository -- manufacturing exactly the class of hole
+# Requirement 1 exists to close. `CI_Pipeline` is defined in the requirements glossary as
+# "the GitHub Actions workflows under `.github/workflows/`", so R1.5's "THE CI_Pipeline
+# SHALL produce a run for that commit containing a step that executed the Check_Registry"
+# is satisfied by any workflow in that directory.
+#
+# EVERY STEP HERE PROPAGATES ITS EXIT STATUS. No `continue-on-error`, no `|| true`, no
+# `|| echo`, no `; exit 0`, no trailing pipe that would report another command's status.
+# That is the whole point of the job (R1.8) and `scripts/audit/workflow_shape_truth.py`
+# re-derives it from this file on every run.
+#
+# GENERATOR STEPS AND THE COUPLING THEY IMPOSE ON THIS FILE, stated because it bites
+# every change to it. `readme_gen --check`, `ledger_gen --check` and
+# `gate_surface --check` each compare a committed generated document against a fresh
+# projection. The note that used to stand here said `docs/state/CURRENT.md` and
+# `docs/state/GATE_SURFACE.md` predated this workflow and would FAIL "until task 12.1
+# runs the --write form"; that is no longer true - the committed record parses this file
+# and carries 49 rows for this job, so it was regenerated. What IS still true, and is
+# the reason the note is kept rather than deleted: `gate_surface` projects every step of
+# every workflow IN STEP ORDER, so ADDING, RENAMING, REORDERING OR REMOVING A STEP IN THIS
+# FILE makes `docs/state/GATE_SURFACE.md` stale and flips registered check C63 to FAIL.
+# REORDERING is named explicitly because it is the case a reader assumes is free: the
+# `Surface` and `Declared-blocking anchors` tables emit one row per step in the order the
+# file declares them, so a pure swap changes row CONTENT at fixed positions while changing
+# no count and no row total. C63's status is inside the count `doc_truth` and `readme_gen`
+# pin, so the drift cascades into both. The repair is
+# `python -m scripts.audit.gate_surface --write`, then `readme_gen --write`, then
+# `ledger_gen --write`, IN THE SAME CHANGE and IN THAT ORDER - registration and wiring
+# first, generation last, and WITHIN generation the README before the ledger.
+#
+# THAT LAST CLAUSE WAS BACKWARDS IN THIS HEADER UNTIL TASK 26.4, and this header is what
+# other documents copied. `ledger_gen` projects a TOP-LEVEL registry execution in which
+# C56 IS evaluated, and C56 reads the README headline `readme_gen` writes, so the true
+# dependency is `readme_gen` -> `README.md` -> C56 -> `ledger_gen` and the old wording
+# inverted it. Measured, not predicted: run `34372152090` generated `docs/state/CURRENT.md`
+# with `C56 | FAIL` against a README the next step then rewrote.
+# `regenerate-truth-docs.yml` executes the corrected order and carries the mechanism.
+# A declared repair order that disagrees with the executed one is a stale instruction
+# sitting in the enforcement spine, which is precisely the defect this spine exists to
+# remove - so the two files move in one commit.
+#
+# THE `--check` ORDER BELOW IS NOT THAT OBLIGATION, stated so nobody "fixes" it into
+# agreement. A `--check` writes nothing, so no check in this job can invalidate another's
+# subject: the two generator checks already run README-then-ledger, and
+# `gate_surface --check` sits after both, which costs nothing in this direction. The one
+# ordered pair here is `doc_truth --check --emit-nested-json` -> `readme_gen --check
+# --counts-json` (AD-21) and it is a producer/consumer edge, not a mirror of the repair
+# order: moving the consumer ahead of the producer makes it report `unavailable` for want
+# of a payload, which is non-passing and is not a fallback. A failing generator diff is the
+# mechanism working, not a defect to paper over; the counts must never be hand-edited to
+# match (I-7).
+
+name: SYNAPSE Truth Gates
+
+on:
+  push:
+    branches: [main, develop, "sprint-*"]
+    # Deliberately NO paths-ignore / paths. See the CF-2 note above: this is the
+    # trigger split, and a filter here would reintroduce R11.4's hole.
+  pull_request:
+    branches: [main]
+
+jobs:
+  truth-gates:
+    name: Truth Gates (enforcement spine)
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+      - name: Install dependencies
+        # The dependency closure MIRRORS ci.yml::quality-gates on purpose, and this is
+        # load-bearing rather than defensive. Several registered checks import an
+        # optional dependency inside a try/except and report SKIP when it is absent
+        # (C45 needs torch, C46 the published-checkpoint stack, C58 synapse_common).
+        # The README headline counts that `doc_truth` pins -- and the four SKIPs it
+        # records -- were measured in quality-gates' closure. A thinner environment here
+        # would turn a PASS into a SKIP, change the counts, and fail `doc_truth` for a
+        # reason that has nothing to do with the narrative. Test runners are omitted:
+        # this job runs no test suite.
+        run: |
+          pip install -r packages/requirements.txt -r packages/requirements-dev.txt
+          pip install -e packages/
+          pip install -r orchestrator/requirements.txt
+          pip install jsonschema pyyaml
+          for req in agents/*/requirements.txt; do pip install -r "$req"; done
+          pip install simpy sse-starlette
+          pip install -r agents/requirements-sprint3.txt
+          pip install --upgrade "pathspec>=0.12.1"
+          pip install "starlette>=0.37.2,<0.38.0"
+          pip install psycopg2-binary
+      - name: Check_Registry gate (R1.1, R1.2, R1.3, R1.6, R1.7 - BLOCKING)
+        # THE call site the audit found missing. `make verify-claims` was described as
+        # "the project's honesty meter" and its exit code was consumed by nothing: 26 of
+        # the registered checks had no enforcement path at all. This step's exit status
+        # IS the registry's verdict -- 0 pass, 1 any FAIL (naming each id), 2 unavailable
+        # (empty registry, an id that did not execute, or an all-SKIP run). 2 is
+        # non-passing: a SKIP is not a PASS (I-7).
+        run: python -m scripts.audit.registry_gate --check
+      - name: Narrative-truth gate (R1.4, R1.6, R7.5, R7.10, R11.4, R11.8, C56)
+        # Also runs in quality-gates, where `paths-ignore` skips it on exactly the
+        # commits most likely to drift the narrative. This is the copy that runs on a
+        # doc-only push (R11.4). It executes the suite as a subprocess to pin
+        # README.md's headline counts, and a required claim that cannot be evaluated now
+        # makes the aggregate unavailable rather than being masked by an `ok` sibling.
+        #
+        # ORDERED PAIR, AND THE ORDER IS LOAD-BEARING (decision-quality-proof AD-21).
+        # `--emit-nested-json` keeps the payload of the NESTED verify_claims execution
+        # this gate just ran -- the execution in which the recursion guard makes C56
+        # self-exclude. The next step projects README.md's headline region from that same
+        # payload instead of spawning a second 900s suite, which is what keeps this job
+        # inside its `timeout-minutes: 25` (sized for ONE registry pass). Reordering the
+        # two steps, or dropping this flag, makes the next step execute the suite again.
+        # The ordering is recorded in infrastructure/quality/blocking-steps.yaml.
+        run: python -m scripts.audit.doc_truth --check --emit-nested-json "$RUNNER_TEMP/nested-verify-claims.json"
+      - name: README headline is a projection, not a transcription (R4.4, R4.5, R4.8, R4.11)
+        # CONSUMER of the step above. `readme_gen --check` diffs README.md's generated
+        # region against the counts that nested execution reported. It must be the NESTED
+        # counts: `ledger_gen` renders the top-level ones into docs/state/CURRENT.md, and
+        # projecting those into README.md would make C56 FAIL by exactly the guard delta
+        # (README 51/3/0/10/64 vs CURRENT 52/3/0/9/64 -- two executions, one number).
+        #
+        # Exit 1 is drift with a printed diff; exit 2 is unavailable (markers absent,
+        # duplicated or out of order, or the payload unreadable) and is NOT a pass (I-7).
+        # If the previous step could not write the payload it reports a non-passing
+        # verdict of its own, so this step never silently falls back to a second suite.
+        run: python -m scripts.audit.readme_gen --check --counts-json "$RUNNER_TEMP/nested-verify-claims.json"
+      - name: Truth_Ledger is generated, not maintained (R10.1-R10.9)
+        # The "EXPECTED FAIL until task 12.1 runs --write" note that stood here is stale:
+        # `docs/state/CURRENT.md` carries C63, C64 and C65 rows today, so it was
+        # regenerated. It goes red again whenever a check's STATUS moves, which is the
+        # drift it exists to catch -- including a status moved by a change to this file
+        # (see the header note on C63).
+        #
+        # AFTER the README check, mirroring the `--write` order
+        # `regenerate-truth-docs.yml` executes (README first, because C56 reads it and this
+        # generator's top-level execution evaluates C56). Here that is legibility, not a
+        # dependency -- `--check` writes nothing, so neither check can move the other's
+        # subject -- and the header says so, so a reader does not have to assume either way.
+        run: python -m scripts.audit.ledger_gen --check
+      - name: Gate-surface record matches the parsed workflow tree (R11.1, R11.2, R11.7, R11.9)
+        # Also stale, and corrected: the committed record parses this workflow file (49
+        # rows for this job) and mutation.yml's push trigger. It goes red whenever a step
+        # or trigger is added, renamed, REORDERED or removed anywhere under
+        # .github/workflows/ -- which the step above this one did -- and the repair is
+        # `--write`, never a hand edit inside the markers. Reordering counts because the
+        # generated tables emit one row per step in declaration order, so a swap moves row
+        # content without moving any total (task 26.4's own coupling).
+        run: python -m scripts.audit.gate_surface --check
+      - name: Declared-blocking steps propagate their exit status (R1.8, R6.13, R8.9, R11.3)
+        run: python -m scripts.audit.workflow_shape_truth --check
+      - name: Required-check declaration resolves to real jobs (R14.1, R14.2)
+        # In-repo consistency only. The live branch-protection read is
+        # required-checks-reconcile.yml's scheduled job (R14.4-R14.6) -- this step makes
+        # no claim about the live configuration and must not be read as one.
+        run: python -m scripts.audit.required_checks_truth --check
+      - name: Sweep cost budget is an arithmetic claim that holds (R1.11 - BLOCKING)
+        # C73. Cheap and stdlib-only: it reads gate-mutations.yaml and this file, re-derives
+        # the sweep's committed inequality from the declaration's own `gates:` block, and
+        # pins `job_timeout_minutes` to `falsification-sweep`'s own `timeout-minutes`
+        # below. It belongs HERE rather than in that job because it is the check that says
+        # whether that job's budget can hold, and a budget check that only runs inside the
+        # job it budgets cannot report before the job is scheduled.
+        run: python -m scripts.audit.sweep_budget_truth --check
+
+  # -------------------------------------------------------------------------
+  # THE FALSIFICATION SWEEP (decision-quality-proof task 5.6; AD-22; R1.1, R1.2, R1.13,
+  # R1.14).
+  #
+  # WHY IT LIVES IN THIS FILE. R1.1 requires the sweep's exit status to gate a job, and
+  # R1.14 requires the job to be declared. `ci.yml` cannot satisfy R1.1: its push trigger
+  # carries `paths-ignore: ["**.md", ...]`, so a commit that changed only a declaration's
+  # notes would produce no sweep at all. This workflow carries NO path filter of any kind
+  # (see the CF-2 note at the top) and its `pull_request: [main]` is unfiltered, so a job
+  # here satisfies R1.1 and R1.14 jointly with no trade (CF-8).
+  #
+  # WHY IT IS A SEPARATE JOB AND NOT A STEP IN `truth-gates`. `truth-gates` carries
+  # `timeout-minutes: 25`, sized for one Check_Registry pass over stdlib gates. This job
+  # copies the whole tree and spawns one subprocess per declared check plus one per
+  # declared operator -- 30 subprocesses at the committed 90s bound plus a 420s install
+  # allowance, which is the arithmetic `sweep_budget` commits and C73 re-derives. Sharing
+  # `truth-gates`' budget would make the sweep time out and report `indeterminate` for
+  # reasons that have nothing to do with any gate.
+  #
+  # `runs-on: ubuntu-latest` ONLY (R1.13). The sweep is a category-2/3 workload under I-0
+  # and never runs on the Windows dev box; the precedent is E-S13-05, where `mutmut` was
+  # validated on CI Linux runners and never locally.
+  #
+  # THE DEPENDENCY CLOSURE MIRRORS `truth-gates`, and that is load-bearing rather than
+  # defensive. Several registered checks import an optional dependency inside a try/except
+  # and report SKIP when it is absent. `falsifies()` reports `indeterminate` when the gate
+  # does not PASS on the unmutated copy, so a thinner environment here would turn a
+  # probeable baseline into an indeterminate one and the sweep would report nothing about
+  # gates that are perfectly capable of biting.
+  #
+  # EXPECT RED ON THE FIRST RUNS, AND READ THE RED CORRECTLY. `gate-mutations.yaml`
+  # records, in its own notes, which declarations this tree does not yet satisfy: C28's
+  # `zero-a-floor` is a disclosed SURVIVOR (a defect against C28, not against the sweep),
+  # and C44, C60, C69, C70, C71 and C72 have non-passing baselines today, so their probes
+  # report `indeterminate`. A survivor is never cleared by weakening its mutation.
+  #
+  # NOT SHARDED, DELIBERATELY. `--shard K/N` over a matrix produces dynamic status-check
+  # names, an aggregator without `if: always()` does not run when a shard fails, and a
+  # skipped job reports its required status check as satisfied. AD-22 records that trade as
+  # available if the unsharded job proves too slow -- and the unsharded job's own
+  # measurement is what would establish that. No duration has ever been measured for these
+  # gates, and the committed 90s bound is honest about being a bound nobody measured: a
+  # gate that cannot answer inside it reports `indeterminate` NAMING the timeout, which is
+  # non-passing and therefore surfaces rather than truncating the sweep silently.
+  # -------------------------------------------------------------------------
+  falsification-sweep:
+    name: Falsification Sweep (declared gate mutations)
+    runs-on: ubuntu-latest
+    # MUST equal `sweep_budget.job_timeout_minutes` in
+    # infrastructure/quality/gate-mutations.yaml. C73 (`sweep_budget_truth`) resolves this
+    # very key from this very file and FAILs on a mismatch, so the two cannot drift.
+    timeout-minutes: 60
+    concurrency:
+      # `cancel-in-progress: false`, following uplift.yml's recorded reasoning: an
+      # abandoned run reports nothing, and nothing is not a pass either (I-7). A superseded
+      # sweep is allowed to finish and report.
+      group: falsification-sweep-${{ github.ref }}
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+      - name: Install dependencies
+        # Mirrors `truth-gates` above, for the reason in the job header: a thinner closure
+        # turns a probeable baseline into an indeterminate one.
+        run: |
+          pip install -r packages/requirements.txt -r packages/requirements-dev.txt
+          pip install -e packages/
+          pip install -r orchestrator/requirements.txt
+          pip install jsonschema pyyaml
+          for req in agents/*/requirements.txt; do pip install -r "$req"; done
+          pip install simpy sse-starlette
+          pip install -r agents/requirements-sprint3.txt
+          pip install --upgrade "pathspec>=0.12.1"
+          pip install "starlette>=0.37.2,<0.38.0"
+          pip install psycopg2-binary
+      - name: Probe every declared mutation operator (R1.1-R1.16 - BLOCKING)
+        # THE call site R1.1 found missing. A search of .github/workflows/*.yml and the
+        # Makefile for `gate_fault_injection` or `--sweep` returned no match: the harness
+        # existed, was tested, and gated nothing.
+        #
+        # `--report-json` writes the canonical payload the next step projects. It is a
+        # separate flag rather than a `> file` redirect of `--json` so this step's own log
+        # still carries the readable survivor list -- the list a human has to act on.
+        #
+        # Exit status propagates. No `continue-on-error`, no `|| true`, no `|| echo`, no
+        # `; exit 0`: a gate that survives its declared mutation does not gate, and
+        # `workflow_shape_truth` re-derives that shape from this file on every run.
+        env:
+          SYNAPSE_FAULT_INJECTION_REPORT: artifacts/audit/fault-injection.json
+        run: python -m scripts.audit.gate_fault_injection --sweep --check --report-json artifacts/audit/fault-injection.json
+      - name: C72 row projects the counts of the run that produced them (R1.12)
+        # CONSUMER of the step above, and the step that makes R1.12 mechanical: "the C72
+        # row reported by that same job" has to be reported by a step in this job, or the
+        # requirement is satisfied by nothing. `--run-check C72` executes exactly one
+        # registered check in this tree; C72 reads the payload back through
+        # $SYNAPSE_FAULT_INJECTION_REPORT and prints the probed-operator count, the
+        # falsified-check count and the unproven count observed in THIS run.
+        #
+        # It adds no independent gate: C72's status IS the sweep's verdict, so this step
+        # can only be red when the step above is already red. What it adds is the row, in
+        # the log, with the counts attached -- and `if: always()` so a red sweep still
+        # publishes them, which is the case a reader most needs them in. `always()` here
+        # does not discard a status: this step's own exit code still propagates.
+        if: always()
+        env:
+          SYNAPSE_FAULT_INJECTION_REPORT: artifacts/audit/fault-injection.json
+        run: python -m scripts.audit.gate_fault_injection --run-check C72
+      - name: Upload the sweep report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: fault-injection-report
+          path: artifacts/audit/fault-injection.json
+          if-no-files-found: warn
+          retention-days: 30

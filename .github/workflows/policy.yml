@@ -10,6 +10,13 @@ on:
     paths:
       - "agents/*/training/**"
       - "agents/*/models/**"
+      # purpose-achievement-audit R12.3: the Layer 6 pricing oracle
+      # (tests/oracle/test_pricing_elasticity_oracle.py) judges the SERVED
+      # elasticity path in agents/*/inference/. Without these two globs a
+      # perturbation of the subject, or of the oracle itself, never reached the
+      # job that runs the oracle suite — the gate could not bite.
+      - "agents/*/inference/**"
+      - "tests/oracle/**"
       - "digital_twin/**"
       - "orchestrator/guardrails/**"
       - "orchestrator/audit/**"
@@ -18,6 +25,8 @@ on:
     paths:
       - "agents/*/training/**"
       - "agents/*/models/**"
+      - "agents/*/inference/**"
+      - "tests/oracle/**"
       - "digital_twin/**"
       - "orchestrator/guardrails/**"
       - "orchestrator/audit/**"
@@ -35,7 +44,13 @@ jobs:
       - run: |
           pip install -r packages/requirements.txt -r packages/requirements-dev.txt
           pip install "numpy>=1.26,<2.0" "pandas>=2.2,<3.0" scipy pydantic-settings simpy mesa
-      - name: Run oracle scenarios
+      - name: Run oracle scenarios (incl. the slow Layer 6 pricing oracle)
+        # No `-m "not slow"` here on purpose. This is the workflow that MUST run
+        # tests/oracle/test_pricing_elasticity_oracle.py: it drives two
+        # 1000-scenario SimPy Monte-Carlo batches and the pricing agent's served
+        # elasticity path, which I-0 forbids on the development laptop. Every
+        # oracle-suite test is slow by nature; the marker exists so local
+        # `-m "not slow"` runs exclude it, not so CI skips it.
         run: |
           PYTHONPATH=. pytest tests/oracle/ -v --tb=short --maxfail=3
 

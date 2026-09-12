@@ -22,24 +22,26 @@ import { expect, test, type Page } from "@playwright/test";
  *   - Req 8.6 — a chained sequence renders the correct distinct state at every
  *     step and never latches on a prior state.
  *
- * ── Harness wiring (graceful-skip convention) ────────────────────────────────
+ * ── Harness wiring (REQUIRED — no graceful skip) ─────────────────────────────
  * The Effectiveness_Harness drives a seeded fault/connectivity transition
  * in-browser through a documented global, mirroring the stream driver
  * (`spec/effectiveness/stream-driver.ts` — `injectSchemaViolation`/`flap`) and
  * the fault resolver (`src/lib/fault-transition.ts`):
  *
  *   interface AtlasHarness {
- *     seedScenario?(scenarioId: string): Promise<void>;            // reach the populated baseline
- *     driveFault?(scenarioId: string, event: FaultEvent): Promise<void>; // apply one transition
+ *     seedScenario(scenarioId: string): Promise<void>;            // reach the populated baseline
+ *     driveFault(scenarioId: string, event: FaultEvent): Promise<void>; // apply one transition
  *   }
  *   declare global { interface Window { __atlasHarness?: AtlasHarness } }
  *
- * Until that global is wired (the browser worker + stream driver expose it) the
- * per-step assertions skip cleanly rather than failing — the same graceful-skip
- * convention as the other harness-dependent e2e specs
- * (firehose-stress.resilience.spec.ts, spatial-visualization.spec.ts). The base
- * render check (Mission Control is reachable and not bounced to /login) runs
- * regardless, so this spec is committed and ready the moment the driver lands.
+ * That global is implemented in `spec/effectiveness/harness.ts` (task 11.1) and
+ * ships only in the e2e-mode build (AD-12), so this suite runs as
+ * `pnpm build:e2e && pnpm test:e2e:harness`. A missing harness FAILS the test
+ * instead of skipping it (I-7).
+ *
+ * The `[data-universal-state="..."]` blocks these steps assert on are rendered
+ * by `@ds/compounds/UniversalStateView` (and `SpatialErrorBoundary` for the
+ * spatial error state), so the per-step assertions read a real DOM contract.
  *
  * Scenario chains below MIRROR the descriptors but are kept LOCAL so this
  * Playwright spec stays free of the app's `@`-alias / spec module graph (same
@@ -238,12 +240,13 @@ test.describe("Resilience — fault-transition state correctness (Req 8)", () =>
       }
       await expect(page.locator("main")).toBeVisible();
 
-      // Driving seeded faults needs the in-browser harness global; skip the
-      // per-step assertions cleanly until it is wired (same convention as the
-      // other harness-dependent e2e specs).
-      if (!(await faultHarnessReady(page))) {
-        test.skip(true, "fault-transition harness (window.__atlasHarness.driveFault) not wired yet");
-      }
+      // The harness is REQUIRED (task 11.1): its absence fails this test rather
+      // than skipping it (I-7). Run as `pnpm build:e2e && pnpm test:e2e:harness`.
+      expect(
+        await faultHarnessReady(page),
+        "window.__atlasHarness.driveFault is absent: run the harness suite against the e2e-mode " +
+          "build (pnpm build:e2e && pnpm test:e2e:harness)",
+      ).toBe(true);
 
       // Reach the populated baseline so a fault is injected against a surface
       // that would otherwise be healthy.

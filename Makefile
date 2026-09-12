@@ -589,7 +589,23 @@ deploy-gcp-verify: ## Verify GCP deployment health (endpoints + audit chain inte
 	@echo "    gcloud compute start-iap-tunnel $(GCP_VM) 3000 --local-host-port=localhost:3000 --zone=$(GCP_ZONE)"
 	@echo ""
 	@echo "=== Audit chain integrity (Sprint 9) ==="
-	-ssh -i $(GCP_KEY) $(GCP_USER)@$(GCP_IP) 'cd ~/synapse && python -m orchestrator.audit.cli verify 2>&1 | tail -10 || echo "synapse audit verify not available yet"'
+# BLOCKING (CF-6, R6.13). `orchestrator/audit/cli.py` now exists (task 7.3) and the
+# migration boundary is committed in infrastructure/quality/audit-chain-bounds.yaml, so
+# this recipe line must exit with the verifier's own code. Three discarding constructs
+# were removed and none may come back: the leading `-` (make ignores errors), the
+# `|| echo "not available yet"`, and the `| tail -10` (a pipeline reports tail's status,
+# not the verifier's). Exit 1 = a break was found and named; exit 2 = unreadable DSN,
+# a declared bound exceeded, or nothing verified -- an empty chain is NOT a pass (R6.9).
+# The fix for a red walk is the chain or a reviewed boundary correction in that YAML,
+# never restoring the swallow. scripts/audit/command_path_truth.py enforces this.
+#
+# It runs INSIDE the orchestrator container, as cd-gcp.yml's equivalent step does. The
+# old `cd ~/synapse && python -m ...` ran on the VM host, which holds only the compose
+# file, the env files and two shell scripts (see deploy-gcp-push) -- no `orchestrator/`
+# package and no Python deps, so the invocation could only ever have failed there. That
+# was invisible for two sprints precisely because the leading `-` and the `|| echo`
+# discarded the status.
+	ssh -i $(GCP_KEY) $(GCP_USER)@$(GCP_IP) 'set -e; cd ~/synapse/docker && $(GCP_COMPOSE) exec -T orchestrator python -m orchestrator.audit.cli verify 2>&1'
 	@echo ""
 	@echo "============================================="
 	@echo "  GCP deployment verified"

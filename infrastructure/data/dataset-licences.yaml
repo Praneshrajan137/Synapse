@@ -1,0 +1,107 @@
+# External dataset licence register — R8.1, R8.2 (decision-quality-proof task 7.1)
+#
+# Validated against `infrastructure/data/schemas/dataset-licences.schema.json` by
+# `scripts/audit/dataset_licence_truth.py` (registered as C74). Design section E4a.1 names
+# this path; `tasks.md` task 7.1 originally named
+# `infrastructure/quality/feed-licence.yaml`, derived from neighbouring convention with an
+# explicit licence to "correct without ceremony if they differ". They differ, so this file
+# lands at the design's path and task 19.1 becomes a verification rather than a migration.
+#
+# ---------------------------------------------------------------------------------------
+# WHY THIS FILE SHIPS WITH NULLS, AND WHY THAT IS THE POINT
+# ---------------------------------------------------------------------------------------
+# R8.1 names six fields. Three of them — `licence_id`, `permitted_use` and the
+# redistribution disposition — are properties of a licence TEXT that sits behind an
+# acceptance gate. Reading it requires accepting competition rules, and accepting rules on
+# an operator's behalf is not an act an agent may perform. So those fields are `null`, and
+# `read_date` is `null` because nobody has read them.
+#
+# A null here is a POSITIVE ASSERTION OF IGNORANCE, not an omission. The schema requires
+# every one of the six keys to be PRESENT while permitting each to be null, so a term
+# cannot be silently dropped, and `dataset_licence_truth` reports each null by name as
+# `unavailable` -> SKIP. A SKIP is not a PASS (I-7). The gate is therefore red-by-honesty
+# from the day it lands, and it flips to PASS with **no code change** the moment an operator
+# fills the fields in. That is the whole mechanism: R8.2 asks for a check that reports a
+# non-passing result when a declared field is absent, and this is that check having
+# something real to report.
+#
+# What is NOT acceptable, and was deliberately not done: writing a plausible-looking
+# `licence_id` such as `CC-BY-4.0` or `CC-BY-NC-SA-4.0`. Every one of those would be a
+# fabricated fact about a legal instrument, it would make the gate go green, and it would be
+# indistinguishable from a confirmed value to every downstream reader. I-7 forbids exactly
+# this trade: absence of proof is never a pass, and a fabricated pass is worse than a
+# visible gap.
+#
+# Fields that ARE recorded are recorded because they are establishable from public
+# competition metadata WITHOUT reading the terms: the dataset's identity, and the URI at
+# which the terms can be read. Naming where a document lives is not a claim to have read it.
+
+schema_version: 1
+
+datasets:
+  - dataset_id: "kaggle/m5-forecasting-uncertainty"
+    # Null: this is a property of the rules text, which has not been read. The M5 data is
+    # distributed under Kaggle competition rules rather than a named open-source licence,
+    # so there may be no SPDX identifier at all — which is itself a finding an operator
+    # must record, not something to approximate here.
+    licence_id: null
+    # Recorded, and NOT a claim to have read it: this is the location the terms live at.
+    licence_text_uri: "https://www.kaggle.com/competitions/m5-forecasting-uncertainty/rules"
+    # Null: nobody has read the terms at the URI above. This field is the one that makes
+    # the artifact honest — it is the difference between "we know the terms" and "we know
+    # where the terms are".
+    read_date: null
+    permitted_use: null
+    # Null: the dataset files are static since the 2020 competition close, but a revision
+    # identifier that pins WHICH BYTES the licence was read against does not exist until an
+    # ingestion records one. Task 7.3's ingestion record supplies it, and until then a
+    # stale confirmation cannot be inherited by a re-published dataset.
+    dataset_revision: null
+    # `unknown` would assert the terms were read and found silent. They were not read.
+    redistribution: null
+    confirmation:
+      confirmed: false
+      confirmed_by: null
+      blocked_on: >-
+        The licence terms sit behind Kaggle's competition-rules acceptance gate. Accepting
+        those rules is an operator act with legal effect; an agent must not perform it on an
+        operator's behalf, and must not infer the terms' content from the fact that the
+        dataset is widely redistributed in third-party mirrors. Widespread redistribution is
+        evidence about other people's behaviour, not about what these terms permit.
+      procedure: >-
+        1. Open the licence_text_uri and accept the competition rules as the operator.
+        2. Record `licence_id` exactly as the terms name it; if the terms are competition
+           rules with no SPDX identifier, record the clause reference and say so in `notes`.
+        3. Record `permitted_use` in the licence's own scope wording — not a paraphrase that
+           broadens it. Academic/research-only terms must read as such.
+        4. Record `redistribution` as one of permitted / prohibited /
+           permitted-with-attribution / unknown. Choose `unknown` only after reading.
+        5. Record `read_date` as the UTC date of step 1, and `confirmed_by`.
+        6. Record `dataset_revision` from the ingestion record produced by
+           `data_fabric/ingest/m5.py` against the files actually downloaded.
+        7. Set `confirmed: true` ONLY when all six R8.1 fields are non-null. The gate
+           re-derives completeness and FAILs a `confirmed: true` entry that still carries a
+           null field, so this flag cannot outrun its own subject.
+    notes:
+      - >-
+        Dataset shape, from public competition metadata and NOT from the terms: 3,049
+        products across 3 categories and 7 departments, sold in 10 stores across 3 US
+        states (CA, TX, WI), yielding roughly 42,840 hierarchical daily series. This is
+        the bulk-read scale that makes statistics extraction a CI workload under I-0
+        rather than a dev-box one.
+      - >-
+        Metric-identity finding carried for task 19.4, recorded here because it is a
+        property of THIS dataset: the M5 Uncertainty track scores Weighted Scaled Pinball
+        Loss over the 50%, 67%, 95% and 99% intervals. `agents/demand_prophet/spec.yaml`
+        declares `quantile_levels: [0.1, 0.5, 0.9]` - an 80% RAW band - while INV-DP-002
+        asserts a CONFORMAL-ADJUSTED 90% band at `empirical_coverage >= 0.85`. Three
+        distinct interval families. R8.18's "not leaderboard-comparable rather than a
+        rank" is the clause that must carry this; do not paper over it by reporting a rank.
+      - >-
+        The straddle (R8.17, Glossary): this register governs the TRAINING-ROW ingestion
+        path. The tree's only provenance-bearing external seam, `ExternalFeedSource`,
+        reads Kafka topics into `WorldState` and is a DIFFERENT path. Only the world seam
+        carries `source_class`. Do not conflate them, and do not add a fourth
+        `SourceProvenance` value - the three are pinned by
+        `orchestrator.audit.models.SOURCE_CLASSES` and by a CHECK constraint in
+        `0007_decision_data_provenance.sql`.

@@ -105,6 +105,75 @@ jobs:
           name: integration-logs
           path: integration-logs.txt
 
+  audit-chain-tamper:
+    name: Audit-chain tamper detection against Postgres (R6.2, R6.10)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    # purpose-achievement-audit task 12.2, discharging task 7.10's routing.
+    #
+    # `tests/integration/test_audit_chain_tamper_postgres.py` gates itself on ONE
+    # environment variable and says so in its own docstring: "No workflow sets
+    # SYNAPSE_AUDIT_CHAIN_IT_DSN today, so this file SKIPs everywhere - including in
+    # integration.yml." A skip is not a pass (I-7), so R6.2 and R6.10 have had no
+    # executed proof against a real database. This job sets the variable, which is
+    # the whole fix.
+    #
+    # Why a dedicated job with a `services:` Postgres rather than a step inside
+    # `integration-e2e` (which the test's docstring suggests): that job's dependency
+    # closure has no sqlalchemy[asyncio]/asyncpg and no orchestrator requirements, so
+    # the test's `pytest.importorskip("sqlalchemy")` would turn the promised proof
+    # back into a skip -- and widening that job's closure risks the fastapi/starlette
+    # resolution ci.yml already had to pin around. The test builds its own throwaway
+    # database and creates only `audit_consensus` inside it, so a bare
+    # `postgres:16-alpine` with a superuser role is sufficient; the compose init SQL
+    # is not needed. Recorded divergence: the docstring's suggested step location is
+    # now one job over.
+    #
+    # Runs on pull_request AND on the nightly cron, so the verifier walks a chain in
+    # a real Postgres on a schedule as well as before merge. The verifier against the
+    # DEPLOYED chain is a separate, already-blocking step --
+    # `cd-gcp.yml::deploy-to-vm` "Audit-chain integrity (Sprint 9 verifier)",
+    # declared in `infrastructure/quality/blocking-steps.yaml`.
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: synapse_audit
+          POSTGRES_USER: synapse
+          POSTGRES_PASSWORD: synapse_audit_2026
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U synapse -d synapse_audit"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: "3.11", cache: "pip"}
+      - name: Install dependencies
+        # orchestrator/requirements.txt carries sqlalchemy[asyncio]==2.0.31 and
+        # asyncpg==0.29.0 (the two the test asserts rather than skips on) plus
+        # structlog/pydantic for `orchestrator.audit.*`; requirements-dev carries
+        # pytest-asyncio; pyyaml is what `chain_walk.load_chain_bounds` reads
+        # `infrastructure/quality/audit-chain-bounds.yaml` with.
+        run: |
+          pip install -r packages/requirements.txt -r packages/requirements-dev.txt
+          pip install -e packages/
+          pip install -r orchestrator/requirements.txt
+          pip install jsonschema pyyaml
+      - name: Audit-chain tamper detection against Postgres (R6.2, R6.10)
+        # Blocking: no `continue-on-error`, no `|| true`. The DSN role must be able
+        # to CREATE DATABASE; the service's `POSTGRES_USER` is the superuser, which
+        # can. A deliberate variable rather than a reachability probe, because a probe
+        # that skipped on an unreachable server would report a green run for a
+        # database that was never there.
+        env:
+          SYNAPSE_AUDIT_CHAIN_IT_DSN: postgresql+asyncpg://synapse:synapse_audit_2026@localhost:5432/synapse_audit
+        run: |
+          PYTHONPATH=. pytest tests/integration/test_audit_chain_tamper_postgres.py \
+            -q --tb=short
+
   real-stack-run:
     name: Real_Stack_Run — Console fidelity (Req 5)
     runs-on: ubuntu-latest
@@ -167,19 +236,76 @@ jobs:
           echo "BACKEND_BUILD_SHA=$(git rev-parse HEAD)" >> "$GITHUB_ENV"
           echo "ORCHESTRATOR_IMAGE=$(docker inspect --format '{{.Image}}' synapse-orchestrator 2>/dev/null || echo unknown)" >> "$GITHUB_ENV"
 
-      - name: Task_Completion_Tests against the real stack (MSW disabled)
+      # ---------------------------------------------------------------------
+      # DESIGN CONFLICT, recorded rather than papered over (task 12.2, I-7).
+      #
+      # Two commitments this repo has made are now in direct tension:
+      #
+      #   (a) Req 5.1 / R8.6 -- run the IDENTICAL Task_Completion_Test suite
+      #       against the real stack with MSW disabled, and count a skipped or
+      #       un-attempted comparison as a divergence.
+      #   (b) AD-12 -- `window.__atlasHarness` is a test-only entry point that
+      #       exists ONLY in the `e2e`-mode build (`dist-e2e/`), never in the
+      #       shipped bundle.
+      #
+      # After task 11.1 the JTBD suite REQUIRES the harness (a missing harness is
+      # a failure, not a skip). The real stack serves the compose `frontend`
+      # container, which is the production bundle. So the identical suite cannot
+      # find its driver against the real stack, and there is no app-level escape:
+      # the console has no configurable API base URL (no `VITE_API_*` anywhere in
+      # `frontend/`), so serving `dist-e2e` on its own origin would point every
+      # request at a port with no backend.
+      #
+      # Options considered:
+      #   1. Serve `dist-e2e` behind the real nginx gateway (bind-mount or an
+      #      e2e-mode build arg on the compose `frontend` service). Preserves
+      #      AD-12's letter -- nothing ships -- but needs a compose/Dockerfile
+      #      change and an amendment to AD-12's wording about which bundles may
+      #      carry the harness.
+      #   2. Inject the harness at run time via Playwright `addInitScript` instead
+      #      of bundling it. This DISSOLVES the tension (the harness is then in no
+      #      bundle at all) and is the recommended permanent fix, but it is a
+      #      rewrite of how `harness.ts` is delivered.
+      #   3. Compare on the non-harness subset. Rejected: the fidelity report is
+      #      job-by-job against the harness baseline, so the five JTBD jobs would
+      #      still be un-compared while the job printed a green-looking summary
+      #      about something else.
+      #
+      # DECISION: neither (1) nor (2) can be authored blind against a stack that
+      # cannot be run here (I-0), and both change a recorded architecture decision,
+      # so this NEEDS A HUMAN DECISION. Until it is made this job stays RED with a
+      # named reason, which is a legitimate outcome (I-7) and strictly better than
+      # the state it replaces: the command below used to be
+      # `pnpm test:e2e --project=chromium --reporter=json task-completion.jtbd`,
+      # whose `chromium` project carries `testIgnore: HARNESS_SPEC_PATTERN` -- it
+      # selected ZERO specs and said nothing about it. `|| true` is NOT an option;
+      # removing those was task 11.2's entire point.
+      # ---------------------------------------------------------------------
+      - name: Task_Completion_Tests against the real stack (MSW disabled) — ADVISORY, the fidelity reporter below owns the verdict
         working-directory: frontend
-        # Identical JTBD suite as the PR-gate harness, but pointed at the real
-        # gateway (PLAYWRIGHT_BASE_URL) so no MSW browser worker is injected and
-        # every request hits the real backend (Req 5.1). Non-fatal here: the
-        # fidelity reporter below turns real-stack failures into a named
-        # divergence report and owns the job's pass/fail.
+        # `test:e2e:harness` runs `playwright.harness.config.ts`, whose `testMatch`
+        # IS `HARNESS_SPEC_PATTERN`, and which omits its own `webServer` when
+        # `PLAYWRIGHT_BASE_URL` is set -- so this is the only invocation that both
+        # SELECTS the JTBD suite and points it at the real gateway (Req 5.1). It is
+        # expected to fail on harness absence per the DESIGN CONFLICT above; the
+        # failure message names the harness, which is the true and actionable cause.
+        #
+        # `continue-on-error: true` is deliberate and now honestly labelled: the
+        # fidelity reporter below is the blocking step that owns this job's verdict
+        # (R8.9 / R11.3 -- a non-propagating step outside `blocking-steps.yaml` must
+        # carry ADVISORY or `informational` in its name, and this step did not, which
+        # `workflow_shape_truth` reports as a violation).
         continue-on-error: true
         env:
           PLAYWRIGHT_BASE_URL: http://localhost
           PLAYWRIGHT_JSON_OUTPUT_NAME: test-results/real-stack/results.json
+        # The positional filter keeps this to the Task_Completion_Test file. The
+        # harness config's `testMatch` covers all six harness specs; the resilience
+        # ones drive in-page transport doubles against seeded streams and have no
+        # baseline in the fidelity report, so running them against a live backend
+        # would add nondeterminism the reporter cannot interpret.
         run: |
-          pnpm test:e2e --project=chromium --reporter=json task-completion.jtbd
+          pnpm test:e2e:harness task-completion.jtbd
 
       - name: Report harness-vs-real-stack fidelity divergences (Req 5.2, 5.4, 5.5)
         working-directory: frontend
@@ -187,6 +313,15 @@ jobs:
         # real-stack results and fails NON-ZERO naming any job that passes under
         # the harness but fails against the real stack, the observed contract
         # difference, and the MSW_Fixture(s) requiring reconciliation.
+        #
+        # Blocking, and EXPECTED RED on landing (task 12.2, I-7). Task 11.2 removed
+        # this reporter's "a real-stack SKIP is informational" rule, which was the
+        # only reason the nightly was ever green: every comparison was un-attempted
+        # and an un-attempted comparison reported nothing. It now emits a named
+        # divergence per job. Given the DESIGN CONFLICT recorded above, expect five
+        # of them until that decision is made. The red is the honest state of a
+        # comparison that cannot currently happen -- not a reason to restore the
+        # rule, and not a reason to add `|| true`.
         run: pnpm effectiveness:real-stack-fidelity
 
       - name: Upload real-stack fidelity report + Playwright report

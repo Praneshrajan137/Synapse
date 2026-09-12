@@ -1,0 +1,38 @@
+{
+  "$comment": [
+    "SYNAPSE -- committed thresholds for the Interruption_Precision measurement (R8.5; design E6).",
+    "",
+    "R8.5 requires the North-Star `interruptionPrecision` value to be COMPUTED from interruptions raised",
+    "during an executed run, and to DIFFER by at least `min_seed_divergence` between two seeds that raise",
+    "different interruption sets. That second clause is the falsifier a committed literal cannot satisfy:",
+    "a constant returns the same number for every seed, so its divergence is exactly 0 and the seed-",
+    "responsiveness audit reports `unresponsive`. This file holds the only number that audit compares",
+    "against, so the threshold is reviewable and diffable instead of being a literal in the checker",
+    "(the same rule as infrastructure/quality/replay-floors.yaml and ratchets.json).",
+    "",
+    "Read contract. JSON rather than YAML so BOTH sides read it without a new dependency (I-1): Python",
+    "gates via json.loads(Path(...).read_text(encoding='utf-8')) (E-S13-07), and the TypeScript side via",
+    "frontend/src/lib/interruption-precision.ts::parseInterruptionPrecisionPolicy, which validates this",
+    "shape with Zod and refuses to substitute an in-code default. A missing or unparseable file is",
+    "reported `unavailable` -- non-passing, never a fabricated threshold (I-7).",
+    "",
+    "`min_seed_divergence` is R8.5's own number, expressed as an absolute difference between two",
+    "precision values in [0, 1]. It is a floor on an OBSERVED difference, not a ratchet on a measurement,",
+    "so it carries no `measured_at`: nothing in this file claims that a measurement exists.",
+    "",
+    "NOT MEASURED YET. No executed run has produced an Interruption_Precision value in this repository.",
+    "The wiring that will produce one (frontend/spec/effectiveness/harness.ts collecting interruptions,",
+    "and the effectiveness job in .github/workflows/frontend.yml running two seeds) is tasks 11.1/11.2.",
+    "Until it lands, computeInterruptionPrecision reports `indeterminate` and the scorecard carries no",
+    "number -- which is the honest state under I-7, not a pass."
+  ],
+  "version": 1,
+  "interruption_precision": {
+    "min_seed_divergence": 0.01,
+    "unit": "absolute-fraction",
+    "requirement": "R8.5",
+    "read_by": [
+      "frontend/src/lib/interruption-precision.ts::parseInterruptionPrecisionPolicy"
+    ]
+  }
+}

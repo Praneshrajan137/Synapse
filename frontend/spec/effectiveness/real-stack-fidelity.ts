@@ -24,12 +24,37 @@
  * It records the backend build SHA the stack ran against (Req 5.5, from
  * `$BACKEND_BUILD_SHA`, falling back to `$GITHUB_SHA`) so a fidelity divergence
  * is traceable to a backend version, and writes a machine- and human-readable
- * report. It exits NON-ZERO when a genuine harness-pass / real-stack-fail
- * divergence exists so the (nightly, PR-gate-separate) job goes red and is
- * actionable; a real-stack SKIP is informational (not comparable), never a
- * divergence — this run is entirely separate from the deterministic PR gate so
+ * report. It exits NON-ZERO when ANY declared fidelity comparison did not come
+ * back comparable-and-green, so the (nightly, PR-gate-separate) job goes red and
+ * is actionable. This run is entirely separate from the deterministic PR gate so
  * real-stack latency/nondeterminism can never make the PR gate flaky (Req 5.3,
  * 20.3).
+ *
+ * ── The removed rule (purpose-achievement-audit R8.6, task 11.2) ──────────────
+ * This file used to carry: "a real-stack SKIP is informational (not comparable),
+ * never a divergence." That rule is REMOVED, and its removal is the fix rather
+ * than a side effect. It was the reason the nightly Real_Stack_Run was green:
+ * every Task_Completion_Test skipped on its first line, every comparison was
+ * therefore "not comparable", and a job that compared nothing reported no
+ * divergence. R8.6 is explicit -- "IF a Job_To_Be_Done, a resilience scenario, or
+ * a real-stack fidelity comparison is skipped, THEN THE effectiveness job SHALL
+ * record that skip as a divergence and SHALL NOT record it as informational or as
+ * a pass" -- and `CLAUDE.md` is explicit: a SKIP is not a PASS, absence of proof
+ * is never a pass (I-7).
+ *
+ * So a comparison that did not happen is now a first-class divergence with its own
+ * {@link DivergenceKind}, named in the report and counted toward the non-zero exit:
+ *
+ *   * `real-stack-failure`    -- green under the harness, failed against the real
+ *     stack. The original, genuine fidelity divergence (Req 5.2).
+ *   * `skipped-comparison`    -- the real-stack spec reported skipped. Formerly
+ *     "informational"; now a divergence (R8.6).
+ *   * `missing-comparison`    -- the real-stack results contain no spec for this
+ *     job at all, so the comparison was never attempted. Structurally the same
+ *     absence of evidence, and treated the same.
+ *   * `uncomparable-baseline` -- the job is not green under the harness, so there
+ *     is no harness verdict to compare the real stack against. Unevaluable is not
+ *     a pass.
  *
  * Run (from `frontend/`): `pnpm effectiveness:real-stack-fidelity` — or
  *   `tsx spec/effectiveness/real-stack-fidelity.ts [playwrightResultsPath]`.
@@ -109,10 +134,27 @@ interface JobResult {
   readonly detail: string;
 }
 
-/** A named harness-pass / real-stack-fail divergence (Req 5.2, 5.4). */
+/**
+ * Why a declared fidelity comparison did not come back comparable-and-green. See the
+ * file header for what each value means and why `skipped-comparison` exists at all
+ * (purpose-achievement-audit R8.6).
+ */
+type DivergenceKind =
+  | "real-stack-failure"
+  | "skipped-comparison"
+  | "missing-comparison"
+  | "uncomparable-baseline";
+
+/** A named fidelity divergence (Req 5.2, 5.4; R8.6). */
 interface Divergence {
+  readonly kind: DivergenceKind;
   readonly job: string;
   readonly title: string;
+  /**
+   * The observed contract difference for `real-stack-failure`; for every other kind,
+   * a statement of what was not compared and why. Never blank: a divergence that
+   * cannot say what it observed is not actionable.
+   */
   readonly contractDifference: string;
   readonly fixturesToReconcile: readonly string[];
 }
@@ -260,6 +302,65 @@ function resolveJobResult(binding: JtbdFixtureBinding, specs: readonly PwSpecVie
   return { outcome: match.outcome, detail: match.detail };
 }
 
+/**
+ * Classifies one declared fidelity comparison, returning `null` only when the
+ * comparison actually happened and the real stack agreed with the harness.
+ *
+ * Total over `RealStackOutcome` x `harnessGreen`, so there is no combination that falls
+ * through to an implicit pass -- which is precisely how the removed
+ * "SKIP is informational" rule worked (R8.6, I-7).
+ */
+function classifyComparison(
+  binding: JtbdFixtureBinding,
+  harnessGreen: boolean,
+  outcome: RealStackOutcome,
+  detail: string,
+): Divergence | null {
+  const base = {
+    job: binding.job,
+    title: binding.titlePrefix,
+    fixturesToReconcile: binding.fixtures,
+  };
+  if (!harnessGreen) {
+    return {
+      ...base,
+      kind: "uncomparable-baseline",
+      contractDifference:
+        "the committed harness baseline records no green row for this job, so the real-stack " +
+        "outcome has no harness verdict to be compared against; unevaluable is not a pass",
+    };
+  }
+  if (outcome === "failed") {
+    return {
+      ...base,
+      kind: "real-stack-failure",
+      contractDifference: detail
+        ? firstLine(detail)
+        : "real-stack test failed (no message captured)",
+    };
+  }
+  if (outcome === "skipped") {
+    return {
+      ...base,
+      kind: "skipped-comparison",
+      contractDifference:
+        "the real-stack run reported this Task_Completion_Test as skipped, so the fidelity " +
+        "comparison did not happen; a skip is recorded as a divergence, never as " +
+        "informational and never as a pass (R8.6)",
+    };
+  }
+  if (outcome === "missing") {
+    return {
+      ...base,
+      kind: "missing-comparison",
+      contractDifference:
+        "the real-stack Playwright results contain no spec whose title starts with " +
+        `"${binding.titlePrefix}", so the fidelity comparison was never attempted`,
+    };
+  }
+  return null;
+}
+
 // ── Report rendering ──────────────────────────────────────────────────────────
 
 interface FidelityReport {
@@ -307,19 +408,21 @@ function renderMarkdown(report: FidelityReport): string {
 
   if (report.divergences.length === 0) {
     lines.push(
-      "## Divergences\n\nNone — no Job_To_Be_Done that passes under the harness failed " +
-        "against the real stack. Harness fixtures remain faithful to real backend behavior " +
-        `at backend build \`${report.backendBuildSha}\`.`,
+      "## Divergences\n\nNone — every declared fidelity comparison was made, and no " +
+        "Job_To_Be_Done that passes under the harness failed against the real stack. " +
+        "Harness fixtures remain faithful to real backend behavior at backend build " +
+        `\`${report.backendBuildSha}\`.`,
     );
     return `${lines.join("\n")}\n`;
   }
 
   lines.push(
-    `## Divergences (${report.divergences.length}) — harness-pass / real-stack-fail (Req 5.2, 5.4)`,
+    `## Divergences (${report.divergences.length}) — a comparison that failed OR did not ` +
+      "happen (Req 5.2, 5.4; R8.6)",
   );
   lines.push("");
   for (const d of report.divergences) {
-    lines.push(`### ${d.title} (\`${d.job}\`)`);
+    lines.push(`### ${d.title} (\`${d.job}\`) — \`${d.kind}\``);
     lines.push("");
     lines.push(`- Observed contract difference: ${d.contractDifference}`);
     lines.push(
@@ -372,16 +475,12 @@ function main(): void {
       fixtures: binding.fixtures,
     });
 
-    // Divergence = green under the harness AND failed against the real stack.
-    // A real-stack SKIP is informational (not comparable), never a divergence.
-    if (harnessGreen && outcome === "failed") {
-      divergences.push({
-        job: binding.job,
-        title: binding.titlePrefix,
-        contractDifference: detail ? firstLine(detail) : "real-stack test failed (no message captured)",
-        fixturesToReconcile: binding.fixtures,
-      });
-    }
+    // R8.6: every declared comparison must come back comparable AND green. A skip, an
+    // absent spec, and a non-green harness row are all divergences now -- the
+    // "a real-stack SKIP is informational" rule this file used to carry is what kept
+    // the nightly green while nothing was ever compared.
+    const divergence = classifyComparison(binding, harnessGreen, outcome, detail);
+    if (divergence !== null) divergences.push(divergence);
   }
 
   const report: FidelityReport = {
@@ -403,8 +502,18 @@ function main(): void {
   process.stdout.write(renderMarkdown(report));
 
   if (divergences.length > 0) {
+    const byKind = divergences.reduce<Record<string, number>>((tally, d) => {
+      tally[d.kind] = (tally[d.kind] ?? 0) + 1;
+      return tally;
+    }, {});
+    const summary = Object.keys(byKind)
+      .sort()
+      .map((kind) => `${kind}=${byKind[kind] ?? 0}`)
+      .join(", ");
     process.stderr.write(
-      `\nReal_Stack_Run: ${divergences.length} fidelity divergence(s) — see ${REPORT_MD_RELPATH}.\n`,
+      `\nReal_Stack_Run: ${divergences.length} fidelity divergence(s) (${summary}) — see ` +
+        `${REPORT_MD_RELPATH}. A comparison that was skipped or never attempted is a ` +
+        "divergence, not an informational note on a pass (R8.6, I-7).\n",
     );
     process.exitCode = 1;
   } else {

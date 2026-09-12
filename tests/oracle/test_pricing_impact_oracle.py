@@ -1,4 +1,18 @@
-"""Oracle Layer 6: Pricing Oracle vs Twin revenue impact."""
+"""Metamorphic Layer 4: twin revenue impact under a coupled price/demand shift.
+
+Re-registered out of the Oracle layer by the purpose-achievement-audit remediation
+(R12.2, R12.6). This test was titled as an oracle for the pricing agent and
+imported no ``pricing_oracle`` module at all; its reference value is a closed-form
+restatement of the twin's own behaviour, as the comment below has always said out
+loud. That makes it a genuine and useful **metamorphic** property of the twin -
+scale the demand multiplier, and revenue moves the way the algebra says - and not
+an oracle for the pricing agent.
+
+Layer membership is derived from four observable properties by
+``scripts/audit/oracle_truth.py``, not from a file path or a title, so the honest
+move is to register the test where it belongs rather than rename the finding away.
+The genuine pricing oracle lives in ``test_pricing_elasticity_oracle.py``.
+"""
 from __future__ import annotations
 
 import pytest
@@ -18,7 +32,7 @@ PRICE_ELASTICITY = -0.4     # demand response per unit relative price change
 TOLERANCE = 0.20            # R8.1: observed impact within 20% of predicted delta
 
 
-@pytest.mark.oracle()
+@pytest.mark.metamorphic(layer=4)
 class TestPricingImpactOracle:
     def test_price_change_revenue_within_predicted(self, twin_runner: MonteCarloRunner) -> None:
         """A +50% price increase with demand elasticity -0.4 drops demand to 0.80x
