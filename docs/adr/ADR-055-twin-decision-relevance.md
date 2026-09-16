@@ -82,6 +82,18 @@ policy, and a three-term split reported in `twin-regret.json`. Full record in **
 before the run judged against it**, per the rule at the head of this log; it changes no threshold
 and does not touch `regret_objective.materiality_margin.value`.
 
+**Amendment, session 11 - D2.6 is CORRECTED twice, and both corrections make the standard
+STRICTER: arm E's grid search runs on tuning seeds DISJOINT from the measurement seeds, and the
+reported split is TWO terms rather than three, the second being a CEILING on information value
+rather than an estimate of it.** Tuning and measuring on one seed set would make arm E's levels
+in-sample optimal, inflating the tuning gap and deflating the information term - a bias toward the
+very hypothesis D2.6 records. Separating the information gap from EVPI would require an arm that is
+the best adaptive policy, and none exists or is planned, so arm E reports the tuning gap plus EVPI
+and the hard gate is denominated against the ceiling. The `twin-regret` job's cost is also measured
+here for the first time, so the sizing decision rests on a reading rather than on an assumption.
+Full record in **D2.6**'s correction block. **It lands before the run judged against it**, per the
+rule at the head of this log; it changes no threshold and instantiates no new value.
+
 **This ADR is written to be falsifiable, and task 10 is the attempt.** Its central premise -
 that a base-stock `(s, S)` policy is near-optimal on today's twin, so intelligence cannot pay
 - is *analytical, not measured*. R5.1-R5.4 are the criteria that falsify it. If task 10
@@ -824,6 +836,49 @@ term (b) is zero; a within-cadence safety-stock advantage is real, and it is unm
 hindsight arm is not an oracle - D2.5.4's construction and both of its per-run falsifiers stand.
 And that `0.4533668749999997` is mostly tuning: **that is the hypothesis, and arm E is the
 measurement that settles it.**
+
+**CORRECTION BLOCK, session 11 - TWO corrections to D2.6, and both make the standard STRICTER.
+Nothing above is deleted: the superseded reading stays visible, because a record that quietly
+overwrites itself is the drift this ADR gates against.**
+
+**CORRECTION 1 - the tuning seeds are DISJOINT from the measurement seeds. The repair paragraph
+above says the grid search runs over the "same fixed seeds", and that is wrong.** Tuning and
+measuring on one seed set makes arm E's levels in-sample optimal - optimal on the very draws that
+then judge them - which INFLATES the tuning gap and DEFLATES the information term. That biases the
+split toward the hypothesis D2.6 itself records, and a measurement must not be biased toward the
+thing it is testing. The committed grid file `infrastructure/quality/comparator-tuning.yaml`
+therefore declares `tuning_seeds.start: 1000` with `count: 100`, disjoint from the measurement's
+`range(replicates)`, and `uplift/tuning.py::seed_overlap_refusal` REFUSES an overlap computed
+against the actual replicate count rather than an assumed one. **The bias direction, stated so a
+reader can check it:** out-of-sample levels can only make the tuning gap smaller and the remaining
+term larger than in-sample levels would, so this correction makes finding 61's own hypothesis
+HARDER to confirm, never easier.
+
+**CORRECTION 2 - only TWO of the three terms are measurable, and the split above should not imply
+three are.** Measuring (b) and (c) separately would require an arm that is the best ADAPTIVE
+policy on this twin, and no such arm exists in the tree or is planned. What arm E actually
+delivers is the textbook two-term decomposition:
+
+    regret(reference - hindsight) = [reference - tuned] + [tuned - hindsight]
+                                  =  tuning gap        +  EVPI
+
+EVPI is DEFINED as the perfect-information expectation minus the best here-and-now decision, and
+the best static policy over a committed grid is that decision within its policy class. So the
+second term is (b) and (c) COMBINED, and it is a **CEILING on information value rather than an
+estimate of it**. **This is a narrowing of what D2.6 claimed to measure, and it is NOT a weakening
+of the gate:** a ceiling is the conservative quantity to gate on, because a hard gate that fires
+when the ceiling is below the materiality margin fires whenever the achievable information value
+is below it too, and never the reverse.
+
+**THE `twin-regret` JOB COST IS NOW MEASURED, and that is what licenses the sizing below.**
+`execution-routing.md` forbids sizing a workload against an unmeasured cost, and no `twin-regret`
+duration was recorded anywhere in this tree. It is measured now: run `34685048665` completed in
+1.6 minutes end to end, of which 1.1 minutes was the measure step, covering four arms over the
+committed replicate count - 800 arm-replicates. Cost is linear in arm-replicates. Arm E adds 200
+measured plus 1800 tuning replicates, taking the job to 2800 units, so the measure step scales to
+roughly 4 minutes and the whole job to under 5, against a committed timeout of 120 minutes.
+**Neither a new job nor a raised timeout is needed** - and both were considered rather than
+assumed unnecessary.
 
 ### D3 - Per-KPI observable sensitivity (R5.34)
 

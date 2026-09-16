@@ -2089,6 +2089,8 @@ tests in the interim, and that is a stated sequencing gap, not an omission.
       gap for an arm to exploit, neither structure unlocks a decision and both join the deferrals.
     - **Nothing is deleted and nothing is ticked.** A deleted leaf is indistinguishable from a
       discharged one in the census; a held leaf carrying its reason is not.
+    - **The measurement that resolves the conditionality is task 28** (arm E's two-term split of
+      the regret). Pointer only -- ADR-055 D2.6 carries the argument.
   - Implements the first two of ADR-055's five structures. **Every structure names the agent
     decision it unlocks; nothing is added for realism's sake.**
   - Preconditions: **checkpoint A has run and task 11's verdict is not `material`** — not
@@ -2256,6 +2258,8 @@ tests in the interim, and that is a stated sequencing gap, not an omission.
   - Ensure all tests pass, ask the user if questions arise.
   - **HELD under the disposition recorded at task 12: this checkpoint is downstream of E2c and
     moves with it.**
+  - **The measurement that resolves this checkpoint's conditionality is task 28** (arm E's
+    two-term split of the regret). Pointer only -- ADR-055 D2.6 carries the argument.
   - **CONFLICT R, RAISED 2026-09-11 -- R5.28 IS UNSATISFIABLE AS WRITTEN, AND R5.29 THEREFORE
     MAKES THIS CHECKPOINT A PROJECT-CANCELLATION TRIPWIRE THAT IS GUARANTEED TO FIRE. SURFACED,
     NOT RESOLVED.**
@@ -4454,6 +4458,159 @@ data and scored against an external benchmark has no demonstrable value.
       `declared == len(pins:)` read from the file rather than against a transcribed integer;
       recorded for whoever owns the prompt's regeneration.
     - _Requirements: —_
+
+- [ ] 28. Arm E -- the tuned static par-level control, and the two-term split of the regret
+  - **Why this task exists, in one sentence.** The regret measured at run `34685048665` is a
+    contrast against an **untuned** comparator, so it cannot distinguish a genuine foresight
+    advantage from a par-level that was simply set badly. Arm E splits it into
+    `tuning_gap + information_ceiling`. **The argument is not restated here** -- ADR-055 **D2.6**
+    carries it, and finding 61 is the hypothesis it puts to a measurement.
+  - **This task is the measurement that tasks 12 and 14 are held on.** Both point here.
+  - **Arm E is a subsidiary arm, not a new judged contrast.** The verdict stays the A-D
+    comparison; the split is reported beside it. That separation is what keeps a misbehaving
+    arm E from discarding a real measurement (I-7 cuts both ways).
+
+  - [~] 28.1 Commit the pre-registered tuning grid and the search module
+    - discharge: ci.yml::uplift-verify fast shard (Property 81 is its proof)
+    - last-checked: authored after run 35074588548 (sha fa42263); its discharge job has not
+      executed at this revision
+    - Files: `infrastructure/quality/comparator-tuning.yaml`, `uplift/tuning.py`
+    - The grid is **pre-registered**: 18 `(s, S)` candidates, **including the incumbent's own
+      pair**. That inclusion is deliberate and load-bearing -- it is what makes prediction 3
+      below able to fail honestly rather than by construction.
+    - `tuning_seeds` start `1000` count `100`, **disjoint from the measurement's
+      `range(replicates)`**. `seed_overlap_refusal` **enforces** the disjointness rather than
+      documenting it; an overlap would tune and measure on the same draws.
+    - `tune_par_level` takes an **injected** `cost_of(seed, point)`. That injection is what lets
+      the argmin, the tie-break and every refusal be proven at the fast suite's budget with no
+      twin run at all (I-0).
+    - `select_levels` carries a **declared** deterministic tie-break, and `tie_broken` is
+      recorded -- not as an error, but because a tie means the grid's resolution is coarser than
+      the difference it is being asked to resolve.
+    - `TuningUnavailableError` on an unreadable, non-mapping or empty grid -- never a default.
+    - Local verification is recorded once, at 28.2, and it is **not** a discharge.
+    - _Requirements: 5.2, 5.3, 5.36_
+
+  - [~] 28.2 Write property test for the search and the decomposition identity (Property 81)
+    - discharge: ci.yml::uplift-verify fast shard
+    - last-checked: authored after run 35074588548 (sha fa42263); its discharge job has not
+      executed at this revision
+    - `# Feature: decision-quality-proof, Property 81: The tuned static arm is the pre-registered
+      grid's out-of-sample minimum, and the decomposition it induces is exact`
+    - File: `tests/uplift/test_tuned_static_arm_property.py` -- **19 tests, no simulation**, so it
+      belongs to the fast shard rather than behind `-m "slow"`.
+    - The identity is asserted **exactly over `Fraction`**, not to a float tolerance: both terms
+      are differences of the same three means, so the middle term cancels over the reals. The
+      float residual is **reported** by `decomposition_residual` and the reader picks a tolerance
+      they can defend (finding 56). Asserting a blurrier claim in order to pass would be the
+      forbidden repair.
+    - Budget inherited from the root `conftest.py` profile. No literal `max_examples`.
+    - **LOCAL RESULT, AND IT IS NOT A DISCHARGE.** Property 81 was run locally at
+      `HYPOTHESIS_PROFILE=ci`: **19 passed in 63 s**. Recorded here because the file is pure
+      arithmetic and `ci` is the budget that will judge it -- but **a local green is not a CI
+      green** (I-7), which is why both 28.1 and 28.2 stay `[~]` and carry `last-checked:` lines
+      naming a job that has not executed at this revision.
+    - Locus: `ci.yml::uplift-verify` fast shard.
+    - _Requirements: 5.2, 5.3, 5.36_
+
+  - [~] 28.3 Wire arm E into the comparator and report the two-term split
+    - discharge: uplift.yml::twin-regret
+    - last-checked: authored after run 35074588548 (sha fa42263); its discharge job has not
+      executed at this revision
+    - Files: `uplift/foresight.py`, `uplift/regret.py`
+    - `run_single_arm` drives ONE arm through the shared `_make`/`_drive`, so **an arm's physics
+      is decided in exactly one place**. Without it the levels could be selected under one
+      cadence and measured under another, and the split would be a comparison of two twins.
+      `ThreePassResult.tuned_static` carries the arm; `usable_for_tuning_gap` is the split's own
+      usability predicate.
+    - `ARM_LABELS` gains `tuned_static`. Arm E joins `arm_cost_family` **deliberately**: leaving
+      it out to stop `hindsight_arm_is_pointwise_best` from flipping would be **narrowing a
+      checker's scope**, and including it makes that claim strictly stronger.
+    - `decomposition_refusal` reports **beside** the verdict and never overwrites it. A
+      **negative** tuning gap is made loud because it makes `information_ceiling` *larger* than
+      the regret it decomposes -- and the ceiling is the denominator E3's hard gate reads, so the
+      error direction is the **permissive** one.
+    - A **second, independent** interval is reported for the gap as `tuning_gap_interval`. It is
+      not the judged contrast's interval and must not be read as one.
+    - New artifact keys: `tuned_static_levels`, `tuned_static_mean_cost` (selected candidate over
+      the **tuning** seeds), `mean_tuned_static_cost` (over the **measurement** seeds),
+      `tuned_static_tie_broken`, `tuned_static_candidates`, `tuning_seed_range`, `tuning_surface`,
+      `tuning_grid_source`, `tuning_gap`, `information_ceiling`, `tuning_gap_interval`,
+      `decomposition_residual`, `decomposition_admissible`, `decomposition_refusal`,
+      `replicates_usable_tuned_static`.
+    - _Requirements: 5.1, 5.3, 5.4, 5.33_
+
+  - [x] 28.4 Pre-register arm E's predictions before the label is added
+    - **`[x]` ON LANDING, AND THE REASON IS THAT ITS DEMO IS NOT A JOB.** The observable is that
+      these predictions exist in this ledger in a commit that **precedes** the measurement run --
+      checkable from **git history**, not from a CI verdict. **No `discharge:` line is written
+      here on purpose**: naming a job that cannot judge this would be a false owner, and a
+      `[~]` would owe a harvest against a job that will never report on it.
+    - **A prediction recorded after the number arrives is not a prediction.** Every clause below
+      is falsifiable **by the run alone**, and each names the artifact key it is read against.
+
+    **PREDICTION 1 -- ARMS A-D ARE UNPERTURBED, TO EVERY DIGIT.**
+    `comparator_headroom_vs_foresight` must read `8.937888952967558`, `regret_vs_foresight` must
+    read `-0.8123524459522771`, and `regret` must read `0.4533668749999997` with its interval
+    `[0.4524633333333333, 0.45426833333333333]`. Arm E is constructed **LAST** inside
+    `run_three_pass` precisely so it cannot shift the substreams. If any of these moves, adding
+    arm E perturbed an arm it was supposed to sit beside -- **that is a finding about arm
+    independence, not a licence to read the new numbers.** This is the **fourth** consecutive
+    session to make this prediction.
+
+    **PREDICTION 2 -- `decomposition_residual` IS ZERO TO FLOATING-POINT TOLERANCE.** The
+    identity is a theorem over the reals, and Property 81 proves it **exactly over `Fraction`**.
+    A non-trivial residual means the two terms were computed from **different denominators**.
+
+    **PREDICTION 3 -- `decomposition_admissible` IS `True`**: the tuning gap and the information
+    ceiling are both non-negative, and the usable-replicate counts agree. **This one CAN fail
+    honestly, and that is why it is worth stating.** The grid contains the incumbent's own
+    levels, so the search cannot lose to the incumbent on the **tuning** seeds -- but arm E is
+    measured **out-of-sample**, and it can lose there.
+
+    **PREDICTION 4 -- `hindsight_arm_is_pointwise_best` STAYS `True`** with arm E in the family.
+    A `False` means arm D is not the objective's minimiser and ADR-055 **D2.5.4** needs repair.
+    It does **NOT** mean arm E is wrong.
+
+    **PREDICTION 5 -- THE ONE THAT DECIDES THE PROJECT, WITH ITS ARITHMETIC STATED SO IT CAN
+    FAIL.** `tuning_gap + information_ceiling = 0.4533668749999997`, and the whole of that regret
+    is `on_hand`: `dominant_regret_share` is `1.0000000000000009` with every other term exactly
+    `0.0` on run `34685048665`. The incumbent holds about **0.7382** objective units of inventory
+    and the hindsight arm about **0.2849**. Finding 61's hypothesis is that most of the gap is
+    **TUNING**, because the comparator replenishes **instantaneously** and foresight therefore
+    buys no timing advantage. So the prediction is **`tuning_gap > information_ceiling`**, and
+    more sharply that **`information_ceiling` lands BELOW the committed materiality margin of
+    `0.40`**.
+    - **What each branch licenses under the operator's HARD GATE, stated before the number
+      arrives.** A ceiling **below** the margin: E3's floor and task 25's claim may **NOT** be
+      denominated against the incumbent arm, and **structures 1 and 3 are reinstated**. A ceiling
+      **at or above** the margin: the headroom is genuinely **information-limited**, and E3
+      proceeds as planned.
+    - **NEITHER BRANCH IS PREFERRED HERE, AND THIS SESSION'S LEAF COUNT IS NOT A REASON.**
+      Reinstating structures 1 and 3 **adds** leaves. That is the **mirror** of the scheduling
+      temptation task 14 names in its own body, where firing the tripwire would have **deleted**
+      twenty-one. A measurement that pays the schedule in either direction is the one to
+      distrust, and the direction of the payment is not evidence.
+
+    **NOT PREDICTED, AND MUST NOT BE INFERRED FROM ANY CLAUSE ABOVE:** which grid point is
+    selected (`tuned_static_levels`), whether `tuned_static_tie_broken` is true, arm E's absolute
+    holding figure (`mean_tuned_static_cost`), and the width of `tuning_gap_interval`.
+    - _Requirements: 5.2, 5.3, 5.4_
+
+  - [ ] 28.5 Run the labelled measurement and record the verdict
+    - discharge: uplift.yml::twin-regret
+    - **OPEN, CI-GATED, AND DELIBERATELY NOT OFFERED AS AUTHORABLE.** An open leaf carrying a
+      `discharge:` line is CI-gated by this ledger's own rule, so the census will not offer 28.5
+      in an authorable batch. That is intended: there is nothing to author here. The work is a
+      run, and the only honest local state is "not yet run".
+    - Record the verdict the instrument produces, against the five predictions at 28.4 **as they
+      are already written**. Do not re-word a prediction after reading the number.
+    - Report which branch of prediction 5 the ceiling selected, and act on the operator's hard
+      gate accordingly -- including reinstating structures 1 and 3 if the ceiling lands below the
+      margin, and saying so plainly if it does not.
+    - A refusal (`decomposition_admissible` false) is a **result**, not a failed run: record the
+      `decomposition_refusal` reason and leave the A-D verdict alone.
+    - _Requirements: 5.3, 5.4, 5.34_
 
 ## Notes
 
