@@ -318,6 +318,25 @@ class ThreePassResult:
     #: ``run_three_pass`` always populates it -- so in production the ``None`` branch is a guard
     #: that can only fire on a bug, never a path a real measurement takes.
     hindsight: SupplyChainSimulation | None = None
+    #: Arm E. The TUNED STATIC par-level control, added in session 10 (ADR-055 D2.6).
+    #:
+    #: It is not an oracle and it is not a candidate for the judged contrast. Its only job is to
+    #: split the judged regret into two terms that mean different things:
+    #:
+    #:     regret(B - D) = [cost(B) - cost(E)] + [cost(E) - cost(D)]
+    #:                   =  tuning gap         +  information ceiling
+    #:
+    #: The first term is closable by a grid search -- no agent, no forecast, no consensus. The
+    #: second is EVPI in its textbook sense, perfect information minus the best here-and-now
+    #: decision, and is therefore a CEILING on everything a forecaster or a consensus system
+    #: could ever win. Before arm E the artifact reported their SUM and called it the headroom
+    #: that licenses the project.
+    #:
+    #: `None` for the same reason arm D is, and the reason is unchanged: the two landed property
+    #: files that construct this dataclass by hand supply neither arm, and a field without a
+    #: default would break them at collection time. `run_three_pass` populates it whenever it is
+    #: given a policy, so in production the `None` branch is a guard that can only fire on a bug.
+    tuned_static: SupplyChainSimulation | None = None
 
     @property
     def usable(self) -> bool:
@@ -343,6 +362,72 @@ class ThreePassResult:
         """
         return self.usable and self.hindsight is not None
 
+    @property
+    def usable_for_tuning_gap(self) -> bool:
+        """Usable for the judged contrast, AND carrying the tuned static control (arm E).
+
+        A THIRD predicate rather than a widened second one, for exactly the reason the second
+        exists rather than a widened first: `usable_for_judged_contrast` is what pairs
+        `reference_costs` against `hindsight_costs`, and requiring arm E there would drop a
+        replicate from the JUDGED contrast because a decomposition arm was missing. The judged
+        number must not move when a subsidiary arm does.
+
+        So the decomposition is reported over the subset of replicates that carry all five arms,
+        and `_measure` refuses rather than reports if that subset is not the whole usable set --
+        a decomposition over a different denominator from the number it decomposes would sum to
+        something that is not the regret.
+        """
+        return self.usable_for_judged_contrast and self.tuned_static is not None
+
+
+def run_single_arm(
+    seed: int,
+    *,
+    hours: float,
+    restock_threshold: float,
+    policy: DecisionPolicy,
+    build: object = None,
+) -> SupplyChainSimulation:
+    """Drive ONE arm at one seed, through the same construction and cadence as `run_three_pass`.
+
+    Session 10, for `uplift/tuning.py`'s grid search (ADR-055 D2.6). The grid needs to evaluate
+    a candidate `(s, S)` at a seed WITHOUT building the other four arms, and the alternative was
+    a second driver loop inside the tuner.
+
+    **That alternative is the one thing this repair must not do.** Two code paths that both claim
+    to "drive an arm" is how a comparator stops comparing: the tuned levels would be selected
+    under one set of physics and then measured under another, and the resulting tuning gap would
+    be an artefact of the difference. So this shares `_make` and `_drive` with `run_three_pass`
+    by construction rather than by convention, and there is exactly one place where an arm's
+    cadence, its unit costs and its restock threshold are decided.
+
+    It returns the simulation rather than a cost, for the same reason `run_three_pass` does: the
+    objective lives in `uplift/regret.py` and this module does not import it.
+    """
+    # Lazy, exactly as `run_three_pass` does it and for the same reason: keeping numpy, pydantic
+    # and scipy out of the fast suite's import closure.
+    from uplift.harness import _apply_reorders, _derive_unit_costs, observe
+
+    unit_costs = _derive_unit_costs()
+    slices = max(1, int((hours * 60.0) // FORESIGHT_WINDOW_MIN))
+    slice_hours = hours / slices
+
+    if build is not None:
+        made = build(seed)  # type: ignore[operator]
+        assert isinstance(made, SupplyChainSimulation)
+        sim = made
+    else:
+        sim = SupplyChainSimulation(seed=seed)
+        sim.start()
+        sim.set_policy(restock_threshold=restock_threshold)
+
+    for _ in range(slices):
+        action = policy.decide(observe(sim, unit_costs=unit_costs))
+        if action.reorder_quantities:
+            _apply_reorders(sim, action.reorder_quantities)
+        sim.advance(slice_hours)
+    return sim
+
 
 def run_three_pass(
     seed: int,
@@ -350,6 +435,7 @@ def run_three_pass(
     hours: float,
     restock_threshold: float,
     reference_policy: DecisionPolicy,
+    tuned_static_policy: DecisionPolicy | None = None,
     build: object = None,
 ) -> ThreePassResult:
     """Run the no-op, ``(s, S)`` reference, foresight and hindsight arms at the **same seed**.
@@ -498,6 +584,33 @@ def run_three_pass(
         ),
     )
 
+    # ARM E, THE TUNED STATIC CONTROL (session 10, ADR-055 D2.6). Constructed LAST, and that is
+    # not stylistic: `SeedSequence.spawn` derives child streams BY INDEX, so an arm built before
+    # the others would shift their substreams and silently move numbers three sessions have
+    # confirmed to sixteen significant figures. Arm D was appended for the same reason.
+    #
+    # It is the SAME class as arm B with different levels -- `Par_Level_Reorder` is fully
+    # parameterised, so no new policy exists to review. What makes arm E different from arm B is
+    # only where its two integers came from: arm B's are READ from the engine's own defaults,
+    # arm E's are DERIVED by a grid search over a committed grid at seeds disjoint from these.
+    tuned_static_sim: SupplyChainSimulation | None = None
+    if tuned_static_policy is not None:
+        tuned_static_sim = _make()
+        _drive(tuned_static_sim, tuned_static_policy)
+
+    # The identity clause is extended UNCONDITIONALLY over the arms that exist. Arm E is checked
+    # exactly as arms B, C and D are; the `is not None` is a construction guard, not a tolerated
+    # exception, because the clause cannot be evaluated against an arm that was never built.
+    paths_identical = (
+        baseline_path == reference.demand_trace.as_tuples()
+        and baseline_path == foresight_sim.demand_trace.as_tuples()
+        and baseline_path == hindsight_sim.demand_trace.as_tuples()
+    )
+    if tuned_static_sim is not None:
+        paths_identical = paths_identical and (
+            baseline_path == tuned_static_sim.demand_trace.as_tuples()
+        )
+
     return ThreePassResult(
         seed=seed,
         trace=recorded,
@@ -505,9 +618,6 @@ def run_three_pass(
         reference=reference,
         foresight=foresight_sim,
         hindsight=hindsight_sim,
-        demand_identical=(
-            baseline_path == reference.demand_trace.as_tuples()
-            and baseline_path == foresight_sim.demand_trace.as_tuples()
-            and baseline_path == hindsight_sim.demand_trace.as_tuples()
-        ),
+        tuned_static=tuned_static_sim,
+        demand_identical=paths_identical,
     )

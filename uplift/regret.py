@@ -53,6 +53,7 @@ __all__ = [
     "RegretVerdict",
     "TermContribution",
     "classify_regret",
+    "decomposition_refusal",
     "hindsight_min",
     "negative_regret_refusal",
     "load_objective",
@@ -70,11 +71,19 @@ OBJECTIVE_TERMS: Final[tuple[str, ...]] = (
     "unmet_service",
 )
 
-#: The comparator's arm labels, in the order this module tables them (ADR-055 D2.5.1, D2.5.4).
-#: Declared once so the per-arm counter totals, the cost decomposition and the
-#: hindsight-minimum family cannot drift apart -- three places naming four arms by hand is how
-#: an arm gets silently dropped from one of them.
-ARM_LABELS: Final[tuple[str, ...]] = ("noop", "reference", "foresight", "hindsight")
+#: The comparator's arm labels, in the order this module tables them (ADR-055 D2.5.1, D2.5.4,
+#: and D2.6 for arm E). Declared once so the per-arm counter totals, the cost decomposition and
+#: the hindsight-minimum family cannot drift apart -- three places naming the arms by hand is
+#: how an arm gets silently dropped from one of them. ``tuned_static`` is arm E, the tuned
+#: static par-level control; ``ORACLE_ARM`` and ``JUDGED_CONTRAST`` below are UNCHANGED by its
+#: arrival, because arm E is a decomposition arm and never a candidate for the judged contrast.
+ARM_LABELS: Final[tuple[str, ...]] = (
+    "noop",
+    "reference",
+    "foresight",
+    "hindsight",
+    "tuned_static",
+)
 
 #: Which of :data:`ARM_LABELS` supplies the oracle that `regret` and `comparator_headroom` are
 #: computed against. It moved from ``foresight`` to ``hindsight`` in session 9, and it is named
@@ -449,6 +458,89 @@ def negative_regret_refusal(
     )
 
 
+def decomposition_refusal(
+    *,
+    tuning_gap: float,
+    information_ceiling: float,
+    usable_judged: int,
+    usable_tuned: int,
+) -> str | None:
+    """Why the two-term split of the judged regret is inadmissible, or ``None`` when it holds.
+
+    **What this does NOT do, stated first because it is the part most easily got wrong.** It does
+    not touch ``status`` and it does not touch ``verdict``. ``status: measured`` certifies the
+    JUDGED contrast -- arm B against arm D -- which is computed from arms that exist whether or
+    not arm E behaved. Refusing a valid verdict because a subsidiary arm misbehaved would discard
+    a real measurement, and I-7 cuts both ways: a fabricated pass and a discarded measurement are
+    both misreports. So ``_measure`` reports ``decomposition_admissible`` and
+    ``decomposition_refusal`` BESIDE the verdict and leaves the verdict alone.
+
+    **Why a NEGATIVE tuning gap must be loud, and the direction is the whole reason.**
+    ``regret = tuning_gap + information_ceiling`` by construction, so a tuning gap below zero
+    makes ``information_ceiling`` LARGER than the regret it decomposes. The information ceiling
+    is the denominator E3's hard gate reads, so an inflated ceiling makes that gate MORE
+    PERMISSIVE -- the dangerous direction, in which a comparator that should have refused instead
+    passes. It is also a real statement about the world when it fires:
+    ``infrastructure/quality/comparator-tuning.yaml`` puts the incumbent's own ``s=50, S=100`` in
+    the grid, so the search's minimum over the tuning seeds cannot be worse than the incumbent
+    THERE, and a negative gap on the measurement seeds is unambiguously an out-of-sample effect
+    rather than an artefact of a grid that excluded its own comparison.
+
+    **A negative information ceiling means arm D is not an oracle**, which is
+    :func:`negative_regret_refusal`'s subject reached by a different route: the best static policy
+    beat the hindsight arm, so that arm does not bound the family and the second term is not EVPI.
+    The repair is the comparator, not the split.
+
+    **The count clause is the subtle one.** Both terms are differences of means, and the identity
+    only telescopes when all three means are taken over the SAME replicates.
+    ``usable_tuned != usable_judged`` means the split is over a different denominator from the
+    number it decomposes, so the two terms sum to something that is not the regret and the
+    residual would be non-zero for a reason that has nothing to do with floating point. Refused
+    rather than averaged, exactly as :meth:`RegretObjective.regret` refuses an unpaired difference.
+
+    Args:
+        tuning_gap: ``mean_reference - mean_tuned_static`` over the measurement seeds. May be
+            ``nan`` when arm E has no admissible mean over that set; ``nan`` fails both sign
+            clauses, so the count clause is what refuses that case -- which is correct, because an
+            undefined term is a denominator problem and not a sign problem.
+        information_ceiling: ``mean_tuned_static - mean_hindsight`` over the same seeds.
+        usable_judged: Replicates that contributed to ``regret``.
+        usable_tuned: Replicates that contributed to arm E.
+
+    Returns:
+        ``None`` when the split may be read. Otherwise a non-empty reason naming the offending
+        quantity, its direction, and what it does and does not imply.
+    """
+    if tuning_gap < 0.0:
+        return (
+            f"tuning gap {tuning_gap!r} is NEGATIVE: the tuned static control (arm E) cost MORE "
+            "than the incumbent (s, S) reference arm on the measurement seeds, so the split "
+            "reports an information ceiling LARGER than the regret it decomposes. That is the "
+            "PERMISSIVE direction for E3's denominator -- an inflated ceiling makes the gate "
+            "that reads it easier to pass -- which is why this refuses rather than reports. The "
+            "committed grid contains the incumbent's own levels, so this is an out-of-sample "
+            "effect and not a grid that excluded its comparison; the repair is the grid's span "
+            "or its resolution, and the JUDGED contrast is unaffected"
+        )
+    if information_ceiling < 0.0:
+        return (
+            f"information ceiling {information_ceiling!r} is NEGATIVE: the tuned static control "
+            "beat the hindsight arm, so that arm does not bound the best STATIC policy and the "
+            "second term is not EVPI. This is `negative_regret_refusal`'s subject reached by "
+            "another route, and the repair is the comparator rather than the decomposition"
+        )
+    if usable_tuned != usable_judged:
+        return (
+            f"the split is over {usable_tuned} replicate(s) while the judged regret is over "
+            f"{usable_judged}: the two terms are differences of means over DIFFERENT replicate "
+            "sets, so they do not telescope to the regret and their residual would be non-zero "
+            "for a reason unrelated to floating point. Refused rather than silently averaged "
+            "(I-7). A `nan` term reaches this clause too, because an arm with no admissible "
+            "mean over the judged set is a denominator defect and not a sign defect"
+        )
+    return None
+
+
 def classify_regret(
     regret: float,
     *,
@@ -550,15 +642,21 @@ def classify_regret(
 # Measurement CLI -- the entry point `uplift.yml::twin-regret` invokes (task 10.3)
 # ---------------------------------------------------------------------------
 #
-# CI ONLY. The protocol runs FOUR arms per replicate, so it costs four twin replicates per
-# seed -- +33% on the three-arm form, paid so one run reports both the retired and the current
-# oracle (ADR-055 D2.5.4). A run at `MIN_SCENARIOS` scale is a category-4 workload under I-0
-# that must never execute on a development machine. `--replicates` defaults small so an
-# accidental local invocation is cheap and obvious rather than thermally expensive.
+# CI ONLY. The protocol runs FIVE arms per replicate, so it costs five twin replicates per
+# seed -- +33% on the three-arm form for arm D, paid so one run reports both the retired and the
+# current oracle (ADR-055 D2.5.4), and +25% again for arm E, paid so the artifact reports the two
+# terms the judged regret splits into rather than only their sum (D2.6). Arm E also adds a TUNING
+# PASS ahead of the measurement loop: `grid x tuning_seeds` single-arm replicates, which
+# `comparator-tuning.yaml`'s `budget` block sizes at 1800 against 800 measured today -- about
+# 3.5x the job, ~4 minutes against a committed `timeout-minutes: 120`. That figure is READ from
+# that file's own measurement of run 34685048665, not measured here. A run at `MIN_SCENARIOS`
+# scale is a category-4 workload under I-0 that must never execute on a development machine.
+# `--replicates` defaults small so an accidental local invocation is cheap and obvious rather
+# than thermally expensive.
 
 
 def _measure(replicates: int, hours: float) -> dict[str, object]:
-    """Run the four-arm comparator over ``replicates`` seeds and report, without judging."""
+    """Run the five-arm comparator over ``replicates`` seeds and report, without judging."""
     # Imported here, not at module scope: `regret.py` is imported by the fast property suite,
     # and pulling the engine in at import time would drag SimPy into every one of those runs.
     from digital_twin.simulation.policy import (
@@ -568,13 +666,20 @@ def _measure(replicates: int, hours: float) -> dict[str, object]:
         materiality_margin_rule,
     )
     from uplift.baselines.par_level_reorder import Par_Level_Reorder
-    from uplift.foresight import run_three_pass
+    from uplift.foresight import run_single_arm, run_three_pass
     from uplift.interval import (
         INTERVAL_SEED,
         IntervalUnavailableError,
         contract_alpha,
         paired_difference_interval,
         resamples_for,
+    )
+    from uplift.tuning import (
+        GridPoint,
+        TuningUnavailableError,
+        decomposition_identity_residual,
+        load_tuning_spec,
+        tune_par_level,
     )
 
     objective = load_objective()
@@ -593,6 +698,10 @@ def _measure(replicates: int, hours: float) -> dict[str, object]:
     foresight_costs: list[float] = []
     #: Arm D, the hindsight oracle -- the JUDGED comparator from session 9 (ADR-055 D2.5.4).
     hindsight_costs: list[float] = []
+    #: Arm E, the tuned static par-level control (ADR-055 D2.6). Gated on its OWN predicate, so
+    #: this list can be shorter than the four above -- and if it is, the decomposition is
+    #: inadmissible rather than reported over a different denominator (see below).
+    tuned_static_costs: list[float] = []
     unusable: list[int] = []
 
     # PER-TERM ACCUMULATORS, AND THE MACHINERY FOR THEM WAS ALWAYS THERE (finding 58).
@@ -607,6 +716,7 @@ def _measure(replicates: int, hours: float) -> dict[str, object]:
     reference_terms: dict[str, list[float]] = {term: [] for term in OBJECTIVE_TERMS}
     foresight_terms: dict[str, list[float]] = {term: [] for term in OBJECTIVE_TERMS}
     hindsight_terms: dict[str, list[float]] = {term: [] for term in OBJECTIVE_TERMS}
+    tuned_static_terms: dict[str, list[float]] = {term: [] for term in OBJECTIVE_TERMS}
     #: Last replicate's counters per arm. Provenance for the complement identity, not an
     #: aggregate: the identity is structural, so one replicate exhibits it or none do.
     arm_counters: dict[str, dict[str, int]] = {}
@@ -659,6 +769,52 @@ def _measure(replicates: int, hours: float) -> dict[str, object]:
         for contribution in objective.contributions(**_observation(sim)):
             into[contribution.term].append(contribution.weighted)
 
+    # THE TUNING PASS, AND IT RUNS BEFORE THE MEASUREMENT LOOP BECAUSE ARM E NEEDS ITS LEVELS
+    # BEFORE ANY REPLICATE IS BUILT (ADR-055 D2.6, finding 61).
+    #
+    # IT CANNOT PERTURB ARMS A-D, and that is a construction fact rather than a hope. Every
+    # candidate is evaluated by `run_single_arm`, which builds its OWN `SupplyChainSimulation`
+    # from `SeedSequence(seed)` at a seed in the committed tuning range (1000..1099), disjoint
+    # from `range(replicates)` by `seed_overlap_refusal`. An arm's realisation is a function of
+    # its own seed and its own actions only, so the numbers three sessions have confirmed to
+    # sixteen significant figures do not move; `comparator_headroom_vs_foresight` must still read
+    # 8.937888952967558 and that is the check, not this comment.
+    #
+    # `cost_of` IS INJECTED SO THERE IS EXACTLY ONE PLACE THAT DECIDES AN ARM'S PHYSICS.
+    # `run_single_arm` shares `_make` and `_drive` with `run_three_pass` by construction, so the
+    # levels are SELECTED under the same cadence, unit costs and restock threshold they are then
+    # MEASURED under. A second driver loop inside the tuner would make part of the tuning gap an
+    # artefact of the difference between the two loops.
+    def _tuning_cost(seed: int, point: GridPoint) -> float:
+        return _cost(
+            run_single_arm(
+                seed,
+                hours=hours,
+                restock_threshold=threshold,
+                policy=Par_Level_Reorder(s=point.s, S=point.S, seed=seed),
+            )
+        )
+
+    try:
+        spec = load_tuning_spec()
+        selection = tune_par_level(spec, cost_of=_tuning_cost, measurement_replicates=replicates)
+    except TuningUnavailableError as error:
+        # REFUSED, NOT DEFAULTED, AND THE MEASUREMENT IS NOT ATTEMPTED. The committed grid is a
+        # PRECONDITION of the decomposition: arm E's entire claim is that its two integers were
+        # pre-registered and DERIVED rather than chosen, so falling back to any other levels --
+        # the incumbent's, a midpoint, a hardcoded pair -- would put an arm nobody registered
+        # into the split and report an information ceiling with no search behind it (I-7).
+        return {
+            "status": "unavailable",
+            "reason": (
+                f"arm E's levels could not be selected from the committed grid: {error}. The "
+                "grid is a precondition of the two-term decomposition, and levels nobody "
+                "pre-registered would make the information ceiling unfalsifiable, so no "
+                "measurement is attempted rather than one being reported on defaulted levels"
+            ),
+            "unusable_seeds": unusable,
+        }
+
     for seed in range(replicates):
         result = run_three_pass(
             seed,
@@ -666,6 +822,14 @@ def _measure(replicates: int, hours: float) -> dict[str, object]:
             restock_threshold=threshold,
             reference_policy=Par_Level_Reorder(
                 s=reference_spec.reorder_point, S=reference_spec.order_up_to, seed=seed
+            ),
+            # ARM E IS THE SAME CLASS AS ARM B WITH DIFFERENT LEVELS, so no new policy exists to
+            # review; the only difference is where the two integers came from -- arm B's are READ
+            # from the engine's own defaults, arm E's are DERIVED by the grid search above.
+            # Constructed inside the loop for arm B's reason: `Par_Level_Reorder` holds a seeded
+            # instance-local RNG under its R1.9 construction contract.
+            tuned_static_policy=Par_Level_Reorder(
+                s=selection.levels.s, S=selection.levels.S, seed=seed
             ),
         )
         if not result.usable_for_judged_contrast:
@@ -694,6 +858,19 @@ def _measure(replicates: int, hours: float) -> dict[str, object]:
             "foresight": _counters(result.foresight),
             "hindsight": _counters(hindsight_arm),
         }
+        # ARM E IS GATED ON ITS OWN PREDICATE, AND ONLY ITS OWN LISTS ARE GATED ON IT.
+        # `usable_for_tuning_gap` is `usable_for_judged_contrast` AND arm E present; gating the
+        # judged lists on it would drop a replicate from `regret` because a SUBSIDIARY arm was
+        # missing, which is the one thing arm E must not be able to do. The `continue` above
+        # therefore still tests `usable_for_judged_contrast`, unchanged. If the two usable sets
+        # differ at all, `decomposition_refusal` marks the split inadmissible below rather than
+        # averaging two denominators together.
+        if result.usable_for_tuning_gap and result.tuned_static is not None:
+            # `usable_for_tuning_gap` already required arm E; the second clause restates it so
+            # the type checker can narrow the Optional, and it cannot fire on its own.
+            tuned_static_costs.append(_cost(result.tuned_static))
+            _accumulate(result.tuned_static, tuned_static_terms)
+            arm_counters["tuned_static"] = _counters(result.tuned_static)
         for arm, counts in arm_counters.items():
             for counter, value in counts.items():
                 counter_totals[arm][counter] += value
@@ -725,6 +902,29 @@ def _measure(replicates: int, hours: float) -> dict[str, object]:
     mean_foresight = objective.aggregate(foresight_costs)
     mean_hindsight = objective.aggregate(hindsight_costs)
     regret_vs_foresight = objective.regret(reference_costs, foresight_costs)
+    # ARM E'S MEAN, AND THE TWO TERMS THE JUDGED REGRET SPLITS INTO (ADR-055 D2.6, finding 61).
+    #
+    #     regret = (mean_reference - mean_tuned_static) + (mean_tuned_static - mean_hindsight)
+    #            =  tuning_gap                          +  information_ceiling
+    #
+    # The first term is closable by a GRID SEARCH -- no forecast, no agent, no consensus. The
+    # second is EVPI in its textbook sense, perfect information minus the best here-and-now
+    # decision, so it is a CEILING on what any forecaster or consensus system could ever win and
+    # not an estimate of what one would. Before arm E this artifact reported their SUM, and every
+    # document that quoted it read that sum as the second term alone.
+    #
+    # `nan` when the two usable sets disagree, because arm E then has no mean over the judged
+    # replicate set and an unpaired one is a different estimator -- which
+    # `RegretObjective.regret` refuses outright. `nan` is IEEE's value for "undefined" rather
+    # than a substituted number: it fails both sign clauses of `decomposition_refusal`, so the
+    # count clause is what refuses, and the artifact reports `None` because `NaN` is not valid
+    # JSON and reads as a measured value in any consumer that coerces it.
+    usable_judged = len(reference_costs)
+    usable_tuned = len(tuned_static_costs)
+    paired_arm_e = usable_tuned == usable_judged
+    mean_tuned_static = objective.aggregate(tuned_static_costs) if paired_arm_e else math.nan
+    tuning_gap = mean_reference - mean_tuned_static
+    information_ceiling = mean_tuned_static - mean_hindsight
     # THE BOUND IS THE NO-OP ARM AGAINST THE ORACLE, AND ITS INDEPENDENCE IS THE WHOLE
     # POINT. `must_be_below_measured_headroom` exists to refuse a margin so large that
     # `material` is unreachable. While the comparator had two arms this was
@@ -755,6 +955,23 @@ def _measure(replicates: int, hours: float) -> dict[str, object]:
         "foresight": foresight_costs,
         "hindsight": hindsight_costs,
     }
+    # ARM E IS IN THE FAMILY, DELIBERATELY, AND EXCLUDING IT WOULD BE A FORBIDDEN REPAIR.
+    # Leaving a new arm out to keep `hindsight_arm_is_pointwise_best` from flipping is narrowing
+    # a checker's scope. Including it makes the claim STRICTLY STRONGER: arm D must now be the
+    # pointwise minimum even against a par-level control tuned by grid search over a committed
+    # grid. PRE-REGISTERED PREDICTION, recorded before the run that tests it: the flag stays
+    # `True`, because arm D raises cumulative supply to cover every unit generated before its next
+    # decision and no STATIC pair of levels can match that per-replicate. A `False` therefore says
+    # arm D is not the objective's minimiser and ADR-055 D2.5.4 needs repair -- it does NOT say
+    # arm E is wrong, and it changes neither `status` nor `verdict`, which read this flag nowhere.
+    #
+    # Admitted only when arm E is PAIRED with the others, and that is the ragged-family refusal
+    # being respected rather than bypassed: `hindsight_min` raises on unequal lengths because an
+    # unpaired minimum is a different estimator. When the sets disagree the decomposition is
+    # already inadmissible below, and `hindsight_min_arms` names the arms the floor was actually
+    # taken over, so a reader sees which family produced the flag instead of inferring it.
+    if paired_arm_e:
+        arm_cost_family["tuned_static"] = tuned_static_costs
     pointwise_best = hindsight_min(arm_cost_family)
     mean_pointwise_best = objective.aggregate(pointwise_best)
     regret_vs_pointwise_best = objective.regret(reference_costs, pointwise_best)
@@ -790,9 +1007,26 @@ def _measure(replicates: int, hours: float) -> dict[str, object]:
     reference_by_term = _term_means(reference_terms)
     foresight_by_term = _term_means(foresight_terms)
     hindsight_by_term = _term_means(hindsight_terms)
+    tuned_static_by_term = _term_means(tuned_static_terms)
     regret_by_term = {
         term: reference_by_term[term] - hindsight_by_term[term] for term in OBJECTIVE_TERMS
     }
+    # THE SPLIT, PER TERM. `regret_by_term[t] == tuning_gap_by_term[t] +
+    # information_ceiling_by_term[t]` for every term by the same telescoping as the scalars, so
+    # these say WHICH term the information ceiling lives in -- the question "is the remaining
+    # headroom holding cost or service?" cannot be answered from the two scalars alone. `None`
+    # rather than a zero-filled mapping when arm E is unpaired: `_term_means` returns 0.0 over an
+    # empty list, and a zero over no observations is indistinguishable from a measured zero.
+    tuning_gap_by_term = (
+        {term: reference_by_term[term] - tuned_static_by_term[term] for term in OBJECTIVE_TERMS}
+        if paired_arm_e
+        else None
+    )
+    information_ceiling_by_term = (
+        {term: tuned_static_by_term[term] - hindsight_by_term[term] for term in OBJECTIVE_TERMS}
+        if paired_arm_e
+        else None
+    )
     regret_by_term_vs_foresight = {
         term: reference_by_term[term] - foresight_by_term[term] for term in OBJECTIVE_TERMS
     }
@@ -803,14 +1037,24 @@ def _measure(replicates: int, hours: float) -> dict[str, object]:
     # named by magnitude rather than by sign so it is meaningful whichever way the regret goes.
     dominant_term = max(OBJECTIVE_TERMS, key=lambda term: abs(regret_by_term[term]))
 
+    # EVERY ARM'S PER-TERM MEANS, IN ONE PLACE, so the artifact and the complement check cannot
+    # disagree about which arms were examined. Arm E joins both when it is paired, for the same
+    # reason it joins the hindsight-minimum family: a new arm excluded from a family-level claim
+    # narrows that claim's scope, and the exclusion would be for no stated reason.
+    by_term_arms: dict[str, dict[str, float]] = {
+        "noop": noop_by_term,
+        "reference": reference_by_term,
+        "foresight": foresight_by_term,
+        "hindsight": hindsight_by_term,
+    }
+    if paired_arm_e:
+        by_term_arms["tuned_static"] = tuned_static_by_term
+
     decomposition: dict[str, object] = {
-        "mean_weighted_cost_by_term": {
-            "noop": noop_by_term,
-            "reference": reference_by_term,
-            "foresight": foresight_by_term,
-            "hindsight": hindsight_by_term,
-        },
+        "mean_weighted_cost_by_term": by_term_arms,
         "regret_by_term": regret_by_term,
+        "tuning_gap_by_term": tuning_gap_by_term,
+        "information_ceiling_by_term": information_ceiling_by_term,
         # The pre-repair attribution, under its own name. This is the column ADR-055 D2.5.3
         # tables, so a reader can confirm from ONE run that the repair moved the service terms
         # and left the others alone, instead of comparing two runs at two shas.
@@ -846,12 +1090,7 @@ def _measure(replicates: int, hours: float) -> dict[str, object]:
             math.isclose(
                 by_term["stockout_rate"], by_term["unmet_service"], rel_tol=0.0, abs_tol=0.0
             )
-            for by_term in (
-                noop_by_term,
-                reference_by_term,
-                foresight_by_term,
-                hindsight_by_term,
-            )
+            for by_term in by_term_arms.values()
         ),
         "note": (
             "regret_by_term sums to `regret` by construction (a difference of two weighted "
@@ -974,6 +1213,99 @@ def _measure(replicates: int, hours: float) -> dict[str, object]:
             "oracle_arm": ORACLE_ARM,
         }
 
+    # THE TUNING GAP'S OWN INTERVAL -- A SECOND, INDEPENDENT CALL (ADR-055 D2.6).
+    #
+    # Not derived from the judged interval and not mutating it. That object is what
+    # `classify_regret` reads to reach `material`, and the dispersion of a DIFFERENT paired
+    # difference is a different bootstrap: reusing it would report the judged contrast's width as
+    # the tuning gap's, which is a number about the wrong subject. Same alpha, same resample count
+    # and same `INTERVAL_SEED`, so the two are comparable without being the same object.
+    #
+    # An unpaired or empty arm E raises `IntervalUnavailableError` here, which is precisely how
+    # this block learns of it -- and the failure marks the DECOMPOSITION inadmissible rather than
+    # failing the measurement, because the judged verdict does not depend on arm E at all.
+    tuning_gap_interval: dict[str, float] | None = None
+    tuning_interval_refusal: str | None = None
+    try:
+        tuning_interval = paired_difference_interval(
+            reference_costs,
+            tuned_static_costs,
+            alpha=alpha,
+            resamples=resamples,
+            seed=INTERVAL_SEED,
+        )
+    except IntervalUnavailableError as error:
+        tuning_interval_refusal = (
+            f"no admissible interval could be estimated on the tuning gap: {error}. The split is "
+            "reported without dispersion and marked INADMISSIBLE; the judged contrast and its "
+            "own interval are untouched, because nothing in them reads arm E"
+        )
+    else:
+        tuning_gap_interval = {
+            "low": tuning_interval.low,
+            "high": tuning_interval.high,
+            "point": tuning_interval.point,
+        }
+
+    # ADMISSIBILITY OF THE SPLIT, AND IT IS NOT THE VERDICT'S BUSINESS (ADR-055 D2.6).
+    # `status: measured` certifies the JUDGED contrast -- arm B against arm D -- and NOT this
+    # two-term split, so the two fields below are what stops a reader taking one for the other.
+    # A negative tuning gap is the loud case and the reason is directional: it makes
+    # `information_ceiling` exceed the regret, and an inflated ceiling makes the hard gate on
+    # E3's denominator MORE permissive. `decomposition_refusal` carries that argument in full.
+    decomposition_reason = decomposition_refusal(
+        tuning_gap=tuning_gap,
+        information_ceiling=information_ceiling,
+        usable_judged=usable_judged,
+        usable_tuned=usable_tuned,
+    )
+    if decomposition_reason is None:
+        decomposition_reason = tuning_interval_refusal
+    decomposition_admissible = decomposition_reason is None
+    # The identity is a theorem over the reals and NOT over IEEE 754 (finding 56), so the residual
+    # is REPORTED and the reader picks a tolerance they can defend. `None` when arm E has no
+    # admissible mean: a NaN residual is not valid JSON and reads as a measured value downstream.
+    decomposition_residual = (
+        decomposition_identity_residual(
+            regret=measured, tuning_gap=tuning_gap, information_ceiling=information_ceiling
+        )
+        if paired_arm_e
+        else None
+    )
+
+    # ARM E'S KEYS, BUILT ONCE AND REPORTED ON BOTH PATHS. A refusal that withheld the split would
+    # withhold the evidence for its own most likely cause -- the objection the existing
+    # `cost_decomposition` on the refusal path already answers.
+    arm_e_report: dict[str, object] = {
+        # Arm E's mean over the MEASUREMENT seeds. This is the number the split uses.
+        "mean_tuned_static_cost": mean_tuned_static if paired_arm_e else None,
+        "tuned_static_levels": {"s": selection.levels.s, "S": selection.levels.S},
+        # TWO MEAN COSTS ONE WORD APART, so state which is which rather than let a reader match
+        # them up: `tuned_static_mean_cost` is the SELECTED candidate's mean over the TUNING
+        # seeds, the number the search minimised, whereas `mean_tuned_static_cost` above is over
+        # the measurement seeds. They differ by construction because the ranges are disjoint, and
+        # their difference is the search's own out-of-sample generalisation gap.
+        "tuned_static_mean_cost": selection.mean_cost,
+        "tuned_static_tie_broken": selection.tie_broken,
+        "tuned_static_candidates": len(spec.grid),
+        "tuning_seed_range": {"start": spec.seed_start, "count": spec.seed_count},
+        # The WHOLE surface the minimum was taken over, not just the winner: a selected pair whose
+        # neighbours are unknown is a number nobody can argue with.
+        "tuning_surface": dict(selection.surface),
+        "tuning_grid_source": spec.source,
+        "tuning_gap": tuning_gap if paired_arm_e else None,
+        "information_ceiling": information_ceiling if paired_arm_e else None,
+        "tuning_gap_interval": tuning_gap_interval,
+        "decomposition_residual": decomposition_residual,
+        # `status` CERTIFIES THE JUDGED CONTRAST AND NOT THIS SPLIT. Reported as its own boolean
+        # so a `measured` run whose decomposition refused cannot be read as certifying both, and
+        # so no consumer has to parse the reason string to find out which.
+        "decomposition_admissible": decomposition_admissible,
+        "decomposition_refusal": decomposition_reason,
+        # The split's denominator, as a value rather than as prose inside the reason.
+        "replicates_usable_tuned_static": usable_tuned,
+    }
+
     # `margin` is READ, not hardcoded. It is `None` until task 10.4 instantiates it, which
     # yields `unavailable` -- the honest verdict for the first run (R5.2). The RULE, however,
     # is required and is reported here, so checkpoint A's operator can see the value the rule
@@ -1030,6 +1362,7 @@ def _measure(replicates: int, hours: float) -> dict[str, object]:
             # A refusal that withholds the evidence for its own cause would be a worse
             # instrument than the one it replaced.
             "cost_decomposition": decomposition,
+            **arm_e_report,
         }
 
     verdict = classify_regret(
@@ -1055,6 +1388,14 @@ def _measure(replicates: int, hours: float) -> dict[str, object]:
         "mean_reference_cost": mean_reference,
         "mean_foresight_cost": mean_foresight,
         "mean_hindsight_cost": mean_hindsight,
+        # ARM E'S KEYS, AND WHAT THEY ARE AND ARE NOT (ADR-055 D2.6). `regret`,
+        # `comparator_headroom`, `regret_vs_foresight`, `comparator_headroom_vs_foresight`, the
+        # judged interval and `verdict` below are computed from EXACTLY the same inputs as before
+        # arm E existed: arm E is constructed LAST inside `run_three_pass` so it cannot perturb
+        # arms A-D, and nothing on the judged path reads it. `status: measured` therefore
+        # certifies the judged contrast and NOT the two-term split -- `decomposition_admissible`
+        # is what certifies the split, and the two must never be read as one.
+        **arm_e_report,
         # WHICH ARM THE TWO SUBTRACTIONS BELOW ARE AGAINST. Reported rather than implied: the
         # oracle moved from arm C to arm D in session 9 (ADR-055 D2.5.4), so `regret` and
         # `comparator_headroom` keep their FORM and change which arm supplies the subtrahend.
@@ -1110,7 +1451,14 @@ def _measure(replicates: int, hours: float) -> dict[str, object]:
         "reason": verdict.reason,
         "insensitive_kpis": [item.term for item in objective.insensitive],
         "comparator": (
-            "FOUR ARMS, and the ORACLE MOVED. regret = (s, S) reference - hindsight oracle, "
+            "FIVE ARMS FROM SESSION 10, and the fifth is a DECOMPOSITION arm rather than a "
+            "candidate comparator: arm E is the tuned static par-level control, and it splits "
+            "the judged regret into `tuning_gap` (closable by a grid search -- no forecast, no "
+            "agent) plus `information_ceiling` (EVPI in its textbook sense, so a CEILING on what "
+            "any forecaster or consensus system could win). `status` certifies the judged "
+            "contrast and NOT that split; `decomposition_admissible` certifies the split. "
+            "ADR-055 D2.6 carries the argument. THE FOUR ARMS BELOW ARE UNCHANGED BY IT. "
+            "regret = (s, S) reference - hindsight oracle, "
             "which is the quantity R5.1, Finding 4 and task 11 are about. comparator_headroom "
             "= no-op - hindsight oracle, retained as an INDEPENDENT bound so the margin guard "
             "`must_be_below_measured_headroom` is not checking the margin against the very "

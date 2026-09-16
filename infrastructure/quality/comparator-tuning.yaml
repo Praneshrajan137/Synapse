@@ -1,0 +1,126 @@
+# =======================================================================================
+# COMPARATOR TUNING GRID -- the pre-registered search arm E is chosen from.
+# =======================================================================================
+# Session 10, ADR-055 D2.6, finding 61. Read by `uplift/tuning.py`; consumed by
+# `uplift/regret.py::_measure` to build arm E, the TUNED STATIC par-level control.
+#
+# WHY ARM E EXISTS, in one paragraph, because a reader of this file needs the intent and
+# not the mechanism. Task 11 measured a `material` regret of the incumbent `(s, S)` policy
+# against a hindsight oracle. That gap is the incumbent's own mis-tuning PLUS the value of
+# perfect information, and only the second part is anything a forecaster or a consensus
+# system could ever win. Arm E is the best STATIC policy, so it splits the gap in two:
+#
+#     regret(reference - hindsight) = [reference - tuned]  +  [tuned - hindsight]
+#                                   =  tuning gap          +  information ceiling
+#
+# The second term is EVPI in its textbook sense -- perfect information minus the best
+# here-and-now decision -- and no information-gathering activity can be worth more than it.
+#
+# =======================================================================================
+# WHY THIS FILE IS NOT IN `digital_twin/simulation/policy.yaml`
+# =======================================================================================
+# That file's contract 2 states that EVERY value in it is pinned in
+# `doc-number-pins.yaml` and carries a `ratchets.json` entry, with each pin's extractor
+# verified by running it. A pin is a triple -- document anchor, mechanical source,
+# extractor -- and `doc_truth.documented_value` requires the anchor to match EXACTLY ONE
+# line. **A grid is a list, so it has no single documented value to anchor to**, and a
+# `yaml_path:` extractor resolving to a sequence cannot be compared against one sentence.
+#
+# Putting the grid there would therefore either break contract 2 or require a pin that
+# cannot be written. The precedent for the alternative is in that same file: the measured
+# comparator headroom is recorded there as PROSE rather than as a key, for exactly this
+# reason. So the grid lives here, `policy.yaml`'s comparator block POINTS at it, and no
+# pin is owed on a list.
+#
+# WHAT IS STILL OWED, stated rather than left implicit: the two levels the search SELECTS
+# are reported in `artifacts/uplift/twin-regret.json` and are NOT committed as literals
+# anywhere. That is deliberate. Committing them would make them look read rather than
+# derived, which is the distinction finding 61 turns on -- the incumbent's `s` and `S` are
+# read from the engine's own defaults, and arm E's are chosen by this search.
+#
+# =======================================================================================
+# THE PRE-REGISTRATION, AND WHY THE SEEDS ARE DISJOINT
+# =======================================================================================
+# **This is the load-bearing clause and it CORRECTS ADR-055 D2.6's first draft, which said
+# the search would run over the same fixed seeds as the measurement.** Tuning and measuring
+# on one seed set makes arm E's levels in-sample optimal, which INFLATES the tuning gap and
+# DEFLATES the information ceiling -- that is, it biases the split toward the very
+# hypothesis session 10 recorded. A measurement must not be biased toward the thing it is
+# testing, so the search runs on a disjoint range and arm E is then measured on the same
+# seeds every other arm uses.
+#
+# The bias direction of the repair is stated so it can be checked: out-of-sample levels can
+# only make the tuning gap SMALLER and the information ceiling LARGER than in-sample ones
+# would. So this choice makes finding 61's hypothesis HARDER to confirm, which is the only
+# direction in which adopting a stricter standard than the criterion demands is legitimate.
+version: 1
+
+# ---------------------------------------------------------------------------------------
+# The grid. Enumerated rather than generated, so it is countable, diffable and cannot
+# change meaning when someone edits a range expression.
+# ---------------------------------------------------------------------------------------
+# `Par_Level_Reorder` requires integral levels with 0 <= s < S, and `uplift/tuning.py`
+# refuses the whole file if any pair violates that rather than skipping the pair -- a
+# silently dropped candidate is a search over a grid nobody declared.
+#
+# THE INCUMBENT'S OWN LEVELS ARE A MEMBER, at s=50/S=100, and that is structural rather
+# than courteous: it means the search's minimum over the TUNING seeds can never be worse
+# than the incumbent there, so a negative tuning gap on the MEASUREMENT seeds is
+# unambiguously an out-of-sample effect and not an artefact of a grid that excluded the
+# thing it is compared against.
+#
+# The span is chosen from what the twin already tells us and is recorded so the choice can
+# be argued with: the incumbent holds about 0.74 objective units of inventory and the
+# hindsight oracle about 0.28 (run 34685048665), so the interesting region is BELOW the
+# incumbent, and a grid that only went upward could not find it.
+grid:
+  - {s: 0, S: 10}
+  - {s: 0, S: 25}
+  - {s: 0, S: 50}
+  - {s: 10, S: 20}
+  - {s: 10, S: 35}
+  - {s: 10, S: 60}
+  - {s: 20, S: 30}
+  - {s: 20, S: 45}
+  - {s: 20, S: 70}
+  - {s: 30, S: 40}
+  - {s: 30, S: 55}
+  - {s: 30, S: 80}
+  - {s: 40, S: 50}
+  - {s: 40, S: 65}
+  - {s: 40, S: 90}
+  - {s: 50, S: 60}
+  - {s: 50, S: 75}
+  - {s: 50, S: 100}
+
+# ---------------------------------------------------------------------------------------
+# The tuning seed range -- DISJOINT from the measurement range by construction.
+# ---------------------------------------------------------------------------------------
+# `uplift/regret.py::_measure` iterates `range(replicates)`, so the measurement seeds are
+# 0 .. replicates-1. `uplift/tuning.py` REFUSES if this range overlaps that one, computed
+# from the actual replicate count rather than from an assumption about it, so raising
+# `--replicates` past 1000 fails loudly instead of quietly overlapping.
+tuning_seeds:
+  start: 1000
+  count: 100
+
+# ---------------------------------------------------------------------------------------
+# Cost, recorded because `execution-routing.md` forbids sizing against an unmeasured
+# workload, and this is the measurement it would otherwise lack.
+# ---------------------------------------------------------------------------------------
+# Run 34685048665 measured FOUR arms x 200 replicates -- 800 arm-replicates -- in 1.1
+# minutes of measure-step wall clock (1.6 min for the whole job). Cost is linear in
+# arm-replicates: ADR-055 records adding arm D as "+33%", which is exactly 3 arms -> 4.
+#
+# This grid adds 18 x 100 = 1800 tuning arm-replicates plus arm E's own 200 measured ones,
+# taking the job from 800 to 2800 units -- about 3.5x, or roughly 4 minutes against a
+# committed `timeout-minutes: 120`. No new job and no timeout change is needed, and both
+# were considered: the sibling `uplift-proof` job sits at 350 minutes, so headroom was
+# never the constraint. It is recorded here so the next person to widen the grid can size
+# it from a measurement instead of re-deriving one.
+budget:
+  measured_reference_run: "34685048665"
+  measured_arm_replicates: 800
+  measured_measure_step_minutes: 1.1
+  added_arm_replicates: 2000
+  projected_total_arm_replicates: 2800
