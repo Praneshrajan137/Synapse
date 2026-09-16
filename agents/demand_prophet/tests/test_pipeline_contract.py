@@ -188,9 +188,7 @@ def test_the_degradation_rule_is_exactly_the_three_term_disjunction() -> None:
     assert seen == {False, True}
     # A resolved checkpoint alone is NOT sufficient for `degraded` false (R9.9).
     assert (
-        is_degraded(
-            model_degraded=False, feature_source=FeatureSource.FALLBACK, has_intervals=True
-        )
+        is_degraded(model_degraded=False, feature_source=FeatureSource.FALLBACK, has_intervals=True)
         is True
     )
     assert (
