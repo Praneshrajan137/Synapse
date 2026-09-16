@@ -156,7 +156,7 @@ steps:
     step_names:
       - "Every uplift shard reported success (aggregate verdict, BLOCKING)"
       - "Fast shards partition tests/uplift + tests/verify exactly (G5 - BLOCKING)"
-      - "Fast shards selected the pre-split test set exactly (G5 - BLOCKING)"
+      - "Fast shards selected the unsharded set exactly (G5 - BLOCKING)"
     match: normalized
 
   - workflow: .github/workflows/ci.yml
@@ -164,6 +164,12 @@ steps:
     step_names:
       - "Install dependencies"
       - "Selected count is non-empty and reported (fast shard 1/4)"
+      # Finding 62. This shard publishes the aggregator's right-hand side, so the
+      # selection proof compares two quantities measured in the SAME run instead of one
+      # measurement against a frozen literal. Declared blocking because the aggregator's
+      # G5 step reads its output: if this step stops running, that proof reads an empty
+      # string and the arithmetic fails rather than passing on nothing.
+      - "Unsharded fast selection for the partition proof (G5)"
       - "Property + unit tests (fast - full 500-example budget, shard 1/4)"
     match: normalized
 

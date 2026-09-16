@@ -491,7 +491,7 @@ jobs:
           printf 'shard files %s/%s/%s/%s = %s; pytest universe = %s\n' \
             "$u1" "$u2" "$v1" "$v2" "$assigned" "$universe"
           test "$assigned" -eq "$universe"
-      - name: Fast shards selected the pre-split test set exactly (G5 - BLOCKING)
+      - name: Fast shards selected the unsharded set exactly (G5 - BLOCKING)
         # `if: always()` for the same reason as the step above. Its subject is the shards'
         # own reported selection counts, which are set by a counting step that runs BEFORE
         # each shard's test step -- so the counts exist whether or not the tests passed,
@@ -500,23 +500,33 @@ jobs:
         if: always()
         # The file-level step above proves the PATHS partition. This one proves the
         # SELECTION does: that four shards of `-m "not slow"` still select the same tests
-        # the single pre-split step selected. The two fail for different reasons, which is
-        # why both exist -- a conftest change or a marker edit could keep every file in
-        # exactly one shard while changing what pytest picks out of them.
+        # a single unsharded invocation of that selector does. The two fail for different
+        # reasons, which is why both exist -- a conftest change or a marker edit could keep
+        # every file in exactly one shard while changing what pytest picks out of them.
         #
-        # THE MAINTENANCE CONSEQUENCE, STATED RATHER THAN DISCOVERED: adding a test to
-        # `tests/uplift` or `tests/verify` makes this step RED until the constant below is
-        # raised in the same change. That is the intended cost. Weakening the equality to
-        # `>=` would turn a partition proof into a floor, and a floor cannot notice a lost
-        # path once any test has been added -- which is the one thing this step is for.
+        # FINDING 62 -- THIS STEP USED TO COMPARE AGAINST A FROZEN LITERAL, AND THAT WAS
+        # TWO DEFECTS. `EXPECTED_FAST_SELECTED: "874"` was recorded from run 34609187697
+        # and went red at 933 on run 34686422504 with nothing dropped: session 9 added
+        # property files and the constant aged. The larger defect is that an equality
+        # against a constant still PASSES when n tests are dropped and n added, so what
+        # read as a partition proof was a TOTAL -- which is what CF-13 forbids and what
+        # this step's own comment thought it had avoided by refusing `>=`.
+        #
+        # The right-hand side is now MEASURED IN THIS RUN by `uplift-verify-fast-1`'s
+        # `universe` step, through the identical selector. `sum(shards) == unsharded` is
+        # STRICTER than the literal, not weaker: the equality is unchanged and the constant
+        # is gone, so a swap that the literal admitted now reddens. It also cannot go
+        # stale, so adding a test no longer requires editing this workflow -- the
+        # maintenance cost the old comment called intended was buying nothing.
+        #
+        # The unsharded selection RECURSES and honours pytest's `python_files` patterns
+        # while the shard globs do not, so it fails CLOSED in the same direction as the
+        # file-level proof: a test in a subdirectory or named `*_test.py` is counted here
+        # and by no shard.
         env:
-          # 874 = 871 passed + 1 skipped + 2 xpassed: the tests the PRE-SPLIT fast step
-          # actually selected on run 34609187697 (sha 5bcfb03), whose summary line reads
-          # `871 passed, 1 skipped, 28 deselected, 2 xpassed ... in 807.68s (0:13:27)`.
-          # Collection saw 902; the 28 `slow`-marked items are deselected in every shard
-          # alike and are owned by `uplift-verify-slow`, so 874 -- not 902 -- is the
-          # number a partition of the FAST selection has to reproduce.
-          EXPECTED_FAST_SELECTED: "874"
+          # Measured, not remembered. Empty for a shard that never ran, which makes the
+          # arithmetic below fail rather than silently read zero.
+          UNSHARDED: ${{ needs.uplift-verify-fast-1.outputs.universe }}
           FAST_1: ${{ needs.uplift-verify-fast-1.outputs.selected }}
           FAST_2: ${{ needs.uplift-verify-fast-2.outputs.selected }}
           FAST_3: ${{ needs.uplift-verify-fast-3.outputs.selected }}
@@ -524,9 +534,10 @@ jobs:
         run: |
           set -euo pipefail
           total=$(( FAST_1 + FAST_2 + FAST_3 + FAST_4 ))
-          printf 'shards selected %s/%s/%s/%s = %s; pre-split fast selection = %s\n' \
-            "$FAST_1" "$FAST_2" "$FAST_3" "$FAST_4" "$total" "$EXPECTED_FAST_SELECTED"
-          test "$total" -eq "$EXPECTED_FAST_SELECTED"
+          printf 'shards selected %s/%s/%s/%s = %s; unsharded selection = %s\n' \
+            "$FAST_1" "$FAST_2" "$FAST_3" "$FAST_4" "$total" "$UNSHARDED"
+          test "$UNSHARDED" -gt 0
+          test "$total" -eq "$UNSHARDED"
 
   # ---------------------------------------------------------------------------
   # THE FIVE SHARD JOBS (throughput-with-integrity G5).
@@ -582,6 +593,12 @@ jobs:
       # never ran, so a skipped or cancelled shard makes the aggregate sum wrong rather
       # than absent, and the aggregator fails on it instead of reading nothing.
       selected: ${{ steps.collect.outputs.selected }}
+      # The UNSHARDED fast selection, measured in the SAME run by the SAME selector.
+      # This is what stops the aggregator's selection proof going stale (finding 62).
+      # Published from this shard rather than from the aggregator because the aggregator
+      # has no Python and no install closure, and adding one there would turn a
+      # bash-only verdict job into a sixth installing job.
+      universe: ${{ steps.universe.outputs.universe }}
     steps:
       - uses: actions/checkout@v4
       - name: Set up Python 3.11
@@ -628,6 +645,45 @@ jobs:
           printf 'selected=%s\n' "$selected" >> "$GITHUB_OUTPUT"
           printf 'fast shard 1/4: %s test(s) selected\n' "$selected"
           test "$selected" -gt 0
+      - name: Unsharded fast selection for the partition proof (G5)
+        id: universe
+        # FINDING 62. The aggregator's selection proof compared the four shards' sum
+        # against a FROZEN LITERAL recorded from one historical run. That literal ages on
+        # every legitimate test addition: it went red at 933 against 874 on run
+        # 34686422504 because session 9 added property files, with NOTHING dropped and the
+        # file-level partition proof green at 128 == 128 in the same run.
+        #
+        # And ageing was the smaller defect. An equality against a constant still PASSES
+        # when 59 tests are dropped and 59 added, so it was a TOTAL dressed as a partition
+        # proof - the shape CF-13 forbids, and the shape the step's own comment believed it
+        # was avoiding by refusing `>=`.
+        #
+        # This step supplies the right-hand side BY MEASUREMENT INSTEAD OF BY MEMORY, in
+        # the same run, through the same selector, so the aggregator can assert
+        # `sum(shards) == unsharded`. That is exactly the both-sides-in-run shape the
+        # file-level proof already had and this one lacked. It is STRICTER, not weaker: the
+        # literal could not notice a swap and this cannot fail to.
+        #
+        # The unsharded form RECURSES over both directories and uses pytest's own
+        # `python_files` patterns, while the shard globs are `-maxdepth 1` name globs. So a
+        # test added in a subdirectory, or named `*_test.py`, is selected here and by no
+        # shard, and the equality reddens. It fails closed, in the same direction as the
+        # file-level proof.
+        #
+        # Paid for by this shard's already-installed closure: one extra collection pass, no
+        # second install. `-o addopts` and the `grep -c '::'` idiom are identical to the
+        # counting step above, deliberately - a different idiom here would silently compare
+        # two different quantities.
+        env:
+          HYPOTHESIS_PROFILE: ci
+        run: |
+          set -euo pipefail
+          pytest -o addopts="--strict-markers" -m "not slow" --collect-only -q \
+            tests/uplift tests/verify | tee "$RUNNER_TEMP/universe.txt"
+          universe="$(grep -c '::' "$RUNNER_TEMP/universe.txt")"
+          printf 'universe=%s\n' "$universe" >> "$GITHUB_OUTPUT"
+          printf 'unsharded fast selection: %s test(s)\n' "$universe"
+          test "$universe" -gt 0
       - name: Property + unit tests (fast - full 500-example budget, shard 1/4)
         # Pure/synthetic properties: no twin, no consensus network, so the full
         # `ci` budget is cheap here. Scope is deliberately `tests/` only: the
