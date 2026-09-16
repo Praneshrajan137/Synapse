@@ -861,17 +861,53 @@ before any twin change.
 4. IF the Finding-4 claim is reported as falsified, THEN THE remaining scope of this
    requirement SHALL be re-cut before implementation continues.
 
+**THE R5.4 RE-CUT — performed here, not promised.** *R5.4's condition is met, so this block is
+its discharge. Nothing below is deleted: scope that leaves this spec leaves it marked (I-7).*
+
+**R5.3 is DISCHARGED.** Task 11's checkpoint A has run: run `34685048665`, sha `c746463`,
+`verdict: material`. The measured `(s, S)` regret on the **unmodified** World_Twin is at or above
+the R5.2 margin, so the Finding-4 claim is **reported as falsified**. R5.1 and R5.3 close by
+measurement, and R5.4 is therefore binding rather than hypothetical.
+
+**R5.6's claim is measured, not owed.** Its falsifiable claim — that a base-stock `(s, S)` policy
+is measurably sub-optimal on this twin — now holds **on the UNMODIFIED twin**, so it no longer
+requires the five structures to become true. *What that licenses:* stating the sub-optimality
+claim as measured, and treating the twin as already containing structure a policy can be wrong
+about. *What it does NOT license:* attributing that sub-optimality to **information value**,
+reading it as uplift, or reading it as evidence that consensus beats a **tuned** baseline. R5.41
+forbids that last inference by name.
+
+**Structures 2, 4 and 5 become recorded DEFERRALS — R5.15-R5.20 and R5.25-R5.27.** The reason is
+the same shape for each: each unlocks a **different** agent, and **none of them creates the
+quantity the central claim is about.** This is a deferral, **not a deletion** — every criterion
+keeps its text, its number and its traceability row, and each carries a `DEFERRED` marker in
+place. R5.28 and R5.29 are **not** deferred; they are the subject of CONFLICT R below.
+
+**Structures 1 and 3 become CONDITIONAL — R5.8-R5.14 and R5.21-R5.23.** The condition is written
+down **before the number that decides it is known**, which is the only ordering under which it is
+a condition rather than a rationalisation: they are reinstated **if and only if** the
+information-gap term measured by the new tuned-static comparator arm is **below** the R5.2
+materiality margin. At or above that margin the twin already rewards information and neither
+structure buys anything the central claim needs. **Why these two and not the other three is a
+design fact. It is recorded once, in `docs/adr/ADR-055-twin-decision-relevance.md` D2.6, and is
+not restated here.** R5.42 and R5.43 make the condition mechanical rather than remembered.
+
 **Record the decision before writing code (R5.5-R5.7).**
 
 5. THE Decision_Relevance_Record SHALL state the inventory-theory argument, the five
    structures, and the agent decision each structure unlocks.
 6. THE Decision_Relevance_Record SHALL state the falsifiable claim that after this phase a
-   base-stock `(s, S)` policy is measurably sub-optimal on this twin.
+   base-stock `(s, S)` policy is measurably sub-optimal on this twin. *[R5.4 re-cut: this claim is
+   already **measured**, on the unmodified twin — run `34685048665`, sha `c746463`,
+   `verdict: material`. "After this phase" no longer conditions it, and the record states it as
+   measured together with what it does not license.]*
 7. THE Decision_Relevance_Record SHALL be committed before any change to
    `digital_twin/simulation/engine.py` made under this requirement.
 
 **Structure 1 — non-stationary demand (R5.8-R5.14).** *Unlocks the Demand_Forecaster:
-forecasting has zero value under stationary demand.*
+forecasting has zero value under stationary demand.* **CONDITIONAL under the R5.4 re-cut:
+R5.8-R5.14 are reinstated if and only if R5.42's information-gap term is below the R5.2 margin
+(R5.43). Text retained in full; no criterion is deleted.**
 
 8. WHEN the World_Twin generates demand, THE demand intensity SHALL vary within a simulated
    day.
@@ -890,50 +926,71 @@ forecasting has zero value under stationary demand.*
     THEN THE non-stationarity SHALL be reported as too weak to make forecasting pay.
 
 **Structure 2 — capacity and queueing (R5.15-R5.20).** *Unlocks `routing_navigator` and
-dispatch prioritisation: with infinite capacity, dispatch policy is a no-op.*
+dispatch prioritisation: with infinite capacity, dispatch policy is a no-op.* **DEFERRED under the
+R5.4 re-cut. Reason: it unlocks a different agent (`routing_navigator`) and creates no part of the
+quantity the central claim is about — the information value of coordination in the reorder
+decision. Deferred, not deleted (I-7): the text below stands and every criterion is marked.**
 
 15. THE World_Twin SHALL model a finite rider pool as a contended resource.
+    *[DEFERRED — R5.4 re-cut.]*
 16. THE World_Twin SHALL model finite pick stations as a contended resource.
+    *[DEFERRED — R5.4 re-cut.]*
 17. WHEN an order is delivered, THE delivery wait SHALL be a function of the contended-resource
-    queue state rather than an independent draw.
+    queue state rather than an independent draw. *[DEFERRED — R5.4 re-cut.]*
 18. WHEN the World_Twin is measured at each level of the ascending utilisation ladder declared in
     the R5.12 policy file, THE mean wait time over the committed replicate count SHALL be
-    non-decreasing in utilisation to within its reported interval.
+    non-decreasing in utilisation to within its reported interval. *[DEFERRED — R5.4 re-cut.]*
 19. WHEN the mean wait times at the declared utilisation ladder are compared, THE successive
     wait-time increments across the near-saturation band declared in the R5.12 policy file SHALL
     be strictly increasing. *(Band boundaries are committed to that policy file before the run
     judged against them; no value is stated here — the same deferral as R5.2.)*
+    *[DEFERRED — R5.4 re-cut.]*
 20. THE claim of an OSRM travel-time estimate in **both** the `SupplyChainSimulation` class
     docstring and the `_delivery` docstring SHALL be replaced by a description of the travel time
     the code actually produces, because `_delivery` draws `self._rng.uniform(10.0, 45.0)` and
     makes no OSRM call, and binding the twin to the repository's OSRM container
     (`docker/docker-compose.mumbai.yml::osrm-mumbai`) would make every twin run a category-1
-    workload under I-0.
+    workload under I-0. *[DEFERRED — R5.4 re-cut, by the stated R5.15-R5.20 range.* **A cost this
+    block surfaces rather than resolves:** *R5.20 is a documentation-truth repair — two docstrings
+    assert an OSRM call the code does not make — and it is independent of whether the queueing
+    structure is ever built. Its cost is two docstring edits and no twin change, so deferring it
+    leaves a false claim standing at no saving. Recorded for the design phase to retain or
+    re-defer explicitly; not resolved here, because the range was given by operator decision.]*
 
 **Structure 3 — correlated lead times and supplier state (R5.21-R5.24).** *Unlocks
 `supplier_trust` and `inventory_sentinel` safety-stock decisions: under i.i.d. lead times a
-static safety stock is optimal.*
+static safety stock is optimal.* **CONDITIONAL under the R5.4 re-cut: R5.21-R5.23 are reinstated
+if and only if R5.42's information-gap term is below the R5.2 margin (R5.43). Text retained in
+full; no criterion is deleted.**
 
 21. THE World_Twin SHALL correlate supplier lead time with concurrent demand.
+    *[CONDITIONAL — R5.43.]*
 22. THE World_Twin SHALL auto-correlate supplier lead time across consecutive simulated days.
+    *[CONDITIONAL — R5.43.]*
 23. THE World_Twin SHALL attribute each restock to a named supplier and SHALL expose that
     supplier's realised lead-time history in the `Observation` presented to every arm, so
-    `supplier_trust`'s reliability scoring has an observable subject.
+    `supplier_trust`'s reliability scoring has an observable subject. *[CONDITIONAL — R5.43.]*
 24. WHEN a supplier-aware reorder policy and a supplier-blind reorder policy are compared on the
     same replicate seeds, THE supplier-aware policy's aggregate on every KPI named in the R5.33
     objective SHALL be better with the two policies' reported intervals disjoint on at least one
-    of them.
+    of them. *[The operator's re-cut named R5.21-R5.23. R5.24 is recorded here as **consequentially
+    conditional**, not as a separate decision: its subject — a supplier-aware policy — has nothing
+    to be aware of unless R5.23 lands, so it cannot be judged while R5.21-R5.23 are held. Stated as
+    a consequence for the design phase to confirm, not as an operator decision.]*
 
 **Structures 4 and 5 — perishability coupling and substitution (R5.25-R5.29).** *Unlocks
 `freshness_guardian` and `pricing_oracle`, and creates the multi-objective tension.*
+**R5.25-R5.27 are DEFERRED under the R5.4 re-cut. Reason: they unlock different agents
+(`freshness_guardian`, `pricing_oracle`) and create no part of the quantity the central claim is
+about. Deferred, not deleted (I-7). R5.28 and R5.29 are NOT deferred — see CONFLICT R below.**
 
-25. THE World_Twin SHALL make spoilage a function of age-at-arrival.
+25. THE World_Twin SHALL make spoilage a function of age-at-arrival. *[DEFERRED — R5.4 re-cut.]*
 26. THE World_Twin SHALL make spoilage a function of order size, so bulk ordering raises
-    spoilage.
+    spoilage. *[DEFERRED — R5.4 re-cut.]*
 27. WHEN a demand event names a SKU whose stock is zero, THE World_Twin SHALL divert the
     substitution fraction declared in the R5.12 policy file to that SKU's declared substitutes, so
     `pricing_oracle`'s cross-SKU pricing and `freshness_guardian`'s markdown decisions have a
-    substitution channel to act on.
+    substitution channel to act on. *[DEFERRED — R5.4 re-cut.]*
 28. WHEN the four single-objective policies — minimise `stockout_rate`, minimise `spoilage_rate`,
     minimise the R5.40 on-hand-inventory measure, minimise `avg_delivery_time_min` — are evaluated
     on the modified World_Twin together with the reference policy set declared in the
@@ -943,10 +1000,47 @@ static safety stock is optimal.*
     *R5.28 as previously written was **unsatisfiable**: the Pareto frontier of a finite non-empty
     set is non-empty, so if the evaluated set is exactly those four, at least one is non-dominated
     by construction. It also named "minimise holding cost", a quantity that exists nowhere in the
-    tree, and "maximise SLA", which is not a `KpiVector` field.*
+    tree, and "maximise SLA", which is not a `KpiVector` field.* *[See CONFLICT R: still
+    unsatisfiable.]*
 29. IF any single-objective policy is Pareto-optimal on the modified World_Twin, THEN THE
     consensus experiment SHALL be reported as having no room to win and SHALL NOT be run,
     because a Pareto-optimal single-objective policy is a proof that consensus is unnecessary.
+    *[See CONFLICT R: fires on a theorem, not a measurement.]*
+
+**CONFLICT R — R5.28 is unsatisfiable a second time, and R5.29 then fires on a theorem.**
+*Surfaced, not resolved. The argument below is pure logic: no run is needed and none was made.*
+
+**The argument.** R5.28 requires the Pareto-optimal subset of the combined set to **exclude all
+four** single-objective policies. Domination requires being **no worse on every KPI** named in the
+R5.33 objective and strictly better on at least one. So a **unique minimiser of one coordinate can
+never be dominated** — nothing can be no-worse on that coordinate than the thing that uniquely
+minimises it. One of the four, "minimise the R5.40 on-hand measure", has a **trivially attainable
+unique minimum: hold no inventory.** Nothing ties that without also holding none. That policy is
+therefore non-dominated **by construction**. R5.28 is unsatisfiable, R5.29 then fires, and the
+consensus experiment is reported as having no room to win — **cancelling E3 and declaring
+SYNAPSE's central claim false on a theorem rather than on a measurement.**
+
+**Two aggravations.** **(i)** The interval clause makes this strictly **worse**, not better:
+requiring the two policies' reported intervals to be disjoint makes domination **harder**, and
+therefore non-dominance **easier**, widening the set R5.28 must exclude. **(ii)** R5.28's own text
+already records that it was found unsatisfiable **once** and repaired by adding the reference set.
+**Adding points cannot dominate a unique argmin**, so that repair addressed the symptom — the set
+being too small — and not the cause.
+
+**The costed repair, recorded and NOT applied.** *No criterion above is amended by this block.
+Applying it is a design-phase decision and is not treated here as already agreed.* Replace
+Pareto-optimality with **scalar-objective optimality against the committed R5.33 weights**:
+consensus has no room to win **if and only if** some single-objective policy attains the committed
+objective's optimum within intervals. Why that is well-posed where R5.28 is not:
+
+- **It can fail in both directions.** A single-objective policy can attain the weighted optimum
+  and can fail to; neither outcome is a theorem.
+- **It uses weights the project has already committed** under R5.33, so it invents no number.
+- **It does not fire today.** On run `34685048665`'s own numbers the minimiser of on-hand
+  inventory is the no-op arm, whose objective cost is far above the incumbent's. *(Read from the
+  recorded run, not re-measured in this document.)*
+
+**A gate that can fail and does not fire today is what a gate should look like.**
 
 **Compatibility and cost (R5.30-R5.32).**
 
@@ -964,7 +1058,11 @@ static safety stock is optimal.*
     mean return, which R5.15-R5.19's queue coupling changes directly; and
     `test_perceive_after_start_is_full_stock` depends on the
     `{f"sku_{i}": 100.0 for i in range(10)}` literal, which PRESERVE forbids reintroducing on the
-    non-seeded path.
+    non-seeded path. *[R5.4 re-cut: with R5.15-R5.20 deferred, the **first** casualty is no longer
+    expected — `test_good_action_beats_bad_over_seeds` is only threatened by the queue coupling that
+    is now held, and it returns to expected-casualty status if and only if R5.43 reinstates that
+    work. The second casualty is untouched by any deferral: it arises from the PRESERVE constraint
+    on opening stock, which no criterion in this re-cut moves.]*
 31. IF a determinism test's committed expectation changes as a consequence of these structures,
     THEN THAT test SHALL be updated in the same change with its new expectation stated.
 32. WHERE a run of the modified World_Twin is executed for measurement, THE run SHALL execute
@@ -1003,6 +1101,27 @@ regret number in this requirement would be taken on an instrument that cannot se
     `inventory_sentinel`'s safety-stock-versus-holding tradeoff has a cost term and R5.28's third
     single-objective policy has a KPI to minimise.
 
+**Added by the R5.4 re-cut (R5.41-R5.43).** *These continue R5's sequence; nothing above is
+renumbered. R5.41 is the operator's binding decision. R5.42 and R5.43 exist so the conditional
+above is judged mechanically rather than remembered.*
+
+**Why R5.41 is needed and R5.35 does not already cover it.** R5.35 guards one direction only: a
+regret **below** the margin measured on an instrument recorded as insensitive is reported
+inconclusive. It says nothing about an **at-or-above** margin verdict whose cause is a badly tuned
+baseline — and that is the direction now measured. The existing guard and the actual result point
+opposite ways, so this needs a criterion of its own rather than a re-reading of R5.35.
+
+41. IF a `material` verdict is attributable to baseline mis-tuning rather than to information
+    value, THEN THAT verdict SHALL NOT be used to denominate E3's floor and SHALL NOT be used to
+    denominate the R7 or R9 published claim, and the attribution SHALL be recorded with the
+    verdict.
+42. WHEN the R5.1 comparator is next run, THE Uplift_Harness SHALL include a tuned-static
+    comparator arm and SHALL record the information-gap term measured against it, because the
+    R5.8-R5.14 and R5.21-R5.23 condition is not decidable without that quantity.
+43. IF the R5.42 information-gap term is below the R5.2 materiality margin, THEN R5.8-R5.14 and
+    R5.21-R5.23 SHALL be reinstated as in-scope; and IF it is at or above that margin, THEN they
+    SHALL remain deferred with that measured term recorded as the reason.
+
 **Two notes the design phase owes an answer to, recorded here rather than legislated as
 criteria.** `orders_spoiled` increments **per SKU per tick**, so `spoilage_rate` is a tick-count
 ratio and not a spoiled-units fraction; R5.25 and R5.26 will change what it measures, and that
@@ -1010,11 +1129,19 @@ change must be stated rather than absorbed. And `digital_twin/simulation/monte_c
 drives a `ProcessPoolExecutor`, which the I-0 taxonomy names explicitly as a category-4
 workload — that strengthens R5.32 rather than qualifying it.
 
-**Verdict: not achieved.**
+**Verdict: partially achieved.** *R5.1, R5.3 and R5.4 are discharged — the falsification test ran
+(run `34685048665`, sha `c746463`, `verdict: material`) and the re-cut it mandated is the marked
+block above. R5.15-R5.20 and R5.25-R5.27 are deferred; R5.8-R5.14 and R5.21-R5.23 are conditional
+on R5.43; R5.28 is unsatisfiable per CONFLICT R. Everything else is not achieved.*
 
 **Falsification.** *What would prove this finding false:* a measured, materially positive
-`(s, S)` regret on the unmodified twin (R5.1). *Not attempted — requires compute that I-0
-places in CI.* **[unchallenged]**
+`(s, S)` regret on the unmodified twin (R5.1). ~~*Not attempted — requires compute that I-0
+places in CI.*~~ **[CHALLENGED, and the finding is FALSIFIED.]** *Attempted and measured in CI:
+run `34685048665`, sha `c746463`, `verdict: material`. The struck sentence above was accurate when
+written and is retained rather than deleted so the change of state is visible. **What this does not
+settle:** whether the measured regret is attributable to information value or to baseline
+mis-tuning — R5.41 forbids the second reading from denominating any published floor, and R5.42
+measures which it is.*
 
 ---
 
@@ -1338,10 +1465,13 @@ conformal-adjusted `lower_90` / `upper_90` that INV-DP-002 is about.
 
 1. THE licence terms of the Real_Data_Feed SHALL be recorded in a version-controlled artifact
    carrying the dataset identity, the licence identifier, the licence-text URI, the read date, the
-   permitted use, and the dataset revision, validated against a committed schema.
+   permitted use, and the dataset revision, validated against a committed schema. *[Permanently
+   unmet — see THE R8 LICENCE DECISION below. `licence_id` and `read_date` stay `null`.]*
 2. THE Check_Registry SHALL include a registered check that reads the licence artifact and
    reports a non-passing result IF any declared field is absent or fails schema validation, because
-   no dataset-licence gate exists anywhere in the tree today.
+   no dataset-licence gate exists anywhere in the tree today. *[C74 is non-passing **by decision**,
+   not pending — see THE R8 LICENCE DECISION below. The criterion is met by the check existing and
+   reporting honestly; the licence fields it reads will never be populated.]*
 3. WHEN the Real_Data_Feed drives the World_Twin, THE World_Twin SHALL report `source_class` as
    `EXTERNAL` on every perceived state.
 4. WHERE a checkpoint is resolved, WHILE the feature source is not `FALLBACK` and conformal
@@ -1387,10 +1517,38 @@ conformal-adjusted `lower_90` / `upper_90` that INV-DP-002 is about.
     key.
 18. IF the split, the aggregation level, or the metric definition used differs from the published
     competition's, THEN THE record SHALL report the result as not leaderboard-comparable rather
-    than reporting a rank.
+    than reporting a rank. *[**R8 licence decision extension, binding.** The published record SHALL
+    distinguish "a published model" from "a published model scored against a published
+    leaderboard", and SHALL NOT let the first be read as the second. With no accepted licence there
+    is no leaderboard-comparable result at all, so this is the only distinction that keeps R8.18's
+    prohibition enforceable rather than vacuous.]*
 
-**Verdict: not achieved** for the benchmark; **demonstrably achieved** for the training
-machinery that would produce it.
+**THE R8 LICENCE DECISION — permanent, and it makes criteria unsatisfiable rather than pending.**
+*Operator decision: the Kaggle M5 competition terms are **NOT** accepted. This is a permanent
+state, not a queue item, and nothing below is weakened to make it satisfiable (I-7).*
+
+`infrastructure/data/dataset-licences.yaml` therefore keeps `licence_id: null` and
+`read_date: null` **permanently**. The consequences, stated once:
+
+- **C74 is non-passing BY DECISION, not pending.** The distinction is the whole point: "pending"
+  invites a future green, and there is no future in which this one arrives. The registry entry
+  reports non-passing because a required field is absent, which is exactly what R8.2 asks of it,
+  and that is the correct and final result.
+- **The M5 score and the ancestry row are permanently `unavailable` / SKIP, and never a pass.**
+  Per PRESERVE's `unavailable -> SKIP, never PASS` mapping
+  (`scripts/audit/verify_claims.py::GATE_STATUS`), absence of the score is reported as absence.
+  It is not a pass, it is not a failure of the training machinery, and it is not to be re-labelled.
+- **The criteria that cannot now be satisfied are named rather than removed:** R8.1 and R8.2 (the
+  licence fields), R8.5-R8.8 (the Uncertainty-track score and its baseline comparison), R8.14 (the
+  expected-outcome record and its ancestor revision), R8.16 and R8.17 (first-ingestion licence
+  check, ingestion record). **Their text stands unchanged.** None is relaxed, none is deleted, and
+  none is restated as a lower bar — the honest record is that they are unmet and will stay unmet.
+- **What survives the decision.** The training machinery is real and gated (C37 `PASS`), and
+  R8.3, R8.4, R8.9-R8.13, R8.15 and R8.18 are unaffected by the licence state. The claim this
+  requirement gives up is **external benchmark comparability**, and only that.
+
+**Verdict: not achieved** for the benchmark, **permanently, by the licence decision above**;
+**demonstrably achieved** for the training machinery that would produce it.
 
 ---
 
@@ -1693,7 +1851,46 @@ touches; the previous version of this requirement cited no ADR at all.
 11. THE job in `.github/workflows/publish-audit-anchor.yml` that produces and publishes an anchor
     SHALL be declared in `infrastructure/quality/blocking-steps.yaml`.
 
-**Verdict: not achieved** externally; **demonstrably achieved** internally.
+**R10 IS DEFERRED IN ITS ENTIRETY to a named follow-on spec.** *Operator decision. Deferred, not
+deleted: R10.1-R10.11 keep their text, their numbers and their traceability row, and no criterion
+above is weakened, relaxed or removed (I-7).*
+
+**The follow-on spec is `.kiro/specs/external-audit-anchor/`.** It is named here and **not
+created** by this change; creating it is the follow-on's own first act.
+
+**The reason, in three parts.**
+
+- **It is tamper-evident-publication infrastructure**, not a decision-quality measurement. Every
+  criterion in R10 is about how an anchor reaches a third party and what that party can check.
+- **It is orthogonal to whether consensus produces better decisions.** Nothing in R5-R7 or R9
+  reads an external anchor, and no uplift number changes if one exists.
+- **It is blocked on OQ-4's undischarged obligation, which this spec does not resolve.** *A
+  conflict surfaced rather than resolved:* the deferral was handed down with the reason "blocked on
+  open question OQ-4", but OQ-4's own entry below records **RESOLVED (2026-08-12, operator) —
+  Rekor**. Both can be true only in this precise reading, which is the one recorded here: the
+  **mechanism choice** is closed, and OQ-4's obligation **(i)** is not — **ADR-056 must supersede
+  `docs/adr/ADR-033-audit-chain.md` before the first publication**, and this spec neither writes
+  that ADR nor authorises publishing without it. R10.1 is stated mechanism-agnostically for that
+  reason. **The wording "OQ-4 is open" is therefore wrong and "OQ-4's supersession obligation is
+  open" is right**; the deferral stands on the second, and the first is not adopted here.
+
+**The decision-quality claim stands without R10.** This spec's thesis is that measured decisions
+are better; R10 would make the *audit trail* externally checkable, which is a different claim to a
+different reader. Deferring it removes no evidence from the decision-quality argument. What is
+honestly given up is the **external** half of the tamper-evidence claim: C67 remains
+`SKIP — chain=unverifiable`, the internal chain remains a strong internal control, and neither is
+reported as more than that.
+
+**Two things the deferral does not touch.** The byte-pinned canonical audit row and the single head
+definition remain in PRESERVE and remain binding — they are protected by I-4 and E-S9-02, not by
+R10.7, and R10.7 only restated them. And the two live defects R10 documented remain **recorded**
+findings for the follow-on: the `workflow_dispatch` race in `publish-audit-anchor.yml` (no `needs:`
+between `anchor` and `publish`, so signing steps skip on a green job) and that workflow's absence
+from `blocking-steps.yaml` and `required-checks.yaml`. Deferring the requirement does not retract
+the findings.
+
+**Verdict: not achieved** externally, **and deferred to `.kiro/specs/external-audit-anchor/`**;
+**demonstrably achieved** internally.
 
 ---
 
@@ -1708,19 +1905,24 @@ Every task in blueprint Part III maps to at least one requirement.
 | 3 — replace hardcoded `numRuns` with an inherited profile | R3 |
 | 4 — fix C64 properly, and un-bend the README | R4 |
 | 5 — write `ADR-055-twin-decision-relevance.md` first | R5.5-R5.7 |
-| 6 — non-stationary demand (and the early `(s,S)`-regret test) | R5.1-R5.4, R5.8-R5.14 |
-| 7 — capacity and queueing | R5.15-R5.20 |
-| 8 — correlated lead times and supplier state | R5.21-R5.24 |
-| 9 — perishability coupled to order quantity, SKU substitution | R5.25-R5.29 |
+| 6 — non-stationary demand (and the early `(s,S)`-regret test) | R5.1-R5.4 done; R5.8-R5.14 [C] |
+| 7 — capacity and queueing | R5.15-R5.20 [D] |
+| 8 — correlated lead times and supplier state | R5.21-R5.24 [C] |
+| 9 — perishability coupled to order quantity, SKU substitution | R5.25-R5.27 [D]; R5.28-29 [X] |
 | 10 — negative control | R6.1 |
 | 11 — positive control (NEW) | R6.2-R6.4 |
 | 12 — make the honest predicate the production path | R7.7-R7.10 |
-| 13 — ingest M5 as the non-synthetic source | R8.1-R8.4, R8.16-R8.17 |
-| 14 — train and benchmark on the Uncertainty track | R8.5-R8.15, R8.18 |
+| 13 — ingest M5 as the non-synthetic source | R8.1-R8.4, R8.16-R8.17 [L] |
+| 14 — train and benchmark on the Uncertainty track | R8.5-R8.15, R8.18 [L] |
 | 15 — publish the checkpoint, let five gates flip | R9 |
 | 16 — run the powered experiment in the evaluating job | R7.1-R7.6, R7.14, R7.18 |
-| 17 — ratchet the floor to the measured lower bound | R7.12, R7.13 |
-| 18 — anchor the chain externally | R10 |
+| 17 — ratchet the floor to the measured lower bound | R7.12, R7.13 [see R5.41] |
+| 18 — anchor the chain externally | R10 [D — follow-on spec] |
+
+**Status markers, added by the R5.4 re-cut and the R8 and R10 decisions.** `[C]` conditional on
+R5.43. `[D]` deferred, text retained rather than deleted (I-7). `[X]` unsatisfiable — see
+CONFLICT R under R5.29. `[L]` permanently unmet by the R8 licence decision. **A marked row is
+still a mapped row:** the mapping is unchanged, only its status is recorded.
 
 **Criteria belonging to no blueprint task.** Refinement created these; they are recorded here so
 the table above is not read as complete coverage in the other direction: **R6.13-R6.16**,
@@ -1956,6 +2158,11 @@ resolved. **OQ-4 and OQ-5** are not among them — both were found during this s
   (ii) `docs/state/CURRENT.md:167` (C25) records Rekor and OpenTimestamps as **unimplemented
   candidates** with the row PARTIAL. That row stays PARTIAL until the anchor actually publishes; a
   chosen mechanism is not an implemented one (I-7).
+
+  **[R10 deferral: both obligations travel to `.kiro/specs/external-audit-anchor/`.** The mechanism
+  choice above stays resolved and is not reopened. C25 stays PARTIAL, which is the honest state for
+  a chosen-but-unpublished mechanism, and it is not to be read as pending completion inside this
+  spec.**]**
 - **OQ-5 — where the Falsification_Sweep is hosted.** R1.1's trigger and R1.14's requiredness
   cannot both be satisfied at their strongest reading, and this spec records the trade rather than
   making the choice. The sweep's own documentation names its intended host: both

@@ -2075,6 +2075,20 @@ tests in the interim, and that is a stated sequencing gap, not an omission.
     pre-commitment at task 25 binds either way.
 
 - [ ] 12. E2c — structures 1 and 2: non-stationary demand, and capacity that binds
+  - **DISPOSITION, 2026-09-11 -- TASKS 12, 13 AND 14 ARE HELD PENDING THE R5 RE-CUT. ELEVEN
+    LEAVES, NEITHER TICKED NOR DELETED.** Task 11's verdict is `material`, so E2c is
+    non-authorable on this task's own stated precondition and R5 must be re-cut (R5.4). **The
+    argument is not restated here:** the design reasoning is ADR-055 **D2.6** and the re-cut
+    criteria are in `requirements.md`.
+    - **Structures 2, 4 and 5 are recorded DEFERRALS** -- capacity that binds (12.3, 12.4), and
+      perishability coupling with substitution (13.3, 13.4). Deferred with the reason recorded,
+      which is not the same as dropped (I-7).
+    - **Structures 1 and 3 are CONDITIONAL** on the tuned-static comparator arm's
+      **information-gap measurement**: non-stationary demand (12.1, 12.2), and correlated lead
+      times with observable supplier state (13.1, 13.2). If that measurement finds no information
+      gap for an arm to exploit, neither structure unlocks a decision and both join the deferrals.
+    - **Nothing is deleted and nothing is ticked.** A deleted leaf is indistinguishable from a
+      discharged one in the census; a held leaf carrying its reason is not.
   - Implements the first two of ADR-055's five structures. **Every structure names the agent
     decision it unlocks; nothing is added for realism's sake.**
   - Preconditions: **checkpoint A has run and task 11's verdict is not `material`** — not
@@ -2147,6 +2161,10 @@ tests in the interim, and that is a stated sequencing gap, not an omission.
     - _Requirements: 5.15, 5.16, 5.17, 5.18, 5.19_
 
 - [ ] 13. E2c — structures 3, 4 and 5, and the Pareto guard that can cancel the experiment
+  - **HELD under the disposition recorded at task 12.** Structure 3 (13.1, 13.2) is CONDITIONAL on
+    the tuned-static comparator arm's information-gap measurement; structures 4 and 5 (13.3, 13.4)
+    are recorded deferrals. Pointer only -- ADR-055 D2.6 and `requirements.md`'s re-cut carry the
+    argument.
 
   - [ ] 13.1 Structure 3 — correlated lead times and observable supplier state
     - Files: `digital_twin/simulation/engine.py`, `digital_twin/world/runtime.py`
@@ -2236,6 +2254,35 @@ tests in the interim, and that is a stated sequencing gap, not an omission.
 - [ ] 14. Checkpoint — is consensus provably unnecessary?
   - discharge: uplift.yml, task 13.7's E2c measurement steps (checkpoint B)
   - Ensure all tests pass, ask the user if questions arise.
+  - **HELD under the disposition recorded at task 12: this checkpoint is downstream of E2c and
+    moves with it.**
+  - **CONFLICT R, RAISED 2026-09-11 -- R5.28 IS UNSATISFIABLE AS WRITTEN, AND R5.29 THEREFORE
+    MAKES THIS CHECKPOINT A PROJECT-CANCELLATION TRIPWIRE THAT IS GUARANTEED TO FIRE. SURFACED,
+    NOT RESOLVED.**
+
+    R5.28 requires the Pareto-optimal subset to **exclude all four** single-objective policies.
+    But a **unique minimiser of a coordinate can never be dominated**: domination requires being
+    no worse on every KPI in the objective and strictly better on at least one, and nothing can be
+    strictly better on a coordinate than that coordinate's unique minimiser. "Minimise on-hand
+    inventory" has a **trivially attainable unique minimum -- hold none.** So that policy is
+    non-dominated **by construction**, R5.28 can never be satisfied, and R5.29 then **cancels E3
+    and declares SYNAPSE's central claim false on a theorem** rather than on a measurement.
+    - **Interval-aware dominance makes it strictly worse, not better.** Requiring disjoint
+      intervals only shrinks the dominance relation, which can only enlarge the non-dominated
+      set. Task 13.5's interval clause cannot rescue R5.28; it widens the hole.
+    - **This body already names the scheduling temptation** -- firing deletes E3's twenty-one
+      leaves, the single largest schedule saving left in the plan. A tripwire that is **guaranteed
+      to fire** sitting next to that saving is the most dangerous shape in this spec, because the
+      cancellation would arrive looking like a measurement.
+    - **The costed repair: judge scalar-objective optimality against the committed R5.33
+      weights**, instead of coordinate-wise Pareto membership. That is the question R5.28 is
+      reaching for -- whether a single-objective policy beats consensus on the objective the
+      project actually committed to -- and it admits a real answer in both directions.
+    - **It would also decouple checkpoint B from E2c entirely**, which is what makes it cheap: the
+      scalar comparison runs on the **unmodified** twin with arms that **already exist**, so it
+      does not wait on the eleven held leaves above.
+    - **Not resolved here.** R5.28 and R5.29 are requirement text and belong to `requirements.md`'s
+      re-cut. This body records the defect and the costed repair so neither is re-derived.
   - **PRECONDITION ADDED IN SESSION 9, AND IT IS A SEQUENCING DECISION RATHER THAN A
     MEASUREMENT ONE. This checkpoint MUST NOT RUN until finding 60's double-count is
     dispositioned.**
@@ -2449,13 +2496,18 @@ tests in the interim, and that is a stated sequencing gap, not an omission.
       against AD-13's pin table at implementation time.
     - _Requirements: 6.3, 6.5_
 
-  - [ ] 16.3 Amend ADR-055 to declare the repetition count and the rate tolerance R6.15 reads
+  - [x] 16.3 Amend ADR-055 to declare the repetition count and the rate tolerance R6.15 reads
     - File: `docs/adr/ADR-055-twin-decision-relevance.md`
+    - **SESSION 9 RECONCILIATION -- ALREADY SATISFIED BEFORE THIS SESSION, AND THIS BODY WAS
+      STALE.** ADR-055 section **D6** declares both numbers R6.15 reads: the 20 independent seed
+      sets and the rate tolerance. The ADR's own amendment log attributes D6 to task 8.1, so the
+      work landed with that task and the mark was never moved. Read from the ADR, not inferred.
+    - **The false premise, corrected rather than deleted.** This body asserted in the present
+      tense that task 8.1's list of ADR-055 contents included **neither** number, and therefore
+      that R6.15 was unsatisfiable until an amendment landed. Both halves are false on disk.
     - R6.15 judges the proportion of negative-control repetitions reporting a proven gain against
-      "the tolerance the Decision_Relevance_Record declares" for the contract's committed
-      `alpha` of `0.05`, and against "the number of independent seed sets" that record declares.
-      **Task 8.1's list of ADR-055 contents does not include either**, so R6.15 is unsatisfiable
-      until this amendment lands. Recording the gap rather than discovering it inside E3.
+      the tolerance the Decision_Relevance_Record declares, for the contract's committed `alpha`
+      of `0.05`, and against the number of independent seed sets that record declares.
     - The reason the repetition is needed at all: a single run classifies only four pairs
       (`primary_kpis: fill_rate` across four scenarios), and four pairs cannot estimate a rate.
     - _Requirements: 6.15_
@@ -2615,18 +2667,24 @@ item 4 binds inside it: **R8 precedes R9** — a checkpoint published before it 
 data and scored against an external benchmark has no demonstrable value.
 
 - [ ] 18. E4 — the held-out block, and the recompute that finally has an input
-  - Implements **AD-19**. The sharpest finding in R9: **the registered check returns PASS with no
-    recompute.** C46 calls `published_checkpoint_truth.evaluate`, not `assess`, and `evaluate`
-    ends `if crps.outcome is Outcome.FAIL: return fail` then `return ok` — so
-    `Outcome.UNAVAILABLE` **falls through to `ok`**. `evaluate` also never calls `validate_entry`,
-    so an entry with no `final_crps` yields `recorded=None` -> `UNAVAILABLE` -> PASS.
-  - `UNAVAILABLE` is the outcome for a sidecar carrying no `heldout` block — **which is every
-    artifact today's `train.py` produces**. So the hole is not hypothetical; it is the live state.
+  - **BOTH PREMISES BELOW ARE NOW FALSE ON DISK -- session 9, commit `e0df6a8`. The finding is
+    kept in the PAST tense rather than deleted, because it is the record of what 18.1-18.3
+    bought.** `verify_claims.py`'s `@register("C46", ...)` now imports and calls
+    `published_checkpoint_truth.assess`, not `evaluate`; and `train.py` now writes a `heldout`
+    block, so the recompute has an input. Measured from CI run `34686422504`, sha `27a74a3`.
+  - Implements **AD-19**. The sharpest finding in R9, as it stood: **the registered check returned
+    PASS with no recompute.** C46 called `published_checkpoint_truth.evaluate`, not `assess`, and
+    `evaluate` ends `if crps.outcome is Outcome.FAIL: return fail` then `return ok` -- so
+    `Outcome.UNAVAILABLE` **fell through to `ok`**. `evaluate` also never calls `validate_entry`,
+    so an entry with no `final_crps` yielded `recorded=None` -> `UNAVAILABLE` -> PASS.
+  - `UNAVAILABLE` was the outcome for a sidecar carrying no `heldout` block -- **which was every
+    artifact `train.py` produced before 18.1 landed**. The hole was not hypothetical; it was the
+    live state, and 18.1 closed it.
   - **The fourth state is the whole fix.** `PublishProbe.status` is `"ok" | "fail" | "skip"`; a
     three-valued vocabulary cannot distinguish "nothing was recomputed" from "the subject is
     absent", and `evaluate` resolves that ambiguity in the direction I-7 forbids.
 
-  - [ ] 18.1 Write the held-out block into the published sidecar and declare its shape
+  - [x] 18.1 Write the held-out block into the published sidecar and declare its shape
     - Files: `agents/demand_prophet/training/train.py`,
       `infrastructure/quality/checkpoint-truth.yaml`
     - `train.py` writes a sidecar of exactly `version`, `smoke`, `arch`, `calibrator` — **no
@@ -2639,7 +2697,7 @@ data and scored against an external benchmark has no demonstrable value.
       critical).
     - _Requirements: 9.13_
 
-  - [ ] 18.2 Recompute coverage rather than reading it
+  - [x] 18.2 Recompute coverage rather than reading it
     - File: `scripts/audit/published_checkpoint_truth.py`
     - `recompute_coverage_p90(sidecar, floor)` computes empirical coverage from the published
       held-out actuals against the published conformal-adjusted bounds over at least the
@@ -2650,7 +2708,10 @@ data and scored against an external benchmark has no demonstrable value.
       the recompute is the verdict. A recorded number nobody recomputed is not evidence.
     - _Requirements: 8.9, 8.10, 9.8, 9.14_
 
-  - [ ] 18.3 Re-point C46 at `assess`, and move its pinning test in the same commit
+  - [x] 18.3 Re-point C46 at `assess`, and move its pinning test in the same commit
+    - **DISCHARGED session 9, commit `e0df6a8`, and the decisive fact was READ rather than
+      inferred: `verify_claims.py`'s `@register("C46", ...)` imports and calls
+      `published_checkpoint_truth.assess`. `evaluate` no longer appears on C46's path.**
     - Files: `scripts/audit/verify_claims.py`,
       `tests/verify/test_published_checkpoint_gate_property.py`
     - `assess` returns a four-valued `Outcome` with findings that name their clause and
@@ -2668,7 +2729,9 @@ data and scored against an external benchmark has no demonstrable value.
       reading did not enumerate its callers.
     - _Requirements: 9.14_
 
-  - [ ] 18.4 Write property test for recompute-or-unavailable
+  - [x] 18.4 Write property test for recompute-or-unavailable
+    - **DISCHARGED: Property 71 ran in fast shard 3/4 of the split `uplift-verify`, run
+      `34686422504`, sha `27a74a3`, all four fast shards `success`.**
     - `# Feature: decision-quality-proof, Property 71: A recorded number is recomputed or reported unavailable, never ok`
     - File: `tests/verify/test_recompute_or_unavailable_property.py`
     - The load-bearing clause is the negative one: **no** observation reaches `ok` through an
@@ -2677,14 +2740,15 @@ data and scored against an external benchmark has no demonstrable value.
     - Locus: `ci.yml::uplift-verify` fast step.
     - _Requirements: 8.9, 8.10, 9.8, 9.13, 9.14_
 
-  - [ ] 18.5 Write property test for the smoke-versus-absent distinction
+  - [x] 18.5 Write property test for the smoke-versus-absent distinction
+    - **DISCHARGED: Property 72 ran in fast shard 4/4 of the same run.**
     - `# Feature: decision-quality-proof, Property 72: A smoke artifact is distinguished from an absent one and never substituted locally`
     - File: `tests/verify/test_smoke_artifact_distinction_property.py`
     - Budget inherited from the root `conftest.py` profile.
     - Locus: `ci.yml::uplift-verify` fast step.
     - _Requirements: 9.2, 9.5, 9.7, 9.11_
 
-  - [ ] 18.6 Correct the runbook's gate identifier and add the publication step the recompute needs
+  - [x] 18.6 Correct the runbook's gate identifier and add the publication step the recompute needs
     - Files: `docs/runbooks/train-and-publish-checkpoint.md`,
       `scripts/audit/published_checkpoint_truth.py` (docstring citations only)
     - The runbook calls this gate **C43** in five places (`:5`, `:58`, `:59`, `:62`, `:75`); it is
@@ -2707,8 +2771,27 @@ data and scored against an external benchmark has no demonstrable value.
     schema), `data_fabric/licence.py::DatasetLicence`, `data_fabric/ingest/m5.py::M5IngestRecord`
     and `scripts/audit/dataset_licence_truth.py`. Properties 68 and 69 are authored against the
     design's names, so the reconciliation happens here, before them.
+  - **SESSION 9 RECONCILIATION -- SEVEN OF EIGHT LEAVES DISCHARGED, ONE OPEN, SO THIS PARENT
+    STAYS `[ ]`.** 19.1, 19.2, 19.5, 19.6, 19.7 and 19.8 landed in commit `4715de5`; 19.3 landed
+    and every one of its tests PASSED in the slow selection of run `34686422504`, sha `27a74a3`.
+    **19.4 is PARTIAL and holds this parent open** -- see its body.
+  - **DISPOSITION, 2026-09-11 -- THE M5 HALF IS PERMANENTLY UNAVAILABLE BY OPERATOR DECISION, NOT
+    PENDING.** The operator has declined to accept the Kaggle competition terms. Consequences,
+    each stated so no later reader records a pass:
+    - The `dataset-licences.yaml` M5 licence fields stay **null permanently**. They are not a
+      missing term awaiting a read date; there will be no read date.
+    - **C74 is non-passing BY DECISION rather than pending.** The distinction is load-bearing: a
+      pending gate implies a future flip, and a reader who treats this one that way will wait
+      forever and may eventually "unblock" it by accepting terms an agent must not accept.
+    - The **M5 benchmark score** (19.4/19.5's subject) and 19.6's **ancestry row** are
+      permanently `unavailable`, never a pass and never a rank. Absence of proof is not a pass
+      (I-7).
+    - **The published record MUST distinguish a published model from one scored against a
+      published leaderboard.** Without that distinction the E4 gate flips over-claim -- the
+      failure mode R8.18 exists to prevent in the benchmark's own reporting, arriving here
+      through the publication record instead.
 
-  - [ ] 19.1 Reconcile E4a's artifacts onto the design's committed names
+  - [x] 19.1 Reconcile E4a's artifacts onto the design's committed names
     - Files: `data_fabric/licence.py` (new, `DatasetLicence`),
       `infrastructure/data/dataset-licences.yaml` (+ `infrastructure/data/schemas/`),
       `data_fabric/ingest/m5.py` (new, `M5IngestRecord`),
@@ -2733,7 +2816,7 @@ data and scored against an external benchmark has no demonstrable value.
       `FEAST`.
     - _Requirements: 8.1, 8.2, 8.3, 8.16, 8.17_
 
-  - [ ] 19.2 Write property test for licence schema totality
+  - [x] 19.2 Write property test for licence schema totality
     - `# Feature: decision-quality-proof, Property 68: The licence artifact is schema-total and every absent field is named`
     - File: `tests/verify/test_dataset_licence_totality_property.py`
     - Closes the gap task 7.5 recorded deliberately: E4a shipped with unit tests and owed this
@@ -2742,7 +2825,11 @@ data and scored against an external benchmark has no demonstrable value.
     - Locus: `ci.yml::uplift-verify` fast step.
     - _Requirements: 8.1, 8.2_
 
-  - [ ] 19.3 Write property test for provenanced ingestion
+  - [x] 19.3 Write property test for provenanced ingestion
+    - **DISCHARGED by the SLOW selection of run `34686422504`, sha `27a74a3`: that step reports
+      `1 failed, 65 passed`, and every test in this module PASSED. The single failure is the known
+      finding-57 false positive in `test_preserved_baseline_regression.py`, another owner's and
+      unrelated to this leaf -- read per test id, not from the summary line.**
     - `# Feature: decision-quality-proof, Property 69: Real-feed ingestion is provenanced and records what it consumed`
     - File: `tests/verify/test_real_feed_ingestion_provenance_property.py`
     - `@pytest.mark.slow`; selected by `ci.yml::uplift-verify`'s slow step (`-m "slow"`,
@@ -2754,6 +2841,18 @@ data and scored against an external benchmark has no demonstrable value.
     - _Requirements: 8.3, 8.17_
 
   - [ ] 19.4 Record the benchmark score with its metric identity and a non-bare baseline
+    - **NOT TICKED IN SESSION 9 -- PARTIAL, AND IT IS A HALF-APPLIED COUPLING.** This leaf names
+      **two** files and only one of them moved. `scripts/audit/benchmark_truth.py` is complete and
+      strong. `scripts/audit/verify_claims.py` carries **no `@register` for it**: the highest
+      registered id is C75 and the string `benchmark_truth` appears nowhere in that file.
+    - **Worse, and this is the part that decides the mark: no workflow invokes `benchmark_truth`
+      or `benchmark_gen` at all.** By this repo's own standard a mechanism that no job runs cannot
+      bite, so ticking here would record a gate that exists as a gate that gates.
+    - **Remaining work, named so it is not re-derived:** the `@register` entry in
+      `verify_claims.py`, and a **workflow locus** that actually invokes it -- with the
+      `blocking-steps.yaml` and `required-checks.yaml` declarations in the same commit, per this
+      file's own same-commit coupling rule. Task 24.1 already lists `benchmark_truth` as one of
+      the two registrations that half owes; this is the same obligation, seen from its subject.
     - Files: `scripts/audit/benchmark_truth.py` (new, `BenchmarkRecord`),
       `scripts/audit/verify_claims.py` (`@register`)
     - The record carries the score, **the identifier of the metric scored**, and **the identifier
@@ -2767,7 +2866,7 @@ data and scored against an external benchmark has no demonstrable value.
       leaderboard-comparable** rather than a rank (R8.18).
     - _Requirements: 8.5, 8.6, 8.7, 8.18_
 
-  - [ ] 19.5 Generate the benchmark document rather than transcribing it
+  - [x] 19.5 Generate the benchmark document rather than transcribing it
     - Files: `scripts/audit/benchmark_gen.py` (new),
       `docs/benchmarks/m5-uncertainty.md` (new, with one generated region)
     - Renders the region from `BenchmarkRecord`, reusing task 4.2's marker helpers
@@ -2780,7 +2879,7 @@ data and scored against an external benchmark has no demonstrable value.
       feed-derived score (R8.13).
     - _Requirements: 8.8, 8.12, 8.13_
 
-  - [ ] 19.6 Commit the expected-outcome record at an ancestor revision, and check the ancestry
+  - [x] 19.6 Commit the expected-outcome record at an ancestor revision, and check the ancestry
     - Files: `infrastructure/quality/benchmark-expectations.yaml` (new),
       `scripts/audit/benchmark_truth.py`
     - States that a sophisticated model is expected to be **competitive rather than dominant on
@@ -2790,7 +2889,7 @@ data and scored against an external benchmark has no demonstrable value.
       satisfied by never recording a prediction.
     - _Requirements: 8.14_
 
-  - [ ] 19.7 Commit the execution-environment run record and pin the zero-cost claim
+  - [x] 19.7 Commit the execution-environment run record and pin the zero-cost claim
     - Files: `infrastructure/ml/training_runs.json` (new, beside `published_checkpoints.json`),
       `scripts/audit/benchmark_truth.py`
     - Records where training and scoring executed: either the CI pipeline or external GPU
@@ -2802,7 +2901,7 @@ data and scored against an external benchmark has no demonstrable value.
       no new dependency; it asserts and records that.
     - _Requirements: 8.11, 8.15_
 
-  - [ ] 19.8 Write property test for benchmark-record honesty
+  - [x] 19.8 Write property test for benchmark-record honesty
     - `# Feature: decision-quality-proof, Property 73: An unconfirmed external value is never rendered as fact, and a differing definition is not comparable`
     - File: `tests/verify/test_benchmark_record_honesty_property.py`
     - Budget inherited from the root `conftest.py` profile.
@@ -2810,6 +2909,11 @@ data and scored against an external benchmark has no demonstrable value.
     - _Requirements: 8.5, 8.6, 8.7, 8.8, 8.12, 8.13, 8.15, 8.18_
 
 - [ ] 20. E4 — publication, the confidence contract, and the gates it actually flips
+  - **SESSION 9 RECONCILIATION -- FIVE LEAVES DISCHARGED, ONE NOT STARTED, TWO AUTHORED-NOT-
+    DISCHARGED, SO THIS PARENT STAYS `[ ]`.** 20.1, 20.2, 20.4, 20.5 and 20.6 landed in commit
+    `4fe1dad` and are measured from run `34686422504`, sha `27a74a3`; 20.4's own job
+    `E4 published-artifact materialisation (C38/C40/C45)` reports `success` in that run. **20.3 is
+    not started** and **20.7/20.8 are `[~]`** -- see their bodies.
   - **The count correction that prevents a wasted pass.** Finding 2's "five gates" is the number
     the *absent* artifact collapses, not the number publication repairs. C38
     (`checkpoint_truth.ARTIFACTS_DIR = artifacts/training`), C40 (`calibration_truth.ARTIFACTS_DIR`,
@@ -2819,7 +2923,7 @@ data and scored against an external benchmark has no demonstrable value.
     could occur. Publishing to the remote source flips only **C46** and **C69**. R9.15 carries
     the difference and task 20.4 discharges it.
 
-  - [ ] 20.1 Make degradation the exact three-term disjunction, and make confidence move
+  - [x] 20.1 Make degradation the exact three-term disjunction, and make confidence move
     - Files: `agents/demand_prophet/inference/pipeline.py`,
       `scripts/audit/runtime_substance.py`
     - The live expression is
@@ -2837,7 +2941,7 @@ data and scored against an external benchmark has no demonstrable value.
       (`packages/synapse_common/provenance.py:14-15`). Nothing here relaxes it.
     - _Requirements: 8.4, 9.3, 9.4, 9.9_
 
-  - [ ] 20.2 Write property test for the degradation disjunction and confidence spread
+  - [x] 20.2 Write property test for the degradation disjunction and confidence spread
     - `# Feature: decision-quality-proof, Property 70: Degradation is exactly the three-term disjunction, and confidence moves across SKUs`
     - File: `tests/verify/test_degradation_disjunction_property.py`
     - "Exactly" is both directions: no term is dropped, and no fourth condition is smuggled in.
@@ -2846,6 +2950,15 @@ data and scored against an external benchmark has no demonstrable value.
     - _Requirements: 8.4, 9.3, 9.4, 9.9_
 
   - [ ] 20.3 Land the registry entry, and keep both substitution pins where they are
+    - **NOT TICKED IN SESSION 9 -- NOT STARTED, AND ITS REMAINING WORK IS AN OPERATOR ACTION
+      RATHER THAN AUTHORING.** `infrastructure/ml/published_checkpoints.json` still holds exactly
+      one key, `__placeholder__`, with `status: unpublished`. Nothing an authoring session can
+      write makes that a published checkpoint: the entry records the sha of a **trained and
+      published** model, so the work is train-then-publish, per the 18.6 runbook.
+    - **Ticking it would be caught, and by design.** `task_claim_truth`'s `lands-registry-entry`
+      pattern matches this leaf's title and its body names the registry file, so an `[x]` here
+      with a placeholder registry fails that gate naming this task record. That is the mechanism
+      the Notes section already predicts would bite at 20.3, doing exactly its job.
     - Files: `infrastructure/ml/published_checkpoints.json`,
       `infrastructure/quality/checkpoint-truth.yaml`
     - The entry records the sha the resolved version string must contain (R9.2) and the
@@ -2860,7 +2973,7 @@ data and scored against an external benchmark has no demonstrable value.
       one's (R9.5).
     - _Requirements: 9.1, 9.2, 9.5, 9.6, 9.7, 9.11_
 
-  - [ ] 20.4 Materialise the published artifact for the three local-reading gates
+  - [x] 20.4 Materialise the published artifact for the three local-reading gates
     - Files: `.github/workflows/ci.yml`,
       `infrastructure/quality/blocking-steps.yaml`,
       `infrastructure/quality/required-checks.yaml`
@@ -2872,7 +2985,7 @@ data and scored against an external benchmark has no demonstrable value.
       `required-checks.yaml`, in the same commit as the job.
     - _Requirements: 9.15_
 
-  - [ ] 20.5 Make the task-completion check read the registry it is told about
+  - [x] 20.5 Make the task-completion check read the registry it is told about
     - File: `scripts/audit/task_claim_truth.py`
     - A task record asserting a landed Published_Checkpoint_Registry entry causes the check to
       read `infrastructure/ml/published_checkpoints.json`; if that file holds no validated
@@ -2880,20 +2993,29 @@ data and scored against an external benchmark has no demonstrable value.
       and an unchecked claim is how this project acquired the findings this spec exists to fix.
     - _Requirements: 9.10_
 
-  - [ ] 20.6 Write property test for task-record claims against the registry
+  - [x] 20.6 Write property test for task-record claims against the registry
     - `# Feature: decision-quality-proof, Property 74: A task record asserting a landed registry entry fails when the registry holds none`
     - File: `tests/verify/test_task_claim_registry_property.py`
     - Budget inherited from the root `conftest.py` profile.
     - Locus: `ci.yml::uplift-verify` fast step.
     - _Requirements: 9.10_
 
-  - [ ] 20.7 Render degradation on every surface that shows the agent's output
+  - [~] 20.7 Render degradation on every surface that shows the agent's output
+    - discharge: frontend.yml::quality step 8 (Vitest unit + property tests)
+    - last-checked: run 34686422478 (SYNAPSE Frontend CI, sha 27a74a3) -- the job
+      `Lint - Typecheck - Unit` **failed at step 6 `Biome lint`, so step 8 was SKIPPED.**
+    - **AUTHORED, NOT DISCHARGED, AND THE REASON IS MEASURED RATHER THAN ASSUMED.** The job that
+      owns this leaf never ran the step that judges it. A skipped step is not a pass (I-7), so the
+      mark stays `[~]` until step 8 executes and reports.
     - Files: `frontend/src/surfaces/` (the surfaces displaying Demand_Forecaster output)
     - What the console draws is a different subject from what the agent reports, which is why
       R9.16 is separate from R9.9 and separately testable. Every surface, not the primary one.
     - _Requirements: 9.16_
 
-  - [ ] 20.8 Extend the console degradation property to every surface
+  - [~] 20.8 Extend the console degradation property to every surface
+    - discharge: frontend.yml::quality step 8 (Vitest unit + property tests)
+    - last-checked: run 34686422478 (sha 27a74a3) -- step 8 skipped behind the step 6
+      `Biome lint` failure, so Property 75 has never executed.
     - `# Feature: decision-quality-proof, Property 75: The console renders degradation on every surface displaying the agent's output`
     - File: `frontend/src/surfaces/__tests__/degradation-rendering.property.test.ts` (extended,
       not new — task 1.1 commits this file and task 1.3 strips its per-call `numRuns`)
@@ -3002,6 +3124,17 @@ data and scored against an external benchmark has no demonstrable value.
     - _Requirements: 7.12, 7.13_
 
 - [ ] 23. E5 — ADR-056, the log coordinate, the export, and the same-run publication
+  - **DISPOSITION, 2026-09-11 -- ALL ELEVEN LEAVES DEFERRED TO A FOLLOW-ON SPEC BY OPERATOR
+    DECISION. THEY STAY `[ ]`, AND NO NEW FILE IS CREATED HERE.**
+    - **The reason, recorded rather than implied.** R10 is **tamper-evident publication
+      infrastructure**, and that is orthogonal to whether consensus produces better decisions --
+      the question every other element of this spec measures. It is also **blocked on OQ-4**, the
+      un-superseded ADR whose three named mechanisms disagree (23.1).
+    - **Deferred, not dropped, and not silently re-scoped (I-7).** The deferral sits at the parent
+      so the census reads eleven open leaves with a stated reason. The follow-on spec is named by
+      the operator when it is created; this body invents no name for it.
+    - Task 25's claim clause -- "the audit chain independently verifiable by a party holding no
+      credential from this project" -- moves with this deferral and must not be read as satisfied.
   - Implements **AD-20**. C67's ledger row: `SKIP — chain=unverifiable, 0 anchor file(s)`.
     `infrastructure/audit_anchors` does not exist anywhere in the tree, and **it will read SKIP on
     Linux CI too** — this is not another C44 (A-3). Do not spend a debugging pass expecting it to
@@ -3295,9 +3428,10 @@ data and scored against an external benchmark has no demonstrable value.
     runs `readme_gen --check`, `ledger_gen --check` and `gate_surface --check`. All three DETECT;
     none REPAIRS. So "let CI answer it" — which was the right call for C63 in session 2p — is
     structurally unavailable here, and the only `--write` path was a developer's machine.
-  - **Repair order is fixed and is the one `truth-gates.yml`'s own header states:**
+  - **Repair order, as originally committed and as `truth-gates.yml`'s header stated it:**
     `gate_surface --write` (landed session 2p, re-run session 2q for the new job) →
     `ledger_gen --write` → `readme_gen --write`. Registration and wiring first, generation last.
+    **SUPERSEDED by task 26.4 (`df0f3ff`): the last two are now swapped, for the reason below.**
   - **CORRECTED SESSION 4 — THAT ORDER IS BACKWARDS FOR EXACTLY THE CASE THIS PARENT EXISTS TO
     REPAIR, and the first real execution proved it.** `ledger_gen` projects a **top-level**
     registry execution, in which C56 **is** evaluated, and C56 reads the README headline that
@@ -3318,10 +3452,9 @@ data and scored against an external benchmark has no demonstrable value.
       recur on every future repair of a README-sourced claim.
     - **The durable repair is to swap the two `--write` steps** so `readme_gen` precedes
       `ledger_gen`, which makes the ledger a projection of the tree the README already describes.
-      **Not taken here:** the order is stated in `truth-gates.yml`'s header as well as in this
-      parent, so changing it edits the declared repair order of the enforcement spine — a
-      registered-surface change, and the operator's. Recorded with its mechanism so it is not
-      re-derived.
+      **TAKEN IN SESSION 9 at task 26.4, commit `df0f3ff`, by operator decision** -- the clause
+      that previously read "not taken here" is superseded. It edits the declared repair order of
+      the enforcement spine, which is a registered-surface change and is why it needed one.
   - **A LOCAL-GENERATION ARTIFACT WAS MASKING THREE REAL FINDINGS, and this was the first
     projection of `CURRENT.md` ever taken on a Linux runner.** The committed ledger recorded
     C44's detail as `check raised FileNotFoundError: [WinError 3] ... The system cannot find the
@@ -3478,16 +3611,19 @@ data and scored against an external benchmark has no demonstrable value.
       README whose contents C56 reads.
     - _Requirements: 4.4, 4.5, 4.8, 4.11, 10.1, 10.7_
 
-  - [ ] 26.4 Swap the two generator `--write` steps, and move the enforcement spine with them
+  - [x] 26.4 Swap the two generator `--write` steps, and move the enforcement spine with them
+    - **DISCHARGED session 9, commit `df0f3ff` -- "generate the README before the ledger that
+      reports it". The dependency now runs in its true direction:
+      `readme_gen` -> `README.md` -> C56 -> `ledger_gen`.**
     - Files: `.github/workflows/regenerate-truth-docs.yml`,
       `.github/workflows/truth-gates.yml`, `docs/state/GATE_SURFACE.md`
-    - **REGISTERED IN SESSION 7 for work the generator ORDER itself owes, measured in session 4
-      and never given a leaf.** `regenerate-truth-docs.yml` runs `ledger_gen --write` at step 6
+    - **REGISTERED IN SESSION 7 for work the generator ORDER itself owed, measured in session 4
+      and never given a leaf.** `regenerate-truth-docs.yml` **ran** `ledger_gen --write` at step 6
       and `readme_gen --write` at step 7. `ledger_gen` projects a top-level Check_Registry
       execution **in which C56 is evaluated**, and C56 reads the README that `readme_gen`
-      rewrites **afterwards**. So `docs/state/CURRENT.md`'s C56 row can be stale against the
-      README committed beside it, out of one run. The durable repair is to swap the two steps
-      and move `truth-gates.yml`'s matching `--check` order with them.
+      rewrote **afterwards**. So `docs/state/CURRENT.md`'s C56 row could be stale against the
+      README committed beside it, out of one run. The durable repair was to swap the two steps
+      and move `truth-gates.yml`'s matching `--check` order with them, which `df0f3ff` did.
     - **Same-commit coupling 4, and it must be CHECKED rather than assumed.** A step **order**
       change moves rows in `docs/state/GATE_SURFACE.md`, so `gate_surface --write` belongs in
       the same commit. Precedent cuts both ways: it fired on a `needs:` removal with 3 rows

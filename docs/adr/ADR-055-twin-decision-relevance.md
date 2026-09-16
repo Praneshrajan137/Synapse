@@ -69,6 +69,19 @@ amendment lands before the run judged against it**, per the rule at the head of 
 changes no threshold and in particular does not touch
 `regret_objective.materiality_margin.value`, which stays at the value session 7 instantiated.
 
+**Amendment, session 10 - the task 11 verdict's ARITHMETIC is confirmed and its DENOMINATOR is
+refused. Finding 61: `regret(incumbent - hindsight)` sums a tuning gap, an information gap and the
+expected value of perfect information, and only the middle term is the quantity R5.1's claim is
+about.** Run `34685048665` (sha `c746463`) reports `regret = 0.4533668749999997` over 200 of 200
+replicates, with a 95% interval of `[0.4524633333333333, 0.45426833333333333]` lying wholly above
+the committed margin of `0.40` and `hindsight_arm_is_pointwise_best` `True` - none of which this
+amendment disputes. What it records is that the comparator replenishes **instantaneously**, so
+foresight buys no timing advantage and the measured gap is presumptively **tuning** rather than
+information. The operator's repair is a **hard gate**: arm E, a grid-search-tuned static par-level
+policy, and a three-term split reported in `twin-regret.json`. Full record in **D2.6**. **It lands
+before the run judged against it**, per the rule at the head of this log; it changes no threshold
+and does not touch `regret_objective.materiality_margin.value`.
+
 **This ADR is written to be falsifiable, and task 10 is the attempt.** Its central premise -
 that a base-stock `(s, S)` policy is near-optimal on today's twin, so intelligence cannot pay
 - is *analytical, not measured*. R5.1-R5.4 are the criteria that falsify it. If task 10
@@ -695,6 +708,122 @@ while it stands. That is why `reference_attains_zero_unmet` is reported beside
 `hindsight_attains_zero_unmet` - the pair is what licenses that sentence on the run's own numbers.
 Defect 1 still gates **checkpoint B**, whose task 13.5 defines dominance over every KPI the R5.33
 objective names, and there the double-count does not cancel.
+
+#### D2.6 The `material` verdict measures TUNING, not information (finding 61, session 10)
+
+**Added by amendment in session 10, and it lands before the run judged against it**, per D2.5's
+own ordering rule. Unlike D2.5.1 through D2.5.4 it disputes **no arithmetic**, and it says so
+first, because everything below is worthless if read as a recount.
+
+| quantity | measured, run `34685048665` (sha `c746463`) |
+|---|---|
+| usable replicates | 200 of 200 |
+| `regret` = mean reference cost - mean hindsight cost | `0.4533668749999997` |
+| 95% interval on the judged contrast | `[0.4524633333333333, 0.45426833333333333]` |
+| committed materiality margin | `0.40` |
+| `hindsight_arm_is_pointwise_best` | `True` |
+
+The interval lies wholly above the margin, the hindsight arm is pointwise best at every replicate,
+and both of D2.5.4's falsifiers held. **The number is right. The quantity it measures is not the
+quantity SYNAPSE's claim is about.**
+
+**WHAT THIS SUBTRACTION DECOMPOSES INTO.** `regret(incumbent - hindsight oracle)` is the gap
+between **an arbitrary incumbent** and a **perfect-information** solution. Decision theory already
+names the second half of that gap: from the best *here-and-now* expectation to the
+perfect-information expectation is the **expected value of perfect information (EVPI)**, whose
+defining property is that **no information-gathering activity can be worth more than it** - EVPI
+is a **ceiling on all information value, never an estimate of it**. (The companion quantity, the
+expected value of including uncertainty (EVIU), comes from Howard's decision-analysis work in the
+1960s. Cited as the standard framing; no URL is invented for it here.) An incumbent that is not
+the best here-and-now policy contributes a **second, unrelated** term. So the committed artifact's
+single scalar is a **sum of three**:
+
+* **(a) the TUNING gap** - the incumbent minus the best **static** par-level policy. Closable by a
+  grid search: **no agent, no forecast, no consensus and no A2A message is required to collect it.**
+* **(b) the INFORMATION gap** - the best static minus the best **adaptive** policy. **This is the
+  only term a `Demand_Forecaster` or a consensus system can win**, and therefore the only term
+  R5.1's claim is about.
+* **(c) EVPI proper** - the best adaptive policy minus hindsight. Closable by nothing
+  implementable, because it is bought only by knowing the future.
+
+`twin-regret.json` reports `(a) + (b) + (c)` as one number and labels it `regret`. **A `material`
+verdict on that number licenses "some policy could have done better", which nobody disputes - not
+"intelligence could have done better", which is the claim R5 exists to test.**
+
+**THE MECHANISM THAT MAKES THIS DECISIVE, AND IT IS READ FROM CODE RATHER THAN ARGUED.** The
+comparator replenishes **instantaneously**. `uplift/harness.py::_apply_reorders` is a plain
+function returning `None` that applies stock through `sim.add_stock` - the ADR-052 actuation lever,
+which accrues inventory-time and then mutates `_inventory` in place - so **no simulated time can
+pass inside it** and no arm pays a lead time on an order it places. The engine's own `_restock`
+lead time is off in every arm at the committed `comparator.restock_threshold: 0.0`. Task 11's own
+session-7 exclusion (b) already recorded both facts, for a different purpose.
+
+Under instantaneous replenishment an arm may order **after** observing the demand it is about to
+serve, so **foresight buys no timing advantage** - which is the thing a forecast is for. What
+remains of information value is only the safety stock covering demand that arrives **within one
+decision cadence**.
+
+**HYPOTHESIS, WITH A NAMED FALSIFIER, EXACTLY AS D2.5.2 LABELLED ITS OWN: term (a) is the
+presumptive bulk of the `0.4533668749999997`, and term (b) is small.** It is a hypothesis because
+no tuned static policy has ever been run on this twin, so the split is **inferred** from the
+zero-lead-time mechanism above rather than **measured**. **The falsifier is the arm E run this
+section commits to:** if the measured information gap clears the committed margin of `0.40` on its
+own, the hypothesis is dead and task 11's verdict stands exactly as read.
+
+**THIS IS THE THIRD INSTANCE OF ONE DEFECT SHAPE, AND THE SHAPE IS CANCELLATION.** D2.5.1's guard
+reduced to `A >= B` because the **oracle** cancelled; here the regret reduces to
+`holding(incumbent) - holding(best par band)` because, with zero lead time, **the information
+cancels** - and a difference the quantity under test has cancelled out of cannot measure it.
+
+**THE MARGIN'S BRACKET DOES NOT APPLY TO THE VERDICT IT ADMITTED.** D2.5's lower bracket is
+derived from a **service** quantity - the incumbent's fill-rate shortfall against the committed
+newsvendor critical ratio, about **3.3 service points** - which is what makes a margin beneath it
+call an accepted shortfall material. The verdict that cleared the margin has **zero service
+content**: `dominant_regret_share` is `1.0000000000000009` on holding, bare `on_hand`, with every
+other term exactly `0.0` - the arithmetic D2.5.4 predicted for two arms that both attain zero
+unmet demand, where the service terms cancel. **So the screen was justified in one dimension and
+fired in another.** The guard is not broken; its bracketing argument is simply **silent** about the
+verdict it admitted, and the lower bracket must be re-derived in holding units before it can speak
+to this run.
+
+**AND NO TUNED BASELINE EXISTS ANYWHERE IN THE TREE, which is what leaves term (a) unmeasured.** A
+search of `uplift/` for a grid search, a parameter sweep or any optimiser over the par band returns
+**no match** - read from the tree, not assumed. The incumbent's two levels were **read from the
+engine** - the lower one from the engine's restock threshold, the upper one from its initial-stock
+literal, both as D2.5.1 records - precisely so that the arm would be the twin's *incumbent* rather
+than a differently-tuned policy. **That was the right choice for identifying an incumbent and it is
+the wrong basis for a floor:** "read from the engine" is the definition of **untuned**, and an
+untuned reference is exactly what makes term (a) large.
+
+**THE REPAIR, AND THE OPERATOR'S DECISION, WHICH IS ALREADY TAKEN AND IS BINDING.** Add **arm E**:
+a **static par-level policy tuned by grid search** over the **same fixed seeds** and against the
+**same committed objective**, and report the three-term split in `twin-regret.json` so that (a),
+(b) and (c) are separately readable instead of summed.
+
+**This is a HARD GATE, not a refinement.** If the measured information gap - term (b) - falls below
+the materiality margin, then **E3's floor and task 25's published claim may NOT be denominated
+against the incumbent arm.** A `material` verdict resting on tuning alone is **refused**: it would
+be a quiet confirmation of the very premise R5 exists to test, which D2.5.2 already recorded as the
+one outcome worse than a false stop.
+
+**In that case ADR-055's structures 1 and 3 are reinstated as preconditions of the central claim** -
+**non-stationary demand** and a **real replenishment lead time** - because they are the two that
+*create* information value: structure 1 gives a forecast something to forecast, and structure 3
+restores the timing advantage `_apply_reorders` currently removes. Structures 2, 4 and 5 unlock
+**other** agents - cross-SKU pricing, spoilage-aware ordering, capacity-aware dispatch - and are
+**not needed for the central claim**. That is a scope reduction this record makes explicitly rather
+than by omission.
+
+**THE ORDERING RULE APPLIES TO THIS SECTION TOO.** Arm E's predictions must be **pre-registered
+before the label is added**, per D2.5's rule that an amendment lands before the run judged against
+it. **D2.6 therefore lands before the run that judges it**, and until that run reports, the honest
+reading of task 11 is: **arithmetically sound, decision-theoretically unattributed.**
+
+**WHAT IS NOT CLAIMED.** That task 11's verdict is wrong - its arithmetic is confirmed above. That
+term (b) is zero; a within-cadence safety-stock advantage is real, and it is unmeasured. That the
+hindsight arm is not an oracle - D2.5.4's construction and both of its per-run falsifiers stand.
+And that `0.4533668749999997` is mostly tuning: **that is the hypothesis, and arm E is the
+measurement that settles it.**
 
 ### D3 - Per-KPI observable sensitivity (R5.34)
 
