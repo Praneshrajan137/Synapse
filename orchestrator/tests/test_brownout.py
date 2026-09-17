@@ -137,5 +137,13 @@ class TestRegistry:
         m = BrownoutController("mumbai", _FakeBreaker(2), _FakeBreaker(2))
         bo.register(b)
         bo.register(m)
-        assert bo.get_controller("bengaluru").current_level() is BrownoutLevel.NONE
-        assert bo.get_controller("mumbai").current_level() is BrownoutLevel.SHED_LLM_ONLY
+        # Bind before asserting: `get_controller` returns `BrownoutController |
+        # None`, so calling straight through it would raise AttributeError on a
+        # registration failure instead of failing the assertion that registration
+        # is what this test is about. Asserting non-None states that precondition.
+        registered_b = bo.get_controller("bengaluru")
+        registered_m = bo.get_controller("mumbai")
+        assert registered_b is not None
+        assert registered_m is not None
+        assert registered_b.current_level() is BrownoutLevel.NONE
+        assert registered_m.current_level() is BrownoutLevel.SHED_LLM_ONLY

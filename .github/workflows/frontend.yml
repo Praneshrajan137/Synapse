@@ -23,6 +23,22 @@ jobs:
     name: Lint • Typecheck • Unit
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    env:
+      # R3.5: the EFFECTIVE fast-check example count, now that the console suite
+      # inherits its budget from a profile instead of stating `{ numRuns: 100 }` at
+      # every call site (`frontend/src/test/fc-budget.ts`, applied by
+      # `frontend/src/test/setup.ts`). This variable is load-bearing, not decorative:
+      # unset resolves to `dev` = 10 by design, because an unset variable is the LOCAL
+      # case and under I-0 the local case must be the cheap one. CI must therefore say
+      # what it wants out loud.
+      #
+      # `heavy` = 100 and not `ci` = 500, deliberately. 100 is exactly the budget every
+      # one of the 48 removed call sites stated, so the inversion is COST-NEUTRAL: this
+      # job runs the same number of examples it ran yesterday, and R3.5's ">= 100" is
+      # met by the value the Property_Inventory_Gate used to require. `ci` would be a
+      # 5x increase in console property work against a 15-minute budget nobody has
+      # measured at that scale, which is a separate decision with its own evidence.
+      HYPOTHESIS_PROFILE: heavy
     steps:
       - uses: actions/checkout@v4
 
@@ -45,6 +61,34 @@ jobs:
         run: pnpm lint
 
       - name: TypeScript strict
+        # decision-quality-proof task 2.1 (R2.2, R2.3). Blocking, and it must stay
+        # blocking. R2.3 is satisfied at BOTH scopes, which is the part that is easy
+        # to break from a distance: this step carries no `continue-on-error`, and
+        # neither does the `quality:` job, because
+        # `workflow_shape_truth._continue_on_error_construct` reads a JOB-scoped
+        # setting as discarding for every step in the job. A `continue-on-error` added
+        # to `quality:` would therefore defeat this step without editing this line.
+        # The `run:` is a single top-level command with no `&&`/`||`/`;` list, so
+        # `final_list_element` returns it unchanged and no discarding construct is
+        # present under the gate's own reading (R4.12).
+        #
+        # Why the propagation carries the weight it does, re-confirmed by reading the
+        # `needs:` graph in this file rather than carried from a draft. Line numbers
+        # are deliberately NOT cited: a comment in this file that quotes this file's
+        # own offsets invalidates itself on the next edit, which is the drift R2's own
+        # authoring notes ran into. The edges instead, each read off a `needs:` key --
+        # `build` needs `quality`; `contract-fidelity` needs `quality`; `mutation`
+        # needs `quality`; `e2e`, `e2e-visual`, `e2e-harness` and `mobile-lighthouse`
+        # each need `build`; `effectiveness-ratchet` needs `e2e-harness`; and
+        # `fe-invariants` needs [quality, e2e, e2e-visual, e2e-harness]. NINE of this
+        # workflow's fourteen jobs are downstream of this one command; the five that
+        # are not are `quality` itself, `spec-typecheck`, `license-audit`, `sbom` and
+        # `audit-supply`. Property 31's file
+        # (`src/surfaces/__tests__/degradation-rendering.property.test.ts`) is inside
+        # `tsconfig.json`'s `include`, so one type error there skips the whole
+        # console-effectiveness spine -- which R2.11 requires
+        # `scripts/audit/gate_surface.py` render as NOT EXECUTED, never as a pass
+        # (I-7).
         run: pnpm typecheck
 
       - name: Vitest unit + property tests
@@ -56,6 +100,88 @@ jobs:
         with:
           name: frontend-coverage
           path: frontend/coverage
+
+      - name: Upload Vitest run record (FE-INV attestation evidence, R8.7)
+        # The `fe-invariants` job gates the registry on EXECUTED, non-skipped
+        # assertions read from this file. Uploaded on failure too: a red suite is
+        # still evidence of what ran, and a MISSING record must read as
+        # `unavailable` to that gate rather than as a pass (I-7).
+        if: success() || failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: fe-invariant-vitest-report
+          path: frontend/artifacts/test-reports/vitest.json
+          retention-days: 7
+
+  spec-typecheck:
+    name: TypeScript strict — spec/ + tests/ (the trees tsconfig.json never checked)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    # purpose-achievement-audit task 12.2. `tsconfig.json`'s `include` covers `src`,
+    # the four config files, and exactly two files under `spec/effectiveness/`
+    # (`harness.ts`, `e2e-entry.ts`). So `pnpm typecheck` and the `tsc --noEmit`
+    # inside `pnpm build` have never checked `arbitraries.ts`, `run-ratchet.ts`,
+    # `check-baseline.ts`, `real-stack-fidelity.ts`, `scorecard-emission.ts`,
+    # `scorecard-gate.ts`, every property test in
+    # `spec/effectiveness/__tests__/`, `spec/contract-fidelity/**`, or ANY e2e spec
+    # under `tests/**`. `pnpm lint` is `biome check ./src`, so they are not linted
+    # either. They execute under vitest/Playwright, esbuild-transpiled without a type
+    # check. `frontend/tsconfig.spec.json` (new) is the project that checks them; its
+    # header records why this is a separate project rather than a wider `include`.
+    #
+    # DELIBERATELY A STANDALONE JOB with no `needs:` and nothing depending on it.
+    # Widening the base `include` would have put these files inside `pnpm build`, and
+    # `build` gates `e2e`, `e2e-visual`, `e2e-harness`, `mobile-lighthouse`,
+    # `effectiveness-ratchet` and `fe-invariants` -- one pre-existing error would have
+    # taken the whole console-effectiveness spine to NOT EXECUTED. Isolated here, a
+    # failure is a failure of exactly this gate.
+    #
+    # EXPECTED RED ON LANDING (I-7): this code has never been compiled, and it now
+    # meets `noUncheckedIndexedAccess`, `exactOptionalPropertyTypes` and
+    # `noUnusedLocals`. Errors in the four older property tests and in the e2e specs
+    # are pre-existing debt becoming visible, not a regression. Blocking on purpose:
+    # no `|| true`, no `continue-on-error`. The fix is to fix the types, never to
+    # narrow the project back.
+    #
+    # A PREDICTION OF RED IS NOT A DISPENSATION (decision-quality-proof R2.15)
+    # -----------------------------------------------------------------------
+    # The paragraph above predicts this job fails on its first CI run. That prediction
+    # licenses nothing. It does not license `continue-on-error` on this step or on this
+    # job, it does not license narrowing `tsconfig.spec.json`'s `include` back, and it
+    # does not license reading the red as "checked anyway".
+    #
+    # What it DOES oblige: WHILE this job reports one or more TypeScript errors, the
+    # four declared property files under `frontend/spec/effectiveness/__tests__/`
+    # (Properties 32, 33, 34, 36) are described as authored but NOT TYPE-CHECKED in
+    # every document that refers to them. That obligation has a mechanical subject
+    # rather than a prose one: each of the four carries
+    # `type_check_project: frontend/tsconfig.spec.json` in
+    # `infrastructure/quality/fe-invariant-attestation.yaml`, read by
+    # `frontend/spec/check_fe_invariants.py`. Property 31's file lives under `src/` and
+    # belongs to `quality`'s `pnpm typecheck`, not to this project -- the two verdicts
+    # are separate and must not be reported as one.
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9.12.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20.18"
+          cache: "pnpm"
+          cache-dependency-path: frontend/pnpm-lock.yaml
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile=false
+      - name: TypeScript strict (spec/ + tests/)
+        # decision-quality-proof task 2.1 (R2.4, R2.5). No `continue-on-error` at step
+        # scope and none on `spec-typecheck:` either -- a job-scoped setting would be
+        # read as discarding for this step by
+        # `workflow_shape_truth._continue_on_error_construct`. The `run:` is a single
+        # top-level command with no `&&`/`||`/`;` list, so the gate's terminal reading
+        # (`final_list_element`, which sees only the FINAL element of a command list,
+        # R4.12) resolves to `pnpm typecheck:spec` itself. Its exit status is the
+        # step's, the step's is the job's, and that is the whole point of the job.
+        run: pnpm typecheck:spec
 
   build:
     name: Vite build + size budget
@@ -76,8 +202,20 @@ jobs:
         run: pnpm install --frozen-lockfile=false
       - name: Build
         run: pnpm build
-      - name: Size budget
-        run: pnpm size || true   # informational in P0; gated in P2 per plan §17
+      - name: Size budget (informational in P0; gated in P2)
+        # decision-quality-proof task 3.3 (R11.3). Renamed exactly as
+        # `infrastructure/quality/blocking-steps.yaml` recorded the remediation: the
+        # trailing comment already said "informational in P0; gated in P2 per plan
+        # section 17", so the fix was to move that word out of a shell comment -- where
+        # only a human sees it -- and into the step name, where `workflow_shape_truth`
+        # and the run log both see it. The plan reference stays here rather than in the
+        # name: a run-log label should be short, and the name is now the ASCII string
+        # `blocking-steps.yaml` can quote byte-for-byte if this step is ever declared.
+        #
+        # `|| true` is unchanged. Promoting the size budget from measurement to gate is
+        # the P0 -> P2 plan's decision to make; doing it as a side effect of a naming fix
+        # would be a scope change disguised as a rename.
+        run: pnpm size || true
 
   contract-fidelity:
     name: Contract fidelity drift (Req 1)
@@ -114,18 +252,49 @@ jobs:
     name: FE-INV registry coverage
     runs-on: ubuntu-latest
     timeout-minutes: 5
-    needs: quality
+    # The gate reads EXECUTED, non-skipped assertions from the Vitest/Playwright
+    # JSON run records (R8.7 / R12.4) instead of calling `.exists()` on the files
+    # the registry lists — `FE-INV-056` was `enforced` on the strength of a suite
+    # that skips on its first line. It therefore consumes the run records produced
+    # by `quality` (Vitest) and `e2e` / `e2e-visual` / `e2e-harness` (Playwright),
+    # and runs where those run. Push-to-main produces no Playwright record
+    # (ADR-039: `pnpm preview` has no backend there), so this job does not execute
+    # on that event; that gap is rendered by `scripts/audit/gate_surface.py` in
+    # docs/state/GATE_SURFACE.md as NOT EXECUTED rather than reported as a pass.
+    needs: [quality, e2e, e2e-visual, e2e-harness]
     steps:
       - uses: actions/checkout@v4
       - name: Setup Python
         uses: actions/setup-python@v5
         with:
           python-version: "3.11"
-      - name: Install pyyaml
-        run: pip install pyyaml
-      - name: Validate FE-INV registry
+      - name: Install gate dependencies
+        run: pip install pyyaml pydantic
+      - name: Download Vitest run record
+        uses: actions/download-artifact@v4
+        with:
+          name: fe-invariant-vitest-report
+          path: frontend/artifacts/test-reports
+      - name: Download Playwright run records
+        uses: actions/download-artifact@v4
+        with:
+          pattern: fe-invariant-playwright-*-report
+          merge-multiple: true
+          path: frontend/artifacts/test-reports
+      - name: Validate FE-INV registry against executed assertions
         working-directory: .
-        run: python frontend/spec/check_fe_invariants.py
+        # No `|| true` and no `continue-on-error` (R8.9): exit 1 = an `enforced`
+        # invariant has no executed, non-skipped assertion; exit 2 = the evidence
+        # could not be read. Both are non-passing, because absence of proof is
+        # never a pass (I-7). This job is EXPECTED to fail on `FE-INV-056` until
+        # the browser harness lands (design E6 / task 11.1) — that failure is the
+        # honest state and must not be silenced.
+        run: |
+          python frontend/spec/check_fe_invariants.py \
+            --report frontend/artifacts/test-reports/vitest.json \
+            --report frontend/artifacts/test-reports/playwright.json \
+            --report frontend/artifacts/test-reports/playwright-visual.json \
+            --report frontend/artifacts/test-reports/playwright-harness.json
 
   e2e:
     name: Playwright E2E + axe
@@ -151,21 +320,41 @@ jobs:
       - run: pnpm install --frozen-lockfile=false
       - run: pnpm exec playwright install --with-deps chromium
       - run: pnpm build
-      - name: Playwright E2E (informational until deterministic-boot lands)
-        # INFORMATIONAL RATCHET: the full E2E suite boots the app via `pnpm
-        # preview` with NO backend, so every /api call proxy-errors and the app's
-        # data-dependent surfaces (mission-control, resilience specs) intermittently
-        # exceed the 30s test timeout under runner load — flaky, not a code defect.
-        # Runs + uploads the report but does not fail the PR (repo convention:
-        # `pnpm size || true`). RATCHET: drop `|| true` once a deterministic MSW/
-        # backend boot makes the suite non-flaky. Deterministic signal today = the
-        # `e2e-harness` scorecard + `effectiveness-ratchet` gate.
-        run: pnpm test:e2e --project=chromium || true
+      - name: Playwright E2E (blocking)
+        # R8.9 (purpose-achievement-audit, task 11.2): every step of this job exits
+        # with the exit status of the command it runs. The `|| true` that used to
+        # live here is REMOVED and must not come back — `workflow_shape_truth`
+        # fails naming this file and this step if it does.
+        #
+        # The removed rationale was real: this suite boots the app via `pnpm
+        # preview` with NO backend, so /api proxy-errors and data-dependent
+        # surfaces can exceed the 30s timeout under runner load. Discarding the
+        # exit status was still the wrong remedy — it converted an unknown into a
+        # pass, which is what I-7 forbids. Expect this job to be RED until the
+        # underlying flakiness is fixed (a deterministic MSW/backend boot, or the
+        # flaky specs moved to the harness suite, which serves its own build).
+        # That red is the honest state of a suite that cannot currently pass; it is
+        # not a reason to swallow the status again.
+        #
+        # NOTE: `fe-invariants` declares `needs: [quality, e2e, e2e-visual,
+        # e2e-harness]`, so a red `e2e` job skips the FE-INV registry gate. That
+        # coupling is real and is NOT fixed here; `scripts/audit/gate_surface.py`
+        # renders a skipped job as NOT EXECUTED rather than as a pass.
+        run: pnpm test:e2e --project=chromium
       - uses: actions/upload-artifact@v4
         if: always()
         with:
           name: playwright-report
           path: frontend/playwright-report
+          retention-days: 7
+      - name: Upload Playwright run record (FE-INV attestation evidence, R8.7)
+        # The machine-readable record of which e2e assertions actually executed.
+        # `fe-invariants` reads it; a skipped spec can no longer read as enforced.
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: fe-invariant-playwright-e2e-report
+          path: frontend/artifacts/test-reports/playwright.json
           retention-days: 7
 
   e2e-visual:
@@ -232,12 +421,26 @@ jobs:
             echo "Baselines already committed — skipping generation."
           fi
       - name: Visual regression compare against committed baselines (real gate)
+        env:
+          # A distinct run record for the `visual` project so the `fe-invariants`
+          # gate can attest the Visual_Regression_Gate invariant from the assertions
+          # that actually ran here (R8.7). Written by the compare run, which is the
+          # gate — the generate-if-absent step above writes it first and is
+          # overwritten.
+          PLAYWRIGHT_JSON_OUTPUT_NAME: artifacts/test-reports/playwright-visual.json
         run: pnpm test:visual
       - uses: actions/upload-artifact@v4
         if: always()
         with:
           name: visual-regression-report
           path: frontend/playwright-report
+          retention-days: 7
+      - name: Upload Playwright visual run record (FE-INV attestation evidence, R8.7)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: fe-invariant-playwright-visual-report
+          path: frontend/artifacts/test-reports/playwright-visual.json
           retention-days: 7
 
   e2e-harness:
@@ -269,29 +472,63 @@ jobs:
           cache-dependency-path: frontend/pnpm-lock.yaml
       - run: pnpm install --frozen-lockfile=false
       - run: pnpm exec playwright install --with-deps chromium
-      - run: pnpm build
+      - name: Build the e2e-mode bundle (the one that contains the harness)
+        # `pnpm build:e2e` -> `dist-e2e/`, served by `pnpm preview:e2e` on :3001
+        # (task 11.1). The PRODUCTION bundle `pnpm build` produces cannot contain
+        # `window.__atlasHarness` by construction (AD-12), so building it here and
+        # then asking the harness specs to drive the harness was a contradiction:
+        # they would fail on the wrong thing.
+        run: pnpm build:e2e
       - name: Task_Completion_Tests + Resilience_Scenarios (seeded, no live network)
-        # Positional filters are OR'd against the test file path, so this runs
-        # exactly the JTBD task-completion suite and every *.resilience.spec.ts
-        # on the deterministic chromium project. The Task_Completion_Tests emit
-        # the single versioned scorecard.json in `afterAll` (chromium is the
-        # canonical emitter).
+        # `test:e2e:harness` runs `playwright.harness.config.ts`, whose `testMatch`
+        # IS `HARNESS_SPEC_PATTERN` — the six harness specs, on the deterministic
+        # chromium project, against `dist-e2e/`.
         #
-        # INFORMATIONAL RATCHET: the resilience specs wait on the not-yet-wired
-        # `__atlasHarness` global and, against the backendless `pnpm preview`,
-        # `page.evaluate`/boot intermittently exceed the 30s timeout — flaky, not a
-        # code defect. This step runs + emits the scorecard but does not fail the
-        # PR; the REAL effectiveness signal is the `effectiveness-ratchet` gate
-        # below, which compares the emitted scorecard against the committed
-        # baseline. RATCHET: drop `|| true` once `__atlasHarness` is wired and the
-        # resilience specs fast-skip instead of hanging.
-        run: pnpm test:e2e --project=chromium task-completion.jtbd resilience.spec || true
+        # This replaces `pnpm test:e2e --project=chromium task-completion.jtbd
+        # resilience.spec || true`, which selected ZERO harness specs: the
+        # `chromium` project of `playwright.config.ts` now carries
+        # `testIgnore: HARNESS_SPEC_PATTERN` (task 11.1), so those positional
+        # filters matched nothing runnable. The consequence was that
+        # `playwright-harness.json` held no executed FE-INV-056 assertion and the
+        # registry gate reported `not_executed` — which the `|| true` then made
+        # look like a green step.
+        #
+        # R8.9: no `|| true` and no `continue-on-error`. An unreachable harness, a
+        # declared job that emits no row, a zero executed count, or any skipped
+        # scenario is a FAILED result (R8.1, R8.2, R8.6, R8.8) — the JTBD suite's
+        # `afterAll` throws rather than emit a shorter scorecard.
+        env:
+          # A distinct run record so the `fe-invariants` gate can tell a
+          # harness-mode execution from the plain `e2e` one (R8.7). This is also
+          # the record `effectiveness-ratchet` reads to detect a skipped
+          # resilience scenario (R8.6) and a run that selected no spec at all.
+          PLAYWRIGHT_JSON_OUTPUT_NAME: artifacts/test-reports/playwright-harness.json
+        run: pnpm test:e2e:harness
+      - name: Upload Playwright harness run record (FE-INV attestation evidence, R8.7)
+        # This is the run in which FE-INV-054..057 are asserted, and it is also the
+        # evidence `effectiveness-ratchet` reads for R8.6/R8.8. Uploaded on failure
+        # too: a record showing what was skipped is exactly what must reach the
+        # gate, rather than a green "the file exists".
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: fe-invariant-playwright-harness-report
+          path: frontend/artifacts/test-reports/playwright-harness.json
+          retention-days: 7
       - name: Upload effectiveness scorecard
         uses: actions/upload-artifact@v4
         if: success() || failure()
         with:
+          # `scorecard.json` is written ONLY by a complete run (one stamped row per
+          # declared Job_To_Be_Done). An incomplete run writes
+          # `scorecard.incomplete.json` instead and fails the step above: R8.2
+          # forbids emitting a scorecard with fewer rows, so the partial
+          # measurement goes to a path nothing consumes as a scorecard. Both are
+          # listed so the evidence survives either way.
           name: effectiveness-scorecard
-          path: frontend/test-results/effectiveness/scorecard.json
+          path: |
+            frontend/test-results/effectiveness/scorecard.json
+            frontend/test-results/effectiveness/scorecard.incomplete.json
           retention-days: 14
       - uses: actions/upload-artifact@v4
         if: always()
@@ -312,6 +549,19 @@ jobs:
     # rate (or Interruption_Precision) regress beyond tolerance (Req 4.3). Both
     # sides derive from seeded, byte-identical harness measurements, so the gate
     # is deterministic and non-flaky (Req 4.4, 20.3). $0-cost / OSS only.
+    #
+    # R8.9: every step below exits with the exit status of the command it runs. No
+    # `|| true`, no `continue-on-error`.
+    #
+    # EXPECTED RED ON LANDING (task 11.2, I-7). The committed baseline carries
+    # `steps: 20` / `latencyMs: 15000` on all five rows and no per-row capture
+    # stamps, so `pnpm effectiveness:baseline` rejects it with five `missing-stamp`
+    # findings and one `uniform-metrics` (R8.10). That is the audit finding becoming
+    # mechanical. It clears when a complete harness run measures the five rows and
+    # the ratchet writes them through `buildBaseline` to the
+    # `effectiveness-baseline-candidate` artifact, which an operator then commits
+    # over the current baseline — never by editing a number, typing a `capturedAt`,
+    # or relaxing a threshold.
     if: github.event_name == 'pull_request' || startsWith(github.ref, 'refs/tags/v')
     steps:
       - uses: actions/checkout@v4
@@ -334,8 +584,39 @@ jobs:
         with:
           name: effectiveness-scorecard
           path: frontend/test-results/effectiveness
+      - name: Download harness run record (skip + zero-execution evidence, R8.6/R8.8)
+        # The scorecard can only speak for the five Jobs-To-Be-Done. A SKIPPED
+        # resilience scenario lives in a sibling spec file, so the ratchet reads the
+        # Playwright run record to see it. A record holding zero specs — the state
+        # the old `pnpm test:e2e ... || true` step produced — is a failure here, so
+        # "nothing ran" can never again read as a pass.
+        uses: actions/download-artifact@v4
+        with:
+          name: fe-invariant-playwright-harness-report
+          path: frontend/artifacts/test-reports
       - name: Effectiveness ratchet (fresh scorecard vs committed baseline)
+        # Also re-applies the complete-or-failed emission rule to the downloaded
+        # record against the real JOB_ORDER (R8.1, R8.2, R8.3, R8.8), and writes the
+        # measured baseline candidate before its own blocking decision so a rejected
+        # baseline has a measured replacement.
         run: pnpm effectiveness:ratchet
+      - name: Effectiveness baseline is a measurement, not a ceiling (R8.10)
+        # Blocking. `if: success() || failure()` is NOT a discarding construct: the
+        # step still exits with the exit status of `pnpm effectiveness:baseline` and
+        # a non-zero exit still fails the job. It is here so this gate reports even
+        # when the ratchet step above already failed — and it runs AFTER the ratchet
+        # on purpose, because the ratchet is what writes the measured candidate that
+        # repairs a rejected baseline. Ordering it first would make its own fix
+        # unreachable.
+        if: success() || failure()
+        run: pnpm effectiveness:baseline
+      - name: Upload measured baseline candidate (commit this to clear R8.10)
+        if: success() || failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: effectiveness-baseline-candidate
+          path: frontend/test-results/effectiveness/scorecard.baseline.candidate.json
+          retention-days: 14
 
   mobile-lighthouse:
     name: Mobile Lighthouse budget (Req 15.4/15.5)
@@ -419,6 +700,14 @@ jobs:
     # uncovered LOC drops the score below the break threshold and turns
     # main red without anyone to act on it). E-S12-14.
     if: github.event_name == 'pull_request' || startsWith(github.ref, 'refs/tags/v')
+    env:
+      # Stryker drives vitest, so it loads `src/test/setup.ts` and inherits the same
+      # fast-check budget. Set explicitly for the same reason `quality` sets it, and to
+      # the same value: leaving it unset would resolve to `dev` = 10 and quietly weaken
+      # every property-based mutant kill behind an unchanged 85% break threshold. A gate
+      # whose strength moves because an environment variable was not written down is the
+      # failure mode this whole phase exists to remove.
+      HYPOTHESIS_PROFILE: heavy
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4

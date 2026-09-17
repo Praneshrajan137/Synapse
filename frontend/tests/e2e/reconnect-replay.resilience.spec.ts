@@ -21,25 +21,37 @@ import { expect, test, type Page } from "@playwright/test";
  *     containing at least one already-acted decision, and a resumed live
  *     stream, exercised deterministically.
  *
- * ── Harness wiring (graceful-skip convention) ────────────────────────────────
- * The Effectiveness_Harness drives the seeded drop/replay/resume in-browser
- * through a documented global, mirroring the stream driver
- * (`spec/effectiveness/stream-driver.ts` — `drive`/`flap`) and the reconcile
- * reducer (`src/lib/reconcile.ts`):
+ * -- Why this spec still skips, and what would un-skip it (task 11.1, I-7) -----
+ * The other six harness-dependent specs were un-skipped when
+ * `window.__atlasHarness` landed (`spec/effectiveness/harness.ts`): a missing
+ * harness now FAILS them. This one was NOT, and the reason is not the harness
+ * global -- `driveResilience` exists. Three things this spec asserts are absent
+ * from the shipped Console, and none of them can be supplied from the harness:
  *
- *   interface AtlasHarness {
- *     seedScenario?(scenarioId: string): Promise<void>;      // reach the populated + acted baseline
- *     driveResilience?(scenarioId: string): Promise<void>;   // drop → since_seq replay → resumed live
- *   }
- *   declare global { interface Window { __atlasHarness?: AtlasHarness } }
+ *   1. **No row identity in the DOM.** `renderedDecisionIds()` and `ACTED_ROW`
+ *      read `[data-decision-row]` / `[data-decision-status]`. Neither attribute
+ *      is rendered anywhere under `frontend/src/` (grep: zero hits), so every
+ *      assertion below would compare an empty set against
+ *      `EXPECTED_DECISION_IDS` and fail while naming the wrong cause.
+ *   2. **No `replay`-plan driver.** `RECONNECT_REPLAY` scripts a
+ *      `replay: { preDrop, sinceSeq, replay, live }` plan and declares no
+ *      `rates`, so `harness.driveResilience` seeds the fixture and returns
+ *      without driving a drop or a `since_seq` burst. Adding that driver is
+ *      cheap; on its own it changes nothing while (1) and (3) hold.
+ *   3. **The reconciler is dormant.** `src/lib/reconcile.ts` -- the
+ *      acted-never-reverted reducer whose guarantee Req 7.2 is about -- is
+ *      imported only by its own property tests (audit R13). The live socket
+ *      dedups by `isFreshSeq` (`transport/ws-multiplex.ts`) and resumes with
+ *      `since_seq` (`hooks/use-firehose.ts`), so (1)/(3) are the production
+ *      work, not test work.
  *
- * Until that global is wired (the browser worker + stream driver expose it) the
- * reconciliation assertions skip cleanly rather than failing — the same
- * graceful-skip convention as the other harness-dependent e2e specs
- * (firehose-stress.resilience.spec.ts, fault-transition.resilience.spec.ts).
- * The base render check (the surface is reachable and not bounced to /login)
- * runs regardless, so this spec is committed and ready the moment the driver
- * lands.
+ * So the skip is retained deliberately and its reason is stated above rather
+ * than as "not wired yet", which is no longer true. A skip is not a pass
+ * (I-7): this spec contributes no evidence for Req 7 and must not be counted
+ * as if it did. RATCHET -- un-skip in one change, once the decision surfaces
+ * render `data-decision-row`/`data-decision-status`, the Console reconciles a
+ * `since_seq` burst through `reconcile`, and the harness drives the `replay`
+ * plan. The base render check runs regardless.
  *
  * The scenario plan below MIRRORS the descriptor but is kept LOCAL so this
  * Playwright spec stays free of the app's `@`-alias / spec module graph (same
@@ -135,13 +147,21 @@ test.describe("Resilience — reconnect and replay reconciliation (Req 7)", () =
     }
     await expect(page.locator("main")).toBeVisible();
 
-    // Driving the seeded drop/replay/resume needs the in-browser harness global;
-    // skip the reconciliation assertions cleanly until it is wired (same
-    // convention as the other harness-dependent e2e specs).
-    if (!(await replayHarnessReady(page))) {
+    // The reconciliation assertions below cannot run honestly yet — see the
+    // three blockers in this file's header. The harness global is necessary but
+    // NOT sufficient, so gate on both: the harness driver AND the row identity
+    // attributes the assertions read. This skip records "no evidence for Req 7",
+    // never "Req 7 holds" (I-7).
+    const rowIdentityRendered = await page.evaluate(
+      () => document.querySelector("[data-decision-row]") !== null,
+    );
+    if (!(await replayHarnessReady(page)) || !rowIdentityRendered) {
       test.skip(
         true,
-        "reconnect-replay harness (window.__atlasHarness.driveResilience) not wired yet",
+        "Req 7 reconciliation is unmeasured: the decision surfaces render no " +
+          "[data-decision-row]/[data-decision-status] identity, src/lib/reconcile.ts is not on " +
+          "the production path, and the harness has no replay-plan driver. This is a SKIP, not " +
+          "a PASS (see the header ratchet).",
       );
     }
 

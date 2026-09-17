@@ -1,11 +1,13 @@
 import type { City } from "@domain/primitives";
-import { KPITile } from "@ds/compounds";
+import { DataPathNotice, KPITile } from "@ds/compounds";
 import { useCalibration } from "@hooks/use-calibration";
 import { cn } from "@lib/cn";
 import { useState } from "react";
+import { surfaceDataPath } from "../data-paths";
 import { ReliabilityCurve } from "./ReliabilityCurve";
 import {
   AWAITING_SCORED_OUTCOMES,
+  NO_VALUE_MARKER,
   formatMetric,
   hasScoredEvidence,
   isProvisional,
@@ -21,18 +23,37 @@ interface CalibrationPanelProps {
  * over the scored outcomes (ADR-047). Defaults to REAL decisions only
  * (FE-INV-044); always discloses n + as_of + window (FE-INV-043) so a thin
  * sample reads as thin, never a confident-looking curve on no evidence.
+ *
+ * R3.5: `n_scored ?? 0` used to make a FAILED calibration read indistinguishable
+ * from a genuinely unscored window - both drew "n=0 scored · awaiting scored
+ * outcomes". They are different facts: one says the pipeline did not answer, the
+ * other says it answered with nothing. The data-path notice states which, and
+ * the disclosure line renders the explicit no-value marker instead of a 0 when
+ * the read did not answer. R4.3: the synthetic toggle already segments
+ * decision-sourced synthetic rows; the notice carries that state as the
+ * panel-level label.
  */
 export function CalibrationPanel({ city }: CalibrationPanelProps) {
   const [includeSynthetic, setIncludeSynthetic] = useState(false);
   const q = useCalibration({ includeSynthetic, ...(city ? { city } : {}) });
   const data = q.data;
+  const known = data !== undefined;
+
+  const dataPath = surfaceDataPath("operations.calibration", {
+    degraded: q.isError ? true : known ? false : null,
+    // The aggregate is synthetic-sourced exactly when the operator has opted
+    // synthetic decisions back in; with no answered read we cannot claim either.
+    synthetic: known ? includeSynthetic : null,
+  });
 
   const brier = data?.brier_score;
   const nScored = data?.n_scored ?? 0;
   // FE-INV-043 (Req 4.4): fewer than 30 scored outcomes reads as provisional.
-  const provisional = isProvisional(nScored);
+  // Only meaningful once the read answered - an unanswered read is not a thin
+  // sample, it is no sample.
+  const provisional = known && isProvisional(nScored);
   // FE-INV-043 (Req 4.5): no scored evidence → "awaiting scored outcomes".
-  const awaiting = !hasScoredEvidence(nScored);
+  const awaiting = known && !hasScoredEvidence(nScored);
 
   // Tri-state outcome mix (FE-INV-041): confirmed / diverged / unknown.
   // `unknown` is rendered with the chroma-drained honesty marker — NEVER
@@ -61,6 +82,8 @@ export function CalibrationPanel({ city }: CalibrationPanelProps) {
           {includeSynthetic ? "Including synthetic" : "Real only"}
         </button>
       </div>
+
+      <DataPathNotice state={dataPath} />
 
       <div className="grid gap-4 md:grid-cols-[minmax(0,1fr)_180px]">
         <ReliabilityCurve bins={data?.bins ?? []} />
@@ -102,11 +125,17 @@ export function CalibrationPanel({ city }: CalibrationPanelProps) {
         </div>
       </div>
 
-      {/* FE-INV-043: statistical-power disclosure is ALWAYS present. */}
+      {/* FE-INV-043: statistical-power disclosure is ALWAYS present. An
+          unanswered read discloses the no-value marker, NOT a zero: "n=0 scored"
+          is a measurement and "n=— scored" is the absence of one (Req 4.6). */}
       <p className="text-2xs text-ink-subtle">
-        n={data?.n_scored ?? 0} scored · {data?.n_unknown ?? 0} unknown ·{" "}
-        {data?.window_hours ?? 168}h window · as of {data?.as_of ?? "—"}
-        {awaiting ? (
+        n={known ? data.n_scored : NO_VALUE_MARKER} scored ·{" "}
+        {known ? data.n_unknown : NO_VALUE_MARKER} unknown ·{" "}
+        {known ? data.window_hours : NO_VALUE_MARKER}h window · as of{" "}
+        {data?.as_of ?? NO_VALUE_MARKER}
+        {!known ? (
+          <span className="text-state-degraded"> · calibration read did not answer</span>
+        ) : awaiting ? (
           <span className="text-signal-warning"> · {AWAITING_SCORED_OUTCOMES.toLowerCase()}</span>
         ) : (
           provisional && (

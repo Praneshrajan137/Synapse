@@ -26,18 +26,21 @@ import { expect, test } from "@playwright/test";
  * `seed` fixes byte-identical fixtures on every run.
  *
  * The harness fault-injection global used to force a WebGL init failure
- * (Req 10.3) follows the same documented shape and graceful-skip convention as
- * the other harness-dependent e2e specs (see firehose-stress.resilience.spec):
+ * (Req 10.3) is implemented in `spec/effectiveness/harness.ts` (task 11.1):
  *
  *   interface AtlasHarness {
- *     seedScenario?(scenarioId: string): Promise<void>;
- *     failWebGL?(surfaceId: string): Promise<void>; // force the next WebGL init to throw
+ *     seedScenario(scenarioId: string): Promise<void>;
+ *     failWebGL(surfaceId: string): Promise<void>; // force the next WebGL init to throw
  *   }
  *   declare global { interface Window { __atlasHarness?: AtlasHarness } }
  *
- * Checks that need the harness (seeded fixtures, forced WebGL failure) skip
- * cleanly until it is wired; the smoke, resolved-token, and non-spatial-
- * equivalent checks run against the surfaces as they render today.
+ * It exists only in the e2e-mode build (AD-12), so this suite runs as
+ * `pnpm build:e2e && pnpm test:e2e:harness`. The forced-WebGL-failure check now
+ * FAILS when the harness is absent instead of skipping (I-7); the smoke,
+ * resolved-token, and non-spatial-equivalent checks still run against the
+ * surfaces as they render today. The error-with-retry state these checks assert
+ * is rendered by `@ds/compounds/SpatialErrorBoundary`
+ * (`data-universal-state="error"`, `role="alert"`).
  *
  * Constants below mirror the descriptor but are kept LOCAL so this Playwright
  * spec stays free of the app's `@`-alias module graph (same convention as
@@ -257,21 +260,20 @@ test.describe("Spatial visualization correctness (Req 10)", () => {
         }
         await expect(page.locator("main")).toBeVisible();
 
-        // Forcing a WebGL init failure requires the harness fault-injection
-        // hook; skip cleanly until it is wired (same convention as the other
-        // harness-dependent e2e specs).
-        if (!(await harnessReady(page))) {
-          test.skip(true, "WebGL fault-injection harness not wired yet");
-        }
+        // The harness fault-injection hook is REQUIRED (task 11.1): its absence
+        // fails this test rather than skipping it (I-7).
+        expect(
+          await harnessReady(page),
+          "window.__atlasHarness is absent: run the harness suite against the e2e-mode build " +
+            "(pnpm build:e2e && pnpm test:e2e:harness)",
+        ).toBe(true);
         const canForce = await page.evaluate(
           () =>
             typeof (window as unknown as {
               __atlasHarness?: { failWebGL?: unknown };
             }).__atlasHarness?.failWebGL === "function",
         );
-        if (!canForce) {
-          test.skip(true, "harness does not expose failWebGL fault injection");
-        }
+        expect(canForce, "window.__atlasHarness.failWebGL is absent").toBe(true);
 
         await page.evaluate(async (surfaceId) => {
           await (window as unknown as {

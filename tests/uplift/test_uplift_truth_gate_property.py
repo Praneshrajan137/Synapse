@@ -1,172 +1,176 @@
-"""Property-based tests for the ``uplift_truth`` honesty gate exit codes.
+"""Property-based tests for the ``uplift_truth`` verdict mapping.
 
 Feature: decision-integrity-uplift-proof
 Property 21: Uplift_truth gate exit codes follow the floor mapping.
 
-    *For any* measured uplift and committed floor, the gate exits ``0`` when the
-    measured uplift is greater than or equal to the floor; exits with the
-    regression code (``1``), emitting the measured value, the floor, and a
-    regression indication, when the measured uplift is strictly below the floor;
-    and exits with a distinct non-zero code (never a pass) when the measured
-    uplift is unavailable.
+    *For any* measurement and committed floor, the gate exits ``0`` when the measurement
+    proves an uplift at or above the floor; exits the regression code (``1``), emitting
+    the measured value and the floor, when a real measurement is strictly below the
+    floor; and exits a distinct non-zero code (never a pass) when no uplift is proven.
 
-Validates: Requirements 6.3, 6.4, 6.5
+**Restated for the purpose-achievement-audit R2 remediation.** The original statement of
+this property was "exits 0 when the measured uplift is >= the floor", read from a bare
+``headline_uplift`` field. That is the tautology Requirement 2 of the
+``purpose-achievement-audit`` spec found: with ``UPLIFT_FLOOR = 0.0`` it reported PASS on
+an artifact declaring ``incomplete: true`` and fidelity ``unknown``. R2.4 supersedes it:
+the verdict now derives from :func:`uplift.uplift_floor.is_proven_uplift`, so a pass
+additionally requires a powered, complete, within-fidelity-bound run with a strictly
+positive headline. The floor mapping itself -- pass at/above, regression below -- is
+unchanged, and that is what this property still pins.
+
+The expected code is recomputed here from the proof's fields rather than by calling
+``is_proven_uplift``, so this is an independent statement of the rule and not a
+restatement of the implementation. Pure: no artifact, no twin, no socket, $0.
+
+**Validates: Requirements 6.3, 6.4, 6.5** (and, as restated, R2.4)
 """
 from __future__ import annotations
 
-import json
 import math
 
-import pytest
-from hypothesis import given, settings
+from hypothesis import given
 from hypothesis import strategies as st
 
-from scripts.audit import uplift_truth as gate
 from scripts.audit.uplift_truth import (
     EXIT_PASS,
     EXIT_REGRESSION,
     EXIT_UNAVAILABLE,
-    read_measured_uplift,
-    run,
+    verdict,
+    verdict_reason,
+)
+from uplift.uplift_floor import MIN_POWERED_REPLICATES, PoweredProof
+
+_EXIT_CODES = (EXIT_PASS, EXIT_REGRESSION, EXIT_UNAVAILABLE)
+
+# Finite values on a range where the ``headline >= floor`` comparison stays meaningful.
+_finite = st.floats(min_value=-1e9, max_value=1e9, allow_nan=False, allow_infinity=False)
+
+# Replicate counts that straddle the INV-TW-002 power floor in both directions.
+_replicates = st.one_of(
+    st.integers(min_value=0, max_value=MIN_POWERED_REPLICATES - 1),
+    st.integers(min_value=MIN_POWERED_REPLICATES, max_value=MIN_POWERED_REPLICATES * 3),
+    st.just(MIN_POWERED_REPLICATES),
 )
 
 
+@st.composite
+def _proofs(draw) -> PoweredProof:
+    """A proof spanning powered/under-powered, complete/incomplete, and all three
+    fidelity states, with headlines that land above, below, and exactly on a floor."""
+    return PoweredProof(
+        headline_uplift=draw(_finite),
+        replicates=draw(_replicates),
+        incomplete=draw(st.booleans()),
+        within_fidelity_bound=draw(st.sampled_from([True, False, None])),
+    )
+
+
+_proof_or_none = st.one_of(st.none(), _proofs())
+
+
+def _expected_exit(proof: PoweredProof | None, floor: float) -> int:
+    """Restate the mapping directly from the proof's fields (R2.4)."""
+    if proof is None:
+        return EXIT_UNAVAILABLE
+    if proof.replicates < MIN_POWERED_REPLICATES:
+        return EXIT_UNAVAILABLE
+    if proof.incomplete:
+        return EXIT_UNAVAILABLE
+    if proof.within_fidelity_bound is not True:
+        return EXIT_UNAVAILABLE
+    if not math.isfinite(proof.headline_uplift):
+        return EXIT_UNAVAILABLE
+    if proof.headline_uplift < floor:
+        return EXIT_REGRESSION
+    if proof.headline_uplift > 0.0:
+        return EXIT_PASS
+    return EXIT_UNAVAILABLE
+
+
 # ---------------------------------------------------------------------------
-# Strategies — finite floats for the measured uplift and the committed floor,
-# plus ``None`` for the "measured uplift unavailable" case (R6.5). Bounded to a
-# sensible finite range so the ``measured >= floor`` comparison stays meaningful.
+# Property 21: the three-way mapping, and its totality
 # ---------------------------------------------------------------------------
-_finite = st.floats(
-    min_value=-1e9,
-    max_value=1e9,
-    allow_nan=False,
-    allow_infinity=False,
-)
-# measured uplift including ``None`` (the unavailable case, R6.5)
-_measured_or_none = st.one_of(st.none(), _finite)
+@given(proof=_proof_or_none, floor=_finite)
+def test_exit_codes_follow_floor_mapping(proof: PoweredProof | None, floor: float) -> None:
+    """Pass at/above the floor when proven, regression below, unavailable otherwise."""
+    code = verdict(proof, floor=floor)
+
+    assert len(set(_EXIT_CODES)) == 3
+    assert code in _EXIT_CODES
+    assert code == _expected_exit(proof, floor)
+
+    if code == EXIT_UNAVAILABLE:
+        # R6.5 / I-7: a distinct non-zero code. Absence of proof is never a pass.
+        assert code != EXIT_PASS
+        assert code != EXIT_REGRESSION
+        assert code != 0
 
 
-def _set_gate_state(monkeypatch, measured: float | None, floor: float) -> None:
-    """Pin the gate's measured-uplift source and committed floor.
-
-    ``run()`` reads the measurement through the module-level
-    ``read_measured_uplift`` and compares against the module-level
-    ``UPLIFT_FLOOR``; monkeypatching both lets Hypothesis drive the full input
-    space (measured value, unavailable, and floor) without a live twin run.
-    """
-    monkeypatch.setattr(gate, "read_measured_uplift", lambda: measured)
-    monkeypatch.setattr(gate, "UPLIFT_FLOOR", floor)
-
-
-# ---------------------------------------------------------------------------
-# Property 21: the three-way exit-code mapping against the floor
-# ---------------------------------------------------------------------------
-@settings(max_examples=200)
-@given(measured=_measured_or_none, floor=_finite)
-def test_exit_codes_follow_floor_mapping(
-    measured: float | None, floor: float, monkeypatch, capsys
+@given(proof=_proof_or_none, floor=_finite)
+def test_regression_reason_names_measured_and_floor(
+    proof: PoweredProof | None, floor: float
 ) -> None:
-    """exit 0 when measured >= floor, 1 (regression) when below, 2 when unavailable."""
-    _set_gate_state(monkeypatch, measured, floor)
+    """R6.4: the regression report emits the measured value, the floor, and 'REGRESSION'."""
+    code = verdict(proof, floor=floor)
+    reason = verdict_reason(proof, code, floor=floor)
 
-    exit_code = run(check=True)
-    out = capsys.readouterr().out
-
-    if measured is None:
-        # R6.5: unavailable -> a DISTINCT non-zero code, never a pass.
-        assert exit_code == EXIT_UNAVAILABLE
-        assert exit_code != EXIT_PASS
-        assert exit_code != EXIT_REGRESSION
-        assert exit_code != 0
-    elif measured >= floor:
-        # R6.3: measured >= floor -> pass.
-        assert exit_code == EXIT_PASS
-        assert exit_code == 0
-    else:
-        # R6.4: measured < floor -> regression code, emitting measured + floor +
-        # a regression indication.
-        assert exit_code == EXIT_REGRESSION
-        assert exit_code != 0
-        assert str(measured) in out
-        assert str(floor) in out
-        assert "REGRESSION" in out.upper()
+    assert reason  # every outcome is explained, never silently non-zero
+    if code == EXIT_REGRESSION:
+        assert proof is not None
+        assert "REGRESSION" in reason.upper()
+        assert str(proof.headline_uplift) in reason
+        assert str(floor) in reason
 
 
 # ---------------------------------------------------------------------------
-# Property 21 (boundary): measured == floor is a pass, not a regression (R6.3 '>=')
+# Property 21 (boundary): measured == floor passes only when it is a real gain
 # ---------------------------------------------------------------------------
-@given(floor=_finite)
-def test_boundary_measured_equals_floor_is_pass(floor: float, monkeypatch) -> None:
-    """When measured == floor exactly, the gate passes (R6.3 uses '>=')."""
-    _set_gate_state(monkeypatch, floor, floor)
-    assert run(check=True) == EXIT_PASS
-
-
-# ---------------------------------------------------------------------------
-# Property 21 (--json mode): the boolean regression field tracks the mapping (R6.7)
-# ---------------------------------------------------------------------------
-@settings(max_examples=200)
-@given(measured=_measured_or_none, floor=_finite)
-def test_json_regression_field_tracks_mapping(
-    measured: float | None, floor: float, monkeypatch, capsys
-) -> None:
-    """--json emits measured, floor, and regression==True iff measured < floor."""
-    _set_gate_state(monkeypatch, measured, floor)
-
-    run(as_json=True, check=True)
-    payload = json.loads(capsys.readouterr().out)
-
-    assert payload["measured_uplift"] == measured
-    assert payload["uplift_floor"] == floor
-    # regression is True iff a measurement exists AND it is below the floor.
-    expected_regression = measured is not None and measured < floor
-    assert payload["regression"] is expected_regression
+@given(floor=st.floats(min_value=1e-6, max_value=1e6, allow_nan=False, allow_infinity=False))
+def test_boundary_measured_equals_positive_floor_is_pass(floor: float) -> None:
+    """A proven measurement exactly on a positive floor passes (R6.3 uses '>=')."""
+    proof = PoweredProof(
+        headline_uplift=floor,
+        replicates=MIN_POWERED_REPLICATES,
+        incomplete=False,
+        within_fidelity_bound=True,
+    )
+    assert verdict(proof, floor=floor) == EXIT_PASS
 
 
 # ---------------------------------------------------------------------------
-# Property 21 (artifact source): the measured value is read from the JSON
-# artifact, and an unavailable measurement (missing / malformed / non-numeric)
-# maps to ``None`` — which drives the distinct "unavailable" exit path (R6.5).
+# The audit's central example: the artifact the gate used to pass (R2.1, R2.4)
 # ---------------------------------------------------------------------------
-@given(headline=_finite)
-def test_read_measured_uplift_round_trips_numeric_headline(
-    headline: float, tmp_path
-) -> None:
-    """A numeric ``headline_uplift`` in the artifact is read back as that value."""
-    artifact = tmp_path / "result.json"
-    artifact.write_text(json.dumps({"headline_uplift": headline}), encoding="utf-8")
-
-    measured = read_measured_uplift(artifact)
-    assert measured is not None
-    assert math.isclose(measured, headline, rel_tol=0.0, abs_tol=0.0)
-
-
-def test_read_measured_uplift_missing_artifact_is_unavailable(tmp_path) -> None:
-    """A missing artifact yields ``None`` (unavailable), never a spurious value."""
-    assert read_measured_uplift(tmp_path / "does_not_exist.json") is None
+def test_zero_headline_on_zero_floor_is_not_a_pass() -> None:
+    """A complete, powered, in-bound run measuring 0.0 against a floor of 0.0 is not
+    proven: "at least zero" is no longer spelled "proven" (R2.4)."""
+    proof = PoweredProof(
+        headline_uplift=0.0,
+        replicates=MIN_POWERED_REPLICATES,
+        incomplete=False,
+        within_fidelity_bound=True,
+    )
+    assert verdict(proof, floor=0.0) == EXIT_UNAVAILABLE
 
 
-@pytest.mark.parametrize(
-    "contents",
-    [
-        "not valid json {",              # malformed JSON
-        json.dumps([1, 2, 3]),           # valid JSON but not a dict
-        json.dumps({"other": 1.0}),      # dict without headline_uplift
-        json.dumps({"headline_uplift": "0.5"}),  # non-numeric headline_uplift
-        json.dumps({"headline_uplift": True}),   # bool must not count as 1.0
-        json.dumps({"headline_uplift": None}),   # explicit null
-    ],
-)
-def test_read_measured_uplift_unavailable_variants(contents: str, tmp_path) -> None:
-    """Malformed / non-numeric artifacts all map to ``None`` (unavailable, R6.5)."""
-    artifact = tmp_path / "result.json"
-    artifact.write_text(contents, encoding="utf-8")
-    assert read_measured_uplift(artifact) is None
+def test_incomplete_run_is_never_a_pass() -> None:
+    """The exact shape of the previously committed artifact: incomplete, unpowered,
+    fidelity unknown, headline 0.0. It used to exit 0; it must not."""
+    proof = PoweredProof(
+        headline_uplift=0.0,
+        replicates=0,
+        incomplete=True,
+        within_fidelity_bound=None,
+    )
+    assert verdict(proof, floor=0.0) == EXIT_UNAVAILABLE
 
 
-def test_read_measured_uplift_rejects_non_finite(tmp_path) -> None:
-    """A non-finite headline (Infinity/NaN) is treated as unavailable (R6.5)."""
-    for token in ("Infinity", "-Infinity", "NaN"):
-        artifact = tmp_path / f"{token}.json"
-        artifact.write_text(f'{{"headline_uplift": {token}}}', encoding="utf-8")
-        assert read_measured_uplift(artifact) is None
+def test_large_gain_out_of_fidelity_bound_is_never_a_pass() -> None:
+    """R2.4: an out-of-bound result is non-zero irrespective of headline magnitude."""
+    for within in (False, None):
+        proof = PoweredProof(
+            headline_uplift=99.0,
+            replicates=MIN_POWERED_REPLICATES,
+            incomplete=False,
+            within_fidelity_bound=within,
+        )
+        assert verdict(proof, floor=0.0) == EXIT_UNAVAILABLE

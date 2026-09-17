@@ -1,0 +1,191 @@
+# SYNAPSE -- FE-INV attestation configuration (R8.7 / R12.4; design E2.4, RC-3)
+#
+# `frontend/spec/check_fe_invariants.py` used to prove that a listed test FILE
+# EXISTS. Existence is not evidence: `FE-INV-056` was registered `enforced` with
+# its sole test being a suite that calls `test.skip(true, ...)` on its first
+# line. The checker now reads the Vitest / Playwright JSON reporter output and
+# requires at least one EXECUTED, NON-SKIPPED assertion attributable to every
+# `enforced` invariant. File existence and an all-skipped run are both rejected.
+#
+# The two numbers/lists that derivation needs are pinned here rather than
+# hardcoded in the checker, so they are reviewable and diffable (design AD-13).
+#
+# Read contract: `encoding='utf-8'` on every read (E-S13-07). A missing or
+# unparseable file makes the checker report `unavailable` -- never a pass (I-7).
+
+version: 1
+
+# A registry `tests:` entry is attributable to the JS reporter output only if it
+# is one of these. Everything else (a workflow file, a Python gate, an
+# `api/tests/*.py` module) is invisible to Vitest and Playwright, so it can
+# never be the thing this checker observed.
+suite_extensions:
+  - ".test.ts"
+  - ".test.tsx"
+  - ".spec.ts"
+  - ".spec.tsx"
+
+# Enforced invariants whose proof mechanism is a CI job rather than a browser or
+# jsdom assertion. Each entry is a DISCLOSED LABEL ON DEBT, not an exemption
+# from measurement, and follows the C61 idiom: it must name a workflow and a job
+# that actually exist, and carry a dated rationale AND a removal condition. An
+# entry missing any of those is itself a FAIL, as is an entry for an invariant
+# that DOES list a suite file -- an observable invariant can never be declared
+# away here. That rule is what keeps `FE-INV-056` failing until the browser
+# harness lands (design E6 / task 11.1), which is the honest state under I-7.
+#
+# Deliberately NOT listed, and therefore reported by the checker as
+# `unattributable` FAILs, because no mechanical enforcer could be named without
+# fabricating one (I-7):
+#   FE-INV-013  tests: frontend/spec/check_fe_invariants.py -- the registry gate
+#               itself. Nothing asserts the English-only i18n catalog. This is
+#               the Requirement 12 "the registry gate validates the registry"
+#               finding, in the registry.
+#   FE-INV-014  the entry-bundle budget these name is `pnpm size || true` in
+#   FE-INV-025  `frontend.yml::build` -- an informational step is not a gate.
+#   FE-INV-020  `tests: .github/workflows/frontend.yml` names no job, and no job
+#   FE-INV-024  in that file asserts tile egress.
+#   FE-INV-031  names "the a11y job"; `frontend.yml` defines no such job.
+out_of_suite:
+  - id: FE-INV-001
+    workflow: .github/workflows/frontend.yml
+    job: license-audit
+    rationale: >
+      No paid SaaS endpoint (I-1) is a property of the dependency tree and the
+      shipped bundle, not of a rendered component, so no jsdom or browser
+      assertion can observe it. The license audit is the mechanical enforcer and
+      it runs on every push and pull request.
+    dated: "2026-06-17"
+    removal_condition: >
+      Delete when a Vitest assertion tagged FE-INV-001 asserts the absence of
+      paid-SaaS hosts in the built bundle, at which point the invariant becomes
+      observable in the reporter output like every other enforced entry.
+
+  - id: FE-INV-015
+    workflow: .github/workflows/frontend.yml
+    job: quality
+    rationale: >
+      The CSP lives in `frontend/nginx.conf` (not reachable from a test render)
+      and the dangerouslySetInnerHTML ban is a Biome rule, enforced by
+      `pnpm lint` in the blocking `quality` job. A component test cannot observe
+      the absence of a source construct across the tree.
+    dated: "2026-06-17"
+    removal_condition: >
+      Delete when a Vitest assertion tagged FE-INV-015 walks `src/` for
+      dangerouslySetInnerHTML and asserts the served CSP header, the way
+      `src/theme/__tests__/no-legacy-js.test.ts` asserts the absence of legacy
+      theme JavaScript for FE-INV-071.
+
+  - id: FE-INV-058
+    workflow: .github/workflows/integration.yml
+    job: real-stack-run
+    rationale: >
+      The nightly Real_Stack_Run is a workflow-level comparison of the harness
+      baseline against the real docker stack; its subject is a CI job pair, so
+      it is enforced by `pnpm effectiveness:real-stack-fidelity` inside that job
+      rather than by an assertion inside either suite.
+    dated: "2026-06-17"
+    removal_condition: >
+      Delete when the fidelity comparison is itself asserted by a test tagged
+      FE-INV-058 that runs in the reporter-observed suite. Note that R8.6 also
+      requires the job to stop recording a real-stack SKIP as informational;
+      until then this entry labels a job whose skip handling is still lenient.
+
+# ---------------------------------------------------------------------------
+# Declared console property suites: a per-file verdict, with an `unavailable`
+# state (R2.6-R2.8, R2.12-R2.14, R2.16; design "Console run record" row)
+# ---------------------------------------------------------------------------
+#
+# WHY THIS BLOCK EXISTS, stated precisely, because the defect is narrower than
+# "the console has no coverage".
+#
+# The machine-readable run record already exists as a CONFIGURATION:
+# `frontend/vitest.config.ts` sets `reporters: ["default","json"]` and
+# `outputFile.json -> artifacts/test-reports/vitest.json`, and
+# `frontend.yml::quality` uploads it on success AND failure. What was missing is
+# a READER WITH AN `unavailable` STATE for these five specific files.
+#
+# The failure mode that forced it: a file matching no `include` pattern, or one
+# that throws during collection, produces NO ENTRY IN THE RECORD AT ALL rather
+# than a zero count. Absence and zero are different facts and only one of them is
+# observable by asking "is the count >= 1". So R2.8 is stated against the RECORD,
+# not against the config. The checker distinguishes six states and exactly one is a
+# pass (I-7):
+#
+#   executed           every reported case ran and passed          <- the only pass
+#   violated           cases ran and at least one failed
+#   partially_skipped  cases ran and passed, and >=1 skipped/todo
+#   skipped_only       every reported case was skipped or todo
+#   no_cases           the record LISTS the file and reports no case
+#   absent             the record has no entry for the file at all
+#
+# `no_cases` is read from the record's own file listing rather than inferred from its
+# cases, because a Vitest `testResults` block with an empty `assertionResults` array
+# yields no case: without the listing, "the runner collected it and produced nothing"
+# and "the runner never looked at it" are the same observation. They are different
+# defects with different repairs.
+#
+# `partially_skipped` exists because R2.14 reads on ANY test reported skipped or todo
+# in a declared file, not only on a file whose every case skipped. A file that proves
+# four of its five obligations has not proven the fifth. Calling it `executed` would be
+# a false pass and calling it `skipped_only` would be a false label, so it gets its own
+# state and the checker NAMES each skipped case -- a count says something did not run
+# and not which thing.
+#
+# This is not hypothetical either. `baseline-measurement.property.test.ts`
+# (Property 36) matched the `include` pattern, was declared in the inventory, and
+# still never executed: `check-baseline.ts` resolved its roots at import time with
+# `fileURLToPath(new URL("../../", import.meta.url))`, which throws
+# ERR_INVALID_URL_SCHEME under vitest because Vite serves imported modules from an
+# `http:` origin. The suite died during collection and reported "0 test". Existence,
+# declaration and a green-looking job were all true at once while the property had
+# never run.
+#
+# R2.9: a reported failure carries the triple -- the FILE (the declared path below),
+# the PROPERTY TITLE (the failing case's own title, not just the per-file title here),
+# and the MINIMAL FAILING INPUT (the shrunk counterexample, which exists only inside the
+# runner's failure message). The checker pairs titles and messages positionally so all
+# three are reconstructible from the verdict alone; a failing case for which the record
+# carried no message is reported as such rather than as an empty counterexample.
+#
+# R2.10, recorded because it is a HUMAN obligation this file cannot enforce:
+# when a property here fails, the repair is to the subject or to the assertion.
+# Weakening a generator to stop a shrunk counterexample from arising is forbidden.
+# A reviewer checks that; no gate can.
+#
+# R2.12, and the live state as of this entry: `artifacts/test-reports/` is gitignored
+# and the record is a CI product by design, so NO CI RUN RECORD EXISTS for any of the
+# five files yet. Every one of them is therefore correctly described as AUTHORED BUT
+# NOT EXECUTED, in this file and in every other document that refers to them, until a
+# CI run produces the record. R2.13: a local `getDiagnostics` or editor probe reporting
+# no error is INCONCLUSIVE, not evidence that a file passes -- `getDiagnostics` returns
+# no TypeScript signal in this workspace, and a clean editor has never executed an
+# assertion.
+# `type_check_project` is recorded per file so R2.15's reporting obligation has a
+# mechanical subject: while the named project is red, a document referring to that
+# file must describe it as authored but NOT TYPE-CHECKED. `tsconfig.spec.json`'s own
+# header predicts red on its first run, and a prediction is not a dispensation. The
+# four `frontend/spec/` files sit in that project; `degradation-rendering` is under
+# `frontend/src/`, so `tsconfig.json` and the `pnpm typecheck` step in
+# `frontend.yml::quality` cover it instead.
+declared_suites:
+  - path: frontend/src/surfaces/__tests__/degradation-rendering.property.test.ts
+    property: 31
+    title: Degradation is rendered wherever degraded data is shown
+    type_check_project: frontend/tsconfig.json
+  - path: frontend/spec/effectiveness/__tests__/scorecard-completeness.property.test.ts
+    property: 32
+    title: The scorecard is complete or the job fails
+    type_check_project: frontend/tsconfig.spec.json
+  - path: frontend/spec/effectiveness/__tests__/ratchet-sensitivity.property.test.ts
+    property: 33
+    title: The ratchet is sensitive to any degradation
+    type_check_project: frontend/tsconfig.spec.json
+  - path: frontend/spec/effectiveness/__tests__/interruption-precision-responsiveness.property.test.ts
+    property: 34
+    title: Interruption precision responds to its inputs
+    type_check_project: frontend/tsconfig.spec.json
+  - path: frontend/spec/effectiveness/__tests__/baseline-measurement.property.test.ts
+    property: 36
+    title: A baseline is a measurement, not a ceiling
+    type_check_project: frontend/tsconfig.spec.json

@@ -1,0 +1,74 @@
+# SYNAPSE -- Audit-chain verification bounds (purpose-achievement-audit R6.8, R6.11, R6.13)
+#
+# The two constants AD-13 requires to be committed rather than inlined, plus the
+# walk bounds R6.13 makes the verifier exit non-zero against. `make_canonical_row`
+# is NOT touched by anything here (I-4, byte-pinned).
+#
+# Read contract: `encoding='utf-8'` on every read (E-S13-07).
+#
+# Consumers:
+#   orchestrator/audit/chain_walk.py    -- boundary + walk bounds (task 7.1, landed)
+#   orchestrator/audit/cli.py           -- `--since` / `--max-rows` / `--timeout`
+#                                          defaults for the verify CLI (task 7.3, landed)
+#   scripts/synapse_cli/audit_verify.py -- the delegating alias (task 7.3, landed)
+#   scripts/audit/anchor_truth.py       -- anchor freshness (task 7.6, not yet)
+
+version: 1
+
+# ---------------------------------------------------------------------------
+# Chain-migration boundary (R6.8)
+# ---------------------------------------------------------------------------
+# Rows created BEFORE the boundary may legitimately carry NULL prev_hash /
+# current_hash: `0003_audit_chain.sql` added the columns and left existing rows
+# NULL by design. Rows created AFTER the boundary with a NULL hash are a break.
+#
+# Legacy pre-boundary NULL rows are counted separately and excluded from the
+# verified count (R6.7) -- never silently folded into "verified".
+migration_boundary:
+  # Authored time of the commit that added the chain columns, in UTC.
+  # Provenance: git log 02ec292 -- "feat(backend): Phase 3 -- chained-hash audit
+  # + archival (Wiles, ADR-033)", 2026-05-24T17:02:51+05:30.
+  value: "2026-05-24T11:32:51Z"
+  source_commit: "02ec292"
+  source_migration: orchestrator/audit/migrations/0003_audit_chain.sql
+  mirror: infrastructure/postgres/04_sprint9_audit_chain.sql
+  # The commit time is the EARLIEST possible application time. A deployment that
+  # applied the migration later can hold post-boundary rows that predate the
+  # actual ALTER TABLE; those surface as NULL_AFTER_BOUNDARY breaks on the first
+  # real walk. CF-6 is exactly this ordering: the deploy-time verify becomes
+  # blocking only after one deploy produces a green walk. If the first walk
+  # reports pre-application NULLs, the boundary is corrected HERE (a data edit,
+  # reviewed) -- never by weakening the walk.
+  confirmed_by_green_walk: false      # flipped by the CF-6 deploy, not by hand
+
+# ---------------------------------------------------------------------------
+# Anchor freshness bound (R6.11)
+# ---------------------------------------------------------------------------
+# No anchor, or a newest anchor older than this, means the chain is
+# UNVERIFIABLE -- never "verified" (I-7).
+anchor_freshness:
+  max_age_hours: 48
+  rationale: >-
+    orchestrator/audit/anchorer.py::anchor_today writes one anchor per UTC day
+    to infrastructure/audit_anchors/<date>.json. 48h allows exactly one missed
+    day (a skipped scheduled run) before the chain is reported unverifiable;
+    72h+ would let two consecutive silent failures pass as fresh.
+  anchor_dir: infrastructure/audit_anchors
+  publisher: .github/workflows/publish-audit-anchor.yml
+  # Wired by task 7.6: the daily `schedule:` trigger of the workflow above runs
+  # `python -m orchestrator.audit.anchorer` (writes the anchor committing to the
+  # chain head hash) and then `python -m scripts.audit.anchor_truth` (the R6.11
+  # freshness gate, exit 2 = UNVERIFIABLE). Both steps propagate their exit status.
+  scheduled_caller: .github/workflows/publish-audit-anchor.yml::anchor
+  gate: scripts/audit/anchor_truth.py
+
+# ---------------------------------------------------------------------------
+# Walk bounds (R6.13)
+# ---------------------------------------------------------------------------
+# Exceeding either bound is a non-zero exit, not a truncated "verified" walk.
+walk_bounds:
+  max_rows: 5000000
+  max_wall_clock_seconds: 900
+  note: >-
+    max_rows is a safety stop, not a capacity claim. A walk that hits it has NOT
+    verified the chain and must exit non-zero naming the bound it hit.

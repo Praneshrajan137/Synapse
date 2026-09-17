@@ -1,0 +1,463 @@
+# SYNAPSE uplift proof -- the generating job for C60 (spec purpose-achievement-audit,
+# task 10.5; design AD-9 / CF-4; requirement R2.7).
+#
+# The audit's single most load-bearing finding (R2) was that the C60 gate reported PASS
+# against a COMMITTED artifact carrying `{"headline_uplift": 0.0, "incomplete": true,
+# "fidelity": {"within_fidelity_bound": null}}`, and that no workflow anywhere ever ran
+# the harness that writes it. This workflow is the missing half: it RUNS the powered
+# counterfactual experiment and then asks the gate for a verdict.
+#
+# ONE JOB, ON PURPOSE (AD-9, CF-4, R2.7/R2.8).
+# Evidence generation and verdict share a single job so the artifact and the check
+# cannot come from different revisions or different runs. `scripts/audit/uplift_truth.py`
+# enforces that structurally rather than trusting this file:
+#
+#   * `--require-fresh-run` is the caller declaring "I ran the harness in this run".
+#     Without it `admit()` returns the `skip` outcome, and R2.9 excludes a SKIP from the
+#     published PASS count. A SKIP is not a PASS (I-7).
+#   * The artifact's provenance record (`revision`, `run_id`) is compared against this
+#     job's `GITHUB_SHA` / `GITHUB_RUN_ID`, both of which GitHub sets for us. A stale or
+#     foreign artifact is inadmissible even if it is glowing.
+#   * `artifacts/uplift/result.json` is git-ignored (task 10.3 removed it from version
+#     control). An in-repo evidence path that no ignore rule covers is treated as read
+#     from version control and rejected outright, so the evidence is uploaded as a
+#     workflow artifact below and never committed.
+#
+# NO DISCARDING CONSTRUCTS ANYWHERE IN THIS FILE (I-7, R1.8).
+# No `|| true`, no `|| echo`, no `; exit 0`, no `continue-on-error`. Every gate step
+# exits with the exit code of the command it runs. A harness that cannot run is a
+# NON-PASSING result, never a skipped-and-green one:
+#
+#   * the harness step fails            -> the verdict step does not run, the job is red;
+#   * the consensus arm cannot be stood up in this environment -> the CLI records every
+#     consensus run as a failed run and marks the result `incomplete: true`, and the gate
+#     exits 2 (EXIT_UNAVAILABLE) on it, so the job is red;
+#   * the run exceeds `timeout-minutes`  -> the job is red.
+#
+# In none of those cases does the repository get to claim a proven uplift.
+#
+# NEVER RUN LOCALLY (I-0, `.kiro/steering/local-compute-budget.md`).
+# A fully-powered proof is 4 adversarial scenarios x 5 arms x 1000 replicates per arm,
+# each replicate a closed loop over the real SimPy twin. That is the single most
+# expensive workload in this repository and `MIN_SCENARIOS`-scale runs are forbidden on
+# the development laptop. This workflow exists precisely to hold that workload. Its
+# wall-clock cost has therefore never been measured locally; if a run proves not to fit
+# inside the hosted-runner job limit, the escalation path is the GCP runner (cd-gcp.yml,
+# ADR-036 window) -- not a reduced `--smoke` run dressed up as a proof.
+name: SYNAPSE Uplift Proof
+
+on:
+  schedule:
+    # Nightly, 03:00 UTC (08:30 IST). Deliberately clear of the Sunday 02:00 UTC
+    # mutation sweep (mutation.yml) and the Monday 07:00 UTC reconciliation read, so the
+    # three long jobs do not contend for the runner queue.
+    - cron: "0 3 * * *"
+  workflow_dispatch:
+    # A JOB SELECTOR, BECAUSE A BARE DISPATCH IS NOT AFFORDABLE (decision-quality-proof
+    # checkpoint A). This block used to be `workflow_dispatch: {}`, and with two jobs in the
+    # file a bare dispatch ran BOTH -- spending up to ~350 minutes of runner time on
+    # `uplift-proof` for an operator who wanted `twin-regret`, and `uplift-proof` cannot
+    # produce an admissible artifact until E3/E5 anyway, so the spend bought nothing.
+    #
+    # Checkpoint A dispatches `twin-regret` alone. It is a decision gate that can end the
+    # spec, so it has to be cheap enough to re-run when a measurement needs repeating; a
+    # once-per-six-hours event is not a gate anybody will exercise twice.
+    #
+    # `default: both` is deliberate: it preserves the previous behaviour exactly, so nothing
+    # that dispatched this workflow before now does something different, and the `schedule`
+    # trigger is unaffected regardless (see each job's `if:`, which short-circuits on
+    # `github.event_name`).
+    inputs:
+      job:
+        description: "Which job to run. 'both' is the previous behaviour and the schedule's."
+        required: false
+        default: both
+        type: choice
+        options:
+          - both
+          - uplift-proof
+          - twin-regret
+  pull_request:
+    # THE ON-DEMAND MECHANISM THAT ACTUALLY WORKS FROM A FEATURE BRANCH
+    # (decision-quality-proof finding 23).
+    #
+    # `workflow_dispatch` cannot reach this file from `feat/decision-quality-proof`.
+    # `gh workflow run uplift.yml --ref feat/decision-quality-proof` returns
+    # `HTTP 404: workflow uplift.yml not found on the default branch`. `--ref` selects which
+    # ref's CODE runs; it does not make a workflow dispatchable. GitHub requires the file on
+    # the default branch first, and `origin/main` carries 14 workflow files of which this is
+    # not one. So checkpoint A -- a gate that can END this spec -- had no way to run at all.
+    #
+    # `pull_request` has no such requirement: a same-repo PR runs the workflow as defined in
+    # its own head. `truth-gates.yml` is likewise absent from `main` and runs on every PR,
+    # which is the empirical proof that this works rather than an inference.
+    #
+    # `types: [labeled]` AND NOTHING ELSE, which is the whole point. Specifying `types`
+    # replaces the default `[opened, synchronize, reopened]`, so this trigger does NOT fire
+    # on pushes. A run happens only when a label is added, and each job's `if:` decides
+    # whether anything executes. An unrelated label creates a run in which every job is
+    # skipped, which costs no runner minutes.
+    #
+    # REJECTED ALTERNATIVES, recorded because each looked cheaper than it was:
+    #   * Land this file on `main` as-is. `uplift-proof` cannot produce an admissible
+    #     artifact until E3/E5 and this file's own header says an incomplete run exits 2 and
+    #     turns the job RED -- so the nightly would manufacture a permanent red on `main`
+    #     that means nothing. A gate with a foreordained verdict is the exact failure this
+    #     spec exists to remove; installing a second one while repairing the first would be
+    #     incoherent.
+    #   * Land it on `main` with the schedule stripped. Works, and gives correct provenance,
+    #     but diverges `main` from this branch on a workflow file and spends a change to the
+    #     shared default branch to buy a capability this branch can grant itself.
+    #   * Land only `regenerate-truth-docs.yml` on `main`. Unblocks task 26.2 -- whose
+    #     precondition (track A's margin commit) is itself blocked, so it buys nothing yet.
+    #   * A `push:` trigger on a magic branch prefix. Gives a real head SHA rather than a
+    #     merge SHA, but litters the remote with throwaway branches and hides the operator's
+    #     intent in a ref name instead of showing it on the PR.
+    #
+    # This trigger does NOT make any job here eligible to be a required status check.
+    # Eligibility needs a job that reports on EVERY pull request; `twin-regret` fires only
+    # when labelled and carries a per-job `if:`. `required-checks.yaml`'s `ineligibleEntry`
+    # enum has no member describing "label-conditioned", and `required_checks_truth`
+    # validates that declared jobs resolve rather than that the file is complete, so no entry
+    # is owed (conflict G).
+    types: [labeled]
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  # Never two powered runs at once: they would write the same artifact path and each
+  # would be evaluating evidence the other was overwriting. `cancel-in-progress: false`
+  # because a run this expensive should finish and report rather than be discarded --
+  # and an abandoned run reports nothing, which is not a pass either.
+  #
+  # LEFT AT WORKFLOW SCOPE ON PURPOSE, and the consequence is recorded rather than removed.
+  # Because the group covers the whole workflow, a `twin-regret` dispatch that lands while a
+  # scheduled run is in flight QUEUES behind it rather than running beside it. Moving the
+  # group to job scope would let them run concurrently, but it would also stop being one
+  # group for two dispatches of `uplift-proof` under different input values -- and the
+  # guarantee this key exists for is "never two powered runs at once", which is worth more
+  # than saving an operator a wait. The nightly window is 03:00 UTC; outside it a dispatch
+  # starts immediately.
+  group: uplift-proof
+  cancel-in-progress: false
+
+env:
+  PYTHONPATH: "."
+
+jobs:
+  uplift-proof:
+    name: Powered uplift harness + C60 verdict (one job -- shared run)
+    runs-on: ubuntu-latest
+    # AN ALLOW-LIST, AND IT WAS A DENY-LIST UNTIL FINDING 23. The previous form led with
+    # `github.event_name != 'workflow_dispatch'`, which was correct while the only other
+    # trigger was `schedule`: on `schedule` there are no inputs at all, so a guard written
+    # only against `inputs.job` would silently disable the scheduled proof -- a job that stops
+    # running is indistinguishable from a job that passes, which is the failure I-7 exists to
+    # prevent.
+    #
+    # That intent is preserved and the MECHANISM is inverted, because the deny-list form is
+    # fail-OPEN against a new trigger. Adding `pull_request` above would have made
+    # `github.event_name != 'workflow_dispatch'` true on every label event and fired THIS job
+    # -- ~350 minutes, on a run that cannot produce an admissible artifact until E3/E5. Naming
+    # the events that may start this job means a future trigger cannot enable it by accident,
+    # which for the most expensive workload in the repository is the correct direction to
+    # fail. `schedule` is named explicitly, so the nightly is protected by declaration rather
+    # than by a double negative.
+    #
+    # `pull_request` IS DELIBERATELY ABSENT, for a second reason beyond cost. On a
+    # `pull_request` event `GITHUB_SHA` is the synthetic MERGE commit, not the head. This
+    # job's gate compares the artifact's recorded `revision` against `GITHUB_SHA` to reject
+    # stale or foreign evidence, so a `pull_request`-triggered powered proof would be
+    # provenance-inadmissible by construction. `twin-regret` carries no such gate, which is
+    # why the label mechanism is safe there and would not be safe here.
+    #
+    # This is a SELECTOR and not a `continue-on-error`: when the job runs, every step's exit
+    # status still gates it.
+    if: >-
+      github.event_name == 'schedule'
+      || (github.event_name == 'workflow_dispatch'
+      && (inputs.job == 'both' || inputs.job == 'uplift-proof'))
+    # Just inside the hosted-runner job ceiling. A timeout is a failed job, which is the
+    # honest outcome for a measurement that did not complete (I-7); it is not a partial
+    # result the gate may read.
+    timeout-minutes: 350
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+
+      - name: Install dependencies
+        # Same dependency closure as ci.yml::uplift-verify, and for the same reason:
+        # `uplift.consensus_arm.build_consensus_arm` assembles all eight real agent A2A
+        # handlers plus the twin handler behind an in-process transport and a real
+        # ConsensusProtocol. A missing agent dependency does not crash the run -- it
+        # degrades the consensus arm to the honest-failure stub, which marks the result
+        # incomplete and makes the gate exit 2. Installing the full closure is what keeps
+        # a dependency gap from being reported as "no uplift measurable".
+        run: |
+          pip install -r packages/requirements.txt -r packages/requirements-dev.txt
+          pip install -e packages/
+          pip install -r orchestrator/requirements.txt
+          pip install jsonschema pyyaml
+          for req in agents/*/requirements.txt; do pip install -r "$req"; done
+          pip install simpy sse-starlette
+          pip install -r agents/requirements-sprint3.txt
+          pip install "starlette>=0.37.2,<0.38.0"
+
+      - name: Run the powered uplift harness (writes the C60 evidence)
+        # `--full` pins replicates per arm to
+        # `digital_twin.simulation.monte_carlo.MIN_SCENARIOS` (1000), which is the same
+        # number the gate independently enforces as
+        # `uplift.uplift_floor.MIN_POWERED_REPLICATES`. The literal is NOT restated here:
+        # a hardcoded count in the workflow is exactly the doc-vs-gate drift R7 reports,
+        # and a count that silently fell below the floor would make every run
+        # inadmissible. `--output` is the CLI's real flag for the artifact path and points
+        # at the canonical location `scripts/audit/uplift_truth.RESULT_ARTIFACT` reads.
+        run: python -m uplift.cli --full --output artifacts/uplift/result.json
+
+      - name: C60 uplift gate -- verdict from THIS run's evidence
+        # Exit 0 proven (is_proven_uplift holds against UPLIFT_FLOOR) / 1 regression
+        # (a powered, complete, in-bound measurement below the floor) / 2 unavailable
+        # (everything else, including an incomplete or under-powered run and any
+        # fidelity that is not demonstrably within bound). Only exit 0 is a pass.
+        run: python -m scripts.audit.uplift_truth --check --require-fresh-run
+
+      - name: Upload the uplift evidence
+        # `if: always()` so a red run keeps its evidence -- an incomplete or
+        # out-of-fidelity artifact is precisely the artifact worth reading. This does not
+        # discard any exit status: the two gate steps above already decided the job's
+        # conclusion. `if-no-files-found: warn` because a missing artifact means the
+        # harness never got that far, and the harness step has already failed the job for
+        # that reason; failing the upload too would only bury the real cause.
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: uplift-result
+          path: artifacts/uplift/result.json
+          if-no-files-found: warn
+          retention-days: 90
+
+
+  # =====================================================================================
+  # twin-regret -- E2b's (s, S) regret measurement (decision-quality-proof task 10.3)
+  # =====================================================================================
+  # ITS OWN JOB, not a step inside `uplift-proof`, and that is deliberate. The two-pass
+  # foresight protocol DOUBLES the twin cost of every replicate, so folding it into a job
+  # already sized at 350 minutes against a ~360-minute ceiling would make one measurement
+  # able to time out the other -- and a timeout is a red job, so the powered uplift proof
+  # would fail for a reason that has nothing to do with uplift.
+  #
+  # WHY THIS CANNOT RUN LOCALLY (I-0). A scenario sweep at `MIN_SCENARIOS` scale
+  # (`digital_twin/simulation/monte_carlo.py:22`, `MIN_SCENARIOS = 1000`) is a category-4
+  # workload, `monte_carlo.py` also drives a `ProcessPoolExecutor`, and the two-pass
+  # protocol doubles it again. Linux CI is the only locus (R5.32).
+  #
+  # WHAT THIS MEASURES, STATED HONESTLY. The comparator is no-op versus perfect-foresight.
+  # That is NOT yet the `(s, S)` regret R5.1 asks for: `Par_Level_Reorder` is owned by
+  # `.kiro/specs/decision-integrity-uplift-proof/` and is a PRECONDITION of R5.1, not a
+  # deliverable of R5. What this job establishes is the comparator's own headroom, which
+  # BOUNDS the `(s, S)` regret from above -- so a small value here would already be
+  # informative, and the report says so in its own `comparator` field rather than leaving a
+  # reader to assume the stronger claim.
+  #
+  # NO MARGIN IS COMMITTED YET, BY DESIGN. R5.2 forbids pinning the materiality margin
+  # before a measurement exists, so this job reports `verdict: unavailable` and judges
+  # nothing. Task 10.4 reads this report and commits the margin; only SUBSEQUENT runs are
+  # judged against it. A job that judged a run against a threshold committed after that run
+  # is the exact defect R5.2 names.
+  #
+  # AND IT NOW REPORTS AN INTERVAL, WHICH IS WHAT MAKES THE NEXT RUN'S VERDICT ADMISSIBLE.
+  # `uplift/regret.py::_measure` estimates a paired percentile bootstrap over the per-seed
+  # costs (`uplift/interval.py`, design E3.1) at `1 - alpha` from the committed
+  # Metric_Contract, and passes it to `classify_regret`. Without it, `material` -- the verdict
+  # that FALSIFIES Finding 4 and stops the spec -- was reachable on a bare point estimate,
+  # because `classify_regret` treats an absent interval as "no interval clause to satisfy".
+  # A measurement whose dispersion cannot be estimated now reports `status: unavailable` and
+  # exits 2, which fails this job; it is never downgraded to a point-estimate verdict.
+  twin-regret:
+    name: E2b twin regret vs perfect foresight (measure, do not judge)
+    runs-on: ubuntu-latest
+    # Same allow-list shape as `uplift-proof` and the same reason for inverting it, plus one
+    # disjunct that job must never have: the LABEL path, which is how checkpoint A actually
+    # runs (finding 23). `schedule` is named explicitly so the nightly is protected by
+    # declaration rather than by a double negative.
+    #
+    # WHY THE LABEL IS SAFE HERE AND NOT ON `uplift-proof`. That job's gate compares the
+    # artifact's `revision` against `GITHUB_SHA`, which on a `pull_request` event is the
+    # synthetic merge commit -- so a labelled powered proof would be provenance-inadmissible
+    # by construction. This job carries no such gate: it MEASURES and does not judge, and its
+    # artifact is read by a human at checkpoint A. The merge-SHA subtlety is therefore not a
+    # correctness problem here, but it IS an attribution problem, and the disclosure step
+    # below closes it rather than leaving the reader to know about it.
+    #
+    # To run it: add the `measure-twin-regret` label to the pull request. Remove it afterwards
+    # so the next label event does not re-measure. The label is visible on the PR, which makes
+    # the operator's intent auditable in a way a dispatch is not.
+    if: >-
+      github.event_name == 'schedule'
+      || (github.event_name == 'workflow_dispatch'
+      && (inputs.job == 'both' || inputs.job == 'twin-regret'))
+      || (github.event_name == 'pull_request'
+      && contains(github.event.pull_request.labels.*.name, 'measure-twin-regret'))
+    # Well under the ceiling: this measurement is far cheaper than the powered proof, and
+    # sizing it honestly leaves the difference visible rather than reserving budget nobody
+    # uses. A timeout is a failed job, which is the honest outcome for an incomplete
+    # measurement (I-7), never a partial result the gate may read.
+    timeout-minutes: 120
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Disclose the revision under measurement (attribution, not a gate)
+        # FIRST, so a run that fails still records WHICH revision failed. This exists because
+        # the label path introduces one trap the dispatch path did not have: on a
+        # `pull_request` event `github.sha` is a SYNTHETIC MERGE COMMIT that appears in no
+        # branch's history, so a reader asking "which code produced this number?" would get a
+        # commit they cannot find.
+        #
+        # `github.event.pull_request.head.sha` is the real head on a labelled run and empty
+        # otherwise, so the fallback yields `github.sha` on `schedule` and `workflow_dispatch`
+        # where that is already the right answer. Checkpoint A can END this spec; the verdict
+        # it records must be attributable to a commit that exists -- the same concern task
+        # 17.7 gates mechanically for the powered proof.
+        #
+        # Disclosure only: it asserts nothing and gates nothing, and its exit status still
+        # propagates like every other step in this file.
+        run: |
+          echo "event=${{ github.event_name }}"
+          echo "github.sha=${{ github.sha }}"
+          echo "measured_revision=${{ github.event.pull_request.head.sha || github.sha }}"
+          echo "run_id=${{ github.run_id }}"
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+
+      - name: Install dependencies
+        # THIS CLOSURE WAS WRONG UNTIL SESSION 2r-pre, AND ITS OWN COMMENT WAS THE REASON.
+        # It used to read "simpy + numpy are the whole closure this measurement needs; it
+        # touches neither the agents nor the orchestrator, so a thinner install is honest
+        # rather than risky here." The premise was almost right and the conclusion was
+        # wrong: the measurement does not touch the agents, but it DOES import the twin,
+        # and `digital_twin/config.py` reads its settings through
+        # `from pydantic_settings import BaseSettings`.
+        #
+        # `pydantic-settings` is in every `agents/*/requirements.txt` and is installed
+        # explicitly by integration.yml and policy.yml, but it is in NEITHER
+        # `packages/requirements.txt` (six packages) NOR `packages/pyproject.toml`'s
+        # `dependencies` (seven), which is all this job installed besides the three extras.
+        # So the unavoidable chain
+        #   uplift.regret -> _measure -> uplift.foresight
+        #     -> digital_twin.simulation.engine -> digital_twin.config -> pydantic_settings
+        # would have raised ModuleNotFoundError at import, inside the job that exists to run
+        # the measurement, on the first dispatch checkpoint A ever made. Same defect class as
+        # the `scipy` gap recorded as HANDOFF defect 14 -- found the same way, by reading the
+        # closure instead of paying for a CI round trip. A static walk of all 9 first-party
+        # modules reachable from `uplift.regret` reports this as the ONLY gap.
+        #
+        # FIXED NARROWLY, ON PURPOSE. The tempting repair is to add `pydantic-settings` to
+        # `packages/requirements.txt` so every job gets it. That is the dangerous one: several
+        # registered checks report SKIP when an optional import is missing, so widening the
+        # shared closure can turn a SKIP into a PASS and MOVE THE REGISTRY COUNTS that
+        # `doc_truth` pins and `ledger_gen`/`readme_gen` project. Adding a package to the
+        # shared file immediately before a regeneration is exactly the wrong time. This job
+        # gets what this job needs.
+        #
+        # Version bound matches `agents/*/requirements.txt` verbatim rather than being
+        # invented here, per CLAUDE.md's rule that every dependency is pinned with an upper
+        # bound.
+        #
+        # `scipy` ADDED SESSION 4, AND THE CLAIM BELOW WAS FALSIFIED BY THE FIRST REAL RUN.
+        # This comment used to end: "A static walk of all 9 first-party modules reachable
+        # from `uplift.regret` reports this as the ONLY gap." Run `34364879758` proved
+        # otherwise -- the measurement died at import on `ModuleNotFoundError: No module
+        # named 'scipy'`.
+        #
+        # WHY THE WALK MISSED IT, because the mechanism is the transferable part: it followed
+        # `import` statements FROM `uplift.regret`, but `python -m uplift.regret` first
+        # executes the PACKAGE initialiser, and `uplift/__init__.py` imports
+        # `uplift.consensus_arm` -> `uplift.harness` -> `uplift.contract` -> `from scipy
+        # import stats`. None of that is reachable from `regret.py`'s own import list. The
+        # walk was correct about the module graph and wrong about the ENTRY POINT'S import
+        # closure. A closure proof must start at the command the job actually runs.
+        #
+        # This is also HANDOFF defect 14 recurring: that defect named this exact `scipy`
+        # import, and the repair taken at the time was to route `uplift/interval.py` around
+        # `load_contract` rather than to widen this closure. The import was still on the
+        # package-initialisation path.
+        #
+        # `scipy` is pinned in NO requirements file in this repository (`policy.yml` installs
+        # it bare), so there is no bound to copy verbatim and `>=1.11,<2.0` is a CHOICE --
+        # flagged as one, shaped like the `numpy>=1.26,<2.0` and `pandas>=2.2,<3.0` bounds
+        # `policy.yml` uses beside it.
+        run: |
+          pip install -r packages/requirements.txt
+          pip install -e packages/
+          pip install simpy numpy pyyaml "pydantic-settings>=2.2.0,<3.0" "scipy>=1.11,<2.0"
+
+      - name: Measure twin regret against the perfect-foresight comparator (R5.1, R5.33)
+        # `set -o pipefail` IS LOAD-BEARING, AND ITS ABSENCE MADE THIS STEP LIE.
+        #
+        # This comment used to read "Exit status propagates. No `continue-on-error`, no
+        # `|| true`, no `|| echo`". That enumerated three discarding constructs and MISSED
+        # THE ONE THIS STEP ACTUALLY USES. Under `bash -e` a pipeline's status is the status
+        # of its LAST command, so `python -m uplift.regret ... | tee <file>` reports `tee`'s
+        # success even when the Python crashed. Measured on run `34364879758`: the
+        # measurement died at import with `ModuleNotFoundError: No module named 'scipy'`,
+        # `tee` wrote a ZERO-BYTE artifact, and this step reported **success** while
+        # `blocking-steps.yaml` declares it `role: producer` emitting canonical JSON.
+        #
+        # The job was red only because the *disclosure* step below -- explicitly "not a
+        # gate" -- failed on the same missing import. Without that step this job would have
+        # been GREEN with no measurement in it, which is precisely the defect this spec
+        # exists to eliminate: a gate that reports nothing is indistinguishable from a gate
+        # that passes (I-7).
+        #
+        # `| tee` is KEPT rather than replaced by a plain redirect, because seeing the JSON
+        # in the job log is what lets a reader check the artifact against the run. With
+        # `pipefail` that visibility is free; without it, it was the whole bug.
+        #
+        # NOTE FOR THE ENFORCEMENT SPINE: `scripts/audit/workflow_shape_truth.py` cannot
+        # catch this. Its `DISCARDING_CONSTRUCTS` is four literals -- `|| true`, `|| echo`,
+        # `; exit 0`, bare `exit 0` -- and an unguarded pipeline is none of them, so a
+        # declared-blocking step could discard its status with the gate reporting pass.
+        # `| tee` appears exactly ONCE in this workflow tree (this step), so the exposure is
+        # closed here; the gate gap is recorded for its owner rather than patched silently.
+        #
+        # The replicate count is the one number here that is NOT yet committed to
+        # policy.yaml, because R5.2's deferral covers the margin and not the sample size,
+        # and the sample size needed follows from the variance this run reports. Stated as
+        # a CLI argument so the value used is visible in the job log.
+        run: |
+          set -o pipefail
+          mkdir -p artifacts/uplift
+          python -m uplift.regret --replicates 200 --hours 24 --json \
+            | tee artifacts/uplift/twin-regret.json
+
+      - name: Report the objective's insensitive KPIs (R5.34, R5.35)
+        # A separate, always-run step because it is the clause a reader most needs and most
+        # easily misses: while ANY objective KPI is recorded not observably sensitive, a
+        # sub-margin regret is INCONCLUSIVE and must not be read as confirming Finding 4.
+        # `always()` publishes it even when the measurement above failed; this step's own
+        # exit status still propagates.
+        if: always()
+        run: |
+          python -c "from uplift.regret import load_objective; o = load_objective(); print('insensitive objective KPIs:', [i.term for i in o.insensitive] or 'none'); [print(' -', i.term, '::', i.blocked_on.split(chr(46))[0]) for i in o.insensitive]"
+
+      - name: Upload the regret report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: twin-regret
+          path: artifacts/uplift/twin-regret.json
+          if-no-files-found: warn
+          retention-days: 90

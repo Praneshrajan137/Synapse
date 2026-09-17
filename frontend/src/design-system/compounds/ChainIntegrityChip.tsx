@@ -30,8 +30,14 @@ export function ChainIntegrityChip({ verified, prevHash, currentHash }: ChainInt
     return <Badge tone="neutral">{t("chain.legacy")}</Badge>;
   }
   if (state === "verified") {
+    // R6.15: the success label carries its own row-level qualifier ("Row hash
+    // verified") plus the scope statement as a title. Previously it read "Chain
+    // verified", which an operator can only read as a chain-wide verdict, while
+    // the field is a single-row hash recompute. The qualification used to live
+    // one layer away (FE-INV-039, this doc comment, the API docstring) - none of
+    // which an operator reads.
     return (
-      <Badge tone="success">
+      <Badge tone="success" title={t("chain.verified_title")}>
         <span aria-hidden>✓ </span>
         {t("chain.verified")}
       </Badge>

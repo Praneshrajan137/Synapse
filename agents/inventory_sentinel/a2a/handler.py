@@ -83,7 +83,12 @@ class InventorySentinelA2AHandler:
         )
         # I-3: validate every emitted payload against proto/domain/.
         validate_agent_payload("inventory_sentinel", proposal.payload)
-        return json.loads(proposal.to_deterministic_json())
+        # Typed local, matching all seven sibling handlers: `json.loads` returns
+        # `Any`, and returning it directly asserted `dict[str, Any]` without
+        # stating it (`no-any-return`). inventory_sentinel was the only handler of
+        # the eight that deviated from this convention.
+        result: dict[str, Any] = json.loads(proposal.to_deterministic_json())
+        return result
 
     def debate_respond(self, params: dict[str, Any]) -> dict[str, Any]:
         # ADR-052/R3: bounded rule-based concession toward the round consensus, with

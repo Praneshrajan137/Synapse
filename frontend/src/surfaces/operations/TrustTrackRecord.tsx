@@ -1,4 +1,4 @@
-import { OperatorIdentity } from "@ds/compounds";
+import { DataPathNotice, OperatorIdentity } from "@ds/compounds";
 import { cn } from "@lib/cn";
 import {
   AWAITING_SCORED_OUTCOMES,
@@ -8,6 +8,7 @@ import {
   aggregateTrack,
 } from "@lib/trust-track-record";
 import { useState } from "react";
+import { surfaceDataPath } from "../data-paths";
 
 /**
  * Trust_Track_Record surface (Req 11) — the authenticated operator's own
@@ -19,6 +20,13 @@ import { useState } from "react";
  * surface renders the honest "awaiting scored outcomes" empty state (Req 11.5)
  * rather than a fabricated or zeroed record. When a per-operator feed is wired
  * later it flows in through the `outcomes` prop with no change to this surface.
+ *
+ * R13.6: "awaiting scored outcomes" alone is not enough. It reads as "the feed
+ * exists and has produced nothing yet", which is not what is true - no feed
+ * exists. The registered data path (`operations.trust-track-record`,
+ * `endpoint: null`) supplies the missing half: a `[data-data-path="absent"]`
+ * notice stating that nothing is fetched for this panel, so the disclosure line
+ * below - `n=0 scored` - is legible as structural rather than as a measurement.
  *
  * Honesty channels (INV-CLR-011 — colour can drain, the words never lie):
  *   • the three outcome states confirmed / diverged / unknown are each rendered
@@ -53,6 +61,12 @@ export function TrustTrackRecord({
   const track = aggregateTrack(outcomes, includeSynthetic, asOf, windowLabel);
 
   const mixTotal = Math.max(1, track.sampleSize);
+  // R13.6. `endpoint: null` in the registry, so this always resolves to
+  // "absent" - there is no signal that could make it read otherwise.
+  const dataPath = surfaceDataPath("operations.trust-track-record", {
+    degraded: null,
+    synthetic: null,
+  });
 
   return (
     <section className="syn-card space-y-3 p-4" aria-label="Operator trust track record">
@@ -77,6 +91,8 @@ export function TrustTrackRecord({
           {includeSynthetic ? "Including synthetic" : "Real only"}
         </button>
       </div>
+
+      <DataPathNotice state={dataPath} />
 
       {track.awaiting ? (
         // Req 11.5 — no scored outcomes → say so, never a zeroed track record.

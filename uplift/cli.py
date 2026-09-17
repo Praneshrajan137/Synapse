@@ -7,9 +7,10 @@ adversarial seeds (:data:`~uplift.scenarios.ADVERSARIAL_SUITE`), assembles the
 :class:`~uplift.interfaces.UpliftResult` under the pre-registered
 :class:`~uplift.contract.MetricContract`, and prints the **headline uplift number
 co-located with its twin-:class:`~uplift.fidelity.FidelityReport`** (R7.2, R7.7,
-R5.2/R5.6). It also persists the headline result to the
-``artifacts/uplift/result.json`` artifact the C60 ``uplift_truth`` gate reads, so a run
-of this command flips that gate from SKIP (uplift unavailable) to PASS/FAIL.
+R5.2/R5.6). It also persists the result to the ``artifacts/uplift/result.json`` artifact
+the C60 ``uplift_truth`` gate reads. That artifact is not under version control: the gate
+is trigger-aware (AD-9, CF-4), so it returns PASS/FAIL only when it is invoked with
+``--require-fresh-run`` in the same job that ran this command, and SKIP everywhere else.
 
 Honesty invariants surfaced by this command:
 
@@ -47,7 +48,6 @@ Run::
 from __future__ import annotations
 
 import argparse
-import json
 import sys
 from pathlib import Path
 from typing import Sequence
@@ -68,10 +68,13 @@ from uplift.harness import (
     HarnessResult,
     LoopConfig,
     UpliftHarness,
+    UpliftProvenance,
     aggregate_arm,
     assemble_uplift_result,
+    build_uplift_artifact,
     build_uplift_report,
     replicate_seed,
+    resolve_provenance,
     run_closed_loop,
     uplift_exit_code,
 )
@@ -236,30 +239,42 @@ def _default_artifact_path() -> Path:
         return root / "artifacts" / "uplift" / "result.json"
 
 
-def _write_result_artifact(path: Path, result, report) -> Path:
-    """Write the headline uplift + fidelity fields to ``path`` for the C60 gate.
+def _write_result_artifact(
+    path: Path,
+    result,
+    report,
+    *,
+    harness_result: HarnessResult | None = None,
+    provenance: UpliftProvenance | None = None,
+) -> Path:
+    """Write the canonical :class:`~uplift.harness.UpliftArtifact` to ``path``.
 
-    The gate (:func:`scripts.audit.uplift_truth.read_measured_uplift`) needs a numeric
-    ``headline_uplift``; the fidelity block co-locates the KL context (R5.6) with it.
+    The gate (:func:`scripts.audit.uplift_truth.admit`) parses this file through
+    :meth:`~uplift.harness.UpliftArtifact.read`, so every field it needs must be present:
+    a finite ``headline_uplift``, a boolean ``incomplete``, the fidelity block that
+    co-locates the KL context (R5.6), and the provenance record naming the revision, run,
+    seed set, arms, and replicates-per-arm count the audit's R2.3 requires -- an artifact
+    missing any of them is inadmissible, not silently readable. Serialisation is canonical
+    (``sort_keys=True``, tight separators) so two runs of the same seed set at the same
+    revision produce byte-identical files.
+
+    ``provenance`` is resolved from the environment when not supplied; a caller with no
+    ``harness_result`` gets an artifact with no arm aggregates and a zero replicate
+    count, which is honest (and inadmissible as proof) rather than fabricated.
     """
-    fidelity = result.fidelity
-    payload = {
-        "headline_uplift": float(result.headline_uplift),
-        "primary_kpi": report.primary_kpi,
-        "noise_tolerance_pp": NOISE_TOLERANCE_PP,
-        "incomplete": bool(result.incomplete),
-        "all_wins_warning": bool(result.all_wins_warning),
-        "fidelity": {
-            "kl_divergence": fidelity.kl_divergence,
-            "threshold": fidelity.threshold,
-            "confidence": fidelity.confidence,
-            "within_fidelity_bound": report.within_fidelity_bound,
-            "fidelity_bound_statement": fidelity.fidelity_bound_statement,
-        },
-    }
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(payload, indent=2, sort_keys=True), encoding="utf-8")
-    return path
+    resolved = (
+        provenance
+        if provenance is not None
+        else resolve_provenance(arms=(), replicates_per_arm=0, seeds=())
+    )
+    artifact = build_uplift_artifact(
+        result,
+        report,
+        resolved,
+        noise_tolerance_pp=NOISE_TOLERANCE_PP,
+        harness_result=harness_result,
+    )
+    return artifact.write(path)
 
 
 # ---------------------------------------------------------------------------
@@ -455,8 +470,23 @@ def main(argv: Sequence[str] | None = None) -> int:
         )
 
     # --- persist the artifact the C60 uplift_truth gate reads ---
+    # The provenance record is what makes this run attributable: the seed set is the
+    # scenario base seeds (every replicate seed is derived from them by
+    # ``replicate_seed``), and the revision is what marks a run as measured before or
+    # after the ADR-054 dispatch choke point, across which uplift is not comparable.
     output_path = args.output if args.output is not None else _default_artifact_path()
-    written = _write_result_artifact(output_path, result, report)
+    provenance = resolve_provenance(
+        arms=[policy.name for policy in arms],
+        replicates_per_arm=n,
+        seeds=[scenario.seed for scenario in scenarios],
+    )
+    written = _write_result_artifact(
+        output_path,
+        result,
+        report,
+        harness_result=harness_result,
+        provenance=provenance,
+    )
     print()
     print(f"wrote result artifact: {written}")
 

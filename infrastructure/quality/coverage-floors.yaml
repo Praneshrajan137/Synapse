@@ -17,6 +17,24 @@
 #     line:        float — line+branch combined %, the gate metric
 #     target:      float — Sprint-13 destination (always 84.0)
 #     note:        str   — provenance, why this number, and what blocks ratchet
+#     measured_at: str|null — ISO-8601 UTC timestamp of the run that measured this
+#                    package. Written by `scripts/coverage_ratchet.py --apply`.
+#                    Absent or null means NO run has measured it.
+#     source_run:  str|null — the run that produced that measurement, e.g.
+#                    "gh-run-1234567890". Same null-vs-recorded semantics as
+#                    `status: measured|unmeasured` in
+#                    `infrastructure/quality/ratchets.json`.
+#
+# Non-vacuity (R7.2 / R7.9), enforced by
+# `scripts/coverage_per_package.py --require-measured-floors`:
+#   - line: 0.0 WITH a recorded measured_at  -> FAIL naming the package. A run
+#     measured it and the floor was still left at zero, so the gate asserts
+#     nothing.
+#   - line: 0.0 with measured_at null/absent -> SKIP-UNMEASURED naming the
+#     package. Nothing has measured it yet, and a SKIP is never a PASS (I-7).
+#   The nine CI-MUST-MEASURE rows below are in the second state today. They stay
+#   there until one `ci.yml::quality-gates` run on `main` publishes coverage.xml
+#   and the operator runs the ratchet; measuring them locally is forbidden (I-0).
 #
 # Coverage modes:
 #   The pytest run uses `--cov-branch`, so the `line` field is actually the

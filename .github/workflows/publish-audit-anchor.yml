@@ -9,13 +9,37 @@ name: Publish daily audit anchor to Rekor
 # transparency log, so the audit chain becomes verifiable against a third
 # party with cryptographic certainty.
 #
-# Trigger: every push to main that touches infrastructure/audit_anchors/.
+# purpose-achievement-audit task 7.6 (design E4.3; R6.11, R6.12) adds the two
+# halves the audit found missing:
+#
+#   1. THE SCHEDULED CALLER. `orchestrator/audit/anchorer.py::anchor_today` had
+#      none (requirements.md Requirement 6), so the "daily anchor" was a
+#      capability, not a practice. The `anchor` job below is that caller: it
+#      captures the chain HEAD HASH and commits the anchor, which is what makes
+#      a later rewrite of any row at or before that head detectable by a party
+#      holding only the anchor (R6.12).
+#   2. THE FRESHNESS GATE. `scripts/audit/anchor_truth.py` reports the chain
+#      UNVERIFIABLE — never verified — when no anchor exists or the newest is
+#      older than the committed bound in
+#      infrastructure/quality/audit-chain-bounds.yaml (R6.11, I-7).
+#
+# The freshness step propagates its exit status deliberately. Until a
+# deployment publishes an anchor, this scheduled job reports exit 2
+# (unverifiable). That is the honest state, and it is a scheduled job — it
+# gates nothing on a pull request.
+#
+# Triggers: the daily schedule (anchor + gate), a manual dispatch, and every
+# push to main that touches infrastructure/audit_anchors/ (sign + publish).
 
 on:
   push:
     branches: [main]
     paths:
       - "infrastructure/audit_anchors/**"
+  schedule:
+    # 02:17 UTC daily — comfortably inside the 48h freshness bound, so one
+    # missed run is tolerated and two consecutive misses are not.
+    - cron: "17 2 * * *"
   workflow_dispatch:
 
 permissions:
@@ -23,8 +47,92 @@ permissions:
   id-token: write   # required for cosign keyless OIDC
 
 jobs:
+  anchor:
+    name: Capture chain head - daily anchor
+    # Only the schedule and a manual dispatch anchor; a push that lands an
+    # anchor file must not immediately write another one.
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: write   # commits today's anchor artifact
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with: {python-version: "3.11", cache: "pip"}
+
+      - name: Install dependencies
+        run: |
+          set -euo pipefail
+          pip install -r packages/requirements.txt
+          pip install -e packages/
+          # The anchorer reads the chain through SQLAlchemy/asyncpg and the
+          # committed bounds through pyyaml (orchestrator/audit/chain_walk.py).
+          pip install "sqlalchemy[asyncio]==2.0.31" "asyncpg==0.29.0" "pyyaml>=6.0.0,<7.0"
+
+      - name: Detect audit DSN
+        id: dsn
+        env:
+          SYNAPSE_AUDIT_DSN: ${{ secrets.SYNAPSE_AUDIT_DSN }}
+        run: |
+          set -euo pipefail
+          if [ -n "${SYNAPSE_AUDIT_DSN:-}" ]; then
+            echo "configured=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "configured=false" >> "$GITHUB_OUTPUT"
+            echo "No SYNAPSE_AUDIT_DSN secret: no chain head can be read, so no anchor"
+            echo "is published. The freshness gate below still runs and will report the"
+            echo "chain UNVERIFIABLE - absence of an anchor is never a pass (I-7)."
+          fi
+
+      - name: Write today's anchor (commits to the chain head hash)
+        if: steps.dsn.outputs.configured == 'true'
+        env:
+          SYNAPSE_AUDIT_DSN: ${{ secrets.SYNAPSE_AUDIT_DSN }}
+        run: |
+          set -euo pipefail
+          # Exit 2 means nothing was anchored (head unreadable, or the chain
+          # holds no hashed row). It propagates: a run that anchored nothing
+          # is not a successful run.
+          PYTHONPATH=. python -m orchestrator.audit.anchorer
+
+      - name: Commit today's anchor
+        if: steps.dsn.outputs.configured == 'true'
+        run: |
+          set -euo pipefail
+          git config user.name "synapse-audit-bot[bot]"
+          git config user.email "audit@synapse.example"
+          git add infrastructure/audit_anchors/*.json
+          if ! git diff --cached --quiet; then
+            git commit -m "audit: daily anchor commits to the chain head (R6.12)"
+            git push
+          else
+            echo "anchor unchanged for today; nothing to commit"
+          fi
+
+      - name: Anchor freshness gate (R6.11 - unverifiable is not verified)
+        run: |
+          set -euo pipefail
+          # Exit 0 a fresh anchor commits to a head; 1 a published anchor is
+          # defective; 2 no anchor exists or the newest is staler than the
+          # committed bound. 2 is non-passing.
+          PYTHONPATH=. python -m scripts.audit.anchor_truth
+
   publish:
     name: Sign anchor → Rekor
+    # Unchanged behaviour: this job signs anchor FILES that have landed on main.
+    # It is excluded from the schedule because a scheduled run has nothing new in
+    # its checkout to diff against.
+    #
+    # KNOWN GAP, recorded rather than papered over: the `anchor` job pushes with
+    # GITHUB_TOKEN, and GitHub does not trigger workflows from such a push, so a
+    # scheduled anchor is signed on the next push to main that touches
+    # infrastructure/audit_anchors/, not in the run that produced it. The anchor's
+    # tamper-evidence value (R6.12) comes from the committed head-hash commitment
+    # and does not wait on the signature; third-party (Rekor) verifiability is the
+    # separate C25 concern and is not what task 7.6 claims to close.
+    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:

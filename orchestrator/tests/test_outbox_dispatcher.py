@@ -86,8 +86,8 @@ class TestDispatchOne:
                 "headers": {},
             }
         ]
-        dispatcher._mark_published.assert_awaited_once_with(row)  # type: ignore[attr-defined]
-        dispatcher._reschedule.assert_not_called()  # type: ignore[attr-defined]
+        dispatcher._mark_published.assert_awaited_once_with(row)
+        dispatcher._reschedule.assert_not_called()
         assert dispatcher.published_count == 1
         assert dispatcher.failed_count == 0
 
@@ -99,8 +99,8 @@ class TestDispatchOne:
         dispatcher._reschedule = AsyncMock()  # type: ignore[method-assign]
         row = _row()
         await dispatcher._dispatch_one(row)
-        dispatcher._mark_published.assert_not_called()  # type: ignore[attr-defined]
-        dispatcher._reschedule.assert_awaited_once()  # type: ignore[attr-defined]
+        dispatcher._mark_published.assert_not_called()
+        dispatcher._reschedule.assert_awaited_once()
         kwargs = dispatcher._reschedule.await_args.kwargs  # type: ignore[union-attr]
         assert "fake kafka outage" in kwargs["error"]
 

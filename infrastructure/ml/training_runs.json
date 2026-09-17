@@ -1,0 +1,91 @@
+{
+  "schema_version": 1,
+  "$why_this_file_exists": [
+    "R8.15 (decision-quality-proof task 19.7): WHERE training or benchmarking is executed, the",
+    "execution SHALL occur either in the CI_Pipeline or on external GPU capacity that requires no",
+    "billable account, no trial linked to a billing account, and no purchased or granted credits,",
+    "AND the run record naming that execution environment SHALL be committed. This is that record.",
+    "Read by scripts/audit/benchmark_truth.py. Beside published_checkpoints.json on purpose: both",
+    "answer 'what did this project actually produce', and separating them invites a reader to",
+    "check only one.",
+    "The three exclusions are three separate booleans rather than the word 'free'. A free trial",
+    "on a hyperscaler requires a card, a grant of credits is a purchase somebody else made, and",
+    "both are routinely called free. benchmark_truth DERIVES zero_cost from all three and treats",
+    "declared_zero_cost as a claim to be compared, never read - the same construction",
+    "data_fabric/licence.py uses for DatasetLicence.confirmed."
+  ],
+  "$why_runs_is_empty": [
+    "No training run has executed. Model training is a category-4 workload under I-0 and never",
+    "runs on the dev box, and no CI job has produced a full train yet. runs: [] is therefore the",
+    "true state, and benchmark_truth reports no-scored-run -> unavailable -> SKIP for it.",
+    "A SKIP is not a PASS (I-7). What is NOT done here: inventing a run entry so the file looks",
+    "populated. A record of a run that never happened is a fabricated fact, and it would be",
+    "indistinguishable from a real one to every downstream reader.",
+    "comparison_setup below is not a run and is deliberately not in runs. It records the",
+    "comparison as SET UP - metric identity, baseline entry, comparability disposition, domain",
+    "gap - all of which are properties of the comparison rather than of a number, and so are",
+    "checkable today. Without it every R8.5-R8.8 / R8.12 / R8.13 / R8.18 clause would be",
+    "unavailable-by-construction until the largest block of work in the spec completed, and a",
+    "gate that cannot fail yet is not yet a gate."
+  ],
+  "environments": [
+    {
+      "environment_id": "ci-pipeline",
+      "locus": "ci-pipeline",
+      "detail": "GitHub Actions standard runners on this public repository, via .github/workflows/. This is where every bounded workload in this project already executes; adding a step is the first escalation rung under .kiro/steering/execution-routing.md.",
+      "billable_account_required": false,
+      "trial_linked_to_billing_required": false,
+      "purchased_or_granted_credits_used": false,
+      "declared_zero_cost": true,
+      "cost_basis": "GitHub Actions standard runners are unmetered for public repositories, so no account with billing enabled, no trial, and no credit grant is involved. Established by the fact that this repository's existing workflows have run on those runners throughout the project without any billing relationship - read from the committed workflows and their history, not from a vendor pricing page.",
+      "new_dependencies": [],
+      "dependency_basis": "R8.11 (I-1): this environment introduces no paid API, SDK, dependency or host. CI already blocks the named paid packages, so the prohibition is enforced where it is enforceable rather than asserted here. The empty list is stated rather than omitted, because silence is indistinguishable from nobody having checked."
+    }
+  ],
+  "runs": [],
+  "comparison_setup": {
+    "score": null,
+    "score_absent_reason": "No scoring run has executed. Model training is a category-4 workload under I-0 and never runs on the dev box; no CI job has produced a full train yet. A null here is the absence of a measurement, not a forgotten field.",
+    "direction": "lower-is-better",
+    "metric": {
+      "metric_id": "m5-uncertainty-wspl",
+      "metric_name": "Weighted Scaled Pinball Loss (WSPL)",
+      "defining_document_id": "kaggle-m5-forecasting-uncertainty-evaluation",
+      "defining_document_uri": "https://www.kaggle.com/competitions/m5-forecasting-uncertainty/overview/evaluation",
+      "defining_document_confirmed": false,
+      "provenance": "The metric name is carried forward from the note recorded in infrastructure/data/dataset-licences.yaml at task 7.1, which states that the M5 Uncertainty track scores Weighted Scaled Pinball Loss over the 50%, 67%, 95% and 99% intervals. It has NOT been verified against the defining document at the URI above - naming where a document lives is not a claim to have read it. R8.7 requires that limitation to be stated, and this field is where it is stated.",
+      "split_id": "not-established: no held-out split has been defined for a scoring run, and the published competition's split has not been read from the defining document",
+      "aggregation_level": "not-established: the published competition aggregates over 12 hierarchical levels; which levels a scoring run would report has not been decided, and asserting one here would be a guess",
+      "quantile_levels": [0.1, 0.5, 0.9]
+    },
+    "baseline": {
+      "status": "unconfirmed",
+      "value": null,
+      "blocked_on": "The numeric M5 leaderboard scores are recorded as UNVERIFIED in this spec's own requirements (.kiro/specs/decision-quality-proof/requirements.md:134: 'the numeric leaderboard scores were NOT verified and MUST be confirmed at implementation time'). Confirming one requires a human to read the published leaderboard; the authoring session had no network access, and inventing a plausible figure would make this gate green while fabricating a fact about somebody else's published result.",
+      "procedure": "1. Open the defining document at metric.defining_document_uri and record the metric definition verbatim, then set metric.defining_document_confirmed to true. 2. Open the competition's public leaderboard, read the baseline score for the SAME metric, and record it as a confirmed baseline: replace this object with {status: confirmed, value: <the number>, source_uri: <the leaderboard URL>, source_title: <the page title>, read_date: <UTC date of the read>, read_by: <who read it>}. 3. Do not record a value read from a blog post, a paper's summary table, or a third-party mirror without recording THAT as the source - the source field is what makes the number checkable.",
+      "limitation": "R8.7: the exact published leaderboard values could not be confirmed at implementation time, so this record states that limitation rather than a number. No comparison to the published field is established, and no generated document may state a baseline value as fact (R8.8)."
+    },
+    "comparability": {
+      "status": "not-leaderboard-comparable",
+      "differences": [
+        "Metric definition: THREE DISTINCT INTERVAL FAMILIES are in play. The M5 Uncertainty track scores the 50%, 67%, 95% and 99% intervals (per the note in infrastructure/data/dataset-licences.yaml). This agent's training objective declares quantile_levels [0.1, 0.5, 0.9], an 80% RAW band (agents/demand_prophet/training/rewards.py:31). INV-DP-002 asserts a CONFORMAL-ADJUSTED 90% band at empirical coverage >= 0.85 (agents/demand_prophet/spec.yaml:25-26). A pinball loss over an 80% raw band is not the quantity a weighted scaled pinball loss over 50/67/95/99 measures, and reporting a rank across them would be a category error dressed as a measurement.",
+        "Split: no held-out split has been defined for a scoring run, and the published competition's split has not been read from the defining document, so no like-for-like split exists to compare over.",
+        "Aggregation level: the published competition aggregates over 12 hierarchical levels; which levels a scoring run would report has not been decided."
+      ],
+      "rank": null
+    },
+    "domain_gap": {
+      "feed_domain": "Daily grocery retail demand: 3,049 products across 10 Walmart stores in 3 US states, one observation per series per day.",
+      "system_domain": "10-minute quick-commerce demand: sub-hourly arrival intensity across a city's dark stores, where the decision horizon is shorter than a single observation of the feed.",
+      "distinct_domains": true,
+      "statement": "R8.12: the Real_Data_Feed and quick-commerce demand are DISTINCT DOMAINS, and every claim derived from the feed carries this gap. A score computed on daily grocery series says nothing directly about 10-minute quick-commerce demand; what transfers is the model's calibration machinery and the shape of its seasonality, not the demand process itself. R8.13: the two are described as distinct domains in every document reporting a feed-derived score, which is why docs/benchmarks/m5-uncertainty.md renders this block rather than paraphrasing it.",
+      "evidence": "The sharpest available evidence is mechanical rather than rhetorical: data_fabric/ingest/m5.py::intra_day_intensity_shape reports the intra-day intensity shape as UNAVAILABLE and carries no values, because the source's observation columns are daily totals and an hour-of-day shape is not recoverable from daily aggregates by any amount of arithmetic. The feed cannot express the grain the quick-commerce domain operates at. That is the gap, measured by a function that refuses rather than argued in prose."
+    }
+  },
+  "notes": [
+    "R8.15's second half - 'THE run record naming that execution environment SHALL be committed' - is discharged by this file existing with a checked environments block, independently of whether a run has executed. That split is why the environment clauses go red on a paid tier today while the score clauses report SKIP.",
+    "The external-GPU locus (external-gpu-no-billing) is declared in the model's vocabulary but NOT used here, and that is deliberate: no such environment has been established, and declaring one before it exists would be a claim about a provider's terms that nobody has read. If one is added later, all three exclusion booleans must be established against that provider's own terms and recorded in cost_basis - not inferred from the word 'free' in its marketing.",
+    "How to record a real run: append an object to runs with {run_id, revision, executed_at, environment_id, benchmark}, where benchmark carries the same shape as comparison_setup but with a real score. benchmark_truth then checks the pre-registered expectation in infrastructure/quality/benchmark-expectations.yaml is a STRICT ancestor of that revision, and reads the prediction back out of history at that revision to confirm it was not rewritten afterwards.",
+    "Validate: python -m scripts.audit.benchmark_truth --check   (expect exit 2 = honest SKIP today)"
+  ]
+}
