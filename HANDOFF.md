@@ -1,6 +1,6 @@
 # HANDOFF — decision-quality-proof
 
-**State at end of session 10 (2026-09-11).** Branch `feat/decision-quality-proof`, PR **#84** open
+**State at end of session 10 (2026-09-16 to 2026-09-17).** Branch `feat/decision-quality-proof`, PR **#84** open
 against `main`. The commit carrying this file also carries `NEXT_SESSION_PROMPT.md` and
 `SESSION_PROTOCOL.md`'s session-10 row and batch table.
 

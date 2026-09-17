@@ -1,6 +1,6 @@
 # NEXT SESSION PROMPT — decision-quality-proof
 
-Regenerated at the end of session **10** (2026-09-11).
+Regenerated at the end of session **10** (2026-09-16 to 2026-09-17).
 
 **This prompt states no HEAD, deliberately.** Conflicts J and K were the same defect three sessions
 running: the prompt is written *before* the commit that carries it, so any sha it names is stale by
