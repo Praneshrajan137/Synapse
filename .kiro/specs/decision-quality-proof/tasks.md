@@ -2073,6 +2073,11 @@ tests in the interim, and that is a stated sequencing gap, not an omission.
     from session 9's batch, which was pre-registered above as the cost of this branch and is not a
     reason to reread the number.** Reported plainly: it is a good outcome, and it is what the
     pre-commitment at task 25 binds either way.
+  - **FINDING 4 IS SUBSTANTIVELY TRUE, AND THIS TASK STAYS `[x]`.** Task 28.5's split shows R5.3's
+    mechanical test fired `material` correctly but **about the wrong quantity**: 85.6% of this
+    regret is baseline mis-tuning. The verdict above was correctly recorded and correctly
+    discharged, and this does **not** reopen it -- what changed is what the verdict **licenses**,
+    recorded at 28.5. Design reasoning: ADR-055 **D2.7**.
 
 - [ ] 12. E2c — structures 1 and 2: non-stationary demand, and capacity that binds
   - **DISPOSITION, 2026-09-11 -- TASKS 12, 13 AND 14 ARE HELD PENDING THE R5 RE-CUT. ELEVEN
@@ -2087,6 +2092,17 @@ tests in the interim, and that is a stated sequencing gap, not an omission.
       **information-gap measurement**: non-stationary demand (12.1, 12.2), and correlated lead
       times with observable supplier state (13.1, 13.2). If that measurement finds no information
       gap for an arm to exploit, neither structure unlocks a decision and both join the deferrals.
+    - **CONDITION TESTED AND MET, 2026-09-12 -- STRUCTURES 1 AND 3 ARE REINSTATED.** Task 28.5's
+      measurement (run `35125443185`, sha `34d861b`) puts the information ceiling **below** the
+      committed margin, so the hold above is resolved **by measurement** rather than by argument:
+      **12.1, 12.2, 13.1 and 13.2 are back in scope and authorable.** They are **not** ticked --
+      reinstated as authorable is not done. Design reasoning: ADR-055 **D2.7**.
+      - **Structure 3 is the decisive one.** It is the only reinstated structure that introduces a
+        replenishment **DELAY**, and delay is what makes knowing the future worth anything: under
+        instantaneous replenishment an arm can order **after** observing demand, which is why the
+        ceiling is only `0.0652`.
+      - **Structures 2, 4 and 5 stay DEFERRED** (12.3, 12.4, 13.3, 13.4): each unlocks other
+        agents rather than this measurement, and none of them introduces a replenishment delay.
     - **Nothing is deleted and nothing is ticked.** A deleted leaf is indistinguishable from a
       discharged one in the census; a held leaf carrying its reason is not.
     - **The measurement that resolves the conditionality is task 28** (arm E's two-term split of
@@ -2167,6 +2183,9 @@ tests in the interim, and that is a stated sequencing gap, not an omission.
     the tuned-static comparator arm's information-gap measurement; structures 4 and 5 (13.3, 13.4)
     are recorded deferrals. Pointer only -- ADR-055 D2.6 and `requirements.md`'s re-cut carry the
     argument.
+  - **STRUCTURE 3 REINSTATED 2026-09-12** by task 28.5's measurement: 13.1 and 13.2 are back in
+    scope and authorable (not ticked); 13.3 and 13.4 stay deferred. Pointer only -- task 12's
+    disposition block and ADR-055 **D2.7** carry it.
 
   - [ ] 13.1 Structure 3 — correlated lead times and observable supplier state
     - Files: `digital_twin/simulation/engine.py`, `digital_twin/world/runtime.py`
@@ -2260,6 +2279,10 @@ tests in the interim, and that is a stated sequencing gap, not an omission.
     moves with it.**
   - **The measurement that resolves this checkpoint's conditionality is task 28** (arm E's
     two-term split of the regret). Pointer only -- ADR-055 D2.6 carries the argument.
+  - **CHECKPOINT B'S CONDITIONALITY IS LIKEWISE RESOLVED, 2026-09-12** by task 28.5's measurement:
+    E2c is authorable again, so this checkpoint moves with it rather than waiting on a condition.
+    **CONFLICT R below (R5.28's unsatisfiability) is untouched by this measurement and still
+    stands** -- nothing in the reinstatement repairs it.
   - **CONFLICT R, RAISED 2026-09-11 -- R5.28 IS UNSATISFIABLE AS WRITTEN, AND R5.29 THEREFORE
     MAKES THIS CHECKPOINT A PROJECT-CANCELLATION TRIPWIRE THAT IS GUARANTEED TO FIRE. SURFACED,
     NOT RESOLVED.**
@@ -2589,6 +2612,10 @@ tests in the interim, and that is a stated sequencing gap, not an omission.
     - A derived requirement **below** `monte_carlo.py::MIN_SCENARIOS` records the INV-TW-002
       floor as **binding** rather than proposing a lower constant (R6.16) — a lower value breaks
       the hard guards at `uplift/harness.py:608-611` and `monte_carlo.py:123-127`.
+    - **BINDING NOTE, 2026-09-12 -- NOT TO BE DENOMINATED AGAINST THE INCUMBENT ARM.** Task 28.5
+      measures most of the regret as baseline mis-tuning, so the honest baseline is the **tuned
+      control at `s=20, S=30`**. Authoring this leaf against the incumbent is now **forbidden**.
+      Mark unchanged; ADR-055 **D2.7** carries the reasoning.
     - _Requirements: 6.9, 6.10, 6.16_
 
   - [ ] 17.3 Refuse publication while no Power_Report describes the revision under measurement
@@ -2616,6 +2643,10 @@ tests in the interim, and that is a stated sequencing gap, not an omission.
       property moves in the same commit.
     - `FloorRatchetError` on any lowering is **already enforced** and pinned; nothing here
       relaxes it (R7.13 is a regression pin, not work).
+    - **BINDING NOTE, 2026-09-12 -- NOT TO BE DENOMINATED AGAINST THE INCUMBENT ARM.** Task 28.5
+      measures most of the regret as baseline mis-tuning, so the honest baseline is the **tuned
+      control at `s=20, S=30`**. Authoring this leaf against the incumbent is now **forbidden**.
+      Mark unchanged; ADR-055 **D2.7** carries the reasoning.
     - _Requirements: 7.12_
 
   - [ ] 17.6 Write property test for the ratchet's source value
@@ -3386,6 +3417,10 @@ data and scored against an external benchmark has no demonstrable value.
     model trained on non-synthetic data and scored against an external benchmark (E4), with the
     audit chain independently verifiable by a party holding no credential from this project (E5).
     Every one of those clauses is a task above. None may be assumed.
+  - **BINDING NOTE, 2026-09-12 -- THIS CLAIM MAY NOT BE DENOMINATED AGAINST THE INCUMBENT ARM.**
+    Task 28.5 measures most of the regret as baseline mis-tuning, so the honest baseline is the
+    **tuned control at `s=20, S=30`**. Stating this claim against the incumbent is now
+    **forbidden**. Mark unchanged; ADR-055 **D2.7** carries the reasoning.
   - **Pre-commitment, made here and binding before the number is known.** If the measured uplift
     is null or negative, **it is reported as null or negative.** The floor stays at `0.0`, no
     headline is published as a gain, and the result is written up as a finding rather than
@@ -4459,7 +4494,7 @@ data and scored against an external benchmark has no demonstrable value.
       recorded for whoever owns the prompt's regeneration.
     - _Requirements: —_
 
-- [ ] 28. Arm E -- the tuned static par-level control, and the two-term split of the regret
+- [x] 28. Arm E -- the tuned static par-level control, and the two-term split of the regret
   - **Why this task exists, in one sentence.** The regret measured at run `34685048665` is a
     contrast against an **untuned** comparator, so it cannot distinguish a genuine foresight
     advantage from a par-level that was simply set badly. Arm E splits it into
@@ -4470,10 +4505,15 @@ data and scored against an external benchmark has no demonstrable value.
     comparison; the split is reported beside it. That separation is what keeps a misbehaving
     arm E from discarding a real measurement (I-7 cuts both ways).
 
-  - [~] 28.1 Commit the pre-registered tuning grid and the search module
+  - [x] 28.1 Commit the pre-registered tuning grid and the search module
     - discharge: ci.yml::uplift-verify fast shard (Property 81 is its proof)
-    - last-checked: authored after run 35074588548 (sha fa42263); its discharge job has not
-      executed at this revision
+    - **DISCHARGED 2026-09-12 BY SHARD NAME, not by the aggregate job.** Property 81's file
+      `tests/uplift/test_tuned_static_arm_property.py` is placed by the glob
+      `test_[pqrstuvwxyz]*.py` into **`uplift-verify-fast-2`**, and that shard reports `success`
+      in run `35125413492` at sha `34d861b`. The aggregate job is red on the slow shard's
+      finding-57 false positive, which is another owner's and unrelated to this leaf -- naming
+      the shard is what makes this an honest discharge rather than a verdict read off the wrong
+      subject.
     - Files: `infrastructure/quality/comparator-tuning.yaml`, `uplift/tuning.py`
     - The grid is **pre-registered**: 18 `(s, S)` candidates, **including the incumbent's own
       pair**. That inclusion is deliberate and load-bearing -- it is what makes prediction 3
@@ -4491,10 +4531,11 @@ data and scored against an external benchmark has no demonstrable value.
     - Local verification is recorded once, at 28.2, and it is **not** a discharge.
     - _Requirements: 5.2, 5.3, 5.36_
 
-  - [~] 28.2 Write property test for the search and the decomposition identity (Property 81)
+  - [x] 28.2 Write property test for the search and the decomposition identity (Property 81)
     - discharge: ci.yml::uplift-verify fast shard
-    - last-checked: authored after run 35074588548 (sha fa42263); its discharge job has not
-      executed at this revision
+    - **DISCHARGED 2026-09-12: shard `uplift-verify-fast-2`, `success`, run `35125413492`, sha
+      `34d861b`.** Same shard, same run as 28.1; see that leaf for why the shard is named rather
+      than the aggregate job.
     - `# Feature: decision-quality-proof, Property 81: The tuned static arm is the pre-registered
       grid's out-of-sample minimum, and the decomposition it induces is exact`
     - File: `tests/uplift/test_tuned_static_arm_property.py` -- **19 tests, no simulation**, so it
@@ -4508,15 +4549,18 @@ data and scored against an external benchmark has no demonstrable value.
     - **LOCAL RESULT, AND IT IS NOT A DISCHARGE.** Property 81 was run locally at
       `HYPOTHESIS_PROFILE=ci`: **19 passed in 63 s**. Recorded here because the file is pure
       arithmetic and `ci` is the budget that will judge it -- but **a local green is not a CI
-      green** (I-7), which is why both 28.1 and 28.2 stay `[~]` and carry `last-checked:` lines
-      naming a job that has not executed at this revision.
+      green** (I-7), which is why 28.1 and 28.2 stood at `[~]` carrying `last-checked:` lines
+      until the discharge job executed at this revision. It has now executed; the CI green above
+      is the discharge, and this local run remains what it always was.
     - Locus: `ci.yml::uplift-verify` fast shard.
     - _Requirements: 5.2, 5.3, 5.36_
 
-  - [~] 28.3 Wire arm E into the comparator and report the two-term split
+  - [x] 28.3 Wire arm E into the comparator and report the two-term split
     - discharge: uplift.yml::twin-regret
-    - last-checked: authored after run 35074588548 (sha fa42263); its discharge job has not
-      executed at this revision
+    - **DISCHARGED 2026-09-12 by run `35125443185`** (`uplift.yml::twin-regret`, dispatched by
+      label) at sha `34d861b`: `status: measured`, 200/200 replicates usable, and the artifact
+      keys listed below present in the verdict. The numbers and what they license are recorded
+      once, at 28.5.
     - Files: `uplift/foresight.py`, `uplift/regret.py`
     - `run_single_arm` drives ONE arm through the shared `_make`/`_drive`, so **an arm's physics
       is decided in exactly one place**. Without it the levels could be selected under one
@@ -4597,9 +4641,48 @@ data and scored against an external benchmark has no demonstrable value.
     holding figure (`mean_tuned_static_cost`), and the width of `tuning_gap_interval`.
     - _Requirements: 5.2, 5.3, 5.4_
 
-  - [ ] 28.5 Run the labelled measurement and record the verdict
+  - [x] 28.5 Run the labelled measurement and record the verdict
     - discharge: uplift.yml::twin-regret
-    - **OPEN, CI-GATED, AND DELIBERATELY NOT OFFERED AS AUTHORABLE.** An open leaf carrying a
+    - **RESULT, 2026-09-12, AND IT SUPERSEDES THE "NOT YET RUN" CLAUSE BELOW.** Run
+      `35125443185` at sha `34d861b`, `uplift.yml::twin-regret` dispatched by label:
+      `status: measured`, 200/200 replicates usable. **All five pre-registered predictions from
+      28.4 resolved, and all five CONFIRMED** against their wording as it already stood.
+      - Arms A-D unperturbed to every digit, the **fourth** consecutive session:
+        `comparator_headroom_vs_foresight` `8.937888952967558`, `regret_vs_foresight`
+        `-0.8123524459522771`, `regret` `0.4533668749999997` with interval
+        `[0.4524633333333333, 0.45426833333333333]`.
+      - `tuning_gap` `0.38812253172657085`, interval `[0.3870638568995475, 0.38909283394762645]`;
+        `information_ceiling` `0.06524434327342887`; `decomposition_residual` **exactly `0.0`**;
+        `decomposition_admissible` `True`; `hindsight_arm_is_pointwise_best` `True` over the
+        **five**-arm family.
+      - Selected levels `s=20, S=30` -- a **unique** minimum over 18 candidates, the incumbent
+        ranked **15th of 18**. Out of sample the arm costs more, which is the direction it must
+        move: tuning-seed mean `1.696209281289319` against measurement-seed mean
+        `1.696864596506129`, higher by `0.000655`.
+    - **THE RESULT, STATED ONCE. 85.6% of the measured regret is baseline mis-tuning; 14.4% is a
+      ceiling on information value** -- a ratio of **5.95 to 1**. The ceiling is about **0.82
+      service-point equivalents** against a pre-registered margin of **5.0**.
+    - **AND THE PART THAT WAS NOT PREDICTED, WHICH IS SHARPER THAN THE PART THAT WAS: neither
+      addend is material on its own.** `tuning_gap`'s interval
+      `[0.3870638568995475, 0.38909283394762645]` sits **below** the committed margin of `0.40`
+      and **excludes** it; the ceiling is far below. **So the `material` verdict is produced only
+      by their SUM.** Neither component clears the bar the project set itself.
+    - **THE FINDING IS CONSERVATIVE, in the direction that matters.** The selected point is
+      interior in `s`, so it is not a grid-edge artefact -- and a finer grid could only find a
+      **lower** tuned cost, which makes the tuning gap **larger** and the ceiling **smaller**.
+      `0.0652` is an upper bound on an upper bound.
+    - **WHAT THIS LICENSES, AND BOTH HALVES ARE BINDING.** The ceiling landed below the margin,
+      so prediction 5's first branch fires: E3's floor and task 25's claim may **NOT** be
+      denominated against the incumbent arm -- the honest baseline is the **tuned control at
+      `s=20, S=30`** (notes added at 17.2, 17.5 and 25, marks unchanged) -- and **structures 1
+      and 3 are reinstated** (task 12's disposition block carries the reinstatement).
+    - **Finding 4 is substantively TRUE, and R5.3's mechanical test could not see it:** it fired
+      `material` correctly, about the wrong quantity. **Task 11 stays `[x]`** -- its verdict was
+      correctly recorded and correctly discharged, and nothing here reopens it. What changed is
+      what that verdict **licenses**.
+    - Design reasoning: ADR-055 **D2.7**. Not restated here.
+    - **OPEN, CI-GATED, AND DELIBERATELY NOT OFFERED AS AUTHORABLE** -- the pre-run state, kept
+      as the record of why this leaf was never authorable. An open leaf carrying a
       `discharge:` line is CI-gated by this ledger's own rule, so the census will not offer 28.5
       in an authorable batch. That is intended: there is nothing to author here. The work is a
       run, and the only honest local state is "not yet run".

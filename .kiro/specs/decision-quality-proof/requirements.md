@@ -858,6 +858,13 @@ before any twin change.
    after it has been measured, because no such measurement exists today.
 3. IF the measured regret on the unmodified World_Twin is at or above that margin, THEN THE
    Finding-4 claim SHALL be reported as falsified.
+   *[R5.43-discharge annotation — R5.3 is NOT weakened, NOT rewritten and NOT softened. It did
+   exactly what it said: it fired `material` correctly, and it fired about the **wrong quantity**.
+   Run `35125443185`, sha `34d861b`, splits that verdict into `tuning_gap`
+   `0.38812253172657085` and `information_ceiling` `0.06524434327342887`, so **Finding 4 is
+   substantively TRUE** — the simulated world does not reward intelligence — while R5.3's
+   mechanical test could not see it. **Satisfying R5.3 is therefore necessary but not sufficient**
+   for the claim R5 exists to support; the sufficient test is R5.45.]*
 4. IF the Finding-4 claim is reported as falsified, THEN THE remaining scope of this
    requirement SHALL be re-cut before implementation continues.
 
@@ -892,6 +899,35 @@ structure buys anything the central claim needs. **Why these two and not the oth
 design fact. It is recorded once, in `docs/adr/ADR-055-twin-decision-relevance.md` D2.6, and is
 not restated here.** R5.42 and R5.43 make the condition mechanical rather than remembered.
 
+**R5.43'S CONDITION IS TESTED AND MET — STRUCTURES 1 AND 3 ARE REINSTATED.** Run `35125443185`,
+sha `34d861b`, `uplift.yml::twin-regret`, `status: measured`, 200 of 200 replicates usable.
+`tuning_gap` = `0.38812253172657085`, interval `[0.3870638568995475, 0.38909283394762645]`;
+`information_ceiling` = `0.06524434327342887`; committed materiality margin `0.40`;
+`decomposition_residual` exactly `0.0`; `decomposition_admissible` `True`. Selected tuned levels
+`s=20, S=30` — a unique minimum over 18 pre-registered candidates, with the incumbent ranked 15th
+of 18. So **85.6% of the judged regret is baseline mis-tuning and 14.4% is a ceiling on
+information value**, a ratio of **5.95 to 1**; the ceiling is about **0.82 service-point
+equivalents** against a pre-registered margin of five. The information-gap term is **below** the
+R5.2 margin, so R5.43's first branch fires: **R5.8-R5.14 and R5.21-R5.23 return to scope and are
+no longer conditional.**
+
+**And the part that was NOT predicted: neither addend is material on its own.** The tuning gap's
+interval sits **below** `0.40` and **excludes** it; the ceiling is far below. Run `34685048665`'s
+`material` verdict was produced **only by their SUM** — which is what R5.45 exists to stop a
+reader from mistaking for the claim.
+
+**The mechanism, once.** Under instantaneous replenishment an arm can order **after** observing
+demand, so foresight buys no timing advantage — and structure 3 is decisive because it is the only
+reinstated structure that introduces a **replenishment delay**. The reasoning is recorded once, in
+`docs/adr/ADR-055-twin-decision-relevance.md` **D2.7**, and is not restated here.
+
+**Structures 2, 4 and 5 remain DEFERRED and this discharge touches no criterion of theirs:** each
+unlocks a different agent, and **none of them introduces a replenishment delay.**
+
+**What this does NOT claim.** Not that the twin's physics are wrong, and not that adding a
+replenishment delay would necessarily produce material information value. That is the **next
+measurement**, not a prediction to act on.
+
 **Record the decision before writing code (R5.5-R5.7).**
 
 5. THE Decision_Relevance_Record SHALL state the inventory-theory argument, the five
@@ -905,9 +941,12 @@ not restated here.** R5.42 and R5.43 make the condition mechanical rather than r
    `digital_twin/simulation/engine.py` made under this requirement.
 
 **Structure 1 — non-stationary demand (R5.8-R5.14).** *Unlocks the Demand_Forecaster:
-forecasting has zero value under stationary demand.* **CONDITIONAL under the R5.4 re-cut:
+forecasting has zero value under stationary demand.* ~~**CONDITIONAL under the R5.4 re-cut:
 R5.8-R5.14 are reinstated if and only if R5.42's information-gap term is below the R5.2 margin
-(R5.43). Text retained in full; no criterion is deleted.**
+(R5.43). Text retained in full; no criterion is deleted.**~~ **REINSTATED — the condition above
+was tested and MET by run `35125443185`, sha `34d861b`: `information_ceiling`
+`0.06524434327342887` is below the `0.40` margin. R5.8-R5.14 are in scope and unconditional. The
+struck sentence was accurate when written and is retained so the change of state is visible.**
 
 8. WHEN the World_Twin generates demand, THE demand intensity SHALL vary within a simulated
    day.
@@ -959,17 +998,21 @@ decision. Deferred, not deleted (I-7): the text below stands and every criterion
 
 **Structure 3 — correlated lead times and supplier state (R5.21-R5.24).** *Unlocks
 `supplier_trust` and `inventory_sentinel` safety-stock decisions: under i.i.d. lead times a
-static safety stock is optimal.* **CONDITIONAL under the R5.4 re-cut: R5.21-R5.23 are reinstated
+static safety stock is optimal.* ~~**CONDITIONAL under the R5.4 re-cut: R5.21-R5.23 are reinstated
 if and only if R5.42's information-gap term is below the R5.2 margin (R5.43). Text retained in
-full; no criterion is deleted.**
+full; no criterion is deleted.**~~ **REINSTATED — the condition above was tested and MET by run
+`35125443185`, sha `34d861b`: `information_ceiling` `0.06524434327342887` is below the `0.40`
+margin. R5.21-R5.23 are in scope and unconditional, and this structure is the **decisive** one
+because it is the only reinstated structure that introduces a replenishment delay (D2.7). The
+struck sentence was accurate when written and is retained so the change of state is visible.**
 
 21. THE World_Twin SHALL correlate supplier lead time with concurrent demand.
-    *[CONDITIONAL — R5.43.]*
+    *[REINSTATED — R5.43 condition met, run `35125443185`, sha `34d861b`.]*
 22. THE World_Twin SHALL auto-correlate supplier lead time across consecutive simulated days.
-    *[CONDITIONAL — R5.43.]*
+    *[REINSTATED — R5.43 condition met, run `35125443185`, sha `34d861b`.]*
 23. THE World_Twin SHALL attribute each restock to a named supplier and SHALL expose that
     supplier's realised lead-time history in the `Observation` presented to every arm, so
-    `supplier_trust`'s reliability scoring has an observable subject. *[CONDITIONAL — R5.43.]*
+    `supplier_trust`'s reliability scoring has an observable subject. *[REINSTATED — R5.43 condition met, run `35125443185`, sha `34d861b`.]*
 24. WHEN a supplier-aware reorder policy and a supplier-blind reorder policy are compared on the
     same replicate seeds, THE supplier-aware policy's aggregate on every KPI named in the R5.33
     objective SHALL be better with the two policies' reported intervals disjoint on at least one
@@ -977,6 +1020,9 @@ full; no criterion is deleted.**
     conditional**, not as a separate decision: its subject — a supplier-aware policy — has nothing
     to be aware of unless R5.23 lands, so it cannot be judged while R5.21-R5.23 are held. Stated as
     a consequence for the design phase to confirm, not as an operator decision.]*
+    *[R5.43-discharge annotation: R5.21-R5.23 are no longer held, so R5.24 is **consequentially
+    reinstated** on the same reasoning that made it consequentially conditional — its subject now
+    lands. Still a consequence for the design phase to confirm, not an operator decision.]*
 
 **Structures 4 and 5 — perishability coupling and substitution (R5.25-R5.29).** *Unlocks
 `freshness_guardian` and `pricing_oracle`, and creates the multi-objective tension.*
@@ -1063,6 +1109,10 @@ objective's optimum within intervals. Why that is well-posed where R5.28 is not:
     is now held, and it returns to expected-casualty status if and only if R5.43 reinstates that
     work. The second casualty is untouched by any deferral: it arises from the PRESERVE constraint
     on opening stock, which no criterion in this re-cut moves.]*
+    *[R5.43-discharge correction, and it makes the reading **stricter** rather than looser: R5.43's
+    met condition reinstates structures 1 and 3 **only**. The queue coupling (structure 2) stays
+    held, so the first casualty remains **not expected** — R5.43 is now discharged and cannot
+    reinstate it. Reinstating structure 2 would need a decision this discharge does not make.]*
 31. IF a determinism test's committed expectation changes as a consequence of these structures,
     THEN THAT test SHALL be updated in the same change with its new expectation stated.
 32. WHERE a run of the modified World_Twin is executed for measurement, THE run SHALL execute
@@ -1115,12 +1165,39 @@ opposite ways, so this needs a criterion of its own rather than a re-reading of 
     value, THEN THAT verdict SHALL NOT be used to denominate E3's floor and SHALL NOT be used to
     denominate the R7 or R9 published claim, and the attribution SHALL be recorded with the
     verdict.
+    *[R5.41 now **BINDS** rather than merely standing. Run `35125443185`, sha `34d861b`, attributes
+    **85.6%** of run `34685048665`'s `material` verdict to baseline mis-tuning, so this is the live
+    case, not a hypothetical: the honest baseline is the **tuned static control at `s=20, S=30`**,
+    not the incumbent, which ranked 15th of 18 candidates. The incumbent-denominated verdict is
+    therefore unusable for E3's floor and for the R7/R9 published claim. R5.44 states the positive
+    obligation this leaves behind.]*
 42. WHEN the R5.1 comparator is next run, THE Uplift_Harness SHALL include a tuned-static
     comparator arm and SHALL record the information-gap term measured against it, because the
     R5.8-R5.14 and R5.21-R5.23 condition is not decidable without that quantity.
+    *[DISCHARGED — run `35125443185`, sha `34d861b`, `status: measured`, 200/200 replicates usable;
+    `tuning_gap` `0.38812253172657085`, `information_ceiling` `0.06524434327342887`,
+    `decomposition_residual` exactly `0.0`, `decomposition_admissible` `True`.]*
 43. IF the R5.42 information-gap term is below the R5.2 materiality margin, THEN R5.8-R5.14 and
     R5.21-R5.23 SHALL be reinstated as in-scope; and IF it is at or above that margin, THEN they
     SHALL remain deferred with that measured term recorded as the reason.
+    *[TESTED AND MET — first branch fires. `information_ceiling` `0.06524434327342887` is below the
+    committed `0.40` margin (run `35125443185`, sha `34d861b`), so R5.8-R5.14 and R5.21-R5.23 are
+    **REINSTATED**. Second branch not taken. Structures 2, 4 and 5 are untouched by this criterion
+    and remain deferred.]*
+
+**Added by the R5.43 discharge (R5.44-R5.45).** *These continue R5's sequence; nothing above is
+renumbered and no criterion text is deleted. R5.44 is the positive obligation R5.41's prohibition
+leaves open. R5.45 is the sufficiency test R5.3 alone cannot supply.*
+
+44. WHERE E3's regret floor or the R7 or R9 published claim is reported, THE reported figure SHALL
+    be denominated against the tuned static control declared under R5.42 — the honest baseline,
+    measured at `s=20, S=30` — rather than against the incumbent baseline arm, and THE report
+    SHALL name the arm it is denominated against, so a reader never has to infer it.
+45. IF an at-or-above-margin R5.3 verdict is cited as establishing the claim R5 exists to support,
+    THEN THAT citation SHALL be reported as insufficient, because satisfying R5.3 is necessary but
+    not sufficient; THE sufficient test SHALL be the R5.42 information-gap term **alone** clearing
+    the R5.2 materiality margin, and a sum of decomposed terms of which no addend clears that
+    margin on its own SHALL NOT be reported as satisfying it.
 
 **Two notes the design phase owes an answer to, recorded here rather than legislated as
 criteria.** `orders_spoiled` increments **per SKU per tick**, so `spoilage_rate` is a tick-count
@@ -1129,10 +1206,12 @@ change must be stated rather than absorbed. And `digital_twin/simulation/monte_c
 drives a `ProcessPoolExecutor`, which the I-0 taxonomy names explicitly as a category-4
 workload — that strengthens R5.32 rather than qualifying it.
 
-**Verdict: partially achieved.** *R5.1, R5.3 and R5.4 are discharged — the falsification test ran
-(run `34685048665`, sha `c746463`, `verdict: material`) and the re-cut it mandated is the marked
-block above. R5.15-R5.20 and R5.25-R5.27 are deferred; R5.8-R5.14 and R5.21-R5.23 are conditional
-on R5.43; R5.28 is unsatisfiable per CONFLICT R. Everything else is not achieved.*
+**Verdict: partially achieved.** *R5.1, R5.3, R5.4 and now R5.42 and R5.43 are discharged — the
+falsification test ran (run `34685048665`, sha `c746463`, `verdict: material`) and the re-cut it
+mandated is the marked block above. R5.15-R5.20 and R5.25-R5.27 are deferred; ~~R5.8-R5.14 and
+R5.21-R5.23 are conditional on R5.43~~ **R5.8-R5.14 and R5.21-R5.23 are REINSTATED — R5.43's
+condition was tested and met by run `35125443185`, sha `34d861b`**; R5.28 is unsatisfiable per
+CONFLICT R. Everything else is not achieved.*
 
 **Falsification.** *What would prove this finding false:* a measured, materially positive
 `(s, S)` regret on the unmodified twin (R5.1). ~~*Not attempted — requires compute that I-0
@@ -1142,6 +1221,13 @@ written and is retained rather than deleted so the change of state is visible. *
 settle:** whether the measured regret is attributable to information value or to baseline
 mis-tuning — R5.41 forbids the second reading from denominating any published floor, and R5.42
 measures which it is.*
+
+**[NOW SETTLED, and the mechanical falsification does not survive it.]** *Run `35125443185`, sha
+`34d861b`, attributes 85.6% of that verdict to baseline mis-tuning and 14.4% to an information
+ceiling that is far below the margin — see the R5.43 discharge block above for the numbers, and
+D2.7 for the reasoning. So **Finding 4 is substantively TRUE**: R5.3 fired `material` correctly,
+about the wrong quantity. The falsification stands as a **mechanical** result and is withdrawn as a
+**substantive** one; R5.45 records that R5.3 alone was never sufficient.*
 
 ---
 

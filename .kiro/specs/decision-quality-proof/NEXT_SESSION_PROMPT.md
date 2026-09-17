@@ -22,24 +22,32 @@ against `main`.
 **Your session cap is FORTY leaf tasks, in waves of about ten. It is a ceiling and it is expected
 never to bind.** What stops you is a barrier or a phase boundary.
 
-### STEP 0 — ARM E IS THE FIRST ITEM, AND IT IS A HARD GATE
+### STEP 0 — THE HARD GATE HAS FIRED. BOTH HALVES BIND, AND THEY COME FIRST
 
-**Author and measure arm E before authoring E3.** It is a tuned static par-level control, and the
-operator has made it a gate rather than a preference:
+**Everything E3 does is denominated on these two sentences. Read them before anything else.**
 
-> **If the information gap is below the materiality margin, E3's floor and task 25's claim may not
-> be denominated against the incumbent arm, and structures 1 and 3 are reinstated. `material` on
-> tuning alone is REFUSED.**
+> **1. E3's floor and task 25's published claim may NOT be denominated against the incumbent arm.**
+> The honest baseline is the **tuned control at `s=20, S=30`**. **Tasks 17.2, 17.5 and 25 may not be
+> authored against the incumbent** — a **recorded prohibition, not a preference**.
+>
+> **2. Structures 1 and 3 are REINSTATED** — tasks **12.1, 12.2, 13.1, 13.2**. Structure 3 is the
+> decisive one, because it is the only one that introduces a replenishment **DELAY**, and delay is
+> what makes knowing the future worth anything. **Structures 2, 4 and 5 stay deferred**, and
+> **12.3 / 13.3 stay forbidden.**
 
-**Why, in one sentence, with the reasoning where it belongs (ADR-055 **D2.6**, finding 61):** the
-measured regret is the incumbent-versus-perfect-information gap, which is EVPI **plus** the
-incumbent's own mis-tuning, and because the comparator replenishes instantaneously through
-`sim.add_stock` with lead time off in every arm, it cannot contain information value. **Read D2.6;
-do not re-derive it, and do not restate it in a third document.**
+**Why, with the reasoning where it belongs — ADR-055 `D2.7`, finding 63:** the judged regret
+decomposes into **85.6% baseline mis-tuning and 14.4% information ceiling**, **neither addend is
+material on its own**, and the `material` verdict was produced only by their **SUM**. **Read D2.7;
+do not re-derive it, and do not restate it in a third document.** `D2.6` (finding 61) is the
+diagnosis that led to it.
 
-**Task 11 is DECIDED and MEASURED.** Its `material` verdict is sound arithmetic on the wrong
-denominator. Do not re-open the three options — they are closed, option (b) landed in `c746463`, and
-arm E is what option (b) now means.
+**Arm E is AUTHORED AND MEASURED. Do not build it.** Run `35125443185`, `status: measured`, 200/200
+usable, `decomposition_residual` exactly `0.0`, all five pre-registered predictions confirmed. Task
+11 is decided; option (b) landed in `c746463`; **do not re-open the three options.**
+
+**And the substantive result, which is not what the mechanical test said:** **Finding 4 is
+substantively TRUE, and R5.3's mechanical test could not see it.** A gate that reads a sum cannot
+report which addend carried it.
 
 ### STEP 0a — THE METRIC, AND THE OBLIGATION SESSION 10 ADDED TO IT
 
@@ -50,11 +58,11 @@ workload runs), `.kiro/steering/throughput-with-integrity.md` (**the metric and 
 
 **The metric: leaves DISCHARGED. A `[~]` counts ZERO. Target: >= 11** (G6).
 
-**Session 10 discharged 20 — and every one of them by RECONCILIATION rather than authoring.**
-Session 9 landed six commits and recorded one ledger entry, leaving twenty leaves complete on disk
-and marked `[ ]`. **So the standing obligation is now mechanical: reconcile the ledger against disk
-BEFORE deriving a batch**, because `--next 40` will offer you work that is already done and the
-census cannot tell you which. Session 10's `--files` run emitted about **110** informational
+**Session 10 discharged 25 — twenty of them by RECONCILIATION rather than authoring.**
+Session 9 landed five feature commits and recorded one ledger entry, leaving twenty leaves complete
+on disk and marked `[ ]`. **So the standing obligation is now mechanical: reconcile the ledger
+against disk BEFORE deriving a batch**, because `--next 40` will offer you work that is already done
+and the census cannot tell you which. Session 10's `--files` run emitted about **110** informational
 `prior-art` lines with the twenty genuine candidate discharges buried inside them; **the severity
 split that would separate them is owed work, not a done thing.**
 
@@ -87,29 +95,31 @@ $log = gh api "repos/:owner/:repo/actions/jobs/<jobid>/logs" 2>$null
 ($log | Select-String -Pattern "FAILED tests|Falsifying example|passed|registry-gate|Summary:").Line
 ```
 
-**What to read, in priority order. Each of the first four is a verdict session 10 could not have.**
+**What to read, in priority order. Two of these were verdicts session 10 could not have and now has;
+three are still open, and item 1 is the one that can regress.**
 
-1. **Did `quality-gates` steps 7–23 execute?** At `27a74a3` the job **failed at step 6 `Ruff format
-   check`**, gating 7–23, on one file — `agents/demand_prophet/tests/test_pipeline_contract.py`,
-   with 385 already formatted. **The repair is landed and CI owns the verdict.** This is the **third
-   time** one formatting or lint finding has gated a whole job on this branch, and `quality-gates`
-   is a `required:` check, so a regression here is the most important thing that can happen.
-2. **Did the new `universe` step run, and is the aggregator's step 5 green?** That is **finding
-   62**'s repair: the shard split's G5 selection proof compared against a frozen literal
-   `EXPECTED_FAST_SELECTED: "874"` and went red at 933 with **nothing dropped** — the file-level
-   partition proof was green at `128 == 128` in the same run. An equality against a constant still
-   passes when *n* tests are dropped and *n* added, so it was **a total dressed as a partition
-   proof.** The right-hand side is now measured in-run. **It has never executed.**
-3. **Is finding 57 still the only slow-selection failure?** At `27a74a3` the slow selection was
-   `1 failed, 65 passed`, the failure being `codecarbon/data/hardware/cpu_power.csv` — another
-   owner's guard, unrepaired, and the repair is a judgement (see STEP 3D). **Confirm it is still the
-   failure before acting**; assertion N+1 may be hiding N+2.
-4. **Did `Vitest` run?** `SYNAPSE Frontend CI` at `27a74a3` failed at step 6 `Biome lint`, so **step
-   8 `Vitest unit + property tests` was SKIPPED — which is the only reason 20.7 and 20.8 are `[~]`
-   rather than `[x]`.** They graduate on that step's own verdict and on nothing else.
-5. **`Truth Gates`, `Integration` and `Mutation` were all red at `27a74a3` and were NOT
-   investigated.** Session 10 says so rather than implying coverage. Reading one of them is a real
-   contribution; adopting it is an operator decision.
+1. **Is `quality-gates` green at the NEWEST sha?** It reached **`success` at 23 of 23 at
+   `fa42263`** — the regression is repaired and **confirmed** — but **at the newest sha it was
+   `cancelled`, superseded, so that verdict is not claimed and you must read it.** The cause was one
+   file's formatting gating **17** steps, the **third time** one formatting or lint finding has gated
+   a whole job on this branch, and `quality-gates` is a `required:` check, so a regression here is
+   the most important thing that can happen.
+2. **Finding 62 is CLEARED and CONFIRMED.** Aggregator **step 5 green**, reporting
+   `shards selected 170/150/349/264 = 933; unsharded selection = 933`. The lesson is what you carry
+   forward, not the repair: the proof compared against a frozen literal `874`, went red at 933 with
+   **nothing dropped**, and **an equality against a constant still passes when *n* tests are dropped
+   and *n* added.** **Any test you add lands in a shard — check that the partition still proves
+   itself exhaustive and disjoint IN-RUN** (G5).
+3. **Is finding 57 still the ONLY `uplift-verify` failure?** It is now the **sole cause of the
+   aggregate red** — `codecarbon/data/hardware/cpu_power.csv`, another owner's guard, unrepaired,
+   and the repair is a judgement (see STEP 3D). **Confirm it is still the failure before acting**;
+   assertion N+1 may be hiding N+2.
+4. **Did `Vitest` run?** `SYNAPSE Frontend CI` failed at step 6 `Biome lint`, so **step 8 `Vitest
+   unit + property tests` was SKIPPED — which is the only reason 20.7 and 20.8 are `[~]` rather than
+   `[x]`.** They graduate on that step's own verdict and on nothing else.
+5. **`Truth Gates`, `Integration` and `Mutation` are all red and were NOT investigated.** Session 10
+   says so rather than implying coverage. Reading one of them is a real contribution; adopting it is
+   an operator decision.
 
 ### STEP 1 — read these, in this order. Binding, not advisory.
 
@@ -131,9 +141,10 @@ $log = gh api "repos/:owner/:repo/actions/jobs/<jobid>/logs" 2>$null
    CLOSED at four names.**
 8. `.claude/skills/synapse-engineer/SKILL.md` + `references/`.
 9. `.cursorrules` + `docs/cursor/*.md`.
-10. `docs/adr/ADR-055-twin-decision-relevance.md` — **D2.6 is finding 61 and it is the session's
-    starting point.** D2.5–D2.5.3 are its history; **D6** declares both R6.15 numbers, which is why
-    16.3 is done.
+10. `docs/adr/ADR-055-twin-decision-relevance.md` — **D2.7 is finding 63 and it is the session's
+    starting point**; D2.6 is the diagnosis behind it, D2.5–D2.5.3 its history. **D6** declares both
+    R6.15 numbers, which is why 16.3 is done. **Eight of the eighteen pins anchor to this
+    document** — probe every one of them, on both sides, if you amend it.
 11. `docs/adr/ADR-056` and **ADR-033** — ADR-056's supersession of ADR-033 is the open obligation
     behind the deferred task 23. **OQ-4 is recorded RESOLVED (Rekor) in `requirements.md`**; do not
     cite OQ-4 as the gap.
@@ -154,21 +165,26 @@ R5.28 is unsatisfiable a second time, and R5.29 would then cancel E3 on a theore
 python -m scripts.audit.spec_ledger_census --files --next 40
 ```
 
-**The batch is E3: `15.1, 15.2, 15.4, 15.5, 15.6, 16.1, 16.2, 16.4, 16.5, 16.6, 16.7, 17.1–17.9`.**
-Twenty leaves, all authorable, none behind a barrier — **re-derive it rather than copying it.** Two
-reconciliation facts shrink it and both are measured:
+**THE BATCH HAS CHANGED, because the reinstatement moves it. The two twin-physics pairs come FIRST,
+because everything downstream is denominated on them:**
+
+> **`12.1`, `12.2`** (non-stationary demand), then **`13.1`, `13.2`** (correlated lead times, and the
+> **delay** that makes knowing the future worth anything), then **`15.1`, `15.2`, `15.4`, `15.5`,
+> `15.6`** — E3's schema half.
+
+Nine leaves, all authorable — **re-derive membership rather than copying it.** Two reconciliation
+facts still shrink E3 and both are measured:
 
 - **16.3 is already done.** ADR-055 **D6** declares both R6.15 numbers.
-- **16.2 is smaller than its body claims.** `ratchets.json` already carries
-  `negative-control-seed-sets` 20 and `negative-control-rate-tolerance`; what is missing is
-  `uplift-controls.yaml`, the oracle tolerance and the detection probability.
+- **16.2 is smaller than its body claims.** `ratchets.json` already carries **both**
+  negative-control entries; what is missing is `uplift-controls.yaml`, the oracle tolerance and the
+  detection probability.
 
-**E2c (tasks 12.1–12.4, 13.1–13.7) is NOT authorable, and the reason is the metric.** Tasks **12.3**
-and **13.3** each flip an objective KPI to `sensitive: true`. With both flipped the insensitive set
-is empty and `classify_regret` maps a negative regret to **`sub-margin`**, whose
-`confirms_finding_4` is `True`. **E2c is precisely the work that converts a defect into a false
-confirmation.** A false stop is recoverable; a false confirmation is not. Under the throughput
-metric authoring E2c scores **0** until the comparator is repaired — which is what arm E is for.
+**12.3 and 13.3 REMAIN FORBIDDEN, and structures 2, 4 and 5 remain deferred.** Those two leaves each
+flip an objective KPI to `sensitive: true`. With both flipped the insensitive set is empty and
+`classify_regret` maps a negative regret to **`sub-margin`**, whose `confirms_finding_4` is `True` —
+**precisely the work that converts a defect into a false confirmation.** A false stop is recoverable;
+a false confirmation is not. Under the throughput metric authoring them scores **0**.
 
 **For every barrier line the census prints, state in your opening whether the batch depends on it.
 An unanswered barrier is a stop, not a warning.**
@@ -179,11 +195,13 @@ it.
 
 ### STEP 3 — what to do, in priority order
 
-#### A. ARM E — author it, then measure it. Everything in E3 is downstream of its number.
+#### A. THE TWIN PHYSICS FIRST — 12.1, 12.2, 13.1, 13.2. Everything downstream is denominated here.
 
-A tuned static par-level control, added as a fourth arm so that the difference it isolates is the
-**information** value rather than the incumbent's mis-tuning. Three obligations that are not
-negotiable:
+**Arm E is measured and its number lives in D2.7. What is NOT measured is whether a replenishment
+DELAY makes information worth anything — that is the next measurement, not a prediction.** Structure
+3 (**13.1, 13.2**, correlated lead times) is the decisive pair because it is the only reinstated
+structure that introduces a delay; structure 1 (**12.1, 12.2**) is non-stationary demand. Four
+obligations, none negotiable:
 
 - **Preserve the refusals.** `negative_regret_refusal` and the comparator-admissibility property
   exist to stop a negative regret becoming a verdict. **No refusal path may be removed to make a
@@ -192,11 +210,17 @@ negotiable:
 - **Do not build a guard from two expressions that share a term.** `headroom >= regret` reduces to
   `A >= B`; the oracle cancels, so it could never constrain the oracle. Ask what your new guard
   **reduces to** before trusting what it appears to check.
-- **Write your predictions down before you measure**, and make them falsifiable. This is the habit
-  that made a negative regret legible as a defect rather than as a number to interpret.
+- **Write your predictions down before you measure**, and make them falsifiable. Five pre-registered
+  predictions are what made arm E's result legible, including arm independence to sixteen significant
+  figures for the fourth consecutive session.
+- **Do not let a sum stand in for its addends.** Finding 63's entire content is that a `material`
+  verdict was carried by the **sum** of two terms, **neither** of which is material alone. When you
+  report the delay's effect, **report the decomposition and its residual, not the total** —
+  `contributions()` already does it, and for eight sessions nothing called it.
 
 Measurement is a **labelled CI run**, never local: any `MIN_SCENARIOS`-scale twin run is category 4
-under I-0. Add the label, read the artifact, **remove the label.**
+under I-0. Add the label, read the artifact, **remove the label.** `twin-regret`'s cost is now
+measured — **1.6 min for 800 arm-replicates** — which is what licensed sizing the grid.
 
 #### B. TASK 15.1 — the blast radius is MEASURED and it is smaller than the ledger implies
 
@@ -218,8 +242,9 @@ Session 10 measured this rather than inferring it, and one part of it changes a 
 #### C. The rest of E3, in the order the tasks declare
 
 Interval + schema (15.x), both controls and their job (16.x), Power_Report, floor admission and the
-C60 operator (17.x). **E3's floor may not be denominated against the incumbent arm if arm E's
-information gap is sub-margin** — that is the hard gate, and it is why arm E comes first.
+C60 operator (17.x). **E3's floor and task 25's claim may NOT be denominated against the incumbent
+arm — the gate has FIRED, the honest baseline is the tuned control at `s=20, S=30`, and tasks 17.2,
+17.5 and 25 sit under that prohibition.** It is recorded, not advisory; STEP 0 carries both halves.
 
 #### D. Also owed, and smaller
 
@@ -228,8 +253,9 @@ information gap is sub-margin** — that is the hard gate, and it is why arm E c
   registry to hold a real validated non-placeholder entry, not a re-worded body.
 - **Finding 57** — `_recording_open`'s `if suffix in _DATA_SUFFIXES or under_data:` flags any `.csv`
   anywhere, so a dependency's bundled `cpu_power.csv` fails the slow step and `_REAL_DATA_DIRS` is
-  inert. Another owner's; the repair is a judgement (`... and under_data` would let a purchased CSV
-  outside `data/` pass). **Do not weaken it (R2.10).**
+  inert. **It is now the SOLE cause of the `uplift-verify` aggregate red.** Another owner's; the
+  repair is a judgement (`... and under_data` would let a purchased CSV outside `data/` pass). **Do
+  not weaken it (R2.10).**
 - **Finding 53** — `security.yml:98`'s second I-1 deny-list omits `replicate`.
 - **Finding 45** — the stale C16 docstring at `verify_claims.py:2406-2408`. Its recorded reason for
   not being edited is measurably wrong: **no pin anchors to `verify_claims.py`**, so `doc_truth`
@@ -254,11 +280,14 @@ information gap is sub-margin** — that is the hard gate, and it is why arm E c
    DEFAULT: any wave with two or more independent units dispatches two or more authoring agents, and
    working serially requires a stated reason in your opening.** Partition by **coupling closure**
    (G2), never by file count.
-   **Every dispatched agent carries a written contract (G3), and put the no-execute clause in its
-   FIRST LINE** — session 10 dispatched six agents and three of them each ran one stray no-op shell
-   command before honouring a ban that appeared further down. Four clauses: files it may touch and
-   files it must not; the one canonical location for its findings; "authoring only — do not execute"
-   unless it is the designated executor; and the couplings it owns, named.
+   **Every dispatched agent carries a written contract (G3), and the no-execute clause is its FIRST
+   LINE** — session 10 dispatched **thirteen** agents and **five** of them each ran one stray no-op
+   shell command before honouring a ban that appeared further down. Four clauses: files it may touch
+   and files it must not; the one canonical location for its findings; "authoring only — do not
+   execute" unless it is the designated executor; and the couplings it owns, named.
+   **And verify an agent's file writes INDEPENDENTLY of its report:** one agent failed with no output
+   **after** its write had already landed, which is why ADR-055's amendment log briefly carried a
+   session number no progress row supported. **A silent agent is not a no-op agent.**
    **Report what each agent PRODUCED**, not how many there were.
 4. **Use the whole tool surface.** Code intelligence, symbol and reference lookup, and research
    powers have gone unused while sessions defaulted to shell and text search. **Finding 48 cost a CI
@@ -267,8 +296,9 @@ information gap is sub-margin** — that is the hard gate, and it is why arm E c
 5. **Re-read the authority file for each wave's area before starting it.**
 
 **Spend `gh` reads first.** Free under I-0 and the highest-yield evidence in this repo. Session 10's
-entire CI picture — four shards, a gated `quality-gates`, a skipped `Vitest` step — cost **zero**
-minutes of critical-path wall-clock because every fact came from a completed run.
+entire CI picture — four shards, a gated `quality-gates`, a skipped `Vitest` step, a confirmed
+selection proof — came from runs that were going to happen anyway; its **~4 minutes** of
+critical-path wall-clock were **one** labelled `twin-regret` measurement and nothing else.
 
 #### FORBIDDEN REPAIRS. Each names what it would destroy.
 
@@ -299,10 +329,11 @@ writes UTF-16 and `Set-Content -Encoding utf8` adds a BOM.
 - **Stop at any barrier the census names that the batch depends on.** Say which.
 - **Stop and report if a count does not move as predicted.** State the delta **per code** and what
   you checked.
-- **Do not author E3's floor claim against the incumbent arm** until arm E's information gap is
-  measured. **`material` on tuning alone is refused** — that is the operator's hard gate.
-- **Do not author task 12 or 13.** They empty the insensitive set and turn a negative regret into a
-  false confirmation.
+- **Do not author E3's floor claim, task 17.2, task 17.5 or task 25 against the incumbent arm.** The
+  gate has **FIRED**; the honest baseline is the **tuned control at `s=20, S=30`**. This is a
+  recorded prohibition, not a preference.
+- **Do not author 12.3, 13.3, or structures 2, 4 and 5.** 12.3 and 13.3 empty the insensitive set and
+  turn a negative regret into a false confirmation. **12.1, 12.2, 13.1 and 13.2 ARE reinstated.**
 - **Do not tick 14, 21, 22.3, 25 or 26.5** without the naming job's own verdict.
 - **Do not tick 20.7 or 20.8** until `Vitest unit + property tests` executes. It was **skipped**
   behind a Biome lint failure, and a skipped step is not a pass.
@@ -343,13 +374,13 @@ writes UTF-16 and `Set-Content -Encoding utf8` adds a BOM.
 | 7 | the slow step's Pinecone failure | **CLEARED.** The construction guard passes; there was no second site |
 | 8 | `truth-gates.yml` steps 6–12 | **NEVER EXECUTED HERE** — skipped behind the C44/C69 red (finding 51) |
 | 9 | `uplift-verify` step 5, the fast surface | **CLEARED.** Four shards `success` at `27a74a3` |
-| **10** | **the slow selection's next assertion** | **UNCHANGED.** `data_file_reads` false-positives on a dependency's bundled `.csv` (**finding 57**) — `1 failed, 65 passed`, another owner's, unrepaired |
-| **11** | **`quality-gates` step 6 `Ruff format check`** | **REPAIRED, UNVERIFIED.** It gated steps 7–23 at `27a74a3` on one file; **CI owns the verdict and 7–23 have not run at this sha** |
-| **12** | **the aggregator's step 5 selection proof** | **REPAIRED, NEVER EXECUTED.** Finding 62: the frozen literal is replaced by an in-run `universe` measurement. Step 4 (the file-level partition proof) was already green |
+| **10** | **the slow selection's next assertion** | **UNCHANGED, and now the SOLE cause of the `uplift-verify` aggregate red.** `data_file_reads` false-positives on a dependency's bundled `.csv` (**finding 57**) — another owner's, unrepaired, and the repair is a judgement R2.10 constrains |
+| **11** | **`quality-gates` step 6 `Ruff format check`** | **CLEARED and CONFIRMED — `success` at 23 of 23 at `fa42263`.** One file's formatting had gated **17** steps. **NOT claimed at the newest sha, where the job was `cancelled`, superseded — read it** |
+| **12** | **the aggregator's step 5 selection proof** | **CLEARED and CONFIRMED.** Finding 62's in-run `universe` measurement reports `shards selected 170/150/349/264 = 933; unsharded selection = 933`. Step 4 (the file-level partition proof) was already green |
 | **13** | **`Frontend CI` step 6 `Biome lint`** | **RED, not adopted.** It skips **step 8 `Vitest`**, which is the only route to 20.7/20.8. Two further frontend jobs red on separate causes |
 | **14** | **`Truth Gates` / `Integration` / `Mutation`** | **RED, NOT INVESTIGATED.** Said plainly rather than implied |
 
-## HARD-WON LESSONS. Sixty-two findings and eighteen conflicts, each one paid for.
+## HARD-WON LESSONS. Sixty-three findings and eighteen conflicts, each one paid for.
 
 ### The habits that caught the most
 
@@ -368,9 +399,10 @@ writes UTF-16 and `Set-Content -Encoding utf8` adds a BOM.
 4. **A citation is not a mechanism.** Walk to the constructor; read the code path the assertion
    names, not the docstring of the object that holds it.
 5. **A document edit's blast radius is every pin anchored to that document.** Eight of the eighteen
-   pins anchor to ADR-055. Session 10 probed **all 18 on both sides** after amending it — all 15
-   live rows `ok`, all 8 ADR-anchored rows matching **exactly one** line. Probing only the pin you
-   are adding is finding 48 in a new place.
+   pins anchor to ADR-055. Session 10 probed **all 18 on both sides after THREE amendments in one
+   session** — all 15 live rows `ok`, all 8 ADR-anchored rows matching **exactly one** line, and each
+   of the six forbidden anchor patterns occurring **exactly once**. Probing only the pin you are
+   adding is finding 48 in a new place.
 6. **Check your own instrument before you trust its verdict.**
 7. **Read what got SKIPPED behind a failure, not only what failed.** One formatting finding gated 17
    steps at `27a74a3`; one Biome finding skipped the only step that can discharge two leaves. **One
@@ -393,6 +425,9 @@ writes UTF-16 and `Set-Content -Encoding utf8` adds a BOM.
   verdict; and a regret measured against a comparator that loses to its own subject is neither.**
 - **Sound arithmetic on the wrong denominator is still the wrong answer** (finding 61). Ask what the
   quantity you measured is a difference *between* before you name it.
+- **A SUM can be material when NEITHER of its addends is, and the verdict cannot say which** (finding
+  63, ADR-055 D2.7). **Decompose before you publish**, and report the residual: a gate that reads a
+  total is blind to which term carried it.
 - **A false stop is recoverable; a false confirmation is not.** Rank your failure modes by which one
   nobody would notice.
 - **A tautology dressed as an assertion is the same defect as no assertion.** Check whether your new
@@ -481,8 +516,9 @@ are what throttle it, and the cost metric is **cores × wall-seconds**.
   execute code: **exactly ONE**.
 - **Preferred flags:** `-q --tb=line -p no:randomly -m "not slow"`, `HYPOTHESIS_PROFILE=dev`.
   **`HYPOTHESIS_PROFILE` unset loads 500 — a 50× load. Set it explicitly, in the same command.**
-- **Report core-seconds, not just invocation counts.** Session 10 spent ~400 and ran **no `pytest`
-  at all**.
+- **Report core-seconds, not just invocation counts.** Session 10 spent **~1,100** across ~30 cheap
+  gates, three `ruff` passes, two `mypy --strict` runs and **two** bounded `pytest` invocations (`ci`
+  = 63 s, `dev` = 4 s) — all serial, one executor, no repo-wide run.
 - **Sweep before finishing, and after any cancelled or timed-out command.**
 
 ### Verification sweep
@@ -513,8 +549,8 @@ python -m scripts.audit.spec_ledger_census --files --check # expect 0
 Expected: **`0 / 0 / 0 / 2 / 1 / 0`** plus census 0, measured again in session 10. **Append
 `*> $null` and read `$LASTEXITCODE`** — piping any of these through `Select-Object -First N`
 manufactures a non-zero exit. `task_claim_truth`'s **1** is `core-purpose-uplift` tasks **9** and
-**9.1**, another spec's, and it was re-read **after** twenty leaves were ticked rather than assumed
-unchanged.
+**9.1**, another spec's, and it was re-read **after** twenty-four leaves were ticked rather than
+assumed unchanged.
 
 **The census's `unharvested-pending` rule is the mechanical form of G4.** It exits **2** for any
 `[~]` leaf recording no `last-checked:` run for its discharge job. **There are two `[~]` leaves now
@@ -643,26 +679,29 @@ sensitive is **inconclusive**, not confirmation (task 10.5). No headline may be 
 Power_Report describes the harness revision under measurement (task 17.3). A `material` verdict on a
 point estimate with no dispersion is not a falsification, nor is one on a comparator the requirement
 does not name (conflict M), nor is any verdict at all on a comparator that loses to its own subject
-(finding 54). **And no claim may be denominated against the incumbent arm if arm E shows the
-information gap is sub-margin — `material` on tuning alone is refused** (finding 61, the operator's
-hard gate).
+(finding 54). **And no claim may be denominated against the incumbent arm: the gate has FIRED, the honest baseline
+is the tuned control at `s=20, S=30`, and `material` on tuning alone is refused** (finding 63,
+ADR-055 D2.7).
 
 ---
 
 ## Session 10 in one paragraph — the rest is in `HANDOFF.md`
 
-**Twenty leaves discharged, every one by RECONCILIATION rather than authoring.** Session 9 landed
-six commits and recorded one ledger entry, so twenty leaves were complete on disk and marked `[ ]`;
-session 10 ticked them — 16.3, 18.1–18.6, 19.1–19.3, 19.5–19.8, 20.1, 20.2, 20.4–20.6, 26.4 —
-marked 20.7/20.8 `[~]` behind a skipped `Vitest` step, and deliberately left 19.4 and 20.3 open. **Finding 61** (ADR-055 **D2.6**) is the session's
-design result: task 11's `material` verdict is sound arithmetic on the wrong denominator, and arm E
-is the repair the operator has made a hard gate. **Finding 62** replaced a frozen-literal selection
-total with an in-run measurement. **Three operator decisions landed:** task 23 deferred to
-`.kiro/specs/external-audit-anchor/` (named, not created), the Kaggle M5 terms refused, and arm E
-made a gate. **Four numbers:** 20 discharged, ~400 core-seconds, **0 minutes** of CI critical path,
-and **6** agents dispatched — of which **three ran one stray no-op shell command each** before
-honouring
-the no-execute clause, which is why G3's ban now belongs in a contract's first line. **Not verified,
-and must not be claimed:** that `quality-gates` steps 7–23 pass, that finding 62's repair is green,
-finding 57's status, `mypy --strict` on anything, `vitest` at all, and **arm E's measurement, which
-is not authored yet.**
+**Twenty-four leaves discharged — twenty by RECONCILIATION and four from arm E.** Session 9 landed
+five feature commits and recorded one ledger entry, so twenty leaves were complete on disk and marked
+`[ ]`; session 10 ticked them, kept 20.7/20.8 `[~]` behind a skipped `Vitest` step, and deliberately
+left 19.4 and 20.3 open. **Finding 63** (ADR-055 **D2.7**) is the session's design result and the
+reason the batch moved: the judged regret is **85.6% baseline mis-tuning and 14.4% information
+ceiling**, **neither addend material alone**, so the `material` verdict came only from their **SUM** —
+**Finding 4 is substantively TRUE and R5.3's mechanical test could not see it.** **The hard gate
+fired: no claim may be denominated against the incumbent arm, and structures 1 and 3 are
+reinstated.** **Finding 62** is cleared and confirmed — the frozen-literal selection total is now an
+in-run measurement, `933 == 933` — and `quality-gates` is `success` at 23 of 23 at `fa42263`. **Four
+numbers:** 25 discharged, **~1,100** core-seconds, **~4 minutes** of CI critical path, and **13**
+agents dispatched, of which **five ran one stray no-op shell command each** and **one failed with no
+output after its write had landed** — which is why the no-execute ban is a contract's first line and
+why an agent's writes are verified independently of its report. **Not verified, and must not be
+claimed:** that `quality-gates` is green at the newest sha (it was `cancelled` there), finding 57 —
+now the **sole** cause of the `uplift-verify` aggregate red — `vitest` at all, the frontend jobs,
+`Truth Gates`/`Integration`/`Mutation`, and **that a replenishment delay would produce material
+information value. That is the next measurement, not a prediction.**

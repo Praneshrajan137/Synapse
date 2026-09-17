@@ -82,7 +82,8 @@ policy, and a three-term split reported in `twin-regret.json`. Full record in **
 before the run judged against it**, per the rule at the head of this log; it changes no threshold
 and does not touch `regret_objective.materiality_margin.value`.
 
-**Amendment, session 11 - D2.6 is CORRECTED twice, and both corrections make the standard
+**Amendment, session 10 (second of three) - D2.6 is CORRECTED twice, and both corrections make the
+standard
 STRICTER: arm E's grid search runs on tuning seeds DISJOINT from the measurement seeds, and the
 reported split is TWO terms rather than three, the second being a CEILING on information value
 rather than an estimate of it.** Tuning and measuring on one seed set would make arm E's levels
@@ -93,6 +94,18 @@ and the hard gate is denominated against the ceiling. The `twin-regret` job's co
 here for the first time, so the sizing decision rests on a reading rather than on an assumption.
 Full record in **D2.6**'s correction block. **It lands before the run judged against it**, per the
 rule at the head of this log; it changes no threshold and instantiates no new value.
+
+**Amendment, session 10 (third of three) - arm E is MEASURED, finding 61 is CONFIRMED, and the
+operator's hard
+gate FIRES. Finding 63: 85.6% of the judged regret is baseline mis-tuning and 14.4% is a CEILING
+on information value.** Run `35125443185` (sha `34d861b`) resolves all five pre-registered
+predictions and confirms all five: the tuning gap is `0.38812253172657085`, the information
+ceiling `0.06524434327342887`, and the residual exactly `0.0`. Neither addend is material on its
+own - the tuning gap's interval sits below the committed margin of `0.40` - so the `material`
+verdict was produced only by their SUM. E3's floor and task 25's published claim may NOT be
+denominated against the incumbent arm, and structures 1 and 3 are REINSTATED. Full record in
+**D2.7**. It records a measurement rather than amending a criterion, so it changes no threshold
+and instantiates no new value.
 
 **This ADR is written to be falsifiable, and task 10 is the attempt.** Its central premise -
 that a base-stock `(s, S)` policy is near-optimal on today's twin, so intelligence cannot pay
@@ -879,6 +892,86 @@ measured plus 1800 tuning replicates, taking the job to 2800 units, so the measu
 roughly 4 minutes and the whole job to under 5, against a committed timeout of 120 minutes.
 **Neither a new job nor a raised timeout is needed** - and both were considered rather than
 assumed unnecessary.
+
+#### D2.7 FINDING 63 - the split is measured, and the information ceiling is small (session 10)
+
+**Run `35125443185`, sha `34d861b`, `uplift.yml::twin-regret` by the `measure-twin-regret` label.
+`status: measured`, 200 of 200 replicates usable, and 200 usable for the tuned arm as well.** All
+five predictions pre-registered in task 28.4 resolved, and all five are confirmed.
+
+| reported quantity | measured |
+|---|---|
+| `regret` | `0.4533668749999997`, interval `[0.4524633333333333, 0.45426833333333333]` |
+| `comparator_headroom_vs_foresight` | `8.937888952967558` - unchanged to every digit |
+| `regret_vs_foresight` | `-0.8123524459522771` - unchanged to every digit |
+| `mean_reference_cost` | `2.0849871282327` |
+| `mean_tuned_static_cost` | `1.696864596506129` |
+| `mean_hindsight_cost` | `1.6316202532327002` |
+| **`tuning_gap`** | **`0.38812253172657085`** |
+| `tuning_gap` interval | `[0.3870638568995475, 0.38909283394762645]` |
+| **`information_ceiling`** | **`0.06524434327342887`** |
+| `decomposition_residual` | **exactly `0.0`** |
+| `decomposition_admissible` | `True` |
+| `hindsight_arm_is_pointwise_best` | `True`, over the FIVE-arm family |
+| selected levels | `s=20, S=30`, a unique minimum over 18 candidates |
+
+**Prediction 1 is confirmed for the fourth consecutive session**: adding arm E perturbed neither
+arm A nor arm C nor the judged contrast, to sixteen significant figures. Arm E is constructed last
+inside `run_three_pass` precisely because `SeedSequence.spawn` derives child streams by index.
+
+**THE RESULT. 85.6% of the measured regret is baseline mis-tuning; 14.4% is a ceiling on
+information value.** The ratio is 5.95 to 1. In the service-point units D2.5 chose so that a
+supply-chain reader could evaluate the number, the entire value of perfect information on this
+twin is about **0.82 service-point equivalents** against a pre-registered margin of five - roughly
+one sixth of the bar this project set for itself.
+
+**AND THE SHARPEST PART WAS NOT PREDICTED, WHICH IS WHY IT IS WORTH MORE THAN WHAT WAS. NEITHER
+ADDEND IS MATERIAL ON ITS OWN.** The tuning gap's interval `[0.3870638568995475,
+0.38909283394762645]` sits **below** the committed margin of `0.40` and excludes it. The
+information ceiling is far below it. So the `material` verdict is produced **only by their sum** -
+by adding a quantity no agent can win to a quantity that is a ceiling on what any agent could win.
+Neither component clears the bar, and the verdict crossed it only because the two were reported as
+one number.
+
+**WHY IT COMES OUT THIS WAY - mechanism, not speculation.** D2.6 records it from the code: the
+comparator replenishes instantaneously through `sim.add_stock`, and the engine's own restock lead
+time is off in every arm. Under instantaneous replenishment an arm can order *after* observing
+demand, so foresight buys no timing advantage; the only residual information value is the safety
+stock covering demand within one decision cadence, and `0.06524434327342887` is the measured size
+of exactly that.
+
+**THE CONSEQUENCE. Finding 4 - that the simulated world does not reward intelligence - is
+substantively TRUE, and R5.3's mechanical test could not see it.** R5.3 fired `material`
+correctly, about the wrong quantity. **This is the third time in this record's life that an
+instrument has been found pointing at a quantity adjacent to the one the claim is about**: the
+no-op comparator (conflict M), the oracle that was not one (finding 54), and now the baseline
+nobody had tuned. The pattern is identical each time - the number was real and the subject was
+not - and each was caught by asking what the guard reduces to rather than whether it passed.
+
+**THE HARD GATE FIRES, and both halves are binding.** E3's floor and task 25's published claim may
+**not** be denominated against the incumbent arm; the honest baseline is the tuned control at
+`s=20, S=30`. And structures 1 (non-stationary demand) and 3 (correlated lead times) are
+**reinstated** as the two that create information value. **Structure 3 is the decisive one**: it is
+the only reinstated structure that introduces a replenishment *delay*, and delay is what makes
+knowing the future worth anything. Structures 2, 4 and 5 stay deferred - each unlocks a different
+agent, and none of them introduces a delay.
+
+**WHAT IS CONSERVATIVE HERE, stated so the finding can be attacked at its weakest point.** The
+selected point is **interior** in the reorder dimension - both the candidate below it and the one
+above it cost more - so this is not a grid-edge artefact. But the grid's resolution is coarse, and
+a finer grid could only ever find a *lower* cost, which would make the tuning gap larger and the
+ceiling smaller. **So `0.06524434327342887` is an upper bound on an upper bound.**
+
+**THE OUT-OF-SAMPLE DESIGN IS VALIDATED BY ITS OWN NUMBERS.** The tuning-seed mean was
+`1.696209281289319` and the measurement-seed mean `1.696864596506129`, higher by `0.000655` -
+which is the direction an out-of-sample estimate is obliged to move. Had the seeds overlapped, as
+D2.6's first draft specified, that check would not exist and the split would have been biased
+toward this very finding. The incumbent ranks **15th of 18** candidates on the tuning seeds.
+
+**NOT CLAIMED.** That the twin's physics are wrong. That a replenishment delay would necessarily
+produce material information value - that is the next measurement, not a prediction to act on. And
+nothing here reopens task 11: its verdict was correctly measured and correctly discharged. What
+this changes is what that verdict **licenses**.
 
 ### D3 - Per-KPI observable sensitivity (R5.34)
 
