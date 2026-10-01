@@ -23,12 +23,16 @@ from __future__ import annotations
 import dataclasses
 import math
 from pathlib import Path
-from typing import Any, Final
+from typing import TYPE_CHECKING, Any, Final
 
 import yaml
 
+if TYPE_CHECKING:  # annotation-only, so the reader's runtime import closure is unchanged
+    from collections.abc import Mapping, Sequence
+
 __all__ = [
     "POLICY_PATH",
+    "ZEROED_PROVENANCE_PREFIX",
     "MarginRule",
     "PolicyUnavailableError",
     "ReferencePolicySpec",
@@ -38,11 +42,19 @@ __all__ = [
     "materiality_margin",
     "materiality_margin_rule",
     "negative_control_settings",
+    "refuse_inadmissible_weights",
     "regret_weights",
     "require",
 ]
 
 POLICY_PATH: Final[Path] = Path(__file__).resolve().parent / "policy.yaml"
+
+#: The provenance prefix under which a zero objective weight is admitted (ADR-055 D2.3, finding
+#: 65). A zero deletes its term's contribution exactly as an omitted term would, and an omitted
+#: term is refused outright, so a zero must say WHY: its ``weight_provenance`` entry starts with
+#: this prefix and carries a reason after it. Positive weights are unaffected. Defined here, beside
+#: :func:`refuse_inadmissible_weights`, so every reader of the weights applies one rule.
+ZEROED_PROVENANCE_PREFIX: Final[str] = "zeroed:"
 
 
 class PolicyUnavailableError(Exception):
@@ -183,19 +195,80 @@ def comparator_reference_policy(path: Path = POLICY_PATH) -> ReferencePolicySpec
     return ReferencePolicySpec(name=name, reorder_point=reorder_point, order_up_to=order_up_to)
 
 
+def refuse_inadmissible_weights(
+    document: Mapping[str, object],
+    weights: Mapping[str, float],
+    *,
+    source: str,
+    terms: Sequence[str],
+) -> None:
+    """Refuse a committed weight that would silently change the objective ADR-055 D2 declares.
+
+    **One definition, two readers.** ``uplift.regret.load_objective`` passes the five objective
+    terms and :func:`regret_weights` passes every weight it returns, so the two readers of
+    ``regret_objective.weights`` cannot disagree about which weights are admitted. ``terms`` is
+    an argument rather than an import because the term list lives in ``uplift/regret.py``, which
+    imports this module.
+
+    Positive finite weights are admitted exactly as before, and their provenance is not read.
+    Three shapes are refused, each naming its key:
+
+    * a negative or non-finite weight, because every term is a COST (D2.1): a negative weight
+      turns it into a reward and inverts the sign convention regret's non-negativity rests on;
+    * a zero weight whose ``weight_provenance`` entry does not start with
+      :data:`ZEROED_PROVENANCE_PREFIX`, because a zero deletes its term's contribution exactly
+      as an omitted term would, and ``load_objective`` refuses an omitted term;
+    * a ``zeroed:`` provenance with nothing after the prefix, because a label is not a reason.
+
+    **Stricter, not looser (finding 65).** Before this, a zero weight was admitted silently.
+    The first zero the policy commits -- ``stockout_rate``, the same measured quantity as
+    ``1 - fill_rate`` (Property 64) -- is admitted only because its provenance says so.
+
+    Raises:
+        PolicyUnavailableError: On any of the three shapes, naming the key and ``source``.
+    """
+    block = document.get("regret_objective")
+    provenance = block.get("weight_provenance") if isinstance(block, dict) else None
+    for term in terms:
+        weight = weights[term]
+        key = f"regret_objective.weights.{term}"
+        if not math.isfinite(weight) or weight < 0.0:
+            raise PolicyUnavailableError(
+                f"{source} declares {key} = {weight!r}. Every objective term is a COST "
+                "(ADR-055 D2.1): a negative weight makes it a reward and a non-finite one makes "
+                "the objective undefined, so neither is recorded"
+            )
+        if weight > 0.0:
+            continue
+        stated = provenance.get(term) if isinstance(provenance, dict) else None
+        text = stated.strip() if isinstance(stated, str) else ""
+        reason = text.removeprefix(ZEROED_PROVENANCE_PREFIX).strip()
+        if not text.startswith(ZEROED_PROVENANCE_PREFIX) or not reason:
+            raise PolicyUnavailableError(
+                f"{source} declares {key} = 0.0 but regret_objective.weight_provenance.{term} "
+                f"is {stated!r}, not {ZEROED_PROVENANCE_PREFIX!r} followed by a reason. A zero "
+                "deletes the term's contribution exactly as an omitted term would, and an "
+                "omitted term is refused -- so a zero is admitted only when the policy says why"
+            )
+
+
 def regret_weights(path: Path = POLICY_PATH) -> dict[str, float]:
     """The scalar regret objective's weights (ADR-055 D2.3, R5.33).
 
     Two of these are READ from ``newsvendor.py`` rather than chosen -- an 8:1
     shortage-to-holding ratio this repository already commits -- and the file records which
-    are read and which are declaration-time choices.
+    are read and which are declaration-time choices. Every weight returned has passed
+    :func:`refuse_inadmissible_weights`, the rule ``uplift.regret.load_objective`` applies too.
     """
-    weights = require(load_policy(path), "regret_objective.weights", path=path)
+    document = load_policy(path)
+    weights = require(document, "regret_objective.weights", path=path)
     if not isinstance(weights, dict) or not weights:
         raise PolicyUnavailableError(
             f"{path.as_posix()} declares no regret_objective.weights mapping"
         )
-    return {str(name): float(value) for name, value in weights.items()}
+    resolved = {str(name): float(value) for name, value in weights.items()}
+    refuse_inadmissible_weights(document, resolved, source=path.as_posix(), terms=tuple(resolved))
+    return resolved
 
 
 def negative_control_settings(path: Path = POLICY_PATH) -> tuple[int, float]:

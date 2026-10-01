@@ -38,7 +38,14 @@ import math
 import statistics
 from typing import TYPE_CHECKING, Final, Literal
 
-from digital_twin.simulation.policy import POLICY_PATH, PolicyUnavailableError, load_policy, require
+from digital_twin.simulation.policy import (
+    POLICY_PATH,
+    ZEROED_PROVENANCE_PREFIX,
+    PolicyUnavailableError,
+    load_policy,
+    refuse_inadmissible_weights,
+    require,
+)
 
 if TYPE_CHECKING:  # annotation-only, so the fast property suite pays nothing for them
     from collections.abc import Mapping, Sequence
@@ -48,6 +55,7 @@ __all__ = [
     "JUDGED_CONTRAST",
     "OBJECTIVE_TERMS",
     "ORACLE_ARM",
+    "ZEROED_PROVENANCE_PREFIX",
     "InsensitiveKpi",
     "RegretObjective",
     "RegretVerdict",
@@ -96,6 +104,10 @@ ORACLE_ARM: Final[str] = "hindsight"
 #: than left to be matched up, because the same key named a different subtraction in each of the
 #: last two runs and a reader should not have to reconstruct which one from a prose field.
 JUDGED_CONTRAST: Final[str] = "mean_reference_cost - mean_hindsight_cost"
+
+# `ZEROED_PROVENANCE_PREFIX` and the zero-weight admission rule it serves (finding 65) are DEFINED
+# in `digital_twin/simulation/policy.py` and re-exported here through `__all__`, so every existing
+# import keeps working while both readers of `regret_objective.weights` apply one rule.
 
 Verdict = Literal["material", "sub-margin", "inconclusive", "unavailable"]
 
@@ -150,10 +162,10 @@ class RegretObjective:
         """Decompose one KPI observation into its five weighted cost terms.
 
         ``fill_rate`` enters as ``1 - fill_rate`` (unmet service), which is what makes every
-        term a cost. ``fill_rate`` and ``stockout_rate`` are related but not redundant after
-        E2a: the first is delivered over demand events, the second is unmet over demand events,
-        and they diverge whenever an order is created and never delivered for a reason other
-        than stock.
+        term a cost. On every measured path the engine makes ``1 - fill_rate`` and
+        ``stockout_rate`` the same quantity (Property 64), which is why the committed objective
+        weights ``stockout_rate`` at 0.0 (finding 65). Both terms stay in the decomposition, so
+        every per-term report keeps all five entries.
         """
         raw: dict[str, float] = {
             "stockout_rate": stockout_rate,
@@ -220,7 +232,9 @@ def load_objective(path: object = POLICY_PATH) -> RegretObjective:
 
     Also enforces ADR-055 D3's citation rule: a KPI recorded ``sensitive: true`` **must** carry
     a ``demonstrated_by`` reference naming the property test that shows it. A bare ``true`` is
-    an assertion, and this phase exists to stop assertions standing in for evidence.
+    an assertion, and this phase exists to stop assertions standing in for evidence. And it
+    refuses a zero weight that does not state why
+    (:func:`digital_twin.simulation.policy.refuse_inadmissible_weights`, the rule's one home).
     """
     document = load_policy(path)  # type: ignore[arg-type]
     weights_raw = require(document, "regret_objective.weights", path=path)  # type: ignore[arg-type]
@@ -233,6 +247,7 @@ def load_objective(path: object = POLICY_PATH) -> RegretObjective:
             "objective term must be weighted explicitly, because an unweighted term silently "
             "contributes nothing and the objective would then not be the one ADR-055 declared"
         )
+    refuse_inadmissible_weights(document, weights, source=str(path), terms=OBJECTIVE_TERMS)
 
     on_hand = float(
         require(document, "regret_objective.normalisers.on_hand_units", path=path)  # type: ignore[arg-type]

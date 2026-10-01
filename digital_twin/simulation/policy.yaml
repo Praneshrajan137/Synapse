@@ -56,8 +56,17 @@ regret_objective:
   # that: nobody derived it, and it is the first candidate for ratification against
   # evidence.
   weights:
-    # Shortage class -- both read from newsvendor.py::cost_under.
-    stockout_rate: 8.0
+    # Shortage class -- ONE measured quantity, priced ONCE, at newsvendor.py::cost_under.
+    #
+    # `stockout_rate` ZEROED IN SESSION 11 (finding 65); the term is KEPT, not deleted. On
+    # every measured path it IS (1 - fill_rate): `_measure` reads the engine's metrics, whose
+    # two service fractions share one denominator (Property 64). Weighting both at 8.0 priced
+    # one quantity at 16.0, so a service point cost 0.16 and the 0.40 margin meant 2.5 points,
+    # below ADR-055 D2.5's own 3.3-point lower bracket. `unmet_service` keeps the 8.0 because
+    # it is the term the margin rule reads. Keeping the zeroed term preserves all five terms
+    # in `contributions()` and every per-term report. `uplift/regret.py::load_objective`
+    # admits a zero ONLY when its provenance below starts with `zeroed:` and states why.
+    stockout_rate: 0.0
     unmet_service: 8.0        # applied to (1 - fill_rate)
     # Over-stocking class -- both read from newsvendor.py::cost_over. Waste is the
     # realised form of over-ordering, so spoilage sits in the holding class.
@@ -68,7 +77,9 @@ regret_objective:
     delivery_latency: 1.0
 
   weight_provenance:
-    stockout_rate: "read: agents/inventory_sentinel/models/newsvendor.py::cost_under"
+    stockout_rate: >-
+      zeroed: the same measured quantity as (1 - fill_rate) on every measured path
+      (Property 64); counting both priced one quantity at 16.0 (finding 65)
     unmet_service: "read: agents/inventory_sentinel/models/newsvendor.py::cost_under"
     on_hand: "read: agents/inventory_sentinel/models/newsvendor.py::cost_over"
     spoilage_rate: "read: agents/inventory_sentinel/models/newsvendor.py::cost_over"

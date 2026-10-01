@@ -200,7 +200,12 @@ pins:
   # they are listed under `deferred:` in the policy file with their owning task.
   # -------------------------------------------------------------------------
 
-  # The shortage weight, read from newsvendor.py::cost_under rather than chosen.
+  # The `stockout_rate` weight. Read from newsvendor.py::cost_under (8.0) until session 11,
+  # when finding 65 ZEROED it: on every measured path the term is the same quantity as
+  # (1 - fill_rate) (Property 64), so 8.0 on both priced one quantity at 16.0. The pin is
+  # kept and both sides moved together (ADR-055 D2.3's row and policy.yaml now read 0.0), so
+  # a silent revert of either side to 8.0 -- which would reinstate the double-count -- FAILs.
+  # The 8.0 now sits on `unmet_service` alone, the weight the margin rule reads.
   - id: regret-weight-shortage
     kind: threshold
     required: true
@@ -212,8 +217,10 @@ pins:
     scale: identity
 
   # The holding weight, read from newsvendor.py::cost_over rather than chosen.
-  # Together with the row above this pins the 8:1 critical ratio the objective
-  # inherits from the inventory agent's own reward.
+  # Since finding 65 this pin and the row above NO LONGER pin the 8:1 critical ratio
+  # the objective inherits from the inventory agent's own reward: the row above pins
+  # stockout_rate = 0.0, and the 8 sits on `unmet_service` (ADR-055 D2.3's
+  # `1 - fill_rate` row), which no pin covers -- so only the ratio's 1 is pinned.
   - id: regret-weight-holding
     kind: threshold
     required: true

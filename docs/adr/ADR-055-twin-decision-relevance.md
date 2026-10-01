@@ -107,6 +107,17 @@ denominated against the incumbent arm, and structures 1 and 3 are REINSTATED. Fu
 **D2.7**. It records a measurement rather than amending a criterion, so it changes no threshold
 and instantiates no new value.
 
+**Amendment, session 11 (2026-09-29) - finding 65: the objective priced one quantity twice.**
+Property 64 (`tests/uplift/test_service_term_identity_property.py`) proves the engine's `fill_rate`
+is the exact complement of `stockout_rate` on every replicate recording a demand event, and
+`_measure` reads the engine metric - so D2.3 weighted one quantity at `8.0` twice, `16.0` in all.
+One service point therefore cost `0.16` objective units and the committed `0.40` margin meant
+**2.5** service points, below D2.5's own lower bracket of about 3.3. The repair weights
+`stockout_rate` at `0.0` and keeps all five terms; `unmet_service`, the margin rule's weight term,
+is unchanged at `8.0`, so the margin stays `0.40` and now means the 5.0 points D2.5 declares.
+D2.5-D2.7's recorded numbers were measured under the old weights and are not re-read. **It lands
+before the run judged against it (B-prime)**, per the rule at the head of this log.
+
 **This ADR is written to be falsifiable, and task 10 is the attempt.** Its central premise -
 that a base-stock `(s, S)` policy is near-optimal on today's twin, so intelligence cannot pay
 - is *analytical, not measured*. R5.1-R5.4 are the criteria that falsify it. If task 10
@@ -229,6 +240,8 @@ added by amendment **before** a run judged against the amended objective.
 `fill_rate` and `stockout_rate` are related but not redundant after E2a: `fill_rate` is
 delivered over created, `stockout_rate` is unmet-demand events over demand events. They
 diverge whenever an order is created and never delivered for a reason other than stock.
+*[CORRECTED session 11: on every measured path they are the same quantity -- Property 64;
+stockout_rate is weighted 0.0 (finding 65).]*
 
 #### D2.2 Normalisation
 
@@ -257,9 +270,9 @@ matters, which is the AD-13 move: read the number, do not restate it.
 
 | Term | Weight | Provenance |
 |---|---|---|
-| `stockout_rate` | 8.0 | `newsvendor.py::cost_under` - **read, not chosen** |
+| `stockout_rate` | 0.0 | **zeroed (finding 65)** - the same measured quantity as `1 - fill_rate` (Property 64); was 8.0 |
 | `avg_on_hand_units` (normalised) | 1.0 | `newsvendor.py::cost_over` - **read, not chosen** |
-| `1 - fill_rate` | 8.0 | same shortage class as `stockout_rate` |
+| `1 - fill_rate` | 8.0 | `newsvendor.py::cost_under` - **read, not chosen**; the one shortage term priced |
 | `spoilage_rate` | 1.0 | same over-stocking class as holding; waste is the realised form of over-ordering |
 | `avg_delivery_time_min` (normalised) | 1.0 | **declaration-time choice, flagged as such** |
 

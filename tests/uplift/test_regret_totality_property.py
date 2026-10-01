@@ -343,7 +343,8 @@ def test_the_committed_weights_carry_the_newsvendor_ratio() -> None:
     """
     weights = load_objective().weights
 
-    assert weights["stockout_rate"] == 8.0
+    # Precondition correction, session 11 (finding 65): the same quantity as unmet_service.
+    assert weights["stockout_rate"] == 0.0
     assert weights["unmet_service"] == 8.0
     assert weights["on_hand"] == 1.0
     assert weights["spoilage_rate"] == 1.0
