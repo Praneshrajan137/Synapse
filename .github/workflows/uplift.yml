@@ -282,8 +282,27 @@ jobs:
   # A measurement whose dispersion cannot be estimated now reports `status: unavailable` and
   # exits 2, which fails this job; it is never downgraded to a point-estimate verdict.
   twin-regret:
-    name: E2b twin regret vs perfect foresight (measure, do not judge)
+    name: E2b twin regret vs perfect foresight (measure, do not judge) [${{ matrix.cell }}]
     runs-on: ubuntu-latest
+    # CHECKPOINT B-PRIME (decision-quality-proof task 14, session-11 re-cut): ONE JOB PER
+    # DECLARED WORLD CELL, read from `digital_twin/simulation/policy.yaml::world.cells`. The
+    # list below restates the cell NAMES only so the matrix is visible on the run page; the
+    # comparator refuses a name the committed file does not declare, so a drift fails loudly.
+    # Only `world.primary_cell` binds; the other seven are descriptive (task 14's body).
+    # `fail-fast: false` so one cell's failure cannot cancel the others' measurements -- each
+    # job's own exit status still propagates; nothing here discards a failure.
+    strategy:
+      fail-fast: false
+      matrix:
+        cell:
+          - off_off
+          - s3_only
+          - s1_only
+          - primary
+          - lead_time_low
+          - lead_time_high
+          - amplitude_quarter
+          - amplitude_half
     # Same allow-list shape as `uplift-proof` and the same reason for inverting it, plus one
     # disjunct that job must never have: the LABEL path, which is how checkpoint A actually
     # runs (finding 23). `schedule` is named explicitly so the nightly is protected by
@@ -314,6 +333,12 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+        with:
+          # FINDING 74. Without `ref:` a labelled run checks out the synthetic MERGE commit
+          # while the disclosure step below reports the PR head, so the measured tree and the
+          # named tree were the same only while `origin/main` stayed an ancestor of the head.
+          # Measuring the head itself makes the disclosure true by construction.
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
 
       - name: Disclose the revision under measurement (attribution, not a gate)
         # FIRST, so a run that fails still records WHICH revision failed. This exists because
@@ -335,6 +360,7 @@ jobs:
           echo "github.sha=${{ github.sha }}"
           echo "measured_revision=${{ github.event.pull_request.head.sha || github.sha }}"
           echo "run_id=${{ github.run_id }}"
+          echo "cell=${{ matrix.cell }}"
 
       - name: Set up Python 3.11
         uses: actions/setup-python@v5
@@ -404,7 +430,7 @@ jobs:
           pip install -e packages/
           pip install simpy numpy pyyaml "pydantic-settings>=2.2.0,<3.0" "scipy>=1.11,<2.0"
 
-      - name: Measure twin regret against the perfect-foresight comparator (R5.1, R5.33)
+      - name: Measure one B-prime world cell against the six-arm comparator (R5.1, R5.33, R5.46)
         # `set -o pipefail` IS LOAD-BEARING, AND ITS ABSENCE MADE THIS STEP LIE.
         #
         # This comment used to read "Exit status propagates. No `continue-on-error`, no
@@ -440,8 +466,8 @@ jobs:
         run: |
           set -o pipefail
           mkdir -p artifacts/uplift
-          python -m uplift.regret --replicates 200 --hours 24 --json \
-            | tee artifacts/uplift/twin-regret.json
+          python -m uplift.regret --replicates 200 --hours 24 --cell "${{ matrix.cell }}" --json \
+            | tee "artifacts/uplift/twin-regret-${{ matrix.cell }}.json"
 
       - name: Report the objective's insensitive KPIs (R5.34, R5.35)
         # A separate, always-run step because it is the clause a reader most needs and most
@@ -457,7 +483,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: twin-regret
-          path: artifacts/uplift/twin-regret.json
+          name: twin-regret-${{ matrix.cell }}
+          path: artifacts/uplift/twin-regret-${{ matrix.cell }}.json
           if-no-files-found: warn
           retention-days: 90

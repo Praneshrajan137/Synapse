@@ -118,6 +118,12 @@ is unchanged at `8.0`, so the margin stays `0.40` and now means the 5.0 points D
 D2.5-D2.7's recorded numbers were measured under the old weights and are not re-read. **It lands
 before the run judged against it (B-prime)**, per the rule at the head of this log.
 
+**Amendment, session 11 (second) - D2.8 records the re-cut's design before checkpoint B-prime
+runs:** where the delay lives (finding 66), inventory position (finding 67), structure 1 by exact
+time-rescaling, the six-arm three-term split, the error direction of every arm, the winner's-curse
+recheck and the binding rule that both ceiling intervals must clear the margin. It changes no
+threshold and instantiates no value; it lands before the run judged against it.
+
 **This ADR is written to be falsifiable, and task 10 is the attempt.** Its central premise -
 that a base-stock `(s, S)` policy is near-optimal on today's twin, so intelligence cannot pay
 - is *analytical, not measured*. R5.1-R5.4 are the criteria that falsify it. If task 10
@@ -985,6 +991,79 @@ toward this very finding. The incumbent ranks **15th of 18** candidates on the t
 produce material information value - that is the next measurement, not a prediction to act on. And
 nothing here reopens task 11: its verdict was correctly measured and correctly discharged. What
 this changes is what that verdict **licenses**.
+
+#### D2.8 The session-11 re-cut: a world where knowing the future can pay, and a split that cannot flatter (session 11)
+
+**Added before the run judged against it (checkpoint B-prime, task 14).** Operator decisions
+1=a, 2=a, 3=a, Q1=a, Q2=a, Q3=c are recorded in `requirements.md` R5.46 and the session-11 ledger
+row; this section carries the design reasoning only.
+
+**Where the delay lives (finding 66).** Every measured arm restocks through the harness's
+`_apply_reorders`, and the engine's own `_restock` loop is switched off in every arm, so a lead
+time placed there (design E2c.3's first draft) would delay nothing any arm does. Structure 3 is
+therefore on the ORDER-PLACEMENT path: `place_order` schedules arrival on a per-supplier
+lognormal daily lead-time path (log-scale AR(1) across days, stretched by the declared demand
+intensity at placement, non-crossing by a running maximum), drawn once per seed from the
+`restock` substream. The path is a pure function of seed, supplier and time, so every arm faces
+the same lead times (common random numbers) and the hindsight arm may read it. With structure 3
+off, `place_order` is a synchronous `add_stock`, and the engine is byte-identical to the
+pre-session engine (golden SHA-256 digests of metrics and demand trace, measured).
+
+**Inventory position (finding 67).** Under a delay an `(s, S)` rule on on-hand stock re-orders
+the pipeline every cadence; every reorder arm now counts stock on order, which is identical to
+the old rule whenever nothing is on order (Property 89).
+
+**Structure 1 changes shape, never whole-week volume.** Arrivals invert the declared cumulative
+intensity exactly (Lewis & Shedler 1979, NRLQ 26(3):403-413, section 1(i)), one standard
+exponential per arrival from the `demand` substream; each profile has mean exactly one, and only
+a declared promotion adds volume. Every value is DECLARED (decision 1=a: no feed is admitted),
+flagged `chosen`, with its research provenance beside it in `policy.yaml` section 5.
+
+**Six arms and three terms.** Incumbent `B`, best static `E`, structure-aware `O`, hindsight `D`
+(plus the no-op `A` and the retired foresight `C`, kept for arm-independence checks):
+
+    regret(B - D) = (B - E) tuning gap + (E - O) achievable information value
+                  + (O - D) residual value of perfect information
+
+`E - D` is the information ceiling B-prime judges. The identity is algebraic; the float residual
+is reported. Every term carries its own paired interval over the same seeds.
+
+**Error directions, stated so the checkpoint can be attacked at its weakest point.**
+* Arm D under delay covers, at each decision `t`, every fulfilment before the NEXT order lands:
+  cumulative supply `max(I, G(min(a(t + w), H)))`. It still sizes by demand GENERATION time (the
+  trace records no fulfilment times), so it over-holds; that raises D's cost and UNDERSTATES the
+  ceiling -- a recoverable false stop, never a false confirmation. It is not the perfect-
+  information optimum, so `E - D` is a lower bound on the EVPI ceiling (Avriel & Williams 1970,
+  OR 18(5):947-954; Brown, Smith & Sun 2010, OR 58(4):785-801); the split is refused if
+  `mean(O - D) < 0`.
+* Arm E is the best STATIC policy, per supplier group, found by a pre-registered search
+  (candidates derived from lead-time-plus-review demand, extension, refinement, base-stock and gap
+  checks, a two-direction unit-step certificate, refusal at a search-box boundary or on
+  non-convergence). Selecting E on noisy TUNING means is a winner's curse: measured out of sample,
+  E's cost is biased UP and the ceiling with it -- the UNSAFE direction for B-prime (the opposite of
+  finding 63, where out-of-sample tuning was the conservative choice). So an in-sample recheck
+  re-prices the search's best vectors and their neighbours on the measurement seeds; its minimum
+  is biased DOWN, and **`room_to_win` binds only when BOTH ceiling intervals lie wholly above the
+  committed margin.**
+* Arm O orders up to the critical-ratio Poisson quantile of its protection window on inventory
+  position. Order-up-to policies are asymptotically optimal as shortage/holding cost -> infinity
+  for a constant lead time and i.i.d. demand (Huh, Janakiraman, Muckstadt & Rusmevichientong 2009,
+  Management Science 55(3):404-420); here lead times are stochastic and demand non-stationary, so
+  O's quality is measured (`E - O` against the ceiling), not assumed. No closed-form optimum is
+  known for lost sales with a lead time (Zipkin 2008, OR 56(5); Goldberg et al. 2016, MOR 41(3)).
+
+**The checkpoint rule.** Only `world.primary_cell` binds; the other seven cells are descriptive
+and none may be promoted except by a recorded operator decision before any E5 run. Room to win,
+measured, licenses E3/E5; anything else records "no room to win at the declared structure" and
+defers E3/E5 by measurement.
+
+**Cost, measured locally rather than assumed.** About 0.1 s per 24-hour arm-replicate on the
+development machine; a primary-cell smoke (3 tuning seeds, 3 replicates) needed 192 search
+evaluations. The per-cell CI projection is recorded in `comparator-tuning.yaml` `budget`.
+
+**NOT CLAIMED.** That the declared values describe any real store (they are `chosen`); that a
+ceiling above the margin means consensus will capture it (that is E5's question); or that D is
+optimal under delay (it is conservative, and says so).
 
 ### D3 - Per-KPI observable sensitivity (R5.34)
 

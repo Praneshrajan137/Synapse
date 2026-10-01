@@ -1,0 +1,98 @@
+# SYNAPSE -- what one consensus decision costs (decision-quality-proof finding 70, task 13.7)
+#
+# `uplift.yml::uplift-proof` (E5, task 22.1) has never run, and its cost was only ever an
+# extrapolation from a test docstring. `.kiro/steering/execution-routing.md` forbids sizing a
+# workload against an unmeasured cost, so this job MEASURES it: `python -m uplift.cost_probe`
+# drives the REAL consensus arm through the harness's closed loop for a small number of
+# replicates of each adversarial scenario, times every decision, records the tier the router
+# assigned, and writes a projection to MIN_SCENARIOS replicates. It measures and judges nothing.
+#
+# ITS OWN WORKFLOW, NOT A JOB IN `uplift.yml`, for one reason: `uplift.yml` holds a WORKFLOW-SCOPE
+# concurrency group (`uplift-proof`) so that two powered runs never overlap, and a probe placed
+# there would queue behind the B-prime factorial instead of running beside it. This probe is not
+# a powered run, so it carries its own group.
+#
+# To run it: add the `measure-uplift-cost` label to the pull request, then remove it. Like
+# `uplift.yml`, the trigger is `pull_request: types: [labeled]` and nothing else, so it never
+# fires on a push; an unrelated label produces a run whose only job is skipped.
+#
+# Not a required check and owed no `required-checks.yaml` entry: it reports only when labelled,
+# and that file's eligibility rule admits only checks produced by every pull request (conflict G).
+
+name: SYNAPSE Uplift Cost Probe
+
+on:
+  pull_request:
+    types: [labeled]
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: uplift-cost-probe
+  cancel-in-progress: false
+
+env:
+  PYTHONPATH: "."
+
+jobs:
+  cost-probe:
+    name: E5 cost probe -- seconds per consensus decision, by tier
+    runs-on: ubuntu-latest
+    if: >-
+      github.event_name == 'pull_request'
+      && contains(github.event.pull_request.labels.*.name, 'measure-uplift-cost')
+    # One replicate per scenario at 24 hourly decisions; a locally measured Tier-4 decision
+    # took ~24 s, so ~75 shocked decisions is ~30 min plus the four-agent install. A timeout is a
+    # failed job, the honest outcome for an incomplete measurement (I-7).
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # Measure the PR head, not the synthetic merge commit (finding 74).
+          ref: ${{ github.event.pull_request.head.sha }}
+
+      - name: Disclose the revision under measurement (attribution, not a gate)
+        run: |
+          echo "event=${{ github.event_name }}"
+          echo "measured_revision=${{ github.event.pull_request.head.sha }}"
+          echo "run_id=${{ github.run_id }}"
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+
+      - name: Install dependencies
+        # The same closure as `uplift.yml::uplift-proof`, for the same reason: the real
+        # consensus arm assembles all eight agent A2A handlers plus the twin handler. A missing
+        # agent dependency would make the probe time an arm E5 would not run.
+        run: |
+          pip install -r packages/requirements.txt -r packages/requirements-dev.txt
+          pip install -e packages/
+          pip install -r orchestrator/requirements.txt
+          pip install jsonschema pyyaml
+          for req in agents/*/requirements.txt; do pip install -r "$req"; done
+          pip install simpy sse-starlette
+          pip install -r agents/requirements-sprint3.txt
+          pip install "starlette>=0.37.2,<0.38.0"
+
+      - name: Measure seconds per consensus decision by tier (E5 sizing, finding 70)
+        # Exit 0 measured / 1 a closed loop failed (reported, not dropped) / 2 the consensus arm
+        # could not be assembled (never timed as if it ran). The report goes to a FILE: the twin
+        # handler's workers are too verbose for stdout to carry parseable JSON.
+        run: |
+          mkdir -p artifacts/uplift
+          python -m uplift.cost_probe --hours 24 --step-hours 1 --replicates 1 \
+            --output artifacts/uplift/cost-probe.json
+
+      - name: Upload the cost-probe report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: uplift-cost-probe
+          path: artifacts/uplift/cost-probe.json
+          if-no-files-found: warn
+          retention-days: 90

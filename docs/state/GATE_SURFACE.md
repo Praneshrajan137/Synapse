@@ -34,13 +34,13 @@ the same pair.
 
 ## Summary
 
-Parsed 18 workflow file(s), 61 job(s), 414 step(s).
+Parsed 19 workflow file(s), 62 job(s), 420 step(s).
 
 | Trigger | Jobs executing | Jobs conditional | Jobs NOT EXECUTED | Steps blocking | Steps advisory | Steps conditional |
 |---|---|---|---|---|---|---|
-| push:main | 4 | 28 | 29 | 31 | 0 | 177 |
-| pull_request | 17 | 24 | 20 | 107 | 4 | 155 |
-| tag:v* | 3 | 3 | 55 | 18 | 0 | 29 |
+| push:main | 4 | 28 | 30 | 31 | 0 | 177 |
+| pull_request | 17 | 25 | 20 | 107 | 4 | 161 |
+| tag:v* | 3 | 3 | 56 | 18 | 0 | 29 |
 
 ## Job selection
 
@@ -107,6 +107,7 @@ Why each job runs, does not run, or runs conditionally under each trigger. `need
 | push:main | .github/workflows/terraform-validate.yml::validate | CONDITIONAL | path-filtered (paths: infrastructure/gcp/terraform/**, infrastructure/oracle/terraform/**) |
 | push:main | .github/workflows/truth-gates.yml::truth-gates | EXECUTES | - |
 | push:main | .github/workflows/truth-gates.yml::falsification-sweep | EXECUTES | - |
+| push:main | .github/workflows/uplift-cost-probe.yml::cost-probe | NOT EXECUTED | workflow on: has no push trigger |
 | push:main | .github/workflows/uplift.yml::uplift-proof | NOT EXECUTED | workflow on: has no push trigger |
 | push:main | .github/workflows/uplift.yml::twin-regret | NOT EXECUTED | workflow on: has no push trigger |
 | pull_request | .github/workflows/cd-gcp.yml::build-push-sign | NOT EXECUTED | workflow on: has no pull_request trigger |
@@ -168,6 +169,7 @@ Why each job runs, does not run, or runs conditionally under each trigger. `need
 | pull_request | .github/workflows/terraform-validate.yml::validate | CONDITIONAL | path-filtered (paths: infrastructure/gcp/terraform/**, infrastructure/oracle/terraform/**, .github/workflows/terraform-validate.yml) |
 | pull_request | .github/workflows/truth-gates.yml::truth-gates | EXECUTES | - |
 | pull_request | .github/workflows/truth-gates.yml::falsification-sweep | EXECUTES | - |
+| pull_request | .github/workflows/uplift-cost-probe.yml::cost-probe | CONDITIONAL | unparsable if: (unparsable at offset 81: "*.name, 'measure-upl") |
 | pull_request | .github/workflows/uplift.yml::uplift-proof | NOT EXECUTED | if: false in pull_request |
 | pull_request | .github/workflows/uplift.yml::twin-regret | CONDITIONAL | unparsable if: (unparsable at offset 220: "*.name, 'measure-twi") |
 | tag:v* | .github/workflows/cd-gcp.yml::build-push-sign | CONDITIONAL | path-filtered (paths-ignore: **.md, docs/**, plans/**, notebooks/**) |
@@ -229,6 +231,7 @@ Why each job runs, does not run, or runs conditionally under each trigger. `need
 | tag:v* | .github/workflows/terraform-validate.yml::validate | NOT EXECUTED | on: push is branch-scoped (no tags: filter), so a tag push is excluded |
 | tag:v* | .github/workflows/truth-gates.yml::truth-gates | NOT EXECUTED | on: push is branch-scoped (no tags: filter), so a tag push is excluded |
 | tag:v* | .github/workflows/truth-gates.yml::falsification-sweep | NOT EXECUTED | on: push is branch-scoped (no tags: filter), so a tag push is excluded |
+| tag:v* | .github/workflows/uplift-cost-probe.yml::cost-probe | NOT EXECUTED | workflow on: has no push trigger |
 | tag:v* | .github/workflows/uplift.yml::uplift-proof | NOT EXECUTED | workflow on: has no push trigger |
 | tag:v* | .github/workflows/uplift.yml::twin-regret | NOT EXECUTED | workflow on: has no push trigger |
 
@@ -471,6 +474,7 @@ Why each job runs, does not run, or runs conditionally under each trigger. `need
 | push:main | .github/workflows/truth-gates.yml::falsification-sweep | Probe every declared mutation operator (R1.1-R1.16 - BLOCKING) | yes | blocking |
 | push:main | .github/workflows/truth-gates.yml::falsification-sweep | C72 row projects the counts of the run that produced them (R1.12) | yes | blocking |
 | push:main | .github/workflows/truth-gates.yml::falsification-sweep | Upload the sweep report | yes | blocking |
+| push:main | .github/workflows/uplift-cost-probe.yml::cost-probe | - | NOT EXECUTED | workflow on: has no push trigger |
 | push:main | .github/workflows/uplift.yml::uplift-proof | - | NOT EXECUTED | workflow on: has no push trigger |
 | push:main | .github/workflows/uplift.yml::twin-regret | - | NOT EXECUTED | workflow on: has no push trigger |
 | pull_request | .github/workflows/cd-gcp.yml::build-push-sign | - | NOT EXECUTED | workflow on: has no pull_request trigger |
@@ -751,12 +755,18 @@ Why each job runs, does not run, or runs conditionally under each trigger. `need
 | pull_request | .github/workflows/truth-gates.yml::falsification-sweep | Probe every declared mutation operator (R1.1-R1.16 - BLOCKING) | yes | blocking |
 | pull_request | .github/workflows/truth-gates.yml::falsification-sweep | C72 row projects the counts of the run that produced them (R1.12) | yes | blocking |
 | pull_request | .github/workflows/truth-gates.yml::falsification-sweep | Upload the sweep report | yes | blocking |
+| pull_request | .github/workflows/uplift-cost-probe.yml::cost-probe | uses: actions/checkout@v4 | CONDITIONAL | conditional - blocking |
+| pull_request | .github/workflows/uplift-cost-probe.yml::cost-probe | Disclose the revision under measurement (attribution, not a gate) | CONDITIONAL | conditional - blocking |
+| pull_request | .github/workflows/uplift-cost-probe.yml::cost-probe | Set up Python 3.11 | CONDITIONAL | conditional - blocking |
+| pull_request | .github/workflows/uplift-cost-probe.yml::cost-probe | Install dependencies | CONDITIONAL | conditional - blocking |
+| pull_request | .github/workflows/uplift-cost-probe.yml::cost-probe | Measure seconds per consensus decision by tier (E5 sizing, finding 70) | CONDITIONAL | conditional - blocking |
+| pull_request | .github/workflows/uplift-cost-probe.yml::cost-probe | Upload the cost-probe report | CONDITIONAL | conditional - blocking |
 | pull_request | .github/workflows/uplift.yml::uplift-proof | - | NOT EXECUTED | if: false in pull_request |
 | pull_request | .github/workflows/uplift.yml::twin-regret | uses: actions/checkout@v4 | CONDITIONAL | conditional - blocking |
 | pull_request | .github/workflows/uplift.yml::twin-regret | Disclose the revision under measurement (attribution, not a gate) | CONDITIONAL | conditional - blocking |
 | pull_request | .github/workflows/uplift.yml::twin-regret | Set up Python 3.11 | CONDITIONAL | conditional - blocking |
 | pull_request | .github/workflows/uplift.yml::twin-regret | Install dependencies | CONDITIONAL | conditional - blocking |
-| pull_request | .github/workflows/uplift.yml::twin-regret | Measure twin regret against the perfect-foresight comparator (R5.1, R5.33) | CONDITIONAL | conditional - blocking |
+| pull_request | .github/workflows/uplift.yml::twin-regret | Measure one B-prime world cell against the six-arm comparator (R5.1, R5.33, R5.46) | CONDITIONAL | conditional - blocking |
 | pull_request | .github/workflows/uplift.yml::twin-regret | Report the objective's insensitive KPIs (R5.34, R5.35) | CONDITIONAL | conditional - blocking |
 | pull_request | .github/workflows/uplift.yml::twin-regret | Upload the regret report | CONDITIONAL | conditional - blocking |
 | tag:v* | .github/workflows/cd-gcp.yml::build-push-sign | uses: actions/checkout@v4 | CONDITIONAL | conditional - blocking |
@@ -859,12 +869,13 @@ Why each job runs, does not run, or runs conditionally under each trigger. `need
 | tag:v* | .github/workflows/terraform-validate.yml::validate | - | NOT EXECUTED | on: push is branch-scoped (no tags: filter), so a tag push is excluded |
 | tag:v* | .github/workflows/truth-gates.yml::truth-gates | - | NOT EXECUTED | on: push is branch-scoped (no tags: filter), so a tag push is excluded |
 | tag:v* | .github/workflows/truth-gates.yml::falsification-sweep | - | NOT EXECUTED | on: push is branch-scoped (no tags: filter), so a tag push is excluded |
+| tag:v* | .github/workflows/uplift-cost-probe.yml::cost-probe | - | NOT EXECUTED | workflow on: has no push trigger |
 | tag:v* | .github/workflows/uplift.yml::uplift-proof | - | NOT EXECUTED | workflow on: has no push trigger |
 | tag:v* | .github/workflows/uplift.yml::twin-regret | - | NOT EXECUTED | workflow on: has no push trigger |
 
 ## Declared-blocking anchors (R11.8)
 
-Every step `infrastructure/quality/blocking-steps.yaml` declares blocking, annotated with the command it runs so a governance claim can be pinned to a row. Source: 17 declared-blocking entries from infrastructure/quality/blocking-steps.yaml.
+Every step `infrastructure/quality/blocking-steps.yaml` declares blocking, annotated with the command it runs so a governance claim can be pinned to a row. Source: 18 declared-blocking entries from infrastructure/quality/blocking-steps.yaml.
 
 | Trigger | Job | Step | Propagates | Note |
 |---|---|---|---|---|

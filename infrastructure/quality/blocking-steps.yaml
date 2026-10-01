@@ -362,13 +362,26 @@ steps:
     all_steps: false
     requirement: "R5.1, R5.32, R5.33, R5.34, R5.35"
     steps:
-      - step: "Measure twin regret against the perfect-foresight comparator (R5.1, R5.33)"
+      - step: "Measure one B-prime world cell against the six-arm comparator (R5.1, R5.33, R5.46)"
         role: producer
-        emits: "artifacts/uplift/twin-regret.json (canonical JSON, --json)"
+        emits: "artifacts/uplift/twin-regret-<cell>.json (canonical JSON, --json; one per matrix cell)"
         requirement: "R5.1, R5.32"
       - step: "Report the objective's insensitive KPIs (R5.34, R5.35)"
         role: disclosure
         requirement: "R5.34, R5.35"
+
+  # decision-quality-proof session 11, finding 70: E5's cost is measured before it is sized.
+  # Declared in the same commit as the workflow it describes (coupling 2). Label-only, so it
+  # owes no `required-checks.yaml` entry (conflict G).
+  - workflow: .github/workflows/uplift-cost-probe.yml
+    job: cost-probe
+    all_steps: false
+    requirement: "R7.1, R7.2 (sizing), finding 70"
+    steps:
+      - step: "Measure seconds per consensus decision by tier (E5 sizing, finding 70)"
+        role: producer
+        emits: "artifacts/uplift/cost-probe.json (canonical JSON, --output)"
+        requirement: "finding 70"
 
   - workflow: .github/workflows/truth-gates.yml
     job: truth-gates

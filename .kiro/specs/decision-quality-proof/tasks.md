@@ -2116,7 +2116,9 @@ tests in the interim, and that is a stated sequencing gap, not an omission.
     merely "task 11 did not falsify Finding 4", because an unrun task 11 falsifies nothing by
     never having looked (I-7). ADR-055 is committed (8.1); E4a's statistics exist (7.4).
 
-  - [ ] 12.1 Structure 1 — non-stationary demand calibrated from the real feed
+  - [~] 12.1 Structure 1 — non-stationary demand calibrated from the real feed
+    - discharge: ci.yml::uplift-verify slow selection (Property 55; Property 93 clauses d-e)
+    - last-checked: none yet -- pushed at the session-11 wave-3 head; no run has read it yet. Locally: golden SHA-256 digests identical to da46ec5 (measured)
     - **RE-SCOPED 2026-09-29 (session-11 plan, operator-approved).** R5.11 is re-cut by decision
       1=a: the shape is DECLARED in `digital_twin/simulation/policy.yaml` `world.structure_1`,
       flagged `chosen` with research provenance, each profile normalised to mean EXACTLY one
@@ -2143,7 +2145,9 @@ tests in the interim, and that is a stated sequencing gap, not an omission.
       file, not embedded in `engine.py`**.
     - _Requirements: 5.8, 5.9, 5.10, 5.11, 5.12_
 
-  - [ ] 12.2 Write property test for the demand-intensity shape
+  - [~] 12.2 Write property test for the demand-intensity shape
+    - discharge: ci.yml::uplift-verify slow selection (Property 55)
+    - last-checked: none yet -- pushed at the session-11 wave-3 head; no run has read it yet
     - `# Feature: decision-quality-proof, Property 55: Demand intensity varies by hour, by weekday and under promotion, from the committed policy`
     - File: `digital_twin/tests/test_demand_intensity_shape_property.py`
     - `@pytest.mark.slow`; selected by `ci.yml::uplift-verify`'s slow step (`-m "slow"`,
@@ -2202,7 +2206,9 @@ tests in the interim, and that is a stated sequencing gap, not an omission.
     scope and authorable (not ticked); 13.3 and 13.4 stay deferred. Pointer only -- task 12's
     disposition block and ADR-055 **D2.7** carry it.
 
-  - [ ] 13.1 Structure 3 — correlated lead times and observable supplier state
+  - [~] 13.1 Structure 3 — correlated lead times and observable supplier state
+    - discharge: ci.yml::quality-gates (digital_twin fast tests) plus ci.yml::uplift-verify
+    - last-checked: run 36827018572 (sha 1ebb93e) -- slow selection `success` incl. Property 90's slow clauses; Property 89 PASSED in fast shard 1/4; quality-gates CANCELLED at step 7, before its digital_twin step, so the fast world-structure clauses are unread
     - **RE-SCOPED 2026-09-29 (session-11 plan, operator-approved).** The delay lives on the
       ORDER-PLACEMENT path every measured arm uses, not in `_restock` (finding 66). Obligations:
       - `SupplyChainSimulation.place_order(sku, qty)` schedules arrival at the lead-time path's
@@ -2252,7 +2258,9 @@ tests in the interim, and that is a stated sequencing gap, not an omission.
       reliability scoring has an observable subject.
     - _Requirements: 5.21, 5.22, 5.23_
 
-  - [ ] 13.2 Write property test for lead-time correlation and supplier attribution
+  - [~] 13.2 Write property test for lead-time correlation and supplier attribution
+    - discharge: ci.yml::quality-gates (fast clauses) plus ci.yml::uplift-verify slow selection
+    - last-checked: none yet -- pushed at the session-11 wave-3 head; no run has read it yet
     - `# Feature: decision-quality-proof, Property 57: Lead time is demand-correlated, day-autocorrelated and supplier-attributed`
     - File: `digital_twin/tests/test_lead_time_correlation_property.py`
     - `@pytest.mark.slow`; selected by `ci.yml::uplift-verify`'s slow step.
@@ -2317,7 +2325,9 @@ tests in the interim, and that is a stated sequencing gap, not an omission.
     - Locus: `ci.yml::uplift-verify` fast step.
     - _Requirements: 5.28, 5.29_
 
-  - [ ] 13.7 Wire E2c's comparative measurements into CI
+  - [~] 13.7 Wire E2c's comparative measurements into CI
+    - discharge: uplift.yml::twin-regret (the B-prime matrix, all eight cells) plus ci.yml::uplift-verify fast shard 2/4 (Properties 81, 96)
+    - last-checked: none yet -- pushed at the session-11 wave-3 head; no run has read it yet
     - **RE-SCOPED 2026-09-29 (session-11 plan, operator-approved).** Wire the B-prime factorial:
       `uplift.yml::twin-regret` becomes a matrix over the eight `world.cells`, one artifact per
       cell, under `set -o pipefail`.
@@ -2361,7 +2371,39 @@ tests in the interim, and that is a stated sequencing gap, not an omission.
     - Conflict R is resolved by supersession: R5.28/R5.29 are replaced by R5.45.
     - Predictions P1-P5 are written into THIS body before the label is added.
   - **PRE-REGISTRATION (written before the B-prime label)**
-    - pending
+    - Committed in the same commit as the matrix that measures it, BEFORE the
+      `measure-twin-regret` label is added; git history is the evidence. Every number below is
+      read from run `35125443185`'s own artifact (sha `34d861b`) or derived from it by stated
+      arithmetic. Arms: A no-op, B incumbent, C retired foresight, D hindsight, E tuned static,
+      O structure-aware.
+    - **P1 -- the off_off cell reproduces the unmodified twin, repriced once (finding 65).** B and D
+      leave zero unmet demand in that run, so the zeroed `stockout_rate` weight leaves them alone:
+      `mean_reference_cost` = `2.0849871282327`, `mean_hindsight_cost` = `1.6316202532327002`,
+      `regret` = `0.4533668749999997` with interval `[0.4524633333333333,
+      0.45426833333333333]`, all to every digit. A and C leave demand unmet, so each falls by
+      exactly 8 x its mean `stockout_rate` (1e-9 relative): `mean_noop_cost` ~
+      `6.688922379147906` (11.835228527152536 - 5.14630614800463) and `mean_foresight_cost` ~
+      `2.2407794269563097` (2.897339574184977 - 0.6565601472286673), so
+      `comparator_headroom_vs_foresight` ~ `4.448142952191596` and `comparator_headroom` ~
+      `5.057302125915205`. A miss on B or D means the engine or an arm moved: a finding about
+      arm independence, not a licence to read the other cells.
+    - **P2 -- a replenishment delay alone opens the ceiling.** In `s3_only`,
+      `information_ceiling_interval.low` > `0.06524434327342887` (finding 63's ceiling).
+    - **P3 -- non-stationarity alone does not.** In `s1_only`, `information_ceiling_interval.high`
+      < the committed `0.40` margin: with instantaneous replenishment an arm can order after it
+      observes demand, so forecasting buys only within-cadence cover (ADR-055 D2.7's mechanism).
+    - **P4 -- the two structures compound.** The primary cell's `information_ceiling` point >=
+      the `s3_only` cell's.
+    - **P5 -- the instrument holds in every cell with a structure on.** `split_admissible` true,
+      `|split_residual_float|` <= 1e-12, `hindsight_unmet_pointwise_least` true,
+      `hindsight_arm_is_pointwise_best` true, and in mean D <= O <= E. A cell where O > E means
+      arm O is not adequate as E3's positive-control arm; E3 stops until it is repaired.
+    - **Handling rules, committed now.** A refused search or split in a cell makes that cell's
+      `room_to_win` `unavailable`; for the primary cell that is NOT a verdict -- the defect is
+      repaired and the factorial re-run, and no other cell is promoted. `room_to_win` binds only
+      when BOTH the out-of-sample and the in-sample ceiling intervals lie wholly above 0.40.
+    - **NOT PREDICTED, and must not be inferred:** whether the primary cell clears 0.40 (the
+      verdict itself); E's selected levels; O - D's magnitude; any interval width.
   - Text below is retained as the record; where it conflicts with the re-scope above, the re-scope governs.
   - Ensure all tests pass, ask the user if questions arise.
   - **HELD under the disposition recorded at task 12: this checkpoint is downstream of E2c and
@@ -2595,7 +2637,9 @@ tests in the interim, and that is a stated sequencing gap, not an omission.
     already works, seeds derive from `(scenario.seed, index)`, and `arm_aggregates`,
     `UpliftProvenance.arms` and C60 are all arm-count agnostic.
 
-  - [ ] 16.1 Implement the Oracle_Arm as the analytically optimal policy for the injected structure
+  - [~] 16.1 Implement the Oracle_Arm as the analytically optimal policy for the injected structure
+    - discharge: ci.yml::uplift-verify fast shard 2/4 (Property 92)
+    - last-checked: none yet -- pushed at the session-11 wave-3 head; no run has read it yet
     - **RE-SCOPED 2026-09-29 (session-11 plan, operator-approved).** The Oracle_Arm is arm O,
       `uplift/oracle_arm.py`: a `DecisionPolicy` that reads only the `Observation` and the
       declared structure, ordering up to the critical-ratio quantile of Poisson demand over
@@ -3171,8 +3215,11 @@ data and scored against an external benchmark has no demonstrable value.
 
   - [~] 20.7 Render degradation on every surface that shows the agent's output
     - discharge: frontend.yml::quality step 8 (Vitest unit + property tests)
-    - last-checked: run 34686422478 (SYNAPSE Frontend CI, sha 27a74a3) -- the job
-      `Lint - Typecheck - Unit` **failed at step 6 `Biome lint`, so step 8 was SKIPPED.**
+    - last-checked: run 36827018596 (SYNAPSE Frontend CI, sha 1ebb93e) -- step 6 `Biome lint`
+      now PASSES and step 8 EXECUTED for the first time: 726 passed, 1 failed. The failure is
+      Property 42 (task 1.5's fc-budget resolver, counterexample `"valueOf"`), repaired in
+      `a985d04`; Property 75's file passed 16 of 16. Step 8 is still red, so this stays `[~]`.
+    - previously: run 34686422478 (sha 27a74a3) -- step 6 failed, step 8 skipped.
     - **AUTHORED, NOT DISCHARGED, AND THE REASON IS MEASURED RATHER THAN ASSUMED.** The job that
       owns this leaf never ran the step that judges it. A skipped step is not a pass (I-7), so the
       mark stays `[~]` until step 8 executes and reports.
@@ -3183,8 +3230,9 @@ data and scored against an external benchmark has no demonstrable value.
 
   - [~] 20.8 Extend the console degradation property to every surface
     - discharge: frontend.yml::quality step 8 (Vitest unit + property tests)
-    - last-checked: run 34686422478 (sha 27a74a3) -- step 8 skipped behind the step 6
-      `Biome lint` failure, so Property 75 has never executed.
+    - last-checked: run 36827018596 (sha 1ebb93e) -- step 8 executed; Property 75's file passed
+      16 of 16, but the step is red on Property 42 (repaired in `a985d04`), so this stays `[~]`.
+    - previously: run 34686422478 (sha 27a74a3) -- step 8 skipped behind step 6.
     - `# Feature: decision-quality-proof, Property 75: The console renders degradation on every surface displaying the agent's output`
     - File: `frontend/src/surfaces/__tests__/degradation-rendering.property.test.ts` (extended,
       not new — task 1.1 commits this file and task 1.3 strips its per-call `numRuns`)
@@ -4900,7 +4948,13 @@ progress ledger; design reasoning is ADR-055.
 
 - [ ] 29. The re-cut's own work: terminal deferral, finding 57, the double-count, the objective headline, and the information pathway
 
-  - [ ] 29.1 Deferral is a terminal state the census reports
+  - [~] 29.1 Deferral is a terminal state the census reports
+    - discharge: ci.yml::uplift-verify fast shard 3/4 (tests/verify a-o)
+    - last-checked: run 36827018572 (SYNAPSE CI, sha 1ebb93e) -- shard 3/4 `success`, 363 passed;
+      `tests/verify/test_census_deferral_property.py` 16 PASSED, 0 failed (read per test id).
+      Kept `[~]` only because the AGGREGATE job was red that run (shard 4/4 and `quality-gates`
+      were cancelled in `Install dependencies` / step 7, both runner-side); it graduates on the
+      next run whose shard 3/4 is green with the aggregate.
     - Files: `scripts/audit/spec_ledger_census.py`, `tests/verify/test_census_deferral_property.py`
     - A leaf carrying a `- deferred: <reason>` sub-bullet is terminal and reasoned, is never
       offered, and completion is reported only when nothing authorable, gated or pending remains
@@ -4913,8 +4967,13 @@ progress ledger; design reasoning is ADR-055.
       `complete: no` until the last in-scope leaf discharges.
     - _Requirements: 4.x (census hygiene)_
 
-  - [ ] 29.2 Flag repository data, not a dependency's bundled data
+  - [x] 29.2 Flag repository data, not a dependency's bundled data
     - discharge: ci.yml::uplift-verify slow selection
+    - **DISCHARGED: run 36827018572 (sha 1ebb93e), job `Uplift slow selection - twin, consensus,
+      CLI` `success`, `69 passed` with 0 failed** -- including
+      `test_reproduction_path_is_zero_cost_network_free_and_synthetic_only`, the one test finding
+      57 kept red at da46ec5 (run 35171859419: `1 failed, 65 passed`). Property 88 passed in fast
+      shard 2/4 of the same run (21 tests of the two touched files, 0 failed). Read per test id.
     - Files: `tests/uplift/test_preserved_baseline_regression.py`,
       `tests/uplift/test_zero_cost_guard_precision_property.py` (new)
     - Finding 57, adopted under decision 3=e: the zero-cost guard flags a CSV read from
@@ -4932,7 +4991,9 @@ progress ledger; design reasoning is ADR-055.
     - _Requirements: none in this spec -- adopted debt (decision 3=e); the guarded file's own
       subject is `core-purpose-uplift` R3.6/R3.7_
 
-  - [ ] 29.3 Remove finding 60's double-count before any run is judged on the objective (finding 65)
+  - [~] 29.3 Remove finding 60's double-count before any run is judged on the objective (finding 65)
+    - discharge: uplift.yml::twin-regret, cell off_off (task 14's P1) plus fast shard 2/4 (Property 64)
+    - last-checked: run 36827018572 (sha 1ebb93e) -- Property 64 PASSED in fast shard 2/4; P1 unread until the B-prime matrix runs
     - Files: `digital_twin/simulation/policy.yaml` (`weights.stockout_rate` 8.0 -> 0.0, with its
       reason), `docs/adr/ADR-055-twin-decision-relevance.md` (D2.3 and the amendment log), any pin
       or ratchet entry for that weight, `tests/uplift/test_service_term_identity_property.py`
