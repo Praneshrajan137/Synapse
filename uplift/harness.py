@@ -186,7 +186,8 @@ def _build_twin(scenario: Scenario, seed: int) -> SupplyChainSimulation:
     The shock's demand/lead-time multipliers map onto ``TwinConfig`` exactly as
     ``MonteCarloRunner._run_single_scenario`` maps them, and the failure/spoilage
     multipliers are passed to the engine constructor, so the harness and the twin's
-    own Monte Carlo path realise a shock identically.
+    own Monte Carlo path realise a shock identically, save that the lead-time multiplier also
+    reaches ``set_policy`` for structure 3's ``place_order`` (inert without a world; see below).
     """
     shock = scenario.shock
     config = TwinConfig(
@@ -211,7 +212,14 @@ def _build_twin(scenario: Scenario, seed: int) -> SupplyChainSimulation:
     # The value is READ from `digital_twin/simulation/policy.yaml`, never inlined
     # (AD-13), and the resolved value is recorded so a run whose recorded threshold
     # differs from the committed one is inadmissible.
-    sim.set_policy(restock_threshold=comparator_restock_threshold())
+    # Task 13.1: the shock's lead-time multiplier must also reach `place_order`, or structure 3
+    # never sees a shock. Byte-identical with structure 3 off: `_lead_time_mult` is read only by
+    # `_restock` (never draws at threshold 0.0) and, structure 3 on, by `place_order` and
+    # `arrival_time_for`. The pick-pack mapping above is kept unchanged.
+    sim.set_policy(
+        restock_threshold=comparator_restock_threshold(),
+        lead_time_mult=shock.lead_time_multiplier,
+    )
     if scenario.cold_start:
         _apply_cold_start(sim)
     return sim
@@ -268,7 +276,13 @@ def _apply_price(sim: SupplyChainSimulation, price: float, reference_price: floa
 
 
 def _apply_reorders(sim: SupplyChainSimulation, reorder_quantities: Mapping[str, float]) -> None:
-    """Apply per-SKU reorder quantities to the twin via ``add_stock`` (R2.2 mapping).
+    """Apply per-SKU reorder quantities to the twin via ``place_order`` (R2.2 mapping).
+
+    decision-quality-proof task 13.1 (finding 66): orders go through ``place_order``, which IS
+    ``add_stock`` whenever structure 3 is off -- and it is off in every twin this harness builds
+    today, because ``_build_twin`` passes no world -- so every seeded expectation is unchanged.
+    With structure 3 on, the stock lands after its supplier's lead time instead of at once: the
+    delay lives where arms order, rather than in an engine loop the comparator switches off.
 
     The annotation is the one ``mypy --strict`` had been asking for at this signature (it
     was one of the seven pre-existing ``uplift/`` errors, in a tree CI's mypy scope never
@@ -284,7 +298,7 @@ def _apply_reorders(sim: SupplyChainSimulation, reorder_quantities: Mapping[str,
         except (TypeError, ValueError):
             continue
         if math.isfinite(quantity) and quantity > 0.0:
-            sim.add_stock(str(sku), quantity)
+            sim.place_order(str(sku), quantity)
 
 
 def observe(
@@ -311,6 +325,15 @@ def observe(
         stockout_count=int(metrics.unmet_demand_events),
         unit_costs=unit_costs,
         active_shock=active_shock,
+        # decision-quality-proof task 13.1: what a real planner also knows. With no world,
+        # `on_order`, `supplier_lead_time_history` and `sku_supplier` are empty and
+        # `start_weekday` is None; `demand_to_date` counts demand in every world. An arm that
+        # ignores all five decides exactly as it did before they existed.
+        on_order=sim.on_order,
+        supplier_lead_time_history=sim.supplier_lead_time_history,
+        demand_to_date=sim.demand_to_date,
+        sku_supplier=sim.sku_supplier,
+        start_weekday=sim.start_weekday,
     )
 
 
@@ -324,7 +347,8 @@ def _apply_action(
 
     Concrete twin levers are actuated here: ``price`` -> demand elasticity + margin
     bookkeeping (the returned ``current_price`` carries the latest applied price for the
-    margin accumulator), and ``reorder_quantities`` -> ``add_stock``. ``routing_assignment``
+    margin accumulator), and ``reorder_quantities`` -> ``place_order``, which IS ``add_stock``
+    while structure 3 is off (:func:`_apply_reorders`). ``routing_assignment``
     and ``disruption_actions`` have no direct twin actuation lever in the current engine
     and are intentionally recorded-but-not-actuated here (a documented seam a later
     disruption-mitigation mapping can extend); a partial action leaves unset levers

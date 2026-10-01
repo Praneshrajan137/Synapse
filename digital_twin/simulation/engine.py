@@ -7,6 +7,7 @@ Each process draws from calibrated distributions and integrates with agent signa
 from __future__ import annotations
 
 import dataclasses
+import math
 import random
 from typing import TYPE_CHECKING, Any
 
@@ -18,6 +19,9 @@ from digital_twin.config import TwinConfig
 
 if TYPE_CHECKING:  # pragma: no cover - typing only
     from collections.abc import Mapping
+
+    from digital_twin.simulation.lead_time import LeadTimePath
+    from digital_twin.simulation.world import ResolvedWorld, SupplyStructure
 
 logger = structlog.get_logger(__name__)
 
@@ -214,6 +218,30 @@ class DemandTrace:
         return tuple((event.t_min, event.sku, event.units) for event in self.events)
 
 
+@dataclasses.dataclass(frozen=True)
+class ArrivedOrder:
+    """One supplier order that has LANDED (decision-quality-proof task 13.1, R5.21-R5.23).
+
+    ``arrived_at`` is the promised instant from the lead-time path, which the stock never
+    precedes (see ``_receive_order``). ``lead_time_min`` is the realised lead time a planner
+    observes -- and it exists only once the order is here.
+    """
+
+    supplier: str
+    sku: str
+    placed_at: float
+    arrived_at: float
+    quantity: float
+
+    @property
+    def lead_time_min(self) -> float:
+        return self.arrived_at - self.placed_at
+
+
+#: Exclusive upper bound of the per-supplier seeds structure 3 draws from the `restock` substream.
+_SUPPLIER_SEED_BOUND: int = 2**62
+
+
 #: The six named RNG substreams (decision-quality-proof task 9.4, R5.30/R5.37).
 #:
 #: THE CHANGE THAT MAKES E2c POSSIBLE. With one shared generator, the realised demand path is
@@ -253,6 +281,7 @@ class SupplyChainSimulation:
         seed: int | None = None,
         failure_rate_multiplier: float = 1.0,
         spoilage_rate_multiplier: float = 1.0,
+        world: ResolvedWorld | None = None,
     ) -> None:
         self._config = config or TwinConfig()
         self._seed = seed
@@ -295,6 +324,49 @@ class SupplyChainSimulation:
         self._demand_mult = 1.0          # >1 = more demand (e.g. a price cut)
         self._lead_time_mult = 1.0       # >1 = slower supplier restock lead time
         self._order_seq = 0              # id counter for externally-injected orders
+        # -- decision-quality-proof task 13.1 (ADR-055 D2.8): the world structures --
+        # PRESERVE BY CONSTRUCTION. With `world` None, or a cell with both structures off,
+        # nothing below draws, schedules or reads a policy file: the containers stay empty
+        # and `place_order` IS `add_stock`. Only structure 3 draws, only here, and only once.
+        self._world = world
+        self._supply: SupplyStructure | None = None
+        self._lead_time_path: LeadTimePath | None = None
+        self._start_weekday: int | None = None
+        self._outstanding: dict[str, dict[int, float]] = {}
+        self._arrived: list[ArrivedOrder] = []
+        self._demand_to_date: dict[str, int] = {}
+        self._supplier_order_seq = 0
+        if world is not None:
+            self._configure_world(world, seed)
+
+    def _configure_world(self, world: ResolvedWorld, seed: int | None) -> None:
+        """Adopt one resolved world cell (task 13.1). Draws only when structure 3 is on.
+
+        The per-supplier seeds are drawn ONCE, from the ``restock`` substream, in sorted
+        supplier-id order -- so the lead-time path is a function of the engine seed alone and is
+        identical for every arm. Imported here, not at module level, so an engine with no world
+        keeps HEAD's import closure exactly: ``world.py`` pulls in the YAML policy reader, and the
+        twin service imports this module.
+        """
+        from digital_twin.simulation import lead_time as lead_time_model
+        from digital_twin.simulation.world import start_weekday as weekday_of_seed
+
+        if world.demand is not None:
+            self._start_weekday = weekday_of_seed(seed)
+        if world.supply is None:
+            return
+        restock = self._streams["restock"]
+        seeds = {
+            supplier: int(restock.integers(0, _SUPPLIER_SEED_BOUND))
+            for supplier in sorted(world.supply.suppliers)
+        }
+        self._supply = world.supply
+        self._lead_time_path = lead_time_model.LeadTimePath(
+            supply=world.supply,
+            demand=world.demand,
+            start_weekday=weekday_of_seed(seed),
+            seeds=seeds,
+        )
 
     @staticmethod
     def _spawn_streams(seed: int | None) -> dict[str, np.random.Generator]:
@@ -409,7 +481,7 @@ class SupplyChainSimulation:
             # `WorldSource` exists to supply.
             sku = self._draw_demanded_sku()
             if sku is not None:
-                self._demand_trace.record(float(self._env.now), sku)
+                self._record_demand(float(self._env.now), sku)
             self._env.process(self._pick_pack_dispatch(self._env, self._order_seq, sku))
 
     def add_stock(self, sku_id: str, quantity: float) -> float:
@@ -418,6 +490,121 @@ class SupplyChainSimulation:
         self._accrue_inventory_time(self._now())
         self._inventory[sku_id] = self._inventory.get(sku_id, 0.0) + max(0.0, float(quantity))
         return self._inventory[sku_id]
+
+    def place_order(self, sku_id: str, quantity: float) -> float:
+        """Order ``quantity`` of ``sku_id`` from its supplier; return when it arrives (task 13.1).
+
+        **Structure 3 off -- including no world at all -- this IS** :meth:`add_stock`: the stock
+        lands now, nothing is scheduled, nothing is drawn, and the return is the current clock.
+        That identity is what leaves every seeded expectation on the PRESERVE list untouched.
+
+        **Structure 3 on:** the order joins :attr:`on_order` now and lands at
+        :meth:`arrival_time_for` ``(sku_id, now)`` -- a function of seed, supplier and time alone,
+        so it is the same whichever arm placed it (finding 66: the delay lives where arms order).
+        A non-positive quantity orders nothing and returns the clock.
+
+        Raises:
+            ValueError: If structure 3 is on and ``sku_id`` has no supplier.
+            RuntimeError: If structure 3 is on and :meth:`start` has not created the clock.
+        """
+        path = self._lead_time_path
+        if path is None:
+            self.add_stock(sku_id, quantity)
+            return self._now()
+        now = self._now()
+        units = max(0.0, float(quantity))
+        if units == 0.0:
+            return now
+        supplier = self._supplier_of(sku_id)
+        env = self._env
+        if env is None:
+            raise RuntimeError(
+                "place_order with structure 3 on needs a running clock: call start() first, "
+                "because an order in transit is an event on the simulation's own timeline"
+            )
+        arrives_at = path.arrival_time(supplier, now, self._lead_time_mult)
+        self._supplier_order_seq += 1
+        order_id = self._supplier_order_seq
+        self._outstanding.setdefault(sku_id, {})[order_id] = units
+        env.process(self._receive_order(env, order_id, supplier, sku_id, now, arrives_at, units))
+        return arrives_at
+
+    def arrival_time_for(self, sku_id: str, t_min: float) -> float:
+        """When an order for ``sku_id`` placed at ``t_min`` arrives (the hindsight arm reads it).
+
+        Structure 3 off: ``t_min`` itself, because :meth:`place_order` lands stock at once.
+        Structure 3 on: the lead-time path at the CURRENT shock multiplier, independent of every
+        order placed -- so it is identical for every arm at one seed.
+
+        Raises:
+            ValueError: If structure 3 is on and ``sku_id`` has no supplier.
+        """
+        path = self._lead_time_path
+        if path is None:
+            return float(t_min)
+        return path.arrival_time(self._supplier_of(sku_id), float(t_min), self._lead_time_mult)
+
+    def _supplier_of(self, sku_id: str) -> str:
+        supply = self._supply
+        if supply is None or sku_id not in supply.sku_supplier:
+            raise ValueError(
+                f"SKU {sku_id!r} has no supplier in world.structure_3.sku_supplier, so no order "
+                "for it can be placed; the world must declare one rather than the engine guess"
+            )
+        return supply.sku_supplier[sku_id]
+
+    def _receive_order(
+        self,
+        env: simpy.Environment,
+        order_id: int,
+        supplier: str,
+        sku_id: str,
+        placed_at: float,
+        arrives_at: float,
+        units: float,
+    ) -> Any:
+        """One supplier order in transit: wait for its promised arrival, then land the stock.
+
+        SimPy computes ``now + delay`` in floating point, which can fall one ulp SHORT of the
+        promised instant; the loop re-waits the residual, so stock never lands before its arrival
+        time. It may land one ulp after it, and the record states the promised instant.
+        """
+        while float(env.now) < arrives_at:
+            yield env.timeout(arrives_at - float(env.now))
+        self.add_stock(sku_id, units)
+        pending = self._outstanding.get(sku_id)
+        if pending is not None:
+            pending.pop(order_id, None)
+            if not pending:
+                del self._outstanding[sku_id]
+        self._arrived.append(
+            ArrivedOrder(
+                supplier=supplier,
+                sku=sku_id,
+                placed_at=placed_at,
+                arrived_at=arrives_at,
+                quantity=units,
+            )
+        )
+
+    def _record_demand(self, t_min: float, sku: str) -> None:
+        """Record one generated demand event in the trace AND the per-SKU count (task 13.1).
+
+        One site for both, so the count a planner observes can never disagree with the trace the
+        comparator replays. Counting only: no draw, no event.
+        """
+        self._demand_trace.record(t_min, sku)
+        self._demand_to_date[sku] = self._demand_to_date.get(sku, 0) + 1
+
+    def _refuse_unsupplied_stock(self, supply: SupplyStructure) -> None:
+        """With structure 3 on, a stocked SKU with no supplier could never be re-ordered."""
+        unsupplied = sorted(sku for sku in self._inventory if sku not in supply.sku_supplier)
+        if unsupplied:
+            raise ValueError(
+                f"structure 3 is on but {', '.join(unsupplied)} has no supplier in "
+                "world.structure_3.sku_supplier; the run is refused rather than started, because "
+                "an arm could never order it and would be measured against a shelf it cannot fill"
+            )
 
     # ── Public read accessors (so callers need not reach into privates) ──
 
@@ -440,6 +627,58 @@ class SupplyChainSimulation:
     def demand_mult(self) -> float:
         """Current demand multiplier (1.0 = neutral)."""
         return self._demand_mult
+
+    # -- task 13.1: what a real planner knows about its supply and its demand --
+
+    @property
+    def world(self) -> ResolvedWorld | None:
+        """The resolved world cell this engine runs, or ``None`` for HEAD's world."""
+        return self._world
+
+    @property
+    def on_order(self) -> dict[str, float]:
+        """Units ordered and not yet arrived, per SKU; a SKU with nothing in transit is absent.
+
+        Summed with ``math.fsum`` over the outstanding orders rather than kept as a running total,
+        so a SKU whose orders have all landed reads exactly nothing -- never a floating-point
+        residue of additions and subtractions that an inventory-position rule would act on.
+        """
+        return {sku: math.fsum(orders.values()) for sku, orders in self._outstanding.items()}
+
+    @property
+    def arrived_orders(self) -> tuple[ArrivedOrder, ...]:
+        """Every supplier order that has landed, in arrival order."""
+        return tuple(self._arrived)
+
+    @property
+    def supplier_lead_time_history(self) -> dict[str, tuple[float, ...]]:
+        """Realised lead times per declared supplier, in arrival order; ``{}``, structure 3 off.
+
+        Only LANDED orders appear: an order in transit has no realised lead time yet, and a
+        promised one in this record would hand an arm the future.
+        """
+        path = self._lead_time_path
+        if path is None:
+            return {}
+        history: dict[str, list[float]] = {supplier: [] for supplier in path.suppliers}
+        for order in self._arrived:
+            history[order.supplier].append(order.lead_time_min)
+        return {supplier: tuple(times) for supplier, times in history.items()}
+
+    @property
+    def demand_to_date(self) -> dict[str, int]:
+        """Demand events generated so far this run, per SKU (counted as recorded; no draws)."""
+        return dict(self._demand_to_date)
+
+    @property
+    def start_weekday(self) -> int | None:
+        """The weekday this run's hour 0 falls on (0 = Monday); ``None`` with structure 1 off."""
+        return self._start_weekday
+
+    @property
+    def sku_supplier(self) -> dict[str, str]:
+        """Which supplier each SKU is ordered from; ``{}`` with structure 3 off."""
+        return dict(self._supply.sku_supplier) if self._supply is not None else {}
 
     def _init_env(self) -> simpy.Environment:
         if self._seed is not None:
@@ -476,7 +715,7 @@ class SupplyChainSimulation:
             sku = self._draw_demanded_sku()
             if sku is not None:
                 # task 9.5: recorded AS GENERATED, before any fulfilment outcome is known.
-                self._demand_trace.record(float(env.now), sku)
+                self._record_demand(float(env.now), sku)
             env.process(self._pick_pack_dispatch(env, order_id, sku))
 
     def _pick_pack_dispatch(
@@ -629,6 +868,9 @@ class SupplyChainSimulation:
             self._inventory = {f"sku_{i}": 100.0 for i in range(10)}
         else:
             self._inventory = {sku: float(level) for sku, level in initial_inventory.items()}
+        if self._supply is not None:
+            # task 13.1: refused before any process exists, so a refused run never ticks.
+            self._refuse_unsupplied_stock(self._supply)
         self._freshness = {sku: 1.0 for sku in self._inventory}
         self._order_seq = 0
         # tasks 9.3 / 9.5: reset the integral and the trace with the rest of the
@@ -637,6 +879,11 @@ class SupplyChainSimulation:
         # did not hold it.
         self._demand_trace = DemandTrace()
         self._last_accrual_min = 0.0
+        # task 13.1: a supplier order belongs to the env that scheduled it, so none survives a
+        # restart -- one carried across would never land and would sit in `on_order` forever.
+        self._demand_to_date = {}
+        self._outstanding = {}
+        self._arrived = []
         env = self._init_env()
         if not external_demand:
             env.process(self._order_arrival(env))

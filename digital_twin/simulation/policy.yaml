@@ -17,6 +17,11 @@
 #    RUNNING IT (`scripts/audit/pin_extractor_truth.py`, task 8.3). A pin whose extractor
 #    resolves to nothing compares `None` to `None`, and two absent values agree -- a pin
 #    that compares nothing reports green.
+#    THE STATED LIMIT OF THIS CONTRACT (session 11, task 13.1). Section 5's values are stated
+#    ONLY in this file, and its lists -- the demand profiles, the supplier roster, the cell
+#    grid -- carry no doc pin because no document restates them: a pin guards a SECOND copy
+#    of a number and here there is none (one document per fact). ADR-055 D2.8 refers to
+#    them by key, never by value; a document that starts restating one owes its pin then.
 # 3. A value is committed BEFORE the run judged against it. Several values are deliberately
 #    committed only after a first measuring run reports a distribution (R5.2 says so in its
 #    own text; R5.19 inherits the pattern). Committed-after-measurement is not
@@ -434,21 +439,22 @@ deferred:
     times. Property 56 reads them from here and states no value of its own. Owner: task 12.4.
 
   demand_intensity: >-
-    The intra-day, day-of-week and promotion shapes (R5.11, R5.12) are CALIBRATED from
-    `data_fabric/ingest/m5.py::extract_statistics`, not invented. NOTE THE CONSTRAINT
-    ALREADY DISCOVERED: M5's observation columns are DAILY totals, so the intra-day shape
-    is NOT derivable from that feed and `extract_statistics` reports it `unavailable`
-    naming the granularity gap. Task 12.1 must source the intra-day shape elsewhere and
-    record where; it must not invent a curve, which is precisely what R5.11 forbids.
-    Owner: task 12.1.
+    COMMITTED IN SECTION 5 (`world.structure_1`), session 11, as a DECLARED shape with
+    research provenance, flagged `chosen` -- NOT a calibration. R5.11 is re-cut by operator
+    decision 1=a: no real feed is admitted (M5 declined; its observation columns are DAILY
+    totals in any case, so no intra-day shape was ever derivable from it), so the shape is
+    declared and B-prime reports the result across an amplitude sweep instead of claiming a
+    calibration. The key stays here so the change of basis stays visible. Owner: task 12.1.
 
   substitution_fraction: >-
     The fraction of a zero-stock demand event diverted to declared substitutes, plus the
     per-SKU substitute sets (R5.27). Owner: task 13.3.
 
   supplier_roster: >-
-    Named suppliers and the lead-time demand-correlation and day-autocorrelation
-    coefficients (R5.21, R5.22, R5.23). Owner: task 13.1.
+    COMMITTED IN SECTION 5 (`world.structure_3`), session 11: the named suppliers, their
+    lead-time means and log-sds, and the demand-coupling and day-autocorrelation coefficients
+    (R5.21, R5.22, R5.23), DECLARED with research provenance and flagged `chosen` (operator
+    decisions 1=a and Q3=c). Owner: task 13.1.
 
   spoilage_coefficients: >-
     Age-at-arrival and order-size coefficients (R5.25, R5.26). Owner: task 13.3.
@@ -456,3 +462,93 @@ deferred:
     increments per SKU per tick, so today's ratio is a tick count, not a spoiled-units
     fraction. Any document comparing a pre-E2c value with a post-E2c one must say they
     measure different quantities.
+
+
+# =======================================================================================
+# 5. The world structures (ADR-055 D2.8; session-11 re-cut of R5.8-R5.14 and R5.21-R5.23)
+# =======================================================================================
+# Read ONLY by `digital_twin/simulation/world.py::load_world`, which refuses -- naming the
+# key -- a missing value, a value breaking a rule, and an UNKNOWN key (a typo such as
+# `amplitude_scal` would otherwise run a cell unscaled and say nothing). NO RUN READS THIS
+# YET: `uplift/harness.py::_build_twin` passes no world, so every measured number is still
+# HEAD's world. Capability is not use.
+#
+# EVERY VALUE BELOW IS DECLARED, NOT CALIBRATED (operator decision 1=a: no real feed is
+# admitted), and each block's `provenance` names the research it was chosen from (session 11).
+# Changing a value is a data edit that changes its provenance in the same commit.
+#
+# Structure 1 -- WHEN demand arrives: intensity(t) = hourly[h] * weekday[d] * promotions,
+# h the hour of day (index 0 = 00:00-01:00) and d the weekday (index 0 = Monday). Each
+# profile's mean is EXACTLY one over its stated decimals (checked with fractions.Fraction),
+# so over any whole week the two profiles move demand around and ADD NONE. Promotions DO add
+# volume: multiplier > 1 by rule. Hour 0 of a seeded run falls on weekday `seed % 7`.
+#
+# Structure 3 -- HOW LONG an order takes, in minutes: per supplier a lognormal daily lead
+# time with the stated mean and log-sd, AR(1) across days, stretched in busy hours by
+# 1 + demand_coupling * (intensity - 1) floored at coupling_floor, never below
+# min_lead_time_min. It applies where arms order (`place_order`), not in the engine's own
+# `_restock` loop, which the comparator switches off (finding 66).
+#
+# Cells -- the experiment grid. `primary` runs both structures; each scale cell moves one
+# lever: lead_time_scale multiplies every supplier mean, and amplitude_scale k moves every
+# profile value p to 1 + k * (p - 1) (the mean stays exactly one; positive for 0 < k <= 1).
+world:
+  structure_1:
+    provenance: >-
+      chosen (operator decision 1=a: no feed admitted), researched session 11: evening peak,
+      late-evening tail and night trough per Gerum et al. 2026 arXiv:2607.06816 (27 dark
+      stores) and Swiggy Instamart / Flipkart Minutes timing statements; hour-to-mean ratios
+      anchored on Instacart 2017 aggregates (non-commercial terms: ratios cited, no data
+      copied); weekend/weekday 1.20, inside Instacart's 1.11-1.33; promotion x1.5 is the
+      Bijmolt et al. 2005 mean elasticity -2.62 at a ~14% cut. Night values are latent
+      demand of a 24 h store. Record: SESSION_PROTOCOL progress ledger, session 11.
+    # Index 0 = 00:00-01:00; twelve hours per line. Sums to exactly 24.000; minimum 0.100.
+    hourly: [0.570, 0.300, 0.180, 0.100, 0.100, 0.200, 0.450, 0.850, 1.250, 1.400, 1.350, 1.200,
+             1.100, 1.050, 1.000, 1.000, 1.100, 1.300, 1.550, 1.800, 1.900, 1.750, 1.450, 1.050]
+    # Monday first: Mon, Tue, Wed, Thu, Fri, Sat, Sun. Sums to exactly 7.000.
+    weekday: [0.940, 0.920, 0.920, 0.930, 1.020, 1.140, 1.130]
+    promotions:
+      - {weekday: 4, start_hour: 19, hours: 3, multiplier: 1.5}  # Friday 19:00-22:00
+    start_weekday_rule: seed_mod_7
+  structure_3:
+    provenance: >-
+      chosen (operator decision 1=a), researched session 11: means 4/6/8 h inside the 4-13 h
+      band implied by once-to-several-daily hub dispatch (MetricsCart 2025; ET Edge 2026);
+      lognormal per Buechel & Corman 2020, log-sd 0.3-0.5 with no published dark-store CV;
+      daily autocorrelation 0.1 per Michna, Nielsen & Nielsen 2015 (one manufacturer,
+      measured; inert at the 24 h horizon, finding 75); demand coupling 0.3 is direction-only
+      evidence (ISM delivery index; Pahl, Voss & Woodruff 2007). Record: SESSION_PROTOCOL
+      progress ledger, session 11.
+    suppliers:
+      sup_a: {mean_lead_time_min: 240, log_sd: 0.30}
+      sup_b: {mean_lead_time_min: 360, log_sd: 0.40}
+      sup_c: {mean_lead_time_min: 480, log_sd: 0.50}
+    sku_supplier:
+      sku_0: sup_a
+      sku_1: sup_b
+      sku_2: sup_c
+      sku_3: sup_a
+      sku_4: sup_b
+      sku_5: sup_c
+      sku_6: sup_a
+      sku_7: sup_b
+      sku_8: sup_c
+      sku_9: sup_a
+    daily_autocorrelation: 0.1
+    demand_coupling: 0.3
+    coupling_floor: 0.5
+    min_lead_time_min: 30
+  cells:
+    provenance: >-
+      chosen: primary = both structures at the declared values; lead-time sweep x0.5 / x1.5
+      (x1.5 gives 6/9/12 h, the once-daily dispatch band; finding 75); amplitude sweep
+      k = 0.25 / 0.5 (k > 1 would push hourly values below the 0.100 floor).
+    off_off: {structure_1: false, structure_3: false}
+    s3_only: {structure_1: false, structure_3: true}
+    s1_only: {structure_1: true, structure_3: false}
+    primary: {structure_1: true, structure_3: true}
+    lead_time_low: {structure_1: true, structure_3: true, lead_time_scale: 0.5}
+    lead_time_high: {structure_1: true, structure_3: true, lead_time_scale: 1.5}
+    amplitude_quarter: {structure_1: true, structure_3: true, amplitude_scale: 0.25}
+    amplitude_half: {structure_1: true, structure_3: true, amplitude_scale: 0.5}
+  primary_cell: primary

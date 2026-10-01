@@ -104,6 +104,20 @@ _shock_st = st.one_of(
     ),
 )
 
+# decision-quality-proof task 13.1 appended five Observation fields, and Par_Level_Reorder now
+# reads one of them (``on_order``). Drawn here so "fully-populated" and "every field a baseline
+# might read" stay true of this strategy.
+_units_st = st.floats(min_value=0.0, max_value=1e6, allow_nan=False, allow_infinity=False)
+_on_order_st = st.dictionaries(keys=_sku, values=_units_st, max_size=6)
+_lead_time_history_st = st.dictionaries(
+    keys=_sku, values=st.lists(_units_st, max_size=3).map(tuple), max_size=3
+)
+_demand_to_date_st = st.dictionaries(
+    keys=_sku, values=st.integers(min_value=0, max_value=1_000_000), max_size=6
+)
+_sku_supplier_st = st.dictionaries(keys=_sku, values=_sku, max_size=6)
+_start_weekday_st = st.one_of(st.none(), st.integers(min_value=0, max_value=6))
+
 
 @st.composite
 def _observation_st(draw: st.DrawFn) -> Observation:
@@ -118,6 +132,11 @@ def _observation_st(draw: st.DrawFn) -> Observation:
         active_shock=draw(_shock_st),
         pending_order=draw(_order_st),
         eligible_stores=draw(_stores_st()),
+        on_order=draw(_on_order_st),
+        supplier_lead_time_history=draw(_lead_time_history_st),
+        demand_to_date=draw(_demand_to_date_st),
+        sku_supplier=draw(_sku_supplier_st),
+        start_weekday=draw(_start_weekday_st),
     )
 
 
