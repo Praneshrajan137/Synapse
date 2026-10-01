@@ -530,7 +530,6 @@ describe("Property 31: Degradation is rendered wherever degraded data is shown",
   });
 });
 
-
 /**
  * Feature: decision-quality-proof, Property 75: The console renders degradation on every
  * surface displaying the agent's output
