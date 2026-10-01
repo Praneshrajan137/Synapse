@@ -88,7 +88,12 @@ export interface BudgetResolution {
  */
 export function resolveBudget(requested: string | undefined | null): BudgetResolution {
   const raw = requested ?? null;
-  const known = raw === null ? undefined : PROFILE_NUM_RUNS[raw];
+  // OWN keys only. `PROFILE_NUM_RUNS[raw]` alone walks the prototype chain, so "valueOf",
+  // "toString" or "constructor" resolved as RECOGNISED profiles whose budget was a function:
+  // Property 42 found `"valueOf"` at run 36827018596 (sha 1ebb93e). Repaired here, at the
+  // resolver; the property's `Object.hasOwn` reading was already the correct one (R2.10).
+  const known =
+    raw !== null && Object.hasOwn(PROFILE_NUM_RUNS, raw) ? PROFILE_NUM_RUNS[raw] : undefined;
   if (known === undefined) {
     const fallback = PROFILE_NUM_RUNS[FALLBACK_PROFILE];
     // `FALLBACK_PROFILE` is a key of the frozen table above, so this branch is
