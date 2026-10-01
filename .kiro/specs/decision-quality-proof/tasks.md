@@ -82,7 +82,10 @@ literal `max_examples=` or a per-call `numRuns`** — that is what amplified the
 incident, and CF-13 records that the tree already carries more violations than the steering
 file states.
 
-**Properties: 38-79.** Each gets its own sub-task, tagged
+**Properties: ~~38-79~~ 38-95.** *[CORRECTED 2026-09-29 (finding 72): 38-81 are landed, in
+flight or deferred in place; 82-95 are declared by the session-11 re-cut -- 82-86 renumber the
+design's former 61-65 and 87-95 are new. Task 15.4 carries the mapping; the phase split below
+names 38-79 only.]* Each gets its own sub-task, tagged
 `# Feature: decision-quality-proof, Property {N}: {title}`. Properties 38-59 land in phases 0-2;
 properties 60-79 land in phases 3-5. Properties **68** and **69** belong to E4a's subject but are
 numbered inside E4's block, so they land in task 19 rather than task 7 — task 7.5 carries unit
@@ -1139,7 +1142,7 @@ tests in the interim, and that is a stated sequencing gap, not an omission.
     - Budget inherited from the profile.
     - _Requirements: 5.36_
 
-- [ ] 10. E2b — measure `(s, S)` regret on the unmodified twin, and try to kill Finding 4
+- [x] 10. E2b — measure `(s, S)` regret on the unmodified twin, and try to kill Finding 4
   - **This task is sequenced here deliberately, to attempt to falsify this spec's central
     claim before the project builds on it.** Finding 4 is *analytical, not measured*: it rests
     on reading `engine.py` plus inventory theory, and it is recorded as *plausible but
@@ -2114,6 +2117,16 @@ tests in the interim, and that is a stated sequencing gap, not an omission.
     never having looked (I-7). ADR-055 is committed (8.1); E4a's statistics exist (7.4).
 
   - [ ] 12.1 Structure 1 — non-stationary demand calibrated from the real feed
+    - **RE-SCOPED 2026-09-29 (session-11 plan, operator-approved).** R5.11 is re-cut by decision
+      1=a: the shape is DECLARED in `digital_twin/simulation/policy.yaml` `world.structure_1`,
+      flagged `chosen` with research provenance, each profile normalised to mean EXACTLY one
+      (Property 91; the reader refuses otherwise) and swept by B-prime's amplitude cells. No real
+      feed is admitted (M5 declined). Arrivals come from exact time-rescaling over the
+      piecewise-constant intensity (Property 93), so structure 1 changes demand's SHAPE and never
+      its whole-week volume; only a declared promotion adds volume. The start weekday is derived
+      from the seed. Property 55 (slow) stands as before.
+      - Demo: with structure 1 off, KPI vectors for sampled seeds equal HEAD's to every digit.
+    - Text below is retained as the record; where it conflicts with the re-scope above, the re-scope governs.
     - Files: `digital_twin/simulation/engine.py`,
       `digital_twin/simulation/policy.yaml`
     - **Path corrected before session 2 could act on it.** This sub-task declared
@@ -2139,6 +2152,7 @@ tests in the interim, and that is a stated sequencing gap, not an omission.
     - _Requirements: 5.8, 5.9, 5.10, 5.11_
 
   - [ ] 12.3 Structure 2 — a finite rider pool and finite pick stations that queue
+    - deferred: structures 2/4/5 deferred by the R5.4 re-cut; none introduces a replenishment delay (ADR-055 D2.7)
     - File: `digital_twin/simulation/engine.py`
     - *Unlocks `routing_navigator` and dispatch prioritisation: with infinite capacity,
       dispatch policy is a no-op.* `git grep
@@ -2169,6 +2183,7 @@ tests in the interim, and that is a stated sequencing gap, not an omission.
     - _Requirements: 5.15, 5.16, 5.17, 5.20_
 
   - [ ] 12.4 Write property test for the utilisation-wait relationship
+    - deferred: structures 2/4/5 deferred by the R5.4 re-cut; none introduces a replenishment delay (ADR-055 D2.7)
     - `# Feature: decision-quality-proof, Property 56: Wait time is non-decreasing in utilisation and its increments rise in the declared band`
     - File: `digital_twin/tests/test_utilisation_wait_property.py`
     - The ladder levels and the near-saturation band boundaries are read from the task 8.2
@@ -2188,6 +2203,45 @@ tests in the interim, and that is a stated sequencing gap, not an omission.
     disposition block and ADR-055 **D2.7** carry it.
 
   - [ ] 13.1 Structure 3 — correlated lead times and observable supplier state
+    - **RE-SCOPED 2026-09-29 (session-11 plan, operator-approved).** The delay lives on the
+      ORDER-PLACEMENT path every measured arm uses, not in `_restock` (finding 66). Obligations:
+      - `SupplyChainSimulation.place_order(sku, qty)` schedules arrival at the lead-time path's
+        arrival time; with structure 3 off it calls `add_stock` synchronously and schedules
+        nothing.
+      - One lead-time path per supplier -- daily AR(1) on the log scale, coupled to the DECLARED
+        demand intensity at placement, times the shock multiplier, non-crossing by running
+        maximum -- drawn once per seed from the `restock` substream, identical for every arm
+        (common random numbers) and readable by the hindsight arm.
+      - `Observation` gains `on_order`, `supplier_lead_time_history` (arrived orders only),
+        `demand_to_date`, `sku_supplier` and `start_weekday`, each defaulting to empty/None.
+      - `Par_Level_Reorder` orders on inventory position (decision Q1=a, edited in its owning
+        spec's file; finding 67).
+      - Values live in `world.structure_3`, flagged `chosen`. Properties 89, 90 and 91.
+      - Demo: with structure 3 off, KPI vectors for sampled seeds equal HEAD's to every digit.
+    - **FINDING 66 (session-11 review, read not measured unless stated).** Every measured arm
+      restocks through the instantaneous `add_stock` (engine.py:415) with the endogenous loop
+      off (harness.py:214); `_lead_time_mult` is read only inside that loop (engine.py:575), so
+      the adversarial scenarios' lead-time shocks reach no measured path, and design E2c.3 put
+      structure 3 in the same switched-off loop. The engine line numbers are the review
+      revision's; wave 1's engine edits moved them (`add_stock` now :487, the `_restock` read
+      now :814; read 2026-09-29).
+    - **FINDING 67 (session-11 review, read not measured unless stated).**
+      `Par_Level_Reorder.decide` reorders from on-hand stock only and `Observation` has no
+      on-order field, so under any delay every `(s, S)` arm over-orders the pipeline.
+    - **FINDING 75 (session-11 review, read not measured unless stated).** At the 24 h horizon
+      the daily AR(1) coefficient is inert -- a replicate spans one simulated day, so each
+      supplier draws ONE day state; the within-day persistence it creates is what makes realised
+      history informative. Declared primary lead times stay 4/6/8 h because a once-daily 13 h
+      mean would put the slowest supplier's first arrival past half the horizon, an initial
+      transient no policy can influence (derived); the high cell (x1.5 -> 6/9/12 h) reaches the
+      once-daily band. Research provenance: the session-11 research record in
+      `SESSION_PROTOCOL.md`'s progress ledger.
+    - **FINDING 78 (read, not measured).** Non-crossing arrivals hold at a constant shock
+      multiplier only; a mid-run `inject_shock` changes the multiplier and can reorder arrivals
+      (only by LOWERING it; a mid-run `set_policy(lead_time_mult=...)` is the same path).
+      Documented in `lead_time.py`, not repaired, because repairing it would make arrivals
+      depend on order history (breaking common random numbers).
+    - Text below is retained as the record; where it conflicts with the re-scope above, the re-scope governs.
     - Files: `digital_twin/simulation/engine.py`, `digital_twin/world/runtime.py`
     - *Unlocks `supplier_trust` and `inventory_sentinel` safety-stock decisions: under i.i.d.
       lead times a static safety stock is optimal.* `_restock` currently draws
@@ -2206,6 +2260,7 @@ tests in the interim, and that is a stated sequencing gap, not an omission.
     - _Requirements: 5.21, 5.22, 5.23_
 
   - [ ] 13.3 Structures 4 and 5 — perishability coupling and substitution
+    - deferred: structures 2/4/5 deferred by the R5.4 re-cut; none introduces a replenishment delay (ADR-055 D2.7)
     - File: `digital_twin/simulation/engine.py`
     - *Unlocks `freshness_guardian` and `pricing_oracle`, and creates the multi-objective
       tension.* `_spoilage` currently applies `decay_rate = 0.01 * spoilage_rate_multiplier`
@@ -2229,6 +2284,7 @@ tests in the interim, and that is a stated sequencing gap, not an omission.
     - _Requirements: 5.25, 5.26, 5.27_
 
   - [ ] 13.4 Write property test for spoilage coupling and the substitution channel
+    - deferred: structures 2/4/5 deferred by the R5.4 re-cut; none introduces a replenishment delay (ADR-055 D2.7)
     - `# Feature: decision-quality-proof, Property 58: Spoilage rises with age and order size, and a stockout diverts the declared substitution fraction`
     - File: `digital_twin/tests/test_spoilage_substitution_property.py`
     - `@pytest.mark.slow`; selected by `ci.yml::uplift-verify`'s slow step.
@@ -2236,6 +2292,7 @@ tests in the interim, and that is a stated sequencing gap, not an omission.
     - _Requirements: 5.25, 5.26, 5.27_
 
   - [ ] 13.5 Implement the four single-objective policies and interval-aware Pareto dominance
+    - deferred: superseded by R5.45 (conflict R resolved by supersession): checkpoint B-prime tests the information ceiling, not Pareto membership (task 14)
     - Files: `uplift/single_objective_arms.py` (new), `uplift/pareto.py` (new)
     - The four policies: minimise `stockout_rate`; minimise `spoilage_rate`; minimise the
       R5.40 on-hand measure; minimise `avg_delivery_time_min`. (R5.28 as originally written
@@ -2253,6 +2310,7 @@ tests in the interim, and that is a stated sequencing gap, not an omission.
     - _Requirements: 5.28, 5.29_
 
   - [ ] 13.6 Write property test for interval-aware Pareto dominance
+    - deferred: superseded by R5.45 (conflict R resolved by supersession): checkpoint B-prime tests the information ceiling, not Pareto membership (task 14)
     - `# Feature: decision-quality-proof, Property 59: Interval-aware Pareto dominance is correct and excludes the single-objective set`
     - File: `tests/uplift/test_pareto_dominance_property.py`
     - Budget inherited from the root `conftest.py` profile.
@@ -2260,6 +2318,23 @@ tests in the interim, and that is a stated sequencing gap, not an omission.
     - _Requirements: 5.28, 5.29_
 
   - [ ] 13.7 Wire E2c's comparative measurements into CI
+    - **RE-SCOPED 2026-09-29 (session-11 plan, operator-approved).** Wire the B-prime factorial:
+      `uplift.yml::twin-regret` becomes a matrix over the eight `world.cells`, one artifact per
+      cell, under `set -o pipefail`.
+      - Six arms: A no-op; B incumbent; C retired foresight, routed through `place_order`; D
+        hindsight, generalised to read the lead-time path; E tuned static, RE-DERIVED per cell
+        (grid by committed rule from lead-time-plus-review demand, incumbent included,
+        deterministic local refinement, split refused on a search-box boundary or on
+        non-convergence); O structure-aware base-stock (16.1).
+      - Report B - D = (B - E) + (E - O) + (O - D), exact over `Fraction`, each term with its
+        interval (R5.46).
+      - Add a label-triggered `uplift-cost-probe` job that measures seconds per consensus
+        decision by tier (finding 70).
+      - Declarations and `gate_surface --write` land in the same commit.
+      - The four measurements named below are superseded: R5.13 is the primary cell's split;
+        R5.18/R5.19 stay deferred with structure 2; R5.24 is judged on the scalar objective
+        (O vs E); R5.28 is superseded by R5.45.
+    - Text below is retained as the record; where it conflicts with the re-scope above, the re-scope governs.
     - Files: `.github/workflows/uplift.yml`,
       `infrastructure/quality/blocking-steps.yaml`
     - Four measurements, each a category-4 workload and each CI-only (R5.32): `(s, S)` regret
@@ -2273,7 +2348,21 @@ tests in the interim, and that is a stated sequencing gap, not an omission.
     - _Requirements: 5.13, 5.14, 5.18, 5.19, 5.24, 5.28, 5.32_
 
 - [ ] 14. Checkpoint — is consensus provably unnecessary?
-  - discharge: uplift.yml, task 13.7's E2c measurement steps (checkpoint B)
+  - discharge: uplift.yml::twin-regret (the B-prime factorial wired by task 13.7)
+  - Re-pointed 2026-09-29; formerly uplift.yml, task 13.7's E2c measurement steps (checkpoint B).
+  - **RE-SCOPED 2026-09-29 (session-11 plan, operator-approved).** CHECKPOINT B-PRIME: R5.45
+    applied to ONE pre-registered primary cell (`world.primary_cell`).
+    - PASS iff the information-ceiling interval (E - D) lies entirely above the committed `0.40`
+      margin.
+    - Below it, or straddling it: record "no room to win at the declared structure", defer
+      E3/E5 BY MEASUREMENT, and run only task 25's null write-up and 24.2's regeneration.
+    - The seven other cells are descriptive and cannot be promoted by a session; only a recorded
+      operator decision before any E5 run can promote one.
+    - Conflict R is resolved by supersession: R5.28/R5.29 are replaced by R5.45.
+    - Predictions P1-P5 are written into THIS body before the label is added.
+  - **PRE-REGISTRATION (written before the B-prime label)**
+    - pending
+  - Text below is retained as the record; where it conflicts with the re-scope above, the re-scope governs.
   - Ensure all tests pass, ask the user if questions arise.
   - **HELD under the disposition recorded at task 12: this checkpoint is downstream of E2c and
     moves with it.**
@@ -2447,7 +2536,15 @@ tests in the interim, and that is a stated sequencing gap, not an omission.
     - _Requirements: 6.13, 7.14_
 
   - [ ] 15.4 Write property test for the interval-carrying artifact's canonical form
-    - `# Feature: decision-quality-proof, Property 61: An interval-carrying artifact round-trips canonically and leaves the aggregate digest unchanged`
+    - `# Feature: decision-quality-proof, Property 82: An interval-carrying artifact round-trips canonically and leaves the aggregate digest unchanged`
+    - **FINDING 72 (session-11 review, read not measured unless stated).** Properties 61-64 are
+      already held by landed files: `tests/uplift/test_regret_comparator_admissibility_property.py`
+      (61), `tests/uplift/test_regret_decomposition_property.py` (62),
+      `tests/verify/test_census_harvest_property.py` (63) and
+      `tests/uplift/test_service_term_identity_property.py` (64). The not-yet-landed leaves are
+      therefore renumbered: 15.4 61 -> 82, 15.6 62 -> 83, 16.5 63 -> 84, 16.6 64 -> 85 and
+      17.4 65 -> 86 (65 is held by no landed file and moves with its block). New properties this
+      plan adds are 87-95.
     - File: `tests/uplift/test_interval_artifact_roundtrip_property.py`
     - The digest clause is the load-bearing half: it is what proves AD-15's affordability claim
       rather than assuming it.
@@ -2480,7 +2577,7 @@ tests in the interim, and that is a stated sequencing gap, not an omission.
     - _Requirements: 6.14_
 
   - [ ] 15.6 Write property test for comparator resolution
-    - `# Feature: decision-quality-proof, Property 62: A named comparator is never pooled, and an oracle-role arm is never absorbed`
+    - `# Feature: decision-quality-proof, Property 83: A named comparator is never pooled, and an oracle-role arm is never absorbed`
     - File: `tests/uplift/test_named_comparator_property.py`
     - Budget inherited from the root `conftest.py` profile.
     - Locus: `ci.yml::uplift-verify` fast step.
@@ -2499,6 +2596,17 @@ tests in the interim, and that is a stated sequencing gap, not an omission.
     `UpliftProvenance.arms` and C60 are all arm-count agnostic.
 
   - [ ] 16.1 Implement the Oracle_Arm as the analytically optimal policy for the injected structure
+    - **RE-SCOPED 2026-09-29 (session-11 plan, operator-approved).** The Oracle_Arm is arm O,
+      `uplift/oracle_arm.py`: a `DecisionPolicy` that reads only the `Observation` and the
+      declared structure, ordering up to the critical-ratio quantile of Poisson demand over
+      `[t, t + L_hat + R]` on inventory position -- lambda from the declared profile, `L_hat`
+      from the supplier's arrived history, the ratio from the committed weights and
+      normalisers; stdlib `math` only. Property 92.
+      - It is B-prime's third arm (E - O = achievable information value) and E3's
+        positive-control arm against E.
+      - No closed-form optimum exists for lost sales with a lead time, so R6.3's "analytic
+        optimum" is re-cut to cross-instrument agreement (16.4).
+    - Text below is retained as the record; where it conflicts with the re-scope above, the re-scope governs.
     - File: `uplift/oracle_arm.py` (new)
     - Registers with `arm_role="oracle"`, so task 15.5's pooling refusal keeps it out of the
       baseline and a failed oracle replicate cannot mark the consensus contrast incomplete.
@@ -2540,6 +2648,18 @@ tests in the interim, and that is a stated sequencing gap, not an omission.
     - _Requirements: 6.15_
 
   - [ ] 16.4 Implement control classification by interval position
+    - **RE-SCOPED 2026-09-29 (session-11 plan, operator-approved).**
+      - Negative control: arm E against itself on DISJOINT seed sets paired by index (finding
+        69), 20 repetitions (ADR-055 D6), proven-gain rate <= 0.20.
+      - Positive control: O against E, interval entirely above 0.
+      - Mis-measurement: the harness's measured O - E disagrees with the comparator's
+        independently measured E - O (the interval on their difference excludes 0), or exceeds
+        the ceiling E - D. Reported as the harness mis-measuring, never as the oracle
+        under-performing.
+    - **FINDING 69 (session-11 review, read not measured unless stated).** Two identical
+      deterministic arms on identical seeds give byte-identical KPIs, so every paired difference
+      is 0 and the interval is [0, 0]; the A/A as written cannot fail (derived).
+    - Text below is retained as the record; where it conflicts with the re-scope above, the re-scope governs.
     - File: `uplift/controls.py` (new)
     - Negative control: the interval **contains** zero. Positive control: the interval **lies
       entirely above** zero — not "excludes zero", which an interval entirely *below* zero also
@@ -2551,7 +2671,7 @@ tests in the interim, and that is a stated sequencing gap, not an omission.
     - _Requirements: 6.1, 6.2, 6.4, 6.14, 6.15_
 
   - [ ] 16.5 Write property test for control classification and the repetition rate
-    - `# Feature: decision-quality-proof, Property 63: Controls classify by interval position, and the repetition rate matches the committed alpha`
+    - `# Feature: decision-quality-proof, Property 84: Controls classify by interval position, and the repetition rate matches the committed alpha`
     - File: `tests/uplift/test_control_classification_property.py`
     - `@pytest.mark.slow`. Selected by **`ci.yml::uplift-verify`'s slow step**, whose path list
       already collects `tests/uplift` and whose selector is `-m "slow"` at
@@ -2561,13 +2681,17 @@ tests in the interim, and that is a stated sequencing gap, not an omission.
     - _Requirements: 6.1, 6.2, 6.15_
 
   - [ ] 16.6 Write property test for the oracle tolerance verdict
-    - `# Feature: decision-quality-proof, Property 64: An out-of-tolerance oracle effect is a mis-measurement, never under-performance`
+    - `# Feature: decision-quality-proof, Property 85: An out-of-tolerance oracle effect is a mis-measurement, never under-performance`
     - File: `tests/uplift/test_oracle_tolerance_property.py`
     - Budget inherited from the root `conftest.py` profile.
     - Locus: `ci.yml::uplift-verify` fast step.
     - _Requirements: 6.3, 6.4_
 
   - [ ] 16.7 Add the `uplift-controls` job and its declarations in one commit
+    - **RE-SCOPED 2026-09-29 (session-11 plan, operator-approved).** The job is label-triggered
+      (`measure-uplift-controls`), runs in the primary cell's world, and writes three artifacts:
+      negative, positive and agreement.
+    - Text below is retained as the record; where it conflicts with the re-scope above, the re-scope governs.
     - Files: `.github/workflows/uplift.yml`,
       `infrastructure/quality/blocking-steps.yaml`,
       `infrastructure/quality/required-checks.yaml`
@@ -2603,6 +2727,10 @@ tests in the interim, and that is a stated sequencing gap, not an omission.
     - _Requirements: 6.5, 6.6, 6.8_
 
   - [ ] 17.2 Make the replicate floor a floor, and move its pin in the same change
+    - **RE-SCOPED 2026-09-29 (session-11 plan, operator-approved).** Denominated against the
+      re-derived tuned control E of the primary cell (R5.44 as re-cut) -- not the incumbent, and
+      not the unmodified-twin instance `s=20, S=30`.
+    - Text below is retained as the record; where it conflicts with the re-scope above, the re-scope governs.
     - Files: `uplift/uplift_floor.py`, `tests/uplift/test_uplift_floor_data_gate.py`
     - A derived requirement **greater than** `MIN_POWERED_REPLICATES` replaces that constant
       (R6.9). In the same change, convert
@@ -2626,13 +2754,14 @@ tests in the interim, and that is a stated sequencing gap, not an omission.
     - _Requirements: 6.7_
 
   - [ ] 17.4 Write property test for the Power_Report's contract
-    - `# Feature: decision-quality-proof, Property 65: The Power_Report is monotone, distinct in kind, revision-bound and floor-respecting`
+    - `# Feature: decision-quality-proof, Property 86: The Power_Report is monotone, distinct in kind, revision-bound and floor-respecting`
     - File: `tests/uplift/test_power_report_property.py`
     - Budget inherited from the root `conftest.py` profile.
     - Locus: `ci.yml::uplift-verify` fast step.
     - _Requirements: 6.5, 6.6, 6.7, 6.8, 6.9, 6.16_
 
   - [ ] 17.5 Make the ratchet read the interval's lower bound
+    - deferred: only act when C60 can pass; C60 cannot reach proven in CI because fidelity is unknown by operator decision 1=a (finding 71, requirements R7)
     - Files: `uplift/uplift_floor.py`,
       `tests/uplift/test_uplift_floor_monotonic_ratchet_property.py`
     - `PoweredProof.from_payload` reads `headline_uplift`, `incomplete`, a top-level
@@ -2650,6 +2779,7 @@ tests in the interim, and that is a stated sequencing gap, not an omission.
     - _Requirements: 7.12_
 
   - [ ] 17.6 Write property test for the ratchet's source value
+    - deferred: only act when C60 can pass; C60 cannot reach proven in CI because fidelity is unknown by operator decision 1=a (finding 71, requirements R7)
     - `# Feature: decision-quality-proof, Property 66: The floor ratchets to the interval's lower bound, never the point estimate`
     - File: `tests/uplift/test_ratchet_lower_bound_property.py`
     - Budget inherited from the root `conftest.py` profile.
@@ -2657,6 +2787,7 @@ tests in the interim, and that is a stated sequencing gap, not an omission.
     - _Requirements: 7.12_
 
   - [ ] 17.7 Report a proof older than the code it measured, on the pull request that ages it
+    - deferred: operator decision 3=d: the one published claim is regenerated in the job that judges it (--require-fresh-run)
     - Files: `scripts/audit/uplift_staleness_truth.py` (new),
       `scripts/audit/verify_claims.py` (`@register`), `.github/workflows/ci.yml`
     - A pull request touching `uplift/`, `scripts/audit/uplift_truth.py` or
@@ -2669,6 +2800,7 @@ tests in the interim, and that is a stated sequencing gap, not an omission.
     - _Requirements: 7.16_
 
   - [ ] 17.8 Write property test for staleness reporting
+    - deferred: operator decision 3=d: the one published claim is regenerated in the job that judges it (--require-fresh-run)
     - `# Feature: decision-quality-proof, Property 67: A recorded proof older than the code it measured is reported stale`
     - File: `tests/verify/test_uplift_proof_staleness_property.py`
     - Budget inherited from the root `conftest.py` profile.
@@ -2676,6 +2808,7 @@ tests in the interim, and that is a stated sequencing gap, not an omission.
     - _Requirements: 7.16_
 
   - [ ] 17.9 Declare the `is_proven_uplift` operator and probe it inside the generating job
+    - deferred: only act when C60 can pass; C60 cannot reach proven in CI because fidelity is unknown by operator decision 1=a (finding 71, requirements R7)
     - Files: `infrastructure/quality/gate-mutations.yaml`,
       `.github/workflows/uplift.yml`,
       `infrastructure/quality/blocking-steps.yaml`
@@ -2985,6 +3118,7 @@ data and scored against an external benchmark has no demonstrable value.
     - _Requirements: 8.4, 9.3, 9.4, 9.9_
 
   - [ ] 20.3 Land the registry entry, and keep both substitution pins where they are
+    - deferred: operator decision 3=c: deferred to named follow-on spec .kiro/specs/forecaster-publication/ (named, not created)
     - **NOT TICKED IN SESSION 9 -- NOT STARTED, AND ITS REMAINING WORK IS AN OPERATOR ACTION
       RATHER THAN AUTHORING.** `infrastructure/ml/published_checkpoints.json` still holds exactly
       one key, `__placeholder__`, with `status: unpublished`. Nothing an authoring session can
@@ -3061,7 +3195,8 @@ data and scored against an external benchmark has no demonstrable value.
     - _Requirements: 9.16_
 
 - [ ] 21. Checkpoint — is the confidence contract actually live?
-  - discharge: CI, the E4 materialisation job (named at task 20.4)
+  - deferred: operator decision 3=c: deferred to named follow-on spec .kiro/specs/forecaster-publication/ (named, not created)
+  - formerly CI-gated on the E4 materialisation job named at task 20.4; now deferred (see the deferral line above)
   - Ensure all tests pass, ask the user if questions arise.
   - **This is a state check with three observable conditions, not a status report.** E4 is
     complete only when all three hold on a CI run, each read from the run's own output:
@@ -3102,6 +3237,30 @@ data and scored against an external benchmark has no demonstrable value.
     `tests/uplift/test_headline_fidelity_colocation_property.py`. Every one must still pass.
 
   - [ ] 22.1 Regenerate the artifact in the generating job and co-locate the interval
+    - **RE-SCOPED 2026-09-29 (session-11 plan, operator-approved).** Reachable, attributable and
+      affordable (finding 70):
+      - label trigger `measure-uplift-proof`; checkout `github.event.pull_request.head.sha`;
+        export `SYNAPSE_REVISION` (`harness.py` and `uplift_truth.py` read it before
+        `GITHUB_SHA`);
+      - a matrix over scenario x replicate block with parallel workers per job, and an aggregator
+        proving in-run that the shards cover every replicate exactly once (G5);
+      - `--duration-hours 24`, and the four named failure states (R7.2);
+      - sized from 13.7's cost probe; escalate to the GCP window (ADR-036) rather than cut
+        replicates below INV-TW-002;
+      - C60 records `unavailable` by decision (finding 71), and consensus recommendations are
+        applied per decision Q2=a.
+    - **FINDING 70 (session-11 review, read not measured unless stated).** `uplift-proof` runs
+      only on schedule/dispatch, and dispatch 404s from this branch; its cost is unmeasured -- a
+      test docstring's ~20 s per Tier-4 decision implies ~400 core-hours at 1000 x 3 shocked
+      scenarios x 24 decisions, and `LoopConfig` defaults to a 4 h horizon.
+    - **FINDING 74 (session-11 review, read not measured unless stated).** `uplift.yml` checks
+      out with no `ref:` (`:188`, `:316`), so a labelled run measures the synthetic MERGE commit
+      while its disclosure step (`:336`) reports `pull_request.head.sha`; the two trees are
+      identical only while `origin/main` is an ancestor of the head (verified true in session 11
+      at `da46ec5`). Repair: every labelled job checks out
+      `ref: ${{ github.event.pull_request.head.sha }}` (wave 3 lands it for `twin-regret`;
+      `regenerate-truth-docs.yml:163` has the same shape).
+    - Text below is retained as the record; where it conflicts with the re-scope above, the re-scope governs.
     - File: `.github/workflows/uplift.yml`
     - `uplift-proof` runs the harness to regenerate the artifact in the **same** job that
       evaluates the gate (R7.1). The reason the obligation is scoped to that job and not to every
@@ -3140,7 +3299,12 @@ data and scored against an external benchmark has no demonstrable value.
     - _Requirements: 7.10, 7.15_
 
   - [ ] 22.3 Ratchet `UPLIFT_FLOOR` to the measured lower bound, and move its pin with it
-    - discharge: uplift.yml::uplift-proof
+    - deferred: only act when C60 can pass; C60 cannot reach proven in CI because fidelity is unknown by operator decision 1=a (finding 71, requirements R7)
+    - **FINDING 71 (session-11 review, read not measured unless stated).** `is_proven_uplift`
+      requires `within_fidelity_bound is True` (`uplift/uplift_floor.py:140`), which only
+      `digital_twin/sync/divergence_monitor.py:118` can set and which never runs in CI, so C60
+      cannot reach proven there.
+    - formerly CI-gated on uplift.yml::uplift-proof; now deferred (see the deferral line above)
     - Files: `uplift/uplift_floor.py`,
       `infrastructure/quality/ratchets.json`,
       `infrastructure/quality/doc-number-pins.yaml`
@@ -3186,6 +3350,7 @@ data and scored against an external benchmark has no demonstrable value.
     deliberately.
 
   - [ ] 23.1 Write ADR-056 superseding ADR-033, before any anchor is published
+    - deferred: deferred to named follow-on spec .kiro/specs/external-audit-anchor/ (named, not created); open obligation is ADR-056 superseding ADR-033
     - Files: `docs/adr/ADR-056-external-audit-anchor.md` (new),
       `docs/adr/ADR-033-audit-chain.md` (superseded header only)
     - **OQ-4 is an ADR-level conflict, not a naming slip.** The mechanism is named three times
@@ -3210,6 +3375,7 @@ data and scored against an external benchmark has no demonstrable value.
     - _Requirements: 10.1, 10.6_
 
   - [ ] 23.2 Record the log coordinate on `AnchorRecord`, nullably
+    - deferred: deferred to named follow-on spec .kiro/specs/external-audit-anchor/ (named, not created); open obligation is ADR-056 superseding ADR-033
     - File: `orchestrator/audit/anchorer.py`
     - Add `log_entry_id: str | None` and `log_inclusion_proof: str | None`. **Both nullable, and
       the nullability is a requirement rather than a convenience:** `AnchorRecord.from_payload`
@@ -3235,6 +3401,7 @@ data and scored against an external benchmark has no demonstrable value.
     - _Requirements: 10.2, 10.7, 10.8_
 
   - [ ] 23.3 Add the external-entry freshness rule, preserving the fail-versus-unavailable split
+    - deferred: deferred to named follow-on spec .kiro/specs/external-audit-anchor/ (named, not created); open obligation is ADR-056 superseding ADR-033
     - File: `scripts/audit/anchor_truth.py`
     - No entry identifier and no inclusion proof after the publisher's declared retry budget is
       exhausted -> **unavailable naming the log and the failure reason**, never a pass (R10.4).
@@ -3257,6 +3424,7 @@ data and scored against an external benchmark has no demonstrable value.
     - _Requirements: 10.4, 10.5_
 
   - [ ] 23.4 Write property test for external anchor freshness
+    - deferred: deferred to named follow-on spec .kiro/specs/external-audit-anchor/ (named, not created); open obligation is ADR-056 superseding ADR-033
     - `# Feature: decision-quality-proof, Property 78: External anchor freshness is unavailable on absence and on staleness, and a back-dated anchor is non-passing`
     - File: `tests/verify/test_external_anchor_freshness_property.py`
     - Budget inherited from the root `conftest.py` profile.
@@ -3264,6 +3432,7 @@ data and scored against an external benchmark has no demonstrable value.
     - _Requirements: 10.4, 10.5, 10.10_
 
   - [ ] 23.5 Add the chain presentation a third party can actually be handed
+    - deferred: deferred to named follow-on spec .kiro/specs/external-audit-anchor/ (named, not created); open obligation is ADR-056 superseding ADR-033
     - File: `orchestrator/audit/presentation.py` (new)
     - `ChainPresentation` carries the exported snapshot in canonical walk order with the linkage
       hashes **and** the hashed content fields, plus the committed migration boundary
@@ -3287,6 +3456,7 @@ data and scored against an external benchmark has no demonstrable value.
     - _Requirements: 10.3_
 
   - [ ] 23.6 Add `verify-export`, calling the same walker the DSN path calls
+    - deferred: deferred to named follow-on spec .kiro/specs/external-audit-anchor/ (named, not created); open obligation is ADR-056 superseding ADR-033
     - File: `orchestrator/audit/cli.py`
     - `verify-export --presentation PATH --anchor PATH --log-proof PATH --bounds PATH` constructs
       `ChainRow` values from the export and calls the **same** `chain_walk.walk` — one walker,
@@ -3302,6 +3472,7 @@ data and scored against an external benchmark has no demonstrable value.
     - _Requirements: 10.3_
 
   - [ ] 23.7 Write property test for the export round-trip and truncation detection
+    - deferred: deferred to named follow-on spec .kiro/specs/external-audit-anchor/ (named, not created); open obligation is ADR-056 superseding ADR-033
     - `# Feature: decision-quality-proof, Property 76: The anchor commits to the head, and the export round-trips with truncation detectable`
     - File: `tests/verify/test_chain_presentation_export_property.py`
     - Budget inherited from the root `conftest.py` profile.
@@ -3309,6 +3480,7 @@ data and scored against an external benchmark has no demonstrable value.
     - _Requirements: 10.2, 10.8_
 
   - [ ] 23.8 Write property test for offline verification totality
+    - deferred: deferred to named follow-on spec .kiro/specs/external-audit-anchor/ (named, not created); open obligation is ADR-056 superseding ADR-033
     - `# Feature: decision-quality-proof, Property 77: Offline verification is a total three-valued function of the public inputs alone`
     - File: `tests/verify/test_offline_verification_totality_property.py`
     - "Of the public inputs alone" is the load-bearing clause: the function must be total over
@@ -3319,6 +3491,7 @@ data and scored against an external benchmark has no demonstrable value.
     - _Requirements: 10.3_
 
   - [ ] 23.9 Add the `chain-export` job where a database exists
+    - deferred: deferred to named follow-on spec .kiro/specs/external-audit-anchor/ (named, not created); open obligation is ADR-056 superseding ADR-033
     - Files: `.github/workflows/integration.yml`,
       `infrastructure/quality/blocking-steps.yaml`,
       `infrastructure/quality/required-checks.yaml`
@@ -3330,6 +3503,7 @@ data and scored against an external benchmark has no demonstrable value.
     - _Requirements: 10.3_
 
   - [ ] 23.10 Make publication reachable, and prove the freshness check can fail
+    - deferred: deferred to named follow-on spec .kiro/specs/external-audit-anchor/ (named, not created); open obligation is ADR-056 superseding ADR-033
     - Files: `.github/workflows/publish-audit-anchor.yml`,
       `infrastructure/quality/blocking-steps.yaml`
     - **Two independent defects, one fix.** `anchor` runs on `schedule`/`workflow_dispatch`,
@@ -3360,6 +3534,7 @@ data and scored against an external benchmark has no demonstrable value.
     - _Requirements: 10.9, 10.10, 10.11_
 
   - [ ] 23.11 Write property test for same-run publication
+    - deferred: deferred to named follow-on spec .kiro/specs/external-audit-anchor/ (named, not created); open obligation is ADR-056 superseding ADR-033
     - `# Feature: decision-quality-proof, Property 79: The anchor is published in the run that produced it`
     - File: `tests/verify/test_anchor_same_run_publication_property.py`
     - Budget inherited from the root `conftest.py` profile.
@@ -3373,6 +3548,13 @@ data and scored against an external benchmark has no demonstrable value.
     halves.
 
   - [ ] 24.1 Assign identifiers and complete the registrations
+    - **RE-SCOPED 2026-09-29 (session-11 plan, operator-approved).** Registers C76
+      `benchmark_truth` only, which reports `unavailable` (M5 declined); `uplift_staleness_truth`
+      is deferred with 17.7. Lands in the SAME session as 24.2 (finding 73).
+    - **FINDING 73 (session-11 review, read not measured unless stated).** Registering a check
+      moves the README headline counts C56 pins, so a registration landed sessions before its
+      regeneration keeps `quality-gates` red in between.
+    - Text below is retained as the record; where it conflicts with the re-scope above, the re-scope governs.
     - Files: `scripts/audit/verify_claims.py`,
       `infrastructure/quality/required-checks.yaml`
     - **C75 is the highest registered identifier, so the next free one is C76.** Verified by
@@ -3407,7 +3589,14 @@ data and scored against an external benchmark has no demonstrable value.
     - _Requirements: 9.12_
 
 - [ ] 25. Final checkpoint — state the claim, and state it honestly
-  - discharge: uplift.yml::uplift-proof plus publish-audit-anchor.yml
+  - discharge: uplift.yml::uplift-proof
+  - Narrowed 2026-09-29: the publish-audit-anchor.yml half is dropped because task 23 is deferred.
+  - **RE-SCOPED 2026-09-29 (session-11 plan, operator-approved).** The claim is a measured TWIN
+    result in objective units against the named tuned control E of the primary cell, with its
+    interval, the controls, the Power_Report, the B-prime split, and the pathway and dispatch
+    facts, worded "recommendations, if executed" (Q2=a). It lists every item unavailable by
+    decision: fidelity/C60, M5, the audit anchor, the published model.
+  - Text below is retained as the record; where it conflicts with the re-scope above, the re-scope governs.
   - Ensure all tests pass, ask the user if questions arise.
   - **The claim this spec exists to support**, and the conditions under which it may be stated:
     a headline uplift with its interval at `1 - alpha`, from a **complete** run at
@@ -4694,6 +4883,104 @@ data and scored against an external benchmark has no demonstrable value.
     - A refusal (`decomposition_admissible` false) is a **result**, not a failed run: record the
       `decomposition_refusal` reason and leave the A-D verdict alone.
     - _Requirements: 5.3, 5.4, 5.34_
+
+### Phase 7 -- the session-11 re-cut's own leaves
+
+The session-11 plan (approved 2026-09-29) re-cut R5 and R7 and deferred every leaf that now carries
+a `deferred:` line; this phase holds the work the re-cut itself creates. **Operator decisions,
+listed once here and cited elsewhere by label:** **1=a** no real-data anchor -- world values are
+declared `chosen`, fidelity stays `unknown`, and C60 records `unavailable` by decision; **2=a** the
+headline is the ADR-055 D2 scalar objective; **3=a** the information pathway is forwarded and
+probed, agent internals untouched; **3=c** 20.3 and 21 are deferred; **3=d** 17.7 and 17.8 are
+deferred; **3=e** finding 57's repair is adopted; **Q1=a** `Par_Level_Reorder` orders on inventory
+position; **Q2=a** the binding recommendation is applied unless a hard guardrail BLOCKed it,
+withheld decisions are counted, and the claim is worded "recommendations, if executed"; **Q3=c**
+the declared world values are researched first. The session record is `SESSION_PROTOCOL.md`'s
+progress ledger; design reasoning is ADR-055.
+
+- [ ] 29. The re-cut's own work: terminal deferral, finding 57, the double-count, the objective headline, and the information pathway
+
+  - [ ] 29.1 Deferral is a terminal state the census reports
+    - Files: `scripts/audit/spec_ledger_census.py`, `tests/verify/test_census_deferral_property.py`
+    - A leaf carrying a `- deferred: <reason>` sub-bullet is terminal and reasoned, is never
+      offered, and completion is reported only when nothing authorable, gated or pending remains
+      (Property 87).
+    - **FINDING 76 (session-11 review, read not measured unless stated).** The census's key
+      matcher strips backticks, so prose lines that START with a backticked `discharge:` (the
+      27.5 and 28.5 bodies in this file) are read as keys; that is harmless today only because
+      the real bullet comes first. `deferred:` requires a real `- ` sub-bullet for that reason.
+    - Demo: `--next 40` offers none of the 25 deferred leaves, reports `deferred: 25`, and prints
+      `complete: no` until the last in-scope leaf discharges.
+    - _Requirements: 4.x (census hygiene)_
+
+  - [ ] 29.2 Flag repository data, not a dependency's bundled data
+    - discharge: ci.yml::uplift-verify slow selection
+    - Files: `tests/uplift/test_preserved_baseline_regression.py`,
+      `tests/uplift/test_zero_cost_guard_precision_property.py` (new)
+    - Finding 57, adopted under decision 3=e: the zero-cost guard flags a CSV read from
+      repository data, not a dependency's bundled data, and a CSV outside installed-distribution
+      roots is still flagged (Property 88). Stricter, not weaker: `... and under_data` would let a
+      purchased CSV outside `data/` pass.
+    - **FINDING 77 (session-11 review, read not measured).** For file reads the zero-cost guard
+      (`_ZeroCostGuard`) rebinds only `builtins.open`; `Path.open`/`read_text`/`read_bytes` call
+      `io.open` and C-level readers bypass it, so `data_file_reads == []` proves no
+      `builtins.open` read of project data, not no read. Pre-existing and core-purpose-uplift's;
+      recorded, not repaired -- extending it to `io.open` is the owner's decision, and it widens
+      what the required slow step judges.
+    - Demo: the slow step reports 0 failed and the aggregate `uplift-verify` (a required check) is
+      green; a CSV outside installed-distribution roots is still flagged.
+    - _Requirements: none in this spec -- adopted debt (decision 3=e); the guarded file's own
+      subject is `core-purpose-uplift` R3.6/R3.7_
+
+  - [ ] 29.3 Remove finding 60's double-count before any run is judged on the objective (finding 65)
+    - Files: `digital_twin/simulation/policy.yaml` (`weights.stockout_rate` 8.0 -> 0.0, with its
+      reason), `docs/adr/ADR-055-twin-decision-relevance.md` (D2.3 and the amendment log), any pin
+      or ratchet entry for that weight, `tests/uplift/test_service_term_identity_property.py`
+      (Property 64 clause 3: a precondition correction).
+    - **FINDING 65 (session-11 review, read not measured unless stated).** With `stockout_rate`
+      and `unmet_service` both weighted 8.0 over one quantity (Property 64), one service point
+      cost 0.16 objective units, so the 0.40 margin meant 2.5 service points -- below D2.5's own
+      3.3-point lower bracket; single counting restores 5.0 (derived).
+    - Demo: in B-prime's `off_off` cell, `mean_reference_cost` and `mean_hindsight_cost` equal
+      run `35125443185`'s to every digit (both arms at zero unmet), and every other arm's mean
+      cost is lower by exactly 8 x its mean `stockout_rate`.
+    - _Requirements: 5.2, 5.33_
+
+  - [ ] 29.4 The headline is the committed objective: metric contract v2
+    - Files: `uplift/metric_contract.yaml`, `uplift/contract.py`, `uplift/harness.py`
+    - Decision 2=a (finding 64): the objective is the sole primary KPI, its MDE is the committed
+      materiality margin read from `policy.yaml`, and the interval rule is four-valued -- entirely
+      above the margin = win; entirely above 0 but not entirely above the margin = sub-margin
+      gain; containing 0 = inconclusive; entirely below 0 = baseline wins.
+    - **FINDING 64 (session-11 review, read not measured unless stated).** `_headline_uplift`
+      reads the contract's FIRST primary KPI, and the only one is `fill_rate`, which rises with
+      stock; an arm that holds more stock beats the lean tuned control on `fill_rate` while
+      losing on the committed objective (inferred from the metric, not measured).
+    - Demo: Property 94 green in CI.
+    - _Requirements: 5.2, 7.19_
+
+  - [ ] 29.5 Property 94: a higher fill rate bought with a worse objective never reports a win
+    - `# Feature: decision-quality-proof, Property 94: A higher fill rate bought with a worse objective never reports a win`
+    - File: `tests/uplift/test_objective_headline_property.py` (new)
+    - Budget inherited from the root `conftest.py` profile; no `max_examples` literal.
+    - Demo: generated overstocking arms never classify as win; the four verdicts are exhaustive
+      and mutually exclusive.
+    - _Requirements: 7.19_
+
+  - [ ] 29.6 Forward what the world rewards, apply recommendations, count dispatch, probe the pathway
+    - Files: `uplift/consensus_arm.py`, `uplift/harness.py`,
+      `tests/uplift/test_information_pathway_probe.py` (new; `@pytest.mark.slow`, Property 95)
+    - Decisions 3=a and Q2=a (finding 68): the obligations are R7.20 and R7.21 as written, and
+      agent internals are untouched. `tests/uplift` is collected by `ci.yml::uplift-verify`'s
+      slow step.
+    - **FINDING 68 (session-11 review, read not measured unless stated).**
+      `observation_to_decision_request` (`uplift/consensus_arm.py:176`) is a snapshot -- no
+      demand history, on-order or supplier history -- and the translator applies
+      `selected_action` even when the protocol withheld dispatch.
+    - Demo: the probe artifact reports non-empty pair counts per input and a
+      dispatch/withheld/blocked/untranslatable count per run; a rate computed over zero pairs
+      fails.
+    - _Requirements: 7.20, 7.21_
 
 ## Notes
 

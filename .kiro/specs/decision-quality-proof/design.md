@@ -1232,6 +1232,11 @@ supplier roster, the age-at-arrival and order-size spoilage coefficients, the su
 fraction and per-SKU substitute sets, and the comparator restock threshold. Every value is
 pinned by `doc-number-pins.yaml` and each is committed **before** the run judged against it.
 
+*CORRECTED 2026-09-29 (session-11 re-cut, decision 1=a):* the demand-intensity shape is
+DECLARED in `world.structure_1`, flagged `chosen` with research provenance -- not calibrated
+from E4a's M5 statistics. No feed is admitted, so R5.11 is unmet by decision (its annotation in
+`requirements.md`); the reasoning is ADR-055 D2.8.
+
 #### E2c.3 The five structures, as engine changes
 
 | Structure | Criteria | Engine change | Agent decision unlocked |
@@ -1242,6 +1247,12 @@ pinned by `doc-number-pins.yaml` and each is committed **before** the run judged
 | 4 perishability coupling | R5.25, R5.26 | `_spoilage` reads age-at-arrival and order size instead of a fixed clock | `freshness_guardian` |
 | 5 substitution | R5.27 | a zero-stock demand event diverts the declared fraction to the SKU's declared substitutes | `pricing_oracle` cross-SKU pricing, `freshness_guardian` markdowns |
 
+*CORRECTED 2026-09-29 (session-11 re-cut), structure-3 row:* the lead time sits on
+`place_order`, the order-placement path (introduced by the re-cut; no such symbol exists in the
+tree today), not on `_restock`, which every measured arm switches off; `Par_Level_Reorder`
+orders on inventory position (Q1=a) and every arm shares one lead-time path. Structure 1's
+shape is declared, not calibrated (decision 1=a); the reasoning is ADR-055 D2.8.
+
 Structures 4 and 5 together create the multi-objective tension R5.28 tests. R5.28 as
 previously written was unsatisfiable — the Pareto frontier of a finite non-empty set is
 non-empty — so the evaluated set is the four single-objective policies **plus** ADR-055's
@@ -1251,6 +1262,11 @@ better on at least one **with the two reported intervals disjoint**. R5.29's sto
 stands: a Pareto-optimal single-objective policy is a proof that consensus is unnecessary,
 and the consensus experiment is then reported as having no room to win and is not run.
 
+*CORRECTED 2026-09-29 (session-11 re-cut):* the paragraph above is not live. R5.28 and R5.29
+are SUPERSEDED by R5.45 -- conflict R resolved by supersession, not by amendment -- so neither
+the Pareto test nor R5.29's stop rule governs E3; the sufficient test is R5.45's. Structures 4
+and 5 stay deferred under the R5.4 re-cut. The reasoning is ADR-055 D2.8.
+
 #### E2c.4 `uplift.yml::twin-ladder` (NEW job) — the utilisation ladder (R5.18, R5.19, R5.32)
 
 Measures mean wait at each declared ladder level over the committed replicate count.
@@ -1259,6 +1275,12 @@ Measures mean wait at each declared ladder level over the committed replicate co
 CI job, unconditionally, and R5.32 is strengthened rather than qualified by that.
 
 ### E3 — Controlled experiment (R6, R7)
+
+*CORRECTED 2026-09-29 (session-11 re-cut):* the headline is the ADR-055 D2 scalar objective
+under Metric_Contract v2 (`uplift/metric_contract.yaml` is `version: 1` with `primary_kpis:
+{fill_rate: higher}` today), the A/A control runs on disjoint seed sets, the oracle is arm O, and
+the oracle tolerance is cross-instrument agreement rather than a distance to an analytic optimum.
+The criteria are the R6/R7 annotations and R7.19-R7.21 in `requirements.md`.
 
 #### E3.1 `uplift/interval.py` (NEW) — the interval at `1 - alpha` (R6.13, R7.14)
 
@@ -1865,6 +1887,14 @@ data-gated — R7.13), Property 9 (the ledger round-trips against its registry e
 R9.12), plus the existing pins `test_substituting_the_proven_uplift_predicate_changes_the_exit_code`
 (R7.7) and `test_headline_fidelity_colocation_property.py` (R7.18). Every one of them must
 still pass after this design lands; several properties below exist to make sure of it.
+
+*CORRECTED 2026-09-29 (numbering, finding 72):* Properties 61-64 are held by landed files --
+`tests/uplift/test_regret_comparator_admissibility_property.py` (61),
+`tests/uplift/test_regret_decomposition_property.py` (62),
+`tests/verify/test_census_harvest_property.py` (63) and
+`tests/uplift/test_service_term_identity_property.py` (64) -- so this design's former 61-65 are
+renumbered 82-86 in `tasks.md`, which also declares 87-95. `tasks.md` is the authority for the
+mapping; the headings below keep their original numbers.
 
 ### Index
 

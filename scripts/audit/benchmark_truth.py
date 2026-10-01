@@ -2,7 +2,7 @@
 pre-registered expectation at an ancestor revision (R8.5-R8.8, R8.11, R8.14, R8.15, R8.18).
 
 Feature: decision-quality-proof, tasks 19.4, 19.6, 19.7. Design table row `BenchmarkRecord`
-(design.md:1642, "a bare number is a violation (R8.6)").
+(design.md:1664, "a bare number is a violation (R8.6)").
 
 There is no benchmark gate anywhere in the tree before this module, so this is the whole of
 the mechanism. It reads two committed artifacts and reports on both:

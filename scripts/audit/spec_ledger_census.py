@@ -22,7 +22,8 @@ Three marks, because the honesty contract has three states (I-7)
 ----------------------------------------------------------------
 
 =========  ==================================================================
-``[ ]``    open -- not started
+``[ ]``    open -- not started. **Deferred** instead when it carries a
+           ``deferred:`` sub-bullet; see "Deferral is a terminal state" below.
 ``[~]``    authored, **discharge pending**: the work is on disk, and the proof
            that it works is owed by the job named in its ``discharge:`` line.
            Not a pass. "Authored and diagnostics-clean, not executed" is a
@@ -46,6 +47,38 @@ An open leaf carrying a ``discharge:`` line is **CI-gated** and is not offered a
 authorable work. That replaces the hardcoded ``GATED`` set: the batch planner and the
 census now read the same source, so they cannot disagree.
 
+Deferral is a terminal state: a sub-bullet, never a fourth mark
+---------------------------------------------------------------
+
+An open leaf carrying ``- deferred: <reason>`` is **deferred**: out of scope by operator
+decision, with the reason on the leaf itself. It is not authorable, not CI-gated, never
+offered by ``next_batch`` at any size, never a barrier, and never an offered id when
+``barriers_crossed`` decides what follows one. Without it, a deliberately dropped leaf is
+indistinguishable from forgotten work, and ``--next`` offers it.
+
+No new checkbox mark, because ``task_claim_truth`` reads marks. The mark stays ``[ ]``, so
+``done + pending + open == leaves`` still holds, and ``authorable``, ``CI-gated`` and
+``deferred`` partition ``open``. A ``deferred:`` line on a *parent* has no effect: deferral
+is per leaf, and the children stay offered, which is the fail-safe side. A line with no
+reason after the key defers nothing either: the leaf stays authorable or CI-gated exactly
+as if the line were absent, and ``deferred-without-reason`` names it.
+
+Keyed exactly as ``discharge:`` is -- case-insensitive, emphasis stripped, first match in
+the leaf's body -- with ONE stricter precondition: the entry must itself be a sub-bullet
+(``- ...``). Read from the committed ledger, not supposed: ``[x]`` task 9.12 wraps a prose
+line that begins with a backticked ``deferred:``, which the looser rule reads as a
+deferral of a done leaf.
+
+``complete`` is "the spec is finished" as a derived verdict rather than a sentence a
+session writes: true iff the ledger has at least one leaf, nothing is authorable, CI-gated
+or pending, and no finding is non-passing. Done and deferred are the only leaf states it
+admits. The leaf clause is the non-vacuity guard -- a tasks file whose records no longer
+parse would otherwise read as finished. Its per-line form is ``unparsed-checkbox``: a line
+shaped like a checkbox that the record grammar rejects (``- [ ] 31.1: X``,
+``* [ ] 31.1 X``, ``- [ ] **31.1** X``) is a leaf no count can see, so it is refused by its
+line number. A census given no checkbox scan never reports ``complete``: it cannot know
+that no such line exists, and absence of proof is not a pass (I-7).
+
 Rules, each naming its subject
 ------------------------------
 
@@ -55,6 +88,10 @@ rule                      verdict what it means
 ``unknown-mark``          2       a checkbox carries a mark this vocabulary does
                                   not define -- the census cannot classify it and
                                   will not guess
+``unparsed-checkbox``     2       a checkbox-shaped line does not parse as a
+                                  record, so the leaf it names is in no count and
+                                  ``complete`` could be printed over it; named
+                                  by its 1-based line number
 ``duplicate-id``          2       two records share one task id, so a count over
                                   ids is not a count over records
 ``unharvested-pending``   2       a ``[~]`` records no ``last-checked:`` run for
@@ -66,6 +103,18 @@ rule                      verdict what it means
                                   G4). Static by design: asking GitHub instead
                                   would move this census out of the LOCAL
                                   allow-list it sits in as a ~1s file reader
+``deferred-marked-done``  2       a ``[x]`` or ``[~]`` leaf carries ``deferred:``.
+                                  Deferral is a state of work never done, so the
+                                  line contradicts the mark and the census will
+                                  not choose between them
+``deferred-without-reason``
+                          2       a ``deferred:`` line with no reason after the
+                                  key -- forgotten work under another name. It
+                                  defers nothing: the leaf is bucketed exactly as
+                                  if the line were absent
+``deferred-and-gated``    2       one leaf carries ``deferred:`` and
+                                  ``discharge:``: out of scope and gated on a
+                                  job's proof at once
 ``ledger-unreadable``     2       the tasks file cannot be read
 ========================  ======  ===============================================
 
@@ -119,6 +168,7 @@ __all__ = [
     "CensusOutcome",
     "LedgerCensus",
     "LedgerRecord",
+    "UnparsedCheckbox",
     "census",
     "evaluate",
     "extract_paths",
@@ -126,6 +176,7 @@ __all__ = [
     "main",
     "parse_records",
     "run",
+    "unparsed_checkboxes",
 ]
 
 ROOT: Final[Path] = Path(__file__).resolve().parents[2]
@@ -142,6 +193,11 @@ MARK_DONE: Final[str] = "x"
 _RECORD_RE: Final[re.Pattern[str]] = re.compile(
     r"^(?P<indent>[ \t]*)-\s+\[(?P<mark>[^\]])\]\s*(?P<id>\d+(?:\.\d+)*)[.)]?\s+(?P<title>\S.*)$"
 )
+
+#: Anything a reader would take for a checkbox: any list bullet, any spacing, any one mark.
+#: Deliberately WIDER than ``_RECORD_RE``: the lines this matches and that one rejects are
+#: leaves no count can see, which ``unparsed-checkbox`` refuses by line number.
+_CHECKBOX_RE: Final[re.Pattern[str]] = re.compile(r"^\s*[-*+]\s*\[[^\]]\]")
 
 #: ``- discharge: uplift.yml::twin-regret`` after markdown emphasis is stripped.
 _DISCHARGE_RE: Final[re.Pattern[str]] = re.compile(r"^discharge:\s*(?P<job>\S.*?)\s*$", re.I)
@@ -163,6 +219,15 @@ _DISCHARGE_RE: Final[re.Pattern[str]] = re.compile(r"^discharge:\s*(?P<job>\S.*?
 _HARVEST_RE: Final[re.Pattern[str]] = re.compile(
     r"^last-checked:\s*(?P<run>\S.*?)\s*$", re.I
 )
+
+#: ``- deferred: <reason>``: a leaf taken out of scope, keyed exactly as ``discharge:`` is.
+#: Unlike the two patterns above, the value may be EMPTY here -- a reasonless line must be
+#: seen in order to be refused by name (``deferred-without-reason``), not silently skipped.
+_DEFERRED_RE: Final[re.Pattern[str]] = re.compile(r"^deferred:(?P<reason>.*)$", re.I)
+
+#: A body entry that is itself a sub-bullet, as opposed to a wrapped prose line that happens
+#: to begin with a key. Required of ``deferred:`` only; :func:`_deferred_of` says why.
+_SUB_BULLET_RE: Final[re.Pattern[str]] = re.compile(r"^-\s")
 
 _EMPHASIS: Final[str] = "-*_` \t"
 
@@ -214,8 +279,12 @@ _PATH_SUFFIXES: Final[frozenset[str]] = frozenset(
 
 RULES: Final[tuple[str, ...]] = (
     "unknown-mark",
+    "unparsed-checkbox",
     "duplicate-id",
     "unharvested-pending",
+    "deferred-marked-done",
+    "deferred-without-reason",
+    "deferred-and-gated",
     "ledger-unreadable",
 )
 
@@ -248,6 +317,11 @@ class LedgerRecord(BaseModel):
     title: str
     body: tuple[str, ...]
     line: int
+    #: The reason a leaf was taken out of scope, from a ``deferred:`` sub-bullet. ``None`` =
+    #: no such line; ``""`` (or anything :attr:`has_deferral_reason` rejects) = a line with
+    #: no reason, which defers nothing and which the census refuses by name.
+    #: Required rather than defaulted: the one constructor must state what it parsed.
+    deferred: str | None
     #: The job owed the proof, from a ``discharge:`` sub-bullet. ``None`` = no gate.
     discharge: str | None = None
     #: The run a ``[~]``'s discharge job was last read at, from a ``last-checked:``
@@ -286,6 +360,28 @@ class LedgerRecord(BaseModel):
         return self.is_pending and self.last_checked is None
 
     @property
+    def is_deferred(self) -> bool:
+        """Carries a ``deferred:`` sub-bullet, whatever its mark and whatever follows the key.
+
+        Only an open leaf with :attr:`has_deferral_reason` is *bucketed* as deferred. On a
+        done or pending leaf, or with no reason after the key, the line is a finding instead.
+        """
+        return self.deferred is not None
+
+    @property
+    def has_deferral_reason(self) -> bool:
+        """A ``deferred:`` line with a reason after the key: the ONE rule for "reasoned".
+
+        Both readers of the fact use it -- the bucketing that takes an open leaf out of
+        scope and the ``deferred-without-reason`` refusal -- so no line can be refused for
+        lacking a reason and obeyed at once. Whitespace and emphasis, in any order, are not
+        a reason, and a line that reduces to nothing defers nothing: the fail-safe reading.
+        """
+        return self.deferred is not None and any(
+            not char.isspace() and char not in _EMPHASIS for char in self.deferred
+        )
+
+    @property
     def name(self) -> str:
         """How this record is named in every message about it."""
         return f'task {self.task_id} "{self.title}"'
@@ -313,6 +409,17 @@ class DiskObservation(BaseModel):
     detail: str
 
 
+class UnparsedCheckbox(BaseModel):
+    """A checkbox-shaped line the record grammar rejects: a leaf that no count can see."""
+
+    model_config = ConfigDict(frozen=True)
+
+    #: 1-based, over the same ``splitlines`` that numbers ``LedgerRecord.line``.
+    line: int
+    #: The line as written, without its surrounding whitespace.
+    text: str
+
+
 class LedgerCensus(BaseModel):
     """Everything one execution of this census observed."""
 
@@ -325,12 +432,13 @@ class LedgerCensus(BaseModel):
     done: int
     pending: int
     open_count: int
-    #: Open leaves with no ``discharge:`` line, in ledger order.
+    #: Open, undeferred leaves with no ``discharge:`` line, in ledger order.
     authorable: tuple[str, ...]
-    #: Open leaves whose ``discharge:`` line names the job that owes the proof.
+    #: Open, undeferred leaves whose ``discharge:`` line names the job that owes the proof.
     gated: tuple[str, ...]
-    #: Every open leaf id in ledger order, gated or not. Ledger *position* is what makes
-    #: ``barriers_crossed`` derivable: ``authorable`` alone cannot see what it steps over.
+    #: Every open leaf id in ledger order, gated, deferred or neither. Ledger *position* is
+    #: what makes ``barriers_crossed`` derivable: ``authorable`` alone cannot see what it
+    #: steps over.
     open_order: tuple[str, ...]
     #: ``{task_id: job}`` for every open CI-gated leaf. A barrier candidate.
     gated_jobs: dict[str, str]
@@ -341,6 +449,16 @@ class LedgerCensus(BaseModel):
     #: alone, from one still waiting -- which is how task 26.1 sat dischargeable for two
     #: sessions while every sweep reported green.
     unharvested: tuple[str, ...]
+    #: Open leaves carrying a REASONED ``deferred:`` sub-bullet: out of scope, reason on the
+    #: leaf. Terminal -- never authorable, gated, offered or a barrier. Counted inside
+    #: ``open_count``, because the mark is still ``[ ]``. A reasonless line defers nothing.
+    deferred: int
+    #: Those leaves' ids, sorted by numeric id component (``9.2`` before ``9.12``).
+    deferred_ids: tuple[str, ...]
+    #: "The spec is finished", derived: at least one leaf, a checkbox scan was supplied,
+    #: nothing authorable, CI-gated or pending, and no non-passing finding (so no
+    #: ``unparsed-checkbox``). Done and deferred are the only states it admits.
+    complete: bool
     observations: tuple[DiskObservation, ...]
     findings: tuple[CensusFinding, ...]
     outcome: CensusOutcome
@@ -352,7 +470,7 @@ class LedgerCensus(BaseModel):
         return _EXIT_BY_OUTCOME[self.outcome]
 
     def next_batch(self, size: int) -> tuple[str, ...]:
-        """The next ``size`` authorable leaves, in ledger order."""
+        """The next ``size`` authorable leaves, in ledger order. Never gated, never deferred."""
         return self.authorable[:size]
 
     def barriers_crossed(self, size: int) -> tuple[str, ...]:
@@ -372,6 +490,9 @@ class LedgerCensus(BaseModel):
         (27.2-27.5) legitimately sat after checkpoint A's task 11 and did not depend on
         it. So this names what is crossed and leaves the judgement where it belongs,
         rather than manufacturing a block the ledger cannot justify.
+
+        A deferred leaf is in neither ``authorable`` nor ``gated_jobs``, so it can be
+        neither the offered id that decides what a barrier precedes nor a barrier itself.
         """
         batch = self.next_batch(size)
         if not batch:
@@ -417,6 +538,35 @@ def _last_checked_of(body: tuple[str, ...]) -> str | None:
     return None
 
 
+def _deferred_of(body: tuple[str, ...]) -> str | None:
+    """A leaf's deferral reason; ``""`` for a line with none; ``None`` for no line.
+
+    Keyed exactly as :func:`_discharge_of` -- emphasis stripped, case-insensitive, first
+    match wins -- plus ONE stricter precondition: the entry must be a sub-bullet. Read from
+    the committed ledger rather than supposed: ``[x]`` task 9.12 wraps a prose line that
+    begins with a backticked ``deferred:``, and the looser rule reads it as a deferral of a
+    done leaf. ``discharge:`` shares the looseness -- tasks 27.5 and 28.5 wrap prose lines
+    that begin with it -- and is masked there only because a real sub-bullet comes first.
+    It is not tightened here: that would move gating, which this grammar does not own.
+    """
+    for entry in body:
+        if _SUB_BULLET_RE.match(entry) is None:
+            continue
+        match = _DEFERRED_RE.match(entry.strip(_EMPHASIS))
+        if match is not None:
+            return match.group("reason").strip(_EMPHASIS)
+    return None
+
+
+def _id_order(task_id: str) -> tuple[int, ...]:
+    """Numeric order for a dotted task id, so ``9.2`` sorts before ``9.12``.
+
+    Every id reaching here matched ``_RECORD_RE``, whose id group is dot-separated digits,
+    so each part is an integer by construction.
+    """
+    return tuple(int(part) for part in task_id.split("."))
+
+
 def parse_records(text: str) -> tuple[LedgerRecord, ...]:
     """Every task record in one ``tasks.md``, with leaf status from the id tree.
 
@@ -451,6 +601,7 @@ def parse_records(text: str) -> tuple[LedgerRecord, ...]:
                 title=match.group("title").strip(),
                 body=frozen_body,
                 line=index + 1,
+                deferred=_deferred_of(frozen_body),
                 discharge=_discharge_of(frozen_body),
                 last_checked=_last_checked_of(frozen_body),
             )
@@ -467,6 +618,21 @@ def parse_records(text: str) -> tuple[LedgerRecord, ...]:
             }
         )
         for record in parsed
+    )
+
+
+def unparsed_checkboxes(text: str) -> tuple[UnparsedCheckbox, ...]:
+    """Every checkbox-shaped line that :func:`parse_records` does not read as a record.
+
+    The parser's only notion of a leaf is a line ``_RECORD_RE`` accepts, so a leaf written
+    ``- [ ] 31.1: X``, ``* [ ] 31.1 X`` or ``- [ ] **31.1** X`` is in no count, and without
+    this scan ``complete`` was derivable over it. Wherever the line sits -- top level, or
+    inside another record's body -- it is reported, numbered as ``LedgerRecord.line`` is.
+    """
+    return tuple(
+        UnparsedCheckbox(line=number, text=line.strip())
+        for number, line in enumerate(text.splitlines(), start=1)
+        if _CHECKBOX_RE.match(line) is not None and _RECORD_RE.match(line) is None
     )
 
 
@@ -505,8 +671,15 @@ def census(
     source: str,
     observations: tuple[DiskObservation, ...] = (),
     read_error: str | None = None,
+    unparsed: tuple[UnparsedCheckbox, ...] | None = None,
 ) -> LedgerCensus:
-    """Classify an already-parsed ledger. No filesystem, no network."""
+    """Classify an already-parsed ledger. No filesystem, no network.
+
+    ``unparsed`` is :func:`unparsed_checkboxes` over the same text: the leaves the parser
+    could not see. ``None`` records that no scan was supplied -- it is not "none found".
+    The census then cannot know every leaf is counted, so it never reports ``complete``
+    and says why in ``detail``; it invents no finding either (I-7).
+    """
     findings: list[CensusFinding] = []
     if read_error is not None:
         findings.append(
@@ -548,21 +721,45 @@ def census(
                     ),
                 )
             )
+    if unparsed is not None:
+        for checkbox in unparsed:
+            findings.append(
+                CensusFinding(
+                    rule="unparsed-checkbox",
+                    outcome=CensusOutcome.UNAVAILABLE,
+                    subject=f"line {checkbox.line}",
+                    detail=(
+                        f"line {checkbox.line} is shaped like a checkbox but does not parse "
+                        f"as a record: {checkbox.text!r}. The leaf it names is in no count, "
+                        "so `complete` could be printed over it. Spell it "
+                        "`- [<mark>] <id> <title>`, with a hyphen bullet and a bare dotted "
+                        "numeric id"
+                    ),
+                )
+            )
 
     leaves = tuple(record for record in records if record.is_leaf)
     done = tuple(record for record in leaves if record.is_done)
     pending = tuple(record for record in leaves if record.is_pending)
     still_open = tuple(record for record in leaves if record.is_open)
-    authorable = tuple(record.task_id for record in still_open if not record.is_gated)
+    # Deferred is a terminal sub-state of open: the mark stays ``[ ]``, so ``open`` still
+    # counts it, but it is removed BEFORE authorable and gated are split, so no path that
+    # offers work or names a barrier can see it. Only a REASONED line removes it: a
+    # reasonless one leaves its leaf where it would be without the line (fail-safe), and the
+    # refusal below reads the same predicate, so bucket and refusal cannot disagree.
+    deferred = tuple(record for record in still_open if record.has_deferral_reason)
+    in_scope = tuple(record for record in still_open if not record.has_deferral_reason)
+    authorable = tuple(record.task_id for record in in_scope if not record.is_gated)
     gated = tuple(
-        f"{record.task_id} -> {record.discharge}" for record in still_open if record.is_gated
+        f"{record.task_id} -> {record.discharge}" for record in in_scope if record.is_gated
     )
     open_order = tuple(record.task_id for record in still_open)
     gated_jobs = {
         record.task_id: record.discharge or "(no discharge declared)"
-        for record in still_open
+        for record in in_scope
         if record.is_gated
     }
+    deferred_ids = tuple(sorted((record.task_id for record in deferred), key=_id_order))
     pending_discharges = tuple(
         f"{record.task_id} -> {record.discharge or '(no discharge declared)'}"
         for record in pending
@@ -591,6 +788,52 @@ def census(
                 ),
             )
         )
+    for record in leaves:
+        if not record.is_deferred:
+            continue
+        if record.is_done or record.is_pending:
+            findings.append(
+                CensusFinding(
+                    rule="deferred-marked-done",
+                    outcome=CensusOutcome.UNAVAILABLE,
+                    subject=record.name,
+                    detail=(
+                        f"{record.name} at line {record.line} is marked {record.mark!r} and "
+                        "carries a `deferred:` sub-bullet. Deferral is a state of work never "
+                        "done, so the line contradicts the mark and the census will not "
+                        "choose between them: delete the line, or reopen the leaf as `[ ]`"
+                    ),
+                )
+            )
+        if not record.has_deferral_reason:
+            findings.append(
+                CensusFinding(
+                    rule="deferred-without-reason",
+                    outcome=CensusOutcome.UNAVAILABLE,
+                    subject=record.name,
+                    detail=(
+                        f"{record.name} at line {record.line} carries a `deferred:` "
+                        "sub-bullet with no reason after the key, so it defers nothing. A "
+                        "deferral without its reason is indistinguishable from forgotten work, "
+                        "which is the state deferral exists to rule out: write the operator's "
+                        "reason on that line"
+                    ),
+                )
+            )
+        if record.is_gated:
+            findings.append(
+                CensusFinding(
+                    rule="deferred-and-gated",
+                    outcome=CensusOutcome.UNAVAILABLE,
+                    subject=record.name,
+                    detail=(
+                        f"{record.name} at line {record.line} carries a `deferred:` "
+                        f"sub-bullet and a `discharge:` line ({record.discharge}). Out of "
+                        "scope and gated on a job's proof cannot both be true of one leaf: "
+                        "delete one of the two lines"
+                    ),
+                )
+            )
 
     ordered = tuple(
         sorted(
@@ -606,12 +849,26 @@ def census(
         if any(item.outcome is CensusOutcome.UNAVAILABLE for item in ordered)
         else CensusOutcome.PASS
     )
+    # "The spec is finished" is derived, never written. `bool(leaves)` is the non-vacuity
+    # clause: without it, a tasks file whose records no longer parse would read as complete.
+    # `unparsed is not None` is its per-line form: a leaf the parser cannot see is refused by
+    # `unparsed-checkbox`, and with no scan at all the census cannot know there is none.
+    complete = (
+        bool(leaves)
+        and unparsed is not None
+        and not authorable
+        and not gated
+        and not pending
+        and all(item.outcome is CensusOutcome.PASS for item in ordered)
+    )
     if outcome is CensusOutcome.PASS:
         detail = (
             f"{len(leaves)} leaf task(s): {len(done)} done, {len(pending)} authored "
             f"pending discharge, {len(still_open)} open "
-            f"({len(authorable)} authorable, {len(gated)} CI-gated)"
+            f"({len(authorable)} authorable, {len(gated)} CI-gated, {len(deferred)} deferred)"
         )
+        if unparsed is None:
+            detail += "; completion not judged: no checkbox scan was supplied"
     else:
         detail = next(item.detail for item in ordered if item.outcome is outcome)
 
@@ -629,6 +886,9 @@ def census(
         gated_jobs=gated_jobs,
         pending_discharges=pending_discharges,
         unharvested=unharvested,
+        deferred=len(deferred),
+        deferred_ids=deferred_ids,
+        complete=complete,
         observations=observations,
         findings=ordered,
         outcome=outcome,
@@ -721,7 +981,13 @@ def evaluate(
         )
     records = parse_records(text)
     observations = _observe_disk(records, root=root) if check_files else ()
-    return census(records, spec=spec, source=source, observations=observations)
+    return census(
+        records,
+        spec=spec,
+        source=source,
+        observations=observations,
+        unparsed=unparsed_checkboxes(text),
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -741,7 +1007,9 @@ def format_report(report: LedgerCensus, *, batch: int = DEFAULT_BATCH) -> list[s
         f"  open          : {report.open_count}",
         f"  authorable    : {len(report.authorable)}",
         f"  CI-gated open : {len(report.gated)}",
+        f"  deferred      : {report.deferred}   (out of scope, reason recorded - never offered)",
         f"  unharvested   : {len(report.unharvested)}   (`[~]` with no last-checked: run - G4)",
+        f"  complete      : {'yes' if report.complete else 'no'}",
         f"  status        : {report.outcome.value}  (exit {report.exit_code})",
         f"  reason        : {report.detail}",
     ]

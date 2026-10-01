@@ -227,6 +227,10 @@ evidence · not achieved · not verifiable locally.*
   production serving-path resolver R9.1 and R9.2 are stated against.
 - **Oracle_Arm**: a new arm that plays the analytically optimal policy for a deliberately
   injected, known-exploitable structure. Does not exist.
+  *[RE-CUT 2026-09-29 (session-11 plan): "analytically optimal" is SUPERSEDED. The Oracle_Arm
+  is arm O, a structure-aware base-stock policy; lost sales with a lead time has no closed-form
+  optimum, so R6.3's tolerance is re-cut to cross-instrument agreement (see the R6.2 and R6.3
+  annotations). Not `uplift/regret.py::ORACLE_ARM`, which is `"hindsight"` -- arm D.]*
 - **Power_Report**: the effect-size-versus-detection-probability curve for the
   Uplift_Harness at a given replicate count. Does not exist.
 - **Property_Inventory_Gate**: `tests/verify/test_property_inventory_consistency.py`.
@@ -956,13 +960,22 @@ struck sentence was accurate when written and is retained so the change of state
     promotion's duration.
 11. THE demand-intensity shape SHALL be calibrated from statistics derived from the
     Real_Data_Feed rather than from invented literals.
+    *[RE-CUT 2026-09-29 (session-11 plan, operator decision 1=a): DECLARED, not calibrated --
+    values recorded `chosen` with research provenance (Q3=c), mean exactly one, amplitude swept;
+    no feed is admitted and M5 stays declined, so this is unmet by decision, not pending.
+    Design: ADR-055 D2.8.]*
 12. THE calibrated demand-intensity parameters SHALL be committed to a version-controlled
     policy file rather than embedded as literals in `engine.py`.
 13. WHEN a perfect-foresight policy and a base-stock `(s, S)` policy are each run against the
     non-stationary World_Twin, THE measured `(s, S)` regret SHALL exceed the R5.2 materiality
     margin with its reported interval excluding that margin.
+    *[RE-CUT 2026-09-29 (session-11 plan): judged through the pre-registered primary cell's
+    R5.46 split -- its (E - D) interval against the R5.2 margin (R5.45) -- not on the
+    incumbent's total regret. Design: ADR-055 D2.8.]*
 14. IF the measured `(s, S)` regret on the non-stationary World_Twin is not strictly positive,
     THEN THE non-stationarity SHALL be reported as too weak to make forecasting pay.
+    *[RE-CUT 2026-09-29 (session-11 plan): the weak-non-stationarity reading is the `s1_only`
+    world cell, reported descriptively; it is never the judged cell. Design: ADR-055 D2.8.]*
 
 **Structure 2 — capacity and queueing (R5.15-R5.20).** *Unlocks `routing_navigator` and
 dispatch prioritisation: with infinite capacity, dispatch policy is a no-op.* **DEFERRED under the
@@ -1008,11 +1021,16 @@ struck sentence was accurate when written and is retained so the change of state
 
 21. THE World_Twin SHALL correlate supplier lead time with concurrent demand.
     *[REINSTATED — R5.43 condition met, run `35125443185`, sha `34d861b`.]*
+    *[RE-CUT 2026-09-29 (session-11 plan, finding 66): implemented on the ORDER-PLACEMENT path;
+    `_restock` is switched off in every measured arm, and the lead-time path is shared by every
+    arm. Design: ADR-055 D2.8.]*
 22. THE World_Twin SHALL auto-correlate supplier lead time across consecutive simulated days.
     *[REINSTATED — R5.43 condition met, run `35125443185`, sha `34d861b`.]*
+    *[RE-CUT 2026-09-29 (session-11 plan, finding 66): order-placement path, as R5.21.]*
 23. THE World_Twin SHALL attribute each restock to a named supplier and SHALL expose that
     supplier's realised lead-time history in the `Observation` presented to every arm, so
     `supplier_trust`'s reliability scoring has an observable subject. *[REINSTATED — R5.43 condition met, run `35125443185`, sha `34d861b`.]*
+    *[RE-CUT 2026-09-29 (session-11 plan, finding 66): order-placement path, as R5.21.]*
 24. WHEN a supplier-aware reorder policy and a supplier-blind reorder policy are compared on the
     same replicate seeds, THE supplier-aware policy's aggregate on every KPI named in the R5.33
     objective SHALL be better with the two policies' reported intervals disjoint on at least one
@@ -1023,6 +1041,9 @@ struck sentence was accurate when written and is retained so the change of state
     *[R5.43-discharge annotation: R5.21-R5.23 are no longer held, so R5.24 is **consequentially
     reinstated** on the same reasoning that made it consequentially conditional — its subject now
     lands. Still a consequence for the design phase to confirm, not an operator decision.]*
+    *[RE-CUT 2026-09-29 (session-11 plan): judged on the committed scalar objective --
+    supplier-aware = arm O, supplier-blind = arm E, in the primary cell; the per-KPI "better on
+    every KPI" form above has conflict R's shape. Design: ADR-055 D2.8.]*
 
 **Structures 4 and 5 — perishability coupling and substitution (R5.25-R5.29).** *Unlocks
 `freshness_guardian` and `pricing_oracle`, and creates the multi-objective tension.*
@@ -1048,10 +1069,14 @@ about. Deferred, not deleted (I-7). R5.28 and R5.29 are NOT deferred — see CON
     by construction. It also named "minimise holding cost", a quantity that exists nowhere in the
     tree, and "maximise SLA", which is not a `KpiVector` field.* *[See CONFLICT R: still
     unsatisfiable.]*
+    *[RE-CUT 2026-09-29 (session-11 plan): SUPERSEDED by R5.45 -- conflict R resolved by
+    supersession, not by amendment. Design: ADR-055 D2.8.]*
 29. IF any single-objective policy is Pareto-optimal on the modified World_Twin, THEN THE
     consensus experiment SHALL be reported as having no room to win and SHALL NOT be run,
     because a Pareto-optimal single-objective policy is a proof that consensus is unnecessary.
     *[See CONFLICT R: fires on a theorem, not a measurement.]*
+    *[RE-CUT 2026-09-29 (session-11 plan): SUPERSEDED by R5.45 -- conflict R resolved by
+    supersession, not by amendment. Design: ADR-055 D2.8.]*
 
 **CONFLICT R — R5.28 is unsatisfiable a second time, and R5.29 then fires on a theorem.**
 *Surfaced, not resolved. The argument below is pure logic: no run is needed and none was made.*
@@ -1193,11 +1218,34 @@ leaves open. R5.45 is the sufficiency test R5.3 alone cannot supply.*
     be denominated against the tuned static control declared under R5.42 — the honest baseline,
     measured at `s=20, S=30` — rather than against the incumbent baseline arm, and THE report
     SHALL name the arm it is denominated against, so a reader never has to infer it.
+    *[RE-CUT 2026-09-29 (session-11 plan): the tuned control is RE-DERIVED per world cell;
+    `s=20, S=30` is its unmodified-twin instance only. Design: ADR-055 D2.8.]*
 45. IF an at-or-above-margin R5.3 verdict is cited as establishing the claim R5 exists to support,
     THEN THAT citation SHALL be reported as insufficient, because satisfying R5.3 is necessary but
     not sufficient; THE sufficient test SHALL be the R5.42 information-gap term **alone** clearing
     the R5.2 materiality margin, and a sum of decomposed terms of which no addend clears that
     margin on its own SHALL NOT be reported as satisfying it.
+
+**THE SESSION-11 RE-CUT (R5.46), performed here.** *Operator decisions of the session-11 plan,
+approved 2026-09-29, listed once; annotations cite them by label. Nothing above is renumbered
+and no criterion text is deleted. Design reasoning: ADR-055 D2.8; ledger facts: `tasks.md`.
+Arms: B the incumbent, E the tuned static control (R5.42), O the structure-aware base-stock
+arm, D the hindsight arm.* **1=a** no real-data anchor: world values are declared `chosen`,
+fidelity is `unknown`, and C60 records `unavailable` by decision. **2=a** the headline is the
+ADR-055 D2 scalar objective. **3=a** the information is forwarded to the consensus request and
+its pathway probed; agent internals untouched. **3=c** tasks 20.3 and 21 are deferred to the
+named follow-on spec `.kiro/specs/forecaster-publication/` (named, not created). **3=d** tasks
+17.7 and 17.8 are deferred. **3=e** finding 57's repair is adopted. **Q1=a**
+`Par_Level_Reorder` orders on inventory position. **Q2=a** the binding recommendation is
+applied unless a hard guardrail BLOCKed it, withheld decisions are counted, and the claim is
+worded "recommendations, if executed". **Q3=c** declared values are researched first.
+
+46. WHEN checkpoint B-prime runs, THE Uplift_Harness SHALL report, per declared world cell, the
+    split B - D = (B - E) + (E - O) + (O - D) -- incumbent minus hindsight equals tuning gap plus
+    achievable information value plus residual value of perfect information -- exact over
+    `Fraction` with each term's interval, and THE checkpoint SHALL be judged on the
+    pre-registered primary cell's (E - D) interval against the R5.2 margin alone; no other cell
+    may be promoted to primary except by a recorded operator decision before any E5 run.
 
 **Two notes the design phase owes an answer to, recorded here rather than legislated as
 criteria.** `orders_spoiled` increments **per SKU per tick**, so `spoilage_rate` is a tick-count
@@ -1212,6 +1260,9 @@ mandated is the marked block above. R5.15-R5.20 and R5.25-R5.27 are deferred; ~~
 R5.21-R5.23 are conditional on R5.43~~ **R5.8-R5.14 and R5.21-R5.23 are REINSTATED — R5.43's
 condition was tested and met by run `35125443185`, sha `34d861b`**; R5.28 is unsatisfiable per
 CONFLICT R. Everything else is not achieved.*
+*[RE-CUT 2026-09-29 (session-11 plan): verdict unchanged -- partially achieved. R5.28 and R5.29
+are SUPERSEDED by R5.45 rather than unsatisfiable-and-pending; R5.11 is unmet by decision 1=a;
+R5.46 is added and not achieved.]*
 
 **Falsification.** *What would prove this finding false:* a measured, materially positive
 `(s, S)` regret on the unmodified twin (R5.1). ~~*Not attempted — requires compute that I-0
@@ -1285,18 +1336,30 @@ it is: a **pre-registered target** carried from the blueprint, not a measurement
    the sole named comparator, THE Uplift_Harness SHALL report a headline uplift whose 95%
    interval contains zero. *(Restates `purpose-achievement-audit` R2.6 as a dependency of R6.2;
    the comparator is named here because the harness pools baselines by default.)*
+   *[RE-CUT 2026-09-29 (session-11 plan, finding 69): run on DISJOINT seed sets paired by
+   index -- identical arms on identical seeds give a [0, 0] interval, which cannot fail.]*
 2. WHEN a known-exploitable structure is present in the World_Twin and an Oracle_Arm plays
    the analytically optimal policy for that structure against a single named baseline comparator,
    THE Uplift_Harness at `MIN_POWERED_REPLICATES` per arm SHALL report a headline uplift whose
    95% interval lies entirely above zero. *(NEW — closes the gap in `purpose-achievement-audit`
    R2. "Lies entirely above zero" replaces "excludes zero", which an interval entirely below zero
    also satisfies.)*
+   *[RE-CUT 2026-09-29 (session-11 plan): the Oracle_Arm is arm O, the structure-aware
+   base-stock arm -- not arm D, which `uplift/regret.py` calls the oracle (hindsight). Arm O is
+   structure-aware, not analytically optimal: no closed-form optimum exists here (R6.3).]*
 3. WHEN the Oracle_Arm result is reported, THE measured effect SHALL fall within a declared
    tolerance of the analytic optimum for the injected structure. *The tolerance does not yet
    exist and SHALL be committed as a pinned value before the run that is judged against it.*
+   *[RE-CUT 2026-09-29 (session-11 plan): no closed-form optimum exists for lost sales with a
+   lead time, so the tolerance becomes CROSS-INSTRUMENT AGREEMENT -- the harness-measured O - E
+   must agree with the comparator-measured E - O (both positive when O beats E), the interval
+   on their difference containing 0, and must not exceed the ceiling E - D. The pinned value is
+   that agreement rule, not a number. Design: ADR-055 D2.8.]*
 4. IF the measured Oracle_Arm effect falls outside that tolerance, THEN THE Uplift_Harness
    SHALL be reported as mis-measuring, and THE Oracle_Arm SHALL NOT be reported as
    under-performing.
+   *[RE-CUT 2026-09-29 (session-11 plan): "outside that tolerance" now means the R6.3
+   agreement rule fails; the harness, never arm O, is then reported as mis-measuring.]*
 5. THE Power_Report SHALL state, for the committed replicate count and the observed variance,
    the minimum effect size the Uplift_Harness detects at a declared detection probability.
 6. THE Power_Report SHALL be committed to version control as a generated artifact declared
@@ -1345,6 +1408,8 @@ it is: a **pre-registered target** carried from the blueprint, not a measurement
 
 **Verdict: not achieved.** The negative control is specified and unrun; the positive control
 is unspecified until this requirement.
+*[RE-CUT 2026-09-29 (session-11 plan): verdict unchanged -- not achieved. The positive control
+now names its arm (O) and an agreement-rule tolerance (R6.3); nothing has run.]*
 
 ---
 
@@ -1388,6 +1453,10 @@ entirely.
 **Eight of the fourteen criteria below describe behaviour that already exists and is already
 tested. They are demoted to regression pins, with the covering test named, so nobody implements
 them twice:**
+*[RE-CUT 2026-09-29 (session-11 plan): R7 now has twenty-one criteria, and the list under this
+line names six, not eight (R7.18 declares itself a seventh pin). R7.19-R7.21 were added by the
+re-cut; R7.8, R7.9, R7.12 and R7.13 (its raise only) are UNREACHABLE BY DECISION (1=a) -- see
+each criterion's annotation and the re-cut note under the verdict.]*
 
 - **R7.3-R7.6** are covered comprehensively by the `_inadmissible` strategy in
   `tests/uplift/test_uplift_admissibility_property.py` — `incomplete` incomplete/absent/
@@ -1444,10 +1513,17 @@ needed.
    stubbing to `True` cannot change an exit code that is already `EXIT_PASS`.)*
 8. THE mutation that replaces `is_proven_uplift` SHALL be declared in
    `infrastructure/quality/gate-mutations.yaml`.
+   *[UNREACHABLE BY DECISION (1=a): C60 reaches proven only with `within_fidelity_bound is True`
+   (uplift/uplift_floor.py:239 in `is_proven_uplift`; :140 in `PoweredProof.supports`, for a
+   raise), derived from the KL gauge (uplift/harness.py:1072-1076) that only
+   digital_twin/sync/divergence_monitor.py:118 sets and no CI job runs (finding 71); tasks 17.5,
+   17.6, 17.9, 22.3 deferred. C60 records `unavailable`, never `proven`.]*
 9. WHEN the Falsification_Sweep runs inside the job that generates the uplift evidence, THE
    sweep SHALL probe the declared `is_proven_uplift` mutation, because
    `gate-mutations.yaml` records that generating job as the only context in which C60 can be
    falsified.
+   *[UNREACHABLE BY DECISION (1=a): as R7.8 -- task 17.9 deferred; with no admitted passing
+   artifact the probe can only report `indeterminate`.]*
 10. THE job that runs the Uplift_Harness and evaluates the Uplift_Gate SHALL be declared in
     `infrastructure/quality/required-checks.yaml` under `ineligible` with the recorded reason
     `post-merge`, because that file's eligibility rule admits only checks produced by every pull
@@ -1458,8 +1534,12 @@ needed.
 12. WHEN `UPLIFT_FLOOR` is raised above `0.0`, THE raise SHALL be admitted only through
     `ratchet_to_measured` against a `PoweredProof` built from an artifact regenerated in the
     same job.
+    *[UNREACHABLE BY DECISION (1=a): as R7.8 -- no `PoweredProof` can support a raise
+    (uplift/uplift_floor.py:140-141); tasks 17.5, 17.6 and 22.3 deferred.]*
 13. IF a proposed `UPLIFT_FLOOR` value is below the previously committed value, THEN THE raise
     SHALL be rejected, because the floor is a monotonic ratchet.
+    *[UNREACHABLE BY DECISION (1=a), for the raise only: as R7.8, task 22.3 deferred. The refusal
+    to LOWER the floor stays live and pinned -- a regression pin, per this requirement's preamble.]*
 14. WHEN the powered run completes, THE reported headline uplift SHALL be accompanied by its
     interval at `1 - alpha` in the same output. *The interval does not exist today (R6.13), and
     carrying it in `UpliftArtifact` is a schema change against an `extra="forbid"` model with a
@@ -1474,6 +1554,7 @@ needed.
     `.github/workflows/uplift.yml`, THE CI_Pipeline SHALL report on that pull request whether the
     most recent recorded powered run predates the change, so a stale proof cannot silently outlive
     the code it measured.
+    *[DEFERRED (3=d): tasks 17.7 and 17.8, its only implementing leaves.]*
 17. WHEN an `UpliftArtifact` carrying an interval is serialised and read back, THE read-back
     artifact SHALL equal the original and its canonical serialisation SHALL be byte-identical,
     because the interval is a schema change to a byte-pinned model.
@@ -1482,9 +1563,32 @@ needed.
     because the interval half is new work and this half is not: already co-located and pinned by
     `tests/uplift/test_headline_fidelity_colocation_property.py`, retained as a regression pin.)*
 
+**Added by the session-11 re-cut (R7.19-R7.21).** *These continue R7's sequence; nothing above
+is renumbered. The operator decisions they cite are listed once, in R5's session-11 block.*
+
+19. THE headline SHALL be the mean paired difference of the ADR-055 D2 scalar objective between
+    the consensus arm and the single named comparator, in objective units and signed so that a
+    positive value favours the consensus arm, with its `1 - alpha` interval, classified four
+    ways: interval entirely above the R5.2 margin = win; entirely above 0 but not entirely above
+    the margin = sub-margin gain; containing 0 = inconclusive; entirely below 0 = baseline wins.
+    `fill_rate` and every other `KpiVector` field are secondary (decision 2=a; finding 64:
+    `fill_rate` rises with stock).
+20. WHEN the consensus protocol withholds dispatch for low confidence, THE Uplift_Harness SHALL
+    apply the binding recommendation unless a hard guardrail BLOCKed it (I-6), SHALL count
+    dispatched, withheld-for-confidence, guardrail-blocked and untranslatable decisions per run,
+    and THE published claim SHALL be worded as recommendations if executed, with the dispatch
+    rate beside the headline (decision Q2=a).
+21. THE consensus request SHALL carry on-order stock, supplier lead-time history and demand to
+    date, and a pathway probe SHALL report how often each input changes the binding decision; a
+    probe showing no response is a finding reported beside E5's number, never a relabelling of it
+    (decision 3=a; finding 68).
+
 **Verdict: implemented but not integrated.** The predicate is reachable, the artifact is no
 longer committed, and the workflow exists; the measurement has never been taken and nothing
 requires it.
+*[RE-CUT 2026-09-29 (session-11 plan): verdict unchanged -- implemented but not integrated. By
+decision 1=a C60 records `unavailable` and never `proven`, so R7.8, R7.9, R7.12 and R7.13's
+raise are unreachable and R7.16 is deferred (3=d); R7.19-R7.21 are added and not achieved.]*
 
 **Falsification.** *What would prove this finding false:* a recorded artifact with
 `incomplete: false` at `MIN_POWERED_REPLICATES`, or a required-check entry for `uplift.yml`.
@@ -1724,8 +1828,11 @@ Also recorded, each read directly:
 1. WHEN a checkpoint is published and recorded in the Published_Checkpoint_Registry, THE
    Model_Registry SHALL resolve it through the production serving path and return an object
    whose `degraded` attribute is false.
+   *[DEFERRED (3=c) to .kiro/specs/forecaster-publication/ (named, not created)]*
 2. WHEN a checkpoint is resolved through the production serving path, THE returned version
    string SHALL contain the sha recorded in the Published_Checkpoint_Registry.
+   *[PARTLY DEFERRED (3=c): resolving a REAL published checkpoint (20.3, task 21 condition 1);
+   the recorded-sha-absent-from-version refusal is landed (18.5, Property 72).]*
 3. WHILE a real checkpoint is resolved, its restored calibrator returns intervals, and features
    are served from the online feature path, THE Demand_Forecaster SHALL report a
    `confidence_basis` of `CONFORMAL_INTERVAL`. *(Live expression, `pipeline.py:282-285`:
@@ -1735,17 +1842,28 @@ Also recorded, each read directly:
    — Feast resolved, model absent, still degraded — which is what establishes the terms as
    independent contributors. As previously written this criterion would fail whenever Feast is
    unreachable, for a reason that has nothing to do with the checkpoint.)*
+   *[PARTLY DEFERRED (3=c): only task 21 condition 2, the observation on a real resolved
+   checkpoint; the three-term disjunction is landed (20.1, 20.2).]*
 4. WHILE a real checkpoint is resolved, WHEN a batch of at least three SKUs carrying distinct
    feature vectors is served, THE Demand_Forecaster SHALL report at least two distinct confidence
    values at the four decimal places it serves, because a confidence that does not move across
    SKUs disables the I-5 HITL gate.
+   *[PARTLY DEFERRED (3=c): only task 21 condition 3, the spread observed on a real checkpoint;
+   the spread rule is landed (20.1, 20.2).]*
 5. IF the artifact resolved from the Published_Checkpoint_Registry was produced by a smoke
    run, THEN THE published-checkpoint check SHALL exit non-zero, and THE reported detail
    SHALL distinguish a smoke artifact from an absent artifact.
+   *[PARTLY DEFERRED (3=c): judging an artifact actually resolved from the registry (20.3); the
+   smoke-versus-absent distinction is landed (18.5, Property 72).]*
 6. THE `allow_local_substitution` flag SHALL remain false.
+   *[PARTLY DEFERRED (3=c): only 20.3's keep-the-pin-while-landing clause; the pin stays
+   enforced here by the landed `assess` POLICY clause (18.3; `published_checkpoint_truth.py:1591`),
+   which no leaf's Requirements line maps to R9.6.]*
 7. IF a recorded sha cannot be fetched from the declared zero-cost serving source, THEN THE
    published-checkpoint check SHALL exit non-zero and SHALL NOT resolve a locally built
    checkpoint in its place.
+   *[PARTLY DEFERRED (3=c): fetching a REAL recorded sha (20.3); the refusal to substitute a
+   local candidate is landed and proven by construction (18.5, Property 72).]*
 8. WHEN the Published_Checkpoint_Registry entry records `final_crps`, THE published-checkpoint
    check registered in the Check_Registry SHALL recompute that value from the published held-out
    predictions by the committed method and SHALL exit non-zero when the absolute difference
@@ -1761,6 +1879,8 @@ Also recorded, each read directly:
     committed, THE published-checkpoint check `C46` SHALL report a status derived from the fetched
     artifact and the committed record, replacing its current
     `DP_HF_REPO unset - no published model claimed (operator step)` SKIP.
+    *[PARTLY DEFERRED (3=c): a status derived from a REAL fetched artifact (20.3, task 21); the
+    total outcome-to-status projection is landed (18.5, Property 72).]*
 12. WHEN the commit that publishes a checkpoint lands, THAT commit SHALL include the
     Truth_Ledger's generated region as projected by one Check_Registry execution at that revision,
     so every changed check status is generated rather than transcribed. *(The original "SHALL name
@@ -1774,10 +1894,14 @@ Also recorded, each read directly:
     PASS (I-7). *(Closes the live hole recorded above: `evaluate` returns `ok` on `UNAVAILABLE`.
     It also forces the registered surface to be the one carrying the recompute clauses, since a
     criterion stated against `assess` while C46 calls `evaluate` binds nothing.)*
+    *[PARTLY DEFERRED (3=c): only task 21's observation that the recompute ran on a published
+    sidecar; the recompute-or-unavailable rule is landed (18.2-18.4).]*
 15. WHERE a job is required to report `C38`, `C40` or `C45` against a published checkpoint, THAT
     job SHALL first materialise the published checkpoint and its sidecar at the serving checkpoint
     path those checks read, because all three read local training artifacts and publication to the
     remote source alone leaves them SKIPped.
+    *[PARTLY DEFERRED (3=c): only task 21's observation of the three reading a materialised
+    artifact; the materialisation step is landed (20.4).]*
 16. WHILE the Demand_Forecaster reports `degraded` as true, THE Atlas_Console SHALL render that
     degradation on every surface that displays the agent's output.
 
