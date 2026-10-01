@@ -1,20 +1,23 @@
 # =======================================================================================
-# COMPARATOR TUNING GRID -- the pre-registered search arm E is chosen from.
+# COMPARATOR TUNING SPEC, VERSION 2 -- the pre-registered search arm E is chosen by.
 # =======================================================================================
-# Session 10, ADR-055 D2.6, finding 61. Read by `uplift/tuning.py`; consumed by
-# `uplift/regret.py::_measure` to build arm E, the TUNED STATIC par-level control.
+# Created in session 10 (ADR-055 D2.6, finding 61). Version 2 is leaf 13.7a of task 13.7's
+# re-scope, which re-derives arm E in every world cell. Read by
+# `uplift/tuning.py::load_tuning_spec`, which REFUSES a missing key, an unknown key and any
+# version but 2 -- so every value below is read, and version 1's grid survives only as the
+# comment block at the end of this file.
 #
 # WHY ARM E EXISTS, in one paragraph, because a reader of this file needs the intent and
-# not the mechanism. Task 11 measured a `material` regret of the incumbent `(s, S)` policy
-# against a hindsight oracle. That gap is the incumbent's own mis-tuning PLUS the value of
-# perfect information, and only the second part is anything a forecaster or a consensus
-# system could ever win. Arm E is the best STATIC policy, so it splits the gap in two:
+# not the mechanism. Checkpoint B-prime splits the incumbent's regret against the hindsight
+# oracle into three terms (R5.46):
 #
-#     regret(reference - hindsight) = [reference - tuned]  +  [tuned - hindsight]
-#                                   =  tuning gap          +  information ceiling
+#     B - D = (B - E)      + (E - O)                      + (O - D)
+#           = tuning gap   + achievable information value + residual value of information
 #
-# The second term is EVPI in its textbook sense -- perfect information minus the best
-# here-and-now decision -- and no information-gathering activity can be worth more than it.
+# E is the tuned STATIC control this file pre-registers; O is the structure-aware
+# base-stock arm. B-prime judges E - D, the information ceiling, and A WEAK E INFLATES IT --
+# the unsafe direction, a false "room to win". So E must be the best static policy FOR THE
+# WORLD UNDER MEASUREMENT, derived in each cell rather than carried over from another one.
 #
 # =======================================================================================
 # WHY THIS FILE IS NOT IN `digital_twin/simulation/policy.yaml`
@@ -23,20 +26,19 @@
 # `doc-number-pins.yaml` and carries a `ratchets.json` entry, with each pin's extractor
 # verified by running it. A pin is a triple -- document anchor, mechanical source,
 # extractor -- and `doc_truth.documented_value` requires the anchor to match EXACTLY ONE
-# line. **A grid is a list, so it has no single documented value to anchor to**, and a
-# `yaml_path:` extractor resolving to a sequence cannot be compared against one sentence.
+# line. **The rule's `z_values` and `gaps` are lists, so they have no single documented
+# value to anchor to**, and a `yaml_path:` extractor resolving to a sequence cannot be
+# compared against one sentence. The precedent for the alternative is in that same file:
+# the measured comparator headroom is recorded there as PROSE rather than as a key, for
+# exactly this reason. So the rule lives here, reached through
+# `uplift/tuning.py::DEFAULT_TUNING_PATH`, and no pin is owed on a list. (Version 1 said
+# `policy.yaml`'s comparator block points at this file. It does not -- nothing in it names
+# this file -- so the claim is corrected here rather than copied forward.)
 #
-# Putting the grid there would therefore either break contract 2 or require a pin that
-# cannot be written. The precedent for the alternative is in that same file: the measured
-# comparator headroom is recorded there as PROSE rather than as a key, for exactly this
-# reason. So the grid lives here, `policy.yaml`'s comparator block POINTS at it, and no
-# pin is owed on a list.
-#
-# WHAT IS STILL OWED, stated rather than left implicit: the two levels the search SELECTS
-# are reported in `artifacts/uplift/twin-regret.json` and are NOT committed as literals
-# anywhere. That is deliberate. Committing them would make them look read rather than
-# derived, which is the distinction finding 61 turns on -- the incumbent's `s` and `S` are
-# read from the engine's own defaults, and arm E's are chosen by this search.
+# WHAT IS STILL OWED, stated rather than left implicit: the levels the search SELECTS --
+# one (s, S) per supplier group, per world cell -- are reported in the run's artifact and
+# are NOT committed as literals anywhere. That is deliberate. Committing them would make
+# them look read rather than derived, which is the distinction finding 61 turns on.
 #
 # =======================================================================================
 # THE PRE-REGISTRATION, AND WHY THE SEEDS ARE DISJOINT
@@ -49,49 +51,64 @@
 # testing, so the search runs on a disjoint range and arm E is then measured on the same
 # seeds every other arm uses.
 #
-# The bias direction of the repair is stated so it can be checked: out-of-sample levels can
-# only make the tuning gap SMALLER and the information ceiling LARGER than in-sample ones
-# would. So this choice makes finding 61's hypothesis HARDER to confirm, which is the only
-# direction in which adopting a stricter standard than the criterion demands is legitimate.
-version: 1
+# THE BIAS DIRECTION DEPENDS ON THE QUESTION (R1), and this paragraph used to state it for
+# one question only. Arm E's levels are the minimum of noisy TUNING means, so measured on
+# the disjoint measurement seeds their cost is biased UP in expectation -- the winner's
+# curse -- and with it the information ceiling E - D. For finding 63's question ("is the
+# ceiling SMALL?", finding 61's hypothesis) that is the safe side: an inflated ceiling makes
+# "small" harder to confirm. For checkpoint B-prime's question ("is the ceiling LARGE
+# enough?") it is the UNSAFE side: an inflated ceiling is a false "room to win". So the
+# comparator also reports an IN-SAMPLE RECHECK (`uplift/regret.py`): the `recheck_top_k`
+# cheapest vectors the search evaluated (`GroupTunedSelection.ranked`) plus the selection's
+# unit moves (`uplift/tuning.py::neighbours`), each measured on EVERY measurement seed. Its
+# minimum is biased DOWN, so its ceiling is biased DOWN, and B-prime's binding `room_to_win`
+# requires BOTH ceilings' intervals above the margin; the out-of-sample reading stays
+# reported beside it.
+# Version 2's per-group search (`tune_group_levels`) is not told the measurement range, so
+# its caller must run `seed_overlap_refusal` first; version 1's search ran it internally.
+version: 2
 
 # ---------------------------------------------------------------------------------------
-# The grid. Enumerated rather than generated, so it is countable, diffable and cannot
-# change meaning when someone edits a range expression.
+# The candidate rule. It repairs the two defects version 1's arm E had once suppliers and
+# lead times entered the world (structure 3).
 # ---------------------------------------------------------------------------------------
-# `Par_Level_Reorder` requires integral levels with 0 <= s < S, and `uplift/tuning.py`
-# refuses the whole file if any pair violates that rather than skipping the pair -- a
-# silently dropped candidate is a search over a grid nobody declared.
+# (1) One (s, S) shared by every SKU is not the best static policy once suppliers differ,
+#     so arm E is tuned PER SUPPLIER GROUP; with structure 3 off there is one group and the
+#     policy decides exactly as `Par_Level_Reorder` (`uplift/tuned_static.py`).
+# (2) A fixed grid sized for instantaneous replenishment cannot contain the optimum once
+#     lead-time demand is several times larger. So the candidates are DERIVED, per group,
+#     from the demand a base-stock level has to cover -- the lead time plus one review:
 #
-# THE INCUMBENT'S OWN LEVELS ARE A MEMBER, at s=50/S=100, and that is structural rather
-# than courteous: it means the search's minimum over the TUNING seeds can never be worse
-# than the incumbent there, so a negative tuning gap on the MEASUREMENT seeds is
-# unambiguously an out-of-sample effect and not an artefact of a grid that excluded the
-# thing it is compared against.
+#        mu    = rate * (L_g + review_min)       L_g = the group's declared mean lead time,
+#        sigma = sqrt(mu + (rate * L_g)^2 * (exp(log_sd^2) - 1))      0 with structure 3 off
+#        S     = max(1, round(mu + z * sigma))   for each z; deduplicated, ascending
 #
-# The span is chosen from what the twin already tells us and is recorded so the choice can
-# be argued with: the incumbent holds about 0.74 objective units of inventory and the
-# hindsight oracle about 0.28 (run 34685048665), so the interesting region is BELOW the
-# incumbent, and a grid that only went upward could not find it.
-grid:
-  - {s: 0, S: 10}
-  - {s: 0, S: 25}
-  - {s: 0, S: 50}
-  - {s: 10, S: 20}
-  - {s: 10, S: 35}
-  - {s: 10, S: 60}
-  - {s: 20, S: 30}
-  - {s: 20, S: 45}
-  - {s: 20, S: 70}
-  - {s: 30, S: 40}
-  - {s: 30, S: 55}
-  - {s: 30, S: 80}
-  - {s: 40, S: 50}
-  - {s: 40, S: 65}
-  - {s: 40, S: 90}
-  - {s: 50, S: 60}
-  - {s: 50, S: 75}
-  - {s: 50, S: 100}
+# and `uplift/tuning.py::tune_group_levels` starts every group at the incumbent, extends the
+# box geometrically when the best S sits on its edge, refines to unit steps, re-tries
+# base-stock at the refined S, checks (s, S) gaps, and REFUSES -- reported, never raised --
+# on a search-box boundary or on non-convergence. It certifies a unit-step LOCAL minimum --
+# no move of s alone, of S alone, or of both with the band kept improves (R3) -- and claims
+# no more.
+candidate_rule:
+  provenance: >-
+    chosen in session 11 (leaf 13.7a), not calibrated. The objective carries no fixed
+    ordering cost, so base-stock (s = S - 1) is the natural static class and is searched
+    first; (s, S) gaps are still checked. review_min is the comparator's decision cadence
+    (uplift/foresight.py FORESIGHT_WINDOW_MIN), and Property 81 asserts the two agree.
+    z spans one sd below the protected mean to six above; demand peaks the stationary sigma
+    under-covers (structure 1's busy hours) are reached by extension, not by a wider z. The
+    two bounds cap one cell's search at the budget projected below. recheck_top_k is chosen
+    too (wave 2b, R1), for the in-sample recheck described above the version key: it is how
+    many of the search's cheapest vectors are re-measured beside the selection's unit moves,
+    and it bounds the recheck at the budget projected below.
+  review_min: 60
+  z_values: [-1.0, -0.5, 0.0, 0.5, 1.0, 1.5, 2.0, 2.5, 3.0, 4.0, 5.0, 6.0]
+  extension_factor: 2.0
+  max_extensions: 3
+  gaps: [5, 10, 25]
+  max_passes: 6
+  max_evaluations: 400
+  recheck_top_k: 5
 
 # ---------------------------------------------------------------------------------------
 # The tuning seed range -- DISJOINT from the measurement range by construction.
@@ -105,22 +122,68 @@ tuning_seeds:
   count: 100
 
 # ---------------------------------------------------------------------------------------
-# Cost, recorded because `execution-routing.md` forbids sizing against an unmeasured
-# workload, and this is the measurement it would otherwise lack.
+# Cost. A PROJECTION, not a measurement, recorded because `execution-routing.md` forbids
+# sizing against an unmeasured workload and this is the nearest measurement there is.
 # ---------------------------------------------------------------------------------------
-# Run 34685048665 measured FOUR arms x 200 replicates -- 800 arm-replicates -- in 1.1
-# minutes of measure-step wall clock (1.6 min for the whole job). Cost is linear in
-# arm-replicates: ADR-055 records adding arm D as "+33%", which is exactly 3 arms -> 4.
+# One evaluation is one candidate level vector costed at every tuning seed, so it costs
+# tuning_seeds.count arm-replicates. Run 34685048665 measured 800 arm-replicates in 1.1
+# minutes of measure-step wall clock -- about 0.08 s per 24 h arm-replicate (66 s / 800)
+# -- on the UNMODIFIED twin. The in-sample recheck re-measures at most recheck_top_k
+# vectors plus 4 unit moves per group, each on every measurement seed. One world cell is
+# therefore bounded by
 #
-# This grid adds 18 x 100 = 1800 tuning arm-replicates plus arm E's own 200 measured ones,
-# taking the job from 800 to 2800 units -- about 3.5x, or roughly 4 minutes against a
-# committed `timeout-minutes: 120`. No new job and no timeout change is needed, and both
-# were considered: the sibling `uplift-proof` job sits at 350 minutes, so headroom was
-# never the constraint. It is recorded here so the next person to widen the grid can size
-# it from a measurement instead of re-deriving one.
+#     search:  max_evaluations x count            = 400 x 100         = 40000
+#     recheck: (recheck_top_k + 4 x groups) x reps = (5 + 4 x 3) x 200 =  3400
+#     total arm-replicates                                            = 43400
+#                                  ~ 43400 x 66 s / 800 = 3580.5 s ~ 60 minutes,
+#
+# where groups = 3 is the most supplier groups any committed cell has and reps = 200 is
+# `uplift.yml::twin-regret`'s `--replicates`; Property 81 binds both to their sources. That
+# is inside the job's committed `timeout-minutes: 120`, beside the measurement's own 6 arms
+# x 200 replicates (~100 s). UNMEASURED, and stated so it is not assumed: the per-replicate
+# cost with structures 1 and 3 on (every in-transit order is a process), and the TYPICAL
+# evaluation count, which the artifact's `evaluations` field will record. `load_tuning_spec`
+# refuses this block when either projection stops equalling its formula, so neither can go
+# stale silently.
 budget:
+  provenance: >-
+    projection derived from run 34685048665's measured rate on the unmodified twin; not
+    itself measured. The recheck's two inputs are declared here and bound to their sources
+    by Property 81: recheck_max_groups to the committed world's cells,
+    recheck_measurement_replicates to uplift.yml::twin-regret's --replicates.
   measured_reference_run: "34685048665"
   measured_arm_replicates: 800
   measured_measure_step_minutes: 1.1
-  added_arm_replicates: 2000
-  projected_total_arm_replicates: 2800
+  projected_max_tuning_arm_replicates: 40000
+  recheck_measurement_replicates: 200
+  recheck_max_groups: 3
+  projected_max_recheck_arm_replicates: 3400
+
+# =======================================================================================
+# history: v1 grid (finding 63's search, run 35125443185)
+# =======================================================================================
+# COMMENTS, NOT VALUES: no reader reads this block, so the every-value-is-read contract at
+# the top of this file holds. Version 1 searched these 18 (s, S) pairs -- one pair shared
+# by every SKU, sized for the instantaneous world. The incumbent's own s=50, S=100 was a
+# member, so the minimum could not be worse than the incumbent on the tuning seeds;
+# version 2 keeps that guarantee by STARTING its search at the incumbent and accepting
+# only strict improvements, and `GroupTunedSelection` asserts mean_cost <= incumbent_cost.
+# R5.44 records the tuned control on the unmodified twin at s=20, S=30, a member below.
+#   - {s: 0, S: 10}
+#   - {s: 0, S: 25}
+#   - {s: 0, S: 50}
+#   - {s: 10, S: 20}
+#   - {s: 10, S: 35}
+#   - {s: 10, S: 60}
+#   - {s: 20, S: 30}
+#   - {s: 20, S: 45}
+#   - {s: 20, S: 70}
+#   - {s: 30, S: 40}
+#   - {s: 30, S: 55}
+#   - {s: 30, S: 80}
+#   - {s: 40, S: 50}
+#   - {s: 40, S: 65}
+#   - {s: 40, S: 90}
+#   - {s: 50, S: 60}
+#   - {s: 50, S: 75}
+#   - {s: 50, S: 100}

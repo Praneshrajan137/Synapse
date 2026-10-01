@@ -198,6 +198,8 @@ def test_a_replicate_is_usable_only_when_all_three_arms_shared_a_demand_path(
         noop=SupplyChainSimulation(seed=0),
         reference=SupplyChainSimulation(seed=0),
         foresight=SupplyChainSimulation(seed=0),
+        # Precondition correction (13.7b): arm O is now required; the predicate ignores it.
+        structure_aware=SupplyChainSimulation(seed=0),
         demand_identical=identical,
     )
     assert result.usable is (identical and events > 0)
@@ -245,6 +247,7 @@ def test_the_three_arms_see_an_identical_demand_path(seed: int) -> None:
         hours=_PROBE_HOURS,
         restock_threshold=comparator_restock_threshold(),
         reference_policy=_reference_arm(seed),
+        world=None,  # Precondition correction (13.7b): world is required; None = this world.
     )
     assert result.demand_identical, (
         f"seed {seed}: the three arms disagreed on the demand path, so the regret would be "
@@ -268,6 +271,7 @@ def test_the_no_op_headroom_bounds_the_reference_arms_regret(seed: int) -> None:
         hours=_PROBE_HOURS,
         restock_threshold=comparator_restock_threshold(),
         reference_policy=_reference_arm(seed),
+        world=None,  # Precondition correction (13.7b): world is required; None = this world.
     )
     if not result.usable:
         pytest.skip(f"seed {seed} produced no usable evidence; excluded, never averaged in")
@@ -315,6 +319,7 @@ def test_the_reference_arm_actually_reorders(seed: int) -> None:
         hours=_PROBE_HOURS,
         restock_threshold=comparator_restock_threshold(),
         reference_policy=_Recording(),  # type: ignore[arg-type]
+        world=None,  # Precondition correction (13.7b): world is required; None = this world.
     )
     assert decisions, (
         f"seed {seed}: the (s, S) reference arm never reordered over "

@@ -1,13 +1,14 @@
-"""The foresight comparator: four arms at one seed, one cadence (R5.1, R5.37).
+"""The foresight comparator: six arms at one seed, one cadence, one world cell (R5.1, R5.37).
 
 Feature: decision-quality-proof, task 10.2. Implements **AD-18**.
 
 **Read this first if the module name or ``run_three_pass`` misleads you.** The comparator was
-authored as two passes, gained the ``(s, S)`` reference arm in session 5 (conflict M) and gains
-the hindsight arm in session 9 (ADR-055 **D2.5.4**), so it now runs **four**. The function keeps
-the name ``run_three_pass`` because renaming it would edit
-``tests/uplift/test_three_arm_comparator_property.py``, which this repair may not touch; the
-rename is owed and is recorded here rather than hidden.
+authored as two passes, gained the ``(s, S)`` reference arm in session 5 (conflict M), the
+hindsight arm in session 9 (ADR-055 **D2.5.4**), the tuned static arm E in session 10 (D2.6) and
+the structure-aware arm O in task 13.7b, so it now runs **six** -- every one of them in the world
+cell it is handed (``world``; ``None`` is the world before structures 1 and 3). The function
+keeps the name ``run_three_pass`` because every caller and landed property imports it under that
+name; the rename is owed and is recorded here rather than hidden.
 
 **Foresight is a recorded trace, not a re-derivation.** ``DecisionPolicy.decide(obs)`` sees only
 present state, so a perfect-foresight policy cannot exist without knowing future demand. Two
@@ -36,14 +37,16 @@ runs on a development machine.
 from __future__ import annotations
 
 import dataclasses
+import math
 from typing import TYPE_CHECKING, Final
 
 from digital_twin.simulation.engine import DemandTrace, SupplyChainSimulation
 from uplift.interfaces import PolicyAction
 
 if TYPE_CHECKING:  # annotation-only
-    from collections.abc import Mapping
+    from collections.abc import Callable, Mapping
 
+    from digital_twin.simulation.world import ResolvedWorld
     from uplift.interfaces import DecisionPolicy, Observation
 
 __all__ = [
@@ -51,7 +54,9 @@ __all__ = [
     "HindsightOraclePolicy",
     "NoOpRecordingPolicy",
     "ThreePassResult",
+    "run_single_arm",
     "run_three_pass",
+    "stocked_skus",
 ]
 
 #: How far ahead the foresight policy provisions, in simulated minutes. Matches the engine's
@@ -189,9 +194,26 @@ class HindsightOraclePolicy:
     contradicted by the arm losing to its subject on the service terms -- it attains their exact
     floor.
 
-    **What would make this arm wrong.** ``unmet_demand_events > 0`` for this arm in any
-    replicate. ``_measure`` reports ``cost_decomposition.hindsight_attains_zero_unmet`` per run
-    precisely so that falsifier is mechanical rather than remembered.
+    **Under a replenishment delay (structure 3, task 13.7b) the same argument moves one step.**
+    An order placed at ``t`` lands at ``a(t)``, where ``a`` is THIS arm's own engine's
+    ``arrival_time_for`` -- a function of seed, supplier and placement time alone, identical for
+    every arm at one seed and non-decreasing in ``t`` at a fixed shock multiplier
+    (``digital_twin/simulation/lead_time.py``), so reading it is the same perfect information
+    about the world the demand trace already is, not leakage. Stock placed at ``t`` must then
+    serve every fulfilment until the NEXT order lands at ``a(t + w)``, so the target becomes
+    ``max(I, G(c))`` with ``c = min(a(t + w), horizon)`` -- capped because nothing fulfilled after
+    the run ends is measured -- and the first decision starts from ``I`` alone, since no earlier
+    order exists. With ``arrival_time_for`` ``None`` the arm is the rule above, byte for byte.
+    Its unmet demand is then the FLOOR, not zero: only demand fulfilled before a SKU's first
+    arrival ``a(0)`` can go unmet, and before ``a(0)`` every arm holds the same opening stock
+    against the same fulfilments, so no arm can do better there and this arm does no worse
+    anywhere after it.
+
+    **What would make this arm wrong.** Instantaneous replenishment: ``unmet_demand_events > 0``
+    in any replicate, which ``cost_decomposition.hindsight_attains_zero_unmet`` reports. Under a
+    delay: any arm leaving strictly LESS demand unmet than this one at any replicate, which
+    ``hindsight_unmet_pointwise_least`` reports. Both are per-run, so the falsifier is mechanical
+    rather than remembered.
     """
 
     trace: DemandTrace
@@ -206,6 +228,31 @@ class HindsightOraclePolicy:
     #: whenever the horizon does not divide evenly by the window and a window shorter than the
     #: cadence leaves a coverage hole -- the same class of defect as arm C's generation offset.
     window_min: float = FORESIGHT_WINDOW_MIN
+    #: When an order for a SKU placed at a given minute LANDS, bound to this arm's own engine
+    #: (``SupplyChainSimulation.arrival_time_for``). ``None`` means stock lands when ordered --
+    #: structure 3 off -- and :meth:`orders_at` is then the instantaneous rule, byte for byte.
+    arrival_time_for: Callable[[str, float], float] | None = None
+    #: The run's last simulated minute, which caps coverage under a delay. REQUIRED with
+    #: ``arrival_time_for`` and refused without it, rather than defaulted: a cap nobody stated
+    #: would be a chosen constant inside a comparator that is allowed none.
+    horizon_min: float | None = None
+
+    def __post_init__(self) -> None:
+        """Refuse a horizon that caps nothing, and a delay with no horizon, by construction."""
+        if self.arrival_time_for is None:
+            if self.horizon_min is not None:
+                raise ValueError(
+                    f"horizon_min = {self.horizon_min!r} is given without arrival_time_for; it "
+                    "caps a delayed arrival and would cap nothing here, so it is refused rather "
+                    "than read as if it had"
+                )
+            return
+        horizon = self.horizon_min
+        if horizon is None or not math.isfinite(horizon) or horizon <= 0.0:
+            raise ValueError(
+                f"arrival_time_for is set but horizon_min = {horizon!r}; a delayed hindsight arm "
+                "needs the run's last minute, finite and positive, and it is not defaulted"
+            )
 
     def generated_before(self, end_min: float) -> dict[str, float]:
         """Per-SKU units the trace records as GENERATED strictly before ``end_min``.
@@ -218,6 +265,34 @@ class HindsightOraclePolicy:
             if event.t_min < end_min:
                 totals[event.sku] = totals.get(event.sku, 0.0) + event.units
         return totals
+
+    def generated_before_each(self, ends: Mapping[str, float]) -> dict[str, float]:
+        """:meth:`generated_before` with one cut-off PER SKU; SKUs absent from ``ends`` skipped.
+
+        Summed in the same event order, so a SKU whose cut-off equals ``generated_before``'s
+        receives the identical float. Needed because, under a delay, each SKU's coverage ends
+        when ITS supplier's next order lands.
+        """
+        totals: dict[str, float] = {}
+        for event in self.trace.events:
+            end = ends.get(event.sku)
+            if end is not None and event.t_min < end:
+                totals[event.sku] = totals.get(event.sku, 0.0) + event.units
+        return totals
+
+    def coverage_end(self, sku: str, next_order_min: float) -> float:
+        """Until when supply must cover demand, if the next order for ``sku`` is placed then.
+
+        No delay: ``next_order_min`` itself. Under a delay: when that order LANDS, never past the
+        run's end -- ``min(a(next_order_min), horizon)``.
+        """
+        arrival = self.arrival_time_for
+        if arrival is None:
+            return next_order_min
+        horizon = self.horizon_min
+        if horizon is None:  # refused in __post_init__; restated so the type narrows
+            raise ValueError("a delayed hindsight arm needs horizon_min")
+        return min(arrival(sku, next_order_min), horizon)
 
     def supply_target(self, sku: str, *, generated: Mapping[str, float]) -> float:
         """Cumulative units supplied for ``sku`` once ``generated`` demand must be covered.
@@ -236,12 +311,40 @@ class HindsightOraclePolicy:
         two arms constructed from one trace decide identically. Non-positive increments are
         omitted rather than sent as zeros, because ``add_stock`` clamps at zero and a zero-valued
         reorder would make ``_apply_reorders``'s skip do the work of the decision.
+
+        Under a delay the previous decision covered through ``coverage_end(sku, start_min)`` --
+        when THIS decision's order lands -- which is read at ``start_min`` itself rather than
+        rebuilt from ``start_min - window``, so the telescoping is exact on the driver's
+        accumulated clock. Before the run's first minute no order exists, so the decision at
+        ``0.0`` starts from the opening stock alone.
         """
+        if self.arrival_time_for is not None:
+            return self._delayed_orders_at(start_min)
         held = self.generated_before(start_min)
         due = self.generated_before(start_min + self.window_min)
         orders: dict[str, float] = {}
         # `due` keys are a superset of `held` keys, so iterating `due` is total.
         for sku in due:
+            target_now = self.supply_target(sku, generated=held)
+            target_next = self.supply_target(sku, generated=due)
+            if target_next > target_now:
+                orders[sku] = target_next - target_now
+        return orders
+
+    def _delayed_orders_at(self, start_min: float) -> dict[str, float]:
+        """:meth:`orders_at` under a delay: per-SKU coverage ends, opening stock at minute 0."""
+        skus = sorted({event.sku for event in self.trace.events})
+        due = self.generated_before_each(
+            {sku: self.coverage_end(sku, start_min + self.window_min) for sku in skus}
+        )
+        held = (
+            self.generated_before_each({sku: self.coverage_end(sku, start_min) for sku in skus})
+            if start_min > 0.0
+            else {}
+        )
+        orders: dict[str, float] = {}
+        # `coverage_end` is non-decreasing in its instant, so `due` covers `held` per SKU.
+        for sku in skus:
             target_now = self.supply_target(sku, generated=held)
             target_next = self.supply_target(sku, generated=due)
             if target_next > target_now:
@@ -289,9 +392,9 @@ class ThreePassResult:
     being the same expression" was wrong, and that correction is why this arm survives
     rather than being replaced.
 
-    **``demand_identical`` is not decoration and is now four-way.** If any arm's demand path
+    **``demand_identical`` is not decoration and is now six-way.** If any arm's demand path
     differed from the others', the arms were not compared on the same world and the regret
-    would be an artefact of the substreams. Arms B, C and D act, which consumes from the
+    would be an artefact of the substreams. Arms B to E and O act, which consumes from the
     ``pick_pack``/``travel`` substreams; ``demand`` and ``sku_choice`` are independent of
     those (Property 52), so identity is expected -- and it is CHECKED per replicate rather
     than assumed, with a differing replicate excluded as unusable rather than averaged in.
@@ -308,6 +411,12 @@ class ThreePassResult:
     #: those runs unreadable. It is no longer the judged comparator -- see ``hindsight``.
     foresight: SupplyChainSimulation
     demand_identical: bool
+    #: Arm O, the structure-aware base-stock arm (``uplift/oracle_arm.py``, task 16.1), wired in
+    #: task 13.7b. A DECOMPOSITION arm like E: it splits E - D into the information value a
+    #: non-anticipative planner can reach (E - O) and what remains beyond it (O - D). REQUIRED,
+    #: unlike D and E below, because ``run_three_pass`` builds it unconditionally and the one
+    #: hand-built construction site was corrected to supply it rather than this field defaulted.
+    structure_aware: SupplyChainSimulation
     #: Arm D. The hindsight oracle, and from session 9 the JUDGED comparator (ADR-055 D2.5.4).
     #:
     #: **Optional only because of a same-commit coupling this repair may not take.**
@@ -372,12 +481,86 @@ class ThreePassResult:
         replicate from the JUDGED contrast because a decomposition arm was missing. The judged
         number must not move when a subsidiary arm does.
 
-        So the decomposition is reported over the subset of replicates that carry all five arms,
-        and `_measure` refuses rather than reports if that subset is not the whole usable set --
-        a decomposition over a different denominator from the number it decomposes would sum to
-        something that is not the regret.
+        So the decomposition is reported over the subset of replicates that carry all six arms
+        (arm O is always built, so arm E is the one that can be missing), and `_measure` refuses
+        rather than reports if that subset is not the whole usable set -- a decomposition over a
+        different denominator from the number it decomposes would sum to something that is not
+        the regret.
         """
         return self.usable_for_judged_contrast and self.tuned_static is not None
+
+
+def _cadence(hours: float) -> tuple[int, float]:
+    """``(slices, slice_hours)``: one decision per :data:`FORESIGHT_WINDOW_MIN`, at least one."""
+    slices = max(1, int((hours * 60.0) // FORESIGHT_WINDOW_MIN))
+    return slices, hours / slices
+
+
+def _new_arm_engine(
+    seed: int,
+    *,
+    restock_threshold: float,
+    world: ResolvedWorld | None,
+    build: Callable[[int], SupplyChainSimulation] | None,
+) -> SupplyChainSimulation:
+    """One arm's engine, started: the ONE construction site every arm and the tuner share.
+
+    ``world`` reaches the engine constructor here and nowhere else, so no arm at a seed can run a
+    world cell the others did not. A ``build`` seam whose engine runs a different world is refused
+    rather than measured, because the artifact would then name a world no arm ran.
+    """
+    if build is not None:
+        made = build(seed)
+        if made.world != world:
+            raise ValueError(
+                f"the injected builder's engine runs world {made.world!r}, not the requested "
+                f"{world!r}; every arm must run the cell the artifact names"
+            )
+        return made
+    sim = SupplyChainSimulation(seed=seed, world=world)
+    sim.start()
+    sim.set_policy(restock_threshold=restock_threshold)
+    return sim
+
+
+def _drive_arm(
+    sim: SupplyChainSimulation,
+    policy: DecisionPolicy,
+    *,
+    slices: int,
+    slice_hours: float,
+    unit_costs: Mapping[str, float],
+) -> None:
+    """observe -> decide -> apply -> advance: the loop `uplift/harness.py` names (R2.2).
+
+    The one driver loop: `run_three_pass` and `run_single_arm` both call it, so an arm's levels
+    cannot be SELECTED under one cadence and MEASURED under another.
+    """
+    # Imported here rather than at module scope, for the reason `regret.py` imports this module
+    # lazily: `uplift.harness` pulls numpy, pydantic and (through `uplift.contract`) scipy, and
+    # `regret.py` is imported by the fast property suite. The functions are the harness's own on
+    # purpose -- see `observe`'s docstring.
+    from uplift.harness import _apply_reorders, observe
+
+    for _ in range(slices):
+        action = policy.decide(observe(sim, unit_costs=unit_costs))
+        if action.reorder_quantities:
+            _apply_reorders(sim, action.reorder_quantities)
+        sim.advance(slice_hours)
+
+
+def stocked_skus(seed: int, *, world: ResolvedWorld | None) -> tuple[str, ...]:
+    """The SKUs an arm's engine opens with in ``world``, sorted, READ from a started engine.
+
+    Read rather than restated: ``SupplyChainSimulation.start`` decides the catalogue and the
+    demanded SKU is drawn uniformly from it (``_draw_demanded_sku``), so it is what a per-SKU
+    demand rate divides by. Started in the same world an arm's engine runs, so a world that refuses
+    an unsupplied SKU refuses here, before any tuning is spent. The catalogue is the ``start()``
+    literal and depends on no seed; ``seed`` is taken so the probe is as reproducible as an arm.
+    """
+    probe = SupplyChainSimulation(seed=seed, world=world)
+    probe.start()
+    return tuple(sorted(probe.inventory))
 
 
 def run_single_arm(
@@ -386,46 +569,34 @@ def run_single_arm(
     hours: float,
     restock_threshold: float,
     policy: DecisionPolicy,
-    build: object = None,
+    world: ResolvedWorld | None,
+    build: Callable[[int], SupplyChainSimulation] | None = None,
 ) -> SupplyChainSimulation:
     """Drive ONE arm at one seed, through the same construction and cadence as `run_three_pass`.
 
-    Session 10, for `uplift/tuning.py`'s grid search (ADR-055 D2.6). The grid needs to evaluate
-    a candidate `(s, S)` at a seed WITHOUT building the other four arms, and the alternative was
-    a second driver loop inside the tuner.
+    Session 10, for `uplift/tuning.py`'s search (ADR-055 D2.6). The search needs to evaluate a
+    candidate at a seed WITHOUT building the other five arms, and the alternative was a second
+    driver loop inside the tuner.
 
     **That alternative is the one thing this repair must not do.** Two code paths that both claim
     to "drive an arm" is how a comparator stops comparing: the tuned levels would be selected
     under one set of physics and then measured under another, and the resulting tuning gap would
-    be an artefact of the difference. So this shares `_make` and `_drive` with `run_three_pass`
-    by construction rather than by convention, and there is exactly one place where an arm's
-    cadence, its unit costs and its restock threshold are decided.
+    be an artefact of the difference. So this calls `_new_arm_engine` and `_drive_arm`, exactly
+    as `run_three_pass` does -- the sharing is now a call graph rather than two copies that
+    happened to agree -- and there is one place where an arm's world, cadence, unit costs and
+    restock threshold are decided. ``world`` is REQUIRED: arm E is tuned in the world it is then
+    measured in, and ``None`` names the world before structures 1 and 3 rather than defaulting.
 
     It returns the simulation rather than a cost, for the same reason `run_three_pass` does: the
     objective lives in `uplift/regret.py` and this module does not import it.
     """
     # Lazy, exactly as `run_three_pass` does it and for the same reason: keeping numpy, pydantic
     # and scipy out of the fast suite's import closure.
-    from uplift.harness import _apply_reorders, _derive_unit_costs, observe
+    from uplift.harness import _derive_unit_costs
 
-    unit_costs = _derive_unit_costs()
-    slices = max(1, int((hours * 60.0) // FORESIGHT_WINDOW_MIN))
-    slice_hours = hours / slices
-
-    if build is not None:
-        made = build(seed)  # type: ignore[operator]
-        assert isinstance(made, SupplyChainSimulation)
-        sim = made
-    else:
-        sim = SupplyChainSimulation(seed=seed)
-        sim.start()
-        sim.set_policy(restock_threshold=restock_threshold)
-
-    for _ in range(slices):
-        action = policy.decide(observe(sim, unit_costs=unit_costs))
-        if action.reorder_quantities:
-            _apply_reorders(sim, action.reorder_quantities)
-        sim.advance(slice_hours)
+    slices, slice_hours = _cadence(hours)
+    sim = _new_arm_engine(seed, restock_threshold=restock_threshold, world=world, build=build)
+    _drive_arm(sim, policy, slices=slices, slice_hours=slice_hours, unit_costs=_derive_unit_costs())
     return sim
 
 
@@ -435,15 +606,20 @@ def run_three_pass(
     hours: float,
     restock_threshold: float,
     reference_policy: DecisionPolicy,
+    world: ResolvedWorld | None,
     tuned_static_policy: DecisionPolicy | None = None,
-    build: object = None,
+    build: Callable[[int], SupplyChainSimulation] | None = None,
 ) -> ThreePassResult:
-    """Run the no-op, ``(s, S)`` reference, foresight and hindsight arms at the **same seed**.
+    """Run every comparator arm at the **same seed**, in the **same world cell**.
 
-    **Four arms, and the name is understated.** Session 5 added arm B (conflict M) and session 9
-    adds arm D, the hindsight oracle that supplies the judged contrast (ADR-055 D2.5.4). The
-    function keeps this name because renaming it would edit a landed property file this repair
-    may not touch; the rename is owed.
+    **Six arms, and the name is understated.** Session 5 added arm B (conflict M), session 9 arm
+    D, the hindsight oracle that supplies the judged contrast (ADR-055 D2.5.4), session 10 arm E
+    and task 13.7b arm O. The name is kept because every caller imports it; the rename is owed.
+
+    ``world`` is REQUIRED and reaches every arm's engine through `_new_arm_engine`: ``None`` names
+    the world before structures 1 and 3, and a resolved cell runs its structures in all six arms
+    alike. Arm D reads its own engine's lead-time path exactly when structure 3 is on, and is the
+    instantaneous rule byte for byte when it is off.
 
     **The stated cost of the fourth arm.** Each arm is a full twin replicate, so the twin cost of
     a comparator replicate rises from three to four -- **+33%** on the dominant term of
@@ -458,7 +634,7 @@ def run_three_pass(
     ``restock_threshold`` is passed explicitly rather than read here, so the caller -- which
     already resolved it from the committed policy file -- remains the single place that decides
     it. A second read inside this function would be a second opinion about a committed value.
-    **All four arms receive it**, which keeps the twin's own endogenous ``(s, S)`` disabled in
+    **Every arm receives it**, which keeps the twin's own endogenous ``(s, S)`` disabled in
     every arm -- exactly what R5.36 requires once an arm supplies its own ``(s, S)`` through
     ``decide``, and why ``comparator.restock_threshold`` needed no amendment.
 
@@ -466,45 +642,35 @@ def run_three_pass(
     ``comparator.reference_policy``, and a policy constructed here would be a second opinion
     about the subject of the measurement.
 
-    ``build`` is an injection seam for tests; ``None`` constructs a plain engine. The harness
-    supplies its own builder so the shock mapping stays in one place.
+    ``build`` is an injection seam for tests; ``None`` constructs a plain engine. An injected
+    engine must run ``world``, or it is refused.
     """
     # Imported here rather than at module scope, for the reason `regret.py` imports this
     # module lazily: `uplift.harness` pulls numpy, pydantic and (through `uplift.contract`)
     # scipy, and `regret.py` is imported by the fast property suite. The functions are the
     # harness's own on purpose -- see `observe`'s docstring. Two implementations of "what an
     # arm may see" and "how a reorder reaches the twin" would drift, and the arm that
-    # drifted would be the one task 11's verdict is about.
-    from uplift.harness import _apply_reorders, _derive_unit_costs, observe
+    # drifted would be the one task 11's verdict is about. `uplift.oracle_arm` reads the
+    # committed objective through `uplift.regret`, which is why it is lazy too.
+    from uplift.harness import _derive_unit_costs
+    from uplift.oracle_arm import build_structure_aware_arm
 
     def _make() -> SupplyChainSimulation:
-        if build is not None:
-            made = build(seed)  # type: ignore[operator]
-            assert isinstance(made, SupplyChainSimulation)
-            return made
-        sim = SupplyChainSimulation(seed=seed)
-        sim.start()
-        sim.set_policy(restock_threshold=restock_threshold)
-        return sim
+        return _new_arm_engine(seed, restock_threshold=restock_threshold, world=world, build=build)
 
-    # ONE CADENCE FOR ALL FOUR ARMS. The committed two-pass form advanced pass one with a
+    # ONE CADENCE FOR ALL SIX ARMS. The committed two-pass form advanced pass one with a
     # single `advance(hours)` while pass two stepped in window-sized slices, so the two arms
     # being subtracted did not share a cadence. Slicing every arm removes that asymmetry and
     # changes nothing measurable: `_accrue_inventory_time` is exact accounting
     # (`sum(levels) * delta` at every mutation and every advance boundary, and its own
     # docstring records that it "draws nothing, schedules nothing, and cannot change
     # timing"), so extra boundaries between mutations integrate to the same total.
-    slices = max(1, int((hours * 60.0) // FORESIGHT_WINDOW_MIN))
-    slice_hours = hours / slices
+    slices, slice_hours = _cadence(hours)
     unit_costs = _derive_unit_costs()
 
     def _drive(sim: SupplyChainSimulation, policy: DecisionPolicy) -> None:
-        """observe -> decide -> apply -> advance: the loop `uplift/harness.py` names (R2.2)."""
-        for _ in range(slices):
-            action = policy.decide(observe(sim, unit_costs=unit_costs))
-            if action.reorder_quantities:
-                _apply_reorders(sim, action.reorder_quantities)
-            sim.advance(slice_hours)
+        """observe -> decide -> apply -> advance, through the one shared loop (`_drive_arm`)."""
+        _drive_arm(sim, policy, slices=slices, slice_hours=slice_hours, unit_costs=unit_costs)
 
     # -- Arm A: observe the world's own demand path, deciding nothing --------------------
     # `NoOpRecordingPolicy` is now the mechanism rather than a documented intention. It was
@@ -540,13 +706,20 @@ def run_three_pass(
     # widening `Observation.inventory` to floats -- a schema change touching every fixture
     # that carries it (same-commit coupling 3) and every arm's behaviour including the
     # consensus arm's -- or accepting a documented bias. Neither belongs in this repair.
+    #
+    # ORDERS THROUGH `place_order`, NEVER `add_stock` (task 13.7b; finding 66's seam). With
+    # structure 3 off `place_order` IS `add_stock` -- same mutation, same accrual, nothing drawn
+    # or scheduled -- so every number arm C has produced is unchanged; with it on, arm C's stock
+    # lands after its supplier's lead time like every other arm's. Its rule still reads ON-HAND
+    # stock, so under a delay it re-orders its own pipeline each window (finding 67's defect):
+    # recorded, not repaired, because arm C is retired and nothing is judged against it.
     for _ in range(slices):
         obs_time = foresight_sim.sim_time_min
         foreseen = policy.demand_in_window(obs_time)
         for sku, units in foreseen.items():
             on_hand = float(foresight_sim.inventory.get(sku, 0.0))
             if units - on_hand > 0.0:
-                foresight_sim.add_stock(sku, units - on_hand)
+                foresight_sim.place_order(sku, units - on_hand)
         foresight_sim.advance(slice_hours)
 
     baseline_path = recorded.as_tuples()
@@ -574,6 +747,13 @@ def run_three_pass(
     # run changes; they diverge whenever `hours * 60.0` is not a multiple of the window, and
     # there a nominal window shorter than the slice would leave demand uncovered and this arm
     # would stop being an oracle for the same reason arm C is not one.
+    #
+    # UNDER STRUCTURE 3 IT READS ITS OWN ENGINE'S LEAD-TIME PATH (task 13.7b). `arrival_time_for`
+    # is bound to `hindsight_sim` -- a function of seed, supplier and placement time alone, so it
+    # is the same supply world every other arm faces -- and the horizon caps coverage at the
+    # run's end. With structure 3 off both are `None`, so the arm is the instantaneous rule byte
+    # for byte and every number it produced before this change is unchanged.
+    delayed = world is not None and world.structure_3_on
     hindsight_sim = _make()
     _drive(
         hindsight_sim,
@@ -581,30 +761,50 @@ def run_three_pass(
             trace=recorded,
             opening_stock=hindsight_sim.inventory,
             window_min=slice_hours * 60.0,
+            arrival_time_for=hindsight_sim.arrival_time_for if delayed else None,
+            horizon_min=hours * 60.0 if delayed else None,
         ),
     )
 
-    # ARM E, THE TUNED STATIC CONTROL (session 10, ADR-055 D2.6). Constructed LAST, and that is
-    # not stylistic: `SeedSequence.spawn` derives child streams BY INDEX, so an arm built before
-    # the others would shift their substreams and silently move numbers three sessions have
-    # confirmed to sixteen significant figures. Arm D was appended for the same reason.
+    # ARM E, THE TUNED STATIC CONTROL (session 10, ADR-055 D2.6). Constructed AFTER arms A-D, and
+    # that is not stylistic: `SeedSequence.spawn` derives child streams BY INDEX, so an arm built
+    # before the others would shift their substreams and silently move numbers three sessions
+    # have confirmed to sixteen significant figures. Arm D was appended for the same reason.
     #
-    # It is the SAME class as arm B with different levels -- `Par_Level_Reorder` is fully
-    # parameterised, so no new policy exists to review. What makes arm E different from arm B is
-    # only where its two integers came from: arm B's are READ from the engine's own defaults,
-    # arm E's are DERIVED by a grid search over a committed grid at seeds disjoint from these.
+    # Its policy is injected: from task 13.7b it is `uplift/tuned_static.py`'s per-supplier-group
+    # par-level rule with levels the caller DERIVED by a search in THIS world cell, at seeds
+    # disjoint from these. Arm B's levels are READ from the engine's own defaults.
     tuned_static_sim: SupplyChainSimulation | None = None
     if tuned_static_policy is not None:
         tuned_static_sim = _make()
         _drive(tuned_static_sim, tuned_static_policy)
 
+    # ARM O, THE STRUCTURE-AWARE BASE-STOCK ARM (task 16.1, wired by task 13.7b). Constructed LAST
+    # for arm E's reason, so arms A-E are untouched by its arrival and the prediction-1 check
+    # (`comparator_headroom_vs_foresight`) keeps working. Non-anticipative by construction: it
+    # sees only the `Observation`, never `recorded`. Its review period is the REALISED cadence,
+    # for arm D's reason above -- equal to FORESIGHT_WINDOW_MIN at every committed configuration
+    # -- and its SKU count is read from its own engine rather than restated.
+    structure_aware_sim = _make()
+    _drive(
+        structure_aware_sim,
+        build_structure_aware_arm(
+            world,
+            seed=seed,
+            hours=hours,
+            review_min=slice_hours * 60.0,
+            n_skus=len(structure_aware_sim.inventory),
+        ),
+    )
+
     # The identity clause is extended UNCONDITIONALLY over the arms that exist. Arm E is checked
-    # exactly as arms B, C and D are; the `is not None` is a construction guard, not a tolerated
-    # exception, because the clause cannot be evaluated against an arm that was never built.
+    # exactly as arms B, C, D and O are; the `is not None` is a construction guard, not a
+    # tolerated exception, because the clause cannot be evaluated against an arm never built.
     paths_identical = (
         baseline_path == reference.demand_trace.as_tuples()
         and baseline_path == foresight_sim.demand_trace.as_tuples()
         and baseline_path == hindsight_sim.demand_trace.as_tuples()
+        and baseline_path == structure_aware_sim.demand_trace.as_tuples()
     )
     if tuned_static_sim is not None:
         paths_identical = paths_identical and (
@@ -619,5 +819,6 @@ def run_three_pass(
         foresight=foresight_sim,
         hindsight=hindsight_sim,
         tuned_static=tuned_static_sim,
+        structure_aware=structure_aware_sim,
         demand_identical=paths_identical,
     )

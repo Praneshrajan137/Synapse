@@ -128,7 +128,8 @@ def test_json_stdout_is_a_single_parseable_canonical_document(
     """
     payload = dict(report)
     payload["status"] = status
-    monkeypatch.setattr(regret_module, "_measure", lambda _r, _h: payload)
+    # Precondition correction (13.7b): `main` now passes the world cell as a third argument.
+    monkeypatch.setattr(regret_module, "_measure", lambda _r, _h, _c: payload)
 
     exit_code = regret_module.main(["--json", "--replicates", "1", "--hours", "0.5"])
 
@@ -164,7 +165,8 @@ def test_a_twin_log_line_cannot_reach_the_json_stream(
     needs it while the pipe carries the measurement alone.
     """
 
-    def _noisy_measure(_replicates: int, _hours: float) -> dict[str, object]:
+    # Precondition correction (13.7b): `_measure` now takes the world cell third.
+    def _noisy_measure(_replicates: int, _hours: float, _cell: str | None) -> dict[str, object]:
         _module_logger.debug("twin_debug_flood", sku="sku_0", level=97.0)
         _module_logger.info("twin_info_flood", order_id="o-1")
         _module_logger.warning("twin_warning_flood", detail="restock")
