@@ -99,6 +99,11 @@ _CELL_KEYS: Final[frozenset[str]] = frozenset(
 )
 _PROVENANCE_BLOCKS: Final[tuple[str, ...]] = ("structure_1", "structure_3", "cells")
 
+#: Hours :meth:`DemandShape.next_arrival` walks before refusing (about 114 simulated years). Every
+#: intensity is > 0 by rule, so every walk ends; a mass needing more hours than this is refused,
+#: naming the state, rather than walked on without bound.
+_MAX_INTENSITY_PIECES: Final[int] = 10**6
+
 
 def start_weekday(seed: int | None) -> int:
     """The weekday hour 0 of a run falls on (0 = Monday), under ``seed_mod_7``; 0 when unseeded."""
@@ -249,6 +254,51 @@ class DemandShape:
             for left, right in itertools.pairwise(self.hour_boundaries(t0_min, t1_min))
         ]
         return rate_per_min * math.fsum(pieces)
+
+    def next_arrival(
+        self, t_min: float, mass: float, start_weekday: int, rate_per_min: float
+    ) -> float:
+        """The instant at which :meth:`expected_units` from ``t_min`` reaches ``mass``.
+
+        Time-rescaling (Lewis & Shedler 1979, NRLQ 26(3):403-413, section 1(i)): for ``mass`` a
+        standard exponential, this is the first arrival after ``t_min`` of the Poisson process of
+        intensity ``rate_per_min`` shaped by this profile; ``rate_per_min`` already carries any
+        demand multiplier. The cumulative intensity is piecewise linear, so the inverse is exact
+        over the reals: whole hours are walked forward, each spending its mass, and the hour the
+        mass runs out in is solved in closed form.
+
+        In floats the result is clamped to the hour that solved it, so rounding never carries an
+        arrival into an hour whose intensity it was not solved with; the clamp is also what keeps
+        the result non-decreasing in ``mass`` in IEEE 754, not only over the reals. Property 93
+        states the precision and the domain it holds over.
+
+        Raises:
+            ValueError: If ``t_min`` is not finite, ``mass`` is not finite and >= 0,
+                ``rate_per_min`` is not finite and > 0, or ``start_weekday`` is outside [0, 6].
+            RuntimeError: If ``_MAX_INTENSITY_PIECES`` hours do not spend ``mass``; refused,
+                naming the state, rather than walked on.
+        """
+        if not (math.isfinite(mass) and mass >= 0.0):
+            raise ValueError(f"mass = {mass!r} must be finite and >= 0")
+        if not _is_positive_finite(rate_per_min):
+            raise ValueError(f"rate_per_min = {rate_per_min!r} must be finite and > 0")
+        hour = _hour_index(t_min)
+        left = t_min
+        remaining = mass
+        for _ in range(_MAX_INTENSITY_PIECES):
+            right = float((hour + 1) * MINUTES_PER_HOUR)
+            rate_here = rate_per_min * self.hour_intensity(hour, start_weekday)
+            piece = rate_here * (right - left)
+            if remaining <= piece:
+                return min(left + remaining / rate_here, right)
+            remaining -= piece
+            left = right
+            hour += 1
+        raise RuntimeError(
+            f"next_arrival walked {_MAX_INTENSITY_PIECES} hours from t_min={t_min!r} "
+            f"(start_weekday={start_weekday!r}, rate_per_min={rate_per_min!r}) and "
+            f"{remaining!r} of mass={mass!r} is unspent at t={left!r}; refused, not walked on"
+        )
 
     def with_amplitude(self, scale: float) -> DemandShape:
         """Both profiles moved toward flat: every value ``p`` becomes ``1 + k (p - 1)``.

@@ -703,12 +703,23 @@ class SupplyChainSimulation:
         return str(self._streams["sku_choice"].choice(list(self._inventory.keys())))
 
     def _order_arrival(self, env: simpy.Environment) -> Any:
-        """Poisson-distributed order arrivals, each naming the SKU it demands."""
+        """Order arrivals, each naming the SKU it demands.
+
+        **Structure 1 off** -- no world, or a cell whose ``demand`` is ``None`` -- this is HEAD's
+        stationary Poisson process, draw for draw (Property 93 (d)). **Structure 1 on**, each
+        arrival makes the same ONE draw from the ``demand`` substream, at unit scale, and
+        :meth:`_shaped_inter_arrival` maps it through the declared intensity, so every arm at one
+        seed still faces common random numbers (task 12.1, R5.8-R5.10).
+        """
+        shaped = self._world is not None and self._world.structure_1_on
         order_id = 0
         while True:
-            inter_arrival = self._streams["demand"].exponential(
-                1.0 / (self._config.order_arrival_rate * self._demand_mult)
-            )
+            if shaped:
+                inter_arrival = self._shaped_inter_arrival(float(env.now))
+            else:
+                inter_arrival = self._streams["demand"].exponential(
+                    1.0 / (self._config.order_arrival_rate * self._demand_mult)
+                )
             yield env.timeout(inter_arrival)
             order_id += 1
             self._metrics.orders_created += 1
@@ -717,6 +728,31 @@ class SupplyChainSimulation:
                 # task 9.5: recorded AS GENERATED, before any fulfilment outcome is known.
                 self._record_demand(float(env.now), sku)
             env.process(self._pick_pack_dispatch(env, order_id, sku))
+
+    def _shaped_inter_arrival(self, now_min: float) -> float:
+        """Minutes from ``now_min`` to the next arrival under structure 1 (task 12.1).
+
+        Exact time-rescaling: ONE standard exponential from ``demand`` is the mass of declared
+        intensity the gap spends, and :meth:`DemandShape.next_arrival` inverts the cumulative
+        intensity from ``now_min`` for the instant it is spent at.
+
+        Raises:
+            RuntimeError: If structure 1 is off, or the start weekday was never derived -- the
+                gap is measured in the shape and the weekday, and neither is defaulted.
+        """
+        demand = self._world.demand if self._world is not None else None
+        start = self._start_weekday
+        if demand is None or start is None:
+            raise RuntimeError(
+                "a structure-1 arrival needs the cell's demand shape and the start weekday "
+                f"derived from the seed (structure_1_on={demand is not None}, "
+                f"start_weekday={start!r}); neither is defaulted"
+            )
+        mass = self._streams["demand"].exponential(1.0)
+        # `_demand_mult` is read at draw time, as HEAD's stationary draw reads it: a price change
+        # inside a gap moves the arrivals after it, never this one -- HEAD's approximation, kept.
+        rate_per_min = self._config.order_arrival_rate * self._demand_mult
+        return demand.next_arrival(now_min, mass, start, rate_per_min) - now_min
 
     def _pick_pack_dispatch(
         self, env: simpy.Environment, order_id: int, sku: str | None = None
