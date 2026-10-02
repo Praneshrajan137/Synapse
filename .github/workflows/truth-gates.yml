@@ -219,10 +219,14 @@ jobs:
   # gates that are perfectly capable of biting.
   #
   # EXPECT RED ON THE FIRST RUNS, AND READ THE RED CORRECTLY. `gate-mutations.yaml`
-  # records, in its own notes, which declarations this tree does not yet satisfy: C28's
-  # `zero-a-floor` is a disclosed SURVIVOR (a defect against C28, not against the sweep),
-  # and C44, C60, C69, C70, C71 and C72 have non-passing baselines today, so their probes
-  # report `indeterminate`. A survivor is never cleared by weakening its mutation.
+  # records, in its own notes, which declarations this tree does not yet satisfy. C28's
+  # `zero-a-floor` WAS a disclosed SURVIVOR (a defect against C28, not against the sweep)
+  # until 2026-10-01, when C28 began failing a floor below its measured ratchet bound; and
+  # C44 and C69 had non-passing baselines until the same date (dead modules removed,
+  # `validate_audit_insertion` wired, a false task claim retracted) -- all three are
+  # expected to probe, not yet observed. C60, C70, C71 and C72 still have non-passing
+  # baselines, so their probes report `indeterminate`. A survivor is never cleared by
+  # weakening its mutation.
   #
   # NOT SHARDED, DELIBERATELY. `--shard K/N` over a matrix produces dynamic status-check
   # names, an aggregator without `if: always()` does not run when a shard fails, and a

@@ -30,8 +30,8 @@ The four shapes this module refuses, each named because each is a way to look gr
    :class:`ConfirmedBaseline` requires a source, a title, a read date and a reader, and
    :class:`UnconfirmedBaseline` structurally **cannot carry a value at all** -- its ``value``
    field is typed ``None``. There is no third shape, so "write the number and move on" is not
-   an available edit. That is the same construction ``ShapeEstimate`` uses to stop an
-   ``unavailable`` shape shipping numbers (``data_fabric/ingest/m5.py``).
+   an available edit. The same construction stopped an ``unavailable`` shape shipping numbers
+   in ``ShapeEstimate`` (``data_fabric/ingest/m5.py``, removed 2026-10-01 with M5).
 
 2. **A rank.** R8.18: a differing split, aggregation level or metric definition makes a result
    **not leaderboard-comparable**, which is a different statement from a worse rank.
@@ -442,8 +442,10 @@ class DomainGap(BaseModel):
     #: The gap in the domain's own words, rendered beside every feed-derived claim (R8.12).
     statement: str
     #: The sharpest single piece of evidence for the gap, so the statement is not an
-    #: assertion. ``data_fabric/ingest/m5.py``'s intra-day shape reports ``unavailable``
-    #: because daily aggregates cannot yield an hour-of-day curve -- that is the evidence.
+    #: assertion. Until 2026-10-01 this cited ``data_fabric/ingest/m5.py``'s intra-day shape,
+    #: which reported ``unavailable`` because daily aggregates cannot yield an hour-of-day
+    #: curve; that module was removed with M5 (declined), so the evidence must cite a
+    #: mechanism that still exists or say plainly that none does.
     evidence: str
 
     @model_validator(mode="after")

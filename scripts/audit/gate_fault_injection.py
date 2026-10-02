@@ -39,12 +39,16 @@ Four properties are load-bearing and deliberate:
   never an exemption and it never contributes a PASS.
 
 **Expect FAILs today, and read them as honest.** ``gate-mutations.yaml`` records, in
-its own notes, three declarations that the current tree does not yet satisfy: C28's
-zero-a-floor survives until task 4.1 lands ``--require-measured-floors``, C61's
-tolerance widening survives until task 5.5 derives oracle membership, and C60's
-``incomplete: true`` is already the committed value so the mutation changes no byte at
-all. This harness reports each of those as it finds them rather than tolerating them:
-a declaration the gate survives is a gate that does not gate.
+its own notes, the declarations the current tree does not yet satisfy, and this harness
+reports each as it finds it rather than tolerating it: a declaration the gate survives is
+a gate that does not gate. None of the three originally listed here is still open as
+written. C61's tolerance widening bites since task 5.5 derived oracle membership. C60's
+``incomplete: true`` operator -- a no-op, since the committed value already was the
+mutation -- was retired when task 10.3 removed the artifact it targeted. C28's zero-a-floor
+survived until 2026-10-01, when C28 began failing a floor below its measured
+``ratchets.json`` bound -- expected to falsify from the next sweep, not yet observed.
+Waiting on ``--require-measured-floors`` could never have fixed it, because C28 never runs
+that script.
 
 **I-0 (local compute).** A sweep copies the tree once and runs one subprocess per
 gate plus one per operator. That is a CI workload and it belongs to

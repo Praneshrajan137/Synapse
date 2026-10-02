@@ -88,10 +88,12 @@ task 10.3 rewrote ``scripts/audit/uplift_truth.py`` so ``verdict()`` derives the
 code from the predicate and ``admit_floor_raise()`` is the ratchet's production caller.
 Both baseline rows keep the corrected count for the same record-drift reason.
 
-Still failing, correctly:
-``synapse_common.contracts.validate_audit_insertion``, whose ``@deal.post`` asserts
-I-4's audit-insertion postcondition and which no production module calls. That FAIL is
-the requirement working, not a defect in this gate.
+Discharged 2026-10-01: ``synapse_common.contracts.validate_audit_insertion``, whose
+``@deal.post`` asserts I-4's audit-insertion postcondition, is now imported and invoked from
+``orchestrator/audit/logger.py`` (``AuditLogger.log_decision``, after the commit), so it is
+detected here mechanically as a production caller and passes. It has no row in the named
+baseline, so a later removal of that call reads as an invariant symbol only tests invoke
+and FAILs again, naming the symbol and the invariant.
 
 Outcome mapping (I-7: absence of proof is never a pass)::
 

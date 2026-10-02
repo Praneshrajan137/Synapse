@@ -458,6 +458,15 @@ steps:
         role: consumer
         consumes: "docs/state/CURRENT.md, README.md, docs/state/GATE_SURFACE.md"
 
+  # Frontend lockfile regeneration (label/dispatch; artifact only). Declared by judgement like
+  # the regenerate entry above: a swallowed failure would upload a lockfile a reviewer then
+  # commits, so every step propagates. Label-conditioned, so no required-checks.yaml entry
+  # (the uplift-cost-probe and regenerate precedents own none either).
+  - workflow: .github/workflows/frontend-lockfile-regen.yml
+    job: regen-lockfile
+    all_steps: true
+    requirement: "R1.8"
+
   # -------------------------------------------------------------------------
   # R8.9 declares three frontend sites blocking BY REQUIREMENT: the
   # `Task_Completion_Tests + Resilience_Scenarios` step of `e2e-harness`, and
@@ -664,6 +673,49 @@ steps:
         role: disclosure
         consumes: "the record's state plus the materialised paths"
         requirement: "R9.15"
+
+  # -------------------------------------------------------------------------
+  # `mutation.yml`'s PR and merge-commit mutation gate (C30, R11.5), declared in the SAME
+  # COMMIT that split the serial `mutation-fast` loop into a plan job, one matrix leg per
+  # changed target, and an aggregator that keeps the `mutation-fast` job id. Either half
+  # alone is red: a declaration naming a step the tree lacks FAILs `blocking-unresolved`.
+  #
+  # Each declared step either decides the gate or is the precondition that gives its
+  # decision a meaning: the plan (an unresolvable base or an empty plan must FAIL, never
+  # read as "nothing changed"), the dependency install (swallowed, a missing import
+  # surfaces later as a mutmut fatal or a misattributed survival FAIL), the mutmut run
+  # (its fatal bit), the survival ceiling, and the aggregator's discharge assertion. A
+  # `|| true` on any of them would turn the gate into a report that cannot fail.
+  #
+  # Deliberately NOT declared: the `uses:` steps, for the reason the
+  # `e4-published-artifact` entry gives (an action version bump would FAIL by name), and
+  # the leg's "Record the leg's verdict and mutmut results", which judges nothing - the
+  # verdict it writes is re-judged by the aggregator, which is declared. Both stay under
+  # the R11.3 name rule. `match: exact`: no name carries a character normalisation would
+  # fold, so exact makes a rename loud for free. Strings are quoted byte-for-byte from
+  # `.github/workflows/mutation.yml`.
+  - workflow: .github/workflows/mutation.yml
+    job: mutation-fast-plan
+    step_names:
+      - "Resolve the mutation partition"
+    match: exact
+    requirement: "R11.5"
+
+  - workflow: .github/workflows/mutation.yml
+    job: mutation-fast-target
+    step_names:
+      - "Install project dependencies"
+      - "Run mutmut on this target"
+      - "Enforce the survival ceiling"
+    match: exact
+    requirement: "R11.5"
+
+  - workflow: .github/workflows/mutation.yml
+    job: mutation-fast
+    step_names:
+      - "Assert every planned target was measured and none exceeded its ceiling"
+    match: exact
+    requirement: "R11.5"
 
 # ---------------------------------------------------------------------------
 # Steps declared blocking ONLY after their remediation lands.

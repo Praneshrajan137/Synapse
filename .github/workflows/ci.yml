@@ -14,7 +14,16 @@ jobs:
   quality-gates:
     name: Lint + Type Check + Unit Tests
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    # MEASURED, not chosen (2026-10-01, run 36860316695 at ec0eb91): cancelled at the old
+    # 15-minute bound with its unit step 94% through after 628 s and ~294 s of steps
+    # before it. Projected content on that runner: ~294 + 668 (628 / 0.94) + ~60 for the
+    # post-test steps (INFERRED) = ~1,020 s, so 25 minutes is ~1.47x. Every pre-existing
+    # test file ran ~1.35x slower than on run 35171859419; the INFERRED cause is the runner
+    # class, not the code -- the repository is now PRIVATE (measured 2026-10-01; it was
+    # public at creation, PublicEvent 2026-04-06), and a private repository's standard
+    # `ubuntu-latest` runner is 2 vCPU / 8 GB against 4 vCPU / 16 GB for a public one. A
+    # bound, not a standard: no selection, floor, Hypothesis profile or budget moved.
+    timeout-minutes: 25
     steps:
       - uses: actions/checkout@v4
       - name: Set up Python 3.11
@@ -360,14 +369,18 @@ jobs:
     #
     # THE COST, HONESTLY, AND THE FIGURE MOVED WHEN THE WORK DID: this job group now runs
     # on pushes where the tree does not type-check. Before the shard split that was one
-    # job at `timeout-minutes: 60`; it is now five jobs bounded at 30, 30, 30, 30 and 20
-    # plus this aggregator at 10, so a pathological tree can spend 150 runner-minutes
-    # where it used to spend 60. The PREDICTED figure is far lower -- about 39
+    # job at `timeout-minutes: 60`; it is now five jobs bounded at 30, 45, 30, 30 and 30
+    # (shard 2 and the slow selection re-measured 2026-10-01) plus this aggregator at 10,
+    # so a pathological tree can spend 175 runner-minutes where it used to spend 60. The
+    # PREDICTED figure is far lower -- about 39
     # runner-minutes against about 23 before, the difference being four extra copies of
     # the ~3-minute install -- and that is a prediction from run 34609187697's step
     # timings, not a measurement of this shape. It buys roughly 12 minutes off the wall
-    # clock of a REQUIRED check. That is CI's cost and the repository is public with
-    # unmetered standard-runner minutes; the alternative was a required check that cannot
+    # clock of a REQUIRED check. That is CI's cost. The repository was public with
+    # unmetered standard-runner minutes when this was written; it is PRIVATE as of
+    # 2026-10-01 (measured), so these minutes now count against the account's monthly
+    # allowance -- the split's cost is no longer zero, and that is recorded rather than
+    # assumed away. The alternative was a required check that cannot
     # report. Reds that appear here are NEWLY VISIBLE, NOT NEWLY BROKEN -- the same
     # reading session 2p-green's five unblocked jobs required.
     #
@@ -703,8 +716,15 @@ jobs:
   uplift-verify-fast-2:
     name: Uplift fast shard 2/4 - tests/uplift p-z
     runs-on: ubuntu-latest
-    # See shard 1/4 for the arithmetic behind this bound.
-    timeout-minutes: 30
+    # Shard 1/4's premise -- no shard can exceed the 807.68 s pre-split step -- is
+    # FALSIFIED for this shard (MEASURED 2026-10-01, run 36860316695): its tests took
+    # 1,303 s and the job 1,585 s against a 30-minute bound (88%). The growth sits in the
+    # two files that drive the real consensus arm's 4-worker Monte-Carlo pool
+    # (`test_reproduction_stability_property.py` 256 -> 852 s,
+    # `test_reproduction_command_integration.py` 100 -> 326 s, both unchanged on this
+    # branch) while serial files grew ~1.35x -- the pattern halved runner cores predict
+    # (see `quality-gates`). 45 minutes is ~1.7x the measured job, shard 1's own ratio.
+    timeout-minutes: 45
     outputs:
       selected: ${{ steps.collect.outputs.selected }}
     steps:
@@ -851,10 +871,13 @@ jobs:
     # measured 352.22s (5:52) on run 34609187697, so it is not the critical path and
     # splitting it would pay three more three-minute installs to save under three
     # minutes. Bound: 5:52 of content plus ~3:55 of checkout, setup, install and
-    # collection is ~9:47, so 20 minutes is ~2x headroom on a measured cost. The 60 that
+    # collection is ~9:47, so 20 minutes was ~2x headroom on a measured cost. The 60 that
     # `uplift-verify` used to carry was sized for BOTH selections plus one install, and
     # the run step below records why it grew to that; only its slow half lives here now.
-    timeout-minutes: 20
+    # RE-MEASURED 2026-10-01 (run 36860316695): 88 passed in 754.79 s and the job took
+    # 1,010 s, 84% of the 20-minute bound, on the slower private-repository runner class
+    # (see `quality-gates`). 30 minutes is ~1.78x the measured job.
+    timeout-minutes: 30
     outputs:
       # Reported for readability, and NOT summed against a committed constant. The slow
       # selection is unsharded, so there is no partition to prove here and a second

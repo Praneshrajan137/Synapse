@@ -756,8 +756,17 @@ def check_verify_images_covers_matrix() -> CheckResult:
 # Sprint 13 §Phase 2 / Phase 6. Supersedes C15's single-gate model. PASS iff:
 #   - `scripts/coverage_per_package.py` exists and is wired into ci.yml,
 #   - `infrastructure/quality/coverage-floors.yaml` exists with all 10 packages
-#     (synapse_common, orchestrator, 8 agents), and
-#   - every floor is non-negative.
+#     (synapse_common, orchestrator, 8 agents),
+#   - every floor is non-negative, and
+#   - (2026-10-01) no floor sits below the MEASURED bound
+#     `infrastructure/quality/ratchets.json` records for it (`coverage-floor:<package>`,
+#     direction up), compared with `ratchet_truth.is_regression` -- the predicate C70 uses.
+# Before that last clause the only value check was "not negative", so zeroing a measured
+# floor (83.5 -> 0.0, gate-mutations.yaml `zero-a-floor`) left C28 green: the declared
+# mutation survived. A 0.0 floor with no measured bound is NOT refused here --
+# `coverage_per_package.py --require-measured-floors` reports it SKIP-UNMEASURED, and C70
+# judges unmeasured ratchet rows. A coverage-floor ratchet row that cannot be read, or no
+# measured row at all, is SKIP: floors compared to nothing are not floors that hold (I-7).
 # The 84% destination on each row is documented intent — verify_claims does NOT
 # fail until measured drops below floor; that is the job of CI's actual
 # per-package gate step.
@@ -798,11 +807,73 @@ def check_per_package_coverage() -> CheckResult:
             "FAIL",
             f"negative line floor in: {bad}",
         )
+    # Value clause (2026-10-01): a floor below its MEASURED ratchet bound is a regression.
+    # The bound, direction and status come from ratchet_truth's own row model; the floor is
+    # the value this check just read. The comparison is ratchet_truth.is_regression.
+    try:
+        from scripts.audit.ratchet_truth import (
+            DIRECTIONS,
+            STATUS_MEASURED,
+            is_regression,
+        )
+        from scripts.audit.ratchet_truth import evaluate as _evaluate_ratchets
+    except ImportError as exc:
+        return CheckResult(
+            "C28", "Per-package coverage", "SKIP", f"ratchet_truth import failed: {exc}"
+        )
+    ratchets_file = ROOT / "infrastructure" / "quality" / "ratchets.json"
+    ratchet_report = _evaluate_ratchets(ratchets_file, root=ROOT)
+    rows = {row.id: row for row in ratchet_report.ratchets}
+    regressed: list[str] = []
+    unreadable: list[str] = []
+    compared = 0
+    for package, cfg in pkgs.items():
+        row = rows.get(f"coverage-floor:{package}")
+        if row is None:
+            continue
+        direction, bound = row.direction, row.bound
+        if direction is None or bound is None or direction not in DIRECTIONS:
+            unreadable.append(row.detail)
+            continue
+        if row.status != STATUS_MEASURED:
+            continue
+        compared += 1
+        floor = float(cfg.get("line", -1))
+        if is_regression(direction, bound, floor):
+            regressed.append(
+                f"{package} line {floor:g} < measured bound {bound:g} ({row.id}, "
+                f"direction {direction})"
+            )
+    if regressed:
+        return CheckResult(
+            "C28",
+            "Per-package coverage",
+            "FAIL",
+            f"line floor below its measured ratchet bound: {'; '.join(regressed)}",
+        )
+    if unreadable:
+        return CheckResult(
+            "C28",
+            "Per-package coverage",
+            "SKIP",
+            "coverage-floor ratchet row(s) unreadable, floors not compared: "
+            f"{'; '.join(unreadable)}",
+        )
+    if compared == 0:
+        return CheckResult(
+            "C28",
+            "Per-package coverage",
+            "SKIP",
+            "no measured coverage-floor bound read from "
+            f"{ratchets_file.relative_to(ROOT).as_posix()} "
+            f"(ratchet_truth outcome {ratchet_report.outcome.value}); floors not compared",
+        )
     return CheckResult(
         "C28",
         "Per-package coverage",
         "PASS",
-        f"{len(pkgs)} packages gated; script wired into ci.yml",
+        f"{len(pkgs)} packages gated; script wired into ci.yml; {compared} floor(s) at or "
+        "above their measured ratchet bound",
     )
 
 
@@ -1428,15 +1499,18 @@ def check_no_dead_modules() -> CheckResult:
     property test whose target no non-test module imports — is *reported* as validating a
     model (the criterion's verb is "SHALL be reported"), so it never moves the status.
 
-    Expect a FAIL here while ``synapse_common.contracts.validate_audit_insertion`` has no
-    production caller. ``orchestrator.guardrails.rules.execute_consensus`` already passes
-    — task 8.5's ``_ratify_and_dispatch`` calls it — and so do
-    ``uplift.uplift_floor.is_proven_uplift`` / ``ratchet_to_measured``, which task 10.3
-    wired into ``uplift_truth.verdict`` / ``uplift_truth.admit_floor_raise``. That
-    remaining FAIL is the requirement working. Note it also makes C44's declared
-    fault-injection operators read
-    *indeterminate* until they clear: a gate that is already red proves nothing by
-    staying red, and that is the honest label, not an exemption.
+    All three R13.7 subjects the audit traced are now on a production path.
+    ``orchestrator.guardrails.rules.execute_consensus`` passes — task 8.5's
+    ``_ratify_and_dispatch`` calls it — and so do ``uplift.uplift_floor.is_proven_uplift`` /
+    ``ratchet_to_measured``, which task 10.3 wired into ``uplift_truth.verdict`` /
+    ``uplift_truth.admit_floor_raise``. The last one,
+    ``synapse_common.contracts.validate_audit_insertion``, has been invoked from
+    ``orchestrator/audit/logger.py`` (``AuditLogger.log_decision``, after the commit) since
+    2026-10-01; removing that call makes this row FAIL again, naming the symbol and the
+    invariant. The same date removed the two dead ``data_fabric/ingest`` modules (M5 was
+    declined 2026-09-29) rather than naming them dormant, which would have raised the named
+    baseline above its ratchet of 0. With the baseline passing, C44's declared
+    fault-injection operators become probes rather than *indeterminate*.
     """
     try:
         from scripts.audit.module_liveness import Outcome, evaluate
@@ -2385,11 +2459,13 @@ def check_task_claim_truth() -> CheckResult:
     still absent FAILs naming the spec, the task id, and the subject it claims.
 
     **Expected FAIL on landing, and deliberately not softened (I-7).**
-    `core-purpose-uplift` tasks 9 and 9.1 are `[x]` against an unchanged
-    `__placeholder__`, so this row reddens the registry the moment it is registered. That
-    is R3.6's finding becoming a gate, which is what this feature is for -- not a gate
-    defect, and not something to allowlist. It clears when the claim is retracted or the
-    checkpoint is genuinely published.
+    `core-purpose-uplift` tasks 9 and 9.1 were `[x]` against an unchanged
+    `__placeholder__`, so this row reddened the registry the moment it was registered.
+    That was R3.6's finding becoming a gate, which is what this feature is for -- not a
+    gate defect, and not something to allowlist. It cleared on 2026-10-01 the honest way:
+    the claim was retracted (both records unticked with a dated note), not the checkpoint
+    published, so this row now reports them `pending` and re-reddens if either is
+    re-ticked while `published_checkpoints.json` still holds only `__placeholder__`.
 
     An unreadable specs root or policy reports `unavailable` -> SKIP, never PASS: no scan
     is not a clean scan.
@@ -2642,12 +2718,14 @@ def check_dataset_licence() -> CheckResult:
     R8.16's "before the first ingestion" is enforceable only on the change that performs
     the ingestion, which is why this lives in the Check_Registry:
     `truth-gates.yml::truth-gates` runs the registry on every push and pull request,
-    including Markdown-only ones, so no ingesting change can avoid it. The runtime
-    companion is `data_fabric/ingest/m5.py::record_ingestion`, which REFUSES to record an
-    ingestion whose licence entry is unconfirmed, whose dataset is undeclared, or whose
-    revision disagrees with the revision the terms were read against. This row reports;
-    that refusal enforces. Neither alone is enough -- a gate can be merged around, and a
-    refusal inside a job nobody reads is invisible.
+    including Markdown-only ones, so no ingesting change can avoid it. This row reports;
+    since 2026-10-01 nothing in the tree enforces. Its runtime companion,
+    `data_fabric/ingest/m5.py::record_ingestion` -- which refused to record an ingestion
+    whose licence entry was unconfirmed, whose dataset was undeclared, or whose revision
+    disagreed with the one the terms were read against -- was removed with M5 (declined
+    2026-09-29) as dead code under C44. No path ingests the dataset, so there is nothing for
+    a refusal to guard; an ingestion path that is ever added must bring its own refusal (I-6)
+    in the same change, because a gate alone can be merged around.
 
     Two non-passing verdicts, split on WHY rather than on severity. An **absent or null**
     field, an unparseable artifact, an unreadable schema, a schema that is not itself a
@@ -2670,8 +2748,8 @@ def check_dataset_licence() -> CheckResult:
     term that is PRESENT must be well-formed -- and it is constructed WITH a format checker,
     because `format` is annotation-only in draft-07 by default and `read_date: "banana"`
     would otherwise validate. `DatasetLicence` re-checks the date at the model layer too,
-    since `load_licence_document` deliberately skips JSON-Schema validation on the runtime
-    ingestion path.
+    since `load_licence_document` deliberately skips JSON-Schema validation on its read
+    path.
 
     **`confirmed` is derived, never read.** `DatasetLicence.confirmed` is computed from
     whether every R8.1 field is non-null; the artifact's own `confirmation.confirmed` flag is
@@ -2681,13 +2759,6 @@ def check_dataset_licence() -> CheckResult:
     asymmetry: over-claiming (`confirmed: true` beside a null term) is a FAIL, while
     under-claiming (every field populated, flag still false) is not a finding at all -- that
     is an operator mid-procedure, and failing it would punish the honest half of the work.
-
-    The runtime companion is `data_fabric/ingest/m5.py::record_ingestion`, which REFUSES to
-    record an ingestion whose licence entry is unconfirmed, whose dataset is undeclared, or
-    whose revision disagrees with the revision the terms were read against. This row
-    reports; that refusal enforces (I-6: a hard guardrail beats a learned policy). Neither
-    alone is enough -- a gate can be merged around, and a refusal inside a job nobody reads
-    is invisible.
 
     **Today this row reads SKIP, and that is the honest state, not a defect.** The M5
     licence terms are competition rules requiring acceptance by a logged-in person, so they
@@ -2699,7 +2770,9 @@ def check_dataset_licence() -> CheckResult:
     terms are establishable from public metadata without reading them; naming where a
     document lives is not a claim to have read it. Writing a plausible `licence_id` such as
     `CC-BY-4.0` instead would be indistinguishable from a fact for every reader downstream
-    and is precisely the fabrication I-7 forbids. A SKIP is not a PASS.
+    and is precisely the fabrication I-7 forbids. A SKIP is not a PASS. Since 2026-09-29
+    the SKIP is by decision rather than pending: the operator declined the M5 terms, so
+    these fields stay null and this row is not expected to pass.
     """
     try:
         from scripts.audit.dataset_licence_truth import assess as _assess_licence

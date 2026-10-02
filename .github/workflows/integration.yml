@@ -112,11 +112,14 @@ jobs:
     # purpose-achievement-audit task 12.2, discharging task 7.10's routing.
     #
     # `tests/integration/test_audit_chain_tamper_postgres.py` gates itself on ONE
-    # environment variable and says so in its own docstring: "No workflow sets
-    # SYNAPSE_AUDIT_CHAIN_IT_DSN today, so this file SKIPs everywhere - including in
-    # integration.yml." A skip is not a pass (I-7), so R6.2 and R6.10 have had no
-    # executed proof against a real database. This job sets the variable, which is
-    # the whole fix.
+    # environment variable. Its docstring used to say "No workflow sets
+    # SYNAPSE_AUDIT_CHAIN_IT_DSN today, so this file SKIPs everywhere"; this job sets the
+    # variable, which was NECESSARY BUT NOT SUFFICIENT. Its first run (36860316544,
+    # 2026-10-01) errored at setup with asyncpg `InvalidPasswordError` in all three
+    # tests: SQLAlchemy 2.0's `str(URL)` masks the password as `***`, and the test built
+    # its engines from `str(url)`. Repaired in the test (engines take the parsed URL; the
+    # verifier's DSN string uses `render_as_string(hide_password=False)`), so R6.2 and
+    # R6.10 still had no executed proof against a real database before that repair.
     #
     # Why a dedicated job with a `services:` Postgres rather than a step inside
     # `integration-e2e` (which the test's docstring suggests): that job's dependency

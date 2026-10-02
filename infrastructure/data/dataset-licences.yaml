@@ -54,8 +54,10 @@ datasets:
     permitted_use: null
     # Null: the dataset files are static since the 2020 competition close, but a revision
     # identifier that pins WHICH BYTES the licence was read against does not exist until an
-    # ingestion records one. Task 7.3's ingestion record supplies it, and until then a
-    # stale confirmation cannot be inherited by a re-published dataset.
+    # ingestion records one. Task 7.3's ingestion record would have supplied it; that module
+    # (`data_fabric/ingest/m5.py`) was removed on 2026-10-01 after M5 was declined, so
+    # nothing supplies it, and a stale confirmation still cannot be inherited by a
+    # re-published dataset.
     dataset_revision: null
     # `unknown` would assert the terms were read and found silent. They were not read.
     redistribution: null
@@ -77,8 +79,10 @@ datasets:
         4. Record `redistribution` as one of permitted / prohibited /
            permitted-with-attribution / unknown. Choose `unknown` only after reading.
         5. Record `read_date` as the UTC date of step 1, and `confirmed_by`.
-        6. Record `dataset_revision` from the ingestion record produced by
-           `data_fabric/ingest/m5.py` against the files actually downloaded.
+        6. Record `dataset_revision` as the revision of the files actually downloaded,
+           read from an ingestion record. No ingestion path has existed since 2026-10-01
+           (M5 declined; `data_fabric/ingest/m5.py` removed), so this step cannot be
+           completed until one is added together with its own refusal.
         7. Set `confirmed: true` ONLY when all six R8.1 fields are non-null. The gate
            re-derives completeness and FAILs a `confirmed: true` entry that still carries a
            null field, so this flag cannot outrun its own subject.

@@ -1,9 +1,8 @@
-"""Feed admission: the licence gate's totality, and the ingestion record's digest binding.
+"""Feed admission: the licence gate's totality and refusal shapes (unit layer).
 
-Feature: decision-quality-proof, task 7.5. Requirements **R8.1**, **R8.2**, **R8.16**,
-**R8.17**.
+Feature: decision-quality-proof, task 7.5. Requirements **R8.1**, **R8.2**.
 
-Three things are established here, and each closes a way the E4a mechanism could report
+Two things are established here, and each closes a way the E4a mechanism could report
 green while proving nothing.
 
 **1. Every absent field is NAMED, and absence never passes.** The suite removes each of
@@ -19,50 +18,38 @@ shapes are covered: an absent file, malformed YAML, and a document whose root is
 mapping. All three are ``unavailable``, because "could not be read" must never collapse into
 "no restriction found".
 
-**3. The ingestion record binds to the licence artifact by digest.** The record carries the
-SHA-256 of the artifact bytes in force at ingestion, so "we had permission" stays checkable
-after the artifact is edited. The test edits the artifact and asserts the digest moves --
-a binding that did not move under an edit would be decoration.
-
 Alongside those: the committed artifact's real state is pinned (M5 unconfirmed -> SKIP, which
 is what stops an invented ``licence_id`` from creeping in later), the marker-versus-fields
-disagreement is pinned as a FAIL rather than a SKIP, ``record_ingestion``'s three refusals
-are each asserted to name their subject, first-versus-subsequent ingestion is asserted to be
-recorded rather than inferred, and the three aggregate shapes are exercised on a
-seven-column fixture -- including the assertion that the intra-day shape reports
-``unavailable`` and carries **no values**, since a plausible intra-day curve derived from
-daily data is exactly the invented literal R5.11 forbids.
+disagreement is pinned as a FAIL rather than a SKIP, and ``artifact_digest`` is asserted to
+refuse an unreadable file rather than digest nothing.
 
-**Plain assertions, no Hypothesis.** E4a's properties are 68 (licence schema totality) and
-69 (provenanced ingestion, slow); both are numbered inside E4's block and land with task 19.
-This file is the unit layer, so there is no example budget to inherit and no ``max_examples``
-anywhere in it (I-0's authoring rule).
+**The ingestion-record half was retired on 2026-10-01.** M5 was declined on 2026-09-29, so
+``data_fabric/ingest/m5.py`` -- the ingestion record, its digest binding to this artifact
+(R8.17), its three refusals (R8.16) and the aggregate-shape extraction (R5.11) -- was removed
+as dead code (C44), and the tests that exercised it went with it. The design withdraws
+Property 69's R8.17 clause for the same reason. ``artifact_digest`` stays covered here because
+it lives in ``data_fabric/licence.py``, which the gate still reads.
+
+**Plain assertions, no Hypothesis.** E4a's licence-totality property is 68, in
+``tests/verify/test_dataset_licence_totality_property.py``. This file is the unit layer, so
+there is no example budget to inherit and no ``max_examples`` anywhere in it (I-0's authoring
+rule).
 
 **No dataset is read and no bulk work runs.** Every fixture is a handful of rows in
-``tmp_path``. ``extract_statistics`` over the real M5 files is a category-3/4 workload whose
-locus is ``ci.yml::training-smoke``; this file proves the extractor's logic, not its scale.
+``tmp_path``.
 
-**Validates: Requirements 8.1, 8.2, 8.16, 8.17.**
+**Validates: Requirements 8.1, 8.2.**
 """
 
 from __future__ import annotations
 
-import copy
 import json
-from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any, Final
 
 import pytest
 import yaml
 from pydantic import ValidationError
 
-from data_fabric.ingest.m5 import (
-    IngestionRefusedError,
-    M5Columns,
-    digest_file,
-    extract_statistics,
-    record_ingestion,
-)
 from data_fabric.licence import (
     ARTIFACT_PATH,
     R8_1_FIELDS,
@@ -80,17 +67,6 @@ if TYPE_CHECKING:  # annotation-only
 #: Alias kept at the name these tests read it under. Single source: the model module.
 LICENCE_FIELDS: Final[tuple[str, ...]] = R8_1_FIELDS
 SCHEMA_PATH: Final = gate.SCHEMA_FILE
-
-#: The dataset the committed artifact declares. Read from the artifact rather than restated,
-#: so a rename in the YAML cannot leave this file asserting against a dataset nobody
-#: declares (AD-13). `dataset_id` is nullable, so an unnamed entry is tolerated here.
-COMMITTED_DATASET_IDS: Final[tuple[str, ...]] = tuple(
-    entry.dataset_id
-    for entry in load_licence_document(ARTIFACT_PATH).datasets
-    if entry.dataset_id is not None
-)
-
-_FIXED_TIME: Final[datetime] = datetime(2026, 9, 1, 12, 0, tzinfo=UTC)
 
 
 def _confirmed_entry(dataset_id: str = "fixture-dataset") -> dict[str, Any]:
@@ -431,8 +407,8 @@ def test_read_date_must_be_a_date_when_present(tmp_path: Path) -> None:
 def test_model_refuses_a_malformed_read_date_even_bypassing_the_schema() -> None:
     """The typed record refuses a date it cannot parse, on the path that skips the schema.
 
-    ``load_licence_document`` does not run JSON-Schema validation, so without this the
-    runtime ingestion path could read a malformed date that the gate would have caught. Null
+    ``load_licence_document`` does not run JSON-Schema validation, so without this a reader
+    that loads through it could accept a malformed date that the gate would have caught. Null
     is admitted; present-and-unparseable is not.
     """
     with pytest.raises(ValidationError, match="ISO YYYY-MM-DD"):
@@ -455,411 +431,10 @@ def test_model_refuses_a_malformed_read_date_even_bypassing_the_schema() -> None
 
 
 # ---------------------------------------------------------------------------
-# 3. The ingestion record's digest binding (R8.16, R8.17)
+# The artifact digest refuses an unreadable file rather than digesting nothing
 # ---------------------------------------------------------------------------
-
-
-def _csv(path: Path, rows: list[list[str]]) -> Path:
-    path.write_text("\n".join(",".join(row) for row in rows) + "\n", encoding="utf-8")
-    return path
-
-
-def test_ingestion_record_pins_the_licence_artifact_digest(tmp_path: Path) -> None:
-    """R8.17: identity, revision, rows, per-file digests, and the licence digest in force."""
-    artifact = _write_artifact(tmp_path / "dataset-licences.yaml", [_confirmed_entry()])
-    data = _csv(tmp_path / "sales.csv", [["id", "d_1"], ["a", "1"], ["b", "2"]])
-
-    record = record_ingestion(
-        dataset_id="fixture-dataset",
-        dataset_revision="rev-1",
-        files=[data],
-        ingested_at=_FIXED_TIME,
-        licence_path=artifact,
-    )
-
-    assert record.dataset_id == "fixture-dataset"
-    assert record.dataset_revision == "rev-1"
-    assert record.rows == 2, "two data rows behind one header"
-    assert record.licence_artifact_digest == artifact_digest(artifact)
-    assert record.licence_artifact_digest.startswith("sha256:")
-    assert record.files[0].sha256 == digest_file(data).sha256
-    assert record.licence_id == "FIXTURE-LICENCE-1.0"
-    assert record.ingested_at == _FIXED_TIME.isoformat()
-    # Canonical JSON, so two records over the same facts are byte-identical.
-    assert record.canonical_json() == json.dumps(
-        json.loads(record.canonical_json()), sort_keys=True, separators=(",", ":")
-    )
-
-
-def test_digest_binding_moves_when_the_artifact_changes(tmp_path: Path) -> None:
-    """A binding that survived an edit to the thing it binds would be decoration."""
-    entries = [_confirmed_entry()]
-    artifact = _write_artifact(tmp_path / "dataset-licences.yaml", entries)
-    data = _csv(tmp_path / "sales.csv", [["id", "d_1"], ["a", "1"]])
-    before = record_ingestion(
-        dataset_id="fixture-dataset",
-        dataset_revision="rev-1",
-        files=[data],
-        ingested_at=_FIXED_TIME,
-        licence_path=artifact,
-    )
-
-    edited = copy.deepcopy(entries)
-    edited[0]["permitted_use"] = "fixture use only; terms re-read and widened"
-    _write_artifact(artifact, edited)
-    after = record_ingestion(
-        dataset_id="fixture-dataset",
-        dataset_revision="rev-1",
-        files=[data],
-        ingested_at=_FIXED_TIME,
-        licence_path=artifact,
-    )
-
-    assert before.licence_artifact_digest != after.licence_artifact_digest
-    assert before.files[0].sha256 == after.files[0].sha256, "the data did not change"
-
-
-def test_first_ingestion_is_recorded_as_such(tmp_path: Path) -> None:
-    """R8.16: a first ingestion is reported, not folded into the steady-state path."""
-    artifact = _write_artifact(tmp_path / "dataset-licences.yaml", [_confirmed_entry()])
-    data = _csv(tmp_path / "sales.csv", [["id", "d_1"], ["a", "1"]])
-
-    first = record_ingestion(
-        dataset_id="fixture-dataset",
-        dataset_revision="rev-1",
-        files=[data],
-        ingested_at=_FIXED_TIME,
-        licence_path=artifact,
-    )
-    later = record_ingestion(
-        dataset_id="fixture-dataset",
-        dataset_revision="rev-1",
-        files=[data],
-        ingested_at=_FIXED_TIME,
-        licence_path=artifact,
-        previously_ingested=("fixture-dataset",),
-    )
-
-    assert first.first_ingestion is True
-    assert later.first_ingestion is False
-
-
-def test_unconfirmed_licence_refuses_ingestion_and_names_the_fields(tmp_path: Path) -> None:
-    """The committed artifact's own state: an unconfirmed entry cannot be ingested."""
-    data = _csv(tmp_path / "sales.csv", [["id", "d_1"], ["a", "1"]])
-
-    with pytest.raises(IngestionRefusedError) as raised:
-        record_ingestion(
-            dataset_id=COMMITTED_DATASET_IDS[0],
-            dataset_revision="any-revision-at-all",
-            files=[data],
-            ingested_at=_FIXED_TIME,
-            licence_path=ARTIFACT_PATH,
-        )
-
-    message = str(raised.value)
-    assert "not confirmed" in message
-    assert "licence_id" in message and "permitted_use" in message
-
-
-def test_undeclared_dataset_refuses_ingestion(tmp_path: Path) -> None:
-    artifact = _write_artifact(tmp_path / "dataset-licences.yaml", [_confirmed_entry()])
-    data = _csv(tmp_path / "sales.csv", [["id", "d_1"], ["a", "1"]])
-
-    with pytest.raises(IngestionRefusedError, match="declares no licence entry"):
-        record_ingestion(
-            dataset_id="some-other-dataset",
-            dataset_revision="rev-1",
-            files=[data],
-            ingested_at=_FIXED_TIME,
-            licence_path=artifact,
-        )
-
-
-def test_revision_mismatch_refuses_ingestion(tmp_path: Path) -> None:
-    """Terms are read against a revision; a different revision has no recorded permission."""
-    artifact = _write_artifact(tmp_path / "dataset-licences.yaml", [_confirmed_entry()])
-    data = _csv(tmp_path / "sales.csv", [["id", "d_1"], ["a", "1"]])
-
-    with pytest.raises(IngestionRefusedError, match="rev-1"):
-        record_ingestion(
-            dataset_id="fixture-dataset",
-            dataset_revision="rev-2",
-            files=[data],
-            ingested_at=_FIXED_TIME,
-            licence_path=artifact,
-        )
-
-
-def test_naive_timestamp_refuses_ingestion(tmp_path: Path) -> None:
-    artifact = _write_artifact(tmp_path / "dataset-licences.yaml", [_confirmed_entry()])
-    data = _csv(tmp_path / "sales.csv", [["id", "d_1"], ["a", "1"]])
-
-    with pytest.raises(IngestionRefusedError, match="timezone-naive"):
-        record_ingestion(
-            dataset_id="fixture-dataset",
-            dataset_revision="rev-1",
-            files=[data],
-            ingested_at=datetime(2026, 9, 1, 12, 0),  # the subject of this test
-            licence_path=artifact,
-        )
-
-
-def test_unreadable_licence_artifact_refuses_ingestion(tmp_path: Path) -> None:
-    with pytest.raises(IngestionRefusedError, match="could not be read"):
-        record_ingestion(
-            dataset_id="fixture-dataset",
-            dataset_revision="rev-1",
-            files=[],
-            ingested_at=_FIXED_TIME,
-            licence_path=tmp_path / "absent.yaml",
-        )
 
 
 def test_artifact_digest_refuses_an_absent_file(tmp_path: Path) -> None:
     with pytest.raises(LicenceArtifactError, match="could not be read for digesting"):
         artifact_digest(tmp_path / "absent.yaml")
-
-
-# ---------------------------------------------------------------------------
-# The three aggregate shapes, on a fixture (R5.11, R8.17)
-# ---------------------------------------------------------------------------
-
-#: A 14-day, two-week fixture. Two series, seven observation columns per week, so one week
-#: is complete and the other is complete too -- the partial-week guard is exercised
-#: separately.
-_CALENDAR: Final[list[list[str]]] = [
-    ["d", "wm_yr_wk", "wday", "weekday"],
-    *[
-        [f"d_{day}", f"w{1 + (day - 1) // 7}", str(1 + (day - 1) % 7), f"day{1 + (day - 1) % 7}"]
-        for day in range(1, 15)
-    ],
-]
-
-
-def _sales_rows(week_one: list[str], week_two: list[str]) -> list[list[str]]:
-    header = ["id", *[f"d_{day}" for day in range(1, 15)]]
-    return [header, ["series-a", *week_one, *week_two]]
-
-
-def test_day_of_week_shape_is_derived_and_normalised(tmp_path: Path) -> None:
-    """The multipliers' cell-count-weighted mean is 1.0 by construction."""
-    calendar = _csv(tmp_path / "calendar.csv", _CALENDAR)
-    sales = _csv(
-        tmp_path / "sales.csv",
-        _sales_rows(
-            ["1", "2", "3", "4", "5", "6", "7"], ["3", "4", "5", "6", "7", "8", "9"]
-        ),
-    )
-
-    statistics = extract_statistics(
-        dataset_id="fixture-dataset",
-        dataset_revision="rev-1",
-        sales_csv=sales,
-        calendar_csv=calendar,
-    )
-
-    shape = statistics.day_of_week
-    assert shape.status == "derived", shape.detail
-    assert len(shape.values) == 7
-    assert len(shape.labels) == 7
-    assert shape.labels[0] == "day1", "labels are read from the calendar, never asserted"
-    assert shape.rows_consumed == 1
-    assert sum(shape.values) / len(shape.values) == pytest.approx(1.0)
-    assert shape.values[6] > shape.values[0], "the fixture rises across the week"
-
-
-def test_intra_day_shape_is_unavailable_and_carries_no_values(tmp_path: Path) -> None:
-    """R5.11: the shape a daily dataset cannot support is reported, never invented.
-
-    The structural half matters as much as the status: an ``unavailable`` estimate carrying
-    numbers would be picked up by the first consumer that read ``values``.
-    """
-    calendar = _csv(tmp_path / "calendar.csv", _CALENDAR)
-    sales = _csv(
-        tmp_path / "sales.csv",
-        _sales_rows(["1"] * 7, ["1"] * 7),
-    )
-
-    statistics = extract_statistics(
-        dataset_id="fixture-dataset",
-        dataset_revision="rev-1",
-        sales_csv=sales,
-        calendar_csv=calendar,
-    )
-
-    shape = statistics.intra_day_intensity
-    assert shape.status == "unavailable"
-    assert shape.values == ()
-    assert shape.labels == ()
-    assert "daily" in shape.basis
-    assert "intra_day_intensity" in statistics.unavailable_shapes
-
-
-def test_promotion_uplift_is_unavailable_without_a_price_file(tmp_path: Path) -> None:
-    calendar = _csv(tmp_path / "calendar.csv", _CALENDAR)
-    sales = _csv(tmp_path / "sales.csv", _sales_rows(["1"] * 7, ["1"] * 7))
-
-    statistics = extract_statistics(
-        dataset_id="fixture-dataset",
-        dataset_revision="rev-1",
-        sales_csv=sales,
-        calendar_csv=calendar,
-    )
-
-    assert statistics.promotion_uplift.status == "unavailable"
-    assert statistics.promotion_uplift.values == ()
-    assert "no promotion flag" in statistics.promotion_uplift.detail
-
-
-def test_promotion_uplift_needs_enough_weeks_to_split(tmp_path: Path) -> None:
-    """Two weeks is below the declared minimum, so the estimate is unavailable, not weak."""
-    calendar = _csv(tmp_path / "calendar.csv", _CALENDAR)
-    sales = _csv(tmp_path / "sales.csv", _sales_rows(["1"] * 7, ["4"] * 7))
-    prices = _csv(
-        tmp_path / "prices.csv",
-        [
-            ["store_id", "item_id", "wm_yr_wk", "sell_price"],
-            ["s1", "i1", "w1", "10.0"],
-            ["s1", "i1", "w2", "5.0"],
-        ],
-    )
-
-    statistics = extract_statistics(
-        dataset_id="fixture-dataset",
-        dataset_revision="rev-1",
-        sales_csv=sales,
-        calendar_csv=calendar,
-        sell_prices_csv=prices,
-    )
-
-    shape = statistics.promotion_uplift
-    assert shape.status == "unavailable"
-    assert str(4) in shape.detail, "the declared minimum must be named"
-    assert "PROXY" in shape.basis, "the proxy nature travels with the estimate"
-
-
-def test_promotion_uplift_is_derived_over_enough_weeks(tmp_path: Path) -> None:
-    """Six weeks, discounted in the back half, with units following. Ratio > 1."""
-    weeks = 6
-    days = weeks * 7
-    calendar = _csv(
-        tmp_path / "calendar.csv",
-        [
-            ["d", "wm_yr_wk", "wday", "weekday"],
-            *[
-                [
-                    f"d_{day}",
-                    f"w{1 + (day - 1) // 7}",
-                    str(1 + (day - 1) % 7),
-                    f"day{1 + (day - 1) % 7}",
-                ]
-                for day in range(1, days + 1)
-            ],
-        ],
-    )
-    # Weeks 1-3 sell 1 unit a day, weeks 4-6 sell 4 -- and weeks 4-6 are the discounted ones.
-    units = ["1"] * 21 + ["4"] * 21
-    sales = _csv(
-        tmp_path / "sales.csv",
-        [
-            ["id", *[f"d_{day}" for day in range(1, days + 1)]],
-            ["series-a", *units],
-        ],
-    )
-    prices = _csv(
-        tmp_path / "prices.csv",
-        [
-            ["store_id", "item_id", "wm_yr_wk", "sell_price"],
-            *[["s1", "i1", f"w{week}", "10.0"] for week in range(1, 4)],
-            *[["s1", "i1", f"w{week}", "6.0"] for week in range(4, 7)],
-        ],
-    )
-
-    statistics = extract_statistics(
-        dataset_id="fixture-dataset",
-        dataset_revision="rev-1",
-        sales_csv=sales,
-        calendar_csv=calendar,
-        sell_prices_csv=prices,
-    )
-
-    shape = statistics.promotion_uplift
-    assert shape.status == "derived", shape.detail
-    assert shape.values[0] == pytest.approx(4.0)
-    assert len(shape.labels) == 1
-    assert "PROXY" in shape.basis
-    assert statistics.canonical_json().startswith("{")
-
-
-def test_missing_calendar_column_is_named_not_silently_empty(tmp_path: Path) -> None:
-    """A wrong column expectation surfaces as a named absence, never as a zero shape."""
-    calendar = _csv(
-        tmp_path / "calendar.csv",
-        [["d", "wm_yr_wk", "weekday"], ["d_1", "w1", "day1"]],
-    )
-    sales = _csv(tmp_path / "sales.csv", [["id", "d_1"], ["series-a", "1"]])
-
-    statistics = extract_statistics(
-        dataset_id="fixture-dataset",
-        dataset_revision="rev-1",
-        sales_csv=sales,
-        calendar_csv=calendar,
-    )
-
-    assert statistics.day_of_week.status == "unavailable"
-    assert "'wday'" in statistics.day_of_week.detail
-    assert statistics.day_of_week.values == ()
-
-
-def test_non_numeric_observation_is_named_not_treated_as_zero(tmp_path: Path) -> None:
-    """An unreadable cell is not a zero observation -- defaulting it would flatten the shape."""
-    calendar = _csv(tmp_path / "calendar.csv", _CALENDAR)
-    sales = _csv(
-        tmp_path / "sales.csv",
-        _sales_rows(["1", "", "3", "4", "5", "6", "7"], ["1"] * 7),
-    )
-
-    statistics = extract_statistics(
-        dataset_id="fixture-dataset",
-        dataset_revision="rev-1",
-        sales_csv=sales,
-        calendar_csv=calendar,
-    )
-
-    assert statistics.day_of_week.status == "unavailable"
-    assert "not a number" in statistics.day_of_week.detail
-
-
-def test_custom_columns_are_honoured(tmp_path: Path) -> None:
-    """The column names are parameters, so a differently shaped export is readable."""
-    calendar = _csv(
-        tmp_path / "calendar.csv",
-        [
-            ["day", "week", "dow"],
-            *[[f"obs_{n}", "w1", str(n)] for n in range(1, 8)],
-        ],
-    )
-    sales = _csv(
-        tmp_path / "sales.csv",
-        [["id", *[f"obs_{n}" for n in range(1, 8)]], ["a", *["2"] * 7]],
-    )
-
-    statistics = extract_statistics(
-        dataset_id="fixture-dataset",
-        dataset_revision="rev-1",
-        sales_csv=sales,
-        calendar_csv=calendar,
-        columns=M5Columns(
-            day_prefix="obs_",
-            calendar_day="day",
-            calendar_week="week",
-            calendar_wday="dow",
-            calendar_weekday_name="absent-on-purpose",
-        ),
-    )
-
-    shape = statistics.day_of_week
-    assert shape.status == "derived", shape.detail
-    assert shape.labels == tuple(f"wday={n}" for n in range(1, 8))
-    assert all(value == pytest.approx(1.0) for value in shape.values)

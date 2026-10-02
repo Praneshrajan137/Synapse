@@ -1447,6 +1447,15 @@ Markdown-only ones.
 
 #### E4a.3 `data_fabric/ingest/m5.py` (NEW) — ingestion, provenance and statistics (R8.3, R8.17, R5.11)
 
+> **RETIRED 2026-10-01.** M5 was declined on 2026-09-29, so this module was removed as dead
+> code: C44 reported both `data_fabric/ingest/__init__.py` and `m5.py` DEAD against a named
+> baseline of 0, and naming them dormant would have raised that baseline above its ratchet.
+> Nothing in the tree now records a training-row ingestion or emits the aggregate statistics
+> described below. R8.17's ingestion-record clause (Property 69) is withdrawn; R5.11's
+> intensity shape was already re-cut to DECLARED rather than calibrated (2026-09-29, ADR-055
+> D2.8). The world-seam half of this section — `WorldState.source_class`, R8.3 — is
+> unaffected. The text below is kept as the record of what was designed, not of what exists.
+
 Records `dataset_id`, `dataset_revision` and `rows` (already a required registry key), and
 emits the aggregate hour-of-day / day-of-week intensity statistics E2c.2's policy file
 consumes. **`Provenance.feature_source` is not touched**: it is a closed `StrEnum` of
@@ -1658,7 +1667,7 @@ hints (`mypy --strict`), and canonical serialisation
 | `PowerReport` | `uplift/power.py` | detectable effect at a replicate count | `kind` declares it distinct from a result artifact (R6.6) |
 | `PoweredProof` (extended) | `uplift/uplift_floor.py` | carries the interval | the ratchet reads `interval.low` (R7.12) |
 | `DatasetLicence` | `data_fabric/licence.py` | one external dataset's licence record | schema-validated; no such gate exists today (R8.1) |
-| `M5IngestRecord` | `data_fabric/ingest/m5.py` | dataset identity, revision, rows consumed | `rows` is already a required registry key (R8.17) |
+| `M5IngestRecord` | `data_fabric/ingest/m5.py` — **RETIRED 2026-10-01** (M5 declined; module removed, see E4a.3) | dataset identity, revision, rows consumed | `rows` is already a required registry key (R8.17; no ingestion path exists since the retirement) |
 | `HeldoutBlock` | `agents/demand_prophet/training/train.py` | per-horizon predictions, actuals, conformal-adjusted 90% bounds | the recompute's only possible input (R9.13) |
 | `CoverageComparison` (reused, extended) | `scripts/audit/published_checkpoint_truth.py` | recomputed vs recorded `coverage_p90` | recompute is the verdict; the read is a cross-check (R8.9) |
 | `BenchmarkRecord` | `scripts/audit/benchmark_truth.py` | score, metric id, defining-document id, baseline-or-unconfirmed | a bare number is a violation (R8.6) |
@@ -1931,7 +1940,7 @@ mapping; the headings below keep their original numbers.
 | 66 | The floor ratchets to the interval's lower bound, never the point estimate | R7.12 | `tests/uplift/` -> `ci.yml::uplift-verify` fast step |
 | 67 | A recorded proof older than the code it measured is reported stale | R7.16 | `tests/verify/` -> `ci.yml::uplift-verify` fast step |
 | 68 | The licence artifact is schema-total and every absent field is named | R8.1, R8.2 | `tests/verify/` -> `ci.yml::uplift-verify` fast step |
-| 69 | Real-feed ingestion is provenanced and records what it consumed **(slow)** | R8.3, R8.17 | `tests/verify/` -> `ci.yml::uplift-verify` slow step |
+| 69 | Real-feed ingestion is provenanced and records what it consumed **(slow)** — **R8.17 clause WITHDRAWN 2026-10-01** (M5 declined; `data_fabric/ingest/m5.py` removed) | R8.3 (R8.17 clause withdrawn) | `tests/verify/` -> `ci.yml::uplift-verify` slow step |
 | 70 | Degradation is exactly the three-term disjunction, and confidence moves across SKUs | R8.4, R9.3, R9.4, R9.9 | `tests/verify/` -> `ci.yml::uplift-verify` fast step |
 | 71 | A recorded number is recomputed or reported unavailable, never `ok` | R8.9, R8.10, R9.8, R9.13, R9.14 | `tests/verify/` -> `ci.yml::uplift-verify` fast step |
 | 72 | A smoke artifact is distinguished from an absent one and never substituted locally | R9.2, R9.5, R9.7, R9.11 | `tests/verify/` -> `ci.yml::uplift-verify` fast step |
@@ -2337,13 +2346,23 @@ non-passing detail rather than reported as a single aggregate failure.
 
 ### Property 69: Real-feed ingestion is provenanced and records what it consumed **(slow)**
 
+> **R8.17 CLAUSE WITHDRAWN 2026-10-01 — M5 declined (2026-09-29), module removed.** The
+> training-row clause ("every ingestion records the dataset identity, the dataset revision and
+> the number of rows consumed, with the record round-tripping through its canonical
+> serialisation") quantified over `data_fabric/ingest/m5.py::record_ingestion`, which was
+> removed as dead code under C44 rather than declared dormant. The clause has no subject, so it
+> is withdrawn and its three properties were deleted with the module; it is not pending. The
+> R8.3 world-seam clause STANDS: `ExternalFeedSource` is production code, and its three
+> properties stay in `tests/verify/test_real_feed_ingestion_provenance_property.py`.
+> Re-admitting any training-row feed reopens R8.17 as new work, not as a revert.
+
 *For any* external feed driving the world, every perceived state reports a source class of `EXTERNAL`
 and derives its synthetic flag from that class rather than from a pinned literal; a source whose
 arrival poll is unconditionally empty is classified as a stub regardless of its class name; and every
 ingestion records the dataset identity, the dataset revision and the number of rows consumed, with
 the record round-tripping through its canonical serialisation.
 
-**Validates: Requirements 8.3, 8.17**
+**Validates: Requirements 8.3** (the 8.17 clause was withdrawn 2026-10-01; R8.17 itself is unmet by decision)
 
 **Locus.** `tests/verify/` — `ci.yml::uplift-verify` slow step, beside its sibling
 `test_nonsynthetic_ingestion_replay_property.py`, which is already selected there.

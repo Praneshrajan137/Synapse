@@ -1346,28 +1346,29 @@ def test_the_committed_registry_is_a_placeholder_so_the_gate_skips_without_fetch
     assert NAME not in COMMITTED_REGISTRY
 
 
-def test_the_committed_task_records_are_the_honest_fail_r3_6_makes_mechanical() -> None:
-    """R3.6 against the committed tree: this FAILs today, and that is the finding.
+def test_the_retracted_task_records_are_pending_against_the_placeholder() -> None:
+    """R3.6 against the committed tree, after the 2026-10-01 retraction.
 
-    ``core-purpose-uplift`` tasks 9 and 9.1 are marked ``[x]`` while
-    ``infrastructure/ml/published_checkpoints.json`` still holds only
-    ``__placeholder__``. The audit's Requirement 3 reported that; this asserts it
-    mechanically. It is a file scan only - no process, no network. If the operator lands
-    a validated entry, or unchecks the records, this test tells us by failing, which is
-    the correct signal in either direction.
+    ``core-purpose-uplift`` tasks 9 and 9.1 were marked ``[x]`` while
+    ``infrastructure/ml/published_checkpoints.json`` still held only ``__placeholder__``;
+    this test asserted that FAIL until both records were unticked on 2026-10-01. It now
+    asserts the honest state: the claims are pending, none is unlanded, and the anti-vacuity
+    records are still seen. Re-ticking either record without a landed entry fails this
+    (``unlanded`` becomes non-empty); landing a validated entry moves ``registry_state`` and
+    fails it too, which is the signal to re-tick. File scan only - no process, no network.
     """
     report = evaluate_task_claims()
 
-    assert report.outcome is ClaimOutcome.FAIL
-    assert report.exit_code == 1
+    assert report.outcome is ClaimOutcome.PASS
+    assert report.exit_code == 0
     assert report.registry_state == "placeholder"
-    assert report.unlanded
+    assert report.unlanded == ()
 
     for required in POLICY.task_claims.must_resolve:
         assert any(
             required.spec in name and f"task {required.task_id} " in name
-            for name in report.unlanded
-        ), (required.spec, required.task_id, report.unlanded)
+            for name in report.pending
+        ), (required.spec, required.task_id, report.pending)
 
 
 if __name__ == "__main__":

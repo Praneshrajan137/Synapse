@@ -1,8 +1,21 @@
 # Feature: decision-quality-proof, Property 69: Real-feed ingestion is provenanced and records what
 # it consumed
-"""Property 69 -- real-feed ingestion is provenanced and records what it consumed.
+"""Property 69 -- real-feed ingestion is provenanced (its R8.3 clause; R8.17 is withdrawn).
 
-Feature: decision-quality-proof, task 19.3. Requirements **R8.3**, **R8.17**.
+Feature: decision-quality-proof, task 19.3. Requirement **R8.3**.
+
+Scope since 2026-10-01
+----------------------
+
+Property 69 had two clauses over two unrelated ingestion paths. The training-row clause
+(R8.17: every ingestion records the dataset identity, revision and rows consumed) quantified
+over ``data_fabric/ingest/m5.py::record_ingestion``. M5 was declined on 2026-09-29 and that
+module was removed as dead code (C44), so the clause has no subject left: it is WITHDRAWN in
+the design, and its three properties were deleted with the module. The world-seam clause
+(R8.3) is untouched -- ``ExternalFeedSource`` is production code -- and its three properties
+below are kept. Deleting them would have weakened coverage of live code, and two of their
+assertions exist nowhere else in the tree: the ``external_feed_records_rejected`` degradation
+under unusable records, and the closure of ``SOURCE_CLASSES`` at three values.
 
 The trap this file was written to avoid, stated first
 -----------------------------------------------------
@@ -13,10 +26,9 @@ bad was produced" is satisfied perfectly by a source that produces nothing, and 
 same vacuity as ``None == None`` agreeing in a dead pin extractor.
 
 **Every property here therefore asserts NON-EMPTINESS before it asserts anything else.** The
-feed strategy generates at least one usable record, the ingestion fixture writes at least one
-data row, and each property asserts the produced count is positive *and* equals the count the
-input implies. A stub returning ``[]`` fails these on the first assertion rather than passing
-them all.
+feed strategy generates at least one usable record, and each property asserts the produced
+count is positive *and* equals the count the input implies. A stub returning ``[]`` fails
+these on the first assertion rather than passing them all.
 
 **Conflict surfaced, not resolved.** ``tasks.md`` 19.3 states the stub as present tense. On disk
 it is not: ``packages/synapse_common/world/source.py`` records that task 10.11 built the real
@@ -26,27 +38,20 @@ whatever the class declares. So the task's *instruction* is discharged here (ass
 non-emptiness, drive a source that yields rows) while its *premise* is stale. Recorded rather
 than quietly corrected -- the reader who next opens 19.3 needs to know which of the two is true.
 
-The straddle, which this file must not collapse
-----------------------------------------------
+The world seam is the only path that carries a source class
+-----------------------------------------------------------
 
-R8.17 and R8.3 govern **two unrelated ingestion paths**, and conflating them is the failure mode
-the licence register's own note warns about:
-
-* **The training-row path** -- ``data_fabric/ingest/m5.py::record_ingestion``. Records dataset
-  identity, dataset revision and rows consumed (R8.17). It carries **no** ``source_class``, and
-  :func:`test_the_training_row_record_carries_no_source_class` asserts that absence, so a future
-  edit cannot quietly add a fourth provenance value here.
-* **The world seam** -- ``ExternalFeedSource``. Declares ``SourceProvenance.EXTERNAL`` when the
-  real feed drives the twin (R8.3). Only this path carries ``source_class``.
-
-``SourceProvenance`` is a closed set of exactly ``SEEDED``, ``EXTERNAL`` and ``STUB``, pinned by
+``ExternalFeedSource`` declares ``SourceProvenance.EXTERNAL`` when the real feed drives the twin
+(R8.3), and only this path carries ``source_class``. ``SourceProvenance`` is a closed set of
+exactly ``SEEDED``, ``EXTERNAL`` and ``STUB``, pinned by
 ``orchestrator.audit.models.SOURCE_CLASSES`` and by a SQL ``CHECK`` in
 ``0007_decision_data_provenance.sql``. Nothing here adds a fourth, and
 :func:`test_the_declared_class_is_one_of_the_three_committed_values` asserts the closure by
-reading the committed tuple rather than a local literal.
+reading the committed tuple rather than a local literal. If a training-row ingestion path is
+ever admitted again, it is a different path and must not gain a fourth value to look uniform.
 
-Why the world-seam half drives the real class
----------------------------------------------
+Why the properties drive the real class
+---------------------------------------
 
 Through the ``FeedConsumer`` protocol seam, exactly as
 ``tests/verify/test_nonsynthetic_ingestion_replay_property.py`` does: ``ExternalFeedSource``
@@ -64,40 +69,27 @@ Budget and locus
 budget is set to fractions of a millisecond: ADR-016's backoff policy is proven in
 ``packages/tests/test_retry.py`` and this property must not pay real backoff.
 
-**Validates: Requirements 8.3, 8.17.**
+**Validates: Requirements 8.3.**
 """
 
 from __future__ import annotations
 
-from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any, Final
 
 import pytest
-import yaml
 from hypothesis import given
 from hypothesis import strategies as st
 from synapse_common.world.models import SourceProvenance
 from synapse_common.world.source import DEMAND_TOPIC, ExternalFeedSource
 
-from data_fabric.ingest.m5 import (
-    IngestionRefusedError,
-    M5IngestRecord,
-    digest_file,
-    record_ingestion,
-)
-from data_fabric.licence import artifact_digest
 from orchestrator.audit.models import SOURCE_CLASSES
 
 if TYPE_CHECKING:  # annotation-only
     from collections.abc import Callable
-    from pathlib import Path
 
 pytestmark = pytest.mark.slow
 
 CITY: Final[str] = "fixture-city"
-DATASET: Final[str] = "fixture-dataset"
-REVISION: Final[str] = "rev-1"
-_FIXED_TIME: Final[datetime] = datetime(2026, 9, 1, 12, 0, tzinfo=UTC)
 
 
 # ---------------------------------------------------------------------------
@@ -262,170 +254,3 @@ def test_unusable_records_are_rejected_and_reported_never_substituted(
     assert len(events) == len(records), "a rejected record must not become a fabricated arrival"
     assert source.degradation() == "external_feed_records_rejected"
     assert source.provenance() is SourceProvenance.EXTERNAL
-
-
-# ---------------------------------------------------------------------------
-# R8.17 -- the training-row path records what it consumed
-# ---------------------------------------------------------------------------
-
-
-def _licence(path: Path) -> Path:
-    """A confirmed licence artifact for ``DATASET`` at ``REVISION``.
-
-    Deliberately fictional. Exercising the *admitted* branch with a real dataset's identity
-    would put a plausible licence record in the test tree where a future reader could mistake it
-    for the real one.
-    """
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(
-        yaml.safe_dump(
-            {
-                "schema_version": 1,
-                "datasets": [
-                    {
-                        "dataset_id": DATASET,
-                        "licence_id": "FIXTURE-LICENCE-1.0",
-                        "licence_text_uri": "https://example.invalid/fixture/licence.txt",
-                        "read_date": "2026-09-01",
-                        "permitted_use": "fixture use only; this describes no real dataset",
-                        "dataset_revision": REVISION,
-                        "redistribution": "permitted",
-                        "confirmation": {
-                            "confirmed": True,
-                            "confirmed_by": "fixture-operator",
-                            "procedure": "fixture: no terms were read",
-                        },
-                    }
-                ],
-            },
-            sort_keys=True,
-        ),
-        encoding="utf-8",
-    )
-    return path
-
-
-def _csv(path: Path, rows: int) -> Path:
-    """A sales fixture with ``rows`` data rows behind one header row."""
-    lines = ["id,d_1", *[f"series-{index},{index}" for index in range(1, rows + 1)]]
-    path.write_text("\n".join(lines) + "\n", encoding="utf-8")
-    return path
-
-
-@given(rows=st.integers(min_value=1, max_value=40))
-def test_the_ingestion_record_states_identity_revision_and_rows_consumed(
-    tmp_path: Path, rows: int
-) -> None:
-    """R8.17: identity, revision and rows consumed, with rows equal to what was read.
-
-    ``rows`` is drawn from **1** upward, never 0. A record reporting ``rows: 0`` would satisfy
-    "the ingestion recorded the number of rows consumed" while consuming nothing, which is the
-    tally-shaped version of the stub. The equality against ``digest_file``'s own count is what
-    makes the number a measurement rather than a copy of the parameter: two independent readers
-    of the same bytes must agree.
-    """
-    licence = _licence(tmp_path / "dataset-licences.yaml")
-    data = _csv(tmp_path / "sales.csv", rows)
-
-    record = record_ingestion(
-        dataset_id=DATASET,
-        dataset_revision=REVISION,
-        files=[data],
-        ingested_at=_FIXED_TIME,
-        licence_path=licence,
-    )
-
-    assert record.rows > 0, "an ingestion that consumed nothing is not an ingestion"
-    assert record.rows == rows
-    assert record.rows == digest_file(data).data_rows
-    assert record.dataset_id == DATASET
-    assert record.dataset_revision == REVISION
-    assert record.files, "the consumed files must be enumerated, not summarised"
-    assert record.files[0].sha256.startswith("sha256:")
-    assert record.licence_artifact_digest == artifact_digest(licence)
-    # Canonical JSON, so two records over the same facts are byte-identical.
-    assert record.canonical_json() == M5IngestRecord.model_validate(
-        record.model_dump(mode="json")
-    ).canonical_json()
-
-
-@given(rows=st.integers(min_value=1, max_value=40))
-def test_the_training_row_record_carries_no_source_class(tmp_path: Path, rows: int) -> None:
-    """The straddle, asserted structurally: only the world seam carries ``source_class``.
-
-    R8.17's training-row path and R8.3's world seam are two unrelated ingestion paths. Asserting
-    the *absence* of the field is what stops a later edit adding a fourth ``SourceProvenance``
-    value here to make the two paths look uniform -- the three values are pinned by
-    ``SOURCE_CLASSES`` and by a SQL ``CHECK``, and a fourth would be rejected by the database
-    after passing every test that did not look.
-    """
-    licence = _licence(tmp_path / "dataset-licences.yaml")
-    data = _csv(tmp_path / "sales.csv", rows)
-
-    record = record_ingestion(
-        dataset_id=DATASET,
-        dataset_revision=REVISION,
-        files=[data],
-        ingested_at=_FIXED_TIME,
-        licence_path=licence,
-    )
-
-    fields = set(M5IngestRecord.model_fields)
-    assert "source_class" not in fields
-    assert "provenance" not in fields
-    assert "source_class" not in record.canonical_json()
-    # And the record does carry the binding that IS its provenance: which terms were in force.
-    assert {"licence_artifact", "licence_artifact_digest", "licence_id"} <= fields
-
-
-@given(
-    rows=st.integers(min_value=1, max_value=8),
-    wrong_revision=st.text(
-        alphabet="abcdefghijklmnopqrstuvwxyz0123456789-", min_size=1, max_size=10
-    ),
-)
-def test_an_unlicensed_or_mismatched_ingestion_cannot_be_recorded_at_all(
-    tmp_path: Path, rows: int, wrong_revision: str
-) -> None:
-    """The refusal path, proven by construction rather than by inspection.
-
-    R8.16 is enforceable only if an unlicensed ingestion cannot be recorded, so the assertion is
-    that ``record_ingestion`` **raises** rather than returning a record with a flag on it. A
-    ``refused: true`` row would leave something a later reader could mistake for evidence that
-    the data was ingested under known terms.
-
-    ``wrong_revision`` is filtered against the licensed revision inside the body rather than by a
-    Hypothesis ``assume``: the equal case is not an uninteresting draw to be discarded, it is the
-    admitted case, and asserting it succeeds is what proves the refusal is discriminating rather
-    than total.
-    """
-    licence = _licence(tmp_path / "dataset-licences.yaml")
-    data = _csv(tmp_path / "sales.csv", rows)
-
-    if wrong_revision == REVISION:
-        admitted = record_ingestion(
-            dataset_id=DATASET,
-            dataset_revision=wrong_revision,
-            files=[data],
-            ingested_at=_FIXED_TIME,
-            licence_path=licence,
-        )
-        assert admitted.rows == rows
-    else:
-        with pytest.raises(IngestionRefusedError, match=REVISION):
-            record_ingestion(
-                dataset_id=DATASET,
-                dataset_revision=wrong_revision,
-                files=[data],
-                ingested_at=_FIXED_TIME,
-                licence_path=licence,
-            )
-
-    with pytest.raises(IngestionRefusedError, match="declares no licence entry"):
-        record_ingestion(
-            dataset_id=f"{DATASET}-undeclared",
-            dataset_revision=REVISION,
-            files=[data],
-            ingested_at=_FIXED_TIME,
-            licence_path=licence,
-        )

@@ -51,9 +51,10 @@ gates:
           survives. It does not: nobody declared a mutation to 26, so the sweep
           never probes that shape and no sweep outcome can be attributed to it.
           R7.8 is a real finding about the ratchet constant, and is why C70 reads
-          INDETERMINATE below; it is not a survivor of this operator. The one
-          DECLARED operator disclosed as a survivor today is C28's
-          `zero-a-floor`, recorded on its own entry.
+          INDETERMINATE below; it is not a survivor of this operator. C28's
+          `zero-a-floor` was the one DECLARED operator disclosed as a survivor
+          until 2026-10-01, when C28 gained its measured-bound clause; see its
+          entry.
 
   # -------------------------------------------------------------------------
   C28:
@@ -66,10 +67,19 @@ gates:
         value: 0.0
         expect_names: ["packages/synapse_common"]
         note: >-
-          Falsifies C28 only once `coverage_per_package.py
-          --require-measured-floors` lands (task 4.1). Before that, C28 asserts
-          floors >= 0 and a 0.0 floor satisfies it -- which is precisely the
-          "gate runs, asserts nothing" finding in R7.2.
+          Repaired 2026-10-01 by making C28 stricter, never this operator weaker.
+          Until then C28's only value check was "floor >= 0", so this 83.5 -> 0.0
+          edit left it green and the sweep recorded it as the one disclosed
+          survivor -- the "gate runs, asserts nothing" finding in R7.2. Waiting on
+          task 4.1's `coverage_per_package.py --require-measured-floors` could not
+          have repaired it: C28 never runs that script, it only checks that ci.yml
+          invokes it. C28 now FAILs any floor below the MEASURED bound
+          `ratchets.json` records for it, and
+          `coverage-floor:packages/synapse_common` is measured at 83.5, so this
+          operator must FAIL naming `packages/synapse_common`. An unmeasured 0.0
+          floor is still not refused (SKIP-UNMEASURED is coverage_per_package's
+          verdict). Expected rather than observed: the first sweep after the
+          repair is the measurement.
 
   # -------------------------------------------------------------------------
   C44:
@@ -90,12 +100,16 @@ gates:
           infrastructure/quality/dead-modules.yaml, so it is a new orphan over the
           named baseline (R13.1) and C44's FAIL detail names its path.
 
-          Reads INDETERMINATE while C44's R13.7 projection is red -- a gate that is
-          already red proves nothing by staying red. That clears when task 10.3
-          wires uplift.uplift_floor.is_proven_uplift / ratchet_to_measured and task
-          8.5's _ratify_and_dispatch calls
-          orchestrator.guardrails.rules.execute_consensus. Honest label, not an
-          exemption.
+          Read INDETERMINATE while C44's baseline was red -- a gate that is
+          already red proves nothing by staying red. Tasks 10.3 and 8.5 put
+          `is_proven_uplift` / `ratchet_to_measured` and `execute_consensus` on a
+          production path; the last red was the two dead
+          `data_fabric/ingest` modules plus
+          `synapse_common.contracts.validate_audit_insertion`, both repaired
+          2026-10-01 (modules removed after M5 was declined; the contract now
+          invoked from `orchestrator/audit/logger.py`). With the baseline expected
+          to pass, this becomes a live probe. Expected rather than observed until
+          the first sweep after that repair.
       - id: unparse-a-seam-marker
         operator: create_file
         target: orchestrator/_fault_injection_bad_seam.py
@@ -211,9 +225,10 @@ gates:
   #
   # Baseline honesty. `falsifies()` reports `indeterminate` when the gate does not
   # pass on the UNMUTATED copy, because a check that is already red proves nothing
-  # by staying red. Four of these rows are non-passing today for reasons this
-  # feature recorded deliberately, and each note below says which and what clears
-  # it. `indeterminate` is never a pass and never PASS-eligible (I-7); it is
+  # by staying red. Three of these rows (C70, C71, C72) are non-passing today for
+  # reasons this feature recorded deliberately, and each note below says which and
+  # what clears it; C69 was a fourth until its false claim was retracted 2026-10-01.
+  # `indeterminate` is never a pass and never PASS-eligible (I-7); it is
   # recorded here rather than papered over with an operator chosen to look green.
   # -------------------------------------------------------------------------
   C65:
@@ -289,16 +304,21 @@ gates:
           report UNAVAILABLE naming the record and the policy key, never PASS.
 
           Deliberately NOT a mutation of the main clause, and deliberately not the
-          one that would look best: the main clause's falsification is already
-          LIVE in this tree. C69 FAILs today because `core-purpose-uplift` tasks 9
-          and 9.1 are `[x]` against an unchanged `__placeholder__` -- a real
-          finding is stronger evidence that a gate bites than any injected one.
+          one that would look best. Until 2026-10-01 the main clause's
+          falsification was LIVE in this tree: C69 FAILed because
+          `core-purpose-uplift` tasks 9 and 9.1 were `[x]` against an unchanged
+          `__placeholder__` -- a real finding is stronger evidence that a gate
+          bites than any injected one.
 
-          Reads INDETERMINATE until that claim is retracted or the checkpoint is
-          genuinely published, because the harness refuses to attribute anything
-          to a mutation of an already-red gate. Honest label, not an exemption
-          (I-7), and chosen so it stays applicable after the repair: a regex on
-          the `[x]` marker would rot the moment the claim is retracted.
+          RETRACTED 2026-10-01: 9 and 9.1 are unticked (`[ ]`) with a dated note,
+          because `infrastructure/ml/published_checkpoints.json` still holds only
+          `__placeholder__`. An unticked record is `pending`, not a finding, and
+          `must_resolve` needs the record to exist and be detected, not ticked, so
+          C69's baseline is expected to PASS and this anti-vacuity operator becomes
+          a live probe instead of INDETERMINATE. Expected rather than observed until
+          the first sweep after the retraction. The operator stays applicable after
+          the repair by design: a regex on the `[x]` marker would have rotted the
+          moment the claim was retracted.
 
   C70:
     title: "Ratcheted thresholds never regress and agree with what they guard"

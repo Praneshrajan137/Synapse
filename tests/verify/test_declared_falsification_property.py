@@ -59,12 +59,12 @@ the tree and without writing a byte inside it. Every such case hashes the real f
 before and after and asserts it did not move.
 
 Expect no assertion here that today's gates all falsify. ``gate-mutations.yaml`` records
-in its own notes that C28's zero-a-floor survives until task 4.1 lands and that C44's
-probe reads indeterminate until task 10.3 and 8.5 land. Asserting universal
-falsification would make this file red for reasons the declaration already discloses;
-turning the shortfall into a gate is task 12.1's job, via
-``gate_fault_injection --sweep`` in CI. What this file asserts is that the harness
-*classifies* those cases honestly and never converts one of them into a pass (I-7).
+in its own notes which declarations do not yet bite -- C28's zero-a-floor survived until
+its measured-bound clause landed on 2026-10-01, and C44's probes read indeterminate while
+its baseline was red. Asserting universal falsification would make this file red for
+reasons the declaration already discloses; turning the shortfall into a gate is task
+12.1's job, via ``gate_fault_injection --sweep`` in CI. What this file asserts is that the
+harness *classifies* those cases honestly and never converts one of them into a pass (I-7).
 
 ``max_examples`` is never set here - the budget comes from the root ``conftest.py``
 profiles (``dev``=10, ``heavy``=100, ``ci``/``default``=500, ``nightly``=5000).
@@ -1406,12 +1406,12 @@ def test_a_real_subprocess_probe_agrees_with_the_declared_decision_table() -> No
     stub could be substituted, which is exactly R9.5's obligation.
 
     What is asserted is the relationship, not today's verdict. ``gate-mutations.yaml``
-    discloses that some declarations do not yet bite (C28 until task 4.1, C44 until
-    tasks 8.5/10.3), so asserting universal falsification here would make this file red
-    for a reason the declaration already records honestly. Turning that shortfall into a
-    gate is ``--sweep`` in ``ci.yml::uplift-verify`` (task 12.2). What this proves is
-    that the real launcher produces runs the classifier handles exactly as E2.1 declares,
-    that the mutation lands, and that the working tree does not move.
+    discloses which declarations do not yet bite (C28 until its 2026-10-01 measured-bound
+    clause, C44 while its baseline was red), so asserting universal falsification here would
+    make this file red for a reason the declaration already records honestly. Turning that
+    shortfall into a gate is ``--sweep`` in ``ci.yml::uplift-verify`` (task 12.2). What this
+    proves is that the real launcher produces runs the classifier handles exactly as E2.1
+    declares, that the mutation lands, and that the working tree does not move.
 
     ``@pytest.mark.slow``: a full tree copy plus two gate subprocesses is a CI workload,
     excluded locally by ``-m "not slow"`` (I-0).

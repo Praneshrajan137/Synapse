@@ -11,7 +11,8 @@ named on failure
 
 Why a property and not examples. The audit finding is not "one floor is wrong", it is
 that the floors table *as a shape* can satisfy its gate while asserting nothing: nine of
-twelve packages carry ``line: 0.0``, and C28 only checks ``floor >= 0``. A fixed example
+twelve packages carry ``line: 0.0``, and until 2026-10-01 C28 only checked ``floor >= 0``. A
+fixed example
 pins the nine packages that happened to be zero on the day the audit ran. What has to
 hold is a statement about the whole (floors, measured) space: every row lands on exactly
 one verdict, the verdict is decided by the row, and no row reaches ``PASS`` without a

@@ -34,13 +34,13 @@ the same pair.
 
 ## Summary
 
-Parsed 19 workflow file(s), 62 job(s), 420 step(s).
+Parsed 20 workflow file(s), 65 job(s), 433 step(s).
 
 | Trigger | Jobs executing | Jobs conditional | Jobs NOT EXECUTED | Steps blocking | Steps advisory | Steps conditional |
 |---|---|---|---|---|---|---|
-| push:main | 4 | 28 | 30 | 31 | 0 | 177 |
-| pull_request | 17 | 25 | 20 | 107 | 4 | 161 |
-| tag:v* | 3 | 3 | 56 | 18 | 0 | 29 |
+| push:main | 4 | 30 | 31 | 31 | 0 | 182 |
+| pull_request | 17 | 28 | 20 | 107 | 4 | 174 |
+| tag:v* | 3 | 3 | 59 | 18 | 0 | 29 |
 
 ## Job selection
 
@@ -70,6 +70,7 @@ Why each job runs, does not run, or runs conditionally under each trigger. `need
 | push:main | .github/workflows/ci.yml::training-smoke | CONDITIONAL | path-filtered (paths-ignore: **.md, docs/**, plans/**, notebooks/**); needs 'quality-gates', which is conditional |
 | push:main | .github/workflows/ci.yml::e4-published-artifact | CONDITIONAL | path-filtered (paths-ignore: **.md, docs/**, plans/**, notebooks/**) |
 | push:main | .github/workflows/eval-llm-judge.yml::llm-judge | NOT EXECUTED | workflow on: has no push trigger |
+| push:main | .github/workflows/frontend-lockfile-regen.yml::regen-lockfile | NOT EXECUTED | workflow on: has no push trigger |
 | push:main | .github/workflows/frontend.yml::quality | CONDITIONAL | path-filtered (paths: frontend/**, proto/domain/**, .github/workflows/frontend.yml) |
 | push:main | .github/workflows/frontend.yml::spec-typecheck | CONDITIONAL | path-filtered (paths: frontend/**, proto/domain/**, .github/workflows/frontend.yml) |
 | push:main | .github/workflows/frontend.yml::build | CONDITIONAL | path-filtered (paths: frontend/**, proto/domain/**, .github/workflows/frontend.yml); needs 'quality', which is conditional |
@@ -92,7 +93,9 @@ Why each job runs, does not run, or runs conditionally under each trigger. `need
 | push:main | .github/workflows/integration.yml::real-stack-run | NOT EXECUTED | workflow on: has no push trigger |
 | push:main | .github/workflows/live-truth.yml::watchdog | NOT EXECUTED | workflow on: has no push trigger |
 | push:main | .github/workflows/mutation.yml::mutation | NOT EXECUTED | if: false in push:main |
-| push:main | .github/workflows/mutation.yml::mutation-fast | CONDITIONAL | path-filtered (paths: agents/*/training/rewards.py, orchestrator/guardrails/rules.py, orchestrator/audit/logger.py, packages/synapse_common/audit_chain.py, +1 more) |
+| push:main | .github/workflows/mutation.yml::mutation-fast-plan | CONDITIONAL | path-filtered (paths: agents/*/training/rewards.py, orchestrator/guardrails/rules.py, orchestrator/audit/logger.py, packages/synapse_common/audit_chain.py, +1 more) |
+| push:main | .github/workflows/mutation.yml::mutation-fast-target | CONDITIONAL | path-filtered (paths: agents/*/training/rewards.py, orchestrator/guardrails/rules.py, orchestrator/audit/logger.py, packages/synapse_common/audit_chain.py, +1 more); needs 'mutation-fast-plan', which is conditional |
+| push:main | .github/workflows/mutation.yml::mutation-fast | CONDITIONAL | path-filtered (paths: agents/*/training/rewards.py, orchestrator/guardrails/rules.py, orchestrator/audit/logger.py, packages/synapse_common/audit_chain.py, +1 more); needs 'mutation-fast-plan', which is conditional; needs 'mutation-fast-target', which is conditional |
 | push:main | .github/workflows/policy.yml::twin-oracle | CONDITIONAL | path-filtered (paths: agents/*/training/**, agents/*/models/**, agents/*/inference/**, tests/oracle/**, +3 more) |
 | push:main | .github/workflows/policy.yml::dpdpa | CONDITIONAL | path-filtered (paths: agents/*/training/**, agents/*/models/**, agents/*/inference/**, tests/oracle/**, +3 more) |
 | push:main | .github/workflows/policy.yml::audit-immutability | CONDITIONAL | path-filtered (paths: agents/*/training/**, agents/*/models/**, agents/*/inference/**, tests/oracle/**, +3 more) |
@@ -132,6 +135,7 @@ Why each job runs, does not run, or runs conditionally under each trigger. `need
 | pull_request | .github/workflows/ci.yml::training-smoke | NOT EXECUTED | if: false in pull_request |
 | pull_request | .github/workflows/ci.yml::e4-published-artifact | EXECUTES | - |
 | pull_request | .github/workflows/eval-llm-judge.yml::llm-judge | NOT EXECUTED | workflow on: has no pull_request trigger |
+| pull_request | .github/workflows/frontend-lockfile-regen.yml::regen-lockfile | CONDITIONAL | if: undecidable from trigger (github.event.label.name) |
 | pull_request | .github/workflows/frontend.yml::quality | CONDITIONAL | path-filtered (paths: frontend/**, proto/domain/**, .github/workflows/frontend.yml) |
 | pull_request | .github/workflows/frontend.yml::spec-typecheck | CONDITIONAL | path-filtered (paths: frontend/**, proto/domain/**, .github/workflows/frontend.yml) |
 | pull_request | .github/workflows/frontend.yml::build | CONDITIONAL | path-filtered (paths: frontend/**, proto/domain/**, .github/workflows/frontend.yml); needs 'quality', which is conditional |
@@ -154,7 +158,9 @@ Why each job runs, does not run, or runs conditionally under each trigger. `need
 | pull_request | .github/workflows/integration.yml::real-stack-run | NOT EXECUTED | if: false in pull_request |
 | pull_request | .github/workflows/live-truth.yml::watchdog | NOT EXECUTED | workflow on: has no pull_request trigger |
 | pull_request | .github/workflows/mutation.yml::mutation | NOT EXECUTED | if: false in pull_request |
-| pull_request | .github/workflows/mutation.yml::mutation-fast | CONDITIONAL | path-filtered (paths: agents/*/training/rewards.py, orchestrator/guardrails/rules.py, orchestrator/audit/logger.py, packages/synapse_common/audit_chain.py, +1 more) |
+| pull_request | .github/workflows/mutation.yml::mutation-fast-plan | CONDITIONAL | path-filtered (paths: agents/*/training/rewards.py, orchestrator/guardrails/rules.py, orchestrator/audit/logger.py, packages/synapse_common/audit_chain.py, +1 more) |
+| pull_request | .github/workflows/mutation.yml::mutation-fast-target | CONDITIONAL | path-filtered (paths: agents/*/training/rewards.py, orchestrator/guardrails/rules.py, orchestrator/audit/logger.py, packages/synapse_common/audit_chain.py, +1 more); needs 'mutation-fast-plan', which is conditional |
+| pull_request | .github/workflows/mutation.yml::mutation-fast | CONDITIONAL | path-filtered (paths: agents/*/training/rewards.py, orchestrator/guardrails/rules.py, orchestrator/audit/logger.py, packages/synapse_common/audit_chain.py, +1 more); needs 'mutation-fast-plan', which is conditional; needs 'mutation-fast-target', which is conditional |
 | pull_request | .github/workflows/policy.yml::twin-oracle | CONDITIONAL | path-filtered (paths: agents/*/training/**, agents/*/models/**, agents/*/inference/**, tests/oracle/**, +3 more) |
 | pull_request | .github/workflows/policy.yml::dpdpa | CONDITIONAL | path-filtered (paths: agents/*/training/**, agents/*/models/**, agents/*/inference/**, tests/oracle/**, +3 more) |
 | pull_request | .github/workflows/policy.yml::audit-immutability | CONDITIONAL | path-filtered (paths: agents/*/training/**, agents/*/models/**, agents/*/inference/**, tests/oracle/**, +3 more) |
@@ -194,6 +200,7 @@ Why each job runs, does not run, or runs conditionally under each trigger. `need
 | tag:v* | .github/workflows/ci.yml::training-smoke | NOT EXECUTED | on: push is branch-scoped (no tags: filter), so a tag push is excluded |
 | tag:v* | .github/workflows/ci.yml::e4-published-artifact | NOT EXECUTED | on: push is branch-scoped (no tags: filter), so a tag push is excluded |
 | tag:v* | .github/workflows/eval-llm-judge.yml::llm-judge | NOT EXECUTED | workflow on: has no push trigger |
+| tag:v* | .github/workflows/frontend-lockfile-regen.yml::regen-lockfile | NOT EXECUTED | workflow on: has no push trigger |
 | tag:v* | .github/workflows/frontend.yml::quality | NOT EXECUTED | on: push is branch-scoped (no tags: filter), so a tag push is excluded |
 | tag:v* | .github/workflows/frontend.yml::spec-typecheck | NOT EXECUTED | on: push is branch-scoped (no tags: filter), so a tag push is excluded |
 | tag:v* | .github/workflows/frontend.yml::build | NOT EXECUTED | on: push is branch-scoped (no tags: filter), so a tag push is excluded |
@@ -216,6 +223,8 @@ Why each job runs, does not run, or runs conditionally under each trigger. `need
 | tag:v* | .github/workflows/integration.yml::real-stack-run | NOT EXECUTED | workflow on: has no push trigger |
 | tag:v* | .github/workflows/live-truth.yml::watchdog | NOT EXECUTED | workflow on: has no push trigger |
 | tag:v* | .github/workflows/mutation.yml::mutation | NOT EXECUTED | on: push is branch-scoped (no tags: filter), so a tag push is excluded |
+| tag:v* | .github/workflows/mutation.yml::mutation-fast-plan | NOT EXECUTED | on: push is branch-scoped (no tags: filter), so a tag push is excluded |
+| tag:v* | .github/workflows/mutation.yml::mutation-fast-target | NOT EXECUTED | on: push is branch-scoped (no tags: filter), so a tag push is excluded |
 | tag:v* | .github/workflows/mutation.yml::mutation-fast | NOT EXECUTED | on: push is branch-scoped (no tags: filter), so a tag push is excluded |
 | tag:v* | .github/workflows/policy.yml::twin-oracle | NOT EXECUTED | on: push is branch-scoped (no tags: filter), so a tag push is excluded |
 | tag:v* | .github/workflows/policy.yml::dpdpa | NOT EXECUTED | on: push is branch-scoped (no tags: filter), so a tag push is excluded |
@@ -358,6 +367,7 @@ Why each job runs, does not run, or runs conditionally under each trigger. `need
 | push:main | .github/workflows/ci.yml::e4-published-artifact | Runtime-substance gate against the materialised artifact (C45) | CONDITIONAL | conditional - blocking |
 | push:main | .github/workflows/ci.yml::e4-published-artifact | A SKIP is not a flip - the three gates read a materialised artifact (R9.15) | CONDITIONAL | conditional - blocking |
 | push:main | .github/workflows/eval-llm-judge.yml::llm-judge | - | NOT EXECUTED | workflow on: has no push trigger |
+| push:main | .github/workflows/frontend-lockfile-regen.yml::regen-lockfile | - | NOT EXECUTED | workflow on: has no push trigger |
 | push:main | .github/workflows/frontend.yml::quality | uses: actions/checkout@v4 | CONDITIONAL | conditional - blocking |
 | push:main | .github/workflows/frontend.yml::quality | Setup pnpm | CONDITIONAL | conditional - blocking |
 | push:main | .github/workflows/frontend.yml::quality | Setup Node | CONDITIONAL | conditional - blocking |
@@ -416,12 +426,17 @@ Why each job runs, does not run, or runs conditionally under each trigger. `need
 | push:main | .github/workflows/integration.yml::real-stack-run | - | NOT EXECUTED | workflow on: has no push trigger |
 | push:main | .github/workflows/live-truth.yml::watchdog | - | NOT EXECUTED | workflow on: has no push trigger |
 | push:main | .github/workflows/mutation.yml::mutation | - | NOT EXECUTED | if: false in push:main |
-| push:main | .github/workflows/mutation.yml::mutation-fast | uses: actions/checkout@v4 | CONDITIONAL | conditional - blocking |
-| push:main | .github/workflows/mutation.yml::mutation-fast | uses: actions/setup-python@v5 | CONDITIONAL | conditional - blocking |
-| push:main | .github/workflows/mutation.yml::mutation-fast | Install project dependencies | CONDITIONAL | conditional - blocking |
-| push:main | .github/workflows/mutation.yml::mutation-fast | Detect changed mutation targets | CONDITIONAL | conditional - blocking |
-| push:main | .github/workflows/mutation.yml::mutation-fast | Run mutmut on changed targets | CONDITIONAL | conditional - blocking |
-| push:main | .github/workflows/mutation.yml::mutation-fast | Upload mutation-fast results | CONDITIONAL | conditional - blocking |
+| push:main | .github/workflows/mutation.yml::mutation-fast-plan | uses: actions/checkout@v4 | CONDITIONAL | conditional - blocking |
+| push:main | .github/workflows/mutation.yml::mutation-fast-plan | Resolve the mutation partition | CONDITIONAL | conditional - blocking |
+| push:main | .github/workflows/mutation.yml::mutation-fast-target | uses: actions/checkout@v4 | CONDITIONAL | conditional - blocking |
+| push:main | .github/workflows/mutation.yml::mutation-fast-target | uses: actions/setup-python@v5 | CONDITIONAL | conditional - blocking |
+| push:main | .github/workflows/mutation.yml::mutation-fast-target | Install project dependencies | CONDITIONAL | conditional - blocking |
+| push:main | .github/workflows/mutation.yml::mutation-fast-target | Run mutmut on this target | CONDITIONAL | conditional - blocking |
+| push:main | .github/workflows/mutation.yml::mutation-fast-target | Enforce the survival ceiling | CONDITIONAL | conditional - blocking |
+| push:main | .github/workflows/mutation.yml::mutation-fast-target | Record the leg's verdict and mutmut results | CONDITIONAL | conditional - blocking |
+| push:main | .github/workflows/mutation.yml::mutation-fast-target | Upload per-target evidence | CONDITIONAL | conditional - blocking |
+| push:main | .github/workflows/mutation.yml::mutation-fast | Download per-target evidence | CONDITIONAL | conditional - blocking |
+| push:main | .github/workflows/mutation.yml::mutation-fast | Assert every planned target was measured and none exceeded its ceiling | CONDITIONAL | conditional - blocking |
 | push:main | .github/workflows/policy.yml::twin-oracle | uses: actions/checkout@v4 | CONDITIONAL | conditional - blocking |
 | push:main | .github/workflows/policy.yml::twin-oracle | uses: actions/setup-python@v5 | CONDITIONAL | conditional - blocking |
 | push:main | .github/workflows/policy.yml::twin-oracle | run: pip install -r packages/requirements.txt -r packages/require | CONDITIONAL | conditional - blocking |
@@ -560,6 +575,14 @@ Why each job runs, does not run, or runs conditionally under each trigger. `need
 | pull_request | .github/workflows/ci.yml::e4-published-artifact | Runtime-substance gate against the materialised artifact (C45) | yes | blocking |
 | pull_request | .github/workflows/ci.yml::e4-published-artifact | A SKIP is not a flip - the three gates read a materialised artifact (R9.15) | yes | blocking |
 | pull_request | .github/workflows/eval-llm-judge.yml::llm-judge | - | NOT EXECUTED | workflow on: has no pull_request trigger |
+| pull_request | .github/workflows/frontend-lockfile-regen.yml::regen-lockfile | Check out the PR head (not the synthetic merge commit) | CONDITIONAL | conditional - blocking |
+| pull_request | .github/workflows/frontend-lockfile-regen.yml::regen-lockfile | Setup pnpm | CONDITIONAL | conditional - blocking |
+| pull_request | .github/workflows/frontend-lockfile-regen.yml::regen-lockfile | Setup Node | CONDITIONAL | conditional - blocking |
+| pull_request | .github/workflows/frontend-lockfile-regen.yml::regen-lockfile | Resolve pnpm-lock.yaml from package.json (lockfile only, no node_modules) | CONDITIONAL | conditional - blocking |
+| pull_request | .github/workflows/frontend-lockfile-regen.yml::regen-lockfile | Prove package.json and pnpm-lock.yaml agree under a FROZEN install | CONDITIONAL | conditional - blocking |
+| pull_request | .github/workflows/frontend-lockfile-regen.yml::regen-lockfile | pnpm-lock supply-chain check (HTTPS + registry.npmjs.org only) | CONDITIONAL | conditional - blocking |
+| pull_request | .github/workflows/frontend-lockfile-regen.yml::regen-lockfile | Upload package.json + pnpm-lock.yaml | CONDITIONAL | conditional - blocking |
+| pull_request | .github/workflows/frontend-lockfile-regen.yml::regen-lockfile | pnpm audit (high+ severity, production tree only) | CONDITIONAL | conditional - blocking |
 | pull_request | .github/workflows/frontend.yml::quality | uses: actions/checkout@v4 | CONDITIONAL | conditional - blocking |
 | pull_request | .github/workflows/frontend.yml::quality | Setup pnpm | CONDITIONAL | conditional - blocking |
 | pull_request | .github/workflows/frontend.yml::quality | Setup Node | CONDITIONAL | conditional - blocking |
@@ -686,12 +709,17 @@ Why each job runs, does not run, or runs conditionally under each trigger. `need
 | pull_request | .github/workflows/integration.yml::real-stack-run | - | NOT EXECUTED | if: false in pull_request |
 | pull_request | .github/workflows/live-truth.yml::watchdog | - | NOT EXECUTED | workflow on: has no pull_request trigger |
 | pull_request | .github/workflows/mutation.yml::mutation | - | NOT EXECUTED | if: false in pull_request |
-| pull_request | .github/workflows/mutation.yml::mutation-fast | uses: actions/checkout@v4 | CONDITIONAL | conditional - blocking |
-| pull_request | .github/workflows/mutation.yml::mutation-fast | uses: actions/setup-python@v5 | CONDITIONAL | conditional - blocking |
-| pull_request | .github/workflows/mutation.yml::mutation-fast | Install project dependencies | CONDITIONAL | conditional - blocking |
-| pull_request | .github/workflows/mutation.yml::mutation-fast | Detect changed mutation targets | CONDITIONAL | conditional - blocking |
-| pull_request | .github/workflows/mutation.yml::mutation-fast | Run mutmut on changed targets | CONDITIONAL | conditional - blocking |
-| pull_request | .github/workflows/mutation.yml::mutation-fast | Upload mutation-fast results | CONDITIONAL | conditional - blocking |
+| pull_request | .github/workflows/mutation.yml::mutation-fast-plan | uses: actions/checkout@v4 | CONDITIONAL | conditional - blocking |
+| pull_request | .github/workflows/mutation.yml::mutation-fast-plan | Resolve the mutation partition | CONDITIONAL | conditional - blocking |
+| pull_request | .github/workflows/mutation.yml::mutation-fast-target | uses: actions/checkout@v4 | CONDITIONAL | conditional - blocking |
+| pull_request | .github/workflows/mutation.yml::mutation-fast-target | uses: actions/setup-python@v5 | CONDITIONAL | conditional - blocking |
+| pull_request | .github/workflows/mutation.yml::mutation-fast-target | Install project dependencies | CONDITIONAL | conditional - blocking |
+| pull_request | .github/workflows/mutation.yml::mutation-fast-target | Run mutmut on this target | CONDITIONAL | conditional - blocking |
+| pull_request | .github/workflows/mutation.yml::mutation-fast-target | Enforce the survival ceiling | CONDITIONAL | conditional - blocking |
+| pull_request | .github/workflows/mutation.yml::mutation-fast-target | Record the leg's verdict and mutmut results | CONDITIONAL | conditional - blocking |
+| pull_request | .github/workflows/mutation.yml::mutation-fast-target | Upload per-target evidence | CONDITIONAL | conditional - blocking |
+| pull_request | .github/workflows/mutation.yml::mutation-fast | Download per-target evidence | CONDITIONAL | conditional - blocking |
+| pull_request | .github/workflows/mutation.yml::mutation-fast | Assert every planned target was measured and none exceeded its ceiling | CONDITIONAL | conditional - blocking |
 | pull_request | .github/workflows/policy.yml::twin-oracle | uses: actions/checkout@v4 | CONDITIONAL | conditional - blocking |
 | pull_request | .github/workflows/policy.yml::twin-oracle | uses: actions/setup-python@v5 | CONDITIONAL | conditional - blocking |
 | pull_request | .github/workflows/policy.yml::twin-oracle | run: pip install -r packages/requirements.txt -r packages/require | CONDITIONAL | conditional - blocking |
@@ -832,6 +860,7 @@ Why each job runs, does not run, or runs conditionally under each trigger. `need
 | tag:v* | .github/workflows/ci.yml::training-smoke | - | NOT EXECUTED | on: push is branch-scoped (no tags: filter), so a tag push is excluded |
 | tag:v* | .github/workflows/ci.yml::e4-published-artifact | - | NOT EXECUTED | on: push is branch-scoped (no tags: filter), so a tag push is excluded |
 | tag:v* | .github/workflows/eval-llm-judge.yml::llm-judge | - | NOT EXECUTED | workflow on: has no push trigger |
+| tag:v* | .github/workflows/frontend-lockfile-regen.yml::regen-lockfile | - | NOT EXECUTED | workflow on: has no push trigger |
 | tag:v* | .github/workflows/frontend.yml::quality | - | NOT EXECUTED | on: push is branch-scoped (no tags: filter), so a tag push is excluded |
 | tag:v* | .github/workflows/frontend.yml::spec-typecheck | - | NOT EXECUTED | on: push is branch-scoped (no tags: filter), so a tag push is excluded |
 | tag:v* | .github/workflows/frontend.yml::build | - | NOT EXECUTED | on: push is branch-scoped (no tags: filter), so a tag push is excluded |
@@ -854,6 +883,8 @@ Why each job runs, does not run, or runs conditionally under each trigger. `need
 | tag:v* | .github/workflows/integration.yml::real-stack-run | - | NOT EXECUTED | workflow on: has no push trigger |
 | tag:v* | .github/workflows/live-truth.yml::watchdog | - | NOT EXECUTED | workflow on: has no push trigger |
 | tag:v* | .github/workflows/mutation.yml::mutation | - | NOT EXECUTED | on: push is branch-scoped (no tags: filter), so a tag push is excluded |
+| tag:v* | .github/workflows/mutation.yml::mutation-fast-plan | - | NOT EXECUTED | on: push is branch-scoped (no tags: filter), so a tag push is excluded |
+| tag:v* | .github/workflows/mutation.yml::mutation-fast-target | - | NOT EXECUTED | on: push is branch-scoped (no tags: filter), so a tag push is excluded |
 | tag:v* | .github/workflows/mutation.yml::mutation-fast | - | NOT EXECUTED | on: push is branch-scoped (no tags: filter), so a tag push is excluded |
 | tag:v* | .github/workflows/policy.yml::twin-oracle | - | NOT EXECUTED | on: push is branch-scoped (no tags: filter), so a tag push is excluded |
 | tag:v* | .github/workflows/policy.yml::dpdpa | - | NOT EXECUTED | on: push is branch-scoped (no tags: filter), so a tag push is excluded |
@@ -875,7 +906,7 @@ Why each job runs, does not run, or runs conditionally under each trigger. `need
 
 ## Declared-blocking anchors (R11.8)
 
-Every step `infrastructure/quality/blocking-steps.yaml` declares blocking, annotated with the command it runs so a governance claim can be pinned to a row. Source: 18 declared-blocking entries from infrastructure/quality/blocking-steps.yaml.
+Every step `infrastructure/quality/blocking-steps.yaml` declares blocking, annotated with the command it runs so a governance claim can be pinned to a row. Source: 22 declared-blocking entries from infrastructure/quality/blocking-steps.yaml.
 
 | Trigger | Job | Step | Propagates | Note |
 |---|---|---|---|---|
@@ -925,6 +956,14 @@ Every step `infrastructure/quality/blocking-steps.yaml` declares blocking, annot
 | push:main | .github/workflows/ci.yml::e4-published-artifact | Calibration-truth gate against the materialised artifact (C40) [scripts.audit.calibration_truth] | CONDITIONAL | declared blocking (R9.15) - conditional (path-filtered (paths-ignore: **.md, docs/**, plans/**, notebooks/**)) |
 | push:main | .github/workflows/ci.yml::e4-published-artifact | Runtime-substance gate against the materialised artifact (C45) [scripts.audit.runtime_substance] | CONDITIONAL | declared blocking (R9.15) - conditional (path-filtered (paths-ignore: **.md, docs/**, plans/**, notebooks/**)) |
 | push:main | .github/workflows/ci.yml::e4-published-artifact | A SKIP is not a flip - the three gates read a materialised artifact (R9.15) | CONDITIONAL | declared blocking (R9.15) - conditional (path-filtered (paths-ignore: **.md, docs/**, plans/**, notebooks/**)) |
+| push:main | .github/workflows/frontend-lockfile-regen.yml::regen-lockfile | Check out the PR head (not the synthetic merge commit) | NOT EXECUTED | declared blocking (R1.8) - workflow on: has no push trigger |
+| push:main | .github/workflows/frontend-lockfile-regen.yml::regen-lockfile | Setup pnpm | NOT EXECUTED | declared blocking (R1.8) - workflow on: has no push trigger |
+| push:main | .github/workflows/frontend-lockfile-regen.yml::regen-lockfile | Setup Node | NOT EXECUTED | declared blocking (R1.8) - workflow on: has no push trigger |
+| push:main | .github/workflows/frontend-lockfile-regen.yml::regen-lockfile | Resolve pnpm-lock.yaml from package.json (lockfile only, no node_modules) | NOT EXECUTED | declared blocking (R1.8) - workflow on: has no push trigger |
+| push:main | .github/workflows/frontend-lockfile-regen.yml::regen-lockfile | Prove package.json and pnpm-lock.yaml agree under a FROZEN install | NOT EXECUTED | declared blocking (R1.8) - workflow on: has no push trigger |
+| push:main | .github/workflows/frontend-lockfile-regen.yml::regen-lockfile | pnpm-lock supply-chain check (HTTPS + registry.npmjs.org only) | NOT EXECUTED | declared blocking (R1.8) - workflow on: has no push trigger |
+| push:main | .github/workflows/frontend-lockfile-regen.yml::regen-lockfile | Upload package.json + pnpm-lock.yaml | NOT EXECUTED | declared blocking (R1.8) - workflow on: has no push trigger |
+| push:main | .github/workflows/frontend-lockfile-regen.yml::regen-lockfile | pnpm audit (high+ severity, production tree only) | NOT EXECUTED | declared blocking (R1.8) - workflow on: has no push trigger |
 | push:main | .github/workflows/frontend.yml::e2e | uses: actions/checkout@v4 | NOT EXECUTED | declared blocking (R8.9) - if: false in push:main |
 | push:main | .github/workflows/frontend.yml::e2e | uses: pnpm/action-setup@v4 | NOT EXECUTED | declared blocking (R8.9) - if: false in push:main |
 | push:main | .github/workflows/frontend.yml::e2e | uses: actions/setup-node@v4 | NOT EXECUTED | declared blocking (R8.9) - if: false in push:main |
@@ -944,6 +983,11 @@ Every step `infrastructure/quality/blocking-steps.yaml` declares blocking, annot
 | push:main | .github/workflows/frontend.yml::effectiveness-ratchet | Effectiveness ratchet (fresh scorecard vs committed baseline) | NOT EXECUTED | declared blocking (R8.9) - if: false in push:main |
 | push:main | .github/workflows/frontend.yml::effectiveness-ratchet | Effectiveness baseline is a measurement, not a ceiling (R8.10) | NOT EXECUTED | declared blocking (R8.9) - if: false in push:main |
 | push:main | .github/workflows/frontend.yml::effectiveness-ratchet | Upload measured baseline candidate (commit this to clear R8.10) | NOT EXECUTED | declared blocking (R8.9) - if: false in push:main |
+| push:main | .github/workflows/mutation.yml::mutation-fast-plan | Resolve the mutation partition [pytest /training/rewards.py] | CONDITIONAL | declared blocking (R11.5) - conditional (path-filtered (paths: agents/*/training/rewards.py, orchestrator/guardrails/rules.py, orchestrator/audit/logger.py, packages/synapse_common/audit_chain.py, +1 more)) |
+| push:main | .github/workflows/mutation.yml::mutation-fast-target | Install project dependencies [chain_walk.py] | CONDITIONAL | declared blocking (R11.5) - conditional (path-filtered (paths: agents/*/training/rewards.py, orchestrator/guardrails/rules.py, orchestrator/audit/logger.py, packages/synapse_common/audit_chain.py, +1 more); needs 'mutation-fast-plan', which is conditional) |
+| push:main | .github/workflows/mutation.yml::mutation-fast-target | Run mutmut on this target | CONDITIONAL | declared blocking (R11.5) - conditional (path-filtered (paths: agents/*/training/rewards.py, orchestrator/guardrails/rules.py, orchestrator/audit/logger.py, packages/synapse_common/audit_chain.py, +1 more); needs 'mutation-fast-plan', which is conditional) |
+| push:main | .github/workflows/mutation.yml::mutation-fast-target | Enforce the survival ceiling [scripts/check_mutation_threshold.py] | CONDITIONAL | declared blocking (R11.5) - conditional (path-filtered (paths: agents/*/training/rewards.py, orchestrator/guardrails/rules.py, orchestrator/audit/logger.py, packages/synapse_common/audit_chain.py, +1 more); needs 'mutation-fast-plan', which is conditional) |
+| push:main | .github/workflows/mutation.yml::mutation-fast | Assert every planned target was measured and none exceeded its ceiling | CONDITIONAL | declared blocking (R11.5) - conditional (path-filtered (paths: agents/*/training/rewards.py, orchestrator/guardrails/rules.py, orchestrator/audit/logger.py, packages/synapse_common/audit_chain.py, +1 more); needs 'mutation-fast-plan', which is conditional; needs 'mutation-fast-target', which is conditional) |
 | push:main | .github/workflows/regenerate-truth-docs.yml::regenerate | uses: actions/checkout@v4 | NOT EXECUTED | declared blocking (R4.4, R4.5, R4.8, R4.11, R10.1, R10.7, R11.7) - workflow on: has no push trigger |
 | push:main | .github/workflows/regenerate-truth-docs.yml::regenerate | Set up Python 3.11 | NOT EXECUTED | declared blocking (R4.4, R4.5, R4.8, R4.11, R10.1, R10.7, R11.7) - workflow on: has no push trigger |
 | push:main | .github/workflows/regenerate-truth-docs.yml::regenerate | Install dependencies | NOT EXECUTED | declared blocking (R4.4, R4.5, R4.8, R4.11, R10.1, R10.7, R11.7) - workflow on: has no push trigger |
@@ -1015,6 +1059,14 @@ Every step `infrastructure/quality/blocking-steps.yaml` declares blocking, annot
 | pull_request | .github/workflows/ci.yml::e4-published-artifact | Calibration-truth gate against the materialised artifact (C40) [scripts.audit.calibration_truth] | yes | declared blocking (R9.15) |
 | pull_request | .github/workflows/ci.yml::e4-published-artifact | Runtime-substance gate against the materialised artifact (C45) [scripts.audit.runtime_substance] | yes | declared blocking (R9.15) |
 | pull_request | .github/workflows/ci.yml::e4-published-artifact | A SKIP is not a flip - the three gates read a materialised artifact (R9.15) | yes | declared blocking (R9.15) |
+| pull_request | .github/workflows/frontend-lockfile-regen.yml::regen-lockfile | Check out the PR head (not the synthetic merge commit) | CONDITIONAL | declared blocking (R1.8) - conditional (if: undecidable from trigger (github.event.label.name)) |
+| pull_request | .github/workflows/frontend-lockfile-regen.yml::regen-lockfile | Setup pnpm | CONDITIONAL | declared blocking (R1.8) - conditional (if: undecidable from trigger (github.event.label.name)) |
+| pull_request | .github/workflows/frontend-lockfile-regen.yml::regen-lockfile | Setup Node | CONDITIONAL | declared blocking (R1.8) - conditional (if: undecidable from trigger (github.event.label.name)) |
+| pull_request | .github/workflows/frontend-lockfile-regen.yml::regen-lockfile | Resolve pnpm-lock.yaml from package.json (lockfile only, no node_modules) | CONDITIONAL | declared blocking (R1.8) - conditional (if: undecidable from trigger (github.event.label.name)) |
+| pull_request | .github/workflows/frontend-lockfile-regen.yml::regen-lockfile | Prove package.json and pnpm-lock.yaml agree under a FROZEN install | CONDITIONAL | declared blocking (R1.8) - conditional (if: undecidable from trigger (github.event.label.name)) |
+| pull_request | .github/workflows/frontend-lockfile-regen.yml::regen-lockfile | pnpm-lock supply-chain check (HTTPS + registry.npmjs.org only) | CONDITIONAL | declared blocking (R1.8) - conditional (if: undecidable from trigger (github.event.label.name)) |
+| pull_request | .github/workflows/frontend-lockfile-regen.yml::regen-lockfile | Upload package.json + pnpm-lock.yaml | CONDITIONAL | declared blocking (R1.8) - conditional (if: undecidable from trigger (github.event.label.name)) |
+| pull_request | .github/workflows/frontend-lockfile-regen.yml::regen-lockfile | pnpm audit (high+ severity, production tree only) | CONDITIONAL | declared blocking (R1.8) - conditional (if: undecidable from trigger (github.event.label.name)) |
 | pull_request | .github/workflows/frontend.yml::e2e | uses: actions/checkout@v4 | CONDITIONAL | declared blocking (R8.9) - conditional (path-filtered (paths: frontend/**, proto/domain/**, .github/workflows/frontend.yml); needs 'build', which is conditional) |
 | pull_request | .github/workflows/frontend.yml::e2e | uses: pnpm/action-setup@v4 | CONDITIONAL | declared blocking (R8.9) - conditional (path-filtered (paths: frontend/**, proto/domain/**, .github/workflows/frontend.yml); needs 'build', which is conditional) |
 | pull_request | .github/workflows/frontend.yml::e2e | uses: actions/setup-node@v4 | CONDITIONAL | declared blocking (R8.9) - conditional (path-filtered (paths: frontend/**, proto/domain/**, .github/workflows/frontend.yml); needs 'build', which is conditional) |
@@ -1034,6 +1086,11 @@ Every step `infrastructure/quality/blocking-steps.yaml` declares blocking, annot
 | pull_request | .github/workflows/frontend.yml::effectiveness-ratchet | Effectiveness ratchet (fresh scorecard vs committed baseline) | CONDITIONAL | declared blocking (R8.9) - conditional (path-filtered (paths: frontend/**, proto/domain/**, .github/workflows/frontend.yml); needs 'e2e-harness', which is conditional) |
 | pull_request | .github/workflows/frontend.yml::effectiveness-ratchet | Effectiveness baseline is a measurement, not a ceiling (R8.10) | CONDITIONAL | declared blocking (R8.9) - conditional (path-filtered (paths: frontend/**, proto/domain/**, .github/workflows/frontend.yml); needs 'e2e-harness', which is conditional) |
 | pull_request | .github/workflows/frontend.yml::effectiveness-ratchet | Upload measured baseline candidate (commit this to clear R8.10) | CONDITIONAL | declared blocking (R8.9) - conditional (path-filtered (paths: frontend/**, proto/domain/**, .github/workflows/frontend.yml); needs 'e2e-harness', which is conditional) |
+| pull_request | .github/workflows/mutation.yml::mutation-fast-plan | Resolve the mutation partition [pytest /training/rewards.py] | CONDITIONAL | declared blocking (R11.5) - conditional (path-filtered (paths: agents/*/training/rewards.py, orchestrator/guardrails/rules.py, orchestrator/audit/logger.py, packages/synapse_common/audit_chain.py, +1 more)) |
+| pull_request | .github/workflows/mutation.yml::mutation-fast-target | Install project dependencies [chain_walk.py] | CONDITIONAL | declared blocking (R11.5) - conditional (path-filtered (paths: agents/*/training/rewards.py, orchestrator/guardrails/rules.py, orchestrator/audit/logger.py, packages/synapse_common/audit_chain.py, +1 more); needs 'mutation-fast-plan', which is conditional) |
+| pull_request | .github/workflows/mutation.yml::mutation-fast-target | Run mutmut on this target | CONDITIONAL | declared blocking (R11.5) - conditional (path-filtered (paths: agents/*/training/rewards.py, orchestrator/guardrails/rules.py, orchestrator/audit/logger.py, packages/synapse_common/audit_chain.py, +1 more); needs 'mutation-fast-plan', which is conditional) |
+| pull_request | .github/workflows/mutation.yml::mutation-fast-target | Enforce the survival ceiling [scripts/check_mutation_threshold.py] | CONDITIONAL | declared blocking (R11.5) - conditional (path-filtered (paths: agents/*/training/rewards.py, orchestrator/guardrails/rules.py, orchestrator/audit/logger.py, packages/synapse_common/audit_chain.py, +1 more); needs 'mutation-fast-plan', which is conditional) |
+| pull_request | .github/workflows/mutation.yml::mutation-fast | Assert every planned target was measured and none exceeded its ceiling | CONDITIONAL | declared blocking (R11.5) - conditional (path-filtered (paths: agents/*/training/rewards.py, orchestrator/guardrails/rules.py, orchestrator/audit/logger.py, packages/synapse_common/audit_chain.py, +1 more); needs 'mutation-fast-plan', which is conditional; needs 'mutation-fast-target', which is conditional) |
 | pull_request | .github/workflows/regenerate-truth-docs.yml::regenerate | uses: actions/checkout@v4 | CONDITIONAL | declared blocking (R4.4, R4.5, R4.8, R4.11, R10.1, R10.7, R11.7) - conditional (unparsable if: (unparsable at offset 126: "*.name, 'regenerate-")) |
 | pull_request | .github/workflows/regenerate-truth-docs.yml::regenerate | Set up Python 3.11 | CONDITIONAL | declared blocking (R4.4, R4.5, R4.8, R4.11, R10.1, R10.7, R11.7) - conditional (unparsable if: (unparsable at offset 126: "*.name, 'regenerate-")) |
 | pull_request | .github/workflows/regenerate-truth-docs.yml::regenerate | Install dependencies | CONDITIONAL | declared blocking (R4.4, R4.5, R4.8, R4.11, R10.1, R10.7, R11.7) - conditional (unparsable if: (unparsable at offset 126: "*.name, 'regenerate-")) |
@@ -1105,6 +1162,14 @@ Every step `infrastructure/quality/blocking-steps.yaml` declares blocking, annot
 | tag:v* | .github/workflows/ci.yml::e4-published-artifact | Calibration-truth gate against the materialised artifact (C40) [scripts.audit.calibration_truth] | NOT EXECUTED | declared blocking (R9.15) - on: push is branch-scoped (no tags: filter), so a tag push is excluded |
 | tag:v* | .github/workflows/ci.yml::e4-published-artifact | Runtime-substance gate against the materialised artifact (C45) [scripts.audit.runtime_substance] | NOT EXECUTED | declared blocking (R9.15) - on: push is branch-scoped (no tags: filter), so a tag push is excluded |
 | tag:v* | .github/workflows/ci.yml::e4-published-artifact | A SKIP is not a flip - the three gates read a materialised artifact (R9.15) | NOT EXECUTED | declared blocking (R9.15) - on: push is branch-scoped (no tags: filter), so a tag push is excluded |
+| tag:v* | .github/workflows/frontend-lockfile-regen.yml::regen-lockfile | Check out the PR head (not the synthetic merge commit) | NOT EXECUTED | declared blocking (R1.8) - workflow on: has no push trigger |
+| tag:v* | .github/workflows/frontend-lockfile-regen.yml::regen-lockfile | Setup pnpm | NOT EXECUTED | declared blocking (R1.8) - workflow on: has no push trigger |
+| tag:v* | .github/workflows/frontend-lockfile-regen.yml::regen-lockfile | Setup Node | NOT EXECUTED | declared blocking (R1.8) - workflow on: has no push trigger |
+| tag:v* | .github/workflows/frontend-lockfile-regen.yml::regen-lockfile | Resolve pnpm-lock.yaml from package.json (lockfile only, no node_modules) | NOT EXECUTED | declared blocking (R1.8) - workflow on: has no push trigger |
+| tag:v* | .github/workflows/frontend-lockfile-regen.yml::regen-lockfile | Prove package.json and pnpm-lock.yaml agree under a FROZEN install | NOT EXECUTED | declared blocking (R1.8) - workflow on: has no push trigger |
+| tag:v* | .github/workflows/frontend-lockfile-regen.yml::regen-lockfile | pnpm-lock supply-chain check (HTTPS + registry.npmjs.org only) | NOT EXECUTED | declared blocking (R1.8) - workflow on: has no push trigger |
+| tag:v* | .github/workflows/frontend-lockfile-regen.yml::regen-lockfile | Upload package.json + pnpm-lock.yaml | NOT EXECUTED | declared blocking (R1.8) - workflow on: has no push trigger |
+| tag:v* | .github/workflows/frontend-lockfile-regen.yml::regen-lockfile | pnpm audit (high+ severity, production tree only) | NOT EXECUTED | declared blocking (R1.8) - workflow on: has no push trigger |
 | tag:v* | .github/workflows/frontend.yml::e2e | uses: actions/checkout@v4 | NOT EXECUTED | declared blocking (R8.9) - on: push is branch-scoped (no tags: filter), so a tag push is excluded |
 | tag:v* | .github/workflows/frontend.yml::e2e | uses: pnpm/action-setup@v4 | NOT EXECUTED | declared blocking (R8.9) - on: push is branch-scoped (no tags: filter), so a tag push is excluded |
 | tag:v* | .github/workflows/frontend.yml::e2e | uses: actions/setup-node@v4 | NOT EXECUTED | declared blocking (R8.9) - on: push is branch-scoped (no tags: filter), so a tag push is excluded |
@@ -1124,6 +1189,11 @@ Every step `infrastructure/quality/blocking-steps.yaml` declares blocking, annot
 | tag:v* | .github/workflows/frontend.yml::effectiveness-ratchet | Effectiveness ratchet (fresh scorecard vs committed baseline) | NOT EXECUTED | declared blocking (R8.9) - on: push is branch-scoped (no tags: filter), so a tag push is excluded |
 | tag:v* | .github/workflows/frontend.yml::effectiveness-ratchet | Effectiveness baseline is a measurement, not a ceiling (R8.10) | NOT EXECUTED | declared blocking (R8.9) - on: push is branch-scoped (no tags: filter), so a tag push is excluded |
 | tag:v* | .github/workflows/frontend.yml::effectiveness-ratchet | Upload measured baseline candidate (commit this to clear R8.10) | NOT EXECUTED | declared blocking (R8.9) - on: push is branch-scoped (no tags: filter), so a tag push is excluded |
+| tag:v* | .github/workflows/mutation.yml::mutation-fast-plan | Resolve the mutation partition [pytest /training/rewards.py] | NOT EXECUTED | declared blocking (R11.5) - on: push is branch-scoped (no tags: filter), so a tag push is excluded |
+| tag:v* | .github/workflows/mutation.yml::mutation-fast-target | Install project dependencies [chain_walk.py] | NOT EXECUTED | declared blocking (R11.5) - on: push is branch-scoped (no tags: filter), so a tag push is excluded |
+| tag:v* | .github/workflows/mutation.yml::mutation-fast-target | Run mutmut on this target | NOT EXECUTED | declared blocking (R11.5) - on: push is branch-scoped (no tags: filter), so a tag push is excluded |
+| tag:v* | .github/workflows/mutation.yml::mutation-fast-target | Enforce the survival ceiling [scripts/check_mutation_threshold.py] | NOT EXECUTED | declared blocking (R11.5) - on: push is branch-scoped (no tags: filter), so a tag push is excluded |
+| tag:v* | .github/workflows/mutation.yml::mutation-fast | Assert every planned target was measured and none exceeded its ceiling | NOT EXECUTED | declared blocking (R11.5) - on: push is branch-scoped (no tags: filter), so a tag push is excluded |
 | tag:v* | .github/workflows/regenerate-truth-docs.yml::regenerate | uses: actions/checkout@v4 | NOT EXECUTED | declared blocking (R4.4, R4.5, R4.8, R4.11, R10.1, R10.7, R11.7) - workflow on: has no push trigger |
 | tag:v* | .github/workflows/regenerate-truth-docs.yml::regenerate | Set up Python 3.11 | NOT EXECUTED | declared blocking (R4.4, R4.5, R4.8, R4.11, R10.1, R10.7, R11.7) - workflow on: has no push trigger |
 | tag:v* | .github/workflows/regenerate-truth-docs.yml::regenerate | Install dependencies | NOT EXECUTED | declared blocking (R4.4, R4.5, R4.8, R4.11, R10.1, R10.7, R11.7) - workflow on: has no push trigger |

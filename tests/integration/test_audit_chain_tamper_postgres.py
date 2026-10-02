@@ -19,7 +19,9 @@ Property 18:
   simulated in memory without deciding, in the test, what the database would have
   returned - which is the self-referential-oracle pattern the audit reports in
   Requirement 12. So this file deletes a row with SQL and reads the verdict from the
-  CLI's own exit code.
+  exit code returned by the CLI's async core (``verify_and_report``, which ``main``
+  delegates to) - in-process, so argparse and the interpreter exit path are not
+  exercised here.
 
 * **R6.10** - "WHILE rows are being appended during a verification run, THE chain
   verifier SHALL walk the row set fixed by a snapshot taken at the start of the run and
@@ -86,22 +88,15 @@ Following the convention of the sibling integration proof
 integration`` plus a ``skipif`` on the one environment variable the proving job sets,
 and a reason that says the SKIP is an unproven claim rather than a passing one (I-7).
 
-**No workflow sets ``SYNAPSE_AUDIT_CHAIN_IT_DSN`` today, so this file SKIPs
-everywhere - including in ``integration.yml``.** That is reported, not hidden: until
-the step below exists, R6.2 has no executed proof against a database and this module's
-``s`` in a green run is the honest record of that. The step ``integration.yml::
-integration-e2e`` needs, after "Start base compose" and with no ``continue-on-error``
-and no ``|| true``::
-
-    - name: Audit-chain tamper detection against Postgres (R6.2, R6.10)
-      env:
-        SYNAPSE_AUDIT_CHAIN_IT_DSN: postgresql+asyncpg://synapse:synapse_audit_2026@localhost:5432/synapse_audit
-      run: |
-        PYTHONPATH=. pytest tests/integration/test_audit_chain_tamper_postgres.py -q --tb=short
-
-The DSN's role must be able to ``CREATE DATABASE``; the compose superuser
-(``POSTGRES_USER=synapse``, ``docker/docker-compose.yml:161``) can. A deliberate
-variable rather than a reachability probe: a probe that skips when Postgres is
+**``integration.yml::audit-chain-tamper`` sets ``SYNAPSE_AUDIT_CHAIN_IT_DSN``** against a
+``services: postgres:16-alpine`` container whose ``POSTGRES_USER=synapse`` is the
+superuser, so the role can ``CREATE DATABASE``. Everywhere else this file SKIPs, and that
+``s`` is the honest record of an unproven claim, not a pass. Engines are built from the
+parsed ``URL``; the one string handed to the verifier uses
+``render_as_string(hide_password=False)``, because SQLAlchemy 2.0's ``str(URL)`` masks the
+password as ``***`` - the job's first run (36860316544, 2026-10-01) errored at setup on
+exactly that, so until then R6.2 had still never executed against a database. A
+deliberate variable rather than a reachability probe: a probe that skips when Postgres is
 unreachable would report a green run for a database that was never there, which is the
 silent-SKIP-as-pass failure this whole spec exists to remove.
 
@@ -193,8 +188,8 @@ pytestmark = [
         not _DSN,
         reason=(
             f"R6.2/R6.10 need a real Postgres. Set {_DSN_ENV} to a SQLAlchemy asyncpg "
-            "DSN whose role can CREATE DATABASE (integration.yml::integration-e2e "
-            "already boots the compose postgres). SKIPPED here: an unproven claim, "
+            "DSN whose role can CREATE DATABASE (integration.yml::audit-chain-tamper "
+            "sets it against a postgres:16-alpine service). SKIPPED here: an unproven claim, "
             "not a passing one (I-7)."
         ),
     ),
@@ -247,7 +242,7 @@ async def _create_database(admin_url: Any, name: str) -> None:  # noqa: ANN401
     ``CREATE DATABASE`` cannot run inside a transaction block, which is the whole
     reason for the explicit AUTOCOMMIT engine here.
     """
-    engine = create_async_engine(str(admin_url), isolation_level="AUTOCOMMIT")
+    engine = create_async_engine(admin_url, isolation_level="AUTOCOMMIT")
     try:
         async with engine.connect() as conn:
             await conn.execute(text(f'CREATE DATABASE "{name}"'))
@@ -265,7 +260,7 @@ async def _drop_database(admin_url: Any, name: str) -> None:  # noqa: ANN401
     if not name.startswith(SCRATCH_DB_PREFIX):
         msg = f"refusing to drop {name!r}: not a {SCRATCH_DB_PREFIX}* scratch database"
         raise AssertionError(msg)
-    engine = create_async_engine(str(admin_url), isolation_level="AUTOCOMMIT")
+    engine = create_async_engine(admin_url, isolation_level="AUTOCOMMIT")
     try:
         async with engine.connect() as conn:
             await conn.execute(text(f'DROP DATABASE IF EXISTS "{name}" WITH (FORCE)'))
@@ -359,7 +354,10 @@ async def scratch_chain() -> AsyncIterator[ScratchChain]:
 
     await _create_database(admin_url, scratch_name)
     scratch_url = url.set(database=scratch_name)
-    engine = create_async_engine(str(scratch_url))
+    # Engines take the parsed URL, never ``str(url)``: SQLAlchemy 2.0 renders the password
+    # as ``***`` in ``str()``, which is what made this job's first run fail at setup with
+    # ``InvalidPasswordError`` before a single assertion ran (run 36860316544).
+    engine = create_async_engine(scratch_url)
     try:
         async with engine.begin() as conn:
             await conn.run_sync(_AUDIT_TABLE.create)
@@ -378,7 +376,10 @@ async def scratch_chain() -> AsyncIterator[ScratchChain]:
             session.add_all(rows)
 
         yield ScratchChain(
-            dsn=str(scratch_url),
+            # The one DSN handed on as a string goes to the verifier, so it must carry
+            # the real password; ``render_as_string(hide_password=False)`` is the only
+            # rendering that does.
+            dsn=scratch_url.render_as_string(hide_password=False),
             engine=engine,
             row_ids=tuple(row.id for row in rows),
             hashes=tuple(hashes),

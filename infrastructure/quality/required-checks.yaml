@@ -74,8 +74,9 @@ required:
   # a commit that changed only a declaration's notes would produce no sweep at all.
   #
   # EXPECT THIS CHECK RED BEFORE IT IS GREEN, and that is the point rather than a defect.
-  # `gate-mutations.yaml` discloses C28's `zero-a-floor` as a surviving mutation and records
-  # six checks whose baselines do not pass on this tree, so their probes report
+  # `gate-mutations.yaml` disclosed C28's `zero-a-floor` as a surviving mutation until
+  # 2026-10-01 (repaired in the gate, never the mutation) and records four checks (C60, C70,
+  # C71, C72) whose baselines do not pass on this tree, so their probes report
   # `indeterminate`. A survivor is a gate proven not to enforce, which invalidates every
   # number that gate ever reported; the repair is to the gate, never to the mutation. Making
   # this entry required is what converts "we have never checked whether our gates bite" into
@@ -254,6 +255,21 @@ ineligible:
       records `activates_after: task 2.17`, but activating it now would compare
       CLAUDE.md's `mutation-fast` claim against `required[].job` -- which still does not
       contain it -- and FAIL. The premise moved; the conclusion did not.
+
+  - job: mutation-fast-plan
+    workflow: .github/workflows/mutation.yml
+    reason: path-filtered
+    detail: >-
+      Same triggers and paths filter as mutation-fast, whose single target resolution it
+      is; a PR touching no gated target never produces the check.
+
+  - job: mutation-fast-target
+    workflow: .github/workflows/mutation.yml
+    reason: path-filtered
+    detail: >-
+      Same filter. A matrix job whose check names are per leg ("mutation-fast / <label>"),
+      so no single name could be required even unfiltered; mutation-fast is the aggregator
+      that reports one verdict for the whole plan.
 
   - job: twin-oracle
     workflow: .github/workflows/policy.yml
