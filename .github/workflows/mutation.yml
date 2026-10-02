@@ -330,7 +330,8 @@ jobs:
                 ;;
               orchestrator/guardrails/rules.py)
                 test_path="orchestrator/tests/test_guardrails.py"
-                runner="python -m pytest ${test_path} -x -q"
+                # Killers first so -x ends a killed mutant's run there; without them 116/149 survived (MEASURED, run 36959909057).
+                runner="python -m pytest orchestrator/tests/test_guardrail_rules_mutation_killers.py ${test_path} -x -q"
                 threshold=10
                 label="guardrails/rules"
                 ;;
