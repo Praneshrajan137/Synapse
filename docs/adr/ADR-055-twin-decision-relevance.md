@@ -1065,6 +1065,49 @@ evaluations. The per-cell CI projection is recorded in `comparator-tuning.yaml` 
 ceiling above the margin means consensus will capture it (that is E5's question); or that D is
 optimal under delay (it is conservative, and says so).
 
+#### D2.9 Checkpoint B-prime, measured: room to win at the declared structure (session 11)
+
+**Recorded after the run, against the rule D2.8 committed before it.** Uplift Proof run
+`36860454801` at `ec0eb91` (2026-10-01): eight cells, 200 replicates each, 100 tuning seeds, no
+refused search, split or recheck. Ledger entry and the P1-P5 scorecard: task 14. Every number
+below is read from the cell artifacts (`twin-regret-<cell>.json`).
+
+**Verdict: `room_to_win`.** Primary cell (structures 1 and 3 on): `E - D = 0.630`, out-of-sample
+interval `[0.596, 0.666]`, in-sample `[0.595, 0.664]`; both lie wholly above the committed `0.40`
+margin, so the rule binds. E3/E5 are licensed by measurement, not deferred.
+
+**The split, primary cell.** `regret(B - D) 2.587 = (B - E) 1.957 + (E - O) 0.246 + (O - D)
+0.383`, float residual `0.0`. Arm O realises 39% of the ceiling; the residual value of perfect
+information is the other 61%. By term, 62% of the ceiling is on-hand cost and 38% unmet service:
+knowing the future pays here mainly by holding less, not by serving more. That is what E5 must be
+read against -- a consensus arm that wins only on service is winning on the smaller term.
+
+**Dose-response, descriptive (no cell is promoted).** The ceiling rises monotonically with both
+declared structures: demand amplitude x1/4 `0.330` -> x1/2 `0.425` -> x1 `0.630`; mean lead times
+2/3/4 h `0.430` -> 4/6/8 h `0.630` -> 6/9/12 h `0.679`. Each structure alone: off_off `0.017`
+(finding 63's small ceiling, reproduced to every digit by P1), non-stationarity alone `0.053`
+(P3: below the margin, D2.7's mechanism), a replenishment delay alone `0.248` (P2: above finding
+63's ceiling), and the two compound (P4).
+
+**What failed, and why the verdict survives it (finding 79).** P5's clause
+`hindsight_arm_is_pointwise_best` failed in s3_only, s1_only and amplitude_quarter: D is
+unmet-pointwise-least in every cell but not cost-pointwise-least in those three, by at most
+`2.0e-4` in mean cost. D2.8 already declined to claim D optimal under delay; s1_only shows the
+same holds with no delay, because D does not minimise the on-hand and latency terms. The error
+direction is the one D2.8 names: `E - D` understates the ceiling against the pointwise minimum,
+so the verdict is conservative, and the gap is three orders below every margin P2 and P3 were
+judged against. The binding cell satisfies every P5 clause. Restating D's claim or making D
+cost-optimal is owed before E3 cites D as a bound.
+
+**E5's budget, measured (finding 70).** A Tier-4 consensus decision costs `25.9 s` mean (n = 72),
+a Tier-2 `0.047 s` (n = 24); `MIN_SCENARIOS` projects to `518.6` core-hours, about 26 five-hour
+jobs at four workers. Those figures were taken on the private repository's 2-vCPU runner class
+(finding 80), which also sets what a "job" costs.
+
+**NOT CLAIMED.** That consensus captures any of the ceiling (E5's question, unmeasured); that the
+declared world describes a real store (its values are `chosen`); that a descriptive cell's verdict
+transfers to the primary's; or that the ceiling is the EVPI (it is a lower bound on it).
+
 ### D3 - Per-KPI observable sensitivity (R5.34)
 
 R5.34 requires this record to state, **per KPI named in the objective**, whether that KPI is
