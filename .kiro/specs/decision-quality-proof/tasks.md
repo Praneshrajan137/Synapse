@@ -549,7 +549,11 @@ tests in the interim, and that is a stated sequencing gap, not an omission.
     tree as committed (finding 81).** C28 now FAILs a floor below its MEASURED `ratchets.json`
     bound (`coverage-floor:packages/synapse_common`, 83.5), so `zero-a-floor` should falsify
     from the next sweep -- executed locally against the mutated floor: FAIL naming
-    `packages/synapse_common` (measured); the sweep's own probe is unobserved.
+    `packages/synapse_common` (measured). **Observed on the sweep at run `36959909056`
+    (sha `aa19d9a`): C28/zero-a-floor `falsified`, and C44's two probes and C69's falsify too**
+    (indeterminate while those baselines were red). That run's other `indeterminate` probes were
+    C56's two (README headline drift, repaired by committing the CI-regenerated README) and the
+    four named below.
     `--require-measured-floors` could never have repaired it: C28 does not run that script.
     Separately, the sweep's verdict is `pass` only with zero findings, and four declared checks
     have baselines that cannot PASS inside that job: C72 by construction (no sweep report exists
@@ -5066,6 +5070,15 @@ progress ledger; design reasoning is ADR-055.
       render with a fresh empty array (deck.gl's 4M-point max pass froze the page under
       SwiftShader -- measured in the traces); the JTBD decision fixture carried a non-UUID id the
       app's own reshape refuses. Repaired in the app and the harness; no assertion weakened.
+      **Measured on run `36959909043` (sha `aa19d9a`): 9 failing Playwright tests became 2**, and
+      each of the two had a further cause the first ones had hidden: the Shell top bar could not
+      wrap, so Mission Control overflowed a 360 px viewport by 264-303 px; and every MSW
+      `worker.start()` patches the `WebSocket` global, so a flapped socket's reconnect opened
+      itself within one backoff draw (< 500 ms) and the not-live state could close unobserved.
+      Repaired in `Shell.tsx` and the harness (the stream driver reclaims its edge, as
+      `src/test/setup.ts` already did for Vitest). Predicted next: `mobile-reality` fails on
+      its LCP budget (main chunk complete 3.9 s after navigation under 3G vs 2.5 s; the spec's
+      header calls LCP "measured and annotated" while its body asserts it -- an operator call).
 
   - [x] 29.1 Deferral is a terminal state the census reports
     - discharge: ci.yml::uplift-verify fast shard 3/4 (tests/verify a-o)
