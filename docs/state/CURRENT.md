@@ -33,7 +33,7 @@ be a second execution and therefore a second truth. `NOT EXECUTED` means the che
 is registered but emitted no result - not a pass, and already a build failure
 (R1.7).
 
-**Registry verdict:** `FAIL` - 3 check(s) did not pass: C44=FAIL, C56=FAIL, C69=FAIL
+**Registry verdict:** `PASS` - 57 PASS of 67 registered check(s), no FAIL (0 PARTIAL, 10 SKIP not counted as passes)
 
 | # | Subject (as registered) | Status | Detail |
 | --- | --- | --- | --- |
@@ -73,10 +73,10 @@ is registered but emitted no result - not a pass, and already a build failure
 | C41 | Declared confidence_basis matches computed basis (ratchet) | PASS | - |
 | C45 | Real checkpoint serves non-degraded calibrated output at runtime | SKIP | all 8 probe(s) skipped: demand_prophet, disruption_shield, freshness_guardian, inventory_sentinel, pricing_oracle, routing_navigator, supplier_trust, sustainability_agent |
 | C7 | Orchestrator invokes the digital twin + records input provenance | PASS | - |
-| C46 | A real, published production checkpoint serves at $0 | SKIP | DP_HF_REPO unset - no published model claimed (operator step) |
+| C46 | A real, published production checkpoint serves at $0 | SKIP | infrastructure/ml/published_checkpoints.json holds no validated non-placeholder entry for 'demand_prophet_hgt_tft' (placeholder): no checkpoint published yet - run docs/runbooks/train-and-publish-checkpoint.md |
 | C42 | Decisions read-path table == orchestrator write-path table | PASS | - |
 | C43 | All 8 agents expose POST /a2a for consensus | PASS | - |
-| C44 | Module liveness: total classification + named baseline + projections | FAIL | 3 liveness violation(s): 2 dead module(s) against a named baseline of 0; 2 not named in infrastructure/quality/dead-modules.yaml: data_fabric/ingest/__init__.py, data_fabric/ingest/m5.py -- wire it, remove it, mark it a seam, or declare it dormant; the named baseline holds 0 dormant name(s) but the graph has 2 dormant module(s), so a name was removed while its module is still imported by no non-test module: data_fabric/ingest/__init__.py, data_fabric/ingest/m5.py; synapse_common.contracts.validate_audit_insertion encodes an invariant [deal.post] and is invoked ONLY from tests (packages/tests/test_contracts.py) |
+| C44 | Module liveness: total classification + named baseline + projections | PASS | - |
 | C47 | Deploy truth gated in cd-gcp.yml (SHA + containers + issue) | PASS | - |
 | C49 | Import smoke covers every Python image in the CD matrix | PASS | - |
 | C50 | Every GCP compose service resolves to a healthcheck | PASS | - |
@@ -84,7 +84,7 @@ is registered but emitted no result - not a pass, and already a build failure
 | C51 | Decision outcomes never fabricated | PASS | - |
 | C52 | Operations aggregate endpoints exist | PASS | - |
 | C55 | audit_outbox DDL matches the ORM (no schema drift) | PASS | - |
-| C56 | Docs match mechanical reality (no narrative drift) | FAIL | 1 doc claim(s) drifted from source - headline-counts: README headline drifted from the live verify_claims summary: PASS (README claims 51, suite reports 54); FAIL (README claims 3, suite reports 2); SKIP (README claims 10, suite reports 11); TOTAL (README claims 64, suite reports 67) |
+| C56 | Docs match mechanical reality (no narrative drift) | PASS | - |
 | C57 | Agentic loop is real (perceive→decide→act→learn) | PASS | - |
 | C58 | Decision initiator typed (autonomous != synthetic) | PASS | - |
 | C59 | Autonomy endpoint + live metric producer exist | PASS | - |
@@ -97,9 +97,9 @@ is registered but emitted no result - not a pass, and already a build failure
 | C66 | Named audit commands resolve to a real module, script, or entry point | PASS | - |
 | C67 | Audit-chain anchors are fresh enough to verify the chain externally | SKIP | chain=unverifiable, 0 anchor file(s); no anchor exists; the chain is unverifiable (R6.11) |
 | C68 | World-feed provenance: the declared source class matches the code | PASS | - |
-| C69 | Completed task records resolve to landed work, not a placeholder | FAIL | 573 task record(s) over 7 spec(s), registry=placeholder; .kiro/specs/core-purpose-uplift/tasks.md:141 core-purpose-uplift task 9 "Populate and verify the flagship checkpoint registry" is marked complete and asserts a landed infrastructure/ml/published_checkpoints.json entry (matched ['populates-checkpoint-registry'] on ['checkpoint registry']), but that file holds no validated non-placeholder entry for 'demand_prophet_hgt_tft' (placeholder: no checkpoint published yet - run docs/runbooks/train-and-publish-checkpoint.md) |
+| C69 | Completed task records resolve to landed work, not a placeholder | PASS | - |
 | C70 | Ratcheted thresholds never regress and agree with what they guard | SKIP | 26 ratchet(s) hold their recorded bounds; 22 carry no measurement, so they are declared values only (SKIP, never PASS) |
-| C71 | Replayed KV-cache and tier-routing metrics meet their committed floors | SKIP | 200 golden trace(s) from tests/eval/golden_traces; kv_cache_hit_rate=unmeasured vs floor 0.70 [unavailable]: synapse_ollama_cache_hit_rate has no samples -- the replay took no cache observation (Ollama offline); no hit rate was measured; tier_routing_accuracy=1.0000 vs floor 0.80 [pass]: 200/200 traces classified into their expected tier |
+| C71 | Replayed KV-cache and tier-routing metrics meet their committed floors | SKIP | 200 golden trace(s) from tests/eval/golden_traces; kv_cache_hit_rate=unmeasured vs floor 0.70 [declared-unmeasurable]: synapse_ollama_cache_hit_rate has no samples -- the replay took no cache observation (Ollama offline); no hit rate was measured; declared unmeasurable in CI -- blocked on A GitHub-hosted runner has no Ollama. Standing one up inside the job is a category-1 service workload under I-0 on the development machine and a multi-gigabyte model pull in CI, and I-1 forbids substituting a paid API for it. Neither is a measurement of THIS repository's cache behaviour, and inferring a hit rate from anything other than the gauge would be fabricating the number the gate exists to stop being fabricated (I-7). Voided by: A `synapse_ollama_cache_hit_rate` gauge carrying at least one sample after the replay, which requires a reachable Ollama serving the completions the cache is meant to be reused across. Present => this declaration is void.; tier_routing_accuracy=1.0000 vs floor 0.80 [pass]: 200/200 traces classified into their expected tier |
 | C72 | Every gate declares a mutation that falsifies it | SKIP | 14 of 67 registered check(s) declare a falsification over 16 operator(s), 52 undeclared and excluded from PASS-eligibility; declaration is valid for 14 check(s) but no falsification was probed; absence of proof is not a pass (I-7) - run with --sweep in CI; no sweep report at artifacts/audit/fault-injection.json (default path) |
 | C73 | The falsification sweep's cost budget is an arithmetic claim that holds | PASS | - |
 | C74 | External-dataset licence terms are recorded, schema-valid and confirmed | SKIP | 1 of 1 dataset(s) carry unestablished licence terms, each named in the findings; the terms sit behind an operator acceptance gate, so this reports SKIP rather than PASS - absence of proof is never a pass (I-7) |
@@ -109,8 +109,8 @@ is registered but emitted no result - not a pass, and already a build failure
 
 | Category | Count |
 | --- | --- |
-| PASS | 54 |
-| FAIL | 3 |
+| PASS | 57 |
+| FAIL | 0 |
 | PARTIAL | 0 |
 | SKIP | 10 |
 | TOTAL | 67 |
@@ -119,7 +119,7 @@ is registered but emitted no result - not a pass, and already a build failure
 
 `TOTAL` is the number of results this execution emitted; `REGISTERED` is the number of `@register` declarations. They differ only when a registered check emits nothing, which is a failure, never a rounding difference.
 
-`README.md` headline counts, from this same execution (R10.9): **54 PASS / 3 FAIL / 0 PARTIAL / 10 SKIP / 67 TOTAL**
+`README.md` headline counts, from this same execution (R10.9): **57 PASS / 0 FAIL / 0 PARTIAL / 10 SKIP / 67 TOTAL**
 <!-- generated:end -->
 
 ---
