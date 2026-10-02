@@ -38,9 +38,17 @@ export function Shell() {
     <div className="flex h-screen flex-col bg-canvas text-ink">
       {/* Obsidian chrome (ADR-045): panel-step bar with an inset bottom
           hairline instead of a border; the BrandMark pulse-ring glyph;
-          nav active = brand underline rail. */}
+          nav active = brand underline rail.
+          Below `lg` the bar wraps instead of running past the viewport
+          (Req 15.3 at 360px): brand + the scrollable nav share the first row,
+          the controls take a full-width row of their own. Below `md` the
+          attention beacon (always the controls' first child) gets a fixed
+          24px row, so its changing summary cannot re-wrap the controls and
+          shift the page (CLS, Req 15.4), and its dropdown anchors to the row's
+          right edge, inside the viewport. From `lg` up every class here
+          resolves to the single desktop row unchanged. */}
       <header
-        className="flex items-center gap-6 bg-surface px-6 py-2"
+        className="flex flex-wrap items-center gap-x-4 gap-y-2 bg-surface px-3 py-2 sm:px-6 lg:flex-nowrap lg:gap-6"
         style={{ boxShadow: "inset 0 -1px 0 rgb(var(--syn-border) / 0.6)" }}
       >
         <div className="flex items-center gap-2.5">
@@ -87,7 +95,7 @@ export function Shell() {
             </div>
           ))}
         </nav>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2 max-lg:w-full max-md:[&>:first-child]:h-6 max-md:[&>:first-child]:basis-full md:max-lg:justify-end lg:flex-nowrap">
           <AttentionBeacon />
           <CitySwitcher />
           <ThemeToggle />

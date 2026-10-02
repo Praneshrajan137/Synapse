@@ -84,6 +84,7 @@ import {
   type StreamChannel,
   type StreamMessage,
 } from "./stream-driver";
+import { ScriptedWebSocket } from "./stream-transport";
 import type { SchemaId } from "./schema-registry";
 
 // ---------------------------------------------------------------------------
@@ -867,6 +868,56 @@ function buildDecisionDetailOverlay(seed: number): Overlay {
 }
 
 // ---------------------------------------------------------------------------
+// The WebSocket edge -- the stream driver's, never MSW's
+// ---------------------------------------------------------------------------
+
+/**
+ * The `WebSocket` global exactly as the stream driver installed it: its
+ * {@link ScriptedWebSocket} double. Refuses when the double is not installed,
+ * because then no socket the Console opens is one the driver controls.
+ */
+export function captureWebSocketEdge(owner: object): PropertyDescriptor {
+  const edge = Object.getOwnPropertyDescriptor(owner, "WebSocket");
+  if (edge === undefined || edge.value !== ScriptedWebSocket) {
+    throw new HarnessDriveError(
+      "the stream driver's ScriptedWebSocket is not the WebSocket global, so no socket the " +
+        "Console opens would be driver-controlled",
+    );
+  }
+  return edge;
+}
+
+/**
+ * Hand the `WebSocket` global back to the stream driver after an MSW worker
+ * start took it; true when it had been taken.
+ *
+ * MSW 2.6+ patches the global on EVERY `worker.start()`, `ws` handlers or not
+ * (`msw/src/browser/setup-worker.ts` always registers a `WebSocketInterceptor`).
+ * The Console then holds MSW's client override, which OPENS ITSELF once MSW has
+ * handled the connection, while the scripted double is only the passthrough
+ * "server" behind it, forwarding messages and closes but not opens
+ * (`@mswjs/interceptors` `WebSocketOverride` / `WebSocketServerConnection`).
+ * That breaks the doubles' contract (`stream-transport.ts`: they never
+ * auto-open; a connection opens only when the driver says so): a flap's
+ * reconnect succeeded by itself one Full-Jitter draw (< 500 ms) later, so the
+ * not-live state Req 8.4 requires could close before anything observed it.
+ * `browser-worker.ts` owns the HTTP surface only; this restores that division,
+ * as `src/test/setup.ts` already does for Vitest after MSW's `listen()`.
+ */
+export function reclaimWebSocketEdge(owner: object, edge: PropertyDescriptor): boolean {
+  const current = Object.getOwnPropertyDescriptor(owner, "WebSocket");
+  if (current?.value === edge.value) return false;
+  if (current !== undefined && current.configurable !== true) {
+    throw new HarnessDriveError(
+      "the WebSocket global was replaced by a non-configurable value, so the stream driver " +
+        "cannot take it back and a flap could not be driver-controlled",
+    );
+  }
+  Object.defineProperty(owner, "WebSocket", edge);
+  return true;
+}
+
+// ---------------------------------------------------------------------------
 // Stream driving
 // ---------------------------------------------------------------------------
 
@@ -1158,12 +1209,17 @@ export async function installAtlasHarness(): Promise<AtlasHarness> {
   // The transport doubles must be installed before any surface mounts, so a
   // socket the app opens is a scripted one the driver can address.
   const driver: InstalledStreamDriver = createStreamDriver({ seed: EFFECTIVENESS_HARNESS_SEED });
+  // Captured before any worker start can wrap it (see reclaimWebSocketEdge).
+  const webSocketEdge = captureWebSocketEdge(globalThis);
 
   let handle: HarnessHandle = await startHarness({
     seed: EFFECTIVENESS_HARNESS_SEED,
     scenarioId: "harness.boot",
   });
   note(`worker started at master seed ${EFFECTIVENESS_HARNESS_SEED}`);
+  if (reclaimWebSocketEdge(globalThis, webSocketEdge)) {
+    note("WebSocket edge reclaimed from the MSW worker for the stream driver");
+  }
 
   /** Monotonic sequence per channel across everything this page drives. */
   const nextSeq = new Map<StreamChannel, number>();
@@ -1204,6 +1260,9 @@ export async function installAtlasHarness(): Promise<AtlasHarness> {
         `${WORKER_RESTART_DEADLINE_MS}ms`,
     );
     note(`worker re-seeded to ${seed} for ${scenarioId}`);
+    if (reclaimWebSocketEdge(globalThis, webSocketEdge)) {
+      note(`WebSocket edge reclaimed from the re-seeded MSW worker for ${scenarioId}`);
+    }
   };
 
   /** True from a `ws-flap` until a `recover` has let the flap's reconnects land. */
