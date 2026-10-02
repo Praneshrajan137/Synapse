@@ -16,23 +16,36 @@ export function LivingMap({ stores }: LivingMapProps) {
   const routes = useFirehoseStore((s) => s.routes.items);
   const demand = useFirehoseStore((s) => s.demand.items);
 
+  // The heatmap's inputs are the stores and the demand signal only, so its
+  // points get their own memo: a routing message must not hand deck.gl a new
+  // heatmap data container (deck diffs `data` by reference, and a new container
+  // re-runs the whole GPU aggregation).
+  const demandPoints = useMemo(
+    () =>
+      demand.flatMap((d) => {
+        // Position the demand weight at the parent store — fallback to
+        // a neutral location if we can't resolve. The 15min horizon is
+        // the freshest signal worth visualising on the map.
+        const horizon = d.horizons["15min"] ?? 0;
+        const parent = stores.find((s) => s.id === d.store_id);
+        if (!parent) return [];
+        return [{ lat: parent.lat, lon: parent.lon, weight: horizon }];
+      }),
+    [stores, demand],
+  );
+
   const layers = useMemo(
     () => [
       storeLayer(stores),
       routeArcLayer(routes),
-      demandHeatmapLayer(
-        demand.flatMap((d) => {
-          // Position the demand weight at the parent store — fallback to
-          // a neutral location if we can't resolve. The 15min horizon is
-          // the freshest signal worth visualising on the map.
-          const horizon = d.horizons["15min"] ?? 0;
-          const parent = stores.find((s) => s.id === d.store_id);
-          if (!parent) return [];
-          return [{ lat: parent.lat, lon: parent.lon, weight: horizon }];
-        }),
-      ),
+      // Mounted only when there is demand to aggregate. An empty heatmap draws
+      // nothing (its fragment shader discards zero-weight pixels), yet every
+      // aggregation still runs a fixed max-weight pass of weightsTextureSize²
+      // points (4,194,304 at the default 2048). Under CI's software rasterizer
+      // the page stopped responding for 8-30 s from the first such pass.
+      ...(demandPoints.length > 0 ? [demandHeatmapLayer(demandPoints)] : []),
     ],
-    [stores, routes, demand],
+    [stores, routes, demandPoints],
   );
 
   return (

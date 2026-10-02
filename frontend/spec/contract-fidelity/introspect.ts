@@ -316,7 +316,22 @@ export function introspectConsoleCapability(
 
   let schemaComplete = schemaPresent;
   if (schemaPresent && contractFields !== undefined && entry?.schemaId) {
-    const schemaFields = schemaFieldNames(DOMAIN_SCHEMA_REGISTRY[entry.schemaId]);
+    // `hasDomainSchema` returns a boolean, not a type guard, so the presence it proved
+    // never reaches the index type (`noUncheckedIndexedAccess`). Narrow here, and refuse
+    // loudly if the predicate and the registry value ever disagree (an own key holding
+    // `undefined`, e.g. an import that did not resolve) -- never report completeness for
+    // a schema that is not there.
+    const schema = DOMAIN_SCHEMA_REGISTRY[entry.schemaId];
+    if (schema === undefined) {
+      throw new Error(
+        `introspectConsoleCapability: capability ${JSON.stringify(entitlement.capabilityId)} ` +
+          `passed hasDomainSchema(${JSON.stringify(entry.schemaId)}), but ` +
+          `DOMAIN_SCHEMA_REGISTRY[${JSON.stringify(entry.schemaId)}] is undefined -- the ` +
+          "registry's membership predicate and its value disagree, so schema completeness " +
+          "cannot be computed.",
+      );
+    }
+    const schemaFields = schemaFieldNames(schema);
     const schemaSet = new Set(schemaFields);
     schemaComplete = contractFields.every((field) => schemaSet.has(field));
   }

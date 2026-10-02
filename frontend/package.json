@@ -55,7 +55,6 @@
   "dependencies": {
     "@deck.gl/aggregation-layers": "^9.0.34",
     "@deck.gl/core": "^9.0.34",
-    "@deck.gl/geo-layers": "^9.0.34",
     "@deck.gl/layers": "^9.0.34",
     "@deck.gl/react": "^9.0.34",
     "@hookform/resolvers": "^3.9.0",

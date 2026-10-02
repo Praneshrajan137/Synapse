@@ -50,15 +50,23 @@
  */
 
 import { queryClient } from "@app/providers";
+import { AutonomyResponseSchema } from "@domain/autonomy";
+import { ConsensusDecisionSchema } from "@domain/consensus-decision";
+import { ZCity } from "@domain/primitives";
+import { reshapeDecision } from "@hooks/use-decision";
 import {
   EFFECTIVENESS_HARNESS_SEED,
   EFFECTIVENESS_HARNESS_VERSION,
   SCRIPTED_PROXY_CEILING,
   type JobToBeDone,
 } from "@lib/effectiveness-scorecard";
+import {
+  DecisionDetailResponseSchema,
+  type DecisionDetailResponse,
+} from "@transport/synapse-api";
 
 import { startHarness, type HarnessHandle } from "./browser-worker";
-import { buildFixture, makeRng, type Rng } from "./fixture-factory";
+import { buildFixture, buildSchemaViolatingFixture, makeRng, type Rng } from "./fixture-factory";
 import { isBackendContractPath } from "./handlers";
 import { getSchema } from "./schema-registry";
 import { SCENARIOS } from "./scenarios";
@@ -161,6 +169,30 @@ const DEFAULT_WAIT_MS = 5_000;
 const POLL_MS = 50;
 const SETTLE_MS = 120;
 
+/**
+ * Upper bound on one `refetchAll` before it is refused as a hang. The slowest
+ * legitimate settle is a query on the default `retry: 2` (`src/app/providers.tsx`)
+ * whose every attempt fails retryably: 3 attempts x the http-client's 5
+ * Full-Jitter tries (backoff <= 200 + 400 + 800 + 1600 ms, `src/lib/jitter-retry.ts`)
+ * plus react-query's 1 s + 2 s retry delays, about 12 s plus latency. 30 s clears
+ * that with margin and still fails well inside the specs' 120 s test timeout, so
+ * a stuck refetch names its query keys instead of surfacing as a bare timeout.
+ */
+const REFETCH_DEADLINE_MS = 30_000;
+/** Upper bound on restarting the MSW worker at a new seed (normally well under 2 s). */
+const WORKER_RESTART_DEADLINE_MS = 30_000;
+/**
+ * A recovering firehose client counts as settled once no new socket has been
+ * constructed for this long. ws-multiplex draws each reconnect delay uniformly
+ * from [0, min(cap, base x 2^attempt)) with base 500 ms, and every reconnect a
+ * flap schedules is an attempt-0 draw (each flap cycle reopens the socket, which
+ * resets the counter), so all of them fire within 500 ms; 1 s leaves margin for
+ * timer delay on a loaded runner.
+ */
+const RECONNECT_QUIET_MS = 1_000;
+/** Refuse a recovery whose client is still constructing sockets after this long. */
+const RECONNECT_SETTLE_DEADLINE_MS = 10_000;
+
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => {
     window.setTimeout(resolve, ms);
@@ -175,6 +207,30 @@ async function waitFor<T>(probe: () => T | null, timeoutMs: number = DEFAULT_WAI
     if (value !== null) return value;
     if (performance.now() >= deadline) return null;
     await sleep(POLL_MS);
+  }
+}
+
+/**
+ * Await `work`, or refuse with a {@link HarnessDriveError} built by `refusal` if it
+ * has not settled within `deadlineMs`. A harness step that never settles must fail
+ * naming what it was waiting on, not hang until the spec's test timeout reports
+ * nothing about the cause.
+ */
+async function settleWithin<T>(
+  work: Promise<T>,
+  deadlineMs: number,
+  refusal: () => string,
+): Promise<T> {
+  let timer: number | undefined;
+  const expired = new Promise<"expired">((resolve) => {
+    timer = window.setTimeout(() => resolve("expired"), deadlineMs);
+  });
+  try {
+    const outcome = await Promise.race([work.then((value) => ({ value })), expired]);
+    if (outcome === "expired") throw new HarnessDriveError(refusal());
+    return outcome.value;
+  } finally {
+    window.clearTimeout(timer);
   }
 }
 
@@ -306,10 +362,16 @@ function channelsFor(scenario: ResolvedScenario): readonly StreamChannel[] {
 
 type FaultMode = "none" | "http-503" | "auth-401-storm";
 
+/** The parts of a request an overlay may read when it answers it. */
+interface OverlayRequest {
+  readonly pathname: string;
+  readonly search: URLSearchParams;
+}
+
 interface Overlay {
   readonly id: string;
   matches(pathname: string, method: string): boolean;
-  body(): unknown;
+  body(request: OverlayRequest): unknown;
   readonly status: number;
 }
 
@@ -421,7 +483,8 @@ class ScenarioEdge {
     if (contractPath) {
       for (const overlay of this.overlays.values()) {
         if (overlay.matches(pathname, method)) {
-          return this.record(pathname, method, jsonResponse(overlay.body(), overlay.status));
+          const body = overlay.body({ pathname, search: searchParamsOf(url) });
+          return this.record(pathname, method, jsonResponse(body, overlay.status));
         }
       }
     }
@@ -467,6 +530,15 @@ function pathnameOf(url: string): string {
   } catch {
     const query = url.indexOf("?");
     return query === -1 ? url : url.slice(0, query);
+  }
+}
+
+function searchParamsOf(url: string): URLSearchParams {
+  try {
+    return new URL(url, window.location.origin).searchParams;
+  } catch {
+    const query = url.indexOf("?");
+    return new URLSearchParams(query === -1 ? "" : url.slice(query + 1));
   }
 }
 
@@ -630,6 +702,170 @@ function buildDegradedAgentOverlay(seed: number): Overlay {
   };
 }
 
+/**
+ * A nominal autonomy read (ADR-053) for whichever city the Console asks about.
+ *
+ * The shared handler set registers no `/api/v1/system/autonomy` fixture, so the
+ * request fell through to the unhandled-request guard, which MSW answers with a 500
+ * "Request Handler Error" (`HttpNetworkFrame.errorWith`). Every seeded surface
+ * therefore rendered "Autonomy unknown", and every `refetchAll` spent the
+ * http-client's whole Full-Jitter retry budget on that one path. The body is
+ * validated through `AutonomyResponseSchema` (the schema `getAutonomy` itself
+ * validates with) and follows the gateway (`api/routers/system.py::system_autonomy`):
+ * a `city` query returns only that city's world, and a city the twin does not run
+ * comes back unreachable (`null`, `degraded: true`), never invented.
+ */
+function buildNominalAutonomyOverlay(seed: number): Overlay {
+  const overlayId = "baseline.AutonomyResponse.nominal";
+  const rng = makeRng(seed);
+  const asOf = new Date(Date.UTC(2026, 0, 1) + Math.floor(rng() * 86_400_000)).toISOString();
+  const polls = 120 + Math.floor(rng() * 480);
+  const sensor = {
+    running: true,
+    cities: [...ZCity.options],
+    polls,
+    decisions_triggered: Math.floor(rng() * (polls / 4)),
+  };
+  const worlds = new Map<string, Record<string, unknown>>();
+  for (const city of ZCity.options) {
+    worlds.set(city, {
+      city,
+      sim_time_min: 600 + Math.floor(rng() * 6_000),
+      inventory: {
+        "sku-milk": 40 + Math.floor(rng() * 160),
+        "sku-bread": 20 + Math.floor(rng() * 80),
+      },
+      pending_orders: Math.floor(rng() * 40),
+      fill_rate: 0.9 + Math.floor(rng() * 90) / 1_000,
+      spoilage_rate: Math.floor(rng() * 30) / 1_000,
+      avg_delivery_min: 8 + Math.floor(rng() * 100) / 10,
+      restocks_triggered: Math.floor(rng() * 20),
+      demand_rate: 1 + Math.floor(rng() * 500) / 100,
+      clock_advancing: true,
+      is_synthetic: true,
+      as_of: asOf,
+    });
+  }
+  const bodyFor = (city: string | null): unknown => {
+    const requested = city === null ? [...worlds.keys()] : [city];
+    const served: Record<string, unknown> = {};
+    for (const name of requested) served[name] = worlds.get(name) ?? null;
+    const parsed = AutonomyResponseSchema.safeParse({
+      sensor,
+      worlds: served,
+      degraded: requested.some((name) => !worlds.has(name)),
+      as_of: asOf,
+    });
+    if (!parsed.success) {
+      throw new HarnessDriveError(
+        `overlay "${overlayId}" body failed AutonomyResponseSchema: ${parsed.error.message}`,
+      );
+    }
+    return parsed.data;
+  };
+  // Every shape this overlay can serve is validated now, while the scenario is
+  // seeded, so contract drift fails the seeding step instead of one request.
+  bodyFor(null);
+  for (const city of worlds.keys()) bodyFor(city);
+  bodyFor("city-the-twin-does-not-run");
+  return {
+    id: overlayId,
+    status: 200,
+    matches: (pathname, method) => method === "GET" && pathname === "/api/v1/system/autonomy",
+    body: ({ search }) => bodyFor(search.get("city")),
+  };
+}
+
+/** A decision-detail path carrying a canonical UUID; the id is captured. */
+const DECISION_DETAIL_PATH =
+  /^\/api\/v1\/decisions\/([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})$/;
+
+/**
+ * A decision-detail read the Console's OWN consumer accepts, answered for the
+ * requested id.
+ *
+ * The shared handler (`decisions.GET./api/v1/decisions/:id`) derives its body from
+ * the loose transport schema `DecisionDetailResponse`, which types `decision_id`,
+ * `tier` and `created_at` as bare strings, so the factory emits
+ * `decision_id: "str-..."`. `reshapeDecision` (`src/hooks/use-decision.ts`) then
+ * refuses it against the strict `ConsensusDecision` (`decision_id: ZUuid`), and the
+ * drill-down rendered "Decision unavailable: schema violation: Invalid uuid" (the
+ * e2e-harness failure screenshot for "Reconstruct a decision's rationale"). The
+ * real route (`api/routers/decisions.py`, `GET /{decision_id}` with a `UUID` path
+ * parameter) cannot return that body.
+ *
+ * This overlay derives the body from the seeded strict `ConsensusDecision` fixture
+ * and answers with the REQUESTED id, as the real route does. While the scenario is
+ * seeded the body is checked through BOTH the transport schema and the consumer's
+ * reshape, and refused if either rejects it. Only the id varies per request and
+ * the matcher admits canonical UUIDs only, so that check covers every body served.
+ */
+function buildDecisionDetailOverlay(seed: number): Overlay {
+  const overlayId = "baseline.DecisionDetailResponse.consumer-valid";
+  const fixture = ConsensusDecisionSchema.safeParse(
+    buildFixture({
+      capabilityId: "decisions.GET./api/v1/decisions/:id",
+      schemaId: "ConsensusDecision",
+      seed,
+    }).body,
+  );
+  if (!fixture.success) {
+    throw new HarnessDriveError(
+      `overlay "${overlayId}" base fixture failed ConsensusDecision: ${fixture.error.message}`,
+    );
+  }
+  const decision = fixture.data;
+  const auditId = decision.audit_id ?? deterministicUuid(makeRng(seed));
+  const detailFor = (decisionId: string): DecisionDetailResponse => {
+    const parsed = DecisionDetailResponseSchema.safeParse({
+      audit_id: auditId,
+      decision_id: decisionId,
+      tier: decision.tier,
+      phase_reached: decision.phase_reached,
+      confidence: decision.confidence,
+      escalated: decision.escalated_to_human ?? false,
+      proposals: decision.proposals,
+      selected_action: decision.selected_action,
+      pareto_weights: decision.pareto_weights,
+      human_override: decision.human_override ?? null,
+      audit_trace: decision.audit_trace,
+      created_at: decision.timestamp,
+      debate_rounds: decision.debate_rounds,
+      pareto_front: decision.pareto_front ?? null,
+      context_messages: decision.context_messages,
+      execution_confirmations: decision.execution_confirmations,
+    });
+    if (!parsed.success) {
+      throw new HarnessDriveError(
+        `overlay "${overlayId}" body failed Domain_Schema "DecisionDetailResponse": ` +
+          parsed.error.message,
+      );
+    }
+    return parsed.data;
+  };
+  const probe = detailFor(decision.decision_id);
+  try {
+    reshapeDecision(probe, decision.decision_id);
+  } catch (error) {
+    throw new HarnessDriveError(
+      `overlay "${overlayId}" body is refused by the Console's own reshape: ` +
+        `${error instanceof Error ? error.message : String(error)}`,
+    );
+  }
+  return {
+    id: overlayId,
+    status: 200,
+    matches: (pathname, method) => method === "GET" && DECISION_DETAIL_PATH.test(pathname),
+    body: ({ pathname }) => {
+      const requested = DECISION_DETAIL_PATH.exec(pathname)?.[1];
+      if (requested === undefined) {
+        throw new HarnessDriveError(`overlay "${overlayId}" was asked to answer ${pathname}`);
+      }
+      return detailFor(requested);
+    },
+  };
+}
+
 // ---------------------------------------------------------------------------
 // Stream driving
 // ---------------------------------------------------------------------------
@@ -670,6 +906,43 @@ function emitBurst(
     socket.driverEmit(buildWsFrame({ channel, seq, payload: source.payload, offsetMs: seq }));
   }
   return startSeq + count;
+}
+
+/**
+ * Deliver ONE schema-violating payload on `channel` at sequence `seq` (the
+ * channel's next), returning the sequence after it. The envelope stays valid, so
+ * the frame reaches the per-channel schema path, where the Console must reject the
+ * payload (Req 8.2).
+ *
+ * This replaces the stream driver's `injectSchemaViolation` for the same reason
+ * `emitBurst` threads `startSeq`: the driver stamps a FIXED sequence (one past its
+ * scripted run), and once this page has advanced the channel beyond it, as every
+ * `recover` burst does, the multiplex dedups the frame away before any schema
+ * check runs. The violation would then be silently absent, not rejected.
+ */
+function emitSchemaViolation(
+  driver: InstalledStreamDriver,
+  channel: StreamChannel,
+  seq: number,
+): number {
+  const schemaId = channelSchemaId(channel);
+  if (schemaId === null) {
+    throw new HarnessDriveError(
+      `channel "${channel}" is open-shape (no Domain_Schema), so it cannot host a ` +
+        "deterministic schema violation",
+    );
+  }
+  const socket = driver.transport.latestSocket(isFirehoseWsUrl);
+  if (socket === undefined) {
+    throw new HarnessDriveError(
+      `no firehose WebSocket has connected yet, so no schema violation can be delivered on ` +
+        `"${channel}"; mount the subscribing surface first`,
+    );
+  }
+  if (socket.readyState !== 1) socket.driverOpen();
+  const payload = buildSchemaViolatingFixture(schemaId, driver.seed);
+  socket.driverEmit(buildWsFrame({ channel, seq, payload, offsetMs: seq }));
+  return seq + 1;
 }
 
 // ---------------------------------------------------------------------------
@@ -898,9 +1171,24 @@ export async function installAtlasHarness(): Promise<AtlasHarness> {
 
   const seqFor = (channel: StreamChannel): number => nextSeq.get(channel) ?? 1;
 
-  /** Re-fetch every active query so a re-seeded/faulted edge is what renders. */
+  /**
+   * Re-fetch every active query so a re-seeded/faulted edge is what renders.
+   * Bounded: a refetch that never settles is refused naming the query keys still
+   * fetching (or paused), instead of hanging the driving spec until its timeout.
+   */
   const refetchAll = async (): Promise<void> => {
-    await queryClient.invalidateQueries();
+    await settleWithin(queryClient.invalidateQueries(), REFETCH_DEADLINE_MS, () => {
+      const cache = queryClient.getQueryCache();
+      const keysWith = (fetchStatus: "fetching" | "paused"): string =>
+        cache
+          .findAll({ fetchStatus })
+          .map((query) => JSON.stringify(query.queryKey))
+          .join(", ");
+      return (
+        `refetch did not settle within ${REFETCH_DEADLINE_MS}ms; ` +
+        `still fetching: [${keysWith("fetching")}]; paused: [${keysWith("paused")}]`
+      );
+    });
     await sleep(SETTLE_MS);
   };
 
@@ -908,8 +1196,53 @@ export async function installAtlasHarness(): Promise<AtlasHarness> {
   const reseedWorker = async (seed: number, scenarioId: string): Promise<void> => {
     if (handle.seed === seed) return;
     await handle.stop();
-    handle = await startHarness({ seed, scenarioId });
+    handle = await settleWithin(
+      startHarness({ seed, scenarioId }),
+      WORKER_RESTART_DEADLINE_MS,
+      () =>
+        `the MSW worker did not restart at seed ${seed} for ${scenarioId} within ` +
+        `${WORKER_RESTART_DEADLINE_MS}ms`,
+    );
     note(`worker re-seeded to ${seed} for ${scenarioId}`);
+  };
+
+  /** True from a `ws-flap` until a `recover` has let the flap's reconnects land. */
+  let flapAwaitingRecovery = false;
+
+  const firehoseSocketCount = (): number =>
+    driver.transport.sockets().filter((socket) => isFirehoseWsUrl(socket.url)).length;
+
+  /**
+   * Wait until the firehose client has stopped constructing sockets.
+   *
+   * A flap leaves ws-multiplex with Full-Jitter reconnect timers in flight (one per
+   * server-side close). Driving the recovery burst into whichever socket exists at
+   * that instant races them: a timer that fires afterwards constructs a fresh
+   * socket, the client drops back to `connecting` with nobody to accept it, and a
+   * recovered surface latches not-live. So recovery waits until no new socket has
+   * appeared for RECONNECT_QUIET_MS, and refuses, rather than guessing which socket
+   * the client will keep, if sockets are still appearing at the deadline.
+   */
+  const awaitReconnectsSettled = async (): Promise<void> => {
+    const deadline = performance.now() + RECONNECT_SETTLE_DEADLINE_MS;
+    let seen = firehoseSocketCount();
+    let quietSince = performance.now();
+    for (;;) {
+      await sleep(POLL_MS);
+      const now = performance.now();
+      const count = firehoseSocketCount();
+      if (count !== seen) {
+        seen = count;
+        quietSince = now;
+      }
+      if (now - quietSince >= RECONNECT_QUIET_MS) return;
+      if (now >= deadline) {
+        throw new HarnessDriveError(
+          `the firehose client was still opening sockets ${RECONNECT_SETTLE_DEADLINE_MS}ms ` +
+            `after a flap (${count} constructed), so recovery cannot tell which one it keeps`,
+        );
+      }
+    }
   };
 
   /** Deliver the scenario's declared channels; record any that cannot be driven. */
@@ -937,6 +1270,8 @@ export async function installAtlasHarness(): Promise<AtlasHarness> {
 
     // The populated baseline every scenario starts from.
     edge.addOverlay(buildHealthyPostureOverlay());
+    edge.addOverlay(buildNominalAutonomyOverlay(scenario.seed));
+    edge.addOverlay(buildDecisionDetailOverlay(scenario.seed));
 
     // Scenario-specific seeded fixtures the shared handler set cannot express.
     if (scenario.kind === "jtbd" && scenario.descriptor.job === "identify-degraded-agent") {
@@ -1029,12 +1364,13 @@ export async function installAtlasHarness(): Promise<AtlasHarness> {
               "schema violation cannot be injected",
           );
         }
-        driver.injectSchemaViolation(schemaBound);
+        nextSeq.set(schemaBound, emitSchemaViolation(driver, schemaBound, seqFor(schemaBound)));
         break;
       }
       case "ws-flap": {
         const channel = schemaBound ?? "decision";
         driver.flap(channel, 2);
+        flapAwaitingRecovery = true;
         break;
       }
       case "offline":
@@ -1047,6 +1383,11 @@ export async function installAtlasHarness(): Promise<AtlasHarness> {
       case "recover":
         edge.clearFaults();
         await refetchAll();
+        if (flapAwaitingRecovery) {
+          // Accept the socket the client keeps, not one a later reconnect orphans.
+          await awaitReconnectsSettled();
+          flapAwaitingRecovery = false;
+        }
         driveDeclaredChannels(scenario, scenarioId);
         break;
       default:

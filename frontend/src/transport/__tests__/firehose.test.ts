@@ -144,6 +144,44 @@ describe("createFirehose", () => {
     expect(warn).toHaveBeenCalledOnce();
   });
 
+  it("reports a schema-failing payload to rejection subscribers instead of dropping it", () => {
+    installWebSocket();
+    vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    const firehose = createFirehose({
+      host: "api.synapse.test",
+      topics: ["demand"],
+      city: "bengaluru",
+    });
+    const listener = vi.fn();
+    const rejected = vi.fn();
+    firehose.on("demand", listener);
+    const stopReporting = firehose.onRejection(rejected);
+    sockets[0]?.open();
+
+    const poison = {
+      topic: "demand",
+      seq: 21,
+      ts: "2026-06-06T00:00:00.000Z",
+      payload: { sku_id: "sku-1" },
+    };
+    sockets[0]?.message(poison);
+
+    // The poison payload never reaches app code, and the rejection names what failed.
+    expect(listener).not.toHaveBeenCalled();
+    expect(rejected).toHaveBeenCalledTimes(1);
+    expect(rejected).toHaveBeenCalledWith({
+      channel: "demand",
+      seq: 21,
+      reason: expect.stringContaining("store_id"),
+    });
+
+    // Unsubscribing stops the reports; the payload is still kept from app code.
+    stopReporting();
+    sockets[0]?.message({ ...poison, seq: 22 });
+    expect(rejected).toHaveBeenCalledTimes(1);
+    expect(listener).not.toHaveBeenCalled();
+  });
+
   it("delegates state subscriptions and close to the multiplex client", () => {
     installWebSocket();
     const firehose = createFirehose({

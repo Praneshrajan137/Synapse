@@ -33,8 +33,12 @@ import { DOMAIN_SCHEMA_REGISTRY, getSchema, type SchemaId } from "../schema-regi
 /** Every `schemaId` bound in the shared registry — the schema-bound input space. */
 const REGISTERED_SCHEMA_IDS: readonly SchemaId[] = Object.keys(DOMAIN_SCHEMA_REGISTRY);
 
-/** An arbitrary drawing a registered schema id paired with a 32-bit seed. */
-const registeredRequest = fc.record<Pick<FixtureRequest, "schemaId" | "seed">>({
+/**
+ * An arbitrary drawing a registered schema id paired with a 32-bit seed. Typed by
+ * what it DRAWS (a registered, non-null `SchemaId`), not by `FixtureRequest`, whose
+ * `schemaId` is nullable to admit schema-less capabilities (Req 2.4).
+ */
+const registeredRequest = fc.record<{ schemaId: SchemaId; seed: number }>({
   schemaId: fc.constantFrom(...REGISTERED_SCHEMA_IDS),
   seed: fc.integer({ min: 0, max: 0xffffffff }),
 });

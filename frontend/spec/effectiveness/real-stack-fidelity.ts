@@ -461,7 +461,8 @@ function main(): void {
 
   const specs = loadResultsSpecs(resultsPath);
 
-  const jobs: FidelityReport["jobs"] = [];
+  // Built mutably here; published read-only through `FidelityReport.jobs`.
+  const jobs: FidelityReport["jobs"][number][] = [];
   const divergences: Divergence[] = [];
 
   for (const binding of JTBD_FIXTURES) {
