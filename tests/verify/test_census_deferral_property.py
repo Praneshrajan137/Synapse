@@ -71,7 +71,25 @@ _JOBS: Final = st.sampled_from(
         "frontend.yml::quality step 8 (Vitest unit + property tests)",
     ]
 )
-_RUNS: Final = st.sampled_from(["34590696403", "run 34686422478 (sha 27a74a3)", "35125413492"])
+#: Each names a GitHub Actions run id, so each harvests a ``[~]``. The oracle reads membership
+#: here, never the census's own pattern.
+_RUN_VALUES: Final[tuple[str, ...]] = (
+    "run 34590696403",
+    "run 34686422478 (sha 27a74a3)",
+    "run `35125413492` (SYNAPSE CI, sha 5eef6ee) -- shard 3/4 `success`",
+)
+_RUNS: Final = st.sampled_from(_RUN_VALUES)
+#: Each names NO run id -- session 11's line, a bare number, seven digits, an ordinal, a sha --
+#: so each leaves a ``[~]`` exactly as unharvested as a missing line does.
+_NO_RUNS: Final = st.sampled_from(
+    [
+        "none yet -- pushed at the session-11 wave-3 head; no run has read it yet",
+        "34590696403",
+        "run 1234567",
+        "run 2",
+        "sha 5eef6ee",
+    ]
+)
 _REASONS: Final = st.sampled_from(
     [
         "structures 2/4/5 deferred by the R5.4 re-cut; none introduces a replenishment delay",
@@ -182,7 +200,9 @@ def _truth(ledger: _Ledger) -> _Truth:
                 authorable.append(task_id)
         elif leaf.mark == "~":
             pending.append(task_id)
-            if leaf.last_checked is None:
+            # Harvested only by a value BUILT as a run id: no line and a line naming none
+            # are one refusal.
+            if leaf.last_checked not in _RUN_VALUES:
                 findings.add(("unharvested-pending", subject))
         if leaf.reason is not None:
             if leaf.mark != " ":
@@ -247,20 +267,22 @@ def _leaf(
     )
 
 
-#: Any state the vocabulary allows, including every malformed deferral.
+#: Any state the vocabulary allows, including every malformed deferral and every harvest line
+#: that names no run.
 _ANY_LEAF: Final = st.sampled_from([" ", "~", "x"]).flatmap(
     lambda mark: _leaf(
         mark,
         discharge=st.none() | _JOBS,
-        last_checked=st.none() | _RUNS,
+        last_checked=st.none() | _RUNS | _NO_RUNS,
         reason=st.none() | _REASONS | _NO_REASON,
     )
 )
 #: A well-formed deferral: open, reasoned, not gated.
 _DEFERRED: Final = _leaf(" ", discharge=st.none(), last_checked=st.none(), reason=_REASONS)
-#: A done leaf, keeping whatever discharge record it earned.
+#: A done leaf, keeping whatever discharge record it earned. It owes no harvest, so a line
+#: naming no run is no finding on it.
 _DONE: Final = _leaf(
-    "x", discharge=st.none() | _JOBS, last_checked=st.none() | _RUNS, reason=st.none()
+    "x", discharge=st.none() | _JOBS, last_checked=st.none() | _RUNS | _NO_RUNS, reason=st.none()
 )
 #: Neither deferred nor refused.
 _CLEAN: Final = st.one_of(
@@ -274,6 +296,7 @@ _UNFINISHING: Final = st.one_of(
     _leaf(" ", discharge=_JOBS, last_checked=st.none(), reason=st.none()),  # CI-gated
     _leaf("~", discharge=_JOBS, last_checked=_RUNS, reason=st.none()),  # pending, no finding
     _leaf("~", discharge=_JOBS, last_checked=st.none(), reason=st.none()),  # unharvested
+    _leaf("~", discharge=_JOBS, last_checked=_NO_RUNS, reason=st.none()),  # names no run id
     _leaf(" ", discharge=st.none(), last_checked=st.none(), reason=_NO_REASON),  # no reason
     _leaf(" ", discharge=_JOBS, last_checked=st.none(), reason=_REASONS),  # deferred, gated
     _leaf("x", discharge=st.none(), last_checked=st.none(), reason=_REASONS),  # deferred, done
@@ -538,7 +561,7 @@ _NO_DEFERRALS: Final[str] = """# Plan
 - [ ] 3. Parent with mixed children
   - [~] 3.1 Authored, discharge owed
     - discharge: ci.yml::uplift-verify
-    - last-checked: 34590696403
+    - last-checked: run 34590696403
   - [ ] 3.2 Open and authorable, carrying task 9.12's wrapped prose line
     - Also pins that a missing key is refused rather than defaulted, and that every
       `deferred:` entry is prose naming its owning task

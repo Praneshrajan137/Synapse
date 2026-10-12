@@ -28,8 +28,11 @@ Three marks, because the honesty contract has three states (I-7)
            that it works is owed by the job named in its ``discharge:`` line.
            Not a pass. "Authored and diagnostics-clean, not executed" is a
            legitimate result; recording it as ``[x]`` is not. **A ``[~]`` also
-           owes a ``last-checked:`` sub-bullet naming the run its discharge job
-           was last read at** -- see ``unharvested-pending`` below.
+           owes a ``last-checked:`` sub-bullet naming, by its GitHub Actions
+           run id, the run its discharge job was last read at**:
+           ``last-checked: run 36976629141 (SYNAPSE CI, sha 5eef6ee) -- ...``.
+           A value naming no run id harvests nothing -- see
+           ``unharvested-pending`` below.
 ``[x]``    done **and** discharged
 =========  ==================================================================
 
@@ -94,15 +97,21 @@ rule                      verdict what it means
                                   by its 1-based line number
 ``duplicate-id``          2       two records share one task id, so a count over
                                   ids is not a count over records
-``unharvested-pending``   2       a ``[~]`` records no ``last-checked:`` run for
-                                  its discharge job. A mark whose proof has
-                                  silently arrived is indistinguishable, from the
-                                  ledger alone, from one still waiting -- task
-                                  26.1 sat dischargeable for two sessions while
-                                  every sweep reported green (steering guardrail
-                                  G4). Static by design: asking GitHub instead
-                                  would move this census out of the LOCAL
-                                  allow-list it sits in as a ~1s file reader
+``unharvested-pending``   2       a ``[~]`` names no run id its discharge job was
+                                  read at: it has no ``last-checked:`` line, or
+                                  the first one's value carries no GitHub Actions
+                                  run id -- the word ``run``, whitespace, then an
+                                  integer of at least 8 digits, backticks
+                                  optional, anywhere in the value. The detail
+                                  says which, and quotes what it found. A mark
+                                  whose proof has silently arrived is
+                                  indistinguishable, from the ledger alone, from
+                                  one still waiting -- task 26.1 sat
+                                  dischargeable for two sessions while every
+                                  sweep reported green (steering guardrail G4).
+                                  Static by design: asking GitHub instead would
+                                  move this census out of the LOCAL allow-list
+                                  it sits in as a ~1s file reader
 ``deferred-marked-done``  2       a ``[x]`` or ``[~]`` leaf carries ``deferred:``.
                                   Deferral is a state of work never done, so the
                                   line contradicts the mark and the census will
@@ -216,13 +225,39 @@ _DISCHARGE_RE: Final[re.Pattern[str]] = re.compile(r"^discharge:\s*(?P<job>\S.*?
 #: asserts the artifact exists. That is derivable from the file alone, and it converts
 #: "remember to check" into a thing a reader can audit -- which is the difference between
 #: task 26.1 sitting dischargeable for two sessions and it being caught on the next open.
-_HARVEST_RE: Final[re.Pattern[str]] = re.compile(
-    r"^last-checked:\s*(?P<run>\S.*?)\s*$", re.I
+#:
+#: The line is necessary, not sufficient: its value must also name a run (``_RUN_ID_RE``).
+_HARVEST_RE: Final[re.Pattern[str]] = re.compile(r"^last-checked:\s*(?P<run>\S.*?)\s*$", re.I)
+
+#: What makes a ``last-checked:`` value a harvest rather than a sentence: it names a GitHub
+#: Actions run id -- the word ``run``, whitespace, then an integer of at least 8 digits,
+#: optionally backticked, anywhere in the value: ``run 36976629141 (SYNAPSE CI, sha 5eef6ee)
+#: -- ...``, ``run `34686422504```, ``Uplift Proof run 36860454801``.
+#:
+#: WHY ANY NON-EMPTY VALUE WAS NOT ENOUGH. Session 11 wrote ``last-checked: none yet --
+#: pushed at the session-11 wave-3 head; no run has read it yet`` on five leaves, and the
+#: census accepted all five: the artifact existed and named nothing a later reader could
+#: open. The word ``run`` is required, so a bare number -- a date written ``20261002``, a
+#: count -- is not read as an id. Eight digits is the floor, so an ordinal is not read as one
+#: either (this ledger's own prose calls two measurements ``run 1`` and ``run 2``), nor a
+#: workflow run NUMBER, which is unique only within its workflow; every id this ledger
+#: records after the word ``run`` has eleven. ``(?!\w)`` makes the id a whole integer, not
+#: the digits at the head of a sha. The closing backtick is optional because the emphasis
+#: stripping removes it when the id ends the line. ASCII, so only ``0-9`` are digits. Other
+#: spellings (``run #<id>``, ``runs <id>``) are refused too, deliberately: a false refusal
+#: costs one edit the detail spells out, and a false acceptance is what cost G4 its force.
+_RUN_ID_RE: Final[re.Pattern[str]] = re.compile(
+    r"\brun\s+`?(?P<id>\d{8,})`?(?!\w)", re.IGNORECASE | re.ASCII
 )
 
+#: How much of a ``last-checked:`` value an ``unharvested-pending`` detail quotes: enough to
+#: find the line in the ledger, not so much that a paragraph-long line floods the report.
+_QUOTE_LIMIT: Final[int] = 60
+
 #: ``- deferred: <reason>``: a leaf taken out of scope, keyed exactly as ``discharge:`` is.
-#: Unlike the two patterns above, the value may be EMPTY here -- a reasonless line must be
-#: seen in order to be refused by name (``deferred-without-reason``), not silently skipped.
+#: Unlike ``_DISCHARGE_RE`` and ``_HARVEST_RE``, the value may be EMPTY here -- a reasonless
+#: line must be seen in order to be refused by name (``deferred-without-reason``), not
+#: silently skipped.
 _DEFERRED_RE: Final[re.Pattern[str]] = re.compile(r"^deferred:(?P<reason>.*)$", re.I)
 
 #: A body entry that is itself a sub-bullet, as opposed to a wrapped prose line that happens
@@ -324,8 +359,8 @@ class LedgerRecord(BaseModel):
     deferred: str | None
     #: The job owed the proof, from a ``discharge:`` sub-bullet. ``None`` = no gate.
     discharge: str | None = None
-    #: The run a ``[~]``'s discharge job was last read at, from a ``last-checked:``
-    #: sub-bullet. ``None`` on a ``[~]`` is the unharvested state G4 forbids at close.
+    #: The first ``last-checked:`` value in the body, as written once emphasis is stripped.
+    #: ``None`` = no such line. Holding a value is not being harvested: :attr:`run_id` is.
     last_checked: str | None = None
     #: Populated by the id tree, not by indentation.
     is_leaf: bool = True
@@ -351,13 +386,26 @@ class LedgerRecord(BaseModel):
         return self.discharge is not None
 
     @property
+    def run_id(self) -> str | None:
+        """The GitHub Actions run id the ``last-checked:`` value names, or ``None`` (G4).
+
+        ``None`` both with no line and with a line naming no run id -- ``none yet``, a bare
+        number, an ordinal. The id is what makes the artifact auditable: it is the one thing
+        in the line a later reader can go and open.
+        """
+        if self.last_checked is None:
+            return None
+        match = _RUN_ID_RE.search(self.last_checked)
+        return None if match is None else match.group("id")
+
+    @property
     def is_unharvested(self) -> bool:
-        """A ``[~]`` that records no run its discharge job was read at (G4).
+        """A ``[~]`` whose ``last-checked:`` names no run id its discharge job was read at (G4).
 
         Only ``[~]`` can be unharvested. An open leaf owes no proof yet and a done leaf
         has already had one, so neither carries the obligation.
         """
-        return self.is_pending and self.last_checked is None
+        return self.is_pending and self.run_id is None
 
     @property
     def is_deferred(self) -> bool:
@@ -444,10 +492,10 @@ class LedgerCensus(BaseModel):
     gated_jobs: dict[str, str]
     #: Every ``[~]`` leaf and the job that owes its proof.
     pending_discharges: tuple[str, ...]
-    #: ``[~]`` leaves recording no run their discharge job was read at (G4). Non-passing:
-    #: a mark whose discharge has silently arrived is indistinguishable, from the ledger
-    #: alone, from one still waiting -- which is how task 26.1 sat dischargeable for two
-    #: sessions while every sweep reported green.
+    #: ``[~]`` leaves whose ``last-checked:`` names no run id, or that carry no such line
+    #: (G4). Non-passing: a mark whose discharge has silently arrived is indistinguishable,
+    #: from the ledger alone, from one still waiting -- which is how task 26.1 sat
+    #: dischargeable for two sessions while every sweep reported green.
     unharvested: tuple[str, ...]
     #: Open leaves carrying a REASONED ``deferred:`` sub-bullet: out of scope, reason on the
     #: leaf. Terminal -- never authorable, gated, offered or a barrier. Counted inside
@@ -530,7 +578,13 @@ def _discharge_of(body: tuple[str, ...]) -> str | None:
 
 
 def _last_checked_of(body: tuple[str, ...]) -> str | None:
-    """The run a ``[~]``'s discharge job was last read at, or ``None`` (G4)."""
+    """The first ``last-checked:`` value in a body, as written, or ``None``.
+
+    Keyed as :func:`_discharge_of` is -- emphasis stripped, case-insensitive, first match
+    wins -- so a later line cannot rescue a first one that names no run, and a
+    ``previously:`` line is history, never the record. Whether the value names a run is
+    :attr:`LedgerRecord.run_id`'s question, not this function's (G4).
+    """
     for entry in body:
         match = _HARVEST_RE.match(entry.strip(_EMPHASIS))
         if match is not None:
@@ -664,6 +718,31 @@ def extract_paths(body: tuple[str, ...]) -> tuple[str, ...]:
 # ---------------------------------------------------------------------------
 
 
+def _quoted(text: str) -> str:
+    """``text`` as a finding quotes it: ``repr``'d, cut to :data:`_QUOTE_LIMIT` characters."""
+    shown = text if len(text) <= _QUOTE_LIMIT else text[: _QUOTE_LIMIT - 3] + "..."
+    return repr(shown)
+
+
+def _unharvested_detail(record: LedgerRecord) -> str:
+    """Why a ``[~]`` is unharvested, telling a missing line from a line that names no run."""
+    found = (
+        "carries no `last-checked:` line"
+        if record.last_checked is None
+        else f"its `last-checked:` value, {_quoted(record.last_checked)}, names no run id"
+    )
+    return (
+        f"{record.name} at line {record.line} is `[~]` and {found}, so nothing records where "
+        f"its discharge job ({record.discharge or 'no discharge declared'}) was last read. A "
+        "harvest names the run it read -- `last-checked: run <id> (...)`, <id> the GitHub "
+        "Actions run id: the word `run`, then an integer of at least 8 digits, backticks "
+        "optional. A mark whose discharge has silently arrived is indistinguishable, from the "
+        "ledger alone, from one still waiting -- task 26.1 sat dischargeable for two sessions "
+        "while every sweep reported green. Read the newest run that names that job and record "
+        "its id; checking without writing it down does NOT satisfy this (G4)"
+    )
+
+
 def census(
     records: tuple[LedgerRecord, ...],
     *,
@@ -777,15 +856,7 @@ def census(
                 rule="unharvested-pending",
                 outcome=CensusOutcome.UNAVAILABLE,
                 subject=record.name,
-                detail=(
-                    f"line {record.line} is `[~]` and records no `last-checked:` run for its "
-                    f"discharge job ({record.discharge or 'no discharge declared'}). A mark "
-                    "whose discharge has silently arrived is indistinguishable, from the "
-                    "ledger alone, from one still waiting -- task 26.1 sat dischargeable for "
-                    "two sessions while every sweep reported green. Read the newest run that "
-                    "names that job, then record it as a `last-checked:` sub-bullet. This is "
-                    "NOT satisfied by checking and not writing it down (G4)"
-                ),
+                detail=_unharvested_detail(record),
             )
         )
     for record in leaves:
@@ -1008,7 +1079,7 @@ def format_report(report: LedgerCensus, *, batch: int = DEFAULT_BATCH) -> list[s
         f"  authorable    : {len(report.authorable)}",
         f"  CI-gated open : {len(report.gated)}",
         f"  deferred      : {report.deferred}   (out of scope, reason recorded - never offered)",
-        f"  unharvested   : {len(report.unharvested)}   (`[~]` with no last-checked: run - G4)",
+        f"  unharvested   : {len(report.unharvested)}   (`[~]` naming no run id - G4)",
         f"  complete      : {'yes' if report.complete else 'no'}",
         f"  status        : {report.outcome.value}  (exit {report.exit_code})",
         f"  reason        : {report.detail}",
@@ -1033,7 +1104,7 @@ def format_report(report: LedgerCensus, *, batch: int = DEFAULT_BATCH) -> list[s
     for entry in report.unharvested:
         lines.append(
             f"  [!!] UNHARVESTED: {entry} -- read the newest run naming that job, then "
-            "record it as a `last-checked:` sub-bullet (G4)"
+            "record its id as a `last-checked: run <id> ...` sub-bullet (G4)"
         )
     for finding in report.findings:
         lines.append(f"  {_MARKER[finding.outcome]} {finding.rule}: {finding.detail}")

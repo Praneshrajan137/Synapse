@@ -2,10 +2,9 @@
 
 Feature: decision-quality-proof, session-protocol revision.
 
-Locus: ``ci.yml::uplift-verify`` fast step, which runs
-``pytest tests/uplift tests/verify -m "not slow"``. These tests are pure string and
-``Path`` work, so they are deliberately **not** slow-marked: a slow marker here would move
-them to the slow step and buy nothing.
+Locus: ``ci.yml::uplift-verify-fast-4``, which collects ``tests/verify/test_[p-z]*`` with
+``-m "not slow"``. These tests are pure string and ``Path`` work, so they are deliberately
+**not** slow-marked: a slow marker here would move them to the slow job and buy nothing.
 
 The three cases that matter are the three the predecessor one-liner got wrong: a leaf
 nested deeper than two spaces, a childless checkpoint parent, and a CI-gated task that
@@ -45,7 +44,7 @@ _LEDGER = """# Plan
   - [~] 3.1 Authored, discharge owed
     - File: `uplift/regret.py`
     - discharge: ci.yml::uplift-verify slow step
-    - last-checked: 34590696403
+    - last-checked: run 34590696403
   - [ ] 3.2 Open and authorable
     - Files: `digital_twin/simulation/engine.py`
   - [ ] 3.3 Open but CI-gated
@@ -102,6 +101,26 @@ def test_pending_is_not_counted_as_done() -> None:
     assert report.pending == 1
     assert "3.1 -> ci.yml::uplift-verify slow step" in report.pending_discharges
     assert "3.1" not in report.authorable
+
+
+def test_a_pending_leaf_whose_last_checked_names_no_run_id_is_reported_by_name() -> None:
+    """Session 11's ``none yet``, in the fixture's shape: refused, and the report says why.
+
+    Any non-empty value used to harvest, so this line once passed. The human report must now
+    count the leaf, name it, say its line names no run id, and still name the job owed.
+    """
+    text = _LEDGER.replace("last-checked: run 34590696403", "last-checked: none yet")
+    assert text != _LEDGER, "the fixture must carry the harvest line this test replaces"
+    report = census(parse_records(text), spec="fixture", source="fixture")
+    assert report.unharvested == ("3.1 -> ci.yml::uplift-verify slow step",)
+    assert report.outcome is CensusOutcome.UNAVAILABLE
+    assert report.exit_code == 2
+
+    printed = "\n".join(format_report(report))
+    assert "  unharvested   : 1 " in printed
+    assert "[!!] UNHARVESTED: 3.1 -> ci.yml::uplift-verify slow step" in printed
+    assert 'unharvested-pending: task 3.1 "Authored, discharge owed" at line ' in printed
+    assert "'none yet', names no run id" in printed
 
 
 def test_an_undefined_mark_is_unavailable_not_a_guess() -> None:
