@@ -1231,8 +1231,20 @@ export async function installAtlasHarness(): Promise<AtlasHarness> {
    * Re-fetch every active query so a re-seeded/faulted edge is what renders.
    * Bounded: a refetch that never settles is refused naming the query keys still
    * fetching (or paused), instead of hanging the driving spec until its timeout.
+   *
+   * In-flight queries are cancelled first. A query still on its first fetch holds no
+   * data, and react-query answers a refetch of such a query with the fetch already in
+   * flight rather than a new one (query-core 5.100.11, `Query.fetch`). An attempt the
+   * previous MSW worker took and, stopped by `reseedWorker`, will never answer would
+   * then hold this refetch until its deadline -- measured on Frontend CI run
+   * 38291036628, where `["system-autonomy","bengaluru"]` never settled. Cancelling
+   * rejects every in-flight fetch at once and reverts its query to idle (the orphaned
+   * request itself may stay pending; no query waits on it any more), so the
+   * invalidation fetches each active query afresh from the edge as now seeded, and
+   * nothing fetched against the previous seed or fault can land afterwards.
    */
   const refetchAll = async (): Promise<void> => {
+    await queryClient.cancelQueries();
     await settleWithin(queryClient.invalidateQueries(), REFETCH_DEADLINE_MS, () => {
       const cache = queryClient.getQueryCache();
       const keysWith = (fetchStatus: "fetching" | "paused"): string =>
