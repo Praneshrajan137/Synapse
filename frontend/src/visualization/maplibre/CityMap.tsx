@@ -1,9 +1,9 @@
 import type { LayersList } from "@deck.gl/core";
 import { DeckGL } from "@deck.gl/react";
 import { useCityStore } from "@state/city.store";
-import maplibregl, { type Map as MapLibreMap } from "maplibre-gl";
+import * as maplibregl from "maplibre-gl";
 import { useEffect, useRef } from "react";
-import { buildBasemapStyle, registerPMTilesProtocol } from "./basemap";
+import { buildBasemapStyle, prepareMapLibre } from "./basemap";
 import "maplibre-gl/dist/maplibre-gl.css";
 
 const TILES_URL = import.meta.env.VITE_TILES_URL ?? "/tiles/india.pmtiles";
@@ -29,7 +29,7 @@ const CITY_VIEWS: Record<string, CityView> = {
  */
 export function CityMap({ layers = [], height = 420 }: CityMapProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
-  const mapRef = useRef<MapLibreMap | null>(null);
+  const mapRef = useRef<maplibregl.Map | null>(null);
   const city = useCityStore((s) => s.city);
   // Safe lookup: BENGALURU_VIEW is the named-constant fallback so the
   // expression cannot be undefined and we don't need a non-null assertion
@@ -37,7 +37,9 @@ export function CityMap({ layers = [], height = 420 }: CityMapProps) {
   const view: CityView = CITY_VIEWS[city] ?? BENGALURU_VIEW;
 
   useEffect(() => {
-    registerPMTilesProtocol();
+    // maplibre-gl v6 needs its worker URL before the first Map exists, and the
+    // pmtiles protocol before the style loads; both are set once per page.
+    prepareMapLibre();
     if (!containerRef.current || mapRef.current) return;
     const map = new maplibregl.Map({
       container: containerRef.current,

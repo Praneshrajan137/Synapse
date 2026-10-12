@@ -1,11 +1,12 @@
 import { AGENT_NAMES, type AgentMetrics, type AgentName } from "@domain/agent-health";
-import { ConfidenceChip, PageHeader, UniversalStateView } from "@ds/compounds";
+import { ConfidenceChip, DataPathNotice, PageHeader, UniversalStateView } from "@ds/compounds";
 import { Badge } from "@ds/primitives";
 import { useSynapseApi } from "@hooks/use-synapse-api";
 import { useUniversalState } from "@hooks/use-universal-state";
 import { fmt } from "@lib/formatters";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
+import { surfaceDataPath } from "../data-paths";
 
 const TONE_FOR_STATUS = (status: string): "success" | "warning" | "danger" | "neutral" => {
   if (status === "healthy") return "success";
@@ -32,12 +33,30 @@ export function AgentCouncil() {
     itemCount: agentCount,
   });
 
+  // R3.5. The board reads an agent's transport health, which is a different
+  // question from whether that agent serves a real published checkpoint: the
+  // health payload carries no model provenance, so a `status: "healthy"` tile
+  // says nothing about degraded serving. An agent that reports `degraded`
+  // through its own status IS surfaced (below, per tile); anything the payload
+  // does not carry resolves to "unknown" rather than to a nominal read.
+  const reportedDegraded =
+    agents.data === undefined
+      ? null
+      : Object.values(agents.data.agents).some((v) =>
+          (typeof v === "string" ? v : v.status).toLowerCase().includes("degraded"),
+        );
+  const dataPath = surfaceDataPath("agent-council.health", {
+    degraded: agents.isError ? true : reportedDegraded === true ? true : null,
+    synthetic: null,
+  });
+
   return (
     <section className="space-y-4">
       <PageHeader
         title="Agent Council"
         subtitle="8 specialised agents — independent rewards (I-2). Per-agent latency percentiles and calibration coverage are sourced from Prometheus via the gateway."
       />
+      <DataPathNotice state={dataPath} />
       <UniversalStateView
         state={state}
         onRetry={() => void agents.refetch()}

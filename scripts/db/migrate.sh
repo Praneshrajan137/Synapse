@@ -50,6 +50,7 @@ MIGRATIONS=(
   "08_ws5_steering.sql"
   "09_wsA_consensus_city.sql"
   "10_sprint19_outcomes.sql"
+  "11_decision_data_provenance.sql"
 )
 
 # When applying against local repo files (not the container mounts), the source
@@ -65,6 +66,7 @@ declare -A LOCAL_NAME=(
   ["08_ws5_steering.sql"]="06_ws5_steering.sql"
   ["09_wsA_consensus_city.sql"]="07_wsA_consensus_city.sql"
   ["10_sprint19_outcomes.sql"]="08_sprint19_outcomes.sql"
+  ["11_decision_data_provenance.sql"]="09_decision_data_provenance.sql"
 )
 
 # Ledger so re-runs are observable. Idempotent SQL means re-applying is safe; the

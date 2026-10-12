@@ -6,8 +6,15 @@
 #   - the source file(s) that implement it
 #   - the test(s) that prove it
 #
-# CI (.github/workflows/frontend.yml) runs spec/check_fe_invariants.py to
-# fail the build on missing implementations or tests for any entry.
+# CI (.github/workflows/frontend.yml::fe-invariants) runs
+# spec/check_fe_invariants.py, which fails the build on a missing implementation
+# or test for any entry AND -- since the purpose-achievement-audit remediation
+# (R8.7 / R12.4) -- on any `status: enforced` entry with no EXECUTED, non-skipped
+# assertion in the Vitest/Playwright JSON run records. A listed test file merely
+# existing, and an all-skipped run of that file, are both rejected. Out-of-suite
+# enforcement (a CI job rather than an assertion) must be declared, dated, and
+# given a removal condition in infrastructure/quality/fe-invariant-attestation.yaml;
+# an entry that owns an executable suite file can never be declared away there.
 
 version: 1
 invariants:

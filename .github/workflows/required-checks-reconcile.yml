@@ -1,0 +1,114 @@
+# Required-check reconciliation -- the live half of R14 (design E1.7, task 2.14).
+#
+# infrastructure/quality/required-checks.yaml declares which jobs must pass before a
+# merge to `main`. That declaration is in-repo and therefore checkable; whether GitHub
+# actually enforces it is not. This workflow closes the gap the only way it can be
+# closed: it reads `repos/{owner}/{repo}/branches/main/protection` DURING THIS RUN,
+# records that run's read timestamp, and reports.
+#
+# The honesty contract (I-7), enforced by scripts/audit/required_checks_truth.py:
+#
+#   declared set == live contexts        -> VERIFIED    exit 0   run passes
+#   declared set != live contexts        -> MISMATCH    exit 1   run fails, names each difference
+#   branch definitively not protected    -> MISMATCH    exit 1   run fails
+#   response unreadable / not understood -> UNVERIFIED  exit 2   run fails
+#   no read timestamp for this run       -> UNVERIFIED  exit 2   run fails
+#   timestamp equals the committed one   -> UNVERIFIED  exit 2   run fails
+#
+# Only the first row is a pass. An unreadable response NEVER reports a match -- the
+# most likely unreadable case is the least alarming one (the default GITHUB_TOKEN
+# cannot read branch protection without admin scope), and reporting "verified" from a
+# failed read would be exactly the fabrication R14 exists to prevent.
+#
+# This workflow never writes back to required-checks.yaml. The committed
+# `reconciliation:` block stays `status: unverified` until an operator commits a
+# change; the run's conclusion lives in the `required-checks-live` artifact, which
+# carries the read timestamp, the live contexts, and every difference in canonical
+# JSON. A cached or committed copy is not a read (R14.6).
+name: Required checks reconcile
+
+on:
+  schedule:
+    # Weekly, Monday 07:00 UTC (12:30 IST) -- an hour after the live-truth watchdog so
+    # the two do not contend for the runner queue.
+    - cron: "0 7 * * 1"
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+  # Reading branch protection needs admin on the repository. The default GITHUB_TOKEN
+  # does not have it, so the read is attempted with BRANCH_PROTECTION_READ_TOKEN when
+  # an operator has provisioned one and falls back to GITHUB_TOKEN otherwise. A
+  # missing scope surfaces as UNVERIFIED, which is the honest outcome, not a pass.
+
+concurrency:
+  group: required-checks-reconcile
+  cancel-in-progress: false
+
+jobs:
+  reconcile:
+    name: Reconcile declared required checks against live branch protection
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install read dependencies
+        run: python -m pip install --quiet "pyyaml>=6.0,<7.0" "jsonschema>=4.22.0,<5.0" "pydantic>=2.7,<3.0"
+
+      - name: In-repo consistency -- declaration resolves to real jobs (R14.1, R14.2)
+        run: python -m scripts.audit.required_checks_truth --check
+
+      - name: Read live branch protection during THIS run (R14.6)
+        id: read
+        env:
+          GH_TOKEN: ${{ secrets.BRANCH_PROTECTION_READ_TOKEN || secrets.GITHUB_TOKEN }}
+          BRANCH: main
+        run: |
+          # Deliberately no `set -e`: a failed read must be CLASSIFIED by the gate as
+          # UNVERIFIED, not abort this step with an unexplained non-zero. The exit code
+          # and stderr are handed to the gate, which decides. This step therefore ends
+          # on a successful `printf`, and the run's conclusion is produced by the
+          # reconcile step below -- never by a swallowed error here.
+          set -uo pipefail
+          read_at="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          printf 'read_at=%s\n' "$read_at" >> "$GITHUB_OUTPUT"
+          gh api "repos/${GITHUB_REPOSITORY}/branches/${BRANCH}/protection" \
+            > live-protection.json 2> gh-api-error.txt
+          code=$?
+          printf 'read_exit_code=%s\n' "$code" >> "$GITHUB_OUTPUT"
+          printf 'branch-protection read exited %s at %s\n' "$code" "$read_at"
+
+      - name: Reconcile declared vs live (R14.4, R14.5, R14.6)
+        id: reconcile
+        run: |
+          python -m scripts.audit.required_checks_truth \
+            --reconcile \
+            --read-at "${{ steps.read.outputs.read_at }}" \
+            --live-protection live-protection.json \
+            --read-exit-code "${{ steps.read.outputs.read_exit_code }}" \
+            --read-error gh-api-error.txt \
+            --artifact artifacts/required-checks/live.json \
+            --repository "${GITHUB_REPOSITORY}" \
+            --run-id "${GITHUB_RUN_ID}"
+
+      - name: Upload the read and its conclusion
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          # The artifact is the durable record of the read: canonical JSON carrying
+          # read_at, the live contexts (or null when unreadable), every difference, and
+          # the status. Uploaded on failure too -- a MISMATCH or UNVERIFIED conclusion
+          # is precisely the evidence worth keeping.
+          name: required-checks-live
+          path: |
+            artifacts/required-checks/live.json
+            live-protection.json
+            gh-api-error.txt
+          if-no-files-found: warn
+          retention-days: 90

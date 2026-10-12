@@ -50,7 +50,7 @@ class TestAuditImmutability:
             audit_trace=["test"],
         )
         with pytest.raises(ValidationError):
-            d.confidence = 0.99  # type: ignore[misc]
+            d.confidence = 0.99
 
     def test_model_copy_creates_new_instance(self) -> None:
         d = ConsensusDecision(

@@ -38,6 +38,40 @@ FEATURE_REFS = [
 FALLBACK_CONFIDENCE = 0.5  # documented I-7 floor when no calibrated model is present
 
 
+def is_degraded(
+    *,
+    model_degraded: bool,
+    feature_source: FeatureSource,
+    has_intervals: bool,
+) -> bool:
+    """The exact three-term degradation disjunction (R9.9; ADR-040/043; I-7).
+
+    Extracted from the inline expression it replaces so that BOTH directions of
+    R9.9 are assertable without constructing a pipeline, and so the serving path
+    and the runtime-substance gate cannot drift into two readings of one word.
+
+    Why the extraction is the deliverable and not a tidy-up. R9.9 was widened
+    from "no checkpoint is published" to this disjunction, which is a
+    **tightening** in the I-7-safe direction: strictly more responses are obliged
+    to report ``degraded``. A resolved checkpoint alone is therefore NOT
+    sufficient for ``degraded`` false - the feature source and the calibrator
+    each get a veto. Stated inline, "no fourth condition was smuggled in" could
+    only be checked by re-reading the expression; stated as this signature, the
+    three keyword parameters ARE the enforcement, because a fourth term cannot
+    enter without changing this declaration.
+
+    Args:
+        model_degraded: No real model resolved, or its inference raised (I-7).
+        feature_source: Where the features came from. ``FALLBACK`` means they
+            were synthesised because the online store was unreachable.
+        has_intervals: The restored calibrator returned conformal intervals.
+
+    Returns:
+        ``True`` when ANY term holds; ``False`` only when all three are healthy.
+    """
+    return model_degraded or feature_source == FeatureSource.FALLBACK or not has_intervals
+
+
 class DemandProphetPipeline:
     """
     End-to-end inference pipeline for the Demand Prophet.
@@ -272,17 +306,20 @@ class DemandProphetPipeline:
         now = datetime.now(UTC)
 
         has_intervals = intervals is not None
-        # ADR-040/043: a forecast is degraded when the model is unavailable, the
-        # features came from the fallback, or no calibrated interval was produced.
+        # ADR-040/043, R9.9: a forecast is degraded when the model is unavailable,
+        # the features came from the fallback, or no calibrated interval was
+        # produced. The rule lives in `is_degraded` (module scope) rather than
+        # inline here so both directions are assertable without a pipeline and so
+        # a fourth term cannot enter without changing that signature.
         # Compute it ONCE up front so confidence is honest per-path: on the real
         # path it is derived from the conformal width (varies per SKU); on the
         # degraded path it is the explicit FALLBACK_CONFIDENCE floor — NOT an
         # arithmetic identity (~0.71) that sat above the 0.7 HITL threshold and
         # silently suppressed I-5 escalation on degraded output.
-        degraded = (
-            self._model_degraded
-            or self._feature_source == FeatureSource.FALLBACK
-            or not has_intervals
+        degraded = is_degraded(
+            model_degraded=self._model_degraded,
+            feature_source=self._feature_source,
+            has_intervals=has_intervals,
         )
 
         for i, sku_id in enumerate(sku_ids):

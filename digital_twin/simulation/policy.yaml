@@ -1,0 +1,554 @@
+# SYNAPSE -- Twin decision-relevance policy (ADR-055; R5.2, R5.12, R5.18, R5.19, R5.27,
+# R5.28, R5.33, R5.36, R6.15)
+#
+# Design section E2c.2 names this path. `tasks.md` task 8.2 originally named
+# `infrastructure/quality/twin-decision-relevance.yaml`; that conflict was surfaced and
+# resolved in favour of the design, whose own reasoning -- "the single committed policy file
+# ... so no literal lands in `engine.py`" -- argues for co-location with the engine that
+# reads it. `infrastructure/quality/` remains the home of GATE declarations; this is a
+# SIMULATION parameter file.
+#
+# ---------------------------------------------------------------------------------------
+# THE CONTRACT THIS FILE IS UNDER (AD-13)
+# ---------------------------------------------------------------------------------------
+# 1. Every value here is READ by the engine or the harness, never inlined at the use site.
+# 2. Every value is PINNED in `infrastructure/quality/doc-number-pins.yaml` and carries a
+#    `infrastructure/quality/ratchets.json` entry, and each pin's extractor is verified BY
+#    RUNNING IT (`scripts/audit/pin_extractor_truth.py`, task 8.3). A pin whose extractor
+#    resolves to nothing compares `None` to `None`, and two absent values agree -- a pin
+#    that compares nothing reports green.
+#    THE STATED LIMIT OF THIS CONTRACT (session 11, task 13.1). Section 5's values are stated
+#    ONLY in this file, and its lists -- the demand profiles, the supplier roster, the cell
+#    grid -- carry no doc pin because no document restates them: a pin guards a SECOND copy
+#    of a number and here there is none (one document per fact). ADR-055 D2.8 refers to
+#    them by key, never by value; a document that starts restating one owes its pin then.
+# 3. A value is committed BEFORE the run judged against it. Several values are deliberately
+#    committed only after a first measuring run reports a distribution (R5.2 says so in its
+#    own text; R5.19 inherits the pattern). Committed-after-measurement is not
+#    committed-late. What is forbidden is judging a run against a threshold committed after
+#    that run.
+# 4. A value absent from this file is NOT defaulted by its reader. Readers raise or report
+#    `unavailable` naming the missing key, because a default silently substitutes an
+#    unreviewed number for a committed one (I-7).
+#
+# Read contract: `encoding='utf-8'` on every read (E-S13-07). ASCII only.
+
+version: 1
+
+# =======================================================================================
+# 1. The scalar regret objective (ADR-055 D2; R5.33)
+# =======================================================================================
+# Declared in ADR-055 BEFORE the R5.1 run, because `uplift/metric_contract.yaml` declares
+# per-KPI hypothesis tests and `MetricContract.classify` returns a three-valued `Outcome`
+# -- NOT a cost. Without this block, regret has no units, no sign convention and no
+# aggregation rule.
+#
+# Every term is stated as a COST (lower is better), so the objective is minimised and
+# regret is non-negative by construction.
+regret_objective:
+
+  # ---------------------------------------------------------------------------------
+  # Weights. THE TWO LOAD-BEARING ONES ARE READ FROM A COMMITTED SOURCE, NOT INVENTED.
+  # ---------------------------------------------------------------------------------
+  # `agents/inventory_sentinel/models/newsvendor.py` already commits this project's
+  # opinion about the newsvendor critical ratio: `cost_under = 8.0`, `cost_over = 1.0`.
+  # Reusing that 8:1 shortage-to-holding ratio keeps the regret objective and the
+  # inventory agent's own reward consistent about what matters. That is the AD-13 move:
+  # read the number, do not restate it.
+  #
+  # `provenance` is recorded per weight and is not decoration -- it is the difference
+  # between a committed objective and a merely plausible one. `chosen` means exactly
+  # that: nobody derived it, and it is the first candidate for ratification against
+  # evidence.
+  weights:
+    # Shortage class -- ONE measured quantity, priced ONCE, at newsvendor.py::cost_under.
+    #
+    # `stockout_rate` ZEROED IN SESSION 11 (finding 65); the term is KEPT, not deleted. On
+    # every measured path it IS (1 - fill_rate): `_measure` reads the engine's metrics, whose
+    # two service fractions share one denominator (Property 64). Weighting both at 8.0 priced
+    # one quantity at 16.0, so a service point cost 0.16 and the 0.40 margin meant 2.5 points,
+    # below ADR-055 D2.5's own 3.3-point lower bracket. `unmet_service` keeps the 8.0 because
+    # it is the term the margin rule reads. Keeping the zeroed term preserves all five terms
+    # in `contributions()` and every per-term report. `uplift/regret.py::load_objective`
+    # admits a zero ONLY when its provenance below starts with `zeroed:` and states why.
+    stockout_rate: 0.0
+    unmet_service: 8.0        # applied to (1 - fill_rate)
+    # Over-stocking class -- both read from newsvendor.py::cost_over. Waste is the
+    # realised form of over-ordering, so spoilage sits in the holding class.
+    on_hand: 1.0
+    spoilage_rate: 1.0
+    # THE ONE NUMBER HERE WITH NO COMMITTED ANTECEDENT. Declared, flagged, pinned, and
+    # open to amendment before any run judged against it.
+    delivery_latency: 1.0
+
+  weight_provenance:
+    stockout_rate: >-
+      zeroed: the same measured quantity as (1 - fill_rate) on every measured path
+      (Property 64); counting both priced one quantity at 16.0 (finding 65)
+    unmet_service: "read: agents/inventory_sentinel/models/newsvendor.py::cost_under"
+    on_hand: "read: agents/inventory_sentinel/models/newsvendor.py::cost_over"
+    spoilage_rate: "read: agents/inventory_sentinel/models/newsvendor.py::cost_over"
+    delivery_latency: "chosen: declaration-time choice, no committed antecedent (ADR-055 D2.3)"
+
+  # ---------------------------------------------------------------------------------
+  # Normalisers (ADR-055 D2.2). Three objective terms are already dimensionless
+  # fractions in [0, 1]; these two are not.
+  # ---------------------------------------------------------------------------------
+  # NEVER derived from the run being judged. A normaliser computed from the run it
+  # normalises makes the objective self-referential, and both of these are committed
+  # constants precisely so the objective is computable WITHOUT a prior measurement --
+  # an objective that cannot be evaluated until something is measured cannot be used to
+  # decide whether to measure.
+  normalisers:
+    # Initial stock per SKU times the SKU count: the engine's own
+    # `{f"sku_{i}": 100.0 for i in range(10)}` literal, lifted here so task 9.3's
+    # `avg_on_hand_units` has a committed scale rather than an inlined one.
+    on_hand_units: 1000.0
+    # Reference delivery time in minutes. Today's engine draws `uniform(10.0, 45.0)`,
+    # whose mean is 27.5; that is the honest reference for the CURRENT twin. Structure 2
+    # replaces that draw with a queue-state function, and when it does this value is
+    # re-derived and the change recorded -- NOT silently inherited, because a normaliser
+    # carried across a physics change compares two different worlds on one scale.
+    delivery_time_min: 27.5
+
+  normaliser_provenance:
+    on_hand_units: "read: digital_twin/simulation/engine.py initial-inventory literal (100.0 x 10 SKUs)"
+    delivery_time_min: "read: digital_twin/simulation/engine.py _delivery uniform(10.0, 45.0) mean; RE-DERIVE at structure 2"
+
+  # Arithmetic mean, not median, and paired on replicate seeds. Mean because this is a
+  # cost and expected cost is the quantity an inventory decision is made against; a median
+  # discards exactly the tail where policy differences live. Paired because `Scenario`
+  # guarantees an identical seed yields an identical demand realisation across arms
+  # (R2.1/R2.5), and pairing removes demand variance from the contrast.
+  aggregation: mean_paired_on_seed
+
+  # Terms deliberately EXCLUDED from the objective, recorded rather than silently omitted.
+  # Both are real `KpiVector` fields, so excluding them is a choice that needs a reason.
+  excluded_terms:
+    margin: >-
+      Not a term of the classical (s,S) cost objective whose near-optimality ADR-055's
+      premise rests on, so including it would mean the regret measured is not the regret
+      the theorem is about. Its derivation was also not audited while authoring ADR-055.
+    co2_estimate: >-
+      Same two reasons. Either term may be added by amendment BEFORE a run judged against
+      the amended objective.
+
+  # ---------------------------------------------------------------------------------
+  # THE MATERIALITY MARGIN: THE RULE IS COMMITTED HERE, THE VALUE IS MEASURED LATER
+  # ---------------------------------------------------------------------------------
+  # ADR-055 D2.5. R5.2 forbids pinning the margin before measurement; every other
+  # threshold here is pinned BEFORE the run judged against it. Combined naively those two
+  # rules license choosing the margin with the number already in hand, which would decide
+  # task 11's verdict by the choice of margin. So the halves are separated: the DERIVATION
+  # RULE is committed now, before checkpoint A, and only the MAGNITUDE is instantiated from
+  # checkpoint A's run. MDE-shaped -- pre-registered rule, measured value.
+  #
+  # `digital_twin/simulation/policy.py::materiality_margin` reads this block, and it
+  # RE-DERIVES the value from the rule rather than trusting it. A committed `value` that the
+  # rule does not produce is refused, not recorded -- otherwise the rule is decoration.
+  materiality_margin:
+
+    # INSTANTIATED AT CHECKPOINT A, SESSION 7. Was `null` from session 1r until here, which was
+    # the honest state rather than a placeholder: `classify_regret` returns `unavailable` for a
+    # null margin, and a placeholder would have been judged against.
+    #
+    # THE VALUE IS THE RULE'S, NOT A CHOICE MADE WITH THE NUMBER IN HAND. It is what
+    # `derivation` below has derived since the pre-registration:
+    #   service_points * points_to_fraction * weights.unmet_service = 5.0 * 0.01 * 8.0 = 0.40
+    # `policy.py::materiality_margin` re-derives it on every read and refuses a value the rule
+    # does not produce, so this line cannot drift from the rule without failing.
+    #
+    # THE MEASURED HEADROOM IT WAS CHECKED AGAINST, recorded as prose and deliberately NOT as a
+    # new key. Contract 2 at the head of this file says every VALUE here is pinned in
+    # doc-number-pins.yaml, so adding `checked_against_headroom: 8.93...` would owe a further
+    # pin, move `doc_truth`'s claim set a second time and compound the regeneration already
+    # owed. The number is `comparator_headroom = 8.937888952967558`, from run 34570166681
+    # (sha e94a1ac), 200 of 200 usable replicates -- unchanged to every digit from run
+    # 34366766968, which is what confirms arm A's realisation was not perturbed by adding arm B.
+    # `bracketing.upper` below therefore needs no correction. 0.40 < 8.937888952967558, so
+    # `must_be_below_measured_headroom` is satisfied against a quantity independent of the one
+    # the margin judges (ADR-055 D2.5.1).
+    #
+    # READ ADR-055 D2.5.2 BEFORE READING ANY VERDICT AGAINST THIS MARGIN. The same run measured
+    # `regret = -0.8123524459522771` with a 95% interval excluding zero: the `(s, S)` arm
+    # OUTPERFORMS the perfect-foresight arm it is subtracted from, so that arm does not bound it
+    # and the difference is not a regret. `_measure` now refuses a negative regret outright
+    # rather than classifying it. This margin is valid; the comparator it would be compared
+    # through is not, and those are two different defects with two different owners.
+    value: 0.40
+
+    derivation:
+      # margin = service_points * points_to_fraction * weights.unmet_service
+      # At the committed weight of 8.0, one service point costs 0.08 objective units.
+      form: service_point_equivalent
+      expression: "service_points * points_to_fraction * regret_objective.weights.unmet_service"
+      weight_term: unmet_service
+      points_to_fraction: 0.01
+
+      # THE ONE IRREDUCIBLE DECISION-RELEVANCE CHOICE, flagged exactly as the
+      # delivery_latency weight is flagged. A margin cannot be derived end-to-end from
+      # committed quantities; pretending otherwise would be false precision. What makes 5.0
+      # defensible is that it is bracketed on both sides -- see `bracketing` below.
+      service_points: 5.0
+
+    derivation_provenance:
+      service_points: "chosen: decision-relevance threshold, no committed antecedent (ADR-055 D2.5)"
+      points_to_fraction: "definitional: one percentage point expressed as a fraction"
+      weight_term: "read: regret_objective.weights.unmet_service (itself read from newsvendor.py::cost_under)"
+
+    bracketing:
+      lower: >-
+        NOT trivially small. The twin's endogenous (s,S) restock measures fill_rate = 0.8556
+        while the newsvendor critical ratio this repo commits, cost_under/(cost_under +
+        cost_over) = 8/9, targets 0.8889 -- so the incumbent's shortfall against its OWN
+        theoretical target is about 3.3 service points. A margin below that would call the
+        incumbent's known and accepted shortfall "material".
+      upper: >-
+        NOT unreachably large. Measured comparator headroom is 8.937888952967558 objective
+        units -- the NO-OP arm against perfect foresight, over 200 of 200 usable replicates in
+        run 34366766968 (sha 245d0dc). This supersedes the 11.79 - 2.93 = 8.86 figure carried
+        from session 1's four-replicate probe; it is a measurement update, not a change of
+        criterion. The fill-rate gap across the same pair is 55.6 service points, so a
+        5.0-point margin is roughly 4.5% of what perfect foresight buys. The criterion can
+        fire.
+
+    # A DERIVABLE GUARD, enforced by the reader rather than trusted. A margin at or above the
+    # total measured headroom is unfalsifiable by construction: no policy could exceed it, so
+    # `material` becomes unreachable and task 11 could only ever proceed.
+    #
+    # AND THE HEADROOM IT IS CHECKED AGAINST IS NOW AN INDEPENDENT QUANTITY (ADR-055 D2.5.1,
+    # conflict M). Until session 5 the comparator had two arms, so `comparator_headroom` and
+    # `regret` were the SAME subtraction and this guard admitted exactly the margins below the
+    # regret they would be judged against -- every margin inside `bracketing` above forced
+    # `material`. The comparator now runs three arms: the bound is no-op minus foresight while
+    # the judged regret is the (s, S) reference arm minus foresight.
+    must_be_below_measured_headroom: true
+
+    # Unlike the objective weights, this number HAS a monotone better-direction, and
+    # ratchets.json records it as `down`. Raising the margin is the self-serving move: it
+    # makes `material` harder to reach, which makes Finding 4 harder to falsify, which lets
+    # the spec proceed. So it may only ever be tightened.
+    ratchet_direction: down
+
+# =======================================================================================
+# 1b. Observable sensitivity, PER OBJECTIVE KPI (ADR-055 D3; R5.34, R5.35)
+# =======================================================================================
+# THE MACHINE-READABLE HALF OF ADR-055 D3. The ADR carries the human record; this block is
+# what `uplift/regret.py` actually reads, because R5.35 has to be enforceable by code and
+# prose is not.
+#
+# WHY THIS EXISTS. R5.35 says a regret below the materiality margin, measured while any
+# objective KPI is NOT observably sensitive, is `inconclusive` -- NOT confirmation of
+# Finding 4. A null produced by an instrument that cannot see its subject is not evidence
+# of absence. Recording sensitivity per KPI is what makes that rule mechanical rather than
+# a matter of judgement at reporting time.
+#
+# `sensitive: true` REQUIRES a `demonstrated_by` citation naming the property test that
+# shows it. ADR-055 D3 committed to that: "each flip must be backed by the property that
+# demonstrates it - not by assertion". `uplift/regret.py` refuses a `true` with no citation.
+kpi_sensitivity:
+
+  # ---- Flipped to true by task 9, each with the property that demonstrates it ----
+  fill_rate:
+    sensitive: true
+    demonstrated_by: >-
+      digital_twin/tests/test_stockout_instrumentation_property.py -- Property 49
+      (test_demand_beyond_the_opening_stock_forces_unmet_demand). MEASURED: fill_rate falls
+      0.8556 -> 0.3592 at seed 42 over 24h when replenishment is disabled. Before task 9.1
+      `_delivery` incremented `orders_delivered` unconditionally, so this could not fall.
+  stockout_rate:
+    sensitive: true
+    demonstrated_by: >-
+      Same property, complementary clause: stockout_rate rises 0.1444 -> 0.6408 on the same
+      pair of runs, and cold start measures 1.0000 exactly. Task 9.6 also moved the
+      numerator into the twin: it was a per-STEP count of SKUs at zero, scaling with
+      `n_steps * |SKU|` until its own clamp saturated -- a number about the shape of the run.
+  on_hand:
+    sensitive: true
+    demonstrated_by: >-
+      digital_twin/tests/test_on_hand_integral_property.py -- Property 50. The measure did
+      not exist before task 9.3; avg_on_hand_units responds 1016.0 -> 202.1 across the same
+      replenished/starved pair.
+  unmet_service:
+    sensitive: true
+    demonstrated_by: >-
+      The objective's `1 - fill_rate` term, so its sensitivity IS fill_rate's and rests on the
+      same evidence: Property 49's
+      test_demand_beyond_the_opening_stock_forces_unmet_demand. Recorded as its own entry
+      rather than inferred from fill_rate, because `uplift/regret.py` requires a record PER
+      OBJECTIVE TERM and an unrecorded term must never be treated as sensitive (I-7). It is a
+      SEPARATE term from stockout_rate and not redundant with it: after E2a, fill_rate is
+      delivered-over-demand-events while stockout_rate is unmet-over-demand-events, and the
+      two diverge whenever an order is created and never delivered for a reason other than
+      stock.
+
+  # ---- STILL NOT SENSITIVE. Do not flip these without the structure that earns it. ----
+  spoilage_rate:
+    sensitive: false
+    blocked_on: >-
+      `_spoilage` applies `decay_rate = 0.01 * spoilage_rate_multiplier` against a fixed
+      0.3 threshold and reads NEITHER inventory level NOR order size, so no inventory
+      decision can move it. Structure 4 (task 13.3, R5.25/R5.26) makes spoilage a function
+      of age-at-arrival and order size. Note ADR-055 D4: `orders_spoiled` increments per SKU
+      per tick, so today's ratio is a TICK COUNT, not a spoiled-units fraction.
+  delivery_latency:
+    sensitive: false
+    blocked_on: >-
+      `_delivery` draws travel time from an independent `uniform(10.0, 45.0)`, unrelated to
+      stock or load, so no inventory decision can move it. Structure 2 (task 12.3,
+      R5.15-R5.20) makes the wait a function of queue state under finite rider/pick capacity.
+
+  # ---- THE CONSEQUENCE, STATED BEFORE THE RUN THAT IT DECIDES ----
+  # Two of five objective KPIs are not yet sensitive. So under R5.35, ANY sub-margin regret
+  # measured on the unmodified twin is `inconclusive` -- task 11 CANNOT confirm Finding 4,
+  # it can only FALSIFY it (by measuring material regret) or report inconclusive. That is
+  # not a defect in the plan; it is the plan's own guard working as designed, and it is
+  # recorded here so nobody reads an inconclusive result as a confirmation later.
+
+
+# =======================================================================================
+# 2. The comparator's restock configuration (R5.36)
+# =======================================================================================
+# THE BIAS THIS EXISTS TO REMOVE. `SupplyChainSimulation.start()` leaves
+# `_restock_threshold` at its constructor default of 50.0, so a compared `(s, S)` policy
+# reaching the twin through `uplift/harness.py` is measured STACKED ON TOP OF the twin's
+# own endogenous `(s, S)` restock. That biases regret toward zero independently of whether
+# the world is easy -- which would make a null result uninterpretable in exactly the way
+# this whole phase exists to prevent.
+#
+# `set_policy` clamps with `max(0.0, ...)`, so 0.0 is reachable, and at 0.0 the engine's
+# `if level < safety_stock` guard is false for every clamped level. 0.0 therefore DISABLES
+# the endogenous restock rather than merely lowering it.
+#
+# The resolved value is written into `UpliftProvenance`, and **a run whose recorded
+# threshold differs from the value committed here is inadmissible.** Recording it is what
+# makes that check possible.
+#
+# ---------------------------------------------------------------------------------------
+# READ THIS BEFORE CHANGING `restock_threshold`: IT IS UNCHANGED, AND THAT IS THE POINT
+# ---------------------------------------------------------------------------------------
+# CONFLICT M's first reason was that `uplift/regret.py`'s two-pass comparator measured a
+# NO-OP against perfect foresight and reported it as the `(s, S)` regret R5.1 asks for.
+# 0.0 was not the defect. The defect was that the rationale above is about
+# `uplift/harness.py`, where an arm supplies its own `(s, S)` through `decide()` and the
+# twin's must therefore be off -- and `uplift/regret.py::_measure` reused the same key in a
+# code path that drove NO policy at all, so 0.0 there did not de-stack an arm, it deleted
+# the incumbent. That is why `regret` and `comparator_headroom` came out equal to every
+# digit: with no reference policy, the `(s, S)` regret and the comparator's total headroom
+# are the same subtraction.
+#
+# Session 5's repair keeps `restock_threshold: 0.0` for all three arms and supplies the
+# `(s, S)` arm through `decide()`, which is the configuration the rationale above describes
+# as CORRECT. Nothing here needed amending.
+comparator:
+  restock_threshold: 0.0
+
+  # -------------------------------------------------------------------------------------
+  # THE REFERENCE ARM -- the `(s, S)` policy R5.1 and Finding 4 are actually about
+  # -------------------------------------------------------------------------------------
+  # CONFLICT N. Four documents recorded `Par_Level_Reorder` as "another spec's UNLANDED
+  # precondition". It is on disk at `uplift/baselines/par_level_reorder.py`, its owning
+  # spec (`.kiro/specs/decision-integrity-uplift-proof/`) marks tasks 2, 2.1 and 2.2 `[x]`,
+  # and `tests/uplift/test_par_level_reorder_properties.py` already runs Property 1 against
+  # it on `ci.yml::uplift-verify`'s fast step. Ownership is that spec's; AVAILABILITY was
+  # never the blocker. The blocker was that `run_two_pass` invoked no `DecisionPolicy`.
+  #
+  # KEY NAMES: spelled out rather than `s` and `S`. YAML would accept both -- they are
+  # distinct keys -- but a committed file a human edits should not distinguish two numbers
+  # by letter case alone. The reader maps them onto `Par_Level_Reorder(s=..., S=...)`, and
+  # it refuses anything that does not satisfy the policy's own `0 <= s < S` invariant, so a
+  # transposition fails loudly instead of measuring a different world.
+  reference_policy:
+    name: Par_Level_Reorder
+    reorder_point_s: 50
+    order_up_to_S: 100
+
+  # BOTH NUMBERS ARE READ, NOT CHOSEN, and that matters because a materiality margin is
+  # allowed exactly one irreducible choice (D2.5's `service_points`) and a comparator is
+  # allowed none. If these were invented, the regret they produce would be a fact about
+  # this file rather than about the twin.
+  reference_policy_provenance:
+    name: >-
+      read: uplift/baselines/par_level_reorder.py::Par_Level_Reorder -- the (s, S) arm R5.1
+      names, owned by decision-integrity-uplift-proof (its task 2.1, marked [x]). Not
+      re-implemented here; ADR-055's premise section already states "Par_Level_Reorder IS
+      that policy".
+    reorder_point_s: >-
+      read: digital_twin/simulation/engine.py::__init__ `self._restock_threshold = 50.0`,
+      commented "safety-stock level that triggers restock" -- the twin's own reorder point.
+      Using the twin's own level is what makes this arm the INCUMBENT rather than a
+      differently-tuned policy that happens to be transparent.
+    order_up_to_S: >-
+      read: digital_twin/simulation/engine.py initial inventory, `100.0` per SKU -- the same
+      literal `regret_objective.normalisers.on_hand_units` already lifts as 100.0 x 10 SKUs
+      = 1000.0. Ordering up to the opening level is the twin's own notion of "full".
+
+  # THE LIMIT OF THE PROVENANCE ABOVE, STATED RATHER THAN IMPLIED (I-7).
+  reference_policy_equivalence_unproven: >-
+    The two VALUES are read from the twin. The claim that Par_Level_Reorder(s=50, S=100)
+    REPRODUCES the twin's endogenous restock is NOT proven and must not be asserted: the
+    mechanisms differ. The endogenous rule is an internal guard evaluated by the engine's
+    own restock process; this arm is an external order-up-to decision applied through
+    `add_stock` on the comparator's step cadence. So D2.5's lower bracket -- the incumbent's
+    fill_rate = 0.8556 against the newsvendor target 8/9, about 3.3 service points -- is a
+    COMPARABLE reference for this arm, not a measurement of it. Whoever wants the stronger
+    claim must measure both arms and report the difference; nothing here licenses assuming
+    it is zero.
+
+
+# =======================================================================================
+# 3. Negative-control repetition and rate tolerance (ADR-055 D6; R6.15)
+# =======================================================================================
+# Declared in ADR-055 rather than deferred to task 16.3, which would otherwise have found
+# R6.15 unsatisfiable -- it reads BOTH numbers from the Decision_Relevance_Record.
+#
+# Why a repetition is needed at all: a single negative-control run classifies only four
+# pairs (`primary_kpis: fill_rate` across four scenarios), and four pairs cannot estimate
+# a rate.
+negative_control:
+  # Chosen so the expected number of false positives at alpha = 0.05 is exactly 1 -- the
+  # smallest count at which a false-positive RATE is estimable rather than merely bounded.
+  independent_seed_sets: 20
+  # A PRE-REGISTERED TARGET, NOT A MEASUREMENT, and deliberately loose against the nominal
+  # alpha = 0.05: at 20 repetitions the exact binomial upper bound on an alpha = 0.05
+  # process is 4/20 = 0.20 at roughly the 98th percentile. A correctly-calibrated
+  # instrument passes this almost always; an instrument reporting gains on a third of its
+  # null repetitions fails it. Tightening to 0.05 itself would fail a CORRECT instrument
+  # roughly a quarter of the time -- a gate that punishes the truth.
+  max_proven_gain_rate: 0.20
+
+# =======================================================================================
+# 4. DELIBERATELY NOT COMMITTED YET -- and each absence is a requirement, not an omission
+# =======================================================================================
+# Every key below is named here so a reader knows it is owed and by whom. None is given a
+# placeholder value: a placeholder would be judged against, and R5.2 forbids exactly that.
+deferred:
+
+  materiality_margin: >-
+    THE RULE IS NOW COMMITTED; ONLY THE VALUE IS OWED. R5.2 forbids pinning the (s,S)
+    materiality margin before measurement, so the two halves were separated (ADR-055 D2.5):
+    the derivation rule lives at `regret_objective.materiality_margin.derivation` and was
+    committed BEFORE checkpoint A, and `regret_objective.materiality_margin.value` is still
+    `null`. Sequence: checkpoint A runs `uplift.yml::twin-regret`, task 10.4 instantiates the
+    value FROM THE RULE and records the measured headroom it was checked against, and only
+    SUBSEQUENT runs are judged against it. Owner: task 10.4.
+
+  utilisation_ladder: >-
+    The ladder levels and the near-saturation band boundaries (R5.18, R5.19) inherit R5.2's
+    pattern and are committed after structure 2's first measuring run reports mean wait
+    times. Property 56 reads them from here and states no value of its own. Owner: task 12.4.
+
+  demand_intensity: >-
+    COMMITTED IN SECTION 5 (`world.structure_1`), session 11, as a DECLARED shape with
+    research provenance, flagged `chosen` -- NOT a calibration. R5.11 is re-cut by operator
+    decision 1=a: no real feed is admitted (M5 declined; its observation columns are DAILY
+    totals in any case, so no intra-day shape was ever derivable from it), so the shape is
+    declared and B-prime reports the result across an amplitude sweep instead of claiming a
+    calibration. The key stays here so the change of basis stays visible. Owner: task 12.1.
+
+  substitution_fraction: >-
+    The fraction of a zero-stock demand event diverted to declared substitutes, plus the
+    per-SKU substitute sets (R5.27). Owner: task 13.3.
+
+  supplier_roster: >-
+    COMMITTED IN SECTION 5 (`world.structure_3`), session 11: the named suppliers, their
+    lead-time means and log-sds, and the demand-coupling and day-autocorrelation coefficients
+    (R5.21, R5.22, R5.23), DECLARED with research provenance and flagged `chosen` (operator
+    decisions 1=a and Q3=c). Owner: task 13.1.
+
+  spoilage_coefficients: >-
+    Age-at-arrival and order-size coefficients (R5.25, R5.26). Owner: task 13.3.
+    ADR-055 D4 records that `spoilage_rate` CHANGES MEANING here -- `orders_spoiled`
+    increments per SKU per tick, so today's ratio is a tick count, not a spoiled-units
+    fraction. Any document comparing a pre-E2c value with a post-E2c one must say they
+    measure different quantities.
+
+
+# =======================================================================================
+# 5. The world structures (ADR-055 D2.8; session-11 re-cut of R5.8-R5.14 and R5.21-R5.23)
+# =======================================================================================
+# Read ONLY by `digital_twin/simulation/world.py::load_world`, which refuses -- naming the
+# key -- a missing value, a value breaking a rule, and an UNKNOWN key (a typo such as
+# `amplitude_scal` would otherwise run a cell unscaled and say nothing). NO RUN READS THIS
+# YET: `uplift/harness.py::_build_twin` passes no world, so every measured number is still
+# HEAD's world. Capability is not use.
+#
+# EVERY VALUE BELOW IS DECLARED, NOT CALIBRATED (operator decision 1=a: no real feed is
+# admitted), and each block's `provenance` names the research it was chosen from (session 11).
+# Changing a value is a data edit that changes its provenance in the same commit.
+#
+# Structure 1 -- WHEN demand arrives: intensity(t) = hourly[h] * weekday[d] * promotions,
+# h the hour of day (index 0 = 00:00-01:00) and d the weekday (index 0 = Monday). Each
+# profile's mean is EXACTLY one over its stated decimals (checked with fractions.Fraction),
+# so over any whole week the two profiles move demand around and ADD NONE. Promotions DO add
+# volume: multiplier > 1 by rule. Hour 0 of a seeded run falls on weekday `seed % 7`.
+#
+# Structure 3 -- HOW LONG an order takes, in minutes: per supplier a lognormal daily lead
+# time with the stated mean and log-sd, AR(1) across days, stretched in busy hours by
+# 1 + demand_coupling * (intensity - 1) floored at coupling_floor, never below
+# min_lead_time_min. It applies where arms order (`place_order`), not in the engine's own
+# `_restock` loop, which the comparator switches off (finding 66).
+#
+# Cells -- the experiment grid. `primary` runs both structures; each scale cell moves one
+# lever: lead_time_scale multiplies every supplier mean, and amplitude_scale k moves every
+# profile value p to 1 + k * (p - 1) (the mean stays exactly one; positive for 0 < k <= 1).
+world:
+  structure_1:
+    provenance: >-
+      chosen (operator decision 1=a: no feed admitted), researched session 11: evening peak,
+      late-evening tail and night trough per Gerum et al. 2026 arXiv:2607.06816 (27 dark
+      stores) and Swiggy Instamart / Flipkart Minutes timing statements; hour-to-mean ratios
+      anchored on Instacart 2017 aggregates (non-commercial terms: ratios cited, no data
+      copied); weekend/weekday 1.20, inside Instacart's 1.11-1.33; promotion x1.5 is the
+      Bijmolt et al. 2005 mean elasticity -2.62 at a ~14% cut. Night values are latent
+      demand of a 24 h store. Record: SESSION_PROTOCOL progress ledger, session 11.
+    # Index 0 = 00:00-01:00; twelve hours per line. Sums to exactly 24.000; minimum 0.100.
+    hourly: [0.570, 0.300, 0.180, 0.100, 0.100, 0.200, 0.450, 0.850, 1.250, 1.400, 1.350, 1.200,
+             1.100, 1.050, 1.000, 1.000, 1.100, 1.300, 1.550, 1.800, 1.900, 1.750, 1.450, 1.050]
+    # Monday first: Mon, Tue, Wed, Thu, Fri, Sat, Sun. Sums to exactly 7.000.
+    weekday: [0.940, 0.920, 0.920, 0.930, 1.020, 1.140, 1.130]
+    promotions:
+      - {weekday: 4, start_hour: 19, hours: 3, multiplier: 1.5}  # Friday 19:00-22:00
+    start_weekday_rule: seed_mod_7
+  structure_3:
+    provenance: >-
+      chosen (operator decision 1=a), researched session 11: means 4/6/8 h inside the 4-13 h
+      band implied by once-to-several-daily hub dispatch (MetricsCart 2025; ET Edge 2026);
+      lognormal per Buechel & Corman 2020, log-sd 0.3-0.5 with no published dark-store CV;
+      daily autocorrelation 0.1 per Michna, Nielsen & Nielsen 2015 (one manufacturer,
+      measured; inert at the 24 h horizon, finding 75); demand coupling 0.3 is direction-only
+      evidence (ISM delivery index; Pahl, Voss & Woodruff 2007). Record: SESSION_PROTOCOL
+      progress ledger, session 11.
+    suppliers:
+      sup_a: {mean_lead_time_min: 240, log_sd: 0.30}
+      sup_b: {mean_lead_time_min: 360, log_sd: 0.40}
+      sup_c: {mean_lead_time_min: 480, log_sd: 0.50}
+    sku_supplier:
+      sku_0: sup_a
+      sku_1: sup_b
+      sku_2: sup_c
+      sku_3: sup_a
+      sku_4: sup_b
+      sku_5: sup_c
+      sku_6: sup_a
+      sku_7: sup_b
+      sku_8: sup_c
+      sku_9: sup_a
+    daily_autocorrelation: 0.1
+    demand_coupling: 0.3
+    coupling_floor: 0.5
+    min_lead_time_min: 30
+  cells:
+    provenance: >-
+      chosen: primary = both structures at the declared values; lead-time sweep x0.5 / x1.5
+      (x1.5 gives 6/9/12 h, the once-daily dispatch band; finding 75); amplitude sweep
+      k = 0.25 / 0.5 (k > 1 would push hourly values below the 0.100 floor).
+    off_off: {structure_1: false, structure_3: false}
+    s3_only: {structure_1: false, structure_3: true}
+    s1_only: {structure_1: true, structure_3: false}
+    primary: {structure_1: true, structure_3: true}
+    lead_time_low: {structure_1: true, structure_3: true, lead_time_scale: 0.5}
+    lead_time_high: {structure_1: true, structure_3: true, lead_time_scale: 1.5}
+    amplitude_quarter: {structure_1: true, structure_3: true, amplitude_scale: 0.25}
+    amplitude_half: {structure_1: true, structure_3: true, amplitude_scale: 0.5}
+  primary_cell: primary

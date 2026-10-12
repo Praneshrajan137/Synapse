@@ -31,6 +31,19 @@ SERIALIZATION_KWARGS: dict[str, Any] = {
 }
 
 
+class KafkaUnreachableError(RuntimeError):
+    """The broker cluster could not be reached within the caller's timeout.
+
+    Raised only by :meth:`SynapseConsumer.reachable_topics`. It exists because
+    ``poll()`` is deliberately lossy — it returns ``None`` for *no message* and for
+    *broker error* alike, which is the right shape for a streaming consumer and the
+    wrong shape for a caller that must distinguish "the feed is empty" from "the feed
+    is unreachable". Anything that has to degrade honestly on unreachability (I-7)
+    needs that distinction: ``packages/synapse_common/world/source.py`` reports zero
+    arrivals either way but only degrades on this exception.
+    """
+
+
 class KafkaConfig(BaseModel):
     """Kafka connection configuration."""
 
@@ -120,6 +133,39 @@ class SynapseConsumer:
             }
         )
         self._consumer.subscribe(topics)
+
+    def reachable_topics(self, timeout: float = 5.0) -> tuple[str, ...]:
+        """Return the broker-advertised topic names, or raise :class:`KafkaUnreachableError`.
+
+        This is the reachability probe ``poll()`` cannot be. Constructing a ``Consumer``
+        never contacts a broker, and ``poll()`` collapses "empty" and "broken" into
+        ``None``; cluster metadata is the one call that fails loudly when no broker
+        answers. Callers use it to tell *configured-but-unreachable* (degrade) from
+        *reachable-but-quiet* (zero records, not degraded).
+        """
+        try:
+            metadata = self._consumer.list_topics(timeout=timeout)
+        except Exception as exc:  # noqa: BLE001 — librdkafka raises KafkaException subclasses
+            raise KafkaUnreachableError(str(exc)) from exc
+        topics = getattr(metadata, "topics", None)
+        if topics is None:
+            raise KafkaUnreachableError("cluster metadata carried no topic map")
+        return tuple(sorted(str(name) for name in topics))
+
+    def drain(self, *, max_records: int = 1000, timeout: float = 1.0) -> list[dict[str, Any]]:
+        """Read up to ``max_records`` currently-available records, in broker order.
+
+        Stops at the first empty poll, so a quiet topic returns ``[]`` promptly rather
+        than blocking for ``max_records * timeout``. Undeserialisable records are skipped
+        by ``poll()`` (it logs them); this method does not invent replacements for them.
+        """
+        records: list[dict[str, Any]] = []
+        for _ in range(max(0, max_records)):
+            record = self.poll(timeout=timeout)
+            if record is None:
+                break
+            records.append(record)
+        return records
 
     def poll(self, timeout: float = 1.0) -> dict[str, Any] | None:
         """Poll for next message, return deserialized dict or None."""

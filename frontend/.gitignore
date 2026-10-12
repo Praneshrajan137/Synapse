@@ -1,5 +1,9 @@
 node_modules
 dist
+# The e2e-harness build (`pnpm build:e2e`, mode `e2e`). Kept OUT of `dist/` on
+# purpose: `dist/` is the shipped bundle and AD-12 asserts the harness global is
+# absent from it (scripts/audit/workflow_shape_truth.py).
+dist-e2e
 coverage
 .vite
 .cache

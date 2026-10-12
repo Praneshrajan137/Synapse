@@ -1,0 +1,238 @@
+{
+  "$comment": "Dialect: JSON Schema draft-07. The dialect keyword is intentionally omitted so nothing has to be fetched over the network to validate this file; scripts/audit/published_checkpoint_truth.py selects jsonschema.Draft7Validator explicitly.",
+  "$id": "synapse.quality.checkpoint_truth",
+  "title": "SYNAPSE published-checkpoint truth policy",
+  "description": "Schema for infrastructure/quality/checkpoint-truth.yaml (design E5.2, AD-13; R3.1, R3.3, R3.4, R3.6, R3.7, R3.9). scripts/audit/published_checkpoint_truth.py and scripts/audit/task_claim_truth.py validate the file against this schema before reading a single threshold from it. Structural validity is a precondition of the checks, not a substitute for them: a schema-valid policy whose artifact cannot be fetched still reports UNAVAILABLE (I-7).",
+  "type": "object",
+  "required": [
+    "version",
+    "serving_name",
+    "registry_file",
+    "source",
+    "classification",
+    "floors",
+    "tolerances",
+    "task_claims"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "version": {"type": "integer", "minimum": 1},
+    "serving_name": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "^[a-z0-9_]+$",
+      "description": "The ModelRegistry base_name the checkpoint and sidecar are published under."
+    },
+    "registry_file": {"$ref": "#/definitions/repoPath"},
+    "source": {"$ref": "#/definitions/source"},
+    "classification": {"$ref": "#/definitions/classification"},
+    "floors": {
+      "type": "object",
+      "required": ["coverage_p90"],
+      "additionalProperties": false,
+      "properties": {"coverage_p90": {"$ref": "#/definitions/coverageFloor"}}
+    },
+    "tolerances": {
+      "type": "object",
+      "required": ["final_crps"],
+      "additionalProperties": false,
+      "properties": {"final_crps": {"$ref": "#/definitions/crpsTolerance"}}
+    },
+    "task_claims": {"$ref": "#/definitions/taskClaims"}
+  },
+  "definitions": {
+    "repoPath": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "^[A-Za-z0-9._/-]+$",
+      "description": "A repository-relative POSIX path. Resolved against the gate's root, never absolute."
+    },
+    "source": {
+      "type": "object",
+      "description": "The declared zero-cost serving source. The gate judges the artifact fetched from here and refuses any local stand-in (R3.6, R3.7).",
+      "required": [
+        "kind",
+        "zero_cost",
+        "env_var",
+        "sidecar_filename",
+        "checkpoint_filename",
+        "allow_local_substitution",
+        "local_candidate_dir"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "type": "string",
+          "enum": ["hf_hub"],
+          "description": "Only zero-cost sources are admissible (I-1). Adding a kind here is adding a source the gate will fetch from, so the enum is closed."
+        },
+        "zero_cost": {
+          "type": "boolean",
+          "const": true,
+          "description": "I-1: a source declared non-zero-cost is refused outright rather than consulted."
+        },
+        "env_var": {"type": "string", "minLength": 1, "pattern": "^[A-Z][A-Z0-9_]*$"},
+        "sidecar_filename": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "\\{name\\}",
+          "description": "Template containing {name}, substituted with serving_name."
+        },
+        "checkpoint_filename": {"type": "string", "minLength": 1, "pattern": "\\{name\\}"},
+        "allow_local_substitution": {
+          "type": "boolean",
+          "const": false,
+          "description": "Pinned false. The gate FAILs (clause `policy`) when this is true, so the refusal cannot be configured away (R3.7)."
+        },
+        "local_candidate_dir": {"$ref": "#/definitions/repoPath"},
+        "note": {"type": "string", "minLength": 1}
+      }
+    },
+    "classification": {
+      "type": "object",
+      "description": "Markers that tell a smoke artifact from a real one (R3.1, R3.4). An artifact matching neither is `indeterminate` and is never promoted to real.",
+      "required": ["smoke", "real"],
+      "additionalProperties": false,
+      "properties": {
+        "smoke": {
+          "type": "object",
+          "required": ["sidecar_flag", "version_prefixes"],
+          "additionalProperties": false,
+          "properties": {
+            "sidecar_flag": {"type": "string", "minLength": 1},
+            "version_prefixes": {"$ref": "#/definitions/prefixList"}
+          }
+        },
+        "real": {
+          "type": "object",
+          "required": ["version_prefixes"],
+          "additionalProperties": false,
+          "properties": {"version_prefixes": {"$ref": "#/definitions/prefixList"}}
+        }
+      }
+    },
+    "prefixList": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {"type": "string", "minLength": 1}
+    },
+    "coverageFloor": {
+      "type": "object",
+      "required": ["value", "unit", "direction", "invariant", "sidecar_path", "registry_key"],
+      "additionalProperties": false,
+      "properties": {
+        "value": {"type": "number", "exclusiveMinimum": 0, "maximum": 1},
+        "unit": {"type": "string", "enum": ["fraction"]},
+        "direction": {"type": "string", "enum": ["at-or-above"]},
+        "invariant": {"type": "string", "minLength": 1},
+        "sidecar_path": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "^[A-Za-z_][A-Za-z0-9_]*(\\.[A-Za-z_][A-Za-z0-9_]*)*$",
+          "description": "Dotted read path inside the published serving sidecar."
+        },
+        "registry_key": {"type": "string", "minLength": 1},
+        "documented_in": {"type": "string", "minLength": 1},
+        "note": {"type": "string", "minLength": 1}
+      }
+    },
+    "crpsTolerance": {
+      "type": "object",
+      "description": "The declared tolerance R3.9 requires the recompute to fall inside. The allowance is max(absolute, relative * |recorded|).",
+      "required": [
+        "absolute",
+        "relative",
+        "min_samples",
+        "method",
+        "quantile_levels",
+        "sidecar_block",
+        "registry_key"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "absolute": {"type": "number", "exclusiveMinimum": 0},
+        "relative": {"type": "number", "exclusiveMinimum": 0, "maximum": 1},
+        "min_samples": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Below this many held-out rows the recompute is too noisy to be evidence, so it is UNAVAILABLE rather than a pass."
+        },
+        "method": {
+          "type": "string",
+          "enum": ["mean_pinball_over_quantile_levels_then_horizons"],
+          "description": "Closed: the recompute must state the definition it uses, and that definition is the training loss's."
+        },
+        "quantile_levels": {
+          "type": "array",
+          "minItems": 2,
+          "uniqueItems": true,
+          "items": {"type": "number", "exclusiveMinimum": 0, "exclusiveMaximum": 1},
+          "description": "Fallback levels when the published sidecar declares none of its own."
+        },
+        "sidecar_block": {"type": "string", "minLength": 1},
+        "registry_key": {"type": "string", "minLength": 1},
+        "note": {"type": "string", "minLength": 1}
+      }
+    },
+    "taskClaims": {
+      "type": "object",
+      "description": "How a task record that asserts a landed registry entry is recognised (R3.6).",
+      "required": [
+        "specs_dir",
+        "tasks_filename",
+        "assertion_patterns",
+        "subject_markers",
+        "must_resolve"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "specs_dir": {"$ref": "#/definitions/repoPath"},
+        "tasks_filename": {"type": "string", "minLength": 1, "pattern": "\\.md$"},
+        "assertion_patterns": {
+          "type": "array",
+          "minItems": 1,
+          "items": {"$ref": "#/definitions/claimPattern"}
+        },
+        "subject_markers": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {"type": "string", "minLength": 3},
+          "description": "A record must mention one of these as well as match a pattern, so a task discussing the gate is not swept up as a claim."
+        },
+        "must_resolve": {
+          "type": "array",
+          "minItems": 1,
+          "items": {"$ref": "#/definitions/mustResolveEntry"},
+          "description": "Anti-vacuity: each record must still be resolvable by spec + task id. A record that vanished makes the gate UNAVAILABLE naming it."
+        }
+      }
+    },
+    "claimPattern": {
+      "type": "object",
+      "required": ["id", "pattern", "description"],
+      "additionalProperties": false,
+      "properties": {
+        "id": {"type": "string", "minLength": 1, "pattern": "^[a-z0-9-]+$"},
+        "pattern": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Python regex, applied case-insensitively to the record title plus its sub-bullets. An uncompilable pattern makes the gate UNAVAILABLE, never a pass."
+        },
+        "description": {"type": "string", "minLength": 1}
+      }
+    },
+    "mustResolveEntry": {
+      "type": "object",
+      "required": ["spec", "task_id", "requirement", "note"],
+      "additionalProperties": false,
+      "properties": {
+        "spec": {"type": "string", "minLength": 1, "pattern": "^[a-z0-9-]+$"},
+        "task_id": {"type": "string", "minLength": 1, "pattern": "^[0-9]+(\\.[0-9]+)*$"},
+        "requirement": {"type": "string", "minLength": 1},
+        "note": {"type": "string", "minLength": 1}
+      }
+    }
+  }
+}

@@ -21,9 +21,20 @@ Design notes
   stock genuinely runs out and ``fill_rate`` falls — which is exactly the realized signal
   the outcome loop (P5) scores against.
 * **Injectable sim** for testing: the default is the real engine; a test may inject a
-  lightweight fake exposing the same surface.
+  lightweight fake exposing the same surface. A fake used with a **non-seeded** source must
+  accept ``start(external_demand=..., initial_inventory=...)``, because that is the call
+  R4.9 requires (the opening stock comes from the source, never from a literal).
 * **Honest degradation (I-7):** a dead clock thread makes ``perceive().clock_advancing``
   False; callers degrade rather than trust a frozen world.
+
+Provenance (purpose-achievement-audit R4.2/R4.9, design AD-11)
+--------------------------------------------------------------
+``perceive()`` no longer hands back a state whose ``is_synthetic`` is pinned ``True``. It
+reports the active source's declared class in ``source_class``, from which
+``WorldState.is_synthetic`` is computed, and it reports ``degraded`` +
+``degraded_reason`` from three things the runtime actually knows: the source's own last
+poll (an unreachable feed), an absent opening stock, and a ``STUB`` source. A stub-driven
+world is always degraded — an empty world must never read as a healthy one.
 """
 
 from __future__ import annotations
@@ -34,8 +45,8 @@ from typing import TYPE_CHECKING, Any
 from uuid import uuid4
 
 import structlog
-from synapse_common.world.models import WorldAction, WorldActionKind, WorldState
-from synapse_common.world.source import SimWorldSource
+from synapse_common.world.models import SourceProvenance, WorldAction, WorldActionKind, WorldState
+from synapse_common.world.source import INVENTORY_ABSENT, STUB_SOURCE, SimWorldSource
 
 from digital_twin.config import TwinConfig
 from digital_twin.simulation.engine import SupplyChainSimulation
@@ -85,6 +96,10 @@ class WorldRuntime:
         self._last_tick_monotonic: float | None = None
         self._last_arrivals = 0
         self._ticks = 0
+        # Set at start() when a non-seeded source supplies no opening stock (R4.9). It is
+        # persistent, not per-poll: a world that began with no stock stays a degraded
+        # reading until it is restarted from a source that has some.
+        self._inventory_degradation: str | None = None
 
     # ── lifecycle ───────────────────────────────────────────────────────
 
@@ -92,10 +107,11 @@ class WorldRuntime:
         """Boot the world. ``run_clock=False`` lets tests drive ``tick()`` manually."""
         with self._lock:
             if not self._started:
-                self._sim.start(external_demand=True)
-                # Agent reorders are the ONLY replenishment (see module docstring).
-                self._sim.set_policy(restock_threshold=0.0)
                 if self._source is None:
+                    # No source given: a seeded world whose catalog is the sim's own stock,
+                    # so the sim must boot first. Its literal opening stock is a declared
+                    # part of the seeded scenario, which is why R4.9 does not reach it.
+                    self._sim.start(external_demand=True)
                     skus = list(self._sim.inventory.keys()) or [f"sku_{i}" for i in range(10)]
                     self._source = SimWorldSource(
                         city=self.city,
@@ -104,8 +120,21 @@ class WorldRuntime:
                         arrival_rate_per_min=self._config.order_arrival_rate,
                         seed=self._seed,
                     )
+                elif self._source.provenance() is SourceProvenance.SEEDED:
+                    self._sim.start(external_demand=True)
+                else:
+                    self._start_from_non_seeded_source(self._source)
+                # Agent reorders are the ONLY replenishment (see module docstring).
+                self._sim.set_policy(restock_threshold=0.0)
                 self._started = True
-                logger.info("world_started", city=self.city, skus=len(self._sim.inventory))
+                logger.info(
+                    "world_started",
+                    city=self.city,
+                    skus=len(self._sim.inventory),
+                    source=self._source.name,
+                    source_class=self._source.provenance().value,
+                    degraded_reason=self._inventory_degradation,
+                )
         if run_clock and self._thread is None:
             self._running = True
             self._thread = threading.Thread(
@@ -113,6 +142,29 @@ class WorldRuntime:
             )
             self._thread.start()
         return self
+
+    def _start_from_non_seeded_source(self, source: WorldSource) -> None:
+        """Boot the world on stock the source supplies — or honestly on none (R4.9).
+
+        The literal ``{sku_i: 100.0}`` default is *not* available here. When a non-seeded
+        source supplies no inventory the sim starts empty and ``perceive()`` reports
+        ``degraded`` with ``external_inventory_absent``, because a fabricated 100 units per
+        SKU would be indistinguishable, downstream, from a real store's reported stock —
+        and every KPI derived from it (fill rate, stockout risk) would be fiction.
+        """
+        opening = source.initial_inventory()
+        if opening is None:
+            self._inventory_degradation = INVENTORY_ABSENT
+            self._sim.start(external_demand=True, initial_inventory={})
+            logger.error(
+                "world_initial_inventory_absent",
+                city=self.city,
+                source=source.name,
+                substituted_default=False,
+            )
+            return
+        self._inventory_degradation = None
+        self._sim.start(external_demand=True, initial_inventory=dict(opening))
 
     def stop(self) -> None:
         self._running = False
@@ -164,6 +216,10 @@ class WorldRuntime:
             demand_rate = self._config.order_arrival_rate * float(
                 getattr(self._sim, "demand_mult", 1.0)
             )
+            source_class = (
+                self._source.provenance() if self._source is not None else SourceProvenance.SEEDED
+            )
+            degraded_reason = self._degraded_reason(source_class)
         in_stock = sum(1 for v in inv.values() if v > 0.0)
         fill = (in_stock / len(inv)) if inv else 1.0
         created = int(m.orders_created)
@@ -179,7 +235,31 @@ class WorldRuntime:
             restocks_triggered=int(m.restocks_triggered),
             demand_rate=round(demand_rate, 4),
             clock_advancing=self._clock_advancing(),
+            # Declared by the source, never asserted here: `is_synthetic` is computed from
+            # this value (AD-11), so there is no keyword a caller could pass to claim the
+            # world is real.
+            source_class=source_class,
+            degraded=degraded_reason is not None,
+            degraded_reason=degraded_reason,
         )
+
+    def _degraded_reason(self, source_class: SourceProvenance) -> str | None:
+        """First applicable degradation, most-recent condition first, else ``None``.
+
+        Order matters only for which reason is reported, not for whether the state is
+        degraded: the source's own last poll (an unreachable feed) is the live condition and
+        wins over the boot-time absent-inventory reason. A ``STUB`` source that reports no
+        degradation of its own still degrades here — a source that can never produce an
+        arrival must not present an empty world as a healthy one (R4.8, I-7).
+        """
+        live = self._source.degradation() if self._source is not None else None
+        if live is not None:
+            return live
+        if self._inventory_degradation is not None:
+            return self._inventory_degradation
+        if source_class is SourceProvenance.STUB:
+            return STUB_SOURCE
+        return None
 
     # ── actuate ─────────────────────────────────────────────────────────
 

@@ -1,7 +1,10 @@
 /* Self-hosted faces (ADR-045; sources + OFL licensing in public/fonts/FONTS.md).
-   font-display: swap — system-ui paints first, the real face swaps in.
-   The two variable files preloaded from index.html are the paint-critical set;
-   the mono weights swap late by design (data surfaces, below the fold). */
+   font-display: swap — a fallback paints first, the real face swaps in.
+   Only Space Grotesk is preloaded from index.html (22 KB; the Shell wordmark and Mission
+   Control's hero title use it above the fold). Inter is NOT preloaded: its 344 KB file
+   competed with the entry JS on the 3G mobile profile, and with swap the first paint never
+   waits for it — "Inter Variable Fallback" below stands in at Inter's metrics until it
+   lands. The mono weights swap late by design (data surfaces, below the fold). */
 
 @font-face {
   font-family: "Inter Variable";
@@ -10,6 +13,40 @@
   font-weight: 100 900;
   font-style: normal;
   font-display: swap;
+}
+
+/* Metric-matched local stand-in for Inter while InterVariable.woff2 downloads, so the swap
+   moves as little as possible (CLS, Req 15.4). It only applies where the font stack names it
+   after "Inter Variable" (tailwind.config.ts `fontFamily.sans`).
+
+   Derived from published metrics with the formula next/font uses
+   (developer.chrome.com/blog/framework-tools-font-fallback), not tuned by eye:
+     Inter 4 (rsms/inter docs/_data/fontinfo.json; capsize googleFonts.json):
+       unitsPerEm 2048, ascent 1984, descent -494, lineGap 0, latin xWidthAvg 978
+     Arial (capsize systemFonts.json): unitsPerEm 2048, latin xWidthAvg 913
+     size-adjust      = 978 / 913                   = 107.12%
+     ascent-override  = 1984 / (2048 * 1.071194)    =  90.44%
+     descent-override =  494 / (2048 * 1.071194)    =  22.52%
+     line-gap-override = 0 (Inter has no line gap)
+
+   local() candidates — each Arial-width-compatible, so the one set of overrides serves all
+   (the ascent/descent/line-gap overrides replace the local face's own vertical metrics):
+     Windows: Arial. macOS: Arial (Helvetica where Arial is absent).
+     Linux CI: Liberation Sans — `fonts-liberation`, which `playwright install --with-deps`
+       installs. Chromium matches local() by full or PostScript name only, so "Arial" does
+       not reach Liberation Sans through fontconfig's alias there.
+     ChromeOS: Arimo.
+   DejaVu Sans is deliberately absent: it keeps Bitstream Vera's wider proportions, so these
+   Arial-derived overrides would make it wider than Inter, not equal. Where no candidate
+   resolves, the face is skipped and the stack falls through exactly as before. One face
+   serves every weight (as next/font does), so bold text still shifts a little on swap. */
+@font-face {
+  font-family: "Inter Variable Fallback";
+  src: local("Arial"), local("Liberation Sans"), local("Helvetica"), local("Arimo");
+  size-adjust: 107.12%;
+  ascent-override: 90.44%;
+  descent-override: 22.52%;
+  line-gap-override: 0%;
 }
 
 @font-face {

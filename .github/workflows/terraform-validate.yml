@@ -75,11 +75,33 @@ jobs:
         working-directory: ${{ matrix.module }}
         run: terraform validate -no-color
 
-      - name: tflint (optional, won't block)
+      - name: tflint (informational - optional, does not block)
+        # R11.3 (decision-quality-proof task 3.2). The old name, "tflint (optional,
+        # won't block)", was honest PROSE that carried neither marker word, so
+        # `workflow_shape_truth` reported it while a human reader would have said the
+        # step was already labelled. That gap is the point of having a fixed marker
+        # vocabulary (`ADVISORY_MARKERS`): a name a machine can read, not a name a
+        # machine has to interpret. The step's behaviour is unchanged.
+        #
+        # Informational rather than blocking on purpose. tflint is not installed on the
+        # runner image; this step fetches an installer over the network from a raw
+        # githubusercontent URL and pipes it to bash, so a network hiccup or an upstream
+        # move would fail the step for reasons that have nothing to do with the Terraform
+        # under review. `terraform fmt`, `terraform init` and `terraform validate` above
+        # are the blocking checks and need nothing off-runner. Promoting tflint would
+        # mean vendoring or pinning the installer first; that is a separate change.
+        #
+        # The trailing `|| true` on the tflint invocation is removed. It was a second,
+        # redundant suppression underneath `continue-on-error`, and the two disagreed
+        # about what a reader sees: with the `|| true` a lint finding rendered as a GREEN
+        # step, which is the "looks like a gate, is not a gate" shape this whole gate
+        # family exists to remove. Without it, a finding renders as a failed-but-
+        # non-blocking step and the job still succeeds -- the same job outcome, an honest
+        # step outcome (I-7).
         if: steps.presence.outputs.present == 'true'
         continue-on-error: true
         working-directory: ${{ matrix.module }}
         run: |
           curl -sSL https://raw.githubusercontent.com/terraform-linters/tflint/master/install_linux.sh | bash
           tflint --init
-          tflint --no-color || true
+          tflint --no-color

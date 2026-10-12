@@ -1,0 +1,42 @@
+{
+  "$comment": [
+    "SYNAPSE -- committed thresholds for the Effectiveness_Baseline check (R8.10; design E6; AD-13).",
+    "",
+    "Read by `frontend/spec/effectiveness/check-baseline.ts` (utf-8 on every read, E-S13-07) and",
+    "passed to `frontend/src/lib/effectiveness-baseline.ts::validateBaseline`. The validator holds no",
+    "numeric literal of its own: every number the authored-ceiling rule compares against lives here,",
+    "so the rule is reviewable and diffable rather than buried in TypeScript (AD-13).",
+    "",
+    "THE RULE, R8.10 verbatim: 'IF every row carries an identical `steps` value and an identical",
+    "`latencyMs` value, THEN THE baseline check SHALL fail the baseline as an authored ceiling rather",
+    "than accept it as a measurement.' The conjunction is deliberate. Two Jobs-To-Be-Done may",
+    "honestly need the same number of affordance activations, so uniform `steps` alone is not the",
+    "tell; uniform `steps` AND uniform millisecond latencies across every row is, because a measured",
+    "time-to-complete does not repeat exactly across five different operator paths.",
+    "",
+    "`min_distinct_steps` / `min_distinct_latency_ms` are the counts of DISTINCT values the row set",
+    "must exhibit. The baseline fails as an authored ceiling only when BOTH counts fall below their",
+    "minimum. Both are floored at 2 by the policy schema: a value of 1 would satisfy any single-",
+    "valued column and so would switch the rule off from configuration, which is exactly the",
+    "weakening this file exists to make visible.",
+    "",
+    "`min_rows` is the row count below which the distinctness rule cannot be evaluated at all (one",
+    "row is trivially uniform in both columns). Below it the baseline is rejected as UNEVALUABLE, not",
+    "accepted: absence of proof is never a pass (I-7). It is NOT the declared Job_To_Be_Done count --",
+    "the row-to-job bijection is R8.1/R8.3, and its single source of truth is `JOB_ORDER` in",
+    "`frontend/src/lib/effectiveness-scorecard.ts`, never a number copied to here.",
+    "",
+    "Seeded from the audit finding, not from a measurement. The committed",
+    "`frontend/spec/effectiveness/scorecard.baseline.json` carries `steps: 20` and `latencyMs: 15000`",
+    "on all five rows and carries no per-row capture stamps, so it FAILS this check as landed. That",
+    "failure is R8.10's finding becoming mechanical, not a defect in this file; it clears only when",
+    "the browser harness (task 11.1) and the complete-or-failed emitter (task 11.2) produce a",
+    "measured, per-row-stamped baseline."
+  ],
+  "version": 1,
+  "authored_ceiling": {
+    "min_rows": 2,
+    "min_distinct_steps": 2,
+    "min_distinct_latency_ms": 2
+  }
+}

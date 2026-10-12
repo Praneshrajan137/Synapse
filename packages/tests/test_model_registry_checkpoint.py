@@ -5,12 +5,26 @@ the *serving* path the free-tier VM actually uses: a checkpoint resolved from a
 local dir (or HF Hub), built into a concrete model by an injected builder, with
 the architecture + fitted calibrator carried in the sidecar meta. torch-free — a
 JSON artifact + a sentinel builder stand in for the trained module.
+
+Scope (R3.8) — TRANSPORT AND ADAPTER VALIDATION ONLY. Every proof below writes its
+checkpoint into a pytest ``tmp_path`` and resolves it from that temporary directory,
+so what is validated is the checkpoint *transport* (local dir -> loader -> sidecar)
+and the *adapter* (injected builder -> ``LoadedModel``). This module is deliberately
+**not evidence that a checkpoint is published**: ``ModelRegistry._resolve_checkpoint_path``
+prefers a local file over the remote, which is exactly why a locally built artifact
+must never be counted as publication evidence, and no published-checkpoint gate reads
+this module (``scripts/audit/published_checkpoint_truth.py`` fetches the remote
+sidecar directly and names the local candidates it REFUSED).
+
+The label is mechanical, not decorative: ``packages/tests/test_checkpoint_scope_labelling.py``
+enforces the statement above and the two constants below against the committed
+``infrastructure/quality/checkpoint-scope.yaml``. Deleting either fails that test.
 """
 
 from __future__ import annotations
 
 import json
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Final
 
 import pytest
 from synapse_common.model_registry import LoadedModel, ModelRegistry
@@ -21,6 +35,11 @@ if TYPE_CHECKING:
     from pathlib import Path
 
 NAME = "demand_prophet_hgt_tft"
+
+#: R3.8 scope label. Read by packages/tests/test_checkpoint_scope_labelling.py.
+SERVING_PROOF_SCOPE: Final[str] = "transport-and-adapter-only"
+#: This module is never counted as evidence that a checkpoint is published (I-7).
+PUBLICATION_EVIDENCE: Final[bool] = False
 
 
 def _write_artifact(tmp: Path, *, sidecar: dict | None = None) -> str:

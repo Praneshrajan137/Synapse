@@ -4,14 +4,27 @@ Par_Level_Reorder — the (s, S) reordering baseline policy (R1.1, R1.2, R1.10).
 Plain-language rule (the control representing operation *without* SYNAPSE):
 
     Maintain two reorder points, a low-water mark ``s`` and a target level ``S`` with
-    ``0 <= s < S``. For each SKU, when the observed inventory level falls to or below
-    ``s``, reorder up to the target: order ``S - projected_level`` units. When the level
-    is strictly above ``s``, order nothing (quantity ``0``).
+    ``0 <= s < S``. For each SKU, take the INVENTORY POSITION -- the observed level plus
+    what is already on order. When the position falls to or below ``s``, reorder up to the
+    target: order ``S - position`` units. When the position is strictly above ``s``, order
+    nothing (quantity ``0``).
 
 This is the textbook (s, S) inventory policy: a transparent, deterministic control arm
 against which SYNAPSE's four-tier consensus reorder decisions are measured. The policy
 holds no hidden global state — it is constructed with a deterministic seed and produces
 identical decisions for identical inputs across runs (R1.9).
+
+**Inventory position, not on-hand stock (decision-quality-proof finding 67).** Inventory
+position is the textbook (s, S) trigger. Under any supplier lead time an order is in transit,
+not on the shelf, so a rule on ON-HAND stock sees the level still at or below ``s`` at the next
+cadence and orders ``S - level`` again -- re-ordering the pipeline every cadence until the
+first order lands. The position rule is IDENTICAL to the on-hand rule whenever nothing is on
+order: with ``obs.on_order`` empty the position is the level. That is every step of every run
+measured before task 13.1, because ``place_order`` is ``add_stock`` with structure 3 off.
+
+**Ownership.** This file belongs to ``.kiro/specs/decision-integrity-uplift-proof/``. It was
+edited from ``decision-quality-proof`` by operator decision (session 11, Q1=a). Its name, its
+constructor signature and its seed contract are unchanged.
 """
 from __future__ import annotations
 
@@ -64,16 +77,18 @@ class Par_Level_Reorder:
         return self._seed
 
     def decide(self, obs: Observation) -> PolicyAction:
-        """Emit per-SKU reorder quantities under the (s, S) rule (R1.2, R1.10).
+        """Emit per-SKU reorder quantities under the (s, S) rule on inventory position.
 
-        For each SKU in the observation's inventory: if the projected level is at or
-        below ``s``, reorder ``S - projected_level``; otherwise reorder ``0``. The
-        projected inventory level is the currently observed inventory level for the SKU.
+        For each SKU in the observation's inventory, ``position = level + on_order`` (a SKU
+        absent from ``obs.on_order`` has nothing in transit). If the position is at or below
+        ``s``, reorder ``S - position``; otherwise reorder ``0``. An order is never negative:
+        whenever one is placed, ``S - position >= S - s > 0``.
         """
         reorder_quantities: dict[str, float] = {}
-        for sku, projected_level in obs.inventory.items():
-            if projected_level <= self._s:
-                reorder_quantities[sku] = float(self._S - projected_level)
+        for sku, level in obs.inventory.items():
+            position = level + obs.on_order.get(sku, 0.0)
+            if position <= self._s:
+                reorder_quantities[sku] = float(self._S - position)
             else:
                 reorder_quantities[sku] = 0.0
         return PolicyAction(reorder_quantities=reorder_quantities)

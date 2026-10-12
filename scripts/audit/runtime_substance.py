@@ -28,6 +28,18 @@ fabricates a pass) when torch is absent or no serving checkpoint exists — the
 runtime proof lives in the CI ``training-smoke`` job, which produces the artifact
 first.
 
+**R9.4 (decision-quality-proof task 20.1): confidence must MOVE, not merely be
+non-floor.** The demand_prophet clause previously fired only on
+``all(c == FALLBACK_CONFIDENCE for c in confs)``, so three SKUs all returning the
+same ``0.7231`` passed it — and a constant above the 0.7 HITL threshold is the
+dangerous case, not the harmless one, because it looks healthy while making I-5
+unable to fire. The clause now requires at least
+:data:`MIN_DISTINCT_CONFIDENCES` distinct values at :data:`CONFIDENCE_DECIMALS`
+decimal places over at least :data:`MIN_DISTINCT_ENTITIES` entities whose feature
+vectors are proven distinct by :meth:`StubFeatureStore.feature_vectors`. Both
+floors are needed: a spread over identical inputs would be evidence of
+nondeterminism rather than of a live model.
+
 Run::
 
     python -m scripts.audit.runtime_substance                 # human lines (all probes)
@@ -40,13 +52,53 @@ from __future__ import annotations
 
 import json
 import sys
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import Any, Final
 
 ROOT = Path(__file__).resolve().parents[2]
 CHECKPOINT_DIR = ROOT / "artifacts" / "checkpoints"
+
+# --------------------------------------------------------------------------- #
+# R9.4's floors, named because a single one is satisfiable vacuously.
+#
+# The clause this replaces read `all(c == FALLBACK_CONFIDENCE for c in confs)`,
+# so it fired ONLY on total collapse to the I-7 floor: three SKUs all returning
+# the same `0.7231` passed it. A confidence that does not MOVE across SKUs is
+# a constant by any other name, and a constant above the HITL threshold makes
+# I-5 (confidence-gated escalation) inoperative - the exact failure mode
+# `synapse_common/provenance.py` names when it forbids a `constant`
+# confidence_basis. Two floors are needed, not one: a spread requires distinct
+# INPUTS to be evidence of a live model rather than of nondeterminism, and a
+# spread over one entity is not a spread at all.
+# --------------------------------------------------------------------------- #
+
+#: R9.4: at least this many entities, each carrying a DISTINCT feature vector.
+MIN_DISTINCT_ENTITIES: Final[int] = 3
+#: R9.4: at least this many distinct confidence values across that batch.
+MIN_DISTINCT_CONFIDENCES: Final[int] = 2
+#: The decimal places the payload actually serves. Comparing at full float
+#: precision would let a difference no operator can see satisfy the floor.
+CONFIDENCE_DECIMALS: Final[int] = 4
+
+
+def served_confidences(values: Sequence[float]) -> tuple[float, ...]:
+    """Round to the decimal places served, so the comparison is the operator's."""
+    return tuple(round(float(value), CONFIDENCE_DECIMALS) for value in values)
+
+
+def confidence_moves(values: Sequence[float]) -> bool:
+    """R9.4: does confidence MOVE across the batch, at the precision served?
+
+    Pure and exported so the property test drives the same predicate the gate
+    does rather than a restatement of it that could drift. Deliberately says
+    nothing about WHY the values differ: that is the caller's job, and the
+    caller must also establish that the inputs differed (see
+    :data:`MIN_DISTINCT_ENTITIES`), or a passing spread would be evidence of
+    nondeterminism instead of evidence of a model.
+    """
+    return len(set(served_confidences(values))) >= MIN_DISTINCT_CONFIDENCES
 
 
 @dataclass
@@ -114,6 +166,21 @@ class StubFeatureStore:
         entities = [r[self._entity_key] for r in entity_rows]
         return self._Online(entities, self._template, self._entity_key)
 
+    def feature_vectors(self, entity_ids: Sequence[str]) -> tuple[tuple[float, ...], ...]:
+        """The per-entity feature rows this stub will serve, in entity order.
+
+        Exposed so a probe can PROVE its batch carries distinct feature vectors
+        instead of asserting it in a comment (R9.4). Built from the same
+        ``_Online`` projection ``get_online_features`` returns, so the evidence
+        and the input cannot drift; the refs are sorted so the tuple order is
+        stable across dict iteration order.
+        """
+        rows = self._Online(list(entity_ids), self._template, self._entity_key).to_dict()
+        refs = sorted(ref for ref in rows if ref != self._entity_key)
+        return tuple(
+            tuple(float(rows[ref][index]) for ref in refs) for index in range(len(entity_ids))
+        )
+
 
 # --------------------------------------------------------------------------- #
 # demand_prophet (forecasting paradigm) — the reference probe.
@@ -164,7 +231,20 @@ def _probe_demand_prophet() -> RuntimeProbe:
     pipe = DemandProphetPipeline(
         model=model, conformal_calibrator=calibrator, feast_client=stub_feast
     )
-    forecasts = pipe.predict(["sku_a", "sku_b", "sku_c"], "store_x", horizons={"1h", "24h"})
+    # R9.4's precondition, established BY CONSTRUCTION before the batch is served.
+    # A confidence spread is only evidence of a live model if the inputs differed;
+    # requiring a spread over identical inputs would be an unsatisfiable
+    # assertion, and reporting one as evidence would be a fabricated pass (I-7).
+    skus = ["sku_a", "sku_b", "sku_c"]
+    vectors = stub_feast.feature_vectors(skus)
+    if len(skus) < MIN_DISTINCT_ENTITIES or len(set(vectors)) < MIN_DISTINCT_ENTITIES:
+        return RuntimeProbe(
+            "fail",
+            f"probe batch is not a valid R9.4 input: {len(set(vectors))} distinct feature "
+            f"vector(s) over {len(skus)} SKU(s); at least {MIN_DISTINCT_ENTITIES} of each "
+            "are required before a confidence spread means anything",
+        )
+    forecasts = pipe.predict(skus, "store_x", horizons={"1h", "24h"})
     prov = pipe.last_provenance
 
     if prov.degraded:
@@ -173,15 +253,39 @@ def _probe_demand_prophet() -> RuntimeProbe:
         return RuntimeProbe("fail", f"expected FEAST features, got {prov.feature_source}")
     if prov.confidence_basis != ConfidenceBasis.CONFORMAL_INTERVAL:
         return RuntimeProbe("fail", f"basis {prov.confidence_basis} is not CONFORMAL_INTERVAL")
-    confs = [round(f.confidence, 4) for f in forecasts]
-    if all(c == FALLBACK_CONFIDENCE for c in confs):
-        return RuntimeProbe("fail", "confidence collapsed to the fallback floor (disguised)")
+    if len(forecasts) < MIN_DISTINCT_ENTITIES:
+        return RuntimeProbe(
+            "fail",
+            f"served {len(forecasts)} forecast(s) for {len(skus)} SKU(s); R9.4 needs at "
+            f"least {MIN_DISTINCT_ENTITIES}",
+        )
+    confs = list(served_confidences([f.confidence for f in forecasts]))
+    if not confidence_moves(confs):
+        # The old clause fired only on total collapse to the floor. That case is
+        # still named - it is the sharpest instance - but it is no longer the only
+        # one: a constant 0.7231 above the 0.7 HITL threshold is the dangerous
+        # instance, because it looks healthy while making I-5 unable to fire.
+        collapsed = all(value == FALLBACK_CONFIDENCE for value in confs)
+        reason = (
+            "collapsed to the fallback floor (a disguised constant)"
+            if collapsed
+            else "constant across SKUs, which disables the I-5 HITL gate entirely"
+        )
+        return RuntimeProbe(
+            "fail",
+            f"confidence does not move: {len(set(confs))} distinct value(s) at "
+            f"{CONFIDENCE_DECIMALS} d.p. ({confs}) over {len(forecasts)} SKUs carrying "
+            f"{len(set(vectors))} distinct feature vectors; at least "
+            f"{MIN_DISTINCT_CONFIDENCES} are required - {reason}",
+        )
 
     cov = getattr(calibrator, "last_coverage_p90", None)
     return RuntimeProbe(
         "ok",
         f"demand_prophet served real: degraded=False, basis=CONFORMAL_INTERVAL, "
-        f"coverage_p90={cov}, confidences={confs}",
+        f"coverage_p90={cov}, confidences={confs} "
+        f"({len(set(confs))} distinct at {CONFIDENCE_DECIMALS} d.p. over "
+        f"{len(set(vectors))} distinct feature vectors)",
     )
 
 

@@ -1,0 +1,98 @@
+# SYNAPSE -- Tier-4 digital-twin verdict bounds (ADR-054 D3, purpose-achievement-audit R13.4)
+#
+# ADR-054 D3 makes the Tier-4 twin verdict consequential: a disagreement beyond
+# the declared bound withholds dispatch or escalates instead of being recorded in
+# `audit_trace` alone. The bound is committed configuration under
+# `infrastructure/quality/` (AD-13) and NEVER a literal in the protocol -- the
+# protocol reads this file, so moving the veto boundary is a reviewed data edit
+# rather than a source change.
+#
+# Read contract: `encoding='utf-8'` on every read (E-S13-07). Values are
+# dimensionless fractions, never percentages.
+#
+# Consumers:
+#   orchestrator/consensus/protocol.py::load_twin_verdict_bounds  (task 8.7)
+#
+# I-7 is pinned mechanically below, not merely described: `unavailable_action`
+# must read `no_veto`, and the loader REFUSES any other value. Absence of a
+# verdict is not a negative verdict, and a dead twin must not become a global
+# Tier-4 kill switch (ADR-054 D3, "Alternatives Rejected": an absolute veto was
+# considered and rejected).
+
+version: 1
+
+tier4_disagreement:
+  # ---------------------------------------------------------------------------
+  # The bound (R13.4)
+  # ---------------------------------------------------------------------------
+  # Disagreement metric: the MAXIMUM relative deviation, over the KPI keys the
+  # consensus itself predicted, between the twin's Monte-Carlo mean and the
+  # consensus prediction:
+  #
+  #     dev_k        = |twin_k - consensus_k| / max(|consensus_k|, relative_floor)
+  #     disagreement = max over compared k of dev_k
+  #
+  # A max (not a mean) so one contradicted KPI cannot be averaged away by seven
+  # agreeing ones. Relative (not absolute) so ONE bound spans KPI scales that
+  # range from `spoilage_rate` (~0.02) to `orders_created` (~100).
+  max_relative_disagreement: 1.00
+
+  # WIDE ON PURPOSE. ADR-054 "Ratchet / deferred": the first value is set from an
+  # OBSERVED disagreement distribution, not guessed -- and no such distribution
+  # exists yet. Measuring one means running the twin's 1000-scenario Monte-Carlo
+  # against real consensus predictions, which is a CI/GCP workload and is
+  # forbidden on the dev laptop (I-0). Any tighter number committed today would
+  # be a guess dressed as a threshold, which is the exact defect class this spec
+  # exists to remove.
+  #
+  # What 1.00 means: the veto fires only when the twin's predicted KPI differs
+  # from the consensus prediction by MORE THAN 100% of the consensus magnitude --
+  # an order-of-magnitude contradiction (the twin says ~2x or ~0x what consensus
+  # claimed). That is the class of disagreement a veto exists for. Ordinary
+  # Monte-Carlo dispersion does not reach it, so this bound does not manufacture
+  # a Tier-4 escalation storm on the day it lands.
+  measured: false
+  measured_at: null
+  source_run: null
+  ratchet_direction: down          # tightening is a ratchet; widening needs a reason
+  ratchet_id: "twin-verdict:tier4-disagreement"
+  next_step: >-
+    Record a disagreement distribution from a CI/GCP run (the Tier-4 path in
+    .github/workflows/sprint6-e2e-oracle.yml or the scheduled uplift job), then
+    set max_relative_disagreement from an upper percentile of it and flip
+    measured: true with measured_at + source_run. Until then this bound is
+    honestly wide and says so (I-7).
+
+  # ---------------------------------------------------------------------------
+  # Normalisation floor
+  # ---------------------------------------------------------------------------
+  # Divisor floor for the relative deviation above, so a consensus prediction at
+  # or near zero cannot divide by ~0 and report an infinite disagreement. Also
+  # committed rather than inlined (AD-13).
+  relative_floor: 0.001
+
+  # ---------------------------------------------------------------------------
+  # Consequence (ADR-054 D3 offers the disjunction; this records the choice)
+  # ---------------------------------------------------------------------------
+  # `escalate` -> HITLEscalation.escalate awaits a human future and dispatches
+  #               nothing, so it withholds dispatch AND puts a human on it.
+  # `withhold`  -> the audit row records the withheld dispatch with no human
+  #               queued.
+  # `escalate` is chosen: a twin contradicting consensus at the most consequential
+  # tier is exactly the condition I-5's human gate exists for, and escalation is
+  # fail-closed either way (execution_confirmations stays empty).
+  action_on_exceed: escalate
+
+  # NOT CONFIGURABLE (I-7). The loader raises if this reads anything but
+  # `no_veto`. An unreachable or slow twin degrades to `twin_unavailable`, is
+  # visible in the audit trail, and vetoes NOTHING.
+  unavailable_action: no_veto
+
+  # Also not a veto: a twin that answered but shares NO numeric KPI key with the
+  # consensus prediction yields no comparison. No comparison is not a negative
+  # verdict either -- it is recorded as `not_comparable` and dispatch proceeds on
+  # the guardrail verdict alone.
+  not_comparable_action: no_veto
+
+  requirement: R13.4
+  adr: ADR-054

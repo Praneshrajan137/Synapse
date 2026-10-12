@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import Any
+
 import pytest
 from synapse_common.models import ConsensusDecision, DecisionTier
 
@@ -15,10 +17,10 @@ def engine() -> GuardrailEngine:
 
 def _decision(
     confidence: float = 0.85,
-    pricing_actions: list | None = None,
-    routing_actions: list | None = None,
+    pricing_actions: list[dict[str, Any]] | None = None,
+    routing_actions: list[dict[str, Any]] | None = None,
 ) -> ConsensusDecision:
-    action: dict = {}
+    action: dict[str, Any] = {}
     if pricing_actions is not None:
         action["pricing_actions"] = pricing_actions
     if routing_actions is not None:

@@ -1,0 +1,125 @@
+# SYNAPSE -- frontend lockfile regeneration (artifact only; commits nothing)
+#
+# WHY THIS EXISTS. I-0 / execution-routing.md route every `pnpm` invocation to CI, so a manifest
+# edit to `frontend/package.json` cannot be paired with its lockfile on the laptop. And every
+# install in this repository is NON-frozen (`frontend.yml`, `integration.yml`, `security.yml` and
+# `frontend/Dockerfile` all pass `--frozen-lockfile=false`), so a manifest-only commit fails
+# nowhere: each job silently re-resolves in its own workspace while the committed lockfile goes
+# stale. This job resolves the lockfile ONCE, with the repository's pnpm, proves the pair under a
+# FROZEN install, and uploads it for a human to commit.
+#
+# To run it: add the `regen-lockfile` label to the pull request, wait for the run, then
+#   gh run download <run-id> -n frontend-lockfile -D frontend
+# and commit `frontend/pnpm-lock.yaml`. Remove the label afterwards. `workflow_dispatch` works
+# only once this file is on the default branch (GitHub requires that), so on a feature branch
+# the label is the route -- the constraint `regenerate-truth-docs.yml` records as finding 23.
+#
+# Not a required check and owed no `required-checks.yaml` entry: it reports only when labelled,
+# and that file's closed `ineligible.reason` enum has no label member (the conclusion
+# `uplift-cost-probe.yml` records as conflict G).
+
+name: SYNAPSE Frontend Lockfile Regeneration
+
+on:
+  workflow_dispatch:
+
+  pull_request:
+    # `types` REPLACES the default [opened, synchronize, reopened], so this never fires on a
+    # push. Every label event on a PR into main creates a run; the job-level `if:` decides
+    # whether anything executes.
+    types: [labeled]
+    branches: [main]
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    # Copied from frontend.yml: every `run:` step executes inside frontend/.
+    working-directory: frontend
+
+jobs:
+  regen-lockfile:
+    name: Regenerate frontend/pnpm-lock.yaml (artifact only -- commits nothing)
+    runs-on: ubuntu-latest
+
+    # AN ALLOW-LIST, in the shape of `regenerate-truth-docs.yml`'s guard: the events that may
+    # start this job are NAMED, so a future trigger cannot enable it by accident. One deliberate
+    # tightening: the label test reads `github.event.label.name` (the label THIS event added),
+    # not `contains(github.event.pull_request.labels.*.name, ...)` (every label the PR carries).
+    # With `contains`, a PR still carrying `regen-lockfile` would re-run this job on every later,
+    # unrelated label event; with the event's own label, every unrelated label is a zero-cost
+    # skip whether or not `regen-lockfile` is still attached. This is a SELECTOR, not a
+    # `continue-on-error`: when the job runs, every step's exit status gates it.
+    if: >-
+      github.event_name == 'workflow_dispatch'
+      || (github.event_name == 'pull_request'
+      && github.event.label.name == 'regen-lockfile')
+
+    # DERIVED, not picked: `frontend.yml::audit-supply` fits a cached install, the audit and the
+    # host check in `timeout-minutes: 5` on this runner class. This job adds one metadata-only
+    # resolution, so 10 is that shape doubled. A timeout is a FAILED job, never a partial
+    # artifact: the upload runs only after the pair is proven.
+    timeout-minutes: 10
+
+    steps:
+      - name: Check out the PR head (not the synthetic merge commit)
+        uses: actions/checkout@v4
+        with:
+          # The lockfile must match the manifest the BRANCH carries; the default pull_request
+          # checkout is the merge with main, whose package.json may differ. A dispatch has no
+          # pull request, so the dispatched revision is used.
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          # Nothing here pushes, so the token is not left in .git/config.
+          persist-credentials: false
+
+      # pnpm and Node COPIED EXACTLY from frontend.yml (`Setup pnpm` / `Setup Node`). 9.12.0 is
+      # also `frontend/package.json`'s `packageManager`: the lockfile must be written by the pnpm
+      # every other job installs with.
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9.12.0
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22.23"
+          cache: "pnpm"
+          cache-dependency-path: frontend/pnpm-lock.yaml
+
+      - name: Resolve pnpm-lock.yaml from package.json (lockfile only, no node_modules)
+        # `--frozen-lockfile=false` is REQUIRED, not decoration: GitHub sets CI=true, and in CI
+        # pnpm defaults `frozen-lockfile` to true whenever a lockfile is present -- which would
+        # refuse the very update this step exists to make. `--lockfile-only` writes only the
+        # lockfile, so no dependency code and no lifecycle script runs.
+        run: pnpm install --lockfile-only --frozen-lockfile=false
+
+      - name: Prove package.json and pnpm-lock.yaml agree under a FROZEN install
+        # The proof no other job makes: a frozen install exits non-zero
+        # (ERR_PNPM_OUTDATED_LOCKFILE) if the regenerated lockfile and the manifest disagree.
+        # `--ignore-scripts`: the proof needs the resolution, not dependency lifecycle code.
+        run: pnpm install --frozen-lockfile --ignore-scripts
+
+      - name: pnpm-lock supply-chain check (HTTPS + registry.npmjs.org only)
+        # Same command as frontend.yml::audit-supply, run BEFORE the upload so the artifact can
+        # never carry a resolution from a non-npmjs host.
+        run: node scripts/check-supply-chain.mjs
+
+      - name: Upload package.json + pnpm-lock.yaml
+        # Reached only if every step above passed, so the artifact's existence means the pair
+        # was proven. The audit runs AFTER the upload deliberately: an advisory that still needs
+        # an operator decision must not withhold a lockfile that is itself consistent.
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontend-lockfile
+          path: |
+            frontend/package.json
+            frontend/pnpm-lock.yaml
+          if-no-files-found: error
+          retention-days: 7
+
+      - name: pnpm audit (high+ severity, production tree only)
+        # Same command as frontend.yml::audit-supply, so this run predicts that job's verdict on
+        # the regenerated tree.
+        run: pnpm audit --audit-level=high --prod

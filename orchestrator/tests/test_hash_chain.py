@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+from typing import Any
 from uuid import UUID
 
 import pytest
@@ -35,7 +36,7 @@ _TIER = "tier_1"
 _SELECTED_ACTION = {"action": "noop", "store_id": "store_1"}
 _PARETO_WEIGHTS = {"latency": 0.5, "cost": 0.5}
 _CONFIDENCE = 0.987654321  # gets rounded to 6 dp
-_PROPOSALS: list[dict] = []
+_PROPOSALS: list[dict[str, Any]] = []
 _AUDIT_TRACE = ["tier_1_routed"]
 
 

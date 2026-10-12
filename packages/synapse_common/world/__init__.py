@@ -11,20 +11,40 @@ from synapse_common.world.actuation import (
 )
 from synapse_common.world.actuator import Actuator, WorldActuator
 from synapse_common.world.models import (
+    SourceProvenance,
     WorldAction,
     WorldActionKind,
     WorldEvent,
     WorldEventKind,
     WorldState,
 )
-from synapse_common.world.source import ExternalFeedSource, SimWorldSource, WorldSource
+from synapse_common.world.source import (
+    INVENTORY_ABSENT,
+    NOT_CONFIGURED,
+    RECORDS_REJECTED,
+    STUB_SOURCE,
+    UNREACHABLE,
+    ExternalFeedSource,
+    FeedConsumer,
+    FeedUnreachableError,
+    SimWorldSource,
+    WorldSource,
+)
 
 __all__ = [
+    "INVENTORY_ABSENT",
+    "NOT_CONFIGURED",
+    "RECORDS_REJECTED",
+    "STUB_SOURCE",
+    "UNREACHABLE",
     "ActuationItem",
     "ActuationOutcome",
     "Actuator",
     "ExternalFeedSource",
+    "FeedConsumer",
+    "FeedUnreachableError",
     "SimWorldSource",
+    "SourceProvenance",
     "WorldActuator",
     "WorldAction",
     "WorldActionKind",

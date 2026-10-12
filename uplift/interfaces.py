@@ -52,6 +52,22 @@ class Observation:
     counters are the running twin tallies observed so far this scenario. ``active_shock``
     is the shock descriptor in effect (``None`` when unshocked). ``pending_order`` and
     ``eligible_stores`` are populated only when a routing decision is required.
+
+    decision-quality-proof task 13.1 appends five fields. Each is something a real planner
+    knows, so exposing it hands no arm an oracle:
+
+    * ``on_order`` -- units ordered and not yet arrived, per SKU (absent = nothing in transit).
+      A planner knows its open purchase orders; it is what makes inventory position computable.
+    * ``supplier_lead_time_history`` -- each supplier's realised lead times, in arrival order.
+      A planner knows how long past deliveries took; never how long a future one will.
+    * ``demand_to_date`` -- demand events generated so far this run, per SKU. A planner knows
+      its own sales history.
+    * ``sku_supplier`` -- which supplier each SKU is ordered from. A planner knows its vendors.
+    * ``start_weekday`` -- the weekday the run started on (0 = Monday), or ``None`` when demand
+      has no weekly shape. A planner knows what day it is.
+
+    All five default to empty (or ``None``), which is what the twin reports with no world, so
+    every existing construction site, and every arm that ignores them, is unchanged.
     """
 
     inventory: Mapping[str, int]
@@ -63,6 +79,13 @@ class Observation:
     active_shock: ShockParams | None = None
     pending_order: PendingOrder | None = None
     eligible_stores: tuple[Store, ...] = ()
+    on_order: Mapping[str, float] = dataclasses.field(default_factory=dict)
+    supplier_lead_time_history: Mapping[str, tuple[float, ...]] = dataclasses.field(
+        default_factory=dict
+    )
+    demand_to_date: Mapping[str, int] = dataclasses.field(default_factory=dict)
+    sku_supplier: Mapping[str, str] = dataclasses.field(default_factory=dict)
+    start_weekday: int | None = None
 
 
 # ---------------------------------------------------------------------------

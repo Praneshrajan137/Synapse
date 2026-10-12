@@ -1,11 +1,6 @@
 import fc from "fast-check";
 import { describe, expect, it } from "vitest";
-import {
-  type Interruption,
-  SEEDED_INTERRUPTIONS,
-  interruptionPrecision,
-  seededInterruptionPrecision,
-} from "../interruption-precision";
+import { type Interruption, interruptionPrecision } from "../interruption-precision";
 
 // Feature: atlas-console-effectiveness
 // Property 18: Interruption_Precision equals warranted ÷ total interruptions
@@ -104,11 +99,11 @@ describe("Property 18: Interruption_Precision is the warranted fraction, bounded
     );
   });
 
-  it("the seeded scripted-proxy value is the warranted fraction of SEEDED_INTERRUPTIONS and lies in [0, 1]", () => {
-    const value = seededInterruptionPrecision();
-    expect(value).toBe(oracle(SEEDED_INTERRUPTIONS));
-    expect(value).not.toBeNull();
-    expect(value).toBeGreaterThanOrEqual(0);
-    expect(value).toBeLessThanOrEqual(1);
-  });
+  // The committed-sample case that used to live here is gone with the sample:
+  // purpose-achievement-audit R8.5 (task 11.5) removed the hand-authored
+  // interruption list this module used to compute over, because a precision
+  // reproducible from a committed list without executing a run is a failed
+  // result. The run-collected replacement (the sealed ledger, seed
+  // responsiveness, and the committed-literal scan) is Property 34's subject,
+  // written in task 11.6 -- deliberately not asserted here.
 });

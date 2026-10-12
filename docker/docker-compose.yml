@@ -181,6 +181,10 @@ services:
       - ../infrastructure/postgres/06_ws5_steering.sql:/docker-entrypoint-initdb.d/08_ws5_steering.sql:ro
       - ../infrastructure/postgres/07_wsA_consensus_city.sql:/docker-entrypoint-initdb.d/09_wsA_consensus_city.sql:ro
       - ../infrastructure/postgres/08_sprint19_outcomes.sql:/docker-entrypoint-initdb.d/10_sprint19_outcomes.sql:ro
+      # purpose-achievement-audit (AD-10 / CF-1): append-only
+      # decision_data_provenance stream. Mounted in dev too, so the parity hole
+      # that let the outbox schema rot (C55) cannot recur for this table.
+      - ../infrastructure/postgres/09_decision_data_provenance.sql:/docker-entrypoint-initdb.d/11_decision_data_provenance.sql:ro
       # NOTE (deliberate divergence): dev has no api-gateway service — nginx routes
       # /api/ straight to the orchestrator. The api/ gateway (auth, rate limiting) is
       # exercised by api/tests + runs in docker-compose.gcp.yml. Schema parity (the
