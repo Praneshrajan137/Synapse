@@ -29,7 +29,7 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: '20.18'
+          node-version: '22.23'
           cache: 'pnpm'
           cache-dependency-path: frontend/pnpm-lock.yaml
 
@@ -46,9 +46,9 @@ jobs:
           if [ -f frontend/package.json ]; then
             cd frontend
             # SYNAPSE is pnpm-only — using npm install here resolves a different
-            # dep graph and lands on packages whose `engines` reject Node 20
-            # (e.g. mute-stream@4.0.0 requires Node ^22). Stick to pnpm so the
-            # audit graph matches what actually ships.
+            # dep graph than the one that ships (it once landed on mute-stream@4.0.0,
+            # whose `engines` wanted Node ^22 while this job ran 20). Stick to pnpm so
+            # the audit graph matches what actually ships.
             pnpm install --frozen-lockfile=false
             pnpm audit --audit-level=critical || true
           else
