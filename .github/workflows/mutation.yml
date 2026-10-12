@@ -47,6 +47,15 @@ on:
       - 'packages/synapse_common/audit_chain.py'
       - 'orchestrator/audit/chain_walk.py'
 
+# A superseded pull-request push stops spending runner time: a newer push to the same PR
+# cancels this workflow's in-progress run for the older head. Scheduled, dispatched and push
+# runs are each keyed by their own run id, so none shares a group and none is cancelled --
+# GitHub cancels a PENDING run when a newer one joins its group whatever
+# `cancel-in-progress` says, so a sha key would let the cron and a push of one commit collide.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 env:
   PYTHONPATH: "."
 

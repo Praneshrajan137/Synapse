@@ -10,6 +10,15 @@ on:
     - cron: "0 4 * * *"
   workflow_dispatch:
 
+# A superseded pull-request push stops spending runner time: a newer push to the same PR
+# cancels this workflow's in-progress run for the older head. The nightly, dispatched and
+# push runs are each keyed by their own run id, so none shares a group and none is
+# cancelled -- GitHub cancels a PENDING run when a newer one joins its group whatever
+# `cancel-in-progress` says.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
   schemathesis:
     name: API Fuzz (Schemathesis)

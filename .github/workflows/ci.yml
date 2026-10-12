@@ -10,6 +10,15 @@ on:
   pull_request:
     branches: [main]
 
+# A superseded pull-request push stops spending runner time: a newer push to the same PR
+# cancels this workflow's in-progress run for the older head, whose verdict nobody can act
+# on. Every other run is keyed by its own run id, so it shares a group with nothing and is
+# never cancelled -- GitHub cancels a PENDING run when a newer one joins its group whatever
+# `cancel-in-progress` says, so a sha key would let two pushes of one commit collide.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
   quality-gates:
     name: Lint + Type Check + Unit Tests
