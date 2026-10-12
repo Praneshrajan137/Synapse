@@ -5195,6 +5195,25 @@ progress ledger; design reasoning is ADR-055.
         with a reload, or an `errorElement` on the root and `/login` routes.
       - Not in P1: no CI check observes it, and new UI code that cannot be type-checked or run
         locally would turn P1's frontend run into discovery.
+    - **FINDING 93 (measured; a discovery P1 should have made before pushing).**
+      - P1's first frontend runs on sha ba02a1b (Frontend CI 38287788536, Security Scan
+        38287788452, Lockfile Regeneration 38287793681) failed at `pnpm install` in every job
+        with `ERR_PNPM_UNSUPPORTED_ENGINE`: maplibre-gl 6.14.0 -> `@maplibre/maplibre-gl-style-spec`
+        26.4.4 -> `@mapbox/jsonlint-lines-primitives` 2.0.3 declares `engines.node >= 22`, every
+        frontend job ran Node 20.18.3, and `frontend/.npmrc` sets `engine-strict=true`.
+      - P1's dependency reading stopped at maplibre's own `engines` (`>=16.14.0`). A registry
+        crawl of maplibre-gl 6.14.0's tree (depth 5, after the fact) finds that one package the
+        only one above 20. Node 20 itself reached end-of-life on 2026-04-30.
+      - Repair: every frontend Node pin moves to 22.23 LTS (`frontend.yml` x13, `security.yml`,
+        `integration.yml::real-stack-run`, `frontend-lockfile-regen.yml`, `frontend/Dockerfile`
+        `node:22.23-alpine`), and `engines.node` becomes `>=22.0.0`. No locked package's
+        `engines` rejects 22.23.3 (lockfile scan, 774 declarations).
+      - Rejected: an override pinning the transitive package back (it silences the constraint),
+        and `engine-strict=false` (it removes a refusal). Node 24 (active LTS) is the longer-lived
+        line but a larger, unmeasured toolchain jump.
+      - Still on Node 20, both EOL and neither installing the frontend:
+        `ci.yml::chromatic-color-gates` (`design-system/color`'s `npm ci`) and
+        `infrastructure/oracle/setup_oracle_vm.sh`.
 
   - [x] 29.1 Deferral is a terminal state the census reports
     - discharge: ci.yml::uplift-verify fast shard 3/4 (tests/verify a-o)
@@ -5293,9 +5312,18 @@ progress ledger; design reasoning is ADR-055.
       fails.
     - _Requirements: 7.20, 7.21_
 
-  - [~] 29.7 An abstaining baseline admits a probe the runner's own FAIL then judges (R1.5a)
+  - [x] 29.7 An abstaining baseline admits a probe the runner's own FAIL then judges (R1.5a)
     - discharge: truth-gates.yml::falsification-sweep
-    - last-checked: run 36976628961 (SYNAPSE Truth Gates, sha 5eef6ee, 2026-10-02) -- pre-change: 16/16 operators probed, 12 falsified, 4 indeterminate (C60, C70, C71, C72: each baseline exit 1, mutated exit 1, every expect_name present)
+    - **DISCHARGED: run 38287788451 (SYNAPSE Truth Gates, sha ba02a1b, 2026-10-12), job
+      `Falsification Sweep (declared gate mutations)` `success`** -- verdict `pass`, 16 of 16
+      operators probed, all 14 checks falsified, 0 unproven; C60, C70, C71 and C72 read
+      `baseline_exit_code` 2 and falsified on the runner's `[FAIL]` line (report artifact
+      `fault-injection-report`, read per probe). The step printed the predicted line verbatim.
+    - **One pre-registered prediction MISSED: "no falsified probe carries mutated exit 2".**
+      C69's probe (`remove-the-record-the-scanner-was-written-against`) has baseline exit 0 and
+      mutated exit 2, so it is counted falsified on an abstention -- finding 85, now measured.
+    - previously: last-checked run 36976628961 (SYNAPSE Truth Gates, sha 5eef6ee, 2026-10-02) --
+      pre-change: 16/16 operators probed, 12 falsified, 4 indeterminate (C60, C70, C71, C72)
     - Files: `scripts/audit/gate_fault_injection.py`,
       `tests/verify/test_declared_falsification_property.py`, `requirements.md` R1 criterion 5a,
       `design.md` Property 38, and notes in `infrastructure/quality/gate-mutations.yaml`,
@@ -5320,14 +5348,31 @@ progress ledger; design reasoning is ADR-055.
         is the first that can, and it is predicted to show none.
       - Whether an abstention or a crash under mutation counts as detection is open, and it is the
         owner's call.
+      - **MEASURED on run 38287788451 (sha ba02a1b).** C69's operator deletes
+        `.kiro/specs/core-purpose-uplift/tasks.md`; `task_claim_truth` then reports its
+        `must_resolve` record `unresolved-record` (exit 2, `unavailable` -> SKIP, read in
+        `task_claim_truth.py`), the runner exits 2 naming both subjects, and the PASS-baseline
+        branch counts it falsified. So one of the sweep's 14 falsified checks rests on an
+        abstention, not a FAIL. The repair belongs to the declaration, not the classifier: an
+        operator that re-ticks core-purpose-uplift task 9 while `published_checkpoints.json`
+        holds only `__placeholder__` would make C69 FAIL, which is the R3.6 failure mode the
+        check exists for. Not changed here: it alters a required job's declaration, and
+        tightening the branch instead would turn that job red until the operator changes.
     - Demo: the required `falsification-sweep` job exits 0 with 16 of 16 falsified. A SKIP on both
       copies, or an exit 1 without the runner's `[FAIL]`/`[PARTIAL]` line, still reads
       `indeterminate`.
     - _Requirements: 1.5a_
 
-  - [~] 29.8 A harvest names the run it read (finding 87)
+  - [x] 29.8 A harvest names the run it read (finding 87)
     - discharge: ci.yml::uplift-verify fast shard 3/4 (tests/verify a-o) and fast shard 4/4
-    - last-checked: run 36976629141 (SYNAPSE CI, sha 5eef6ee, 2026-10-02) -- pre-change: fast shards 3/4 and 4/4 success
+    - **DISCHARGED: run 38287788434 (SYNAPSE CI, sha ba02a1b, 2026-10-12), fast shard 3/4
+      (`371 passed`) and 4/4 (`265 passed`) `success`, aggregate `success`** -- read per test id:
+      `test_census_harvest_property.py` 11 PASSED and `test_census_deferral_property.py` 16
+      (13 matched by id, 3 parametrised with spaces in the id; 0 failed in the shard) in 3/4,
+      and `test_spec_ledger_census.py` 22 PASSED in 4/4. `--files --check` at ba02a1b: pending
+      2, unharvested 0, exit 0.
+    - previously: last-checked run 36976629141 (SYNAPSE CI, sha 5eef6ee, 2026-10-02) --
+      pre-change: fast shards 3/4 and 4/4 success
     - Files: `scripts/audit/spec_ledger_census.py`, `tests/verify/test_census_harvest_property.py`,
       `tests/verify/test_census_deferral_property.py`, `tests/verify/test_spec_ledger_census.py`
     - Prediction (pre-registered): both shards succeed. Collected locally (`-m "not slow"`), and
