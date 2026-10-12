@@ -42,6 +42,73 @@ function e2eHarnessEntry(): Plugin {
   };
 }
 
+/**
+ * Vendor chunks by npm package (FE-INV-014, FE-INV-025). Every heavy viz library has
+ * its own named chunk, and `deck`, `map` and `graph` must never be on the entry's
+ * critical path: scripts/check-entry-preloads.mjs lists the eager set after each build
+ * and fails on those prefixes.
+ *
+ * Rollup also puts a manual chunk's static dependencies into that chunk unless another
+ * manual chunk has claimed them -- in both forms of `manualChunks` (rollup 4.60.4,
+ * `addStaticDependenciesToManualChunk`). So a small module that the entry AND a heavy
+ * library both import belongs to whichever chunk reaches it first, and the entry then
+ * imports it FROM that chunk, which makes the whole chunk eager. A local build of
+ * 2026-08-01 measured exactly this: the entry statically imported Vite's preload helper
+ * and three tslib helpers from `deck-*.js`, and `clsx` from `viz-*.js`.
+ * `runtime` claims those modules first, so they load with the entry in a few kilobytes
+ * and the heavy chunks load only behind their lazy boundaries.
+ *
+ * This is the function form because it assigns by package path: it claims every installed
+ * copy of a package (the lockfile carries more than one tslib), where the object form
+ * resolves each name to a single module from the project root, and it can name the preload
+ * helper by its virtual id.
+ */
+const VENDOR_CHUNKS: Readonly<Record<string, readonly string[]>> = {
+  "react-vendor": ["react", "react-dom", "react-router-dom"],
+  query: ["@tanstack/react-query"],
+  deck: ["@deck.gl/core", "@deck.gl/layers", "@deck.gl/aggregation-layers", "@deck.gl/react"],
+  // maplibre-gl v6's tile worker is not in this chunk: basemap.ts imports it with
+  // `?worker&url`, which Vite bundles on its own as assets/maplibre-gl-worker-[hash].js
+  // (tests/e2e/map-worker.spec.ts).
+  map: ["maplibre-gl"],
+  viz: ["recharts"],
+  visx: ["@visx/axis", "@visx/group", "@visx/scale", "@visx/shape"],
+  graph: ["sigma", "graphology", "graphology-layout-forceatlas2", "graphology-communities-louvain"],
+  zod: ["zod"],
+  runtime: ["clsx", "tslib"],
+};
+
+/** Vite's dynamic-import preload helper: a virtual module (vite 5.4 importAnalysisBuild). */
+const VITE_PRELOAD_HELPER = "\0vite/preload-helper.js";
+
+const CHUNK_OF_PACKAGE: ReadonlyMap<string, string> = new Map(
+  Object.entries(VENDOR_CHUNKS).flatMap(([chunk, packages]) =>
+    packages.map((name) => [name, chunk] as const),
+  ),
+);
+
+/** The npm package a resolved module id lives in; undefined for app code and virtual modules. */
+function packageOf(id: string): string | undefined {
+  const marker = "/node_modules/";
+  const at = id.lastIndexOf(marker);
+  if (at < 0) return undefined;
+  const [first, second] = id.slice(at + marker.length).split("/");
+  if (first === undefined || first === "") return undefined;
+  return first.startsWith("@") && second !== undefined ? `${first}/${second}` : first;
+}
+
+/**
+ * `output.manualChunks`: the named chunk a module belongs to, or undefined for Rollup to place.
+ * Stylesheets are never assigned: a package's CSS stays with the module that imports it, as
+ * it did under the object form (maplibre-gl.css belongs to the lazy CityMap chunk).
+ */
+function vendorChunkOf(id: string): string | undefined {
+  if (id === VITE_PRELOAD_HELPER) return "runtime";
+  if (/\.css(?:$|\?)/.test(id)) return undefined;
+  const name = packageOf(id);
+  return name === undefined ? undefined : CHUNK_OF_PACKAGE.get(name);
+}
+
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), "VITE_");
   const orchestratorTarget = env.VITE_ORCHESTRATOR_URL ?? "http://localhost:8085";
@@ -90,38 +157,11 @@ export default defineConfig(({ mode }) => {
       chunkSizeWarningLimit: 200,
       rollupOptions: {
         output: {
-          manualChunks: {
-            "react-vendor": ["react", "react-dom", "react-router-dom"],
-            "query": ["@tanstack/react-query"],
-            // FE-INV-025: every heavy viz lib is split into its own chunk so it
-            // never lands in the entry bundle (index-*.js). @deck.gl/aggregation-
-            // layers (HeatmapLayer) must be listed explicitly — without it the
-            // heatmap layer spills into the entry chunk via the eager
-            // MissionControl → LivingMap → deck-gl/layers import.
-            "deck": [
-              "@deck.gl/core",
-              "@deck.gl/layers",
-              "@deck.gl/aggregation-layers",
-              "@deck.gl/react",
-            ],
-            "map": ["maplibre-gl"],
-            "viz": ["recharts"],
-            // visx feeds ParetoFrontier, which the eager decision/cockpit routes
-            // import — split it out so it stays clear of the entry bundle.
-            "visx": [
-              "@visx/axis",
-              "@visx/group",
-              "@visx/scale",
-              "@visx/shape",
-            ],
-            "graph": [
-              "sigma",
-              "graphology",
-              "graphology-layout-forceatlas2",
-              "graphology-communities-louvain",
-            ],
-            "zod": ["zod"],
-          },
+          // Nothing eager imports deck.gl, MapLibre or sigma: the living map's canvas is one
+          // lazy module (surfaces/mission-control/LivingMapCanvas) and every surface except
+          // Mission Control is route-split, so those chunks load behind lazy boundaries. The
+          // @deck.gl packages stay one named chunk so deck.gl is cached as a unit.
+          manualChunks: vendorChunkOf,
         },
       },
     },

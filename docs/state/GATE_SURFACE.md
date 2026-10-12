@@ -34,12 +34,12 @@ the same pair.
 
 ## Summary
 
-Parsed 20 workflow file(s), 65 job(s), 433 step(s).
+Parsed 20 workflow file(s), 65 job(s), 434 step(s).
 
 | Trigger | Jobs executing | Jobs conditional | Jobs NOT EXECUTED | Steps blocking | Steps advisory | Steps conditional |
 |---|---|---|---|---|---|---|
-| push:main | 4 | 30 | 31 | 31 | 0 | 182 |
-| pull_request | 17 | 28 | 20 | 107 | 4 | 174 |
+| push:main | 4 | 30 | 31 | 31 | 0 | 183 |
+| pull_request | 17 | 28 | 20 | 107 | 4 | 175 |
 | tag:v* | 3 | 3 | 59 | 18 | 0 | 29 |
 
 ## Job selection
@@ -387,6 +387,7 @@ Why each job runs, does not run, or runs conditionally under each trigger. `need
 | push:main | .github/workflows/frontend.yml::build | uses: actions/setup-node@v4 | CONDITIONAL | conditional - blocking |
 | push:main | .github/workflows/frontend.yml::build | Install dependencies | CONDITIONAL | conditional - blocking |
 | push:main | .github/workflows/frontend.yml::build | Build | CONDITIONAL | conditional - blocking |
+| push:main | .github/workflows/frontend.yml::build | Entry preloads exclude the heavy viz chunks (FE-INV-025) | CONDITIONAL | conditional - blocking |
 | push:main | .github/workflows/frontend.yml::build | Size budget (informational in P0; gated in P2) | CONDITIONAL | conditional - advisory (named) |
 | push:main | .github/workflows/frontend.yml::contract-fidelity | uses: actions/checkout@v4 | CONDITIONAL | conditional - blocking |
 | push:main | .github/workflows/frontend.yml::contract-fidelity | uses: pnpm/action-setup@v4 | CONDITIONAL | conditional - blocking |
@@ -602,6 +603,7 @@ Why each job runs, does not run, or runs conditionally under each trigger. `need
 | pull_request | .github/workflows/frontend.yml::build | uses: actions/setup-node@v4 | CONDITIONAL | conditional - blocking |
 | pull_request | .github/workflows/frontend.yml::build | Install dependencies | CONDITIONAL | conditional - blocking |
 | pull_request | .github/workflows/frontend.yml::build | Build | CONDITIONAL | conditional - blocking |
+| pull_request | .github/workflows/frontend.yml::build | Entry preloads exclude the heavy viz chunks (FE-INV-025) | CONDITIONAL | conditional - blocking |
 | pull_request | .github/workflows/frontend.yml::build | Size budget (informational in P0; gated in P2) | CONDITIONAL | conditional - advisory (named) |
 | pull_request | .github/workflows/frontend.yml::contract-fidelity | uses: actions/checkout@v4 | CONDITIONAL | conditional - blocking |
 | pull_request | .github/workflows/frontend.yml::contract-fidelity | uses: pnpm/action-setup@v4 | CONDITIONAL | conditional - blocking |
@@ -906,7 +908,7 @@ Why each job runs, does not run, or runs conditionally under each trigger. `need
 
 ## Declared-blocking anchors (R11.8)
 
-Every step `infrastructure/quality/blocking-steps.yaml` declares blocking, annotated with the command it runs so a governance claim can be pinned to a row. Source: 22 declared-blocking entries from infrastructure/quality/blocking-steps.yaml.
+Every step `infrastructure/quality/blocking-steps.yaml` declares blocking, annotated with the command it runs so a governance claim can be pinned to a row. Source: 23 declared-blocking entries from infrastructure/quality/blocking-steps.yaml.
 
 | Trigger | Job | Step | Propagates | Note |
 |---|---|---|---|---|
@@ -964,6 +966,7 @@ Every step `infrastructure/quality/blocking-steps.yaml` declares blocking, annot
 | push:main | .github/workflows/frontend-lockfile-regen.yml::regen-lockfile | pnpm-lock supply-chain check (HTTPS + registry.npmjs.org only) | NOT EXECUTED | declared blocking (R1.8) - workflow on: has no push trigger |
 | push:main | .github/workflows/frontend-lockfile-regen.yml::regen-lockfile | Upload package.json + pnpm-lock.yaml | NOT EXECUTED | declared blocking (R1.8) - workflow on: has no push trigger |
 | push:main | .github/workflows/frontend-lockfile-regen.yml::regen-lockfile | pnpm audit (high+ severity, production tree only) | NOT EXECUTED | declared blocking (R1.8) - workflow on: has no push trigger |
+| push:main | .github/workflows/frontend.yml::build | Entry preloads exclude the heavy viz chunks (FE-INV-025) | CONDITIONAL | declared blocking (FE-INV-025) - conditional (path-filtered (paths: frontend/**, proto/domain/**, .github/workflows/frontend.yml); needs 'quality', which is conditional) |
 | push:main | .github/workflows/frontend.yml::e2e | uses: actions/checkout@v4 | NOT EXECUTED | declared blocking (R8.9) - if: false in push:main |
 | push:main | .github/workflows/frontend.yml::e2e | uses: pnpm/action-setup@v4 | NOT EXECUTED | declared blocking (R8.9) - if: false in push:main |
 | push:main | .github/workflows/frontend.yml::e2e | uses: actions/setup-node@v4 | NOT EXECUTED | declared blocking (R8.9) - if: false in push:main |
@@ -1067,6 +1070,7 @@ Every step `infrastructure/quality/blocking-steps.yaml` declares blocking, annot
 | pull_request | .github/workflows/frontend-lockfile-regen.yml::regen-lockfile | pnpm-lock supply-chain check (HTTPS + registry.npmjs.org only) | CONDITIONAL | declared blocking (R1.8) - conditional (if: undecidable from trigger (github.event.label.name)) |
 | pull_request | .github/workflows/frontend-lockfile-regen.yml::regen-lockfile | Upload package.json + pnpm-lock.yaml | CONDITIONAL | declared blocking (R1.8) - conditional (if: undecidable from trigger (github.event.label.name)) |
 | pull_request | .github/workflows/frontend-lockfile-regen.yml::regen-lockfile | pnpm audit (high+ severity, production tree only) | CONDITIONAL | declared blocking (R1.8) - conditional (if: undecidable from trigger (github.event.label.name)) |
+| pull_request | .github/workflows/frontend.yml::build | Entry preloads exclude the heavy viz chunks (FE-INV-025) | CONDITIONAL | declared blocking (FE-INV-025) - conditional (path-filtered (paths: frontend/**, proto/domain/**, .github/workflows/frontend.yml); needs 'quality', which is conditional) |
 | pull_request | .github/workflows/frontend.yml::e2e | uses: actions/checkout@v4 | CONDITIONAL | declared blocking (R8.9) - conditional (path-filtered (paths: frontend/**, proto/domain/**, .github/workflows/frontend.yml); needs 'build', which is conditional) |
 | pull_request | .github/workflows/frontend.yml::e2e | uses: pnpm/action-setup@v4 | CONDITIONAL | declared blocking (R8.9) - conditional (path-filtered (paths: frontend/**, proto/domain/**, .github/workflows/frontend.yml); needs 'build', which is conditional) |
 | pull_request | .github/workflows/frontend.yml::e2e | uses: actions/setup-node@v4 | CONDITIONAL | declared blocking (R8.9) - conditional (path-filtered (paths: frontend/**, proto/domain/**, .github/workflows/frontend.yml); needs 'build', which is conditional) |
@@ -1170,6 +1174,7 @@ Every step `infrastructure/quality/blocking-steps.yaml` declares blocking, annot
 | tag:v* | .github/workflows/frontend-lockfile-regen.yml::regen-lockfile | pnpm-lock supply-chain check (HTTPS + registry.npmjs.org only) | NOT EXECUTED | declared blocking (R1.8) - workflow on: has no push trigger |
 | tag:v* | .github/workflows/frontend-lockfile-regen.yml::regen-lockfile | Upload package.json + pnpm-lock.yaml | NOT EXECUTED | declared blocking (R1.8) - workflow on: has no push trigger |
 | tag:v* | .github/workflows/frontend-lockfile-regen.yml::regen-lockfile | pnpm audit (high+ severity, production tree only) | NOT EXECUTED | declared blocking (R1.8) - workflow on: has no push trigger |
+| tag:v* | .github/workflows/frontend.yml::build | Entry preloads exclude the heavy viz chunks (FE-INV-025) | NOT EXECUTED | declared blocking (FE-INV-025) - on: push is branch-scoped (no tags: filter), so a tag push is excluded |
 | tag:v* | .github/workflows/frontend.yml::e2e | uses: actions/checkout@v4 | NOT EXECUTED | declared blocking (R8.9) - on: push is branch-scoped (no tags: filter), so a tag push is excluded |
 | tag:v* | .github/workflows/frontend.yml::e2e | uses: pnpm/action-setup@v4 | NOT EXECUTED | declared blocking (R8.9) - on: push is branch-scoped (no tags: filter), so a tag push is excluded |
 | tag:v* | .github/workflows/frontend.yml::e2e | uses: actions/setup-node@v4 | NOT EXECUTED | declared blocking (R8.9) - on: push is branch-scoped (no tags: filter), so a tag push is excluded |

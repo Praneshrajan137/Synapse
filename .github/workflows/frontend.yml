@@ -14,6 +14,15 @@ on:
       - "proto/domain/**"
       - ".github/workflows/frontend.yml"
 
+# A superseded pull-request push stops spending runner time: a newer push to the same PR
+# cancels this workflow's in-progress run for the older head, whose verdict nobody can act
+# on. Every other run is keyed by its own run id, so it shares a group with nothing and is
+# never cancelled -- GitHub cancels a PENDING run when a newer one joins its group whatever
+# `cancel-in-progress` says, so a sha key would let two pushes of one commit collide.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 defaults:
   run:
     working-directory: frontend
@@ -202,6 +211,20 @@ jobs:
         run: pnpm install --frozen-lockfile=false
       - name: Build
         run: pnpm build
+      - name: Entry preloads exclude the heavy viz chunks (FE-INV-025)
+        # Lists every asset dist/index.html loads before the app renders -- the module script,
+        # each modulepreload / preload / stylesheet, and every chunk those reach by static
+        # import -- with raw and gzip bytes, and FAILS naming the file when a `deck-`, `map-`
+        # or `graph-` chunk is among them (FE-INV-025: async-only). A missing or empty
+        # document fails too: nothing is not a pass (I-7). Not a byte budget; `viz-`/`visx-`
+        # are listed, not forbidden, for the reason in the script's header.
+        #
+        # Blocking, and declared so in infrastructure/quality/blocking-steps.yaml by its exact
+        # name: no `continue-on-error`, no `|| true`, one top-level command. `e2e`,
+        # `e2e-visual`, `e2e-harness` and `mobile-lighthouse` need this job, so a heavy chunk
+        # back on "/" stops them from running at all -- the mobile LCP spec would only
+        # re-measure a regression this step has already named.
+        run: node scripts/check-entry-preloads.mjs
       - name: Size budget (informational in P0; gated in P2)
         # decision-quality-proof task 3.3 (R11.3). Renamed exactly as
         # `infrastructure/quality/blocking-steps.yaml` recorded the remediation: the
@@ -401,6 +424,13 @@ jobs:
         # `--update-snapshots=missing`): only when the snapshots dir has no PNGs do
         # we write them and commit back. Existing baselines are NEVER regenerated,
         # so this structurally cannot loop or churn on later runs.
+        #
+        # The PR branch name reaches the shell through `env:`, never spliced into the
+        # script: a branch name is attacker-controlled on a public repository, and
+        # `${{ github.head_ref }}` inside `run:` is expanded before bash parses it, so a
+        # name such as `x$(cmd)` would execute (actionlint "potentially untrusted").
+        env:
+          HEAD_REF: ${{ github.head_ref }}
         run: |
           SNAP="tests/e2e/visual/visual-regression.spec.ts-snapshots"
           if [ -z "$(ls -A "$SNAP" 2>/dev/null)" ]; then
@@ -410,12 +440,12 @@ jobs:
             # so `bash -e` does not abort before the commit/push (the compare step
             # below is the real gate).
             pnpm test:visual:update || true
-            if [ -n "${{ github.head_ref }}" ] && [ -n "$(git status --porcelain -- "$SNAP")" ]; then
+            if [ -n "${HEAD_REF}" ] && [ -n "$(git status --porcelain -- "$SNAP")" ]; then
               git config user.name "github-actions[bot]"
               git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
               git add "$SNAP"
               git commit -m "test(visual): add CI-generated Linux screenshot baselines (Req 14)"
-              git push origin "HEAD:${{ github.head_ref }}"
+              git push origin "HEAD:${HEAD_REF}"
             fi
           else
             echo "Baselines already committed — skipping generation."

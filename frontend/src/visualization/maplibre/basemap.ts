@@ -1,16 +1,33 @@
-// PMTiles protocol registration for MapLibre GL (FE-INV-020).
-// One-time call from the app shell; idempotent.
+// MapLibre GL set-up for the self-hosted basemap (FE-INV-020, FE-INV-024): the
+// tile worker's URL and the PMTiles protocol, registered once per page before
+// the first Map is constructed. Idempotent.
 
-import maplibregl from "maplibre-gl";
+import * as maplibregl from "maplibre-gl";
+import workerUrl from "maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url";
 import { Protocol } from "pmtiles";
 
-let registered = false;
+let prepared = false;
 
-export function registerPMTilesProtocol(): void {
-  if (registered) return;
+/**
+ * Process-wide MapLibre set-up; call it before constructing a Map.
+ *
+ * maplibre-gl v6 is ESM-only and, inside a bundler's module graph, cannot find
+ * its own worker, so a bundled app must call `setWorkerUrl` once before the
+ * first Map exists (v5 to v6 migration guide). `?worker&url` is the Vite form
+ * maplibre's installation guide prescribes: Vite bundles the worker entry, and
+ * anything it imports, into one hashed asset
+ * (`assets/maplibre-gl-worker-[hash].js`) and returns that asset's URL.
+ *
+ * Without it nothing fails loudly: the map, its controls and the deck.gl
+ * overlay all mount, but no vector tile is ever decoded, because the worker
+ * that decodes them never starts. `tests/e2e/map-worker.spec.ts` observes it.
+ */
+export function prepareMapLibre(): void {
+  if (prepared) return;
+  maplibregl.setWorkerUrl(workerUrl);
   const protocol = new Protocol();
   maplibregl.addProtocol("pmtiles", protocol.tile);
-  registered = true;
+  prepared = true;
 }
 
 /** Self-hosted Protomaps style — dark theme tuned for SYNAPSE canvas. */

@@ -1,7 +1,7 @@
 import type { DemandForecast } from "@domain/demand-forecast";
 import type { RoutePlan } from "@domain/route-plan";
 import { useFirehoseStore } from "@state/firehose.store";
-import { act, render, waitFor } from "@testing-library/react";
+import { act, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { LivingMap } from "../LivingMap";
 
@@ -17,8 +17,10 @@ const rendered = vi.hoisted((): { layerLists: Array<ReadonlyArray<LayerProbe>> }
 }));
 
 // No deck.gl layer or WebGL context is built under jsdom: the factories become
-// probes and the lazy map records the layer list it is given. What is under
-// test is which layers LivingMap asks deck.gl to aggregate, and with what data.
+// probes and the city map records the layer list it is given. Which layers are
+// asked for is the pure builder's claim (LivingMapCanvas.test.ts); what is under
+// test here is the rendering around it — what LivingMap shows eagerly, what it
+// leaves to the lazy canvas, and which data container reaches deck.gl.
 vi.mock("@viz/deck-gl/layers", () => ({
   storeLayer: (data: unknown): LayerProbe => ({ id: "dark-stores", data }),
   routeArcLayer: (data: unknown): LayerProbe => ({ id: "route-arcs", data }),
@@ -67,26 +69,31 @@ function layerData(id: string): unknown {
   return latestLayers().find((layer) => layer.id === id)?.data;
 }
 
-// An empty heatmap still runs a weightsTextureSize² max-weight pass on every
-// aggregation, which stalled the page under CI's software WebGL; and deck.gl
-// re-aggregates whenever it is handed a new data container.
+// deck.gl re-aggregates whenever it is handed a new data container, and the
+// canvas that builds the layers is a separate, lazily loaded chunk.
 describe("LivingMap", () => {
   beforeEach(() => {
     useFirehoseStore.getState().flushAll();
     rendered.layerLists.length = 0;
   });
 
-  it("asks deck.gl for no heatmap while there is no demand to aggregate", async () => {
-    render(<LivingMap stores={STORES} />);
-    await waitFor(() => expect(rendered.layerLists.length).toBeGreaterThan(0));
-    expect(latestLayers().map((layer) => layer.id)).toEqual(["dark-stores", "route-arcs"]);
-  });
+  it("renders the non-spatial table eagerly and the spatial canvas lazily", async () => {
+    // A fresh module graph, so the canvas chunk certainly has not resolved yet:
+    // `lazy()` caches a resolved chunk for the life of the module that made it.
+    vi.resetModules();
+    const fresh = await import("../LivingMap");
+    render(<fresh.LivingMap stores={STORES} />);
 
-  it("asks for no heatmap when the only demand is at a store the map cannot place", async () => {
-    useFirehoseStore.getState().appendDemand(demandAt("store-elsewhere", 12), 1);
-    render(<LivingMap stores={STORES} />);
+    // First paint: the Suspense fallback holds the canvas's place, and the
+    // keyboard/SR-reachable table of the same data is already there (Req 10.4).
+    expect(screen.getByText("Loading map…")).toBeInTheDocument();
+    expect(screen.getByText(/^Map data as a table/)).toBeInTheDocument();
+    expect(rendered.layerLists).toHaveLength(0);
+
+    // Then the canvas chunk arrives and mounts the map inside the boundary.
     await waitFor(() => expect(rendered.layerLists.length).toBeGreaterThan(0));
-    expect(latestLayers().map((layer) => layer.id)).toEqual(["dark-stores", "route-arcs"]);
+    expect(screen.queryByText("Loading map…")).not.toBeInTheDocument();
+    expect(screen.getByText(/^Map data as a table/)).toBeInTheDocument();
   });
 
   it("keeps the heatmap's data container across a route-only update", async () => {

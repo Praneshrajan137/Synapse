@@ -43,6 +43,11 @@ suite_extensions:
 #               finding, in the registry.
 #   FE-INV-014  the entry-bundle budget these name is `pnpm size || true` in
 #   FE-INV-025  `frontend.yml::build` -- an informational step is not a gate.
+#               Since decision-quality-proof task 29's CI block, that job's
+#               "Entry preloads exclude the heavy viz chunks (FE-INV-025)" step
+#               DOES block `deck-`/`map-`/`graph-` chunks on the entry -- but
+#               not `visx-`, which FE-INV-025 also names, so naming `build` as
+#               its enforcer here would still overclaim.
 #   FE-INV-020  `tests: .github/workflows/frontend.yml` names no job, and no job
 #   FE-INV-024  in that file asserts tile egress.
 #   FE-INV-031  names "the a11y job"; `frontend.yml` defines no such job.

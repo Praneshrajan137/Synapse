@@ -502,6 +502,21 @@ steps:
     all_steps: true
     requirement: R8.9
 
+  # FE-INV-025's entry-preload guard, declared in the SAME change as the step: a
+  # declaration that resolves to no step FAILs as `blocking-unresolved`, so either half alone
+  # is red. `step_names`, not `all_steps: true`: this job's "Size budget (informational in P0;
+  # gated in P2)" keeps its `|| true` by the P0 -> P2 plan's decision, and `all_steps` would
+  # declare that advisory blocking. The guard is the job's only gate on WHAT the entry loads;
+  # it refuses a missing dist/index.html itself, so `Build` is not declared alongside it.
+  # `match: exact`: the name is plain ASCII, so normalisation buys nothing and a rename stays
+  # loud. Quoted byte-for-byte from `.github/workflows/frontend.yml`.
+  - workflow: .github/workflows/frontend.yml
+    job: build
+    step_names:
+      - "Entry preloads exclude the heavy viz chunks (FE-INV-025)"
+    match: exact
+    requirement: "FE-INV-025"
+
   # -------------------------------------------------------------------------
   # NOT YET DECLARED, AND THE REASON IS MECHANICAL, NOT A JUDGEMENT (task 3.3).
   #

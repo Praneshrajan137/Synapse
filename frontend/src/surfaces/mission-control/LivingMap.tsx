@@ -1,12 +1,15 @@
 import { SpatialErrorBoundary } from "@ds/compounds";
 import { useFirehoseStore } from "@state/firehose.store";
-import { demandHeatmapLayer, routeArcLayer, storeLayer } from "@viz/deck-gl/layers";
-import { Suspense, lazy, useMemo } from "react";
+import { Suspense, lazy } from "react";
 import { MapDataTable } from "./MapDataTable";
 
-// CityMap pulls in maplibre + deck.gl + pmtiles — lazy-load it so the
-// initial bundle stays inside FE-INV-014's 180KB gz budget.
-const CityMap = lazy(() => import("@viz/maplibre/CityMap").then((m) => ({ default: m.CityMap })));
+// The spatial canvas (deck.gl layers, MapLibre, pmtiles) is one lazily loaded
+// module, and nothing LivingMap imports eagerly reaches deck.gl, so the deck and
+// map chunks stay out of the entry's static import graph (FE-INV-014,
+// FE-INV-025). The non-spatial equivalent below stays eager (Req 10.4).
+const LivingMapCanvas = lazy(() =>
+  import("./LivingMapCanvas").then((m) => ({ default: m.LivingMapCanvas })),
+);
 
 interface LivingMapProps {
   readonly stores: ReadonlyArray<{ id: string; lat: number; lon: number }>;
@@ -16,38 +19,6 @@ export function LivingMap({ stores }: LivingMapProps) {
   const routes = useFirehoseStore((s) => s.routes.items);
   const demand = useFirehoseStore((s) => s.demand.items);
 
-  // The heatmap's inputs are the stores and the demand signal only, so its
-  // points get their own memo: a routing message must not hand deck.gl a new
-  // heatmap data container (deck diffs `data` by reference, and a new container
-  // re-runs the whole GPU aggregation).
-  const demandPoints = useMemo(
-    () =>
-      demand.flatMap((d) => {
-        // Position the demand weight at the parent store — fallback to
-        // a neutral location if we can't resolve. The 15min horizon is
-        // the freshest signal worth visualising on the map.
-        const horizon = d.horizons["15min"] ?? 0;
-        const parent = stores.find((s) => s.id === d.store_id);
-        if (!parent) return [];
-        return [{ lat: parent.lat, lon: parent.lon, weight: horizon }];
-      }),
-    [stores, demand],
-  );
-
-  const layers = useMemo(
-    () => [
-      storeLayer(stores),
-      routeArcLayer(routes),
-      // Mounted only when there is demand to aggregate. An empty heatmap draws
-      // nothing (its fragment shader discards zero-weight pixels), yet every
-      // aggregation still runs a fixed max-weight pass of weightsTextureSize²
-      // points (4,194,304 at the default 2048). Under CI's software rasterizer
-      // the page stopped responding for 8-30 s from the first such pass.
-      ...(demandPoints.length > 0 ? [demandHeatmapLayer(demandPoints)] : []),
-    ],
-    [stores, routes, demandPoints],
-  );
-
   return (
     <div>
       {/* The spatial canvas: a boundary catches a failed chunk/render (error +
@@ -56,14 +27,14 @@ export function LivingMap({ stores }: LivingMapProps) {
         <Suspense
           fallback={
             <div
-              className="syn-card syn-skeleton flex h-[420px] items-center justify-center text-sm text-ink-muted"
+              className="syn-card syn-skeleton flex h-[460px] items-center justify-center text-sm text-ink-muted"
               aria-busy="true"
             >
               Loading map…
             </div>
           }
         >
-          <CityMap layers={layers} height={460} />
+          <LivingMapCanvas stores={stores} routes={routes} demand={demand} />
         </Suspense>
       </SpatialErrorBoundary>
 
