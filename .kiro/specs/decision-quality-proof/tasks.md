@@ -5088,6 +5088,10 @@ progress ledger; design reasoning is ADR-055.
           `assets/maplibre-gl-worker-*.js`, that the asset is served as JavaScript, and that
           maplibre's worker runtime boots in it.
         - Rejected: an audit exception, because policy forbids ignoring a production advisory.
+        - **MEASURED on Frontend CI run 38291036628 (sha 5c2f2b3):** `audit-supply` `success`, and
+          `map-worker.spec.ts` passed on its first attempt (1.3 s), its worker booting from
+          `assets/maplibre-gl-worker-BVA-2wZ2.js` (506.1 kB). The first P1 run (sha ba02a1b)
+          never reached either check: every install failed on Node 20 (finding 93).
     - **FINDING 84 (read).** The Frontend `e2e` and `e2e-harness` failures were masked on main
       twice over (`test.skip` when the harness driver was absent, then `|| true` on the step)
       and on this branch by `quality` failing upstream. Three root causes: Mission Control
@@ -5133,6 +5137,13 @@ progress ledger; design reasoning is ADR-055.
         only. LCP on "/" is predicted at 2.2-3.5 s, so a value at or under 2.5 s is NOT predicted
         with confidence.
       - Flipping Lighthouse's LCP assertion to `error` is deferred to session 12.
+      - **MEASURED on Frontend CI run 38291036628 (sha 5c2f2b3).** The guard's eager JS set is
+        exactly the predicted five -- index 120.6, react-vendor 66.3, zod 12.4, query 10.4 and
+        runtime 1.1 KiB gzip -- with the SpaceGrotesk preload and the stylesheet: 240.8 KiB gzip
+        listed, against 916.6 KiB in the 2026-08-01 local build. `mobile-reality` on "/" measured
+        LCP 2292 ms, CLS 0 and INP 112 ms, and PASSED, on its first attempt. That is one sample
+        with 208 ms of margin, not a distribution. `e2e` reads 21 passed, 0 failed, 8 skipped
+        (19/1/8 at `5eef6ee`).
     - **FINDING 88 (measured; the comparison is not a strict A/A).**
       - At `5eef6ee` (run `36976628938`), the R8.10 step rejects the committed placeholder
         effectiveness baseline (5 `missing-stamp` plus `uniform-metrics`).
@@ -5214,6 +5225,31 @@ progress ledger; design reasoning is ADR-055.
       - Still on Node 20, both EOL and neither installing the frontend:
         `ci.yml::chromatic-color-gates` (`design-system/color`'s `npm ci`) and
         `infrastructure/oracle/setup_oracle_vm.sh`.
+      - **MEASURED on sha 5c2f2b3:** every frontend install passed on Node 22.23 -- Frontend CI
+        run 38291036628, Security Scan run 38291036640 and Lockfile Regeneration run
+        38291044430, whose artifact resolves `maplibre-gl` 6.14.0 and
+        `@mapbox/jsonlint-lines-primitives` 2.0.3 with a `package.json` identical to the
+        committed one.
+    - **FINDING 94 (measured symptom; mechanism read in query-core, interleaving inferred).**
+      - On Frontend CI run 38291036628 (sha 5c2f2b3), `e2e-harness` failed one JTBD on both
+        attempts: "Identify which agent degraded and why", with `HarnessDriveError: refetch did
+        not settle within 30000ms; still fetching: [["system-autonomy","bengaluru"]]`. The
+        serial suite then skipped the remaining JTBDs, so no scorecard was emitted. It passed at
+        `5eef6ee`, and P1 did not touch the harness.
+      - Mechanism (read): when a query is still on its first fetch it holds no data, and
+        `Query.fetch` (query-core 5.100.11) answers a refetch of it with the in-flight
+        retryer's promise instead of a new fetch. `seedScenario` restarts the MSW worker
+        (`reseedWorker`) and then invalidates. An attempt the stopped worker took is never
+        answered, so the invalidation waits on it until the 30 s deadline.
+      - Why now (inferred, not traced): P1's lighter entry and route split changed boot timing,
+        so the autonomy query's first fetch is still in flight when the second scenario
+        re-seeds. The first JTBD keeps the boot seed and never restarts the worker.
+      - Repair: `refetchAll` cancels in-flight queries before invalidating. Cancelling rejects
+        each fetch at once and reverts its query to idle, so every active query is fetched
+        afresh from the edge as now seeded. The 30 s refusal is unchanged; no assertion moved.
+      - Predicted for the next run: `e2e-harness` succeeds with all five JTBDs measured;
+        `effectiveness-ratchet` then runs and is red by design (finding 88); `fe-invariants`
+        then runs and does not pass (finding 90).
 
   - [x] 29.1 Deferral is a terminal state the census reports
     - discharge: ci.yml::uplift-verify fast shard 3/4 (tests/verify a-o)
