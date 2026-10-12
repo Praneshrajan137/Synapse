@@ -213,10 +213,10 @@ jobs:
   #
   # THE DEPENDENCY CLOSURE MIRRORS `truth-gates`, and that is load-bearing rather than
   # defensive. Several registered checks import an optional dependency inside a try/except
-  # and report SKIP when it is absent. `falsifies()` reports `indeterminate` when the gate
-  # does not PASS on the unmutated copy, so a thinner environment here would turn a
-  # probeable baseline into an indeterminate one and the sweep would report nothing about
-  # gates that are perfectly capable of biting.
+  # and report SKIP when it is absent. `falsifies()` reports `indeterminate` when the gate is
+  # red on the unmutated copy, or abstains (SKIP) there and again under its mutation (R1.5,
+  # R1.5a), so a thinner environment here would SKIP a gate on both copies and the sweep
+  # would report nothing about gates that are perfectly capable of biting.
   #
   # EXPECT RED ON THE FIRST RUNS, AND READ THE RED CORRECTLY. `gate-mutations.yaml`
   # records, in its own notes, which declarations this tree does not yet satisfy. C28's
@@ -224,9 +224,10 @@ jobs:
   # until 2026-10-01, when C28 began failing a floor below its measured ratchet bound; and
   # C44 and C69 had non-passing baselines until the same date (dead modules removed,
   # `validate_audit_insertion` wired, a false task claim retracted) -- all three are
-  # expected to probe, not yet observed. C60, C70, C71 and C72 still have non-passing
-  # baselines, so their probes report `indeterminate`. A survivor is never cleared by
-  # weakening its mutation.
+  # expected to probe, not yet observed. C60, C70, C71 and C72 have SKIP baselines, which
+  # read `indeterminate` while the runner exited 1 for SKIP and FAIL alike; since 2026-10-02
+  # SKIP exits 2 and R1.5a admits a SKIP baseline, so all four are expected `falsified` from
+  # the next sweep, not yet observed. A survivor is never cleared by weakening its mutation.
   #
   # NOT SHARDED, DELIBERATELY. `--shard K/N` over a matrix produces dynamic status-check
   # names, an aggregator without `if: always()` does not run when a shard fails, and a

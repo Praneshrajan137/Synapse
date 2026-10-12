@@ -269,6 +269,14 @@ ledger's current statuses:
 | `FAIL` | C44, C69 | no — indeterminate |
 | `SKIP` | C60, C70, C71, C72 | no — indeterminate (C72 structurally, by design) |
 
+*Appended 2026-10-02 (R1.5a).* Measured at `5eef6ee` (run 36976628961): 16 of 16 operators
+probed, 12 `falsified` — C44 and C69 among them, their baselines having passed since
+2026-10-01 — and 4 `indeterminate`, exactly the four `SKIP` rows above, because the runner then
+exited 1 for SKIP and FAIL alike. It now exits 2 for SKIP, and criterion 5a admits a SKIP
+baseline: each of the four gates is coded to FAIL naming its subject under its mutation, so all
+four are expected `falsified` from the next sweep (read, not yet observed). C72 is therefore
+not structurally indeterminate; the structure was the runner's exit codes.
+
 So the honest expectation, stated before the run: **at most 8 of 14 can be probed on this
 tree**. A survivor is a gate that does not enforce; it is a defect against that gate, not
 against the sweep.
@@ -335,6 +343,27 @@ produced by every later requirement is only as trustworthy as the gate that repo
 5. IF a probed mutation operator reports `indeterminate`, THEN THE Falsification_Sweep SHALL
    report which condition made it indeterminate: a non-passing unmutated baseline, naming that
    baseline's exit status; a timeout; or a gate subprocess that could not be started.
+   *[AMENDED 2026-10-02: R1.5 stands for a baseline that reports FAIL or PARTIAL, that names an
+   unregistered check, or that is otherwise non-passing without being the runner's own
+   abstention. A baseline that abstained (SKIP) is governed by 5a.]*
+
+   **5a.** IF the unmutated baseline of a probed mutation operator exits `2` carrying the
+   runner's `[SKIP] <check id>` status line for that check, THEN THE Falsification_Sweep SHALL
+   report `falsified` when the mutated run exits `1` carrying the runner's `[FAIL] <check id>`
+   or `[PARTIAL] <check id>` status line and naming every declared subject; `survived` when the
+   mutated run exits `0`, or exits `1` carrying one of those lines without naming every declared
+   subject; and `indeterminate` otherwise, naming the condition — the gate abstained on both the
+   unmutated and the mutated copy, or the mutated run's exit status. An exit `1` without either
+   line is `indeterminate`: it is also an uncaught exception's status, which no status line
+   accompanies. *[ADDED 2026-10-02; the status-line clause added the same day, before any run
+   judged it -- stricter, not weaker.]*
+   *Rationale.* R1.5 exists because "a check that is already red proves nothing by staying
+   red", which covers FAIL. A SKIP baseline is an abstention, not a verdict; with SKIP and FAIL
+   on distinct exit codes, a SKIP -> FAIL change naming the declared subject is attributable to
+   the mutation, the only difference between the two copies. It proves the gate CAN fail when
+   its subject breaks; it does not prove the gate would PASS a sound subject, and nothing in
+   the published registry moves — those rows still report SKIP. Both halves of the admission
+   are required: exit `2` alone is also an unregistered check's `[??]` line.
 6. IF any probed mutation operator declared for a check reports an outcome other than
    `falsified`, THEN THE Falsification_Sweep SHALL exclude that check from the falsified-check
    count.

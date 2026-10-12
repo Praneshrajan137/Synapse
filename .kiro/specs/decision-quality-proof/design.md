@@ -1909,7 +1909,7 @@ mapping; the headings below keep their original numbers.
 
 | # | Title | Validates | Execution locus |
 |---|---|---|---|
-| 38 | Sweep outcome classification is total, four-valued and per-operator | R1.3, R1.4, R1.5 | `tests/verify/` -> `ci.yml::uplift-verify` fast step |
+| 38 | Sweep outcome classification is total, four-valued and per-operator | R1.3, R1.4, R1.5, R1.5a | `tests/verify/` -> `ci.yml::uplift-verify` fast step |
 | 39 | The falsified-check count and PASS-eligibility are derived, never asserted | R1.6, R1.7, R1.8, R1.9, R1.10, R1.15 | `tests/verify/` -> `ci.yml::uplift-verify` fast step |
 | 40 | A sweep that could not observe is non-passing | R1.11, R1.16 | `tests/verify/` -> `ci.yml::uplift-verify` fast step |
 | 41 | The C72 row projects the counts of the run that produced it | R1.12 | `tests/verify/` -> `ci.yml::uplift-verify` fast step |
@@ -1967,7 +1967,20 @@ baseline together with that baseline's exit status, a timeout, or a gate subproc
 could not be started — with no observation mapping to two outcomes and none mapping to
 none.
 
+*Amended 2026-10-02 (R1.5a).* The observation also includes whether the unmutated baseline's
+output carries the runner's `[SKIP] <check id>` status line. A baseline that exits 2 with that
+line abstained rather than judged, so it is not "a non-passing unmutated baseline" in the sense
+above: the outcome is `falsified` when the mutated run exits 1 carrying the runner's
+`[FAIL]` or `[PARTIAL] <check id>` line and naming every declared subject, `survived` when it
+exits 0 or exits 1 with one of those lines without naming every declared subject, and
+`indeterminate` otherwise — an exit 1 with neither line (an uncaught exception's status)
+included — naming the abstention on both copies or the mutated exit status.
+Every other non-passing baseline — FAIL or PARTIAL at exit 1, an unregistered check at exit 2,
+any other status — remains `indeterminate` naming its exit status, and a passing baseline is
+classified as before.
+
 **Validates: Requirements 1.3, 1.4, 1.5**
+*Validates, from 2026-10-02: Requirement 1.5a (R1.5a).*
 
 ### Property 39: The falsified-check count and PASS-eligibility are derived, never asserted
 

@@ -45,16 +45,18 @@ gates:
 
           ATTRIBUTION, corrected in task 5.1. An earlier form of this note
           recorded a survivor shape at 26 -- the ratchet constant
-          STRYKER_BREAK_NOW is frozen at 26 while the shipped config is 50,
+          STRYKER_BREAK_NOW was frozen at 26 while the shipped config was 50,
           audit finding R7.8, tracked in ratchets.json -- directly beside the
           declared operator, which reads as though C16's DECLARED falsification
           survives. It does not: nobody declared a mutation to 26, so the sweep
           never probes that shape and no sweep outcome can be attributed to it.
-          R7.8 is a real finding about the ratchet constant, and is why C70 reads
-          INDETERMINATE below; it is not a survivor of this operator. C28's
-          `zero-a-floor` was the one DECLARED operator disclosed as a survivor
-          until 2026-10-01, when C28 gained its measured-bound clause; see its
-          entry.
+          R7.8 was a real finding about the ratchet constant and task 12.1 closed
+          it (`STRYKER_BREAK_NOW = 50` in verify_claims.py, equal to the shipped
+          `thresholds.break: 50`); it is not a survivor of this operator, and it
+          is not why C70's probe read INDETERMINATE (C70's baseline is SKIP, not
+          red; see its entry). C28's `zero-a-floor` was the one DECLARED operator
+          disclosed as a survivor until 2026-10-01, when C28 gained its
+          measured-bound clause; see its entry.
 
   # -------------------------------------------------------------------------
   C28:
@@ -179,17 +181,26 @@ gates:
 
           This is the only C60 operator applicable in this sweep. Task 10.3 removed
           the committed artifact and made C60 trigger-aware (AD-9, CF-4): outside
-          the job that ran the harness the check reports SKIP, so it is not
-          PASS-eligible there and no mutation of an artifact can change its status.
+          the job that ran the harness the check reports SKIP, so no mutation of an
+          artifact can change its status there.
           The two admissibility operators that used to live here
           (`set_json_path $.incomplete = true` and `$.replicates_per_arm = 5`)
           required a committed artifact, so their falsification obligation moves to
           the generating job: `.github/workflows/uplift.yml` (task 10.5) runs the
           harness and then `uplift_truth --check --require-fresh-run`, the only
-          context in which C60 can pass and therefore the only context in which it
-          can be falsified. Recording that here rather than leaving an inapplicable
-          target keeps the declaration honest (I-7) instead of manufacturing a probe
-          that proves nothing.
+          context in which C60 can pass and therefore the only context in which
+          those admissibility mutations can be falsified. Recording that here
+          rather than leaving an inapplicable target keeps the declaration honest
+          (I-7) instead of manufacturing a probe that proves nothing.
+
+          Probe status (2026-10-02, R1.5a). Outside the generating job C60's
+          baseline is SKIP, so the sweep at 5eef6ee (run 36976628961) read this
+          probe INDETERMINATE: the runner then exited 1 for SKIP and FAIL alike.
+          It now exits 2 for SKIP and R1.5a admits a SKIP baseline, and
+          `uplift_truth.admit` checks version control first and irrespective of
+          trigger, so the mutated run FAILs naming the path. Expected
+          `falsified` under R1.5a from the next sweep, not yet observed
+          (2026-10-02).
 
   # -------------------------------------------------------------------------
   C61:
@@ -223,13 +234,18 @@ gates:
   # carry their leading findings for exactly this reason -- a non-zero exit that
   # names nothing does not satisfy a declaration.
   #
-  # Baseline honesty. `falsifies()` reports `indeterminate` when the gate does not
-  # pass on the UNMUTATED copy, because a check that is already red proves nothing
-  # by staying red. Three of these rows (C70, C71, C72) are non-passing today for
-  # reasons this feature recorded deliberately, and each note below says which and
-  # what clears it; C69 was a fourth until its false claim was retracted 2026-10-01.
-  # `indeterminate` is never a pass and never PASS-eligible (I-7); it is
-  # recorded here rather than papered over with an operator chosen to look green.
+  # Baseline honesty. `falsifies()` reports `indeterminate` when the gate is red on
+  # the UNMUTATED copy (FAIL, PARTIAL, unregistered), because a check that is
+  # already red proves nothing by staying red (R1.5). Three of these rows (C70,
+  # C71, C72) do not PASS on the unmutated copy for reasons this feature recorded
+  # deliberately, and each note below says which; C69 was a fourth until its false
+  # claim was retracted 2026-10-01. All three, and C60 above, ABSTAIN rather than
+  # fail there: their baselines are SKIP. Since 2026-10-02 the runner exits 2 for
+  # SKIP and R1.5a admits a SKIP baseline, so a SKIP -> FAIL change naming every
+  # declared subject is `falsified`: expected `falsified` under R1.5a from the next
+  # sweep for all four, not yet observed (2026-10-02). `indeterminate` is never a
+  # pass and never PASS-eligible (I-7); it is recorded here rather than papered
+  # over with an operator chosen to look green.
   # -------------------------------------------------------------------------
   C65:
     title: "Required-check declaration resolves to real jobs"
@@ -337,10 +353,18 @@ gates:
           `audit/chain-walk` ceiling on purpose -- it was the entry `ratchets.json`
           was missing, so this operator and that entry are each other's proof.
 
-          Reads INDETERMINATE while C70 is red for the pre-existing R7.8 hole
-          (`STRYKER_BREAK_NOW = 26` against a shipped `thresholds.break: 50`).
-          That clears when the constant and the shipped config are reconciled;
-          until then the gate's redness is a real finding, not a defect.
+          Probe status (2026-10-02, R1.5a). C70's baseline is SKIP, not red: the
+          R7.8 hole this note used to cite is closed (`STRYKER_BREAK_NOW = 50` in
+          verify_claims.py, equal to the shipped `thresholds.break: 50`, and
+          ratchets.json's `stryker-break` row records both), and the row reads
+          SKIP because 22 of its 26 ratchets carry no measurement. The sweep at
+          5eef6ee read this probe INDETERMINATE because the runner then exited 1
+          for SKIP and FAIL alike. `judge_ratchet` FAILs a breach before it SKIPs
+          an unmeasured row, and this row is unmeasured (`measured_at: null`), so
+          the mutated run FAILs naming it: expected `falsified` under R1.5a from
+          the next sweep, not yet observed (2026-10-02). The FAIL it prints is the
+          RECORD_DRIFT finding (shipped 10 -> 40), not the monotonicity one, so on
+          its own this operator does not isolate clause 1.
 
   C71:
     title: "Replayed KV-cache and tier-routing metrics meet their committed floors"
@@ -366,9 +390,16 @@ gates:
           declared operator without a body that could raise instead of misclassify
           (an exception reads `unavailable`, which would prove nothing).
 
-          Reads INDETERMINATE off a live Ollama: the KV-cache gauge has no samples
-          there, so C71's aggregate row is SKIP on the unmutated copy. A sweep in
-          a job with the cache gauge populated gives a real probe.
+          Probe status (2026-10-02, R1.5a). Off a live Ollama the KV-cache floor is
+          declared unmeasurable, so C71's row is SKIP on the unmutated copy, and
+          the sweep at 5eef6ee read this probe INDETERMINATE because the runner
+          then exited 1 for SKIP and FAIL alike. In `replay_metrics.aggregate` a
+          measured breach outranks that declared absence, so the mutated run
+          FAILs naming the metric and the floor: expected `falsified` under R1.5a
+          from the next sweep, not yet observed (2026-10-02). If the tier-routing
+          replay were itself unavailable in the sweep's copy, the row would stay
+          SKIP under the mutation and the probe would read INDETERMINATE naming the
+          double abstention -- an honest null, never a pass.
 
   C72:
     title: "Every gate declares a mutation that falsifies it"
@@ -386,14 +417,17 @@ gates:
           must FAIL naming the drift, so nobody can shrink the recorded obligation
           without the gate saying so.
 
-          STRUCTURALLY INDETERMINATE, and recorded as such rather than dropped.
-          C72's registry row can never report PASS outside `--sweep` -- by design,
-          because an unprobed declaration has falsified nothing -- so the harness's
-          baseline run of C72 never passes and no probe of C72 can attribute
-          anything to the mutation. The declaration is still the useful half: it
-          records what MUST falsify this gate, and
-          `--sweep --gate C72 --no-baseline` runs it by hand for diagnosis. It
-          contributes no PASS in any mode.
+          Probe status (2026-10-02, R1.5a). C72's registry row cannot PASS outside
+          `--sweep` -- by design, because an unprobed declaration has falsified
+          nothing -- so in the sweep's copy, where no sweep report exists yet, its
+          baseline is SKIP, and the sweep at 5eef6ee read this probe INDETERMINATE
+          because the runner then exited 1 for SKIP and FAIL alike. This note used
+          to call that structural; the structure was the runner's exit codes, not
+          C72. `evaluate` FAILs a count drift ahead of the unprobed `unavailable`,
+          so the mutated run FAILs naming the drift: expected `falsified` under
+          R1.5a from the next sweep, not yet observed (2026-10-02).
+          `--sweep --gate C72 --no-baseline` still runs it by hand for diagnosis,
+          and a run under `--no-baseline` still contributes no PASS (R1.16).
 
 # ---------------------------------------------------------------------------
 # Reporting tools: registered checks for which no falsifying mutation can be

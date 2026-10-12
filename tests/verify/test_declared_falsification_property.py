@@ -52,6 +52,17 @@ E2.1's precedence with plain comparisons rather than importing the module's deci
 table, so each test compares two implementations of the same rule instead of asking the
 harness to agree with itself.
 
+**R1.5a (decision-quality-proof, amended 2026-10-02).** The precedence gained one branch.
+A baseline that exited ``2`` printing the runner's own ``[SKIP] <cid>`` line abstained
+rather than judged, so against it the runner's FAIL or PARTIAL - exit ``1`` WITH its own
+status line - naming every declared subject is ``falsified``, a PASS is ``survived``, and
+anything else, an exit-``1`` crash with no status line included, is ``indeterminate``; every
+other non-passing baseline is still red (R1.5). ``runner_abstained`` and ``runner_reported``
+restate the runner's lines with ``str.split`` and ``startswith`` rather than the harness's
+regex, and the baseline
+strategy draws the runner's abstention as often as each near miss that must not pass for
+one.
+
 The committed declaration is checked statically, per operator, against the real tree:
 each operator is applied inside a throwaway directory seeded with *only* the single file
 it targets, which proves the declaration still applies to today's tree without copying
@@ -92,6 +103,7 @@ from hypothesis import given
 from hypothesis import strategies as st
 
 from scripts.audit import gate_fault_injection as gfi
+from scripts.audit import verify_claims as vc
 from scripts.audit.gate_fault_injection import (
     EXIT_FAIL,
     EXIT_PASS,
@@ -158,6 +170,64 @@ PROBE_BODY: Final[str] = (
     json.dumps({"thresholds": {"break": 50}}, indent=2, sort_keys=True) + "\n"
 )
 
+#: A line every synthetic run prints before its status line, because the runner's status
+#: line is never the only thing a gate subprocess prints - so "the status line is a line"
+#: is tested off the first line, not on it.
+LOG_LINE: Final[str] = "2026-10-02 12:00:00 [info     ] synthetic_log_line"
+
+#: Every unmutated baseline the classifier can be handed, keyed by what it is: the runner's
+#: statuses, its unregistered line, the three unobservable runs, and each near miss R1.5a's
+#: admission must refuse. ``(exit code, timed out, status line)``, ``{check}`` filled in per
+#: probe. Drawn by shape, so the runner's abstention is as likely as any one near miss.
+BASELINE_SHAPES: Final[Mapping[str, tuple[int | None, bool, str]]] = {
+    "passed": (EXIT_PASS, False, "[PASS] {check} synthetic title: synthetic pass"),
+    "failed": (EXIT_FAIL, False, "[FAIL] {check} synthetic title: synthetic defect"),
+    "partial": (EXIT_FAIL, False, "[PARTIAL] {check} synthetic title: synthetic partial"),
+    "abstained": (EXIT_UNAVAILABLE, False, "[SKIP] {check} synthetic title: an abstention"),
+    "unregistered": (
+        EXIT_UNAVAILABLE,
+        False,
+        "[??] {check} is not registered in this tree's Check_Registry",
+    ),
+    "skip-line-at-the-pre-r1-5a-exit": (
+        EXIT_FAIL,
+        False,
+        "[SKIP] {check} synthetic title: the runner exited 1 for this until 2026-10-02",
+    ),
+    "skip-line-for-another-check": (
+        EXIT_UNAVAILABLE,
+        False,
+        "[SKIP] {check}0 synthetic title: an id that merely starts with this one",
+    ),
+    "skip-line-quoted-mid-line": (
+        EXIT_UNAVAILABLE,
+        False,
+        "log: the runner said [SKIP] {check} synthetic title: quoted, not printed",
+    ),
+    "exit-2-with-no-status-line": (
+        EXIT_UNAVAILABLE,
+        False,
+        "usage: gate_fault_injection: error: unrecognized arguments",
+    ),
+    "signalled": (-9, False, ""),
+    "timed-out": (None, True, ""),
+    "unstartable": (None, False, "gate subprocess could not be started: synthetic"),
+}
+
+#: The status line a synthetic mutated run prints ahead of the names it mentions. Drawn
+#: independently of the exit code, because against an abstaining baseline the line decides
+#: as much as the code does (R1.5a): exit 1 is a verdict only with the runner's FAIL or
+#: PARTIAL line, and SKIP on both copies only with its SKIP line. ``traceback`` is the
+#: crash shape - exit 1 is also an uncaught exception's status, and it prints no status line.
+MUTATED_LINES: Final[Mapping[str, str]] = {
+    "verdict": "[FAIL] {check} synthetic title:",
+    "partial": "[PARTIAL] {check} synthetic title:",
+    "abstention": "[SKIP] {check} synthetic title:",
+    "unregistered": "[??] {check} is not registered:",
+    "unlabelled": "[XX] {check} synthetic gate output:",
+    "traceback": "Traceback (most recent call last):",
+}
+
 # ---------------------------------------------------------------------------
 # The committed declaration and the live registry, read once
 # ---------------------------------------------------------------------------
@@ -184,33 +254,75 @@ COMMITTED_OPERATOR_IDS: Final[tuple[str, ...]] = tuple(
 # ---------------------------------------------------------------------------
 
 
+def runner_abstained(baseline: GateRun | None, check: str) -> bool:
+    """R1.5a's admission, restated: the baseline exited 2 AND printed ``[SKIP] <check>``.
+
+    Written with ``str.split`` and ``startswith`` rather than the harness's regex, so the
+    classifier is compared against a second implementation. The trailing space is what keeps
+    ``C16`` from matching ``C160``; the line start is what keeps a quoted mention out.
+    """
+    if baseline is None or baseline.timed_out or baseline.exit_code != EXIT_UNAVAILABLE:
+        return False
+    return any(line.startswith(f"[SKIP] {check} ") for line in baseline.output.split("\n"))
+
+
+def runner_reported(output: str, check: str, statuses: Sequence[str]) -> bool:
+    """Whether ``output`` carries the runner's ``[STATUS] <check>`` line for any of ``statuses``.
+
+    The same ``str.split``/``startswith`` restatement as :func:`runner_abstained`, applied to
+    the mutated run: R1.5a credits exit 1 only beside the runner's FAIL or PARTIAL line.
+    """
+    return any(
+        line.startswith(f"[{status}] {check} ")
+        for status in statuses
+        for line in output.split("\n")
+    )
+
+
 def declared_outcome(
     *,
+    check: str,
     applied: bool,
     timed_out: bool,
     exit_code: int | None,
+    mutated_output: str,
     missing_names: Sequence[str],
     baseline: GateRun | None,
 ) -> str:
     """The outcome E2.1 mandates for one probe, first match wins.
 
-    1. the mutation did not land                     -> ``not-applied``
-    2. the gate did not answer inside its bound      -> ``indeterminate``
-    3. the gate could not be executed at all         -> ``indeterminate``
-    4. the gate does not pass on the unmutated copy  -> ``indeterminate``
-    5. non-zero exit naming every declared subject   -> ``falsified``
-    6. zero exit                                     -> ``survived``
-    7. non-zero exit naming nothing                  -> ``survived``
+    1. the mutation did not land                                 -> ``not-applied``
+    2. the gate did not answer inside its bound                  -> ``indeterminate``
+    3. the gate could not be executed at all, or was signalled   -> ``indeterminate``
+    4. the baseline abstained: exit 2 printing ``[SKIP] <check>`` (R1.5a, 2026-10-02)
+       a. mutated exit 1 printing ``[FAIL]``/``[PARTIAL] <check>``,
+          naming every declared subject                          -> ``falsified``
+       b. the same naming less, or mutated exit 0                -> ``survived``
+       c. any other mutated run - exit 1 with neither line (an
+          uncaught exception), or 2 (SKIP on both) - included    -> ``indeterminate``
+    5. the gate does not pass on the unmutated copy              -> ``indeterminate``
+    6. non-zero exit naming every declared subject               -> ``falsified``
+    7. zero exit                                                 -> ``survived``
+    8. non-zero exit naming nothing                              -> ``survived``
 
-    Rules 2-4 are the I-7 cases: each is an absence of proof, and none may read as a
-    pass. Rule 7 is the naming obligation with teeth - a gate that fails without saying
-    what failed has not satisfied its declaration.
+    Rules 2, 3, 4c and 5 are the I-7 cases: each is an absence of proof, and none may read
+    as a pass. Rule 5 is R1.5 (a check already red proves nothing by staying red), and rule
+    4 is the one relaxation R1.5a makes of it: an abstention is not a verdict, so a change
+    from SKIP to the runner's FAIL or PARTIAL is the mutation's doing, and nothing else that
+    departs from SKIP is. Rule 8 is the naming obligation with teeth - a gate that fails
+    without saying what failed has not satisfied its declaration.
     """
     if not applied:
         return "not-applied"
     if timed_out:
         return "indeterminate"
-    if exit_code is None:
+    if exit_code is None or exit_code < 0:
+        return "indeterminate"
+    if runner_abstained(baseline, check):
+        if exit_code == EXIT_FAIL and runner_reported(mutated_output, check, ("FAIL", "PARTIAL")):
+            return "survived" if missing_names else "falsified"
+        if exit_code == EXIT_PASS:
+            return "survived"
         return "indeterminate"
     if baseline is not None and not baseline.passed:
         return "indeterminate"
@@ -311,15 +423,16 @@ class ClassificationCase:
 
     ``visible`` is the subset of ``expect_names`` the synthetic gate output mentions:
     the classifier's job is to rediscover which declared subjects went unnamed.
+    ``baseline_shape`` keys :data:`BASELINE_SHAPES`; ``None`` is a probe with no baseline
+    at all, the diagnostic mode.
     """
 
     expect_names: tuple[str, ...]
     visible: tuple[str, ...]
     exit_code: int | None
     timed_out: bool
-    baseline_probed: bool
-    baseline_exit: int | None
-    baseline_timed_out: bool
+    mutated_line: str
+    baseline_shape: str | None
 
     @property
     def present(self) -> tuple[str, ...]:
@@ -329,8 +442,13 @@ class ClassificationCase:
     def missing(self) -> tuple[str, ...]:
         return tuple(name for name in self.expect_names if name not in self.visible)
 
+    @property
+    def baseline_probed(self) -> bool:
+        return self.baseline_shape is not None
+
     def output(self, check: str) -> str:
-        return f"[XX] {check} synthetic gate output: {' '.join(self.visible)}"
+        status = MUTATED_LINES[self.mutated_line].format(check=check)
+        return f"{LOG_LINE}\n{status} {' '.join(self.visible)}"
 
     def gate_run(self, check: str) -> GateRun:
         return GateRun(
@@ -342,14 +460,15 @@ class ClassificationCase:
         )
 
     def baseline(self, check: str) -> GateRun | None:
-        if not self.baseline_probed:
+        if self.baseline_shape is None:
             return None
+        exit_code, timed_out, line = BASELINE_SHAPES[self.baseline_shape]
         return GateRun(
             check=check,
             command=("synthetic", "baseline"),
-            exit_code=self.baseline_exit,
-            output=f"[--] {check} synthetic baseline",
-            timed_out=self.baseline_timed_out,
+            exit_code=exit_code,
+            output="\n".join(part for part in (LOG_LINE, line.format(check=check)) if part),
+            timed_out=timed_out,
         )
 
 
@@ -360,7 +479,13 @@ def classification_cases(draw: st.DrawFn) -> ClassificationCase:
     ``timed_out`` implies ``exit_code is None`` because that is what ``run_gate``
     actually returns on a ``TimeoutExpired``; an unstartable process is the other
     ``None`` case and is drawn separately, so both indeterminate branches are reachable
-    without generating a shape the launcher could never emit.
+    without generating a shape the launcher could never emit. ``-9`` is a run a signal
+    terminated, and ``130`` an exit status the runner itself never emits.
+
+    The baseline is drawn by *shape* from :data:`BASELINE_SHAPES` rather than by exit
+    code, so R1.5a's admitted case - the runner's own abstention - is drawn as often as
+    each near miss it must be told apart from: an unregistered exit 2, a SKIP line at the
+    pre-R1.5a exit 1, another check's SKIP line, a quoted one, and exit 2 with no line.
     """
     expect = tuple(
         draw(st.lists(st.sampled_from(NAME_TOKENS), min_size=1, max_size=4, unique=True))
@@ -368,23 +493,14 @@ def classification_cases(draw: st.DrawFn) -> ClassificationCase:
     visible = tuple(draw(st.lists(st.sampled_from(expect), max_size=len(expect), unique=True)))
 
     timed_out = draw(st.booleans())
-    exit_code = None if timed_out else draw(st.sampled_from((None, 0, 1, 2, 130)))
-
-    baseline_probed = draw(st.booleans())
-    baseline_timed_out = draw(st.booleans()) if baseline_probed else False
-    baseline_exit = (
-        None
-        if (not baseline_probed or baseline_timed_out)
-        else draw(st.sampled_from((None, 0, 1, 2)))
-    )
+    exit_code = None if timed_out else draw(st.sampled_from((None, 0, 1, 2, 130, -9)))
     return ClassificationCase(
         expect_names=expect,
         visible=visible,
         exit_code=exit_code,
         timed_out=timed_out,
-        baseline_probed=baseline_probed,
-        baseline_exit=baseline_exit,
-        baseline_timed_out=baseline_timed_out,
+        mutated_line=draw(st.sampled_from(tuple(MUTATED_LINES))),
+        baseline_shape=draw(st.one_of(st.none(), st.sampled_from(tuple(BASELINE_SHAPES)))),
     )
 
 
@@ -427,9 +543,11 @@ def test_the_probe_outcome_is_a_total_function_of_the_run_and_its_baseline(
     assert result.outcome in OUTCOMES
     assert result.falsified is (result.outcome == "falsified")
     assert result.outcome == declared_outcome(
+        check=check,
         applied=result.applied,
         timed_out=result.timed_out,
         exit_code=result.exit_code,
+        mutated_output=case.output(check),
         missing_names=result.missing_names,
         baseline=baseline,
     )
@@ -463,11 +581,17 @@ def test_the_probe_outcome_is_a_total_function_of_the_run_and_its_baseline(
     assert not set(result.names_present) & set(result.missing_names)
 
     # Falsified requires BOTH halves: a non-zero exit and every declared subject named.
+    abstained = runner_abstained(baseline, check)
+    observed = not result.timed_out and result.exit_code is not None and result.exit_code >= 0
     if result.falsified:
         assert result.non_zero_exit
         assert result.missing_names == ()
         assert not result.timed_out
-        assert baseline is None or baseline.passed
+        # Credit needs a baseline that passed or abstained (R1.5, R1.5a), and against an
+        # abstention only the runner's FAIL/PARTIAL exit is a verdict the mutation caused.
+        assert baseline is None or baseline.passed or abstained
+        if abstained:
+            assert result.exit_code == EXIT_FAIL
         for name in operator.expect_names:
             assert name in result.detail
 
@@ -480,12 +604,31 @@ def test_the_probe_outcome_is_a_total_function_of_the_run_and_its_baseline(
                 assert name in result.detail
 
     # I-7: an absence of proof is never a falsification.
-    if result.timed_out or result.exit_code is None:
+    if not observed:
         assert result.outcome == "indeterminate"
         assert not result.falsified
-    if baseline is not None and not baseline.passed:
+    # R1.5 stands for every baseline that is red rather than abstaining - FAIL, PARTIAL,
+    # unregistered, unobservable, or carrying a SKIP line it did not earn - and an
+    # observed baseline's exit status travels into the detail.
+    if baseline is not None and not baseline.passed and not abstained:
         assert result.outcome == "indeterminate"
         assert not result.falsified
+        if (
+            observed
+            and not baseline.timed_out
+            and baseline.exit_code is not None
+            and baseline.exit_code >= 0
+        ):
+            assert f"baseline exit {baseline.exit_code}" in result.detail
+    # R1.5a: against an abstention every detail names both exit statuses, and a SKIP on
+    # both copies is indeterminate and says that is what it was.
+    if abstained and observed:
+        assert f"baseline exit {EXIT_UNAVAILABLE}" in result.detail
+        assert f"mutated exit {result.exit_code}" in result.detail
+        if result.exit_code == EXIT_UNAVAILABLE:
+            assert result.outcome == "indeterminate"
+            if case.mutated_line == "abstention":
+                assert "abstained on both the unmutated and the mutated copy" in result.detail
 
 
 @given(case=classification_cases())
@@ -522,6 +665,315 @@ def test_a_mutation_that_cannot_land_never_reaches_a_gate_and_never_survives(
     # Naming the subject applies to the harness's own failures too.
     assert PROBE_TARGET in result.detail
     assert operator.id in result.detail
+
+
+# ---------------------------------------------------------------------------
+# R1.5a (decision-quality-proof, 2026-10-02): an abstaining baseline, one case per branch
+# ---------------------------------------------------------------------------
+
+
+def skip_line(check: str) -> str:
+    """The runner's own SKIP line, rendered by the function the runner prints with."""
+    return gfi._status_line("SKIP", check, "Synthetic title", "an abstention")
+
+
+def fail_line(check: str, named: str = "NAME_ALPHA NAME_BRAVO") -> str:
+    """The runner's own FAIL line, naming ``named``."""
+    return gfi._status_line("FAIL", check, "Synthetic title", f"a breach of {named}")
+
+
+def runner_run(check: str, *, exit_code: int | None, status_line: str) -> GateRun:
+    """A gate run shaped like the runner's: a log line, then its one status line."""
+    return GateRun(
+        check=check,
+        command=gfi._gate_command(check),
+        exit_code=exit_code,
+        output=f"{LOG_LINE}\n{status_line}",
+        timed_out=False,
+    )
+
+
+def classify(check: str, *, baseline: GateRun | None, mutated: GateRun) -> FaultInjectionResult:
+    """Drive the real classifier over two synthesised runs, starting no process.
+
+    ``run_gate`` - the harness's own launcher, never a gate - returns ``mutated``; the
+    mutation itself is applied for real inside a throwaway tree, as in the property above.
+    Every case declares the same two subjects, ``NAME_ALPHA`` and ``NAME_BRAVO``.
+    """
+
+    def launcher(_gate: str, _tree: Path, **_: object) -> GateRun:
+        return mutated
+
+    operator = probe_operator(("NAME_ALPHA", "NAME_BRAVO"))
+    with probe_tree() as tree, pytest.MonkeyPatch.context() as mp:
+        mp.setattr(gfi, "run_gate", launcher)
+        return gfi.falsifies(check, operator, tree=tree, baseline=baseline)
+
+
+def test_a_skip_baseline_that_fails_under_its_mutation_naming_every_subject_is_falsified() -> None:
+    """R1.5a: an abstention is not a verdict, so a SKIP -> FAIL change is the mutation's.
+
+    R1.5 refuses a red baseline because a check already red proves nothing by staying red.
+    A SKIP judged nothing, and with SKIP and FAIL on distinct exit codes the mutation is the
+    only difference between the two copies. What this does NOT show is that the gate would
+    PASS a sound subject - only that it can FAIL when its subject breaks.
+    """
+    check = "C60"
+    result = classify(
+        check,
+        baseline=runner_run(check, exit_code=EXIT_UNAVAILABLE, status_line=skip_line(check)),
+        mutated=runner_run(check, exit_code=EXIT_FAIL, status_line=fail_line(check)),
+    )
+
+    assert result.outcome == "falsified"
+    assert result.falsified is True
+    assert result.baseline_probed is True
+    assert result.baseline_exit_code == EXIT_UNAVAILABLE
+    assert result.exit_code == EXIT_FAIL
+    assert result.missing_names == ()
+    for name in ("NAME_ALPHA", "NAME_BRAVO"):
+        assert name in result.detail
+    assert "SKIP -> FAIL" in result.detail
+    assert f"`[FAIL] {check}`" in result.detail
+    assert "R1.5a" in result.detail
+
+
+def test_a_skip_baseline_that_reports_partial_under_its_mutation_is_falsified_too() -> None:
+    """R1.5a: PARTIAL is the runner's other exit-1 verdict, credited as FAIL is."""
+    check = "C70"
+    partial = gfi._status_line("PARTIAL", check, "Synthetic title", "NAME_ALPHA NAME_BRAVO short")
+    result = classify(
+        check,
+        baseline=runner_run(check, exit_code=EXIT_UNAVAILABLE, status_line=skip_line(check)),
+        mutated=runner_run(check, exit_code=EXIT_FAIL, status_line=partial),
+    )
+
+    assert result.outcome == "falsified"
+    assert result.missing_names == ()
+    assert "SKIP -> PARTIAL" in result.detail
+
+
+def test_a_skip_baseline_still_abstaining_under_its_mutation_proves_nothing_and_says_so() -> None:
+    """R1.5a / I-7: SKIP on both copies moved no verdict, whatever the output mentions.
+
+    The mutated run names every declared subject on purpose. Before R1.5a a non-zero exit
+    naming them would have been enough against a passing baseline; against an abstention it
+    is not, because a gate that abstains on both copies judged neither. The detail says it
+    abstained twice - a different repair (make the gate observable) from a survivor's.
+    """
+    check = "C71"
+    abstaining = gfi._status_line("SKIP", check, "Synthetic title", "NAME_ALPHA NAME_BRAVO")
+    result = classify(
+        check,
+        baseline=runner_run(check, exit_code=EXIT_UNAVAILABLE, status_line=skip_line(check)),
+        mutated=runner_run(check, exit_code=EXIT_UNAVAILABLE, status_line=abstaining),
+    )
+
+    assert result.outcome == "indeterminate"
+    assert result.falsified is False
+    assert result.missing_names == ()
+    assert "abstained on both the unmutated and the mutated copy" in result.detail
+    assert f"mutated exit {EXIT_UNAVAILABLE}" in result.detail
+
+
+def test_a_skip_baseline_that_passes_under_its_mutation_is_a_survivor() -> None:
+    """R1.5a: a mutation that turns an abstaining gate into a PASS is a gate that does not gate.
+
+    The subject was broken on purpose and the gate called it sound. That is the defect a
+    survivor names, so it FAILs the sweep rather than reading as an absence.
+    """
+    check = "C70"
+    passing = gfi._status_line("PASS", check, "Synthetic title", "NAME_ALPHA NAME_BRAVO hold")
+    result = classify(
+        check,
+        baseline=runner_run(check, exit_code=EXIT_UNAVAILABLE, status_line=skip_line(check)),
+        mutated=runner_run(check, exit_code=EXIT_PASS, status_line=passing),
+    )
+
+    assert result.outcome == "survived"
+    assert result.falsified is False
+    assert "PASS a broken subject" in result.detail
+    assert f"mutated exit {EXIT_PASS}" in result.detail
+
+
+def test_a_skip_baseline_that_fails_without_naming_every_subject_survives_naming_the_gap() -> None:
+    """R1.5a keeps the naming obligation: a FAIL that names less is not a falsification."""
+    check = "C72"
+    result = classify(
+        check,
+        baseline=runner_run(check, exit_code=EXIT_UNAVAILABLE, status_line=skip_line(check)),
+        mutated=runner_run(check, exit_code=EXIT_FAIL, status_line=fail_line(check, "NAME_ALPHA")),
+    )
+
+    assert result.outcome == "survived"
+    assert result.names_present == ("NAME_ALPHA",)
+    assert result.missing_names == ("NAME_BRAVO",)
+    assert "NAME_BRAVO" in result.detail
+
+
+@pytest.mark.parametrize(
+    ("exit_code", "status_line"),
+    [
+        pytest.param(
+            EXIT_FAIL,
+            "Traceback (most recent call last):",
+            id="an-uncaught-exception-exits-1-with-no-status-line",
+        ),
+        pytest.param(
+            EXIT_FAIL,
+            "[SKIP] C60 Synthetic title: a SKIP line printed at exit 1",
+            id="exit-1-beside-a-skip-line-not-a-fail-line",
+        ),
+        pytest.param(
+            130,
+            "Traceback (most recent call last):",
+            id="an-exit-the-runner-never-emits",
+        ),
+        pytest.param(
+            EXIT_UNAVAILABLE,
+            "[??] C60 is not registered in this tree's Check_Registry",
+            id="exit-2-unregistered-in-the-mutated-copy",
+        ),
+    ],
+)
+def test_a_skip_baseline_whose_mutated_run_reaches_no_runner_verdict_is_indeterminate(
+    exit_code: int, status_line: str
+) -> None:
+    """R1.5a credits only the runner's FAIL or PARTIAL; any other departure from SKIP is no verdict.
+
+    Both runs name every declared subject, so the names cannot be what decides it, and the
+    detail names the mutated exit status rather than claiming a double abstention. Exit 1
+    alone is not the runner's FAIL: an uncaught exception in the mutated copy - an
+    import-time traceback - exits 1 too, and prints no status line.
+    """
+    check = "C60"
+    result = classify(
+        check,
+        baseline=runner_run(check, exit_code=EXIT_UNAVAILABLE, status_line=skip_line(check)),
+        mutated=runner_run(
+            check, exit_code=exit_code, status_line=f"{status_line} NAME_ALPHA NAME_BRAVO"
+        ),
+    )
+
+    assert result.outcome == "indeterminate"
+    assert result.missing_names == ()
+    assert f"mutated exit {exit_code}" in result.detail
+    assert "abstained on both" not in result.detail
+
+
+def test_an_unregistered_id_exits_2_but_is_never_admitted_as_an_abstention() -> None:
+    """R1.5 stands for exit 2 without the runner's SKIP line, using the runner's own output.
+
+    The unregistered branch of ``run_single_check`` executes no check, so it is driven for
+    real: its exit status and its ``[??]`` line are exactly what a baseline of an id the copy
+    does not register looks like. SKIP shares exit 2 on purpose, so the line is the only
+    thing telling the two apart, and a probe judged against this one stays
+    ``indeterminate`` however well the mutated run names its subjects.
+    """
+    check = "C999"
+    assert check not in REGISTERED_IDS
+    stdout = io.StringIO()
+    with contextlib.redirect_stdout(stdout):
+        code = gfi.run_single_check(check)
+    printed = stdout.getvalue()
+    assert code == EXIT_UNAVAILABLE
+    assert printed.startswith(f"[??] {check} ")
+
+    baseline = GateRun(
+        check=check,
+        command=gfi._gate_command(check),
+        exit_code=code,
+        output=printed,
+        timed_out=False,
+    )
+    result = classify(
+        check,
+        baseline=baseline,
+        mutated=runner_run(check, exit_code=EXIT_FAIL, status_line=fail_line(check)),
+    )
+
+    assert result.outcome == "indeterminate"
+    assert result.falsified is False
+    assert f"baseline exit {EXIT_UNAVAILABLE}" in result.detail
+    assert f"`[SKIP] {check}`" in result.detail
+
+
+@pytest.mark.parametrize(
+    ("exit_code", "status_line"),
+    [
+        pytest.param(EXIT_FAIL, skip_line("C60"), id="a-skip-line-at-the-pre-r1-5a-exit"),
+        pytest.param(EXIT_UNAVAILABLE, skip_line("C600"), id="another-checks-skip-line"),
+        pytest.param(EXIT_UNAVAILABLE, f"note: {skip_line('C60')}", id="a-skip-line-quoted"),
+        pytest.param(EXIT_UNAVAILABLE, "usage: error: bad arguments", id="exit-2-with-no-line"),
+        pytest.param(EXIT_FAIL, fail_line("C60", "nothing"), id="a-baseline-already-red"),
+        pytest.param(
+            EXIT_FAIL,
+            gfi._status_line("PARTIAL", "C60", "Synthetic title", "partly red"),
+            id="a-partial-baseline",
+        ),
+    ],
+)
+def test_a_baseline_is_admitted_as_an_abstention_only_at_exit_2_with_its_own_skip_line(
+    exit_code: int, status_line: str
+) -> None:
+    """R1.5 stands for every non-passing baseline R1.5a does not admit.
+
+    The admission has two halves - exit 2, and the runner's ``[SKIP] <check>`` line for
+    THIS check at the start of a line - and each near miss lacks one of them. FAIL and
+    PARTIAL are the red baselines R1.5 was written for. Each stays ``indeterminate``,
+    naming the baseline's exit status, however well the mutated run names its subjects.
+    """
+    check = "C60"
+    result = classify(
+        check,
+        baseline=runner_run(check, exit_code=exit_code, status_line=status_line),
+        mutated=runner_run(check, exit_code=EXIT_FAIL, status_line=fail_line(check)),
+    )
+
+    assert result.outcome == "indeterminate"
+    assert result.falsified is False
+    assert f"baseline exit {exit_code}" in result.detail
+    assert "does not pass on the unmutated copy" in result.detail
+
+
+def test_escaping_a_capture_keeps_its_lines_so_the_status_line_stays_a_line() -> None:
+    """R1.5a reads the runner's status line as a LINE, so escaping must not flatten it.
+
+    ``unicode_escape`` escapes newlines too: one non-ASCII byte anywhere in a capture would
+    otherwise collapse it into a single line, and the runner's real SKIP would read as no
+    status line at all - an honest null, but for a reason no gate owns.
+    """
+    capture = "log: \u2192 a non-ASCII arrow before the status line\n" + skip_line("C60")
+    kept = gfi._ascii_lines(capture)
+
+    assert "\n" not in gfi._ascii(capture), "the flattening _ascii_lines exists to avoid"
+    assert kept.isascii()
+    assert kept.split("\n")[1] == skip_line("C60")
+    baseline = GateRun(
+        check="C60",
+        command=gfi._gate_command("C60"),
+        exit_code=EXIT_UNAVAILABLE,
+        output=kept,
+        timed_out=False,
+    )
+    mutated = runner_run("C60", exit_code=EXIT_FAIL, status_line=fail_line("C60"))
+    assert classify("C60", baseline=baseline, mutated=mutated).outcome == "falsified"
+
+
+def test_the_runner_gives_skip_its_own_exit_status_and_only_pass_exits_zero() -> None:
+    """R1.5a's precondition, pinned against the registry's own status vocabulary.
+
+    While SKIP shared exit 1 with FAIL, an abstaining baseline was indistinguishable from a
+    red one, and R1.5 read C60, C70, C71 and C72 as red. The mapping covers exactly the
+    statuses ``verify_claims._run_check`` coerces every result into, so no status reaches
+    the runner unmapped, and PASS is the only one that exits 0 (I-7).
+    """
+    assert set(gfi.RUNNER_EXIT_CODES) == set(vc.STATUSES)
+    assert gfi.RUNNER_EXIT_CODES["SKIP"] == EXIT_UNAVAILABLE
+    assert gfi.RUNNER_EXIT_CODES["SKIP"] != gfi.RUNNER_EXIT_CODES["FAIL"]
+    assert gfi.RUNNER_EXIT_CODES["FAIL"] == gfi.RUNNER_EXIT_CODES["PARTIAL"] == EXIT_FAIL
+    passing = [status for status, code in gfi.RUNNER_EXIT_CODES.items() if code == EXIT_PASS]
+    assert passing == ["PASS"]
 
 
 def test_an_operator_that_changes_no_byte_is_refused_rather_than_reported_as_survived() -> None:
@@ -1414,21 +1866,37 @@ def test_a_real_subprocess_probe_agrees_with_the_declared_decision_table() -> No
     declares, that the mutation lands, and that the working tree does not move.
 
     ``@pytest.mark.slow``: a full tree copy plus two gate subprocesses is a CI workload,
-    excluded locally by ``-m "not slow"`` (I-0).
+    excluded locally by ``-m "not slow"`` (I-0). The launcher is wrapped only to keep the
+    mutated run's output, so the restatement can read the runner's status line as R1.5a
+    requires; the wrapper calls the real launcher, which still starts the real gate process.
     """
     check, operator = COMMITTED_OPERATORS[0]
     subject = gfi.ROOT / operator.file_target
     before = digest_of(subject) if subject.is_file() else None
+    real_launcher = gfi.run_gate
+    mutated_runs: list[GateRun] = []
 
-    with gfi.tree_copy() as tree:
+    def recording_launcher(
+        gate: str,
+        tree_root: Path,
+        *,
+        timeout: float = gfi.DEFAULT_TIMEOUT_S,
+        command: Sequence[str] | None = None,
+    ) -> GateRun:
+        run = real_launcher(gate, tree_root, timeout=timeout, command=command)
+        mutated_runs.append(run)
+        return run
+
+    with gfi.tree_copy() as tree, pytest.MonkeyPatch.context() as mp:
         assert tree.resolve() != gfi.ROOT.resolve()
         assert not (tree / ".git").exists()
 
-        baseline = gfi.run_gate(check, tree, timeout=gfi.DEFAULT_TIMEOUT_S)
+        baseline = real_launcher(check, tree, timeout=gfi.DEFAULT_TIMEOUT_S)
         assert baseline.check == check
         assert baseline.command == gfi._gate_command(check)
         assert baseline.passed is (baseline.exit_code == 0 and not baseline.timed_out)
 
+        mp.setattr(gfi, "run_gate", recording_launcher)
         result = gfi.falsifies(
             check, operator, tree=tree, baseline=baseline, timeout=gfi.DEFAULT_TIMEOUT_S
         )
@@ -1448,9 +1916,11 @@ def test_a_real_subprocess_probe_agrees_with_the_declared_decision_table() -> No
     assert result.outcome in OUTCOMES
     assert result.falsified is (result.outcome == "falsified")
     assert result.outcome == declared_outcome(
+        check=check,
         applied=result.applied,
         timed_out=result.timed_out,
         exit_code=result.exit_code,
+        mutated_output="\n".join(run.output for run in mutated_runs),
         missing_names=result.missing_names,
         baseline=baseline,
     )

@@ -33,10 +33,11 @@ Four properties are load-bearing and deliberate:
   nothing about the mutation, so it cannot echo a name it was fed.
 * **Absence of a falsification is never a pass (I-7).** A registered check absent from
   both ``gates`` and ``reporting_tools`` is UNDECLARED and is excluded from the
-  PASS-eligible set. So is a declared check whose mutation the gate survived, and so
-  is one whose baseline run does not pass on the unmutated copy (a gate that is
-  already red proves nothing when it stays red). Exclusion is the honest label; it is
-  never an exemption and it never contributes a PASS.
+  PASS-eligible set. So is a declared check whose mutation the gate survived, so is one
+  whose baseline run is red on the unmutated copy (a gate that is already red proves
+  nothing when it stays red), and so is one that abstains there and still abstains under
+  its mutation (R1.5a). Exclusion is the honest label; it is never an exemption and it
+  never contributes a PASS.
 
 **Expect FAILs today, and read them as honest.** ``gate-mutations.yaml`` records, in
 its own notes, the declarations the current tree does not yet satisfy, and this harness
@@ -46,9 +47,9 @@ written. C61's tolerance widening bites since task 5.5 derived oracle membership
 ``incomplete: true`` operator -- a no-op, since the committed value already was the
 mutation -- was retired when task 10.3 removed the artifact it targeted. C28's zero-a-floor
 survived until 2026-10-01, when C28 began failing a floor below its measured
-``ratchets.json`` bound -- expected to falsify from the next sweep, not yet observed.
-Waiting on ``--require-measured-floors`` could never have fixed it, because C28 never runs
-that script.
+``ratchets.json`` bound -- observed ``falsified`` from the sweep at ``5eef6ee`` (run
+36976628961). Waiting on ``--require-measured-floors`` could never have fixed it, because
+C28 never runs that script.
 
 **I-0 (local compute).** A sweep copies the tree once and runs one subprocess per
 gate plus one per operator. That is a CI workload and it belongs to
@@ -87,6 +88,16 @@ non-zero, whose status is named instead. A report that cannot be serialised exit
 copying the tree is "the sweep could not start" rather than a traceback. None of the four
 is a pass.
 
+**An abstention is not a red baseline (R1.5a, amended 2026-10-02).** ``--run-check`` exits
+``2`` for SKIP and ``1`` for FAIL or PARTIAL, so a gate that abstains on the unmutated copy
+is no longer indistinguishable from one that is already red. A baseline that exits ``2``
+printing the runner's own ``[SKIP] <cid>`` line admits a probe: the runner's FAIL or PARTIAL
+under the mutation (exit ``1`` WITH its ``[FAIL] <cid>`` / ``[PARTIAL] <cid>`` line) naming
+every declared subject is ``falsified``, PASS is ``survived``, and SKIP again - or exit ``1``
+with no such line, which is also an uncaught exception's status - is ``indeterminate``. That
+proves the gate can fail when its subject breaks. It does not prove the gate would pass a
+sound subject, and the published registry row still reads SKIP.
+
 Run::
 
     python -m scripts.audit.gate_fault_injection             # declaration only, exits 2
@@ -95,7 +106,9 @@ Run::
     python -m scripts.audit.gate_fault_injection --sweep --gate C57
     python -m scripts.audit.gate_fault_injection --run-check C57   # internal runner
 
-Exit codes: ``0`` pass, ``1`` fail, ``2`` unavailable. ``2`` is non-passing.
+Exit codes: ``0`` pass, ``1`` fail, ``2`` unavailable. ``2`` is non-passing. The internal
+``--run-check`` runner reports a registry status instead: ``0`` PASS, ``1`` FAIL or PARTIAL,
+``2`` SKIP or an id this tree does not register (R1.5a).
 Every file is read with ``encoding='utf-8'`` (E-S13-07) and all console output is
 ASCII (non-ASCII check titles are escaped for display and compared unescaped).
 """
@@ -147,6 +160,35 @@ _EXIT_CODES: Final[Mapping[str, int]] = {
     "unavailable": EXIT_UNAVAILABLE,
 }
 _SYMBOLS: Final[Mapping[str, str]] = {"pass": "[OK]", "fail": "[XX]", "unavailable": "[--]"}
+
+#: The ``--run-check`` runner's exit status for each registry status (R1.5a, 2026-10-02).
+#: SKIP has a code of its own so a gate that abstains on the unmutated copy can be told
+#: apart from one that is already red; while the two shared ``1``, R1.5 had to read every
+#: abstaining baseline as red, which is why C60, C70, C71 and C72 could never be probed.
+#: Only PASS exits ``0`` (I-7). The keys are exactly ``verify_claims.STATUSES``, which
+#: ``verify_claims._run_check`` coerces every result into.
+RUNNER_EXIT_CODES: Final[Mapping[str, int]] = {
+    "PASS": EXIT_PASS,
+    "FAIL": EXIT_FAIL,
+    "PARTIAL": EXIT_FAIL,
+    "SKIP": EXIT_UNAVAILABLE,
+}
+
+#: The one line the runner prints, ``[STATUS] <cid> <title>: <detail>``, read back
+#: line-anchored and with the whole identifier captured, so neither a quoted mention nor an
+#: id that merely starts with the probed one (``C600`` for ``C60``) reads as its line.
+_STATUS_LINE: Final[re.Pattern[str]] = re.compile(
+    r"^\[(?P<status>" + "|".join(map(re.escape, RUNNER_EXIT_CODES)) + r")\] (?P<check>\S+) ",
+    re.MULTILINE,
+)
+
+#: The statuses the runner reports at exit ``1``: FAIL and PARTIAL, derived from
+#: :data:`RUNNER_EXIT_CODES` so the two cannot drift. Exit ``1`` is a verdict only WITH one
+#: of their lines for the probed check, because it is also the status of an uncaught
+#: exception - an import-time traceback in the mutated copy prints no status line (R1.5a).
+_VERDICTS_AT_EXIT_FAIL: Final[frozenset[str]] = frozenset(
+    status for status, code in RUNNER_EXIT_CODES.items() if code == EXIT_FAIL
+)
 
 #: Wall-clock bound on one gate subprocess. A gate that cannot answer inside it is
 #: reported ``indeterminate`` - never falsified, and never a pass.
@@ -215,6 +257,7 @@ __all__ = [
     "EXIT_PASS",
     "EXIT_UNAVAILABLE",
     "ROOT",
+    "RUNNER_EXIT_CODES",
     "SCHEMA_FILE",
     "SWEEP_BUDGET_KEY",
     "SWEEP_REPORT_ENV",
@@ -293,6 +336,18 @@ def _ascii(text: str) -> str:
     if text.isascii():
         return text
     return text.encode("unicode_escape").decode("ascii")
+
+
+def _ascii_lines(text: str) -> str:
+    """:func:`_ascii`, applied line by line so a captured output keeps its lines.
+
+    ``unicode_escape`` escapes newlines too, so escaping a whole capture in one call would
+    flatten it into a single line whenever any byte of it is non-ASCII - and the runner's
+    status line, which R1.5a's admission reads, is identified by being a line. Escaping per
+    line changes nothing a name match can see: ``expect_names`` are ASCII and contain no
+    newline.
+    """
+    return "\n".join(_ascii(line) for line in text.split("\n"))
 
 
 # ---------------------------------------------------------------------------
@@ -1298,7 +1353,7 @@ def run_gate(
             check=check,
             command=argv,
             exit_code=None,
-            output=_ascii(captured),
+            output=_ascii_lines(captured),
             timed_out=True,
         )
     except OSError as error:
@@ -1313,7 +1368,7 @@ def run_gate(
         check=check,
         command=argv,
         exit_code=completed.returncode,
-        output=_ascii(completed.stdout + completed.stderr),
+        output=_ascii_lines(completed.stdout + completed.stderr),
         timed_out=False,
     )
 
@@ -1343,6 +1398,90 @@ def unobservable_reason(run: GateRun, *, timeout: float) -> str | None:
     return None
 
 
+def _reported_status(run: GateRun, check: str) -> str | None:
+    """The registry status the runner printed for ``check`` in ``run``, or ``None``.
+
+    Read from the line :func:`_status_line` renders, compared by whole identifier, so a
+    status printed for another check is never this check's.
+    """
+    for match in _STATUS_LINE.finditer(run.output):
+        if match.group("check") == check:
+            return match.group("status")
+    return None
+
+
+def _abstained(run: GateRun, check: str) -> bool:
+    """Whether ``run`` is the runner's own SKIP for ``check`` (R1.5a): exit 2 AND its line.
+
+    Neither half suffices. Exit ``2`` alone is also an id this tree does not register (the
+    runner's ``[??]`` line) and an argparse usage error; the line alone is only a rendering,
+    and until 2026-10-02 the runner printed it beside exit ``1``.
+    """
+    return (
+        not run.timed_out
+        and run.exit_code == EXIT_UNAVAILABLE
+        and _reported_status(run, check) == "SKIP"
+    )
+
+
+def _after_abstention(
+    gate_id: str,
+    operator: MutationOperator,
+    gate_run: GateRun,
+    baseline: GateRun,
+    missing: tuple[str, ...],
+) -> tuple[Outcome, str]:
+    """R1.5a: the outcome of a probe whose unmutated baseline abstained, first match wins.
+
+    The caller has established that both runs observed and that the baseline is the
+    runner's SKIP for ``gate_id``. A SKIP is an abstention, not a verdict, and the mutation
+    is the only difference between the two copies, so a move from SKIP to the runner's FAIL
+    or PARTIAL is the mutation's doing. Nothing else is credited: exit ``1`` counts only with
+    the runner's own ``[FAIL]``/``[PARTIAL] <cid>`` line, because an uncaught exception exits
+    ``1`` too and prints none; a SKIP on both copies moved nothing; and an exit the runner
+    never emits is no verdict at all. Every detail names both exit statuses (R1.5).
+    """
+    code = gate_run.exit_code
+    reported = _reported_status(gate_run, gate_id)
+    judged = code == EXIT_FAIL and reported in _VERDICTS_AT_EXIT_FAIL
+    abstention = (
+        f"gate abstained on the unmutated copy (baseline exit {baseline.exit_code}, "
+        f"`[SKIP] {gate_id}`)"
+    )
+    if judged and not missing:
+        return "falsified", (
+            f"{abstention} and failed under the mutation (mutated exit {code}, "
+            f"`[{reported}] {gate_id}`) naming every declared subject "
+            f"({', '.join(operator.expect_names)}): the SKIP -> {reported} change is "
+            "attributable to the mutation, the only difference between the two copies (R1.5a)"
+        )
+    if judged:
+        return "survived", (
+            f"{abstention} and failed under the mutation (mutated exit {code}, "
+            f"`[{reported}] {gate_id}`) but named nothing for {', '.join(missing)}: a non-zero "
+            "exit that does not name the mutated subject does not satisfy the declaration"
+        )
+    if code == EXIT_PASS:
+        return "survived", (
+            f"{abstention} and passed under the declared mutation (mutated exit {code}): "
+            "the mutation made an abstaining gate PASS a broken subject, so it does not "
+            "gate this property (R1.5a)"
+        )
+    if code == EXIT_UNAVAILABLE and reported == "SKIP":
+        return "indeterminate", (
+            "gate abstained on both the unmutated and the mutated copy (baseline exit "
+            f"{baseline.exit_code}, mutated exit {code}, each `[SKIP] {gate_id}`), so the "
+            "mutation moved no verdict and nothing is attributable to it (R1.5a)"
+        )
+    return "indeterminate", (
+        f"{abstention} and the mutated run reached no verdict the runner reports (mutated "
+        f"exit {code}; FAIL and PARTIAL exit {EXIT_FAIL} printing their `[FAIL] {gate_id}` or "
+        f"`[PARTIAL] {gate_id}` line, SKIP exits {EXIT_UNAVAILABLE} with its `[SKIP] {gate_id}` "
+        "line, and an uncaught exception exits 1 with neither), so nothing is attributable to "
+        "the mutation (R1.5a)"
+    )
+
+
 def falsifies(
     gate_id: str,
     operator: MutationOperator,
@@ -1360,13 +1499,21 @@ def falsifies(
     * its output contains **every** ``expect_names`` substring.
 
     A non-zero exit that names nothing is ``survived``, because a gate that fails without
-    saying what failed cannot be acted on and does not satisfy the declaration. When
-    ``baseline`` is supplied and the gate does not pass on the unmutated copy, the result
-    is ``indeterminate``: a check that is already red proves nothing by staying red. A run
+    saying what failed cannot be acted on and does not satisfy the declaration. A run
     that observed nothing at all - a timeout, an unstartable process, or a
     signal-terminated one, each named separately by :func:`unobservable_reason` - is
-    ``indeterminate`` too, and so is a baseline in any of those states. None of them is a
-    pass (I-7).
+    ``indeterminate``, and so is a baseline in any of those states. When ``baseline`` is
+    supplied and is red on the unmutated copy - FAIL or PARTIAL, an unregistered id, or any
+    other non-passing status that is not the runner's own abstention - the result is
+    ``indeterminate`` too: a check that is already red proves nothing by staying red
+    (R1.5). None of them is a pass (I-7).
+
+    **A baseline that abstained is not red (R1.5a, 2026-10-02).** Exit ``2`` carrying the
+    runner's ``[SKIP] <gate_id>`` line is an abstention rather than a verdict, and
+    :func:`_after_abstention` credits the mutation only with a FAIL naming every declared
+    subject. A **PASS** baseline is classified exactly as before, so a PASS -> SKIP change
+    naming every subject still reads ``falsified``; whether it should is an open question
+    (finding 85), deliberately not decided here.
 
     Note what ``baseline=None`` does *not* mean: it is the diagnostic mode, and a
     ``falsified`` outcome under it is unsound because an already-red gate stays red. The
@@ -1440,14 +1587,26 @@ def falsifies(
         )
     if baseline is not None and not baseline.passed:
         baseline_unobservable = unobservable_reason(baseline, timeout=timeout)
-        cause = (
-            f"the unmutated baseline {baseline_unobservable}"
-            if baseline_unobservable is not None
-            else (
-                f"gate does not pass on the unmutated copy (baseline exit "
-                f"{baseline.exit_code})"
+        if baseline_unobservable is None and _abstained(baseline, gate_id):
+            outcome, detail = _after_abstention(gate_id, operator, gate_run, baseline, missing)
+            return result(
+                applied=True,
+                gate_run=gate_run,
+                outcome=outcome,
+                detail=detail,
+                names_present=present,
+                missing_names=missing,
             )
-        )
+        if baseline_unobservable is not None:
+            cause = f"the unmutated baseline {baseline_unobservable}"
+        elif baseline.exit_code == EXIT_UNAVAILABLE:
+            cause = (
+                f"gate does not pass on the unmutated copy (baseline exit "
+                f"{baseline.exit_code} without the `[SKIP] {gate_id}` status line, so it is "
+                "not an abstention R1.5a admits)"
+            )
+        else:
+            cause = f"gate does not pass on the unmutated copy (baseline exit {baseline.exit_code})"
         return result(
             applied=True,
             gate_run=gate_run,
@@ -1873,6 +2032,11 @@ def evaluate(
 # ---------------------------------------------------------------------------
 
 
+def _status_line(status: str, check: str, title: str, detail: str) -> str:
+    """The one line :func:`run_single_check` prints, and :func:`_reported_status` reads."""
+    return f"[{status}] {check} {_ascii(title)}: {_ascii(detail)}"
+
+
 def run_single_check(check: str) -> int:
     """Runner mode: execute exactly one registered check in **this** tree.
 
@@ -1880,9 +2044,11 @@ def run_single_check(check: str) -> int:
     check id and nothing else - no operator, no target, no expected names - so the gate's
     output can only name what the gate itself observed.
 
-    Exit ``0`` only for ``PASS``. FAIL, PARTIAL and SKIP are all non-zero, because a SKIP
-    is not a PASS (I-7); the harness's baseline probe is what keeps a SKIP on the
-    unmutated tree from being mistaken for a falsification.
+    Exit ``0`` only for ``PASS``, because a SKIP is not a PASS (I-7). Since 2026-10-02
+    (R1.5a) the other statuses exit by class, per :data:`RUNNER_EXIT_CODES`: ``1`` for FAIL
+    and PARTIAL, ``2`` for SKIP. An id this tree does not register also exits ``2``, and its
+    ``[??]`` line is what keeps it from being read as an abstention. SKIP used to share
+    ``1`` with FAIL, and that is what made every abstaining baseline read as already red.
     """
     from scripts.audit import verify_claims
 
@@ -1891,8 +2057,8 @@ def run_single_check(check: str) -> int:
         print(f"[??] {check} is not registered in this tree's Check_Registry")
         return EXIT_UNAVAILABLE
     result = verify_claims._run_check(*entry)
-    print(f"[{result.status}] {result.cid} {_ascii(result.title)}: {_ascii(result.detail)}")
-    return EXIT_PASS if result.status == "PASS" else EXIT_FAIL
+    print(_status_line(result.status, result.cid, result.title, result.detail))
+    return RUNNER_EXIT_CODES[result.status]
 
 
 def _print_report(report: FaultInjectionReport) -> None:
