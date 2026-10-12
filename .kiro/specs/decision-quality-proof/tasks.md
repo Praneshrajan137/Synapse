@@ -565,6 +565,13 @@ tests in the interim, and that is a stated sequencing gap, not an omission.
     unobservable operators (C60, C72) to `reporting_tools:` as C67's is, or a repair that makes
     them observable; dropping the job from `required-checks.yaml` would weaken what blocks a
     merge and is not offered.
+  - **2026-10-11 -- R1.5a lands with P1 (task 29.7).**
+    - `--run-check` exits 2 for SKIP.
+    - A SKIP baseline (exit 2 with the runner's `[SKIP] <id>` line) is admitted when the mutated
+      run exits 1 carrying the runner's `[FAIL] <id>` or `[PARTIAL] <id>` line and names every
+      declared subject. An exit 1 without that line is also an uncaught exception's status, so it
+      stays `indeterminate`.
+    - Measured outcome: pending P1's sweep, recorded at 29.7.
   - Ensure all tests pass, ask the user if questions arise.
   - **REVIEWED AND ACCEPTED BY THE OPERATOR, session 2q. This closes E1.** The list below was
     measured by the declared discharge job and the review it was waiting on has happened, so the
@@ -2238,14 +2245,15 @@ tests in the interim, and that is a stated sequencing gap, not an omission.
     scope and authorable (not ticked); 13.3 and 13.4 stay deferred. Pointer only -- task 12's
     disposition block and ADR-055 **D2.7** carry it.
 
-  - [~] 13.1 Structure 3 — correlated lead times and observable supplier state
+  - [x] 13.1 Structure 3 — correlated lead times and observable supplier state
     - discharge: ci.yml::quality-gates (digital_twin fast tests) plus ci.yml::uplift-verify
-    - last-checked: run 36860316695 (SYNAPSE CI, sha ec0eb91, 2026-10-01) -- `quality-gates` CANCELLED at its 15-minute bound inside
-      `test_world_structure_property.py` (6 fast tests PASSED; Property 91 and the rest unread),
-      so the discharge job did not complete; slow selection `success` incl. Property 90's 3 slow
-      clauses; Property 89 in fast shard 1/4 (`success`, not read per test id). The bound is
-      raised to 25 minutes from measurement (finding 80); graduates on the next run whose
-      `quality-gates` concludes green.
+    - **DISCHARGED: run 36976629141 (SYNAPSE CI, sha 5eef6ee, 2026-10-02), `quality-gates`
+      `success` in 958 s under the measured 25-minute bound, unit step `1610 passed` /0 failed;
+      `uplift-verify` aggregate `success`** -- `test_world_structure_property.py` 44/44 fast
+      PASSED (Properties 90 and 91, read per test id) and 3/3 slow PASSED; Property 89
+      (`test_inventory_position_equivalence_property.py`) 4/4 PASSED in fast shard 1/4.
+    - previously: run 36860316695 (sha ec0eb91) -- `quality-gates` CANCELLED at its 15-minute
+      bound inside `test_world_structure_property.py` (6 fast tests PASSED, the rest unread).
     - previously: run 36827018572 (sha 1ebb93e) -- slow selection `success` incl. Property 90's
       slow clauses; Property 89 PASSED in fast shard 1/4; `quality-gates` CANCELLED at step 7.
     - **RE-SCOPED 2026-09-29 (session-11 plan, operator-approved).** The delay lives on the
@@ -2297,12 +2305,13 @@ tests in the interim, and that is a stated sequencing gap, not an omission.
       reliability scoring has an observable subject.
     - _Requirements: 5.21, 5.22, 5.23_
 
-  - [~] 13.2 Write property test for lead-time correlation and supplier attribution
+  - [x] 13.2 Write property test for lead-time correlation and supplier attribution
     - discharge: ci.yml::quality-gates (fast clauses) plus ci.yml::uplift-verify slow selection
-    - last-checked: run 36860316695 (SYNAPSE CI, sha ec0eb91, 2026-10-01) -- every Property 57 test id PASSED (7/7 fast in `quality-gates`,
-      6/6 slow), but `quality-gates` was CANCELLED at its 15-minute bound before concluding, so
-      the named job did not discharge; graduates on the next run whose `quality-gates`
-      concludes green.
+    - **DISCHARGED: run 36976629141 (SYNAPSE CI, sha 5eef6ee, 2026-10-02), `quality-gates`
+      `success` and the slow selection `success` (85 passed, 0 failed)** -- Property 57 7/7 fast
+      and 6/6 slow PASSED, read per test id.
+    - previously: run 36860316695 (sha ec0eb91) -- every Property 57 test id PASSED, but
+      `quality-gates` was cancelled at its 15-minute bound before concluding.
     - `# Feature: decision-quality-proof, Property 57: Lead time is demand-correlated, day-autocorrelated and supplier-attributed`
     - File: `digital_twin/tests/test_lead_time_correlation_property.py`
     - `@pytest.mark.slow`; selected by `ci.yml::uplift-verify`'s slow step.
@@ -2386,6 +2395,12 @@ tests in the interim, and that is a stated sequencing gap, not an omission.
       METERED against the account's allowance (~1,031 billable minutes on 2026-10-01 alone,
       estimated from job durations), so `execution-routing.md`'s 'free and unmetered' premise
       is false while the repository is private -- an I-1 question for the operator.
+      - **RESOLVED 2026-10-02 (measured).**
+        - The operator made the repository public again after a history secrets audit: 132 remote
+          refs, 439 commits and 527,987 added lines scanned; 0 high-confidence hits;
+          56 low-confidence, all development defaults; `.env.cloud` never committed.
+        - The API reads `visibility: public` (re-read 2026-10-11), so `ubuntu-latest` is the
+          4 vCPU / 16 GB public runner again and Actions minutes are unmetered.
     - **RE-SCOPED 2026-09-29 (session-11 plan, operator-approved).** Wire the B-prime factorial:
       `uplift.yml::twin-regret` becomes a matrix over the eight `world.cells`, one artifact per
       cell, under `set -o pipefail`.
@@ -5063,6 +5078,16 @@ progress ledger; design reasoning is ADR-055.
       CI check, so it is an operator decision, not part of this batch. The HIGH image-size
       advisory is cleared by removing the unused `@deck.gl/geo-layers`; the committed lockfile
       is regenerated by `frontend-lockfile-regen.yml` (label `regen-lockfile`, artifact only).
+      - **UPDATE 2026-10-11 (decided under the operator's delegation of 2026-10-02; not yet observed).**
+        - P1 upgrades `maplibre-gl` to `^6.4.1`. CI resolves 6.14.0, the latest 6.x on 2026-10-11;
+          the vulnerable range is `<= 6.4.0`.
+        - Changes: `setWorkerUrl` through Vite's `?worker&url` (`basemap.ts::prepareMapLibre`), and
+          `import * as maplibregl`.
+        - The observable this finding said no check had: `frontend/tests/e2e/map-worker.spec.ts`.
+          It asserts that a dedicated Worker starts from the hashed
+          `assets/maplibre-gl-worker-*.js`, that the asset is served as JavaScript, and that
+          maplibre's worker runtime boots in it.
+        - Rejected: an audit exception, because policy forbids ignoring a production advisory.
     - **FINDING 84 (read).** The Frontend `e2e` and `e2e-harness` failures were masked on main
       twice over (`test.skip` when the harness driver was absent, then `|| true` on the step)
       and on this branch by `quality` failing upstream. Three root causes: Mission Control
@@ -5079,6 +5104,97 @@ progress ledger; design reasoning is ADR-055.
       `src/test/setup.ts` already did for Vitest). Predicted next: `mobile-reality` fails on
       its LCP budget (main chunk complete 3.9 s after navigation under 3G vs 2.5 s; the spec's
       header calls LCP "measured and annotated" while its body asserts it -- an operator call).
+    - **FINDING 86 (measured; critical path read from the run's Playwright trace).**
+      - On Frontend run `36976628938` (sha `5eef6ee`), `mobile-reality` measured LCP on "/" at
+        6316 ms, and 5656 ms on retry, against the 2500 ms Web_Vitals_Budget. Overflow and CLS
+        passed.
+      - `mobile-lighthouse` asserts `largest-contentful-paint` at `warn`
+        (`lighthouserc.mobile.json`). It measured 6042 ms and 7056 ms and the job succeeded. The
+        `mobile-reality` spec's header called Lighthouse the authoritative mobile LCP gate, which
+        was false: the spec's own assertion is the only blocking one, and P1 corrects the header.
+      - About 1361.5 kB was requested before 6400 ms. The first-render set was about 923 kB:
+        `InterVariable.woff2` 344 KB (preloaded); index 169; deck 176 (eager via LivingMap ->
+        `@viz/deck-gl/layers`); viz 83; react-vendor 66.5; visx 30; zod 12.8; query 11; css 8.6;
+        SpaceGrotesk 22. The lazy map chunk (213 KB) started at about 6.0 s.
+      - Read in a local build of 2026-08-01: the entry also imported Vite's preload helper and
+        three tslib helpers from `deck-*.js`, and `clsx` from `viz-*.js`, because Rollup puts a
+        manual chunk's static dependencies into that chunk.
+      - P1's repairs; no assertion changed:
+        - the Inter preload is dropped, and a metric-matched `Inter Variable Fallback` face is
+          named in tailwind `fontFamily.sans`;
+        - the map canvas sits behind one lazy module (`LivingMapCanvas`);
+        - every route except "/" is lazy (`LazySurface`);
+        - a `runtime` manual chunk claims clsx, every tslib copy and the preload helper;
+        - a blocking build step, `Entry preloads exclude the heavy viz chunks (FE-INV-025)`
+          (`check-entry-preloads.mjs`), fails when a `deck-`/`map-`/`graph-` chunk is eager or
+          missing from the build. `viz-` and `visx-` are listed, not forbidden, until a CI table
+          shows them absent.
+      - Predicted for P1: the guard's eager JS set is index, react-vendor, query, zod and runtime
+        only. LCP on "/" is predicted at 2.2-3.5 s, so a value at or under 2.5 s is NOT predicted
+        with confidence.
+      - Flipping Lighthouse's LCP assertion to `error` is deferred to session 12.
+    - **FINDING 88 (measured; the comparison is not a strict A/A).**
+      - At `5eef6ee` (run `36976628938`), the R8.10 step rejects the committed placeholder
+        effectiveness baseline (5 `missing-stamp` plus `uniform-metrics`).
+      - Two harness scorecards at seed 30000, on consecutive commits `aa19d9a` (run `36959909043`)
+        and `5eef6ee` (run `36976628938`), differ in latency by up to 94%:
+        catch-disruption-before-cascade 13.4 -> 6.9 ms, and resolve-escalation-correctly
+        133 -> 157 ms. The committed `latencyPct` is 0.10.
+      - `67a459f` changed the harness's WebSocket driver between those commits, so this bounds
+        run-to-run variation rather than isolating noise. A strict A/A, re-running `e2e-harness`
+        once on one sha, is the next measurement.
+      - Committing a measured baseline now would trade a true red (no baseline) for a false one
+        (noise).
+      - Recommendation for the owner (purpose-achievement-audit R8.10 / Req 4.3): a median of k
+        runs with a MAD-scaled band, or an absolute resolution floor for latencies in single-digit
+        milliseconds.
+      - `effectiveness-ratchet` stays red BY DESIGN until that is decided. Widening `latencyPct`
+        is forbidden.
+    - **FINDING 89 (read from source, not probed).**
+      - `frontend/src/surfaces/auth/useBootAutoLogin.ts` signs every visitor in as admin on boot,
+        and falls back to a development credential compiled into the bundle.
+      - With the repository public since 2026-10-02, that credential is readable in source and
+        ships in every production bundle built from this tree. Any deployment of such a build
+        signs anonymous visitors in as admin.
+      - Not changed in P1, because it is a product and security decision. The options are: remove
+        the fallback, gate auto-login on a build-time development flag, or rotate the credential
+        server-side. **Raise it first.**
+    - **FINDING 90 (measured).**
+      - `frontend.yml::fe-invariants` (FE-INV registry coverage) was `skipped` on all 40 PR runs
+        read, back to run `34366753685` (2026-09-09). It
+        `needs: [quality, e2e, e2e-visual, e2e-harness]`, and `e2e` failed throughout.
+      - If P1's `e2e` passes, `fe-invariants` runs for the first time in that window, and it is
+        predicted NOT to pass. `infrastructure/quality/fe-invariant-attestation.yaml`
+        deliberately leaves FE-INV-013, -014, -020, -024, -025 and -031 unattributable, which
+        `frontend/spec/check_fe_invariants.py` reports as `unavailable` (exit 2) at best, and
+        `fail` if any enforced invariant's listed suites skipped or failed.
+      - Its inputs cannot be pre-checked: the run-record artifacts carry `retention-days: 7`, and
+        the `5eef6ee` records were already deleted when read on 2026-10-11 (artifact API 404).
+      - Owner: purpose-achievement-audit (R8.7 / R12.4).
+      - P1 narrows FE-INV-025's reason: the new build step blocks `deck-`/`map-`/`graph-` but not
+        `visx-`, which the invariant also names. That is recorded in the attestation file's comment.
+    - **FINDING 91 (read; inferred from code and the `5eef6ee` e2e log).**
+      - `frontend/tests/e2e/smoke.spec.ts` ("every route ... a11y-clean") seeds no session. Under
+        `pnpm preview` every `/api` call is refused (`ECONNREFUSED` proxy errors in run
+        `36976628938`'s e2e log), so boot auto-login fails and `RouteGuard` sends all 11 of its
+        routes to `/login`. The axe matrix has scanned the sign-in page eleven times, and never a
+        surface.
+      - Not repaired in P1: seeding a session would put ten surfaces under axe for the first time,
+        which is a discovery run, not a confirmation.
+      - The repair: seed the admin session as `cockpit.spec.ts` does, and wait for the surface's
+        `h1` before `analyze()`. It belongs to the console a11y owner, with its own CI run.
+      - Related: FE-INV-031 is unattributable because `frontend.yml` defines no a11y job.
+    - **FINDING 92 (inferred from code; owed before PR #84 merges).**
+      - P1 route-splits 14 surfaces (only Operations and Council Theater were split before), and
+        none has a failed-chunk state.
+      - A rejected lazy import renders React Router's default "Unexpected Application Error!" with
+        no retry. In production, nginx `try_files` answers a stale chunk with `index.html` after a
+        deploy, so the import rejects. `React.lazy` caches the rejection, so remounting cannot
+        retry.
+      - The repair: an error boundary inside `LazySurface` that renders an error Universal_State
+        with a reload, or an `errorElement` on the root and `/login` routes.
+      - Not in P1: no CI check observes it, and new UI code that cannot be type-checked or run
+        locally would turn P1's frontend run into discovery.
 
   - [x] 29.1 Deferral is a terminal state the census reports
     - discharge: ci.yml::uplift-verify fast shard 3/4 (tests/verify a-o)
@@ -5176,6 +5292,57 @@ progress ledger; design reasoning is ADR-055.
       dispatch/withheld/blocked/untranslatable count per run; a rate computed over zero pairs
       fails.
     - _Requirements: 7.20, 7.21_
+
+  - [~] 29.7 An abstaining baseline admits a probe the runner's own FAIL then judges (R1.5a)
+    - discharge: truth-gates.yml::falsification-sweep
+    - last-checked: run 36976628961 (SYNAPSE Truth Gates, sha 5eef6ee, 2026-10-02) -- pre-change: 16/16 operators probed, 12 falsified, 4 indeterminate (C60, C70, C71, C72: each baseline exit 1, mutated exit 1, every expect_name present)
+    - Files: `scripts/audit/gate_fault_injection.py`,
+      `tests/verify/test_declared_falsification_property.py`, `requirements.md` R1 criterion 5a,
+      `design.md` Property 38, and notes in `infrastructure/quality/gate-mutations.yaml`,
+      `infrastructure/quality/required-checks.yaml` and `.github/workflows/truth-gates.yml`
+    - Prediction (pre-registered):
+      - verdict `pass`, exit 0;
+      - 16 of 16 operators probed, over 14 checks, all falsified;
+      - `baseline_exit_code` 2 for C60, C70, C71 and C72, and 0 for the other twelve probes;
+      - the step prints `[PASS] C72 Gate fault injection: 16 of 16 declared operator(s) probed, 14 check(s) falsified by every declared mutation, 0 operator(s) unproven`;
+      - no falsified probe carries mutated exit 2 (finding 85);
+      - most likely miss: C71, if it abstains on both copies (then `indeterminate`);
+      - `CURRENT.md` unchanged;
+      - its unit suite, `test_declared_falsification_property.py` (69 non-slow tests collected
+        locally, all passing at `ci` for its two properties), passes in `ci.yml::uplift-verify`
+        fast shard 3/4.
+    - **FINDING 85 (read).**
+      - When the baseline PASSed, a mutated run that abstains (exit 2) or crashes (exit 1 with no
+        status line) but names every declared subject still counts as `falsified`.
+      - R1.5a's SKIP-baseline branch now credits only the runner's FAIL or PARTIAL line; the
+        PASS-baseline branch does not yet.
+      - Before P1, SKIP and FAIL both exited 1, so the sweep could not see this shape. P1's report
+        is the first that can, and it is predicted to show none.
+      - Whether an abstention or a crash under mutation counts as detection is open, and it is the
+        owner's call.
+    - Demo: the required `falsification-sweep` job exits 0 with 16 of 16 falsified. A SKIP on both
+      copies, or an exit 1 without the runner's `[FAIL]`/`[PARTIAL]` line, still reads
+      `indeterminate`.
+    - _Requirements: 1.5a_
+
+  - [~] 29.8 A harvest names the run it read (finding 87)
+    - discharge: ci.yml::uplift-verify fast shard 3/4 (tests/verify a-o) and fast shard 4/4
+    - last-checked: run 36976629141 (SYNAPSE CI, sha 5eef6ee, 2026-10-02) -- pre-change: fast shards 3/4 and 4/4 success
+    - Files: `scripts/audit/spec_ledger_census.py`, `tests/verify/test_census_harvest_property.py`,
+      `tests/verify/test_census_deferral_property.py`, `tests/verify/test_spec_ledger_census.py`
+    - Prediction (pre-registered): both shards succeed. Collected locally (`-m "not slow"`), and
+      each file passes in full in the shard that collects it: `test_census_harvest_property.py`
+      11 (was 5) and `test_census_deferral_property.py` 16 in shard 3/4; `test_spec_ledger_census.py`
+      22 (was 21) in shard 4/4. `spec_ledger_census --files --check` reports pending 2 and
+      unharvested 0.
+    - **FINDING 87 (read).**
+      - The census counted any `last-checked:` line as a harvest, so a line reading "none yet"
+        satisfied G4.
+      - P1's repair: a harvest must name a run id (`run` followed by 8 or more digits; backticks
+        allowed). Otherwise the `[~]` reads unharvested and `--check` fails.
+    - Demo: a `last-checked:` line that names no run id leaves its `[~]` unharvested and makes
+      `--check` exit non-zero. Both of this file's `[~]` leaves name a run and read harvested.
+    - _Requirements: 4.x (census hygiene)_
 
 ## Notes
 
