@@ -5184,6 +5184,21 @@ progress ledger; design reasoning is ADR-055.
       - Owner: purpose-achievement-audit (R8.7 / R12.4).
       - P1 narrows FE-INV-025's reason: the new build step blocks `deck-`/`map-`/`graph-` but not
         `visx-`, which the invariant also names. That is recorded in the attestation file's comment.
+      - **MEASURED on Frontend CI run 38293903740 (sha 0745290), its first run in the window:
+        FAIL.** Summary `INVARIANTS=75 ENFORCED=75 ATTESTED=60 EXECUTED=786 SKIPPED=16 REPORTS=4`.
+        The six unobservable invariants are as predicted (013, 014, 020, 024, 025, 031). The
+        verdict is FAIL, not `unavailable`, because six more read `not_executed`: FE-INV-010, -011,
+        -022, -029, -056 and -063. Each names a top-level e2e spec (`smoke`, `cockpit`, `demo`,
+        `task-completion.jtbd`, `spatial-visualization`) whose tests DID run in the same run.
+      - **Root cause of those six (read):** `paths_match` in `frontend/spec/check_fe_invariants.py`
+        requires at least two shared trailing path segments, and its docstring assumes
+        Playwright reports paths relative to `frontend/`. Playwright reports them relative to
+        `config.rootDir`, which is `frontend/tests/e2e` (read in this run's JSON report), so a
+        top-level spec is the bare one-segment `smoke.spec.ts` and can never match. Specs in a
+        subdirectory (`a11y/`, `visual/`) do match.
+      - The repair is the owner's (purpose-achievement-audit R8.7): resolve each Playwright
+        `file` against `config.rootDir` before comparing. Even after it, the job reads
+        `unavailable` until the six unobservable invariants gain an enforcer.
     - **FINDING 91 (read; inferred from code and the `5eef6ee` e2e log).**
       - `frontend/tests/e2e/smoke.spec.ts` ("every route ... a11y-clean") seeds no session. Under
         `pnpm preview` every `/api` call is refused (`ECONNREFUSED` proxy errors in run
@@ -5250,6 +5265,10 @@ progress ledger; design reasoning is ADR-055.
       - Predicted for the next run: `e2e-harness` succeeds with all five JTBDs measured;
         `effectiveness-ratchet` then runs and is red by design (finding 88); `fe-invariants`
         then runs and does not pass (finding 90).
+      - **MEASURED on Frontend CI run 38293903740 (sha 0745290): all three held.**
+        `e2e-harness` `success`. `effectiveness-ratchet` `failure` on exactly the R8.10
+        rejection read at `5eef6ee` (5 `missing-stamp`, `uniform-metrics`). `fe-invariants` ran
+        and FAILED (finding 90).
 
   - [x] 29.1 Deferral is a terminal state the census reports
     - discharge: ci.yml::uplift-verify fast shard 3/4 (tests/verify a-o)

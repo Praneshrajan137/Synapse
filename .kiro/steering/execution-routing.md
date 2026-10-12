@@ -26,12 +26,16 @@ workload as out of scope for the laptop entirely.
 ## The asymmetry this document exists to exploit
 
 One thermally-throttling laptop. **GitHub Actions is free and unmetered** (public repo,
-standard runners) **and runs jobs in parallel at no extra cost.**
+standard runners) **and runs jobs in parallel at no extra cost.** **That premise holds only
+while the repository is public** — it was found private on 2026-10-01, with 2-vCPU runners and
+metered minutes, and made public again on 2026-10-02 (decision-quality-proof finding 80).
+Re-check it with `gh api repos/<owner>/<repo>` (`visibility`) before sizing CI work on it.
 
 > **CI is the execution substrate. The laptop is an authoring and reading terminal.**
 
-Unused headroom, from committed `timeout-minutes`: `quality-gates` 15, `uplift-verify` **60**
-(using ~27), `truth-gates` 25, `integration` 15–40, `twin-regret` 120, `uplift-proof` 350.
+Unused headroom, from committed `timeout-minutes`: `quality-gates` 25 (using ~16 on public
+runners), `uplift-verify` five jobs bounded at 30/45/30/30/30, `truth-gates` 25, `integration`
+15–40, `twin-regret` 120, `uplift-proof` 350.
 
 **But know what CI actually buys.** CI gates **discharge**, not **authoring**. Adding runner
 capacity does not make a leaf get written; it makes a written leaf get judged. Optimise
@@ -90,6 +94,10 @@ have caught first.
 |---|---|
 | **LOCAL** | `ruff check` / `ruff format --check` on changed files, or at CI's exact scope (386 files, ~2 s) |
 | **LOCAL** | `mypy --strict -m <dotted non-test module>` |
+| **LOCAL** | `biome lint` on changed `frontend/src` files (10 files, 0.2 s, measured 2026-10-12); `biome format` fed LF content through `--stdin-file-path`, so a CRLF working copy reports only real diffs |
+| **LOCAL** | `actionlint -shellcheck= -pyflakes=` on changed workflows (5 workflows, 1.8 s) |
+| **LOCAL** | a stdlib regex scan for secrets over a diff's added lines (~1 s); over the whole history, 12 s |
+| **LOCAL** | `node frontend/scripts/check-entry-preloads.mjs` against a `dist/` that already exists (2.2 s) — it reads, it never builds |
 | **CI ONLY** | `mypy --strict` over `tests/**` — the closure drags `uplift/__init__` → `scipy`, exceeding a 120 s budget. **No CI step type-checks `tests/` either; say so rather than implying coverage** |
 | **CI ONLY** | `pnpm` anything · `vite build` · full-project `tsc` |
 
