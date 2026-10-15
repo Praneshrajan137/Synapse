@@ -5269,6 +5269,42 @@ progress ledger; design reasoning is ADR-055.
         `e2e-harness` `success`. `effectiveness-ratchet` `failure` on exactly the R8.10
         rejection read at `5eef6ee` (5 `missing-stamp`, `uniform-metrics`). `fe-invariants` ran
         and FAILED (finding 90).
+  - **SESSION 12, 2026-10-15 -- open decisions (a) and (e), measured.**
+    - **PRE-REGISTERED before attempt 2 is read: the strict A/A of finding 88.** `e2e-harness`
+      is re-run once on Frontend CI run `38298457463` (sha `ecf517b`); attempt 2 is read against
+      attempt 1, seed 30000 in both. Attempt 1 measured (ms): resolve-escalation-correctly 85.3,
+      identify-degraded-agent 65.0, reconstruct-decision-rationale 67.6, adjust-steering-safely
+      5.6, catch-disruption-before-cascade 2.9.
+      - AA1: `steps`, `errorRate`, each row's `seed` and `interruptionPrecision` (0.75) are
+        identical. Falsified by any difference.
+      - AA2: at least one of the five latencies differs from attempt 1 by more than the
+        committed `latencyPct` (0.10), relative to attempt 1. Falsified if all five lie within it.
+      - AA3: `effectiveness-ratchet` re-runs and reads `failure` on the same R8.10 rejection, and
+        `fe-invariants` re-runs and reads `failure`. Falsified by any other verdict.
+      - It measures runner-to-runner noise at one sha and one seed. It does not decide (a).
+    - **FINDING 95 (measured; it falsifies the premise recorded for decision (e)).**
+      - `mobile-lighthouse` on run `38298457463` (sha `ecf517b`, job `114976396567`) found
+        `largest-contentful-paint` 4224 ms on `/login` and 5254 ms on `/`, three runs each,
+        against `maxNumericValue` 2500 at `warn`. The job succeeded. First-contentful-paint
+        read 3992 and 4655 ms against 2000.
+      - So flipping the assertion to `error` is not the cheaper repair finding 86 recorded: on
+        this tree it turns `mobile-lighthouse` red.
+      - The two instruments do not measure the same page (read from config and spec).
+        `lighthouserc.mobile.json` uses `throttlingMethod: simulate` and seeds no session, so
+        its `/` is an unauthenticated boot. `mobile-reality.spec.ts` seeds an admin session and
+        throttles over CDP.
+      - The job's upload step reports no files at `frontend/.lighthouseci`, so these values
+        survive only in the job log.
+      - The same run's `e2e` measured `mobile-reality` "/" at LCP 2428 ms, CLS 0 and INP 96 ms,
+        and passed. That value is from the `fe-invariant-playwright-e2e-report` artifact's
+        `mobile-vitals.mission-control.json`. Under `frontend/`, only `pnpm-lock.yaml` and the
+        effectiveness harness changed since `5c2f2b3`, so it is a second sample and not a strict
+        replicate.
+      - **PRE-REGISTERED before the third sample is read:** `e2e` is re-run once on the same
+        run and sha. L1: "/" LCP lies in 2200-2700 ms. Whether it is at or under 2500 ms is NOT
+        predicted with confidence: two samples, margins 208 and 72 ms. L2: CLS reads 0.
+        Falsified by a value outside either band.
+      - Decision (e) stays the operator's. This finding changes the evidence it rests on.
 
   - [x] 29.1 Deferral is a terminal state the census reports
     - discharge: ci.yml::uplift-verify fast shard 3/4 (tests/verify a-o)
