@@ -370,6 +370,88 @@ steps:
         role: disclosure
         requirement: "R5.34, R5.35"
 
+  # -------------------------------------------------------------------------
+  # decision-quality-proof tasks 16.7, 22.1 and 22.2 (R6.12, R7.1, R7.2, R7.15). The four
+  # label-triggered measurement jobs of `uplift.yml`, declared in the SAME COMMIT as the jobs:
+  # `workflow_shape_truth` resolves every declaration against the tree, so either half alone is
+  # a red gate.
+  #
+  # `all_steps: true` on all four, because every step is load-bearing and R7.15's whole point is
+  # that the workflow header's "no discarding constructs" is prose no gate reads. A swallowed
+  # install degrades the consensus arm to its stub (`uplift-proof`) or loses the twin import
+  # (the controls) while the job still looks like a measurement; a swallowed measurement,
+  # report, arrival proof or upload hides the run it describes. `all_steps` cannot be evaded by
+  # renaming a step to carry `informational`. It also cannot NOTICE a rename, which is accepted
+  # here because no other file cites these step names mechanically. `step_order` is for readers
+  # only: the gate reads `workflow`, `job`, `step_names`, `all_steps`, `match` and `requirement`.
+  #
+  # THE C60 STEP IS REPORT MODE, AND THAT IS NOT A DISCARD. `uplift_truth --json
+  # --require-fresh-run` without `--check` exits 0 once it has written its verdict -- C60 is
+  # `unavailable` by decision 1=a and never `proven` -- while a crash still fails the step; the
+  # verdict travels in the emitted JSON rather than in the step's colour.
+  - workflow: .github/workflows/uplift.yml
+    job: uplift-proof
+    all_steps: true
+    requirement: "R7.1, R7.2, R7.15"
+    step_order:
+      - step: "Run E5 under the proof supervisor (R7.1, R7.2)"
+        role: producer
+        emits: >-
+          artifacts/uplift/result.json (the harness artifact) and
+          artifacts/uplift/supervisor-status.json (canonical JSON naming exactly one of
+          completed, failed_to_start, exited_nonzero, exceeded_wall_clock, no_artifact)
+        requirement: "R7.1, R7.2"
+      - step: "Report C60 from this run's evidence (report mode - unavailable by decision 1=a)"
+        role: consumer
+        consumes: "artifacts/uplift/result.json, via uplift_truth --require-fresh-run"
+        emits: "artifacts/uplift/uplift-truth.json (uplift_truth --json; parsed in the step)"
+        requirement: "R7.1"
+      - step: "Upload the proof evidence"
+        role: consumer
+        consumes: "result.json, supervisor-status.json and uplift-truth.json"
+
+  - workflow: .github/workflows/uplift.yml
+    job: uplift-controls-negative
+    all_steps: true
+    requirement: "R6.1, R6.12, R6.14, R6.15"
+    step_order:
+      - step: "Run one negative-control repetition (R6.1, R6.14, R6.15)"
+        role: producer
+        emits: "artifacts/uplift/controls/negative-<repetition>.json (one per matrix leg)"
+        requirement: "R6.1, R6.15"
+
+  - workflow: .github/workflows/uplift.yml
+    job: uplift-controls-positive
+    all_steps: true
+    requirement: "R6.2, R6.3, R6.12, R6.14"
+    step_order:
+      - step: "Run the positive control (R6.2, R6.3, R6.14)"
+        role: producer
+        emits: "artifacts/uplift/controls/positive.json"
+        requirement: "R6.2, R6.3"
+
+  # The arrival proof is the G5 obligation for the 20-leg split: it re-reads
+  # `negative_control.independent_seed_sets` from `digital_twin/simulation/policy.yaml` and
+  # refuses a verdict unless exactly those repetitions arrived, so the explicit matrix list in
+  # the workflow and the committed count cannot drift apart silently.
+  - workflow: .github/workflows/uplift.yml
+    job: uplift-controls
+    all_steps: true
+    requirement: "R6.1, R6.2, R6.3, R6.5, R6.12, R6.15"
+    step_order:
+      - step: "Every declared negative repetition and the positive record arrived (G5 - BLOCKING)"
+        role: precondition
+        consumes: "artifacts/uplift/controls/ (downloaded) and digital_twin/simulation/policy.yaml"
+      - step: "Write the controls verdict, agreement record and Power_Report (R6.1-R6.5, R6.15)"
+        role: producer
+        emits: >-
+          artifacts/uplift/controls-verdict/ negative.json, positive.json, agreement.json and
+          power-report.json
+        requirement: "R6.1, R6.2, R6.3, R6.5, R6.15"
+      - step: "Upload the controls verdict"
+        role: consumer
+        consumes: "artifacts/uplift/controls-verdict/"
+
   # decision-quality-proof session 11, finding 70: E5's cost is measured before it is sized.
   # Declared in the same commit as the workflow it describes (coupling 2). Label-only, so it
   # owes no `required-checks.yaml` entry (conflict G).

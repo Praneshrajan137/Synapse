@@ -30,6 +30,10 @@ and not an arithmetic accident.
   the statistics makes the percentile well defined; input-order invariance needs the paired
   *differences* sorted before resampling. The subject does both.
 
+The design's fourth clause -- the interval is reported in the same output as the headline it
+describes -- is a property of the rendered report rather than of the estimator, and is asserted
+over generated results in ``tests/uplift/test_headline_fidelity_colocation_property.py``.
+
 Budget inherited from the root ``conftest.py`` profile via ``HYPOTHESIS_PROFILE``. **No
 ``max_examples`` literal appears in this file.**
 
@@ -108,14 +112,14 @@ def test_the_committed_alpha_is_the_one_the_validating_contract_reader_reports()
     """The narrow YAML read and ``MetricContract`` must agree, mechanically.
 
     ``uplift/interval.py`` reads ``alpha`` with ``yaml`` rather than through
-    :func:`uplift.contract.load_contract`, because ``contract.py`` imports ``scipy`` at module
-    scope and ``scipy`` is not in ``uplift.yml::twin-regret``'s install closure -- so the
-    validating reader cannot be imported inside the job that runs the regret measurement. This
-    test is the price of that, and it is the whole anti-drift mechanism: two readers of one
-    artifact with nothing comparing them is exactly the hole C75 was written to close.
-
-    It runs here rather than in the twin-regret job because ``scipy`` IS present in
-    ``ci.yml::uplift-verify``'s closure, which is the point.
+    :func:`uplift.contract.load_contract`. Under Metric_Contract v2 (task 29.4) the reason
+    left is the import direction: ``contract.py`` imports this module at module scope --
+    ``METHOD``, ``INTERVAL_SEED``, ``resamples_for`` and ``paired_difference_interval`` -- so a
+    module-scope import of the validating reader from ``interval.py`` would be a cycle. (The
+    reason given here before v2, that ``contract.py`` imports ``scipy`` at module scope, stopped
+    being true when v2 dropped the rank test.) This test is the price of the narrow read, and
+    it is the whole anti-drift mechanism: two readers of one artifact with nothing comparing
+    them is exactly the hole C75 was written to close.
     """
     from uplift.contract import load_contract
 

@@ -17,7 +17,7 @@ IEEE-754 value; non-finite KPI values (``nan``/``inf``) are preserved via the JS
 Schema (a single JSON object so the file is self-describing and forward-compatible)::
 
     {
-      "version": 1,
+      "version": 2,
       "runs": [
         {
           "arm": "<arm id>",
@@ -30,12 +30,19 @@ Schema (a single JSON object so the file is self-describing and forward-compatib
             "stockout_rate": <float>,
             "avg_delivery_time_min": <float>,
             "margin": <float>,
-            "co2_estimate": <float>
+            "co2_estimate": <float>,
+            "avg_on_hand_units": <float>,
+            "objective": <float>
           }
         },
         ...
       ]
     }
+
+**Version 2 (decision-quality-proof task 29.4).** :class:`~uplift.interfaces.KpiVector` gained
+two REQUIRED fields, ``avg_on_hand_units`` and ``objective``, so a version-1 file cannot carry a
+complete vector. It is refused by the version check below rather than read with those two
+values invented: an objective defaulted to ``0.0`` would be the best cost there is.
 """
 from __future__ import annotations
 
@@ -48,8 +55,9 @@ from pathlib import Path
 from uplift.interfaces import KpiVector, ScenarioRun
 
 # The on-disk schema version. Bump only on an incompatible layout change so an older
-# reader can refuse a newer file rather than silently misinterpret it.
-SCHEMA_VERSION: int = 1
+# reader can refuse a newer file rather than silently misinterpret it. Version 2: the
+# KpiVector gained `avg_on_hand_units` and `objective` (task 29.4), both required.
+SCHEMA_VERSION: int = 2
 
 # The KpiVector field names, in declaration order, derived from the dataclass itself so
 # this module stays in lock-step with the interface if a KPI is ever added/removed.

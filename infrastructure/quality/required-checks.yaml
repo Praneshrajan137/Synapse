@@ -341,6 +341,52 @@ ineligible:
       blocking-steps.yaml, not by branch protection -- a required check cannot cover a
       post-merge job.
 
+  # decision-quality-proof tasks 16.7 and 22.2 (R7.10). The four label-triggered measurement jobs
+  # of `uplift.yml`, declared in the SAME COMMIT as the jobs: `required_checks_truth` resolves
+  # each `job` against that file, so either half alone is a red gate.
+  #
+  # WHY `conditioned-off-pull-request` AND NOT `post-merge`, which tasks 16.7 and 22.2 and R7.10
+  # name. `post-merge` was true while `uplift.yml` ran only on `schedule` and `workflow_dispatch`;
+  # the session-11 re-scope moved these jobs onto a pull-request LABEL, so they run before merge
+  # and `post-merge` would now be false. The closed enum has no "label-conditioned" member and
+  # none is invented here. `conditioned-off-pull-request` is the trigger fact that fits: the
+  # workflow's `pull_request` trigger carries `types: [labeled]` only and each job's `if:`
+  # requires `github.event.label.name` to equal its label, so no job reports on the
+  # opened/synchronize/reopened events a required check must report on -- kept off the ordinary
+  # PR path deliberately, like `real-stack-run`, here because each is a category-4 measurement.
+  - job: uplift-proof
+    workflow: .github/workflows/uplift.yml
+    reason: conditioned-off-pull-request
+    detail: >-
+      on: pull_request with types [labeled] only, and if: github.event.label.name ==
+      'measure-uplift-proof' -- it reports only on the label event that names it, never on the
+      opened/synchronize/reopened events a required check must report on. The one job that
+      evaluates C60 with --require-fresh-run; by decision 1=a it reports C60 unavailable and
+      nothing claims it proven, so R7.10's purpose is unreachable through branch protection and
+      this entry is what makes that gap visible.
+
+  - job: uplift-controls-negative
+    workflow: .github/workflows/uplift.yml
+    reason: conditioned-off-pull-request
+    detail: >-
+      Same trigger; if: github.event.label.name == 'measure-uplift-controls'. A 20-leg matrix
+      whose check names are per leg, so no single name could be required even unconditioned;
+      uplift-controls reports the one verdict over the set.
+
+  - job: uplift-controls-positive
+    workflow: .github/workflows/uplift.yml
+    reason: conditioned-off-pull-request
+    detail: >-
+      Same trigger and the same if: as uplift-controls-negative (label
+      measure-uplift-controls).
+
+  - job: uplift-controls
+    workflow: .github/workflows/uplift.yml
+    reason: conditioned-off-pull-request
+    detail: >-
+      Same trigger and if: as the two control jobs it needs, so it runs only on the
+      measure-uplift-controls label event, and only after both of them succeeded.
+
 # ---------------------------------------------------------------------------
 # Pending: jobs that will join `required:` once they exist. Nothing reads this section as
 # a pass, and `required_checks_truth` does not resolve these job names (they would not

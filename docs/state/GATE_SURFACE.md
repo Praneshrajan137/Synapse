@@ -34,13 +34,13 @@ the same pair.
 
 ## Summary
 
-Parsed 20 workflow file(s), 65 job(s), 434 step(s).
+Parsed 20 workflow file(s), 68 job(s), 455 step(s).
 
 | Trigger | Jobs executing | Jobs conditional | Jobs NOT EXECUTED | Steps blocking | Steps advisory | Steps conditional |
 |---|---|---|---|---|---|---|
-| push:main | 4 | 30 | 31 | 31 | 0 | 183 |
-| pull_request | 17 | 28 | 20 | 107 | 4 | 175 |
-| tag:v* | 3 | 3 | 59 | 18 | 0 | 29 |
+| push:main | 4 | 30 | 34 | 31 | 0 | 183 |
+| pull_request | 17 | 32 | 19 | 107 | 4 | 202 |
+| tag:v* | 3 | 3 | 62 | 18 | 0 | 29 |
 
 ## Job selection
 
@@ -113,6 +113,9 @@ Why each job runs, does not run, or runs conditionally under each trigger. `need
 | push:main | .github/workflows/uplift-cost-probe.yml::cost-probe | NOT EXECUTED | workflow on: has no push trigger |
 | push:main | .github/workflows/uplift.yml::uplift-proof | NOT EXECUTED | workflow on: has no push trigger |
 | push:main | .github/workflows/uplift.yml::twin-regret | NOT EXECUTED | workflow on: has no push trigger |
+| push:main | .github/workflows/uplift.yml::uplift-controls-negative | NOT EXECUTED | workflow on: has no push trigger |
+| push:main | .github/workflows/uplift.yml::uplift-controls-positive | NOT EXECUTED | workflow on: has no push trigger |
+| push:main | .github/workflows/uplift.yml::uplift-controls | NOT EXECUTED | workflow on: has no push trigger |
 | pull_request | .github/workflows/cd-gcp.yml::build-push-sign | NOT EXECUTED | workflow on: has no pull_request trigger |
 | pull_request | .github/workflows/cd-gcp.yml::deploy-to-vm | NOT EXECUTED | workflow on: has no pull_request trigger |
 | pull_request | .github/workflows/cd-gcp.yml::alert-on-failure | NOT EXECUTED | workflow on: has no pull_request trigger |
@@ -176,8 +179,11 @@ Why each job runs, does not run, or runs conditionally under each trigger. `need
 | pull_request | .github/workflows/truth-gates.yml::truth-gates | EXECUTES | - |
 | pull_request | .github/workflows/truth-gates.yml::falsification-sweep | EXECUTES | - |
 | pull_request | .github/workflows/uplift-cost-probe.yml::cost-probe | CONDITIONAL | unparsable if: (unparsable at offset 81: "*.name, 'measure-upl") |
-| pull_request | .github/workflows/uplift.yml::uplift-proof | NOT EXECUTED | if: false in pull_request |
-| pull_request | .github/workflows/uplift.yml::twin-regret | CONDITIONAL | unparsable if: (unparsable at offset 220: "*.name, 'measure-twi") |
+| pull_request | .github/workflows/uplift.yml::uplift-proof | CONDITIONAL | if: undecidable from trigger (github.event.label.name) |
+| pull_request | .github/workflows/uplift.yml::twin-regret | CONDITIONAL | unparsable if: (unparsable at offset 81: "*.name, 'measure-twi") |
+| pull_request | .github/workflows/uplift.yml::uplift-controls-negative | CONDITIONAL | if: undecidable from trigger (github.event.label.name) |
+| pull_request | .github/workflows/uplift.yml::uplift-controls-positive | CONDITIONAL | if: undecidable from trigger (github.event.label.name) |
+| pull_request | .github/workflows/uplift.yml::uplift-controls | CONDITIONAL | if: undecidable from trigger (github.event.label.name); needs 'uplift-controls-negative', which is conditional; needs 'uplift-controls-positive', which is conditional |
 | tag:v* | .github/workflows/cd-gcp.yml::build-push-sign | CONDITIONAL | path-filtered (paths-ignore: **.md, docs/**, plans/**, notebooks/**) |
 | tag:v* | .github/workflows/cd-gcp.yml::deploy-to-vm | CONDITIONAL | path-filtered (paths-ignore: **.md, docs/**, plans/**, notebooks/**); needs 'build-push-sign', which is conditional |
 | tag:v* | .github/workflows/cd-gcp.yml::alert-on-failure | CONDITIONAL | path-filtered (paths-ignore: **.md, docs/**, plans/**, notebooks/**); if: outcome-dependent (failure()); needs 'build-push-sign', which is conditional; needs 'deploy-to-vm', which is conditional |
@@ -243,6 +249,9 @@ Why each job runs, does not run, or runs conditionally under each trigger. `need
 | tag:v* | .github/workflows/uplift-cost-probe.yml::cost-probe | NOT EXECUTED | workflow on: has no push trigger |
 | tag:v* | .github/workflows/uplift.yml::uplift-proof | NOT EXECUTED | workflow on: has no push trigger |
 | tag:v* | .github/workflows/uplift.yml::twin-regret | NOT EXECUTED | workflow on: has no push trigger |
+| tag:v* | .github/workflows/uplift.yml::uplift-controls-negative | NOT EXECUTED | workflow on: has no push trigger |
+| tag:v* | .github/workflows/uplift.yml::uplift-controls-positive | NOT EXECUTED | workflow on: has no push trigger |
+| tag:v* | .github/workflows/uplift.yml::uplift-controls | NOT EXECUTED | workflow on: has no push trigger |
 
 ## Surface
 
@@ -493,6 +502,9 @@ Why each job runs, does not run, or runs conditionally under each trigger. `need
 | push:main | .github/workflows/uplift-cost-probe.yml::cost-probe | - | NOT EXECUTED | workflow on: has no push trigger |
 | push:main | .github/workflows/uplift.yml::uplift-proof | - | NOT EXECUTED | workflow on: has no push trigger |
 | push:main | .github/workflows/uplift.yml::twin-regret | - | NOT EXECUTED | workflow on: has no push trigger |
+| push:main | .github/workflows/uplift.yml::uplift-controls-negative | - | NOT EXECUTED | workflow on: has no push trigger |
+| push:main | .github/workflows/uplift.yml::uplift-controls-positive | - | NOT EXECUTED | workflow on: has no push trigger |
+| push:main | .github/workflows/uplift.yml::uplift-controls | - | NOT EXECUTED | workflow on: has no push trigger |
 | pull_request | .github/workflows/cd-gcp.yml::build-push-sign | - | NOT EXECUTED | workflow on: has no pull_request trigger |
 | pull_request | .github/workflows/cd-gcp.yml::deploy-to-vm | - | NOT EXECUTED | workflow on: has no pull_request trigger |
 | pull_request | .github/workflows/cd-gcp.yml::alert-on-failure | - | NOT EXECUTED | workflow on: has no pull_request trigger |
@@ -791,7 +803,13 @@ Why each job runs, does not run, or runs conditionally under each trigger. `need
 | pull_request | .github/workflows/uplift-cost-probe.yml::cost-probe | Install dependencies | CONDITIONAL | conditional - blocking |
 | pull_request | .github/workflows/uplift-cost-probe.yml::cost-probe | Measure seconds per consensus decision by tier (E5 sizing, finding 70) | CONDITIONAL | conditional - blocking |
 | pull_request | .github/workflows/uplift-cost-probe.yml::cost-probe | Upload the cost-probe report | CONDITIONAL | conditional - blocking |
-| pull_request | .github/workflows/uplift.yml::uplift-proof | - | NOT EXECUTED | if: false in pull_request |
+| pull_request | .github/workflows/uplift.yml::uplift-proof | uses: actions/checkout@v4 | CONDITIONAL | conditional - blocking |
+| pull_request | .github/workflows/uplift.yml::uplift-proof | Disclose the revision under measurement (attribution, not a gate) | CONDITIONAL | conditional - blocking |
+| pull_request | .github/workflows/uplift.yml::uplift-proof | Set up Python 3.11 | CONDITIONAL | conditional - blocking |
+| pull_request | .github/workflows/uplift.yml::uplift-proof | Install dependencies | CONDITIONAL | conditional - blocking |
+| pull_request | .github/workflows/uplift.yml::uplift-proof | Run E5 under the proof supervisor (R7.1, R7.2) | CONDITIONAL | conditional - blocking |
+| pull_request | .github/workflows/uplift.yml::uplift-proof | Report C60 from this run's evidence (report mode - unavailable by decision 1=a) | CONDITIONAL | conditional - blocking |
+| pull_request | .github/workflows/uplift.yml::uplift-proof | Upload the proof evidence | CONDITIONAL | conditional - blocking |
 | pull_request | .github/workflows/uplift.yml::twin-regret | uses: actions/checkout@v4 | CONDITIONAL | conditional - blocking |
 | pull_request | .github/workflows/uplift.yml::twin-regret | Disclose the revision under measurement (attribution, not a gate) | CONDITIONAL | conditional - blocking |
 | pull_request | .github/workflows/uplift.yml::twin-regret | Set up Python 3.11 | CONDITIONAL | conditional - blocking |
@@ -799,6 +817,26 @@ Why each job runs, does not run, or runs conditionally under each trigger. `need
 | pull_request | .github/workflows/uplift.yml::twin-regret | Measure one B-prime world cell against the six-arm comparator (R5.1, R5.33, R5.46) | CONDITIONAL | conditional - blocking |
 | pull_request | .github/workflows/uplift.yml::twin-regret | Report the objective's insensitive KPIs (R5.34, R5.35) | CONDITIONAL | conditional - blocking |
 | pull_request | .github/workflows/uplift.yml::twin-regret | Upload the regret report | CONDITIONAL | conditional - blocking |
+| pull_request | .github/workflows/uplift.yml::uplift-controls-negative | uses: actions/checkout@v4 | CONDITIONAL | conditional - blocking |
+| pull_request | .github/workflows/uplift.yml::uplift-controls-negative | Disclose the revision under measurement (attribution, not a gate) | CONDITIONAL | conditional - blocking |
+| pull_request | .github/workflows/uplift.yml::uplift-controls-negative | Set up Python 3.11 | CONDITIONAL | conditional - blocking |
+| pull_request | .github/workflows/uplift.yml::uplift-controls-negative | Install dependencies | CONDITIONAL | conditional - blocking |
+| pull_request | .github/workflows/uplift.yml::uplift-controls-negative | Run one negative-control repetition (R6.1, R6.14, R6.15) | CONDITIONAL | conditional - blocking |
+| pull_request | .github/workflows/uplift.yml::uplift-controls-negative | Upload the negative-control record | CONDITIONAL | conditional - blocking |
+| pull_request | .github/workflows/uplift.yml::uplift-controls-positive | uses: actions/checkout@v4 | CONDITIONAL | conditional - blocking |
+| pull_request | .github/workflows/uplift.yml::uplift-controls-positive | Disclose the revision under measurement (attribution, not a gate) | CONDITIONAL | conditional - blocking |
+| pull_request | .github/workflows/uplift.yml::uplift-controls-positive | Set up Python 3.11 | CONDITIONAL | conditional - blocking |
+| pull_request | .github/workflows/uplift.yml::uplift-controls-positive | Install dependencies | CONDITIONAL | conditional - blocking |
+| pull_request | .github/workflows/uplift.yml::uplift-controls-positive | Run the positive control (R6.2, R6.3, R6.14) | CONDITIONAL | conditional - blocking |
+| pull_request | .github/workflows/uplift.yml::uplift-controls-positive | Upload the positive-control record | CONDITIONAL | conditional - blocking |
+| pull_request | .github/workflows/uplift.yml::uplift-controls | uses: actions/checkout@v4 | CONDITIONAL | conditional - blocking |
+| pull_request | .github/workflows/uplift.yml::uplift-controls | Disclose the revision under measurement (attribution, not a gate) | CONDITIONAL | conditional - blocking |
+| pull_request | .github/workflows/uplift.yml::uplift-controls | Set up Python 3.11 | CONDITIONAL | conditional - blocking |
+| pull_request | .github/workflows/uplift.yml::uplift-controls | Install dependencies | CONDITIONAL | conditional - blocking |
+| pull_request | .github/workflows/uplift.yml::uplift-controls | Download the control records | CONDITIONAL | conditional - blocking |
+| pull_request | .github/workflows/uplift.yml::uplift-controls | Every declared negative repetition and the positive record arrived (G5 - BLOCKING) | CONDITIONAL | conditional - blocking |
+| pull_request | .github/workflows/uplift.yml::uplift-controls | Write the controls verdict, agreement record and Power_Report (R6.1-R6.5, R6.15) | CONDITIONAL | conditional - blocking |
+| pull_request | .github/workflows/uplift.yml::uplift-controls | Upload the controls verdict | CONDITIONAL | conditional - blocking |
 | tag:v* | .github/workflows/cd-gcp.yml::build-push-sign | uses: actions/checkout@v4 | CONDITIONAL | conditional - blocking |
 | tag:v* | .github/workflows/cd-gcp.yml::build-push-sign | Set up Docker Buildx | CONDITIONAL | conditional - blocking |
 | tag:v* | .github/workflows/cd-gcp.yml::build-push-sign | Authenticate to GCP via Workload Identity Federation | CONDITIONAL | conditional - blocking |
@@ -905,10 +943,13 @@ Why each job runs, does not run, or runs conditionally under each trigger. `need
 | tag:v* | .github/workflows/uplift-cost-probe.yml::cost-probe | - | NOT EXECUTED | workflow on: has no push trigger |
 | tag:v* | .github/workflows/uplift.yml::uplift-proof | - | NOT EXECUTED | workflow on: has no push trigger |
 | tag:v* | .github/workflows/uplift.yml::twin-regret | - | NOT EXECUTED | workflow on: has no push trigger |
+| tag:v* | .github/workflows/uplift.yml::uplift-controls-negative | - | NOT EXECUTED | workflow on: has no push trigger |
+| tag:v* | .github/workflows/uplift.yml::uplift-controls-positive | - | NOT EXECUTED | workflow on: has no push trigger |
+| tag:v* | .github/workflows/uplift.yml::uplift-controls | - | NOT EXECUTED | workflow on: has no push trigger |
 
 ## Declared-blocking anchors (R11.8)
 
-Every step `infrastructure/quality/blocking-steps.yaml` declares blocking, annotated with the command it runs so a governance claim can be pinned to a row. Source: 23 declared-blocking entries from infrastructure/quality/blocking-steps.yaml.
+Every step `infrastructure/quality/blocking-steps.yaml` declares blocking, annotated with the command it runs so a governance claim can be pinned to a row. Source: 27 declared-blocking entries from infrastructure/quality/blocking-steps.yaml.
 
 | Trigger | Job | Step | Propagates | Note |
 |---|---|---|---|---|
@@ -1016,6 +1057,33 @@ Every step `infrastructure/quality/blocking-steps.yaml` declares blocking, annot
 | push:main | .github/workflows/truth-gates.yml::falsification-sweep | Probe every declared mutation operator (R1.1-R1.16 - BLOCKING) [scripts.audit.gate_fault_injection] | yes | declared blocking (R1.1, R1.2, R1.11, R1.12, R1.13, R1.14) |
 | push:main | .github/workflows/truth-gates.yml::falsification-sweep | C72 row projects the counts of the run that produced them (R1.12) [scripts.audit.gate_fault_injection] | yes | declared blocking (R1.1, R1.2, R1.11, R1.12, R1.13, R1.14) |
 | push:main | .github/workflows/truth-gates.yml::falsification-sweep | Upload the sweep report | yes | declared blocking (R1.1, R1.2, R1.11, R1.12, R1.13, R1.14) |
+| push:main | .github/workflows/uplift.yml::uplift-proof | uses: actions/checkout@v4 | NOT EXECUTED | declared blocking (R7.1, R7.2, R7.15) - workflow on: has no push trigger |
+| push:main | .github/workflows/uplift.yml::uplift-proof | Disclose the revision under measurement (attribution, not a gate) [github.sh] | NOT EXECUTED | declared blocking (R7.1, R7.2, R7.15) - workflow on: has no push trigger |
+| push:main | .github/workflows/uplift.yml::uplift-proof | Set up Python 3.11 | NOT EXECUTED | declared blocking (R7.1, R7.2, R7.15) - workflow on: has no push trigger |
+| push:main | .github/workflows/uplift.yml::uplift-proof | Install dependencies | NOT EXECUTED | declared blocking (R7.1, R7.2, R7.15) - workflow on: has no push trigger |
+| push:main | .github/workflows/uplift.yml::uplift-proof | Run E5 under the proof supervisor (R7.1, R7.2) [uplift.proof_supervisor uplift.cli] | NOT EXECUTED | declared blocking (R7.1, R7.2, R7.15) - workflow on: has no push trigger |
+| push:main | .github/workflows/uplift.yml::uplift-proof | Report C60 from this run's evidence (report mode - unavailable by decision 1=a) [scripts.audit.uplift_truth] | NOT EXECUTED | declared blocking (R7.1, R7.2, R7.15) - workflow on: has no push trigger |
+| push:main | .github/workflows/uplift.yml::uplift-proof | Upload the proof evidence | NOT EXECUTED | declared blocking (R7.1, R7.2, R7.15) - workflow on: has no push trigger |
+| push:main | .github/workflows/uplift.yml::uplift-controls-negative | uses: actions/checkout@v4 | NOT EXECUTED | declared blocking (R6.1, R6.12, R6.14, R6.15) - workflow on: has no push trigger |
+| push:main | .github/workflows/uplift.yml::uplift-controls-negative | Disclose the revision under measurement (attribution, not a gate) [github.sh] | NOT EXECUTED | declared blocking (R6.1, R6.12, R6.14, R6.15) - workflow on: has no push trigger |
+| push:main | .github/workflows/uplift.yml::uplift-controls-negative | Set up Python 3.11 | NOT EXECUTED | declared blocking (R6.1, R6.12, R6.14, R6.15) - workflow on: has no push trigger |
+| push:main | .github/workflows/uplift.yml::uplift-controls-negative | Install dependencies | NOT EXECUTED | declared blocking (R6.1, R6.12, R6.14, R6.15) - workflow on: has no push trigger |
+| push:main | .github/workflows/uplift.yml::uplift-controls-negative | Run one negative-control repetition (R6.1, R6.14, R6.15) [uplift.controls_run] | NOT EXECUTED | declared blocking (R6.1, R6.12, R6.14, R6.15) - workflow on: has no push trigger |
+| push:main | .github/workflows/uplift.yml::uplift-controls-negative | Upload the negative-control record | NOT EXECUTED | declared blocking (R6.1, R6.12, R6.14, R6.15) - workflow on: has no push trigger |
+| push:main | .github/workflows/uplift.yml::uplift-controls-positive | uses: actions/checkout@v4 | NOT EXECUTED | declared blocking (R6.2, R6.3, R6.12, R6.14) - workflow on: has no push trigger |
+| push:main | .github/workflows/uplift.yml::uplift-controls-positive | Disclose the revision under measurement (attribution, not a gate) [github.sh] | NOT EXECUTED | declared blocking (R6.2, R6.3, R6.12, R6.14) - workflow on: has no push trigger |
+| push:main | .github/workflows/uplift.yml::uplift-controls-positive | Set up Python 3.11 | NOT EXECUTED | declared blocking (R6.2, R6.3, R6.12, R6.14) - workflow on: has no push trigger |
+| push:main | .github/workflows/uplift.yml::uplift-controls-positive | Install dependencies | NOT EXECUTED | declared blocking (R6.2, R6.3, R6.12, R6.14) - workflow on: has no push trigger |
+| push:main | .github/workflows/uplift.yml::uplift-controls-positive | Run the positive control (R6.2, R6.3, R6.14) [uplift.controls_run] | NOT EXECUTED | declared blocking (R6.2, R6.3, R6.12, R6.14) - workflow on: has no push trigger |
+| push:main | .github/workflows/uplift.yml::uplift-controls-positive | Upload the positive-control record | NOT EXECUTED | declared blocking (R6.2, R6.3, R6.12, R6.14) - workflow on: has no push trigger |
+| push:main | .github/workflows/uplift.yml::uplift-controls | uses: actions/checkout@v4 | NOT EXECUTED | declared blocking (R6.1, R6.2, R6.3, R6.5, R6.12, R6.15) - workflow on: has no push trigger |
+| push:main | .github/workflows/uplift.yml::uplift-controls | Disclose the revision under measurement (attribution, not a gate) [github.sh] | NOT EXECUTED | declared blocking (R6.1, R6.2, R6.3, R6.5, R6.12, R6.15) - workflow on: has no push trigger |
+| push:main | .github/workflows/uplift.yml::uplift-controls | Set up Python 3.11 | NOT EXECUTED | declared blocking (R6.1, R6.2, R6.3, R6.5, R6.12, R6.15) - workflow on: has no push trigger |
+| push:main | .github/workflows/uplift.yml::uplift-controls | Install dependencies | NOT EXECUTED | declared blocking (R6.1, R6.2, R6.3, R6.5, R6.12, R6.15) - workflow on: has no push trigger |
+| push:main | .github/workflows/uplift.yml::uplift-controls | Download the control records | NOT EXECUTED | declared blocking (R6.1, R6.2, R6.3, R6.5, R6.12, R6.15) - workflow on: has no push trigger |
+| push:main | .github/workflows/uplift.yml::uplift-controls | Every declared negative repetition and the positive record arrived (G5 - BLOCKING) | NOT EXECUTED | declared blocking (R6.1, R6.2, R6.3, R6.5, R6.12, R6.15) - workflow on: has no push trigger |
+| push:main | .github/workflows/uplift.yml::uplift-controls | Write the controls verdict, agreement record and Power_Report (R6.1-R6.5, R6.15) [uplift.controls_run] | NOT EXECUTED | declared blocking (R6.1, R6.2, R6.3, R6.5, R6.12, R6.15) - workflow on: has no push trigger |
+| push:main | .github/workflows/uplift.yml::uplift-controls | Upload the controls verdict | NOT EXECUTED | declared blocking (R6.1, R6.2, R6.3, R6.5, R6.12, R6.15) - workflow on: has no push trigger |
 | pull_request | .github/workflows/cd-gcp.yml::deploy-to-vm | Verify deploy truth (containers) [scripts/deploy/verify_live.py] | NOT EXECUTED | declared blocking (R1.8) - workflow on: has no pull_request trigger |
 | pull_request | .github/workflows/cd-gcp.yml::deploy-to-vm | Verify deploy truth (external) [github.sh scripts/deploy/verify_live.py] | NOT EXECUTED | declared blocking (R1.8) - workflow on: has no pull_request trigger |
 | pull_request | .github/workflows/cd-gcp.yml::deploy-to-vm | Audit-chain integrity (Sprint 9 verifier) [orchestrator.audit.cli] | NOT EXECUTED | declared blocking (R1.8) - workflow on: has no pull_request trigger |
@@ -1120,6 +1188,33 @@ Every step `infrastructure/quality/blocking-steps.yaml` declares blocking, annot
 | pull_request | .github/workflows/truth-gates.yml::falsification-sweep | Probe every declared mutation operator (R1.1-R1.16 - BLOCKING) [scripts.audit.gate_fault_injection] | yes | declared blocking (R1.1, R1.2, R1.11, R1.12, R1.13, R1.14) |
 | pull_request | .github/workflows/truth-gates.yml::falsification-sweep | C72 row projects the counts of the run that produced them (R1.12) [scripts.audit.gate_fault_injection] | yes | declared blocking (R1.1, R1.2, R1.11, R1.12, R1.13, R1.14) |
 | pull_request | .github/workflows/truth-gates.yml::falsification-sweep | Upload the sweep report | yes | declared blocking (R1.1, R1.2, R1.11, R1.12, R1.13, R1.14) |
+| pull_request | .github/workflows/uplift.yml::uplift-proof | uses: actions/checkout@v4 | CONDITIONAL | declared blocking (R7.1, R7.2, R7.15) - conditional (if: undecidable from trigger (github.event.label.name)) |
+| pull_request | .github/workflows/uplift.yml::uplift-proof | Disclose the revision under measurement (attribution, not a gate) [github.sh] | CONDITIONAL | declared blocking (R7.1, R7.2, R7.15) - conditional (if: undecidable from trigger (github.event.label.name)) |
+| pull_request | .github/workflows/uplift.yml::uplift-proof | Set up Python 3.11 | CONDITIONAL | declared blocking (R7.1, R7.2, R7.15) - conditional (if: undecidable from trigger (github.event.label.name)) |
+| pull_request | .github/workflows/uplift.yml::uplift-proof | Install dependencies | CONDITIONAL | declared blocking (R7.1, R7.2, R7.15) - conditional (if: undecidable from trigger (github.event.label.name)) |
+| pull_request | .github/workflows/uplift.yml::uplift-proof | Run E5 under the proof supervisor (R7.1, R7.2) [uplift.proof_supervisor uplift.cli] | CONDITIONAL | declared blocking (R7.1, R7.2, R7.15) - conditional (if: undecidable from trigger (github.event.label.name)) |
+| pull_request | .github/workflows/uplift.yml::uplift-proof | Report C60 from this run's evidence (report mode - unavailable by decision 1=a) [scripts.audit.uplift_truth] | CONDITIONAL | declared blocking (R7.1, R7.2, R7.15) - conditional (if: undecidable from trigger (github.event.label.name)) |
+| pull_request | .github/workflows/uplift.yml::uplift-proof | Upload the proof evidence | CONDITIONAL | declared blocking (R7.1, R7.2, R7.15) - conditional (if: undecidable from trigger (github.event.label.name)) |
+| pull_request | .github/workflows/uplift.yml::uplift-controls-negative | uses: actions/checkout@v4 | CONDITIONAL | declared blocking (R6.1, R6.12, R6.14, R6.15) - conditional (if: undecidable from trigger (github.event.label.name)) |
+| pull_request | .github/workflows/uplift.yml::uplift-controls-negative | Disclose the revision under measurement (attribution, not a gate) [github.sh] | CONDITIONAL | declared blocking (R6.1, R6.12, R6.14, R6.15) - conditional (if: undecidable from trigger (github.event.label.name)) |
+| pull_request | .github/workflows/uplift.yml::uplift-controls-negative | Set up Python 3.11 | CONDITIONAL | declared blocking (R6.1, R6.12, R6.14, R6.15) - conditional (if: undecidable from trigger (github.event.label.name)) |
+| pull_request | .github/workflows/uplift.yml::uplift-controls-negative | Install dependencies | CONDITIONAL | declared blocking (R6.1, R6.12, R6.14, R6.15) - conditional (if: undecidable from trigger (github.event.label.name)) |
+| pull_request | .github/workflows/uplift.yml::uplift-controls-negative | Run one negative-control repetition (R6.1, R6.14, R6.15) [uplift.controls_run] | CONDITIONAL | declared blocking (R6.1, R6.12, R6.14, R6.15) - conditional (if: undecidable from trigger (github.event.label.name)) |
+| pull_request | .github/workflows/uplift.yml::uplift-controls-negative | Upload the negative-control record | CONDITIONAL | declared blocking (R6.1, R6.12, R6.14, R6.15) - conditional (if: undecidable from trigger (github.event.label.name)) |
+| pull_request | .github/workflows/uplift.yml::uplift-controls-positive | uses: actions/checkout@v4 | CONDITIONAL | declared blocking (R6.2, R6.3, R6.12, R6.14) - conditional (if: undecidable from trigger (github.event.label.name)) |
+| pull_request | .github/workflows/uplift.yml::uplift-controls-positive | Disclose the revision under measurement (attribution, not a gate) [github.sh] | CONDITIONAL | declared blocking (R6.2, R6.3, R6.12, R6.14) - conditional (if: undecidable from trigger (github.event.label.name)) |
+| pull_request | .github/workflows/uplift.yml::uplift-controls-positive | Set up Python 3.11 | CONDITIONAL | declared blocking (R6.2, R6.3, R6.12, R6.14) - conditional (if: undecidable from trigger (github.event.label.name)) |
+| pull_request | .github/workflows/uplift.yml::uplift-controls-positive | Install dependencies | CONDITIONAL | declared blocking (R6.2, R6.3, R6.12, R6.14) - conditional (if: undecidable from trigger (github.event.label.name)) |
+| pull_request | .github/workflows/uplift.yml::uplift-controls-positive | Run the positive control (R6.2, R6.3, R6.14) [uplift.controls_run] | CONDITIONAL | declared blocking (R6.2, R6.3, R6.12, R6.14) - conditional (if: undecidable from trigger (github.event.label.name)) |
+| pull_request | .github/workflows/uplift.yml::uplift-controls-positive | Upload the positive-control record | CONDITIONAL | declared blocking (R6.2, R6.3, R6.12, R6.14) - conditional (if: undecidable from trigger (github.event.label.name)) |
+| pull_request | .github/workflows/uplift.yml::uplift-controls | uses: actions/checkout@v4 | CONDITIONAL | declared blocking (R6.1, R6.2, R6.3, R6.5, R6.12, R6.15) - conditional (if: undecidable from trigger (github.event.label.name); needs 'uplift-controls-negative', which is conditional; needs 'uplift-controls-positive', which is conditional) |
+| pull_request | .github/workflows/uplift.yml::uplift-controls | Disclose the revision under measurement (attribution, not a gate) [github.sh] | CONDITIONAL | declared blocking (R6.1, R6.2, R6.3, R6.5, R6.12, R6.15) - conditional (if: undecidable from trigger (github.event.label.name); needs 'uplift-controls-negative', which is conditional; needs 'uplift-controls-positive', which is conditional) |
+| pull_request | .github/workflows/uplift.yml::uplift-controls | Set up Python 3.11 | CONDITIONAL | declared blocking (R6.1, R6.2, R6.3, R6.5, R6.12, R6.15) - conditional (if: undecidable from trigger (github.event.label.name); needs 'uplift-controls-negative', which is conditional; needs 'uplift-controls-positive', which is conditional) |
+| pull_request | .github/workflows/uplift.yml::uplift-controls | Install dependencies | CONDITIONAL | declared blocking (R6.1, R6.2, R6.3, R6.5, R6.12, R6.15) - conditional (if: undecidable from trigger (github.event.label.name); needs 'uplift-controls-negative', which is conditional; needs 'uplift-controls-positive', which is conditional) |
+| pull_request | .github/workflows/uplift.yml::uplift-controls | Download the control records | CONDITIONAL | declared blocking (R6.1, R6.2, R6.3, R6.5, R6.12, R6.15) - conditional (if: undecidable from trigger (github.event.label.name); needs 'uplift-controls-negative', which is conditional; needs 'uplift-controls-positive', which is conditional) |
+| pull_request | .github/workflows/uplift.yml::uplift-controls | Every declared negative repetition and the positive record arrived (G5 - BLOCKING) | CONDITIONAL | declared blocking (R6.1, R6.2, R6.3, R6.5, R6.12, R6.15) - conditional (if: undecidable from trigger (github.event.label.name); needs 'uplift-controls-negative', which is conditional; needs 'uplift-controls-positive', which is conditional) |
+| pull_request | .github/workflows/uplift.yml::uplift-controls | Write the controls verdict, agreement record and Power_Report (R6.1-R6.5, R6.15) [uplift.controls_run] | CONDITIONAL | declared blocking (R6.1, R6.2, R6.3, R6.5, R6.12, R6.15) - conditional (if: undecidable from trigger (github.event.label.name); needs 'uplift-controls-negative', which is conditional; needs 'uplift-controls-positive', which is conditional) |
+| pull_request | .github/workflows/uplift.yml::uplift-controls | Upload the controls verdict | CONDITIONAL | declared blocking (R6.1, R6.2, R6.3, R6.5, R6.12, R6.15) - conditional (if: undecidable from trigger (github.event.label.name); needs 'uplift-controls-negative', which is conditional; needs 'uplift-controls-positive', which is conditional) |
 | tag:v* | .github/workflows/cd-gcp.yml::deploy-to-vm | Verify deploy truth (containers) [scripts/deploy/verify_live.py] | CONDITIONAL | declared blocking (R1.8) - conditional (path-filtered (paths-ignore: **.md, docs/**, plans/**, notebooks/**); needs 'build-push-sign', which is conditional) |
 | tag:v* | .github/workflows/cd-gcp.yml::deploy-to-vm | Verify deploy truth (external) [github.sh scripts/deploy/verify_live.py] | CONDITIONAL | declared blocking (R1.8) - conditional (path-filtered (paths-ignore: **.md, docs/**, plans/**, notebooks/**); needs 'build-push-sign', which is conditional) |
 | tag:v* | .github/workflows/cd-gcp.yml::deploy-to-vm | Audit-chain integrity (Sprint 9 verifier) [orchestrator.audit.cli] | CONDITIONAL | declared blocking (R1.8) - conditional (path-filtered (paths-ignore: **.md, docs/**, plans/**, notebooks/**); needs 'build-push-sign', which is conditional) |
@@ -1224,4 +1319,31 @@ Every step `infrastructure/quality/blocking-steps.yaml` declares blocking, annot
 | tag:v* | .github/workflows/truth-gates.yml::falsification-sweep | Probe every declared mutation operator (R1.1-R1.16 - BLOCKING) [scripts.audit.gate_fault_injection] | NOT EXECUTED | declared blocking (R1.1, R1.2, R1.11, R1.12, R1.13, R1.14) - on: push is branch-scoped (no tags: filter), so a tag push is excluded |
 | tag:v* | .github/workflows/truth-gates.yml::falsification-sweep | C72 row projects the counts of the run that produced them (R1.12) [scripts.audit.gate_fault_injection] | NOT EXECUTED | declared blocking (R1.1, R1.2, R1.11, R1.12, R1.13, R1.14) - on: push is branch-scoped (no tags: filter), so a tag push is excluded |
 | tag:v* | .github/workflows/truth-gates.yml::falsification-sweep | Upload the sweep report | NOT EXECUTED | declared blocking (R1.1, R1.2, R1.11, R1.12, R1.13, R1.14) - on: push is branch-scoped (no tags: filter), so a tag push is excluded |
+| tag:v* | .github/workflows/uplift.yml::uplift-proof | uses: actions/checkout@v4 | NOT EXECUTED | declared blocking (R7.1, R7.2, R7.15) - workflow on: has no push trigger |
+| tag:v* | .github/workflows/uplift.yml::uplift-proof | Disclose the revision under measurement (attribution, not a gate) [github.sh] | NOT EXECUTED | declared blocking (R7.1, R7.2, R7.15) - workflow on: has no push trigger |
+| tag:v* | .github/workflows/uplift.yml::uplift-proof | Set up Python 3.11 | NOT EXECUTED | declared blocking (R7.1, R7.2, R7.15) - workflow on: has no push trigger |
+| tag:v* | .github/workflows/uplift.yml::uplift-proof | Install dependencies | NOT EXECUTED | declared blocking (R7.1, R7.2, R7.15) - workflow on: has no push trigger |
+| tag:v* | .github/workflows/uplift.yml::uplift-proof | Run E5 under the proof supervisor (R7.1, R7.2) [uplift.proof_supervisor uplift.cli] | NOT EXECUTED | declared blocking (R7.1, R7.2, R7.15) - workflow on: has no push trigger |
+| tag:v* | .github/workflows/uplift.yml::uplift-proof | Report C60 from this run's evidence (report mode - unavailable by decision 1=a) [scripts.audit.uplift_truth] | NOT EXECUTED | declared blocking (R7.1, R7.2, R7.15) - workflow on: has no push trigger |
+| tag:v* | .github/workflows/uplift.yml::uplift-proof | Upload the proof evidence | NOT EXECUTED | declared blocking (R7.1, R7.2, R7.15) - workflow on: has no push trigger |
+| tag:v* | .github/workflows/uplift.yml::uplift-controls-negative | uses: actions/checkout@v4 | NOT EXECUTED | declared blocking (R6.1, R6.12, R6.14, R6.15) - workflow on: has no push trigger |
+| tag:v* | .github/workflows/uplift.yml::uplift-controls-negative | Disclose the revision under measurement (attribution, not a gate) [github.sh] | NOT EXECUTED | declared blocking (R6.1, R6.12, R6.14, R6.15) - workflow on: has no push trigger |
+| tag:v* | .github/workflows/uplift.yml::uplift-controls-negative | Set up Python 3.11 | NOT EXECUTED | declared blocking (R6.1, R6.12, R6.14, R6.15) - workflow on: has no push trigger |
+| tag:v* | .github/workflows/uplift.yml::uplift-controls-negative | Install dependencies | NOT EXECUTED | declared blocking (R6.1, R6.12, R6.14, R6.15) - workflow on: has no push trigger |
+| tag:v* | .github/workflows/uplift.yml::uplift-controls-negative | Run one negative-control repetition (R6.1, R6.14, R6.15) [uplift.controls_run] | NOT EXECUTED | declared blocking (R6.1, R6.12, R6.14, R6.15) - workflow on: has no push trigger |
+| tag:v* | .github/workflows/uplift.yml::uplift-controls-negative | Upload the negative-control record | NOT EXECUTED | declared blocking (R6.1, R6.12, R6.14, R6.15) - workflow on: has no push trigger |
+| tag:v* | .github/workflows/uplift.yml::uplift-controls-positive | uses: actions/checkout@v4 | NOT EXECUTED | declared blocking (R6.2, R6.3, R6.12, R6.14) - workflow on: has no push trigger |
+| tag:v* | .github/workflows/uplift.yml::uplift-controls-positive | Disclose the revision under measurement (attribution, not a gate) [github.sh] | NOT EXECUTED | declared blocking (R6.2, R6.3, R6.12, R6.14) - workflow on: has no push trigger |
+| tag:v* | .github/workflows/uplift.yml::uplift-controls-positive | Set up Python 3.11 | NOT EXECUTED | declared blocking (R6.2, R6.3, R6.12, R6.14) - workflow on: has no push trigger |
+| tag:v* | .github/workflows/uplift.yml::uplift-controls-positive | Install dependencies | NOT EXECUTED | declared blocking (R6.2, R6.3, R6.12, R6.14) - workflow on: has no push trigger |
+| tag:v* | .github/workflows/uplift.yml::uplift-controls-positive | Run the positive control (R6.2, R6.3, R6.14) [uplift.controls_run] | NOT EXECUTED | declared blocking (R6.2, R6.3, R6.12, R6.14) - workflow on: has no push trigger |
+| tag:v* | .github/workflows/uplift.yml::uplift-controls-positive | Upload the positive-control record | NOT EXECUTED | declared blocking (R6.2, R6.3, R6.12, R6.14) - workflow on: has no push trigger |
+| tag:v* | .github/workflows/uplift.yml::uplift-controls | uses: actions/checkout@v4 | NOT EXECUTED | declared blocking (R6.1, R6.2, R6.3, R6.5, R6.12, R6.15) - workflow on: has no push trigger |
+| tag:v* | .github/workflows/uplift.yml::uplift-controls | Disclose the revision under measurement (attribution, not a gate) [github.sh] | NOT EXECUTED | declared blocking (R6.1, R6.2, R6.3, R6.5, R6.12, R6.15) - workflow on: has no push trigger |
+| tag:v* | .github/workflows/uplift.yml::uplift-controls | Set up Python 3.11 | NOT EXECUTED | declared blocking (R6.1, R6.2, R6.3, R6.5, R6.12, R6.15) - workflow on: has no push trigger |
+| tag:v* | .github/workflows/uplift.yml::uplift-controls | Install dependencies | NOT EXECUTED | declared blocking (R6.1, R6.2, R6.3, R6.5, R6.12, R6.15) - workflow on: has no push trigger |
+| tag:v* | .github/workflows/uplift.yml::uplift-controls | Download the control records | NOT EXECUTED | declared blocking (R6.1, R6.2, R6.3, R6.5, R6.12, R6.15) - workflow on: has no push trigger |
+| tag:v* | .github/workflows/uplift.yml::uplift-controls | Every declared negative repetition and the positive record arrived (G5 - BLOCKING) | NOT EXECUTED | declared blocking (R6.1, R6.2, R6.3, R6.5, R6.12, R6.15) - workflow on: has no push trigger |
+| tag:v* | .github/workflows/uplift.yml::uplift-controls | Write the controls verdict, agreement record and Power_Report (R6.1-R6.5, R6.15) [uplift.controls_run] | NOT EXECUTED | declared blocking (R6.1, R6.2, R6.3, R6.5, R6.12, R6.15) - workflow on: has no push trigger |
+| tag:v* | .github/workflows/uplift.yml::uplift-controls | Upload the controls verdict | NOT EXECUTED | declared blocking (R6.1, R6.2, R6.3, R6.5, R6.12, R6.15) - workflow on: has no push trigger |
 <!-- generated:end -->

@@ -1,13 +1,18 @@
 """
-SYNAPSE Decision-Integrity Uplift Proof — the one-command reproduction CLI (R7).
+SYNAPSE Decision-Integrity Uplift Proof -- the one-command reproduction CLI (R7).
 
 ``python -m uplift.cli`` is the single, ``$0``, synthetic-seed-only command that runs
 the closed-loop counterfactual :class:`~uplift.harness.UpliftHarness` on the declared
 adversarial seeds (:data:`~uplift.scenarios.ADVERSARIAL_SUITE`), assembles the
 :class:`~uplift.interfaces.UpliftResult` under the pre-registered
 :class:`~uplift.contract.MetricContract`, and prints the **headline uplift number
-co-located with its twin-:class:`~uplift.fidelity.FidelityReport`** (R7.2, R7.7,
-R5.2/R5.6). It also persists the result to the ``artifacts/uplift/result.json`` artifact
+co-located with its interval, its verdict, its comparator and its
+twin-:class:`~uplift.fidelity.FidelityReport`** (R7.2, R7.7, R7.14, R5.2/R5.6). Under
+Metric_Contract v2 (decision-quality-proof task 29.4) the headline is the mean seed-paired
+difference of the committed ADR-055 D2 objective, comparator minus consensus, in objective
+units -- positive means the consensus arm is cheaper. It is never a fill-rate percentage.
+
+It also persists the result to the ``artifacts/uplift/result.json`` artifact
 the C60 ``uplift_truth`` gate reads. That artifact is not under version control: the gate
 is trigger-aware (AD-9, CF-4), so it returns PASS/FAIL only when it is invoked with
 ``--require-fresh-run`` in the same job that ran this command, and SKIP everywhere else.
@@ -17,16 +22,24 @@ Honesty invariants surfaced by this command:
 * **Synthetic seed data only (R7.5).** Every scenario is driven by the harness's seeded
   synthetic demand realization (``numpy.random.SeedSequence``-derived replicate seeds);
   no real, scraped, or purchased data is read.
-* **No external paid service (R7.6).** The whole pipeline is in-process — the twin, the
+* **No external paid service (R7.6).** The whole pipeline is in-process -- the twin, the
   baselines, and (when available) the in-process consensus arm. Nothing dials a paid
   API. The consensus arm requires an injected in-process protocol + transport and, when
   that cannot be stood up in a plain environment, its runs fail honestly (recorded as
   failed runs, excluded from aggregation) rather than crashing or fabricating a decision.
-* **Version-controlled noise tolerance (≤ 1.0 pp).** :data:`NOISE_TOLERANCE_PP` is the
-  committed run-to-run reproduction tolerance; it is stated in the output.
-* **Missing required input ⇒ honest failure (R7.8).** A missing/malformed metric
-  contract (:class:`~uplift.contract.MetricContractError`) exits with a non-zero status,
-  naming the missing input, and prints **no** headline number.
+* **The comparator is explicit (AD-16, R6.14, task 15.5).** Every arm is registered with the
+  role it plays. The canonical five arms :func:`build_arms` returns default to the pool of
+  their four baseline-role arms, and the artifact records that pool by name. Any other arm
+  set must pass ``--baseline-arm NAME`` (that arm alone) or ``--pooled-baseline`` (every
+  baseline-role arm); an unrecognised arm with neither is refused, never pooled by default.
+* **Version-controlled noise tolerance.** :data:`NOISE_TOLERANCE_PP` is the committed
+  run-to-run reproduction tolerance, stated in the output. Its value and name are kept
+  unchanged, and its unit is now in question: it was committed in percentage points of the
+  version-1 fill-rate headline, and the headline is now in objective units.
+* **Missing required input => honest failure (R7.8).** A missing/malformed metric
+  contract (:class:`~uplift.contract.MetricContractError`), or a comparator that cannot be
+  resolved, exits with a non-zero status naming the input and prints **no** headline
+  number.
 
 Cost / runtime (INV-TW-002 tradeoff). A real, fully-powered proof requires ``n >= 1000``
 completed scenarios per arm (:data:`digital_twin.simulation.monte_carlo.MIN_SCENARIOS`)
@@ -44,13 +57,15 @@ Run::
     python -m uplift.cli --full                  # fully-powered proof (n >= 1000, slow)
     python -m uplift.cli --n 2000                # explicit replicate count
     python -m uplift.cli --contract path.yaml    # alternate pre-registered contract
+    python -m uplift.cli --smoke --baseline-arm Par_Level_Reorder   # one named comparator
 """
 from __future__ import annotations
 
 import argparse
+import dataclasses
 import sys
 from pathlib import Path
-from typing import Sequence
+from typing import TYPE_CHECKING, Final
 
 from digital_twin.simulation.monte_carlo import MIN_SCENARIOS
 
@@ -69,30 +84,49 @@ from uplift.harness import (
     LoopConfig,
     UpliftHarness,
     UpliftProvenance,
+    UpliftReport,
     aggregate_arm,
     assemble_uplift_result,
     build_uplift_artifact,
     build_uplift_report,
+    registered_roles,
     replicate_seed,
     resolve_provenance,
     run_closed_loop,
     uplift_exit_code,
 )
-from uplift.interfaces import DecisionPolicy, Observation, PolicyAction, Scenario
+from uplift.interfaces import (
+    ArmResult,
+    ArmSpec,
+    DecisionPolicy,
+    Observation,
+    PolicyAction,
+    Scenario,
+    ScenarioRun,
+    UpliftResult,
+)
 from uplift.kpi import DEFAULT_EMISSION_FACTOR_KG_PER_DELIVERY
 from uplift.scenarios import adversarial_suite
+
+if TYPE_CHECKING:
+    from collections.abc import Sequence
 
 # ---------------------------------------------------------------------------
 # Version-controlled constants
 # ---------------------------------------------------------------------------
-#: The committed run-to-run reproduction noise tolerance, in percentage points (R7.3).
-#: A headline-uplift difference between two reproductions of the same seeded config must
-#: not exceed this many percentage points. Version-controlled here (≤ 1.0 pp) so the
-#: tolerance the reproduction is judged against cannot be quietly widened.
+#: The committed run-to-run reproduction noise tolerance (R7.3): a headline-uplift difference
+#: between two reproductions of the same seeded config must not exceed it. Version-controlled
+#: here so the tolerance a reproduction is judged against cannot be quietly widened.
+#:
+#: **Committed in percentage points, when the headline was a fill-rate relative percentage.**
+#: Under Metric_Contract v2 the headline is a paired difference of the committed objective, in
+#: objective units, so every comparison of a headline difference against this number now
+#: compares objective units with a bound stated in another unit. The value and the name are
+#: deliberately unchanged here; re-deciding the bound is not this module's call.
 NOISE_TOLERANCE_PP: float = 1.0
 
 #: Default replicate count for reduced-cost smoke reproduction (well below the
-#: INV-TW-002 ``MIN_SCENARIOS`` floor; NOT a fully-powered proof — see module docstring).
+#: INV-TW-002 ``MIN_SCENARIOS`` floor; NOT a fully-powered proof -- see module docstring).
 SMOKE_REPLICATES: int = 5
 
 #: Reduced closed-loop cadence used by smoke mode (short horizon for fast turnaround).
@@ -102,8 +136,29 @@ SMOKE_LOOP = LoopConfig(duration_hours=2.0, step_hours=1.0)
 #: harness's own no-completed-run failure so a missing input is diagnosable.
 EXIT_MISSING_INPUT: int = 2
 
-# Exit code re-exported for callers/tests that want the success sentinel by name.
-__all__ = ["NOISE_TOLERANCE_PP", "EXIT_MISSING_INPUT", "build_arms", "main"]
+#: The five arm names :func:`build_arms` registers, in its order: the consensus subject, then
+#: the four transparent baselines. A run over EXACTLY this tuple may leave its comparator
+#: implicit, and then compares against the pool of the four baseline-role arms; any other arm
+#: set must name its comparator (:func:`resolve_control_spec`). Literal names rather than a
+#: call to :func:`build_arms`, because building the arms stands up the consensus network.
+CANONICAL_ARM_NAMES: Final[tuple[str, ...]] = (
+    DEFAULT_CONSENSUS_ARM,
+    "Par_Level_Reorder",
+    "static_pricing",
+    "greedy_routing",
+    "no_op_disruption",
+)
+
+# The public surface: the constants and the comparator vocabulary callers and tests name.
+__all__ = [
+    "CANONICAL_ARM_NAMES",
+    "EXIT_MISSING_INPUT",
+    "NOISE_TOLERANCE_PP",
+    "ControlSpec",
+    "build_arms",
+    "main",
+    "resolve_control_spec",
+]
 
 
 # ---------------------------------------------------------------------------
@@ -118,7 +173,7 @@ class _UnavailableConsensusArm:
     fabricate a decision, the CLI substitutes this arm under the canonical consensus
     name: each :meth:`decide` raises :class:`ConsensusArmUnavailable`, so the harness
     records every consensus run as a *failed* run, excludes it from aggregation, and
-    continues — exactly the honest-failure contract. The assembled result is then marked
+    continues -- exactly the honest-failure contract. The assembled result is then marked
     incomplete and the consensus-vs-baseline headline is not credited to SYNAPSE.
     """
 
@@ -153,32 +208,106 @@ def _build_consensus_arm() -> DecisionPolicy:
 
 
 # ---------------------------------------------------------------------------
-# Arm construction
+# Arm construction and the comparator (AD-16, task 15.5)
 # ---------------------------------------------------------------------------
-def build_arms(seed: int = 0) -> tuple[DecisionPolicy, ...]:
-    """Build the arm suite: the consensus arm plus the four transparent baselines.
+def build_arms(seed: int = 0) -> tuple[ArmSpec, ...]:
+    """Build the arm suite: the consensus arm plus the four transparent baselines, with roles.
 
-    The consensus arm is named :data:`DEFAULT_CONSENSUS_ARM` (``"consensus"``) so result
-    assembly identifies it and pools every other (baseline) arm into "the transparent
-    operator without SYNAPSE". The four baselines are the pre-registered control suite
-    (R1.1): ``Par_Level_Reorder`` (the fill-rate-relevant reorder control),
-    ``Static_Pricing``, ``Greedy_Routing``, and ``NoOpDisruption``.
+    Registered in :data:`CANONICAL_ARM_NAMES` order. The consensus arm is named
+    :data:`DEFAULT_CONSENSUS_ARM` (``"consensus"``) and declares role ``consensus``, so result
+    assembly identifies it as the subject. The four baselines are the pre-registered control
+    suite (R1.1) -- ``Par_Level_Reorder``, ``Static_Pricing``, ``Greedy_Routing`` and
+    ``NoOpDisruption`` -- and each declares role ``baseline``, which is what lets the pooled
+    comparator absorb them; an oracle or excluded arm added later is never pooled.
     """
     return (
-        _build_consensus_arm(),
-        Par_Level_Reorder(s=20, S=100, seed=seed),
-        Static_Pricing(markup=1.5, seed=seed),
-        Greedy_Routing(),
-        NoOpDisruption(),
+        ArmSpec(_build_consensus_arm(), "consensus"),
+        ArmSpec(Par_Level_Reorder(s=20, S=100, seed=seed), "baseline"),
+        ArmSpec(Static_Pricing(markup=1.5, seed=seed), "baseline"),
+        ArmSpec(Greedy_Routing(), "baseline"),
+        ArmSpec(NoOpDisruption(), "baseline"),
     )
 
 
+@dataclasses.dataclass(frozen=True)
+class ControlSpec:
+    """The comparator a run's headline is measured against (AD-16, R6.14).
+
+    Exactly one of two forms, and construction refuses anything else:
+
+    * ``ControlSpec(baseline_arm="NAME", pooled=False)`` -- that one registered arm alone, the
+      form R6.14 requires of both controls;
+    * ``ControlSpec(baseline_arm=None, pooled=True)`` -- the pool of every arm whose declared
+      role is ``baseline``, recorded in the artifact as ``"pooled:"`` plus the sorted names.
+    """
+
+    baseline_arm: str | None
+    pooled: bool
+
+    def __post_init__(self) -> None:
+        if self.pooled == (self.baseline_arm is not None):
+            raise ValueError(
+                "a ControlSpec names one comparator arm or asks for the pool, exactly one of "
+                f"the two: got baseline_arm={self.baseline_arm!r}, pooled={self.pooled!r}"
+            )
+        if self.baseline_arm is not None and not self.baseline_arm.strip():
+            raise ValueError("a named comparator must have a non-empty name")
+
+
+def resolve_control_spec(
+    *,
+    baseline_arm: str | None,
+    pooled_baseline: bool,
+    arm_names: Sequence[str],
+) -> ControlSpec:
+    """Resolve the comparator a run measures against, or refuse before any replicate runs.
+
+    * ``baseline_arm`` names one registered arm: that arm alone, never pooled.
+    * ``pooled_baseline`` asks for the pool of every baseline-role arm.
+    * Neither: allowed ONLY when ``arm_names`` is exactly :data:`CANONICAL_ARM_NAMES`, and then
+      it is the pool -- recorded as a pool, never left implicit. Any other arm set has no
+      default, because an arm the canonical suite does not contain (an oracle, a copy of a
+      baseline) would otherwise be compared against whatever the pool happened to hold.
+
+    Raises:
+        ValueError: When both are given, when ``baseline_arm`` is not one of ``arm_names``, or
+            when neither is given and ``arm_names`` is not exactly the canonical five.
+    """
+    if pooled_baseline and baseline_arm is not None:
+        raise ValueError(
+            "--pooled-baseline and --baseline-arm are mutually exclusive: a contrast is "
+            "against one named arm or against the pool, never both"
+        )
+    if baseline_arm is not None:
+        if baseline_arm not in arm_names:
+            raise ValueError(
+                f"--baseline-arm {baseline_arm!r} is not a registered arm "
+                f"(registered: {list(arm_names)})"
+            )
+        return ControlSpec(baseline_arm=baseline_arm, pooled=False)
+    if not pooled_baseline and tuple(arm_names) != CANONICAL_ARM_NAMES:
+        raise ValueError(
+            f"the arm set {list(arm_names)} is not exactly the canonical five "
+            f"{list(CANONICAL_ARM_NAMES)}, so its comparator must be stated: pass "
+            "--baseline-arm NAME or --pooled-baseline. An unrecognised arm is never pooled "
+            "by default (AD-16)"
+        )
+    return ControlSpec(baseline_arm=None, pooled=True)
+
+
+def _describe_control(control: ControlSpec) -> str:
+    """ASCII one-liner naming the comparator a run is about to be measured against."""
+    if control.baseline_arm is not None:
+        return f"{control.baseline_arm} (named; never pooled)"
+    return "pool of every baseline-role arm (recorded in the artifact as 'pooled:...')"
+
+
 # ---------------------------------------------------------------------------
-# Reduced-cost (smoke) harness execution — bypasses the INV-TW-002 guard
+# Reduced-cost (smoke) harness execution -- bypasses the INV-TW-002 guard
 # ---------------------------------------------------------------------------
 def _run_reduced(
     scenarios: Sequence[Scenario],
-    arms: Sequence[DecisionPolicy],
+    arms: Sequence[ArmSpec],
     n_replicates: int,
     loop_config: LoopConfig,
     emission_factor: float,
@@ -189,35 +318,39 @@ def _run_reduced(
     ``n >= MIN_SCENARIOS`` under-power guard so ``make prove-uplift`` and the
     reproduction tests run in seconds. It reuses the exact same per-scenario replicate
     seeding (:func:`replicate_seed`) so every arm still sees the identical seeded demand
-    realization (the attribution guarantee, R2.1/R2.5). A result produced this way is a
-    fast smoke reproduction, NOT a fully-powered proof — only ``n >= MIN_SCENARIOS``
-    (``--full``) satisfies INV-TW-002.
+    realization (the attribution guarantee, R2.1/R2.5), and it registers the arms through
+    :func:`~uplift.harness.registered_roles` exactly as :meth:`UpliftHarness.run` does --
+    before any replicate runs, so an arm with no role costs no twin work. A result produced
+    this way is a fast smoke reproduction, NOT a fully-powered proof -- only
+    ``n >= MIN_SCENARIOS`` (``--full``) satisfies INV-TW-002.
     """
-    arm_results: dict[tuple[str, str], object] = {}
-    runs_by_pair: dict[tuple[str, str], list] = {}
-    all_runs: list = []
+    roles = registered_roles(arms)
+    arm_results: dict[tuple[str, str], ArmResult] = {}
+    runs_by_pair: dict[tuple[str, str], list[ScenarioRun]] = {}
+    all_runs: list[ScenarioRun] = []
 
     for scenario in scenarios:
         seeds = [replicate_seed(scenario.seed, index) for index in range(n_replicates)]
-        for policy in arms:
+        for spec in arms:
             runs = [
                 run_closed_loop(
-                    scenario, policy, seed, policy.name, loop_config, emission_factor
+                    scenario, spec.policy, seed, spec.name, loop_config, emission_factor
                 )
                 for seed in seeds
             ]
-            pair = (scenario.name, policy.name)
+            pair = (scenario.name, spec.name)
             runs_by_pair[pair] = runs
-            arm_results[pair] = aggregate_arm(policy.name, runs)
+            arm_results[pair] = aggregate_arm(spec.name, runs)
             all_runs.extend(runs)
 
     return HarnessResult(
-        arm_results=arm_results,  # type: ignore[arg-type]
+        arm_results=arm_results,
         runs_by_pair=runs_by_pair,
         all_runs=all_runs,
         results_path=None,
         scenarios=tuple(scenarios),
-        arm_names=tuple(policy.name for policy in arms),
+        arm_names=tuple(spec.name for spec in arms),
+        arm_roles=roles,
     )
 
 
@@ -241,8 +374,8 @@ def _default_artifact_path() -> Path:
 
 def _write_result_artifact(
     path: Path,
-    result,
-    report,
+    result: UpliftResult,
+    report: UpliftReport,
     *,
     harness_result: HarnessResult | None = None,
     provenance: UpliftProvenance | None = None,
@@ -251,21 +384,21 @@ def _write_result_artifact(
 
     The gate (:func:`scripts.audit.uplift_truth.admit`) parses this file through
     :meth:`~uplift.harness.UpliftArtifact.read`, so every field it needs must be present:
-    a finite ``headline_uplift``, a boolean ``incomplete``, the fidelity block that
-    co-locates the KL context (R5.6), and the provenance record naming the revision, run,
-    seed set, arms, and replicates-per-arm count the audit's R2.3 requires -- an artifact
-    missing any of them is inadmissible, not silently readable. Serialisation is canonical
-    (``sort_keys=True``, tight separators) so two runs of the same seed set at the same
-    revision produce byte-identical files.
+    a finite ``headline_uplift`` with its interval and verdict, a boolean ``incomplete``, the
+    fidelity block that co-locates the KL context (R5.6), and the provenance record naming the
+    revision, run, seed set, arms, arm roles, and replicates-per-arm count the audit's R2.3
+    requires -- an artifact missing any of them is inadmissible, not silently readable.
+    Serialisation is canonical (``sort_keys=True``, tight separators) so two runs of the same
+    seed set at the same revision produce byte-identical files.
 
     ``provenance`` is resolved from the environment when not supplied; a caller with no
-    ``harness_result`` gets an artifact with no arm aggregates and a zero replicate
-    count, which is honest (and inadmissible as proof) rather than fabricated.
+    provenance gets a record with no arms, no roles and a zero replicate count, which is
+    honest (and inadmissible as proof) rather than fabricated.
     """
     resolved = (
         provenance
         if provenance is not None
-        else resolve_provenance(arms=(), replicates_per_arm=0, seeds=())
+        else resolve_provenance(arms=(), arm_roles={}, replicates_per_arm=0, seeds=())
     )
     artifact = build_uplift_artifact(
         result,
@@ -286,8 +419,8 @@ def _build_parser() -> argparse.ArgumentParser:
         description=(
             "Run the closed-loop counterfactual uplift harness on the declared "
             "adversarial seeds and print the headline uplift number co-located with "
-            "its twin-fidelity report. Synthetic seed data only; no external paid "
-            "service."
+            "its interval, verdict, comparator and twin-fidelity report. Synthetic seed "
+            "data only; no external paid service."
         ),
     )
     parser.add_argument(
@@ -351,6 +484,24 @@ def _build_parser() -> argparse.ArgumentParser:
         default=1.0,
         help="Per-step advance duration in hours (default: 1.0).",
     )
+    comparator = parser.add_mutually_exclusive_group()
+    comparator.add_argument(
+        "--pooled-baseline",
+        action="store_true",
+        help=(
+            "Compare the consensus arm against the pool of every baseline-role arm. The "
+            "default for the canonical five arms; required to pool any other arm set."
+        ),
+    )
+    comparator.add_argument(
+        "--baseline-arm",
+        default=None,
+        metavar="NAME",
+        help=(
+            "Compare the consensus arm against this one registered arm alone, never pooled "
+            "(R6.14). Mutually exclusive with --pooled-baseline."
+        ),
+    )
     return parser
 
 
@@ -386,12 +537,14 @@ def _resolve_run_config(args: argparse.Namespace) -> tuple[int, LoopConfig, bool
 
 
 def main(argv: Sequence[str] | None = None) -> int:
-    """Entry point for ``python -m uplift.cli`` (R7.2, R7.5–R7.8).
+    """Entry point for ``python -m uplift.cli`` (R7.2, R7.5-R7.8, R6.14).
 
     Returns ``0`` when at least one scenario completed (a valid outcome regardless of
     which arm wins, R4.6), :data:`EXIT_MISSING_INPUT` when a required input is missing
-    or malformed (R7.8, printing no headline number), or the harness's
-    ``EXIT_NO_COMPLETED_RUN`` when nothing completed.
+    or malformed -- the metric contract, or a comparator that cannot be resolved -- printing
+    no headline number (R7.8), or the harness's ``EXIT_NO_COMPLETED_RUN`` when nothing
+    completed. ``--pooled-baseline`` with ``--baseline-arm`` is refused by the argument
+    parser itself (exit status 2, its usage message).
     """
     parser = _build_parser()
     args = parser.parse_args(argv)
@@ -420,16 +573,40 @@ def main(argv: Sequence[str] | None = None) -> int:
     n, loop, reduced = _resolve_run_config(args)
     scenarios = adversarial_suite()
     arms = build_arms(seed=args.seed)
+    arm_names = [spec.name for spec in arms]
+
+    # --- required input: the comparator, resolved BEFORE any replicate runs (AD-16) ---
+    try:
+        roles = registered_roles(arms)
+        control = resolve_control_spec(
+            baseline_arm=args.baseline_arm,
+            pooled_baseline=args.pooled_baseline,
+            arm_names=arm_names,
+        )
+        if control.baseline_arm == DEFAULT_CONSENSUS_ARM:
+            raise ValueError(
+                f"--baseline-arm {DEFAULT_CONSENSUS_ARM!r} is the consensus arm itself; a "
+                "contrast of an arm with itself is zero by construction and measures nothing"
+            )
+    except ValueError as exc:
+        print(f"[FAIL] required input unresolvable: comparator: {exc}", file=sys.stderr)
+        print(
+            "No headline uplift number is produced without a resolvable comparator.",
+            file=sys.stderr,
+        )
+        return EXIT_MISSING_INPUT
+
     emission_factor = DEFAULT_EMISSION_FACTOR_KG_PER_DELIVERY
 
     mode = "reduced-cost SMOKE (NOT a fully-powered proof)" if reduced else "fully-powered PROOF"
-    print(f"uplift reproduction — mode: {mode}")
+    print(f"uplift reproduction -- mode: {mode}")
     print(
         f"  scenarios: {len(scenarios)} adversarial seeds "
         f"({', '.join(s.name for s in scenarios)})"
     )
     print(f"  replicates per arm: {n} (INV-TW-002 floor: {MIN_SCENARIOS})")
     print(f"  closed-loop horizon: {loop.duration_hours}h in {loop.step_hours}h steps")
+    print(f"  comparator: {_describe_control(control)}")
 
     # --- run the harness on the declared seeds (R7.2) ---
     if reduced:
@@ -439,44 +616,57 @@ def main(argv: Sequence[str] | None = None) -> int:
         harness_result = harness.run(scenarios, arms, n_per_arm=n)
 
     result = assemble_uplift_result(
-        harness_result, contract, consensus_arm=DEFAULT_CONSENSUS_ARM
+        harness_result,
+        contract,
+        consensus_arm=DEFAULT_CONSENSUS_ARM,
+        baseline_arm=control.baseline_arm,
     )
     report = build_uplift_report(result)
 
-    # --- headline number co-located with its FidelityReport (R7.7, R5.2/R5.6) ---
+    # --- headline number co-located with its interval, verdict and FidelityReport ---
     print()
     print(report.render())
 
     # --- honesty disclosures (R7.5, R7.6) + version-controlled noise tolerance ---
     print()
-    print(f"applied noise tolerance: <= {NOISE_TOLERANCE_PP:.1f} percentage point "
-          "(version-controlled reproduction tolerance)")
+    print(
+        f"applied noise tolerance: <= {NOISE_TOLERANCE_PP:.1f} percentage point "
+        "(version-controlled reproduction tolerance, committed for the version-1 fill-rate "
+        "headline; the headline above is in objective units)"
+    )
     print("data provenance: synthetic seed-generated data only (no real/scraped/paid data)")
-    print("external services: none — fully in-process (no external paid service)")
+    print("external services: none -- fully in-process (no external paid service)")
     if reduced:
         print(
-            "note: reduced-cost smoke run — a fully-powered proof requires "
+            "note: reduced-cost smoke run -- a fully-powered proof requires "
             f"n >= {MIN_SCENARIOS} per arm (--full)."
         )
     if result.incomplete:
         print(
-            "note: result marked INCOMPLETE — at least one arm (e.g. the consensus arm) "
-            "could not complete every scenario; no incomplete pair is credited to SYNAPSE."
+            "note: result marked INCOMPLETE -- the consensus arm or a comparator arm could "
+            "not complete every scenario; no incomplete pair is credited to SYNAPSE."
+        )
+    elif result.run_incomplete:
+        print(
+            "note: an arm outside this contrast failed a replicate (run_incomplete); the "
+            "contrast itself completed, so its verdict is unaffected."
         )
     if result.all_wins_warning:
         print(
-            "self-scrutiny warning: every classified pair is SYNAPSE_WINS — scrutinize "
+            "self-scrutiny warning: every classified pair is SYNAPSE_WINS -- scrutinize "
             "for measurement bias before trusting this result."
         )
 
     # --- persist the artifact the C60 uplift_truth gate reads ---
     # The provenance record is what makes this run attributable: the seed set is the
     # scenario base seeds (every replicate seed is derived from them by
-    # ``replicate_seed``), and the revision is what marks a run as measured before or
-    # after the ADR-054 dispatch choke point, across which uplift is not comparable.
+    # ``replicate_seed``), the roles are what each arm declared, and the revision is what
+    # marks a run as measured before or after the ADR-054 dispatch choke point, across which
+    # uplift is not comparable.
     output_path = args.output if args.output is not None else _default_artifact_path()
     provenance = resolve_provenance(
-        arms=[policy.name for policy in arms],
+        arms=arm_names,
+        arm_roles=roles,
         replicates_per_arm=n,
         seeds=[scenario.seed for scenario in scenarios],
     )
@@ -493,7 +683,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     exit_code = uplift_exit_code(harness_result)
     if exit_code != EXIT_SUCCESS:
         print(
-            "[FAIL] no scenario completed for any arm — nothing to report.",
+            "[FAIL] no scenario completed for any arm -- nothing to report.",
             file=sys.stderr,
         )
     return exit_code

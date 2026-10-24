@@ -10,6 +10,12 @@ Property 11: Effect-size computation matches the reference formula.
     documented formulas (computed here with numpy, never by calling the functions
     under test).
 
+Carried to Metric_Contract v2 (decision-quality-proof task 29.4) unchanged in substance: the
+two functions are no longer the decision rule -- v2 judges the objective by its paired
+interval -- but they remain importable pure measures with unchanged signatures, so this
+property still holds as stated. Budget inherited from the root ``conftest.py`` profile; no
+``max_examples`` literal.
+
 Validates: Requirements 3.2
 """
 from __future__ import annotations
@@ -17,7 +23,7 @@ from __future__ import annotations
 import math
 
 import numpy as np
-from hypothesis import assume, given, settings
+from hypothesis import assume, given
 from hypothesis import strategies as st
 
 from uplift.contract import cohens_d, relative_pct_change
@@ -66,7 +72,6 @@ def _reference_rel_pct(consensus: np.ndarray, baseline: np.ndarray) -> float:
 # ---------------------------------------------------------------------------
 # Property 11: computed effect sizes equal the reference formulas (R3.2)
 # ---------------------------------------------------------------------------
-@settings(max_examples=300)
 @given(arrays=_sample_arrays())
 def test_effect_sizes_match_reference_formulas(
     arrays: tuple[list[float], list[float]],
@@ -105,7 +110,6 @@ def test_effect_sizes_match_reference_formulas(
 # ---------------------------------------------------------------------------
 # Documented degenerate-input behavior: both functions return 0.0 (never raise).
 # ---------------------------------------------------------------------------
-@settings(max_examples=100)
 @given(samples=st.lists(_finite_values, min_size=2, max_size=32))
 def test_empty_input_returns_zero(samples: list[float]) -> None:
     """An empty arm makes both effect sizes 0.0 (degenerate input)."""
@@ -115,7 +119,6 @@ def test_empty_input_returns_zero(samples: list[float]) -> None:
     assert relative_pct_change(samples, []) == 0.0
 
 
-@settings(max_examples=100)
 @given(
     # Small, exactly-representable integer values so the sample variance of a
     # repeated value is *exactly* zero (avoids floating-point residue that a large
@@ -131,7 +134,6 @@ def test_zero_pooled_std_returns_zero_cohens_d(value: float, n1: int, n2: int) -
     assert cohens_d(consensus, baseline) == 0.0
 
 
-@settings(max_examples=100)
 @given(consensus=st.lists(_finite_values, min_size=2, max_size=16))
 def test_zero_baseline_mean_returns_zero_rel_pct(consensus: list[float]) -> None:
     """A zero baseline mean makes relative percentage change 0.0."""

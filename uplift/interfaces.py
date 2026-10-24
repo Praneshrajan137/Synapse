@@ -9,17 +9,23 @@ ArmResult, UpliftResult) per the design Data Models section.
 
 The harness loop is arm-agnostic: it only ever sees ``DecisionPolicy.decide(obs)``.
 Any KPI delta between arms is therefore attributable to the decision policy alone.
+
+decision-quality-proof tasks 15.5 and 29.4 add three vocabulary items here, because this is the
+module every other one already shares: :data:`ArmRole` and :class:`ArmSpec` (an arm is
+registered WITH the role it plays in a contrast, never with a defaulted one), and
+:data:`HeadlineVerdict` (the four-valued interval verdict R7.19 declares).
 """
 from __future__ import annotations
 
 import dataclasses
 from enum import Enum
-from typing import TYPE_CHECKING, Mapping, Protocol, runtime_checkable
+from typing import TYPE_CHECKING, Final, Literal, Mapping, Protocol, runtime_checkable
 
 from digital_twin.simulation.monte_carlo import ShockParams
 
 if TYPE_CHECKING:  # avoid a runtime import cycle; fidelity.py is built in a later task
     from uplift.fidelity import FidelityReport
+    from uplift.interval import Interval
 
 
 # ---------------------------------------------------------------------------
@@ -126,13 +132,64 @@ class DecisionPolicy(Protocol):
 
     The harness drives every arm through this identical interface, so the only
     difference between arms is which policy produces the per-step decisions.
+
+    ``name`` is declared READ-ONLY, because that is all the harness ever does with it: it
+    reads it to register, key and label an arm. A settable protocol member would reject
+    every frozen-dataclass policy (``Static_Pricing``, ``GroupParLevelReorder``) at the type
+    level while accepting it at run time -- a declaration that misled the checker, repaired
+    here rather than at the call sites that reported it.
     """
 
-    name: str
+    @property
+    def name(self) -> str:
+        """The arm identifier the harness registers, keys and labels this policy by."""
+        ...
 
     def decide(self, obs: Observation) -> PolicyAction:
         """Return the ``PolicyAction`` to apply to the twin for this ``Observation``."""
         ...
+
+
+# ---------------------------------------------------------------------------
+# Arm registration -- every arm declares the role it plays (AD-16, task 15.5)
+# ---------------------------------------------------------------------------
+#: What an arm is FOR in a contrast. ``consensus`` is the subject a headline is about;
+#: ``baseline`` arms are the only ones a pooled comparator may absorb; an ``oracle`` (the
+#: positive control's arm O) and an ``excluded`` arm are recorded but never pooled, so neither
+#: can move the consensus contrast's comparator or its completeness verdict.
+ArmRole = Literal["consensus", "baseline", "oracle", "excluded"]
+
+#: Every admissible :data:`ArmRole`, for runtime refusal: a ``Literal`` is not checked at run
+#: time, and a role read from a caller is exactly the value that must be checked.
+ARM_ROLES: Final[tuple[ArmRole, ...]] = ("consensus", "baseline", "oracle", "excluded")
+
+
+@dataclasses.dataclass(frozen=True)
+class ArmSpec:
+    """One registered arm: the policy it runs and the role it plays in a contrast.
+
+    **There is no default role, by design.** The pooled comparator used to absorb every
+    non-consensus arm, so an Oracle_Arm added to a run was silently pooled into the baseline
+    and one failed oracle replicate could mark the consensus contrast incomplete (AD-16). A
+    role declared beside the policy at registration is what lets pooling refuse an oracle, and
+    an absent role is a refusal rather than a guess. A later suite declares its arms the same
+    way: ``ArmSpec(policy, "baseline")``, ``ArmSpec(policy, "oracle")``.
+    """
+
+    policy: DecisionPolicy
+    role: ArmRole
+
+    def __post_init__(self) -> None:
+        if self.role not in ARM_ROLES:
+            raise ValueError(
+                f"arm {getattr(self.policy, 'name', self.policy)!r} declares role "
+                f"{self.role!r}; the admissible roles are {list(ARM_ROLES)}"
+            )
+
+    @property
+    def name(self) -> str:
+        """The arm identifier: the policy's own ``name``, so an arm has exactly one name."""
+        return self.policy.name
 
 
 # ---------------------------------------------------------------------------
@@ -153,6 +210,22 @@ class Outcome(Enum):
     TIE_INCONCLUSIVE = "tie_inconclusive"
 
 
+#: The four-valued headline verdict (R7.19, task 29.4), read off the ``1 - alpha`` interval on
+#: the mean paired objective difference against the committed materiality margin ``m``, with
+#: STRICT bounds: ``win`` iff ``low > m``; ``sub_margin_gain`` iff ``0 < low <= m``;
+#: ``inconclusive`` iff ``low <= 0 <= high``; ``baseline_wins`` iff ``high < 0``. Exhaustive and
+#: mutually exclusive for any admissible interval (``low <= high``) and margin (``m > 0``).
+HeadlineVerdict = Literal["win", "sub_margin_gain", "inconclusive", "baseline_wins"]
+
+#: Every :data:`HeadlineVerdict`, in the order the rule is stated.
+HEADLINE_VERDICTS: Final[tuple[HeadlineVerdict, ...]] = (
+    "win",
+    "sub_margin_gain",
+    "inconclusive",
+    "baseline_wins",
+)
+
+
 @dataclasses.dataclass(frozen=True)
 class KpiVector:
     """The business KPIs recorded for one completed run (R2.3).
@@ -160,6 +233,22 @@ class KpiVector:
     ``fill_rate``, ``spoilage_rate``, and ``stockout_rate`` are fractions in
     ``[0.0, 1.0]``; ``avg_delivery_time_min`` is a non-negative number of minutes;
     ``margin`` and ``co2_estimate`` are numeric values.
+
+    decision-quality-proof task 29.4 appends two fields, so positional construction of the
+    first six is unchanged:
+
+    * ``avg_on_hand_units`` -- mean on-hand units over the run (R5.40), the holding input of
+      the committed objective that this vector lacked.
+    * ``objective`` -- the ADR-055 D2 scalar cost of this replicate, lower is better, computed
+      by :meth:`uplift.regret.RegretObjective.cost` from the five engine reads
+      ``uplift.regret._measure`` uses. It is Metric_Contract v2's sole primary KPI; every other
+      field here is secondary (R7.19).
+
+    **``objective`` is NOT a function of this vector's own ``fill_rate``.** Its unmet-service
+    term reads the ENGINE's fill rate (fulfilled over demand events), while this vector's
+    ``fill_rate`` is the extractor's delivered-over-created -- two inequivalent definitions
+    that Property 64 clause 3 pins apart. Recompute the objective from the engine metrics,
+    never from these six fields.
     """
 
     fill_rate: float
@@ -168,6 +257,8 @@ class KpiVector:
     avg_delivery_time_min: float
     margin: float
     co2_estimate: float
+    avg_on_hand_units: float
+    objective: float
 
 
 @dataclasses.dataclass(frozen=True)
@@ -209,7 +300,21 @@ class ArmResult:
 
 @dataclasses.dataclass
 class UpliftResult:
-    """The assembled uplift outcome with mandatory fidelity context (R3–R5)."""
+    """The assembled uplift outcome with mandatory fidelity context (R3–R5).
+
+    Under Metric_Contract v2 (task 29.4) ``headline_uplift`` is the mean paired difference of
+    the committed objective, comparator minus subject, in objective units -- positive means the
+    subject (consensus) arm is CHEAPER -- and it is exactly ``interval.point`` whenever an
+    interval was estimated. ``interval`` is ``None`` only when no interval could be estimated,
+    and then ``headline_verdict`` is ``None`` too and the headline is the no-estimate sentinel,
+    never a measurement (I-7).
+
+    ``incomplete`` is the CONTRAST predicate (task 15.5): the subject or a comparator arm did
+    not complete every replicate. ``run_incomplete`` is the whole-run predicate over every
+    registered arm, retained and reported but never read by the verdict, so a failed oracle
+    replicate cannot break the consensus contrast it is not part of. ``comparator`` names the
+    arm compared against, or ``"pooled:"`` plus the sorted pooled baseline-role arms.
+    """
 
     per_kpi: dict[str, Outcome]
     per_scenario: dict[tuple[str, str], Outcome]
@@ -218,3 +323,8 @@ class UpliftResult:
     fidelity: "FidelityReport"
     all_wins_warning: bool
     incomplete: bool
+    interval: Interval | None
+    headline_verdict: HeadlineVerdict | None
+    materiality_margin: float
+    comparator: str
+    run_incomplete: bool

@@ -57,6 +57,24 @@
       "note": "ADR-055 D6 / R6.15. direction: down because this is a CEILING on the proportion of negative-control repetitions allowed to report a proven gain -- raising it would weaken the gate, so it may only tighten. Deliberately loose against the nominal alpha = 0.05: at 20 repetitions the exact binomial upper bound on an alpha = 0.05 process is 4/20 = 0.20 at roughly the 98th percentile, so a correctly-calibrated instrument passes almost always while an instrument reporting gains on a third of its null repetitions fails. Tightening to 0.05 itself would fail a CORRECT instrument roughly a quarter of the time -- a gate that punishes the truth. status: unmeasured because this is a pre-registered target, not a measurement.",
       "$note_on_absent_siblings": "The two regret WEIGHTS (regret-weight-shortage = 0.0 since session 11, when finding 65 zeroed the double-counted stockout_rate term and left the shortage weight 8.0 on unmet_service alone; regret-weight-holding = 1.0) are PINNED in doc-number-pins.yaml but deliberately carry NO ratchet entry. A ratchet asserts a monotonic better-direction, and for an objective weight neither direction is better -- 8.0 is not 'safer' than 9.0, it is the newsvendor critical ratio this repository already commits in agents/inventory_sentinel/models/newsvendor.py::cost_under. Inventing a `direction` for them would be exactly the fabrication this file's own header forbids ('Nothing here was invented'). They are guarded by their pins and by C75, which verifies each extractor resolves by running it. Recorded here so their absence reads as a decision rather than an oversight. CONTRAST with materiality-margin-service-points below, which DOES carry a direction: unlike a weight, a falsification threshold has an obvious self-serving sign."
     },
+    "positive-control-detection-probability": {
+      "kind": "power-target-floor",
+      "direction": "up",
+      "bound": 0.8,
+      "unit": "probability",
+      "shipped": {
+        "file": "digital_twin/simulation/policy.yaml",
+        "extractor": "yaml_path:positive_control.detection_probability",
+        "value": 0.8
+      },
+      "guard_constant": null,
+      "agrees_with_shipped": true,
+      "status": "unmeasured",
+      "measured_at": null,
+      "source_run": null,
+      "source": ".kiro/specs/decision-quality-proof/requirements.md",
+      "note": "R6 / R6.5, task 16.2. direction: up because a HIGHER pre-registered detection target is the stricter one: z_beta = Phi^-1(p) grows with p, so the Power_Report's minimum detectable effect and its derived replicate requirement both grow, and lowering p is the self-serving move. status: unmeasured because this is a PRE-REGISTERED TARGET carried from the blueprint, not a measurement. R6.3's numeric oracle tolerance has no sibling entry: the 2026-09-29 re-scope replaced it with the cross-instrument agreement rule (uplift/controls.py::AGREEMENT_RULE), so no number exists for a ratchet to hold."
+    },
     "materiality-margin-service-points": {
       "kind": "falsification-threshold-ceiling",
       "direction": "down",
@@ -424,7 +442,7 @@
       },
       "guard_constant": {
         "file": "tests/uplift/test_uplift_floor_data_gate.py",
-        "symbol": "test_uplift_floor_is_pinned_at_zero",
+        "symbol": "test_declared_floor_is_zero_until_a_powered_proof_lands",
         "value": 0.0
       },
       "agrees_with_shipped": true,

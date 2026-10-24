@@ -17,6 +17,16 @@ Property 13: Every headline number is co-located with its fidelity context
     across available/unavailable KL values and within/outside the committed threshold so
     every branch of the co-located fidelity block is exercised.
 
+Carried to Metric_Contract v2 (decision-quality-proof task 29.4). The claim holds unchanged, and
+v2 widens what "its context" means: the headline is the mean seed-paired objective difference,
+and the same block now also carries the ``1 - alpha`` interval it is the point of (or names the
+interval unavailable, when nothing paired and the headline is the no-estimate sentinel), the
+four-valued verdict, the materiality margin it was judged against, and the comparator it was
+measured against. Those are asserted in the same contiguous block too -- decision-quality-proof
+R7.14 ("accompanied by its interval at ``1 - alpha`` in the same output") and the last clause of
+that spec's Property 60. Budget inherited from the root ``conftest.py`` profile; no
+``max_examples`` literal.
+
 **Validates: Requirements 3.5**
 """
 from __future__ import annotations
@@ -34,49 +44,56 @@ from uplift.fidelity import (
 )
 from uplift.harness import (
     DEFAULT_CONSENSUS_ARM,
+    NO_ESTIMATE_HEADLINE,
     HarnessResult,
     aggregate_arm,
     assemble_uplift_result,
     build_uplift_report,
 )
-from uplift.interfaces import KpiVector, Scenario, ScenarioRun
+from uplift.interfaces import ArmRole, KpiVector, Scenario, ScenarioRun
 
 from digital_twin.simulation.monte_carlo import ShockParams
 
-# The real, version-controlled metric contract (single primary KPI ``fill_rate``).
+# The real, version-controlled metric contract (v2: single primary KPI ``objective``).
 _CONTRACT = load_contract()
 
-# Strictly positive fill rates keep the pooled baseline mean non-zero so the headline's
-# relative-change denominator is defined for every generated grid.
-_FILL_RATES = st.floats(
+# Objective costs; any finite value is admissible, since the headline is a difference.
+_OBJECTIVES = st.floats(
     min_value=0.05, max_value=1.0, allow_nan=False, allow_infinity=False
 )
 _KL_VALUES = st.floats(min_value=0.0, max_value=1.0, allow_nan=False, allow_infinity=False)
 _THRESHOLDS = st.floats(min_value=0.0, max_value=1.0, allow_nan=False, allow_infinity=False)
 
 
-def _kpi(fill_rate: float) -> KpiVector:
+def _kpi(objective: float) -> KpiVector:
     return KpiVector(
-        fill_rate=fill_rate,
+        fill_rate=1.0,
         spoilage_rate=0.0,
         stockout_rate=0.0,
         avg_delivery_time_min=1.0,
         margin=1.0,
         co2_estimate=1.0,
+        avg_on_hand_units=1.0,
+        objective=objective,
     )
 
 
-def _runs(arm: str, fill_rates: list[float], *, failed: bool) -> list[ScenarioRun]:
+def _runs(arm: str, objectives: list[float], *, failed: bool) -> list[ScenarioRun]:
     """Runs for one ``(scenario, arm)`` pair, either all completed or all failed."""
     if failed:
         return [
             ScenarioRun(arm=arm, seed=index, kpis=None, failed=True, error="synthetic")
-            for index, _ in enumerate(fill_rates)
+            for index, _ in enumerate(objectives)
         ]
     return [
         ScenarioRun(arm=arm, seed=index, kpis=_kpi(value), failed=False, error=None)
-        for index, value in enumerate(fill_rates)
+        for index, value in enumerate(objectives)
     ]
+
+
+def _role(arm: str) -> ArmRole:
+    """The consensus subject, or one of the baseline-role arms the comparator pools."""
+    return "consensus" if arm == DEFAULT_CONSENSUS_ARM else "baseline"
 
 
 @st.composite
@@ -85,8 +102,9 @@ def _results(draw: st.DrawFn) -> tuple[HarnessResult, FidelityReport]:
 
     The grid is deliberately small (1-2 scenarios x 1-2 baseline arms, 2-3 replicates)
     because co-location is a rendering property, not a sample-size property. Pairs are
-    allowed to fail so incomplete results (headline ``0.0``) are covered too — the
-    fidelity context must accompany *every* headline number, including that one.
+    allowed to fail so incomplete results are covered too, including runs where nothing
+    pairs at all, whose headline is the no-estimate sentinel ``0.0`` -- the fidelity context
+    must accompany *every* headline number, including that one.
 
     The fidelity report is drawn so all three branches occur: KL unavailable
     (``None``), KL at or below the threshold, and KL strictly above it.
@@ -108,11 +126,11 @@ def _results(draw: st.DrawFn) -> tuple[HarnessResult, FidelityReport]:
     runs_by_pair: dict[tuple[str, str], list[ScenarioRun]] = {}
     for scenario in scenarios:
         for arm in arm_names:
-            fill_rates = draw(
-                st.lists(_FILL_RATES, min_size=n_replicates, max_size=n_replicates)
+            objectives = draw(
+                st.lists(_OBJECTIVES, min_size=n_replicates, max_size=n_replicates)
             )
             failed = draw(st.booleans())
-            runs_by_pair[(scenario.name, arm)] = _runs(arm, fill_rates, failed=failed)
+            runs_by_pair[(scenario.name, arm)] = _runs(arm, objectives, failed=failed)
 
     harness_result = HarnessResult(
         arm_results={
@@ -123,6 +141,7 @@ def _results(draw: st.DrawFn) -> tuple[HarnessResult, FidelityReport]:
         results_path=None,
         scenarios=tuple(scenarios),
         arm_names=arm_names,
+        arm_roles={arm: _role(arm) for arm in arm_names},
     )
 
     fidelity = FidelityReport(
@@ -132,7 +151,7 @@ def _results(draw: st.DrawFn) -> tuple[HarnessResult, FidelityReport]:
     return harness_result, fidelity
 
 
-@settings(max_examples=200, deadline=None)
+@settings(deadline=None)
 @given(case=_results())
 def test_headline_is_co_located_with_its_fidelity_context(
     case: tuple[HarnessResult, FidelityReport],
@@ -149,6 +168,12 @@ def test_headline_is_co_located_with_its_fidelity_context(
     assert report.threshold == fidelity.threshold
     assert report.confidence == fidelity.confidence
     assert report.fidelity_bound_statement == FIDELITY_BOUND_STATEMENT
+    # ... and the v2 context, unchanged from the result it renders.
+    assert report.primary_kpi == "objective"
+    assert report.interval == result.interval
+    assert report.headline_verdict == result.headline_verdict
+    assert report.materiality_margin == result.materiality_margin
+    assert report.comparator == result.comparator
 
     rendered = report.render()
 
@@ -176,7 +201,22 @@ def test_headline_is_co_located_with_its_fidelity_context(
     # (5) the fidelity-bound statement
     assert FIDELITY_BOUND_STATEMENT in rendered
 
-    # ... and all five live in ONE place: a single contiguous block with no blank line
+    # (6) v2: the interval the headline is the point of -- or its named absence, in which
+    # case the headline is the no-estimate sentinel and no verdict is reported
+    if result.interval is None:
+        assert result.headline_verdict is None
+        assert result.headline_uplift == NO_ESTIMATE_HEADLINE
+        assert "interval: unavailable" in rendered
+        assert "verdict: unavailable" in rendered
+    else:
+        assert result.headline_uplift == result.interval.point
+        assert f"interval: {result.interval.describe()}" in rendered
+        assert f"verdict: {result.headline_verdict} " in rendered
+    # (7) v2: the margin it was judged against and the comparator it was measured against
+    assert f"materiality margin {result.materiality_margin:.6g}" in rendered
+    assert f"comparator: {result.comparator}" in rendered
+
+    # ... and all of it lives in ONE place: a single contiguous block with no blank line
     # separating the headline from its fidelity context.
     lines = rendered.splitlines()
     assert all(line.strip() for line in lines), rendered

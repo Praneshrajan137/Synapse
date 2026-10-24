@@ -68,10 +68,11 @@ Deliberately **not** restated here
 Scope this property does **not** cover, stated plainly
 -----------------------------------------------------
 * **The consensus arm is not exercised.** The arms are two of the pre-registered
-  deterministic baselines, one of them carrying the consensus arm's name so result
-  assembly treats it as the consensus side. Standing up the real eight-agent
-  ``ConsensusProtocol`` inside two child processes per Hypothesis example is not
-  affordable, and it is a different subject: a hash-seed or global-state dependence
+  deterministic baselines, one of them carrying the consensus arm's name and registered
+  under the ``consensus`` role so result assembly treats it as the subject, the other
+  registered as the ``baseline`` its pooled comparator absorbs. Standing up the real
+  eight-agent ``ConsensusProtocol`` inside two child processes per Hypothesis example is
+  not affordable, and it is a different subject: a hash-seed or global-state dependence
   *inside* ``ConsensusProtocol`` would not be caught here. It would surface in the
   powered run owned by ``.github/workflows/uplift.yml``.
 * **The replicate count is small and generated, never ``MIN_SCENARIOS``.** Each example
@@ -185,11 +186,12 @@ from uplift.harness import (
     build_uplift_artifact,
     build_uplift_report,
     canonical_arm_aggregates,
+    registered_roles,
     replicate_seed,
     resolve_provenance,
     run_closed_loop,
 )
-from uplift.interfaces import Scenario
+from uplift.interfaces import ArmSpec, Scenario
 
 
 def build_policy(spec: dict[str, Any]) -> Any:
@@ -216,7 +218,9 @@ def main() -> int:
         )
         for entry in config["scenarios"]
     )
-    arms = tuple(build_policy(entry) for entry in config["arms"])
+    # Every arm is registered with the role its spec declares -- never inferred from its
+    # name, never defaulted (AD-16).
+    arms = tuple(ArmSpec(build_policy(entry), entry["role"]) for entry in config["arms"])
     replicates = config["replicates"]
     emission_factor = config["emission_factor"]
 
@@ -227,16 +231,16 @@ def main() -> int:
     for scenario in scenarios:
         seeds = [replicate_seed(scenario.seed, index) for index in range(replicates)]
         replicate_seeds[scenario.name] = seeds
-        for policy in arms:
+        for spec in arms:
             runs = [
                 run_closed_loop(
-                    scenario, policy, seed, policy.name, loop, emission_factor
+                    scenario, spec.policy, seed, spec.name, loop, emission_factor
                 )
                 for seed in seeds
             ]
-            pair = (scenario.name, policy.name)
+            pair = (scenario.name, spec.name)
             runs_by_pair[pair] = runs
-            arm_results[pair] = aggregate_arm(policy.name, runs)
+            arm_results[pair] = aggregate_arm(spec.name, runs)
             all_runs.extend(runs)
 
     harness_result = HarnessResult(
@@ -245,7 +249,8 @@ def main() -> int:
         all_runs=all_runs,
         results_path=None,
         scenarios=scenarios,
-        arm_names=tuple(policy.name for policy in arms),
+        arm_names=tuple(spec.name for spec in arms),
+        arm_roles=registered_roles(arms),
     )
     result = assemble_uplift_result(
         harness_result,
@@ -257,10 +262,11 @@ def main() -> int:
     )
     report = build_uplift_report(result)
 
-    arm_names = [policy.name for policy in arms]
+    arm_names = [spec.name for spec in arms]
     base_seeds = [scenario.seed for scenario in scenarios]
     pinned = resolve_provenance(
         arms=arm_names,
+        arm_roles=harness_result.arm_roles,
         replicates_per_arm=replicates,
         seeds=base_seeds,
         revision=config["revision"],
@@ -269,7 +275,10 @@ def main() -> int:
     )
     # Resolved from this process's own environment: same revision, different run id.
     from_env = resolve_provenance(
-        arms=arm_names, replicates_per_arm=replicates, seeds=base_seeds
+        arms=arm_names,
+        arm_roles=harness_result.arm_roles,
+        replicates_per_arm=replicates,
+        seeds=base_seeds,
     )
     # The parent asserts the two children carry distinct run identifiers; fail loudly
     # here if the environment did not actually supply this process's own one.
@@ -397,10 +406,11 @@ def _static_pricing_arm(draw: st.DrawFn, name: str) -> dict[str, Any]:
 
 
 @st.composite
-def _arm(draw: st.DrawFn, name: str) -> dict[str, Any]:
-    if draw(st.booleans()):
-        return draw(_par_level_arm(name))
-    return draw(_static_pricing_arm(name))
+def _arm(draw: st.DrawFn, name: str, role: str) -> dict[str, Any]:
+    spec = draw(_par_level_arm(name)) if draw(st.booleans()) else draw(_static_pricing_arm(name))
+    # The role travels with the spec, so the worker registers each arm under the role it
+    # declares rather than inferring one from its name (AD-16).
+    return {**spec, "role": role}
 
 
 @st.composite
@@ -426,8 +436,8 @@ def _run_configs(draw: st.DrawFn) -> _RunConfig:
         # two recorded aggregate rows are distinguishable and a bug that collapsed them
         # into one row could not hide behind the byte comparison.
         arms=(
-            draw(_arm(DEFAULT_CONSENSUS_ARM)),
-            draw(_arm("baseline-prop15")),
+            draw(_arm(DEFAULT_CONSENSUS_ARM, "consensus")),
+            draw(_arm("baseline-prop15", "baseline")),
         ),
     )
 
@@ -547,6 +557,18 @@ def test_two_processes_replaying_one_seed_set_agree_byte_for_byte(
     assert first["aggregates"] not in ("", "[]")
     assert math.isfinite(parsed.headline_uplift)
     assert parsed.provenance.replicates_per_arm == config.replicates
+
+    # -- v2 non-vacuity: the compared bytes carry the interval, not its absence -------
+    # Metric_Contract v2 writes a paired bootstrap interval, the verdict it licenses, the
+    # comparator label and every arm's declared role into the artifact. Each is a new way
+    # two processes could disagree (a seeded resampler, a sort, a pooled label), and a
+    # `null` interval would compare equal trivially -- so its presence is required here,
+    # where both deterministic baselines complete every replicate.
+    assert parsed.interval is not None, (
+        "no replicate completed in both arms, so no interval was estimated and the "
+        "interval bytes compared below measure nothing"
+    )
+    assert parsed.provenance.arm_roles == {arm["name"]: arm["role"] for arm in config.arms}
 
     # -- R2.5: byte-identical arm KPI aggregates -------------------------------------
     assert first["aggregates"] == second["aggregates"]

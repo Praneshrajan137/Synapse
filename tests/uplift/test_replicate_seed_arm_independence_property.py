@@ -21,19 +21,36 @@ The property is pure: it exercises the seed derivation itself and the harness's
 per-scenario seed-sequence construction with the closed loop stubbed out. No twin runs,
 no consensus assembly, no sockets, $0.
 
+Carried to the v2 harness (decision-quality-proof task 15.5): every arm is registered as an
+``ArmSpec`` declaring its role, and :meth:`UpliftHarness.run` -- the entry point a real run
+takes -- is driven over several scenarios with arms of every role, so the reuse is shown for
+whatever role an arm declared, not only for the two the predecessor named.
+
 **Validates: Requirements 6.1, 6.2**
 """
 from __future__ import annotations
 
 import inspect
+from typing import TYPE_CHECKING
 
-from hypothesis import given, settings
+from hypothesis import given
 from hypothesis import strategies as st
 
-from uplift.harness import MIN_SCENARIOS, UpliftHarness, replicate_seed
-from uplift.interfaces import Observation, PolicyAction, Scenario, ScenarioRun
+from digital_twin.simulation.monte_carlo import MIN_SCENARIOS, ShockParams
+from uplift.harness import UpliftHarness, replicate_seed
+from uplift.interfaces import (
+    ARM_ROLES,
+    ArmRole,
+    ArmSpec,
+    DecisionPolicy,
+    Observation,
+    PolicyAction,
+    Scenario,
+    ScenarioRun,
+)
 
-from digital_twin.simulation.monte_carlo import ShockParams
+if TYPE_CHECKING:
+    from collections.abc import Callable, Sequence
 
 # Scenario seeds and replicate indices, over the range the harness actually derives from.
 _seeds = st.integers(min_value=0, max_value=2**31 - 1)
@@ -74,18 +91,45 @@ class _SeedCapturingHarness(UpliftHarness):
 
     Overrides only the execution seam (``_run_sequential``), so the seed derivation under
     test — ``_run_arm_runs``'s ``[replicate_seed(scenario.seed, i) for i in range(n)]`` —
-    runs verbatim while no twin is ever built.
+    runs verbatim while no twin is ever built. ``captured`` keeps the last sequence per arm;
+    ``captured_by_pair`` keeps every ``(scenario, arm)`` sequence, for multi-scenario runs.
     """
 
     def __init__(self) -> None:
         super().__init__()
         self.captured: dict[str, list[int]] = {}
+        self.captured_by_pair: dict[tuple[str, str], list[int]] = {}
 
-    def _run_sequential(  # type: ignore[override]
-        self, scenario, policy, policy_factory, arm_name, seeds
+    def _run_sequential(
+        self,
+        scenario: Scenario,
+        policy: DecisionPolicy | None,
+        policy_factory: Callable[[], DecisionPolicy] | None,
+        arm_name: str,
+        seeds: Sequence[int],
     ) -> list[ScenarioRun]:
         self.captured[arm_name] = list(seeds)
+        self.captured_by_pair[(scenario.name, arm_name)] = list(seeds)
         return []
+
+
+class _UnflooredSeedCapturingHarness(_SeedCapturingHarness):
+    """The capturing harness with the INV-TW-002 floor lifted.
+
+    The power floor is Property 10's subject; lifting it here keeps this property fast. It is
+    an override of the one guard method, so the seed derivation still runs verbatim.
+    """
+
+    @staticmethod
+    def _check_power(n: int) -> None:
+        """No floor: Property 10 (``test_under_power_guard_property.py``) owns the guard."""
+
+
+@st.composite
+def _registrations(draw: st.DrawFn) -> list[tuple[str, ArmRole]]:
+    """Unique arm names, each with a role drawn from every admissible role."""
+    names = draw(_arm_names)
+    return [(name, draw(st.sampled_from(ARM_ROLES))) for name in names]
 
 
 def test_replicate_seed_signature_takes_no_arm() -> None:
@@ -94,7 +138,6 @@ def test_replicate_seed_signature_takes_no_arm() -> None:
     assert params == ["base_seed", "index"]
 
 
-@settings(max_examples=200)
 @given(base_seed=_seeds, index=_indices, arms=_arm_names)
 def test_replicate_seeds_are_arm_independent_and_deterministic(
     base_seed: int, index: int, arms: list[str]
@@ -126,9 +169,8 @@ def test_replicate_seeds_are_arm_independent_and_deterministic(
     n = min(index + 1, 8)
     derived = [replicate_seed(scenario.seed, i) for i in range(n)]
 
-    harness = _SeedCapturingHarness()
-    # The power floor is Property 10's subject; bypass it so this property stays fast.
-    harness._check_power = lambda _n: None  # type: ignore[method-assign]
+    # The power floor is Property 10's subject; the unfloored harness keeps this fast.
+    harness = _UnflooredSeedCapturingHarness()
     for arm in arms:
         harness._run_arm_runs(scenario, _StubPolicy(arm), n, parallel=False)
 
@@ -136,6 +178,39 @@ def test_replicate_seeds_are_arm_independent_and_deterministic(
     for arm in arms:
         assert harness.captured[arm] == derived
     assert derived[index % n] == replicate_seed(base_seed, index % n)
+
+
+@given(
+    base_seeds=st.lists(_seeds, min_size=1, max_size=3, unique=True),
+    registrations=_registrations(),
+    n=st.integers(min_value=1, max_value=8),
+)
+def test_every_registered_arm_is_handed_one_seed_sequence_per_scenario(
+    base_seeds: list[int], registrations: list[tuple[str, ArmRole]], n: int
+) -> None:
+    """Through ``run``, every arm of every role gets its scenario's one derived sequence.
+
+    **Validates: Requirements 6.1, 6.2**
+    """
+    scenarios = [
+        Scenario(name=f"prop17-{position}", seed=seed, shock=ShockParams())
+        for position, seed in enumerate(base_seeds)
+    ]
+    arms = [ArmSpec(_StubPolicy(name), role) for name, role in registrations]
+    harness = _UnflooredSeedCapturingHarness()
+
+    result = harness.run(scenarios, arms, n, parallel=False)
+
+    # Every (scenario, arm) pair reached the execution seam exactly once, and the result
+    # records each arm with the role it declared.
+    assert set(harness.captured_by_pair) == {
+        (scenario.name, name) for scenario in scenarios for name, _role in registrations
+    }
+    assert result.arm_roles == dict(registrations)
+    for scenario in scenarios:
+        derived = [replicate_seed(scenario.seed, i) for i in range(n)]
+        for name, _role in registrations:
+            assert harness.captured_by_pair[(scenario.name, name)] == derived
 
 
 def test_harness_seed_sequence_is_shared_at_the_powered_floor() -> None:

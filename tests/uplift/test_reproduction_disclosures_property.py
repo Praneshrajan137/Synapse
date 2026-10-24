@@ -16,13 +16,23 @@ overrides. It also varies the run outcome between a fully completed matrix and o
 the consensus arm failed every replicate (the honest-failure / ``incomplete`` path), so
 the disclosures must hold whether or not the headline is credited.
 
+**Under Metric_Contract v2 the comparator is part of the mode surface too**
+(decision-quality-proof tasks 15.5 and 29.4, AD-16). ``main`` resolves a ``ControlSpec``
+from two mutually exclusive flags, so every example also draws one of the three
+admissible selections: no flag, ``--pooled-baseline``, or ``--baseline-arm NAME`` naming
+one of the four baselines. The stub suite therefore carries exactly
+:data:`uplift.cli.CANONICAL_ARM_NAMES`, each registered as an
+:class:`~uplift.interfaces.ArmSpec` with its declared role: for any other arm set the
+no-flag mode is refused (``resolve_control_spec`` raises), and the property could not
+reach the mode ``make prove-uplift`` actually uses.
+
 Kept fast (this is the point of the stubs): the real consensus-arm assembly and the real
 closed-loop twin run are the expensive parts (Tier-4 twin verification is seconds per
 decision, and ``--full`` would demand 1000 replicates per arm), and neither influences
 the disclosure text. So ``build_arms``, ``_run_reduced``, and ``UpliftHarness`` are
 patched with in-process stubs that return a small hand-built
-:class:`~uplift.harness.HarnessResult`; everything downstream of the run — contract
-loading, result assembly, fidelity-co-located reporting, disclosure printing, and
+:class:`~uplift.harness.HarnessResult`; everything else — contract loading, comparator
+resolution, result assembly, fidelity-co-located reporting, disclosure printing, and
 artifact writing — is the real CLI code path. No sockets, no models, no paid services.
 
 Validates: Requirements 3.4, 7.2, 7.6
@@ -33,6 +43,7 @@ import contextlib
 import io
 import tempfile
 from pathlib import Path
+from typing import Final
 from unittest.mock import patch
 
 from hypothesis import HealthCheck, given, settings
@@ -41,12 +52,28 @@ from hypothesis import strategies as st
 from digital_twin.simulation.monte_carlo import MIN_SCENARIOS, ShockParams
 
 import uplift.cli as cli
-from uplift.cli import NOISE_TOLERANCE_PP, SMOKE_REPLICATES, main
-from uplift.harness import DEFAULT_CONSENSUS_ARM, HarnessResult, aggregate_arm
-from uplift.interfaces import KpiVector, Observation, PolicyAction, Scenario, ScenarioRun
+from uplift.cli import CANONICAL_ARM_NAMES, NOISE_TOLERANCE_PP, SMOKE_REPLICATES, main
+from uplift.harness import (
+    DEFAULT_CONSENSUS_ARM,
+    HarnessResult,
+    aggregate_arm,
+    registered_roles,
+)
+from uplift.interfaces import (
+    ArmRole,
+    ArmSpec,
+    KpiVector,
+    Observation,
+    PolicyAction,
+    Scenario,
+    ScenarioRun,
+)
 
 
-_BASELINE_ARM = "par_level_reorder"
+#: The four baselines of the canonical suite: every canonical arm except the subject.
+_BASELINE_ARMS: Final[tuple[str, ...]] = tuple(
+    name for name in CANONICAL_ARM_NAMES if name != DEFAULT_CONSENSUS_ARM
+)
 
 _SCENARIO = Scenario(
     name="demand-spike", seed=7, shock=ShockParams(demand_multiplier=2.0)
@@ -63,24 +90,43 @@ class _StubPolicy:
         return PolicyAction()
 
 
-def _kpi(fill_rate: float) -> KpiVector:
+def _declared_role(name: str) -> ArmRole:
+    """The role ``build_arms`` declares for a canonical arm: the subject, or a baseline."""
+    return "consensus" if name == DEFAULT_CONSENSUS_ARM else "baseline"
+
+
+#: The stub suite, registered the way ``build_arms`` registers the real one: every arm is an
+#: ``ArmSpec`` carrying its role, in canonical order. No role is defaulted (AD-16).
+_ARMS: Final[tuple[ArmSpec, ...]] = tuple(
+    ArmSpec(_StubPolicy(name), _declared_role(name)) for name in CANONICAL_ARM_NAMES
+)
+
+
+def _kpi(objective: float) -> KpiVector:
+    """A completed run's KPIs, varying only the committed objective (the primary KPI)."""
     return KpiVector(
-        fill_rate=fill_rate,
+        fill_rate=0.9,
         spoilage_rate=0.0,
         stockout_rate=0.0,
         avg_delivery_time_min=1.0,
         margin=1.0,
         co2_estimate=1.0,
+        avg_on_hand_units=1.0,
+        objective=objective,
     )
 
 
 def _completed_runs(arm: str, base: float) -> list[ScenarioRun]:
-    """A small spread of completed runs so the significance test is well-defined."""
+    """A spread of completed runs on seeds shared by every arm, so the runs pair on seed.
+
+    Exact binary fractions, so every paired objective difference is exact and the interval
+    the CLI estimates over them is well-defined rather than an artefact of rounding.
+    """
     return [
         ScenarioRun(
             arm=arm,
             seed=i,
-            kpis=_kpi(base + (i % 5) * 0.001),
+            kpis=_kpi(base + (i % 5) * 0.125),
             failed=False,
             error=None,
         )
@@ -96,16 +142,22 @@ def _failed_runs(arm: str) -> list[ScenarioRun]:
 
 
 def _stub_harness_result(consensus_failed: bool) -> HarnessResult:
-    """A hand-built harness result standing in for a real (slow) closed-loop matrix."""
-    consensus = (
-        _failed_runs(DEFAULT_CONSENSUS_ARM)
-        if consensus_failed
-        else _completed_runs(DEFAULT_CONSENSUS_ARM, 0.9)
-    )
-    runs_by_pair = {
-        (_SCENARIO.name, DEFAULT_CONSENSUS_ARM): consensus,
-        (_SCENARIO.name, _BASELINE_ARM): _completed_runs(_BASELINE_ARM, 0.5),
-    }
+    """A hand-built harness result standing in for a real (slow) closed-loop matrix.
+
+    Every registered arm has a record, and the role map is built by
+    :func:`uplift.harness.registered_roles` -- the function the CLI's reduced path uses --
+    so the stub result and the stub arm list cannot disagree about registration. The
+    consensus arm is the cheaper one when it completes (a lower objective is better).
+    """
+    runs_by_pair: dict[tuple[str, str], list[ScenarioRun]] = {}
+    for spec in _ARMS:
+        if spec.role != "consensus":
+            runs = _completed_runs(spec.name, 1.5)
+        elif consensus_failed:
+            runs = _failed_runs(spec.name)
+        else:
+            runs = _completed_runs(spec.name, 0.5)
+        runs_by_pair[(_SCENARIO.name, spec.name)] = runs
     return HarnessResult(
         arm_results={
             pair: aggregate_arm(pair[1], runs) for pair, runs in runs_by_pair.items()
@@ -114,7 +166,8 @@ def _stub_harness_result(consensus_failed: bool) -> HarnessResult:
         all_runs=[run for runs in runs_by_pair.values() for run in runs],
         results_path=None,
         scenarios=(_SCENARIO,),
-        arm_names=(DEFAULT_CONSENSUS_ARM, _BASELINE_ARM),
+        arm_names=tuple(spec.name for spec in _ARMS),
+        arm_roles=registered_roles(_ARMS),
     )
 
 
@@ -150,6 +203,15 @@ def _run_modes(draw: st.DrawFn) -> tuple[list[str], bool, bool]:
     if draw(st.booleans()):
         argv += ["--seed", str(draw(st.integers(min_value=0, max_value=99)))]
 
+    # The comparator selection (AD-16): exactly one of the three admissible forms. The two
+    # flags are mutually exclusive, so passing both is a refusal, not a run mode; with the
+    # canonical arm set, no flag at all is the default the CLI records as a pool.
+    comparator = draw(st.sampled_from(["default", "pooled", "named"]))
+    if comparator == "pooled":
+        argv += ["--pooled-baseline"]
+    elif comparator == "named":
+        argv += ["--baseline-arm", draw(st.sampled_from(_BASELINE_ARMS))]
+
     return argv, expected_reduced, draw(st.booleans())
 
 
@@ -164,7 +226,6 @@ def test_reproduction_output_carries_disclosures_and_labels(
     """
     mode_argv, expected_reduced, consensus_failed = case
     harness_result = _stub_harness_result(consensus_failed)
-    arms = (_StubPolicy(DEFAULT_CONSENSUS_ARM), _StubPolicy(_BASELINE_ARM))
 
     class _StubHarness:
         """Stands in for the real (slow) ``UpliftHarness`` in fully-powered mode."""
@@ -180,7 +241,7 @@ def test_reproduction_output_carries_disclosures_and_labels(
         argv = mode_argv + ["--output", str(output)]
         buffer = io.StringIO()
         with (
-            patch.object(cli, "build_arms", lambda seed=0: arms),
+            patch.object(cli, "build_arms", lambda seed=0: _ARMS),
             patch.object(cli, "_run_reduced", lambda *a, **k: harness_result),
             patch.object(cli, "UpliftHarness", _StubHarness),
             contextlib.redirect_stdout(buffer),

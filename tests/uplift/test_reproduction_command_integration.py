@@ -15,6 +15,12 @@ command (``make prove-uplift`` invokes ``python -m uplift.cli``):
 * R7.8 — a missing required input (the metric contract) exits with a non-zero failure
   code (``EXIT_MISSING_INPUT``), names the missing input, and prints NO headline number.
 
+Under Metric_Contract v2 (decision-quality-proof tasks 15.1, 15.5 and 29.4) the same run is
+also held to what v2 changed: the printed headline is in objective units and sits beside
+its interval and verdict (R7.14, R7.19), and the artifact parses as a v2
+:class:`~uplift.harness.UpliftArtifact` that records its comparator -- for the canonical
+five arms with no comparator flag, a pool of the four declared baselines (AD-16).
+
 The run is kept cheap: 2 replicates, a 1-hour horizon, and ``--output`` pointed at a
 ``tmp_path`` so the real ``artifacts/uplift/result.json`` is never clobbered. The twin
 emits verbose logs during the run; that is expected.
@@ -28,8 +34,15 @@ from pathlib import Path
 
 import pytest
 
-from uplift.cli import EXIT_MISSING_INPUT, NOISE_TOLERANCE_PP, main
-from uplift.harness import EXIT_SUCCESS
+from uplift.cli import CANONICAL_ARM_NAMES, EXIT_MISSING_INPUT, NOISE_TOLERANCE_PP, main
+from uplift.harness import (
+    ARTIFACT_SCHEMA_VERSION,
+    DEFAULT_CONSENSUS_ARM,
+    EXIT_SUCCESS,
+    POOLED_COMPARATOR_PREFIX,
+    UpliftArtifact,
+    comparator_label,
+)
 
 
 # The smallest config that still runs the real closed loop fast: a couple of replicates
@@ -62,6 +75,17 @@ def test_reproduction_prints_headline_with_fidelity_and_tolerance(tmp_path, caps
     assert "fidelity confidence:" in out
     assert "bounded by twin fidelity" in out
 
+    # v2 (R7.14, R7.19): the headline is a cost difference in objective units, and it is
+    # co-located with its interval, its verdict and the comparator it was measured against
+    # -- for the canonical five with no comparator flag, a recorded pool (AD-16). The unit
+    # is checked on the headline line itself: the tolerance disclosure names it too.
+    headline_lines = [line for line in out.splitlines() if line.startswith("headline uplift:")]
+    assert len(headline_lines) == 1, headline_lines
+    assert "objective units" in headline_lines[0]
+    assert f"comparator: {POOLED_COMPARATOR_PREFIX}" in headline_lines[0]
+    assert "interval:" in out
+    assert "verdict:" in out
+
     # R7.4: the applied version-controlled noise tolerance is stated.
     assert "applied noise tolerance:" in out
     assert f"<= {NOISE_TOLERANCE_PP:.1f} percentage point" in out
@@ -91,6 +115,22 @@ def test_reproduction_writes_numeric_headline_artifact(tmp_path, capsys):
     # Fidelity context is co-located in the artifact too (R5.6).
     assert "fidelity" in payload
     assert "fidelity_bound_statement" in payload["fidelity"]
+
+    # v2: the C60 gate reads this file through the model, not as raw JSON, so it must parse
+    # as a valid v2 UpliftArtifact -- whose validators tie the headline to its interval and
+    # re-derive the verdict. The canonical five arms with no comparator flag are recorded
+    # with their declared roles and compared against a POOL of the four baselines, never an
+    # implicit one (AD-16).
+    artifact = UpliftArtifact.read(output)
+    assert artifact.schema_version == ARTIFACT_SCHEMA_VERSION
+    assert artifact.headline_uplift == payload["headline_uplift"]
+    baselines = [name for name in CANONICAL_ARM_NAMES if name != DEFAULT_CONSENSUS_ARM]
+    assert len(baselines) == len(CANONICAL_ARM_NAMES) - 1
+    assert artifact.provenance.arm_roles == {
+        DEFAULT_CONSENSUS_ARM: "consensus",
+        **{name: "baseline" for name in baselines},
+    }
+    assert artifact.comparator == comparator_label(None, baselines)
 
 
 def test_missing_contract_input_fails_named_with_no_headline(tmp_path, capsys):

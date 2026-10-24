@@ -61,10 +61,11 @@ import hashlib
 import json
 import math
 import os
+import statistics
 from concurrent.futures import ProcessPoolExecutor
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Callable, Final, Iterable, Mapping, Sequence
+from typing import Any, Callable, Final, Iterable, Literal, Mapping, Sequence
 
 import numpy as np
 import structlog
@@ -75,12 +76,21 @@ from digital_twin.simulation.engine import SupplyChainSimulation
 from digital_twin.simulation.monte_carlo import MIN_SCENARIOS, ShockParams
 from digital_twin.simulation.policy import comparator_restock_threshold
 
-from uplift.contract import MetricContract, relative_pct_change
+from uplift.contract import (
+    DECISION_RULE_TEXT,
+    OBJECTIVE_KPI,
+    MetricContract,
+    interval_verdict,
+    outcome_for_verdict,
+)
 from uplift.fidelity import FidelityReport
 from uplift.interfaces import (
+    ARM_ROLES,
     ArmResult,
+    ArmRole,
+    ArmSpec,
     DecisionPolicy,
-    Direction,
+    HeadlineVerdict,
     KpiVector,
     Observation,
     Outcome,
@@ -89,11 +99,13 @@ from uplift.interfaces import (
     ScenarioRun,
     UpliftResult,
 )
+from uplift.interval import Interval, IntervalUnavailableError
 from uplift.kpi import (
     DEFAULT_EMISSION_FACTOR_KG_PER_DELIVERY,
     AppliedDecisions,
     DeliveredOrder,
     KpiExtractor,
+    committed_objective,
 )
 from uplift.persistence import save_runs
 from uplift.uplift_floor import MIN_POWERED_REPLICATES, PoweredProof
@@ -105,9 +117,22 @@ logger = structlog.get_logger(__name__)
 KPI_FIELDS: tuple[str, ...] = tuple(f.name for f in dataclasses.fields(KpiVector))
 
 # The canonical name of the SYNAPSE consensus arm (``ConsensusArm.name`` default);
-# result assembly (task 10.1) identifies the consensus arm by this name and treats
-# every other arm as a baseline arm.
+# result assembly identifies the consensus arm by this name. What it is compared against is
+# decided by the arms' declared roles (:class:`~uplift.interfaces.ArmSpec`), never by being
+# "every other arm" (AD-16, task 15.5).
 DEFAULT_CONSENSUS_ARM: str = "consensus"
+
+#: The prefix of a pooled comparator's recorded label: ``"pooled:"`` plus the sorted pooled
+#: baseline-role arm names, comma-joined. A named comparator is recorded as its bare name, so
+#: a reader can always tell which of the two contrasts an artifact measured (AD-16).
+POOLED_COMPARATOR_PREFIX: Final[str] = "pooled:"
+
+#: The headline recorded when NO interval could be estimated. Not a measurement: such a result
+#: carries ``interval=None`` and ``headline_verdict=None``, and the artifact names the absence
+#: in ``unavailable_reasons`` and is never proof-grade. Pinned by the artifact model, so a
+#: headline can only ever be an interval's point or this sentinel -- never an unintervalled
+#: number (I-7).
+NO_ESTIMATE_HEADLINE: Final[float] = 0.0
 
 # The neutral (unshocked) shock; an ``Observation.active_shock`` of ``None`` signals an
 # unshocked step so the consensus arm's tier routing does not spuriously escalate.
@@ -384,14 +409,22 @@ def run_closed_loop(
 
     On *any* exception — most importantly ``policy.decide`` raising or the policy being
     unavailable — the run is recorded as failed with the error string and no KPIs are
-    ever fabricated (R2.7).
+    ever fabricated (R2.7). That includes an objective the extractor refuses
+    (:class:`~uplift.kpi.ObjectiveUnavailableError`): a replicate with no admissible cost is a
+    failed replicate, never a zero-cost one.
+
+    **The objective is read once per process, not per replicate (task 29.4).** The extractor is
+    handed :func:`~uplift.kpi.committed_objective`, which reads ``policy.yaml`` through
+    ``uplift.regret.load_objective`` on first use in each process and returns the same object
+    thereafter. This signature is unchanged on purpose: ``uplift/cost_probe.py`` calls it with
+    five positional arguments.
     """
     try:
         sim = _build_twin(scenario, seed)
         unit_costs = _derive_unit_costs()
         reference_price = _mean_unit_cost(unit_costs)
         active_shock = scenario.shock if scenario.shock != _NEUTRAL_SHOCK else None
-        extractor = KpiExtractor(emission_factor)
+        extractor = KpiExtractor(emission_factor, objective=committed_objective())
 
         current_price: float | None = None
         delivered_orders: list[DeliveredOrder] = []
@@ -438,7 +471,7 @@ def run_closed_loop(
             demand_events=int(sim.metrics.demand_events),
             delivered_volume=float(sim.metrics.orders_delivered),
         )
-        kpis = extractor.extract(sim.metrics, applied)
+        kpis = extractor.extract(sim.metrics, applied, sim_time_min=sim.sim_time_min)
         return ScenarioRun(arm=arm_name, seed=seed, kpis=kpis, failed=False, error=None)
     except Exception as exc:  # noqa: BLE001 — every failure is an honest failed run (R2.7)
         return ScenarioRun(
@@ -531,6 +564,11 @@ class HarnessResult:
     per-``(scenario, arm)`` :class:`ScenarioRun` lists, so task 10.1 can compute
     effect sizes over the completed KPI samples and apply the metric-contract decision
     rule. ``all_runs`` is the flat list persisted to ``results_path`` (R2.6).
+
+    ``arm_roles`` maps every registered arm to the role it declared (AD-16, task 15.5).
+    Construction REFUSES an arm with no declared role, a role for an arm that is not
+    registered, an inadmissible role, and two arms with one name -- because the comparator is
+    resolved from these roles, and a guessed role is how an oracle used to be pooled.
     """
 
     arm_results: dict[tuple[str, str], ArmResult]
@@ -539,6 +577,29 @@ class HarnessResult:
     results_path: Path | None
     scenarios: tuple[Scenario, ...]
     arm_names: tuple[str, ...]
+    arm_roles: Mapping[str, ArmRole]
+
+    def __post_init__(self) -> None:
+        duplicated = sorted({arm for arm in self.arm_names if self.arm_names.count(arm) > 1})
+        if duplicated:
+            raise ValueError(
+                f"arms {duplicated} are registered more than once; two arms with one name "
+                "would share one (scenario, arm) record and silently overwrite each other"
+            )
+        undeclared = sorted(set(self.arm_names) - set(self.arm_roles))
+        stray = sorted(set(self.arm_roles) - set(self.arm_names))
+        if undeclared or stray:
+            raise ValueError(
+                f"every registered arm must declare exactly one role and no role may name an "
+                f"unregistered arm: undeclared={undeclared}, unregistered={stray}. A missing "
+                "role is refused rather than defaulted (AD-16)"
+            )
+        invalid = {arm: role for arm, role in self.arm_roles.items() if role not in ARM_ROLES}
+        if invalid:
+            raise ValueError(
+                f"inadmissible arm roles {invalid}; the admissible roles are {list(ARM_ROLES)}"
+            )
+        self.arm_roles = dict(self.arm_roles)
 
     def completed_runs(self, scenario_name: str, arm_name: str) -> list[ScenarioRun]:
         """The completed (non-failed) runs for a ``(scenario, arm)`` pair."""
@@ -555,6 +616,35 @@ class HarnessResult:
             float(getattr(run.kpis, kpi))
             for run in self.completed_runs(scenario_name, arm_name)
         ]
+
+
+# ---------------------------------------------------------------------------
+# Arm registration (AD-16, task 15.5)
+# ---------------------------------------------------------------------------
+def registered_roles(arms: Sequence[ArmSpec]) -> dict[str, ArmRole]:
+    """Each registered arm's declared role, keyed by arm name -- or a refusal.
+
+    The one place a run's arm list becomes its role map, shared by :meth:`UpliftHarness.run`
+    and the CLI's reduced-cost path so the two cannot disagree about what registration means.
+    Refuses an arm passed without a role (a bare ``DecisionPolicy`` is not a registration) and
+    two arms with one name.
+
+    Raises:
+        ValueError: On an entry that is not an :class:`~uplift.interfaces.ArmSpec`, or a
+            duplicated arm name.
+    """
+    roles: dict[str, ArmRole] = {}
+    for spec in arms:
+        if not isinstance(spec, ArmSpec):
+            raise ValueError(
+                f"arm {getattr(spec, 'name', spec)!r} was registered without a role. Register "
+                "it as ArmSpec(policy, role) with role one of "
+                f"{list(ARM_ROLES)}; a missing role is refused, never defaulted (AD-16)"
+            )
+        if spec.name in roles:
+            raise ValueError(f"arm {spec.name!r} is registered more than once")
+        roles[spec.name] = spec.role
+    return roles
 
 
 # ---------------------------------------------------------------------------
@@ -628,7 +718,7 @@ class UpliftHarness:
     def run(
         self,
         scenarios: Iterable[Scenario],
-        arms: Iterable[DecisionPolicy],
+        arms: Iterable[ArmSpec],
         n_per_arm: int = MIN_SCENARIOS,
         *,
         parallel: bool = True,
@@ -640,22 +730,26 @@ class UpliftHarness:
         Every recorded run is persisted to ``results_path`` (when configured) with its
         arm identifier and scenario seed (R2.6). Returns a :class:`HarnessResult` carrying
         per-``(scenario, arm)`` aggregates and raw runs for downstream assembly (task 10.1).
+
+        Every arm is an :class:`~uplift.interfaces.ArmSpec` declaring its role; the roles are
+        resolved BEFORE any replicate runs, so a missing role costs no twin work (AD-16).
         """
         scenario_list = list(scenarios)
         arm_list = list(arms)
+        roles = registered_roles(arm_list)
 
         arm_results: dict[tuple[str, str], ArmResult] = {}
         runs_by_pair: dict[tuple[str, str], list[ScenarioRun]] = {}
         all_runs: list[ScenarioRun] = []
 
         for scenario in scenario_list:
-            for policy in arm_list:
+            for spec in arm_list:
                 runs = self._run_arm_runs(
-                    scenario, policy, n_per_arm, parallel=parallel
+                    scenario, spec.policy, n_per_arm, parallel=parallel
                 )
-                pair = (scenario.name, policy.name)
+                pair = (scenario.name, spec.name)
                 runs_by_pair[pair] = runs
-                arm_results[pair] = aggregate_arm(policy.name, runs)
+                arm_results[pair] = aggregate_arm(spec.name, runs)
                 all_runs.extend(runs)
 
         results_path: Path | None = None
@@ -668,7 +762,8 @@ class UpliftHarness:
             all_runs=all_runs,
             results_path=results_path,
             scenarios=tuple(scenario_list),
-            arm_names=tuple(policy.name for policy in arm_list),
+            arm_names=tuple(spec.name for spec in arm_list),
+            arm_roles=roles,
         )
 
     # -- result assembly (task 10.1) ----------------------------------------
@@ -822,39 +917,146 @@ EXIT_SUCCESS: int = 0
 EXIT_NO_COMPLETED_RUN: int = 1
 
 
+def _refuse_ambiguous_arm_name(arm: str) -> None:
+    """Refuse an arm name a recorded comparator label could not state unambiguously."""
+    if not arm or "," in arm or arm.startswith(POOLED_COMPARATOR_PREFIX):
+        raise ValueError(
+            f"arm name {arm!r} cannot be recorded in a comparator label: it is empty, contains "
+            f"',', or starts with {POOLED_COMPARATOR_PREFIX!r}"
+        )
+
+
+def comparator_label(baseline_arm: str | None, baseline_arms: Sequence[str]) -> str:
+    """The recorded name of the comparator a contrast measured against (AD-16).
+
+    A named comparator is recorded as its bare name; a pooled one as
+    :data:`POOLED_COMPARATOR_PREFIX` plus the sorted pooled arm names, comma-joined. The two
+    forms cannot be confused, so an artifact always says which contrast it measured -- the
+    pooled default is RECORDED as a pool, never left implicit.
+    """
+    for arm in baseline_arms:
+        _refuse_ambiguous_arm_name(arm)
+    if baseline_arm is not None:
+        return baseline_arm
+    return POOLED_COMPARATOR_PREFIX + ",".join(sorted(baseline_arms))
+
+
 def _resolve_baseline_arms(
     harness_result: HarnessResult,
     consensus_arm: str,
     baseline_arm: str | None,
 ) -> list[str]:
-    """Resolve which arm(s) form the baseline the consensus arm is compared against.
+    """Resolve which arm(s) form the comparator the subject arm is compared against.
 
-    Consensus-vs-baseline handling (documented design choice): the consensus arm is
-    identified *by name* (``consensus_arm``, the ``ConsensusArm.name`` default
-    ``"consensus"``). The baseline is every *other* arm. When a specific
-    ``baseline_arm`` is named, only that arm is used; otherwise the completed samples
-    of **all** non-consensus baseline arms are pooled into a single baseline
-    distribution per ``(scenario, KPI)`` — a defensible aggregation representing "the
-    transparent operator without SYNAPSE" as a whole, and one that uses every recorded
-    baseline sample rather than privileging one policy.
+    The subject is identified *by name* (``consensus_arm``, the ``ConsensusArm.name`` default
+    ``"consensus"``; the positive control names the oracle here instead). AD-16 / task 15.5:
+
+    * **A named comparator is never pooled.** ``baseline_arm`` returns exactly
+      ``[baseline_arm]``, whatever role it declared -- naming is the explicit contrast. It is
+      refused if it is not a registered arm, or if it IS the subject (a contrast of an arm with
+      itself is identically zero and can only ever report a null).
+    * **Pooling absorbs only declared baselines.** With no named comparator, the comparator is
+      every arm whose declared role is ``"baseline"``, other than the subject. An ``oracle`` or
+      ``excluded`` arm is NEVER absorbed, so the pooled default means "every arm declared a
+      baseline", which is what it always claimed to mean. An empty pool is refused rather than
+      compared against nothing.
+
+    Raises:
+        ValueError: On a subject arm that is not registered, a named comparator that is
+            unregistered or is the subject, or a pool with no baseline-role arm in it.
     """
+    if consensus_arm not in harness_result.arm_names:
+        # Refused rather than read as "no replicate completed": an unregistered subject has no
+        # runs at all, so assembly would otherwise report an incomplete contrast for a run that
+        # never named the arm it claims to measure (finding 97).
+        raise ValueError(
+            f"the subject arm {consensus_arm!r} is not a registered arm "
+            f"(registered: {list(harness_result.arm_names)}); a contrast cannot be measured for "
+            "an arm the run never registered"
+        )
     if baseline_arm is not None:
+        if baseline_arm == consensus_arm:
+            raise ValueError(
+                f"the named comparator {baseline_arm!r} is the subject arm itself; a contrast "
+                "of an arm with itself is zero by construction and measures nothing"
+            )
+        if baseline_arm not in harness_result.arm_names:
+            raise ValueError(
+                f"the named comparator {baseline_arm!r} is not a registered arm "
+                f"(registered: {list(harness_result.arm_names)})"
+            )
         return [baseline_arm]
-    return [arm for arm in harness_result.arm_names if arm != consensus_arm]
+    pooled = [
+        arm
+        for arm in harness_result.arm_names
+        if arm != consensus_arm and harness_result.arm_roles[arm] == "baseline"
+    ]
+    if not pooled:
+        raise ValueError(
+            "the pooled comparator found no baseline-role arm other than the subject "
+            f"{consensus_arm!r} (roles: {dict(harness_result.arm_roles)}); name one with "
+            "baseline_arm= or register a baseline"
+        )
+    return pooled
 
 
-def _pooled_samples(
+def _objective_by_replicate(runs: Sequence[ScenarioRun]) -> dict[tuple[int, int], float]:
+    """Each completed replicate's objective, keyed by ``(seed, occurrence of that seed)``.
+
+    **Paired on SEED, never on list position (task 29.4).** Replicate ``i`` of every arm runs
+    at ``replicate_seed(scenario.seed, i)`` and nothing else, so the seed is what identifies
+    "the same demand realisation" across arms. The occurrence index only disambiguates the
+    vanishingly rare case of two replicate indices deriving one 32-bit seed; it counts EVERY
+    recorded run, failed ones included, so a failure upstream of a duplicate cannot shift
+    which occurrence a later run is paired as.
+    """
+    seen: dict[int, int] = {}
+    keyed: dict[tuple[int, int], float] = {}
+    for run in runs:
+        occurrence = seen.get(run.seed, 0)
+        seen[run.seed] = occurrence + 1
+        if not run.failed and run.kpis is not None:
+            keyed[(run.seed, occurrence)] = float(run.kpis.objective)
+    return keyed
+
+
+def _paired_objectives(
     harness_result: HarnessResult,
-    arms: Sequence[str],
     scenario_names: Sequence[str],
-    kpi: str,
-) -> list[float]:
-    """Pool completed per-scenario KPI samples across the given arms and scenarios."""
-    samples: list[float] = []
+    subject: str,
+    comparators: Sequence[str],
+) -> tuple[list[float], list[float]]:
+    """``(subject, comparator)`` objective samples, paired element by element on seed.
+
+    For every scenario, only replicates that COMPLETED in the subject and in every comparator
+    arm are paired. A named comparator contributes its own per-replicate objective; a pooled
+    comparator contributes the per-replicate MEAN over its baseline-role arms (``fmean`` of
+    one value is that value exactly). Pairs are emitted per scenario, in ascending key order.
+
+    Raises:
+        ValueError: On an empty comparator list -- there is nothing to pair against.
+    """
+    if not comparators:
+        raise ValueError("cannot pair a subject against an empty comparator")
+    subject_values: list[float] = []
+    comparator_values: list[float] = []
     for scenario_name in scenario_names:
-        for arm in arms:
-            samples.extend(harness_result.kpi_samples(scenario_name, arm, kpi))
-    return samples
+        subject_map = _objective_by_replicate(
+            harness_result.runs_by_pair.get((scenario_name, subject), [])
+        )
+        comparator_maps = [
+            _objective_by_replicate(harness_result.runs_by_pair.get((scenario_name, arm), []))
+            for arm in comparators
+        ]
+        shared = set(subject_map)
+        for comparator_map in comparator_maps:
+            shared &= set(comparator_map)
+        for key in sorted(shared):
+            subject_values.append(subject_map[key])
+            comparator_values.append(
+                statistics.fmean(comparator_map[key] for comparator_map in comparator_maps)
+            )
+    return subject_values, comparator_values
 
 
 def _pair_is_incomplete(
@@ -880,51 +1082,54 @@ def _pair_is_incomplete(
     return not harness_result.completed_runs(scenario_name, arm)
 
 
-def _run_is_incomplete(
+def _run_is_incomplete(harness_result: HarnessResult) -> bool:
+    """The WHOLE-RUN predicate: any registered arm failed to complete any scenario.
+
+    Retained and reported as ``run_incomplete`` (task 15.5), but never read by the verdict:
+    an oracle or excluded arm that failed a replicate makes the run incomplete without being
+    any part of the consensus contrast. :func:`_contrast_is_incomplete` is what the verdict
+    reads.
+    """
+    return any(
+        _pair_is_incomplete(harness_result, scenario.name, arm)
+        for scenario in harness_result.scenarios
+        for arm in harness_result.arm_names
+    )
+
+
+def _contrast_is_incomplete(
     harness_result: HarnessResult,
-    scenario_names: Sequence[str],
     consensus_arm: str,
     baseline_arms: Sequence[str],
 ) -> bool:
-    """True if any (scenario, arm) pair recorded a failed run or failed to complete.
+    """True if the subject or any comparator arm failed to complete any scenario (R4.7).
 
-    A run is incomplete (R4.7) when, for any scenario and any compared arm, there is a
-    failed run, no run at all, or no completed run — i.e. an arm could not complete
-    that scenario.
+    The CONTRAST predicate C60 reads through ``incomplete`` (task 15.5): a pair is incomplete
+    when, for any scenario and any arm IN THIS CONTRAST, there is a failed run, no run at all,
+    or no completed run. An arm outside the contrast -- an oracle, an excluded arm, or a
+    baseline the named comparator did not choose -- cannot mark it incomplete.
     """
     return any(
-        _pair_is_incomplete(harness_result, scenario_name, arm)
-        for scenario_name in scenario_names
+        _pair_is_incomplete(harness_result, scenario.name, arm)
+        for scenario in harness_result.scenarios
         for arm in (consensus_arm, *baseline_arms)
     )
 
 
-def _headline_uplift(
-    harness_result: HarnessResult,
-    contract: MetricContract,
-    consensus_arm: str,
-    baseline_arms: Sequence[str],
-    scenario_names: Sequence[str],
-) -> float:
-    """Relative % improvement of consensus over baseline on the headline primary KPI.
+def _estimate_interval(
+    contract: MetricContract, subject: Sequence[float], comparator: Sequence[float]
+) -> Interval | None:
+    """The contract's ``1 - alpha`` interval on ``mean(comparator - subject)``, or ``None``.
 
-    The headline number is the relative percentage change (:func:`relative_pct_change`)
-    of the consensus arm's mean over the baseline arm's mean on the contract's headline
-    primary KPI — the *first* declared primary KPI — pooled across every scenario, in
-    percentage points (the unit :data:`uplift.uplift_floor.UPLIFT_FLOOR` is expressed
-    in). It is oriented by the KPI's improvement direction so a positive headline always
-    means SYNAPSE is better: for a higher-is-better KPI the raw relative change is used
-    directly; for a lower-is-better KPI it is negated (a lower consensus value is an
-    improvement, so it reports as a positive uplift).
+    ``None`` is the honest state when no interval can be estimated (no paired replicate, a
+    non-finite difference, an overflow, a degenerate bootstrap that does not bracket its own
+    point): the caller then records no verdict, and the artifact names the absence (I-7).
     """
-    if not contract.primary_kpis:
-        return 0.0
-    kpi = next(iter(contract.primary_kpis))
-    direction = contract.primary_kpis[kpi]
-    consensus = _pooled_samples(harness_result, [consensus_arm], scenario_names, kpi)
-    baseline = _pooled_samples(harness_result, baseline_arms, scenario_names, kpi)
-    rel = relative_pct_change(consensus, baseline)
-    return rel if direction is Direction.HIGHER_IS_BETTER else -rel
+    try:
+        return contract.interval(subject, comparator)
+    except (IntervalUnavailableError, OverflowError) as error:
+        logger.warning("uplift_interval_unavailable", reason=f"{type(error).__name__}: {error}")
+        return None
 
 
 def assemble_uplift_result(
@@ -937,77 +1142,108 @@ def assemble_uplift_result(
 ) -> UpliftResult:
     """Assemble the :class:`~uplift.interfaces.UpliftResult` from a harness run (task 10.1).
 
-    Applies the pre-registered metric contract's decision rule *exactly as declared*
-    (R3.7) — via :meth:`MetricContract.classify` — to classify each ``(scenario,
-    primary KPI)`` pair into exactly one :class:`~uplift.interfaces.Outcome` (R4.3),
-    consensus arm versus the pooled baseline arm(s). Every executed scenario is
-    reported with no outcome-based filtering (R4.4). Every reported non-primary KPI is
-    labelled secondary (R3.8). The all-wins self-scrutiny warning is emitted iff every
-    classified pair is ``SYNAPSE_WINS`` (R4.5). If any scenario could not complete for
-    an arm the result is marked ``incomplete`` and the affected pair is *never* credited
-    to SYNAPSE — an incomplete pair resolves to ``TIE_INCONCLUSIVE`` (R4.7). The
-    :class:`~uplift.fidelity.FidelityReport` is attached so the headline number carries
-    its KL value, threshold comparison, and confidence annotation (R5.2/R5.6); when no
-    report is supplied it is read from the live C34 gauge.
+    Applies the pre-registered metric contract's decision rule *exactly as declared* (R3.7).
+    Under Metric_Contract v2 (task 29.4) that rule is the four-valued interval rule on the
+    committed objective:
+
+    * **The headline** is ``fmean`` over every paired ``(scenario, replicate)`` of
+      ``comparator objective - subject objective`` -- objective units, positive means the
+      subject is CHEAPER. It is computed ONCE, as the point of the contract's ``1 - alpha``
+      paired interval (``uplift.interval``), and ``headline_uplift`` is set from
+      ``interval.point``; nothing recomputes it. Replicates are paired on SEED
+      (:func:`_paired_objectives`), never on list position. **An incomplete contrast has no
+      headline**: no interval, no verdict, and the no-estimate sentinel, because its surviving
+      replicates are the self-selected sample the per-scenario rule already refuses.
+    * **The headline verdict** is :func:`uplift.contract.interval_verdict` of that interval
+      against the contract's materiality margin; ``per_kpi`` maps it onto ``Outcome``.
+    * **The per-(scenario, KPI) grid** classifies each scenario with the same interval rule
+      over that scenario's pairs (R4.3), with no outcome-based filtering (R4.4).
+
+    The comparator is resolved by :func:`_resolve_baseline_arms`: a named ``baseline_arm`` is
+    used alone; otherwise only declared ``baseline``-role arms are pooled, per replicate (AD-16).
+    ``incomplete`` is :func:`_contrast_is_incomplete` -- the subject and the comparator arms
+    only -- so a failed oracle replicate cannot break the consensus verdict; the whole-run
+    predicate is reported as ``run_incomplete``. An affected scenario pair is *never* credited
+    to SYNAPSE: it resolves to ``TIE_INCONCLUSIVE`` and marks the contrast incomplete (R4.7).
+    Every non-primary KPI is labelled secondary (R3.8); the all-wins self-scrutiny warning is
+    emitted iff every classified pair is ``SYNAPSE_WINS`` (R4.5). The
+    :class:`~uplift.fidelity.FidelityReport` is attached so the headline carries its KL
+    value, threshold comparison, and confidence annotation (R5.2/R5.6); when no report is
+    supplied it is read from the live C34 gauge.
+
+    Raises:
+        ValueError: If the comparator cannot be resolved (see :func:`_resolve_baseline_arms`).
     """
     scenario_names = [scenario.name for scenario in harness_result.scenarios]
     baseline_arms = _resolve_baseline_arms(harness_result, consensus_arm, baseline_arm)
-    primary_kpis = contract.primary_kpis
+    comparator = comparator_label(baseline_arm, baseline_arms)
+    kpi = contract.objective_kpi
 
-    incomplete = _run_is_incomplete(
-        harness_result, scenario_names, consensus_arm, baseline_arms
-    )
+    incomplete = _contrast_is_incomplete(harness_result, consensus_arm, baseline_arms)
+    run_incomplete = _run_is_incomplete(harness_result)
 
     # R4.3 / R4.4: classify every (scenario, primary KPI) pair exactly once, with no
     # outcome-based filtering.
     #
-    # R2.4 / R2.5 / R4.7 (design C5): a pair is *affected* when the consensus arm or any
-    # pooled baseline arm did not complete every replicate for that scenario — zero
-    # completed replicates (R2.4) **or** some-but-not-all replicates completed, i.e. at
-    # least one failed replicate (R2.5). An affected pair is never credited to SYNAPSE:
-    # it resolves to TIE_INCONCLUSIVE and marks the run incomplete, rather than being
-    # classified over the surviving completed samples (which could otherwise report
-    # SYNAPSE_WINS off a partial, self-selected sample).
+    # R2.4 / R2.5 / R4.7 (design C5): a pair is *affected* when the subject arm or any
+    # comparator arm did not complete every replicate for that scenario — zero completed
+    # replicates (R2.4) **or** some-but-not-all replicates completed, i.e. at least one
+    # failed replicate (R2.5). An affected pair is never credited to SYNAPSE: it resolves to
+    # TIE_INCONCLUSIVE and marks the contrast incomplete, rather than being classified over
+    # the surviving completed samples (which could otherwise report SYNAPSE_WINS off a
+    # partial, self-selected sample).
     per_scenario: dict[tuple[str, str], Outcome] = {}
     for scenario_name in scenario_names:
         affected = any(
             _pair_is_incomplete(harness_result, scenario_name, arm)
             for arm in (consensus_arm, *baseline_arms)
         )
-        for kpi in primary_kpis:
-            consensus = harness_result.kpi_samples(scenario_name, consensus_arm, kpi)
-            baseline = _pooled_samples(
-                harness_result, baseline_arms, [scenario_name], kpi
-            )
-            if affected or not consensus or not baseline:
-                per_scenario[(scenario_name, kpi)] = Outcome.TIE_INCONCLUSIVE
-                incomplete = True
-            else:
-                per_scenario[(scenario_name, kpi)] = contract.classify(
-                    consensus, baseline, kpi
-                )
-
-    # Per-primary-KPI verdict pooled across all scenarios (consensus vs baseline).
-    per_kpi: dict[str, Outcome] = {}
-    for kpi in primary_kpis:
-        consensus = _pooled_samples(harness_result, [consensus_arm], scenario_names, kpi)
-        baseline = _pooled_samples(harness_result, baseline_arms, scenario_names, kpi)
-        if not consensus or not baseline:
-            per_kpi[kpi] = Outcome.TIE_INCONCLUSIVE
+        subject, paired = _paired_objectives(
+            harness_result, [scenario_name], consensus_arm, baseline_arms
+        )
+        if affected or not subject:
+            per_scenario[(scenario_name, kpi)] = Outcome.TIE_INCONCLUSIVE
+            incomplete = True
         else:
-            per_kpi[kpi] = contract.classify(consensus, baseline, kpi)
+            per_scenario[(scenario_name, kpi)] = contract.classify(subject, paired, kpi)
+
+    # The headline: ONE interval over every paired replicate, and everything else read off it.
+    #
+    # NO HEADLINE ON AN INCOMPLETE CONTRAST (R2.4, R2.5, R4.7), and the reason is the per-scenario
+    # rule above, applied once more at the level it was missing from. A scenario whose subject or
+    # comparator lost a replicate is never classified over its surviving replicates, because those
+    # are a self-selected sample. Pooling those same survivors into the headline would re-admit,
+    # through the headline, the sample the grid refuses. It could also render `verdict: win` beside
+    # `incomplete: true`. So an incomplete contrast records no interval and no verdict, and its
+    # headline is the no-estimate sentinel. The artifact names both absences, and the per-arm
+    # aggregates still carry every completed replicate as description (I-7). Finding 96.
+    subject_all, paired_all = _paired_objectives(
+        harness_result, scenario_names, consensus_arm, baseline_arms
+    )
+    interval = (
+        _estimate_interval(contract, subject_all, paired_all)
+        if subject_all and not incomplete
+        else None
+    )
+    headline_verdict: HeadlineVerdict | None = (
+        contract.verdict(interval) if interval is not None else None
+    )
+    headline_uplift = interval.point if interval is not None else NO_ESTIMATE_HEADLINE
+    per_kpi: dict[str, Outcome] = {
+        kpi: (
+            outcome_for_verdict(headline_verdict)
+            if headline_verdict is not None
+            else Outcome.TIE_INCONCLUSIVE
+        )
+    }
 
     # R3.8: every reported KPI that is not a declared primary KPI is labelled secondary
     # (set difference over the KpiVector fields guarantees no KPI is labelled both).
-    secondary_kpis = [field for field in KPI_FIELDS if field not in primary_kpis]
+    secondary_kpis = [field for field in KPI_FIELDS if field not in contract.primary_kpis]
 
     # R4.5: warn iff every classified pair is SYNAPSE_WINS (an empty grid never warns).
     all_wins_warning = bool(per_scenario) and all(
         outcome is Outcome.SYNAPSE_WINS for outcome in per_scenario.values()
-    )
-
-    headline_uplift = _headline_uplift(
-        harness_result, contract, consensus_arm, baseline_arms, scenario_names
     )
 
     fidelity_report = fidelity if fidelity is not None else FidelityReport.from_metric()
@@ -1020,6 +1256,11 @@ def assemble_uplift_result(
         fidelity=fidelity_report,
         all_wins_warning=all_wins_warning,
         incomplete=incomplete,
+        interval=interval,
+        headline_verdict=headline_verdict,
+        materiality_margin=contract.materiality_margin,
+        comparator=comparator,
+        run_incomplete=run_incomplete,
     )
 
 
@@ -1046,12 +1287,14 @@ def uplift_exit_code(harness_result: HarnessResult) -> int:
 
 @dataclasses.dataclass(frozen=True)
 class UpliftReport:
-    """An uplift number co-located with its full twin-fidelity context (R5.2/R5.6).
+    """An uplift number co-located with its interval, verdict and fidelity context.
 
     Every uplift number the harness surfaces is rendered through this report so no
-    number is ever presented without its fidelity context: the KL-divergence value,
-    its comparison to the C34 re-sync threshold, the resulting confidence annotation,
-    and the fixed statement that the number's validity is bounded by twin fidelity.
+    number is ever presented without its context: the ``1 - alpha`` interval and the
+    four-valued verdict it licenses against the materiality margin (R7.14, R7.19), the
+    comparator it was measured against (AD-16), the KL-divergence value, its comparison to
+    the C34 re-sync threshold, the resulting confidence annotation, and the fixed statement
+    that the number's validity is bounded by twin fidelity (R5.2/R5.6).
     """
 
     headline_uplift: float
@@ -1061,9 +1304,17 @@ class UpliftReport:
     within_fidelity_bound: bool | None
     confidence: str
     fidelity_bound_statement: str
+    interval: Interval | None
+    headline_verdict: HeadlineVerdict | None
+    materiality_margin: float
+    comparator: str
 
     def render(self) -> str:
-        """Render the uplift number and its fidelity context as co-located text (R5.6)."""
+        """Render the uplift number and its full context as co-located text (R5.6, R7.14).
+
+        ASCII only (E-S13-07). The headline is in objective units under Metric_Contract v2:
+        it is a cost difference, comparator minus subject, never a percentage.
+        """
         if self.kl_divergence is None:
             kl = "unavailable"
             comparison = "unavailable"
@@ -1072,9 +1323,21 @@ class UpliftReport:
             comparison = (
                 "<= threshold" if self.within_fidelity_bound else "> threshold"
             )
+        if self.interval is None:
+            interval_line = (
+                "interval: unavailable -- no interval was estimated, so the headline is not "
+                "a measurement and no verdict is reported"
+            )
+        else:
+            interval_line = f"interval: {self.interval.describe()}"
+        verdict = self.headline_verdict if self.headline_verdict is not None else "unavailable"
         return (
-            f"headline uplift: {self.headline_uplift:+.4f} pp "
-            f"(primary KPI: {self.primary_kpi})\n"
+            f"headline uplift: {self.headline_uplift:+.4f} objective units "
+            f"(primary KPI: {self.primary_kpi}; comparator: {self.comparator}; "
+            "positive = subject cheaper)\n"
+            f"{interval_line}\n"
+            f"verdict: {verdict} (materiality margin {self.materiality_margin:.6g} objective "
+            f"units; {DECISION_RULE_TEXT})\n"
             f"twin KL divergence: {kl} "
             f"(C34 re-sync threshold {self.threshold:.6f}; {comparison})\n"
             f"fidelity confidence: {self.confidence}\n"
@@ -1085,11 +1348,11 @@ class UpliftReport:
 def build_uplift_report(
     result: UpliftResult, *, primary_kpi: str | None = None
 ) -> UpliftReport:
-    """Build the fidelity-co-located :class:`UpliftReport` for an assembled result (R5.6).
+    """Build the co-located :class:`UpliftReport` for an assembled result (R5.6, R7.14).
 
-    Pairs ``result.headline_uplift`` with its :class:`~uplift.fidelity.FidelityReport`
-    so the reported number carries the KL value, the threshold comparison, the
-    confidence annotation, and the fixed fidelity-bound statement in one place.
+    Pairs ``result.headline_uplift`` with its interval, verdict, comparator and
+    :class:`~uplift.fidelity.FidelityReport` so the reported number carries all of them, and
+    the fixed fidelity-bound statement, in one place.
     """
     fidelity = result.fidelity
     kpi = primary_kpi or (next(iter(result.per_kpi)) if result.per_kpi else "")
@@ -1106,6 +1369,10 @@ def build_uplift_report(
         within_fidelity_bound=within,
         confidence=fidelity.confidence,
         fidelity_bound_statement=fidelity.fidelity_bound_statement,
+        interval=result.interval,
+        headline_verdict=result.headline_verdict,
+        materiality_margin=result.materiality_margin,
+        comparator=result.comparator,
     )
 
 
@@ -1183,6 +1450,10 @@ class UpliftProvenance(BaseModel):
 
     Attributes:
         arms: The arm identifiers compared, sorted so the record is canonical.
+        arm_roles: The role each registered arm DECLARED (AD-16, task 15.5), so a reader
+            can see which arms a pooled comparator was allowed to absorb and that an oracle
+            was not among them. Required: a provenance record that cannot say what each arm
+            was for cannot say what its comparator was.
         replicates_per_arm: Replicates each arm ran (power evidence, INV-TW-002).
         revision: The source revision the harness ran at, or :data:`UNATTRIBUTED`.
         run_id: The run the measurement was taken in, or :data:`UNATTRIBUTED`.
@@ -1197,6 +1468,7 @@ class UpliftProvenance(BaseModel):
     model_config = ConfigDict(frozen=True, extra="forbid")
 
     arms: tuple[str, ...]
+    arm_roles: dict[str, ArmRole]
     replicates_per_arm: int = Field(ge=0)
     revision: str = Field(min_length=1)
     run_id: str = Field(min_length=1)
@@ -1217,6 +1489,31 @@ class UpliftProvenance(BaseModel):
         """Normalise to a sorted, de-duplicated *set* — R2.5/R2.8 compare seed sets."""
         return tuple(sorted(set(value)))
 
+    @field_validator("arm_roles")
+    @classmethod
+    def _canonical_roles(cls, value: dict[str, ArmRole]) -> dict[str, ArmRole]:
+        """Order the role map by arm name, as ``arms`` is sorted, so the in-memory record and
+        its canonical serialisation agree and two runs cannot differ by insertion order."""
+        return dict(sorted(value.items()))
+
+    @model_validator(mode="after")
+    def _every_arm_declares_one_role(self) -> UpliftProvenance:
+        """Refuse a role map that does not cover exactly the recorded arms (AD-16).
+
+        Every value is already one of :data:`~uplift.interfaces.ARM_ROLES`, because the
+        ``ArmRole`` literal refuses any other. This checks the keys: an arm recorded with no
+        role, or a role recorded for an arm the run did not register, is a comparator no reader
+        can reconstruct.
+        """
+        undeclared = sorted(set(self.arms) - set(self.arm_roles))
+        stray = sorted(set(self.arm_roles) - set(self.arms))
+        if undeclared or stray:
+            raise ValueError(
+                "arm_roles must name exactly the recorded arms: "
+                f"undeclared={undeclared}, unregistered={stray}"
+            )
+        return self
+
     @property
     def is_attributed(self) -> bool:
         """True iff both the revision and the run identifier were actually resolved.
@@ -1227,10 +1524,12 @@ class UpliftProvenance(BaseModel):
         return self.revision != UNATTRIBUTED and self.run_id != UNATTRIBUTED
 
     def matches(self, other: "UpliftProvenance") -> bool:
-        """True iff the revision, seed set, and arm identifiers agree (R2.8).
+        """True iff the revision, seed set, arm identifiers and arm roles agree (R2.8).
 
         Both records must be attributed: two ``"unknown"`` revisions are not an
-        agreement, they are two absences of evidence.
+        agreement, they are two absences of evidence. The roles are compared too (task
+        15.5): the same arms registered in different roles resolve a different comparator,
+        so the two records do not describe the same run.
         """
         return (
             self.is_attributed
@@ -1238,6 +1537,7 @@ class UpliftProvenance(BaseModel):
             and self.revision == other.revision
             and self.seeds == other.seeds
             and self.arms == other.arms
+            and self.arm_roles == other.arm_roles
         )
 
     def to_canonical_json(self) -> str:
@@ -1248,6 +1548,7 @@ class UpliftProvenance(BaseModel):
 def resolve_provenance(
     *,
     arms: Sequence[str],
+    arm_roles: Mapping[str, ArmRole],
     replicates_per_arm: int,
     seeds: Sequence[int],
     revision: str | None = None,
@@ -1260,10 +1561,12 @@ def resolve_provenance(
     to ``$SYNAPSE_RUN_ID`` then ``$GITHUB_RUN_ID``. When neither resolves, the field is
     recorded as :data:`UNATTRIBUTED` — the artifact then truthfully states that it
     cannot be attributed to a revision or a run, and R2.8 rejects it as proof, which is
-    the honest outcome for a run taken outside a CI job (I-7).
+    the honest outcome for a run taken outside a CI job (I-7). ``arm_roles`` is required
+    and never inferred: it is what the run's arms DECLARED (``HarnessResult.arm_roles``).
     """
     return UpliftProvenance(
         arms=tuple(arms),
+        arm_roles=dict(arm_roles),
         replicates_per_arm=replicates_per_arm,
         revision=(revision or "").strip() or _from_env(_REVISION_ENV_KEYS) or UNATTRIBUTED,
         run_id=(run_id or "").strip() or _from_env(_RUN_ID_ENV_KEYS) or UNATTRIBUTED,
@@ -1362,21 +1665,104 @@ class ArtifactFidelity(BaseModel):
         return value
 
 
-class UpliftArtifact(BaseModel):
-    """The persisted uplift result the C60 gate evaluates (R2.3).
+#: The one :class:`UpliftArtifact` schema this module writes and reads (AD-15, tasks 15.1 and
+#: 29.4). Version 2 carries the interval block, the four-valued verdict, the margin it was
+#: judged against, the comparator and the whole-run completeness flag. Every other version is
+#: REFUSED, never migrated: a version-1 headline was a fill-rate relative percentage and a
+#: version-2 headline is a cost difference in objective units, so reading one as the other is
+#: the unit confusion Metric_Contract v2 exists to remove.
+ARTIFACT_SCHEMA_VERSION: Final[Literal[2]] = 2
 
-    Construction enforces what R2.3 requires *of the artifact's shape*: a finite
-    numeric ``headline_uplift``, a boolean ``incomplete``, the replicates-per-arm count
-    agreeing with the provenance record, and an arm-aggregate digest that matches the
-    aggregates it is stored beside. What it deliberately does **not** enforce is that
-    the run was complete, powered, and within the fidelity bound — an artifact must be
-    able to state honestly that it was not (I-7). :attr:`is_proof_grade` and
-    :attr:`unavailable_reasons` are the predicates over that, and task 10.3's
-    ``admit()`` is their gate-side caller.
+
+class ArtifactInterval(BaseModel):
+    """The headline's ``1 - alpha`` interval as persisted (R6.13, R7.14, AD-15).
+
+    The SERIALISATION form of :class:`uplift.interval.Interval`, which is the computation form
+    (design E3.1): the seven field names are the same, and :meth:`from_interval` copies them
+    rather than recomputing anything. Admissibility is DELEGATED to ``Interval`` -- the
+    validator rebuilds one -- so this model refuses exactly what the estimator's record refuses
+    (a non-finite bound or point, ``low > high``, a point outside ``[low, high]``, fewer than
+    one resample) and cannot drift from it. It also refuses a non-finite ``alpha``, the one
+    field ``Interval`` leaves unchecked, because a non-finite number cannot survive the
+    canonical JSON round trip R7.17 requires; the estimator never produces one.
+
+    ``extra="forbid"``: an unknown key inside the block is a refusal, never a dropped field.
     """
 
     model_config = ConfigDict(frozen=True, extra="forbid")
 
+    method: str
+    alpha: float
+    resamples: int = Field(ge=1)
+    seed: int
+    low: float
+    high: float
+    point: float
+
+    @model_validator(mode="after")
+    def _admissible(self) -> ArtifactInterval:
+        if not math.isfinite(self.alpha):
+            raise ValueError(
+                f"interval alpha={self.alpha!r} is not finite, so it names no confidence level "
+                "and cannot survive the canonical round trip"
+            )
+        try:
+            self.to_interval()
+        except IntervalUnavailableError as error:
+            raise ValueError(f"inadmissible interval: {error}") from error
+        return self
+
+    @classmethod
+    def from_interval(cls, interval: Interval) -> ArtifactInterval:
+        """The persisted form of an estimated interval: its seven fields, copied by name."""
+        return cls.model_validate(interval.as_dict())
+
+    def to_interval(self) -> Interval:
+        """The computation form, so a reader re-derives a verdict from the record alone."""
+        return Interval(
+            method=self.method,
+            alpha=self.alpha,
+            resamples=self.resamples,
+            seed=self.seed,
+            low=self.low,
+            high=self.high,
+            point=self.point,
+        )
+
+
+class UpliftArtifact(BaseModel):
+    """The persisted uplift result the C60 gate evaluates (R2.3), schema version 2 (AD-15).
+
+    Construction enforces what R2.3 requires *of the artifact's shape*: a finite
+    numeric ``headline_uplift``, a boolean ``incomplete``, the replicates-per-arm count
+    agreeing with the provenance record, and an arm-aggregate digest that matches the
+    aggregates it is stored beside. Version 2 (tasks 15.1, 15.5, 29.4) adds the
+    ``1 - alpha`` :class:`ArtifactInterval`, the four-valued ``headline_verdict``, the
+    ``materiality_margin`` it was judged against, the ``comparator`` and ``run_incomplete``,
+    and construction pins them to one another:
+
+    * the headline IS the interval's point, compared exactly -- one number stored once, not a
+      second computation of it -- and with no interval it is :data:`NO_ESTIMATE_HEADLINE`;
+    * an interval and a verdict are recorded together or not at all, and the stored verdict is
+      RE-DERIVED from the interval and the margin by :func:`uplift.contract.interval_verdict`,
+      so a verdict the rule does not produce is refused rather than believed;
+    * the primary KPI is the committed objective, the margin is strictly positive and finite,
+      and the comparator is named.
+
+    What it deliberately does **not** enforce is that the run was complete, powered, and
+    within the fidelity bound -- an artifact must be able to state honestly that it was not
+    (I-7). :attr:`is_proof_grade` and :attr:`unavailable_reasons` are the predicates over that,
+    and task 10.3's ``admit()`` is their gate-side caller. ``incomplete`` is the CONTRAST
+    predicate; ``run_incomplete`` is recorded beside it and is never a reason, so a failed
+    oracle replicate cannot break the consensus contrast it is not part of (task 15.5).
+
+    The interval block never moves :attr:`arm_aggregates_digest`, which covers
+    :func:`canonical_arm_aggregates` only -- the property that makes AD-15 affordable.
+    """
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    schema_version: Literal[2]
     headline_uplift: float
     primary_kpi: str
     noise_tolerance_pp: float
@@ -1387,8 +1773,26 @@ class UpliftArtifact(BaseModel):
     replicates_per_arm: int = Field(ge=0)
     fidelity: ArtifactFidelity
     provenance: UpliftProvenance
+    interval: ArtifactInterval | None
+    headline_verdict: HeadlineVerdict | None
+    materiality_margin: float
+    comparator: str
+    run_incomplete: bool
     arm_aggregates: tuple[ArmAggregate, ...] = ()
     arm_aggregates_digest: str = ""
+
+    @field_validator("schema_version", mode="before")
+    @classmethod
+    def _version_two_only(cls, value: Any) -> Any:
+        """Refuse every schema but version 2, saying why; nothing is migrated (AD-15)."""
+        if type(value) is not int or value != ARTIFACT_SCHEMA_VERSION:
+            raise ValueError(
+                f"artifact schema_version {value!r} is not {ARTIFACT_SCHEMA_VERSION}: a "
+                "version-1 headline was a fill-rate relative percentage with no interval, a "
+                "version-2 headline is the committed objective's paired difference with its "
+                "1 - alpha interval, and one is never read as the other"
+            )
+        return value
 
     @model_validator(mode="before")
     @classmethod
@@ -1427,7 +1831,61 @@ class UpliftArtifact(BaseModel):
                 f"arm_aggregates_digest {self.arm_aggregates_digest!r} does not match "
                 f"the stored aggregates (recomputed {expected!r})"
             )
+        self._check_headline_contract()
         return self
+
+    def _check_headline_contract(self) -> None:
+        """The version-2 pins between the headline, its interval, its verdict and its margin.
+
+        Raises:
+            ValueError: On a primary KPI other than the objective, a margin that is not
+                strictly positive and finite, an unnamed comparator, an interval without a
+                verdict (or the reverse), a headline that is not the interval's point (or, with
+                no interval, not the no-estimate sentinel), or a stored verdict the rule does
+                not derive from the stored interval and margin.
+        """
+        if self.primary_kpi != OBJECTIVE_KPI:
+            raise ValueError(
+                f"primary_kpi must be {OBJECTIVE_KPI!r} under schema version "
+                f"{ARTIFACT_SCHEMA_VERSION}, got {self.primary_kpi!r}: the committed objective "
+                "is the sole primary KPI and every other KpiVector field is secondary (R7.19)"
+            )
+        if not math.isfinite(self.materiality_margin) or self.materiality_margin <= 0.0:
+            raise ValueError(
+                f"materiality_margin must be strictly positive and finite, got "
+                f"{self.materiality_margin!r}: against no positive margin every gain is a win"
+            )
+        if not self.comparator.strip():
+            raise ValueError(
+                "comparator must name the arm, or the pool, the headline was measured against"
+            )
+        if (self.interval is None) != (self.headline_verdict is None):
+            raise ValueError(
+                "an interval and a verdict are recorded together or not at all: interval is "
+                f"{'absent' if self.interval is None else 'present'}, headline_verdict is "
+                f"{self.headline_verdict!r}"
+            )
+        if self.interval is None and self.headline_uplift != NO_ESTIMATE_HEADLINE:
+            raise ValueError(
+                f"with no interval the headline must be the no-estimate sentinel "
+                f"{NO_ESTIMATE_HEADLINE!r}, got {self.headline_uplift!r}: a headline nobody "
+                "intervalled is not a measurement (I-7)"
+            )
+        if self.interval is not None:
+            if self.headline_uplift != self.interval.point:
+                raise ValueError(
+                    f"headline_uplift {self.headline_uplift!r} is not the interval's point "
+                    f"{self.interval.point!r}: the headline is that point, stored once"
+                )
+            derived = interval_verdict(
+                self.interval.low, self.interval.high, margin=self.materiality_margin
+            )
+            if self.headline_verdict != derived:
+                raise ValueError(
+                    f"stored headline_verdict {self.headline_verdict!r} is not what the rule "
+                    f"derives from interval [{self.interval.low!r}, {self.interval.high!r}] "
+                    f"against margin {self.materiality_margin!r}: {derived!r}"
+                )
 
     # -- honest classification (I-7) ----------------------------------------
     @property
@@ -1441,8 +1899,14 @@ class UpliftArtifact(BaseModel):
         reasons: list[str] = []
         if self.incomplete:
             reasons.append(
-                "run is incomplete: at least one (scenario, arm) pair did not complete "
-                "every replicate"
+                "contrast is incomplete: the subject or a comparator arm did not complete "
+                "every replicate of at least one scenario"
+            )
+        if self.interval is None:
+            reasons.append(
+                "no interval was estimated: the headline carries no 1 - alpha interval and no "
+                f"verdict, so its value {NO_ESTIMATE_HEADLINE!r} is a sentinel rather than a "
+                "measurement (R6.13, R7.14)"
             )
         if self.replicates_per_arm < MIN_POWERED_REPLICATES:
             reasons.append(
@@ -1472,9 +1936,11 @@ class UpliftArtifact(BaseModel):
     def to_payload(self) -> dict[str, Any]:
         """The plain JSON-able mapping this artifact serialises to.
 
-        This is exactly what :meth:`uplift.uplift_floor.PoweredProof.from_payload`
-        consumes: ``headline_uplift``, ``incomplete``, a top-level
-        ``replicates_per_arm``, and ``fidelity.within_fidelity_bound``.
+        :meth:`uplift.uplift_floor.PoweredProof.from_payload` consumes four keys of it:
+        ``headline_uplift``, ``incomplete``, a top-level ``replicates_per_arm``, and
+        ``fidelity.within_fidelity_bound``. It ignores the version-2 keys (``interval``,
+        ``headline_verdict``, ``materiality_margin``, ``comparator``, ``run_incomplete``,
+        ``schema_version``), so it reads none of the interval.
         """
         payload: dict[str, Any] = self.model_dump(mode="json")
         return payload
@@ -1526,8 +1992,12 @@ class UpliftArtifact(BaseModel):
         logger.info(
             "uplift_artifact_written",
             path=str(target),
+            schema_version=self.schema_version,
             headline_uplift=self.headline_uplift,
+            headline_verdict=self.headline_verdict,
+            comparator=self.comparator,
             incomplete=self.incomplete,
+            run_incomplete=self.run_incomplete,
             replicates_per_arm=self.replicates_per_arm,
             revision=self.provenance.revision,
             run_id=self.provenance.run_id,
@@ -1550,7 +2020,7 @@ def build_uplift_artifact(
     noise_tolerance_pp: float,
     harness_result: HarnessResult | None = None,
 ) -> UpliftArtifact:
-    """Assemble the persisted :class:`UpliftArtifact` for a completed run (R2.3).
+    """Assemble the persisted :class:`UpliftArtifact` for a completed run (R2.3, AD-15).
 
     ``provenance`` supplies the replicates-per-arm count, so the artifact's top-level
     ``replicates_per_arm`` and its provenance record can never disagree.
@@ -1560,10 +2030,19 @@ def build_uplift_artifact(
     per-``(scenario, arm)`` KPI aggregates are recorded and digested, giving R2.5 its
     byte-comparable surface; without it the aggregates are empty and the artifact
     carries the digest of an empty set rather than an unstated one.
+
+    Schema version 2: the interval (through :meth:`ArtifactInterval.from_interval`), the
+    headline verdict, the materiality margin, the comparator and ``run_incomplete`` are COPIED
+    from ``result``, never recomputed here, so the artifact's construction-time pins check the
+    assembly's own numbers against one another.
     """
     fidelity = result.fidelity
     aggregates = arm_aggregates(harness_result) if harness_result is not None else ()
+    interval = (
+        ArtifactInterval.from_interval(result.interval) if result.interval is not None else None
+    )
     return UpliftArtifact(
+        schema_version=ARTIFACT_SCHEMA_VERSION,
         headline_uplift=float(result.headline_uplift),
         primary_kpi=report.primary_kpi,
         noise_tolerance_pp=float(noise_tolerance_pp),
@@ -1578,19 +2057,28 @@ def build_uplift_artifact(
             fidelity_bound_statement=fidelity.fidelity_bound_statement,
         ),
         provenance=provenance,
+        interval=interval,
+        headline_verdict=result.headline_verdict,
+        materiality_margin=float(result.materiality_margin),
+        comparator=result.comparator,
+        run_incomplete=bool(result.run_incomplete),
         arm_aggregates=aggregates,
         arm_aggregates_digest=arm_aggregates_digest(aggregates),
     )
 
 
 __all__ = [
+    "ARTIFACT_SCHEMA_VERSION",
     "DEFAULT_CONSENSUS_ARM",
     "EXIT_NO_COMPLETED_RUN",
     "EXIT_SUCCESS",
     "KPI_FIELDS",
+    "NO_ESTIMATE_HEADLINE",
+    "POOLED_COMPARATOR_PREFIX",
     "UNATTRIBUTED",
     "ArmAggregate",
     "ArtifactFidelity",
+    "ArtifactInterval",
     "HarnessResult",
     "LoopConfig",
     "UpliftArtifact",
@@ -1605,7 +2093,9 @@ __all__ = [
     "build_uplift_report",
     "canonical_arm_aggregates",
     "canonical_json",
+    "comparator_label",
     "completed_run_count",
+    "registered_roles",
     "replicate_seed",
     "resolve_provenance",
     "run_closed_loop",

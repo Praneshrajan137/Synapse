@@ -1,191 +1,127 @@
-# SYNAPSE uplift proof -- the generating job for C60 (spec purpose-achievement-audit,
-# task 10.5; design AD-9 / CF-4; requirement R2.7).
+# SYNAPSE uplift measurement -- the generating jobs for C60 and for E3's controls, and E2b's
+# twin regret (purpose-achievement-audit task 10.5; decision-quality-proof tasks 10.3, 16.7,
+# 22.1; design AD-9 / CF-4; requirements R2.7, R6.11, R6.12, R7.1, R7.2, R7.15).
 #
-# The audit's single most load-bearing finding (R2) was that the C60 gate reported PASS
-# against a COMMITTED artifact carrying `{"headline_uplift": 0.0, "incomplete": true,
-# "fidelity": {"within_fidelity_bound": null}}`, and that no workflow anywhere ever ran
-# the harness that writes it. This workflow is the missing half: it RUNS the powered
-# counterfactual experiment and then asks the gate for a verdict.
+# LABEL-TRIGGERED, AND NOTHING ELSE STARTS A JOB HERE. One label per measurement:
+#   measure-twin-regret      -> twin-regret (E2b, one job per declared world cell)
+#   measure-uplift-controls  -> uplift-controls-negative (20 legs) and uplift-controls-positive,
+#                               then uplift-controls (the verdict over both)
+#   measure-uplift-proof     -> uplift-proof (E5, under the proof supervisor)
+# The nightly `schedule` is dropped by operator decision D12.2=a. `workflow_dispatch` is
+# removed because nothing here can use it: GitHub cannot dispatch a workflow absent from the
+# default branch (finding 23, `HTTP 404`), and every measurement attributes itself to the pull
+# request's head, which a dispatch does not carry. A label is visible on the PR, which makes the
+# operator's intent auditable in a way a dispatch is not.
 #
-# ONE JOB, ON PURPOSE (AD-9, CF-4, R2.7/R2.8).
-# Evidence generation and verdict share a single job so the artifact and the check
-# cannot come from different revisions or different runs. `scripts/audit/uplift_truth.py`
-# enforces that structurally rather than trusting this file:
+# EVIDENCE AND VERDICT SHARE ONE JOB (AD-9, CF-4, R2.7, R7.1). `uplift-proof` regenerates the
+# artifact and reads C60 from it in the same job. `scripts/audit/uplift_truth.py` enforces the
+# pairing rather than trusting this file: `--require-fresh-run` declares "the harness ran in
+# this job" (without it C60 is a SKIP, which R2.9 excludes from the PASS count); the artifact's
+# `revision`/`run_id` must equal this job's `SYNAPSE_REVISION`/`SYNAPSE_RUN_ID`; and
+# `artifacts/uplift/result.json` is git-ignored and uploaded, never committed (R2.8).
+# `SYNAPSE_REVISION` is the PR head because on a `pull_request` event `GITHUB_SHA` is a
+# synthetic merge commit in no branch's history, and every job checks out that same head
+# (finding 74), so the measured tree and the named tree are one tree by construction.
 #
-#   * `--require-fresh-run` is the caller declaring "I ran the harness in this run".
-#     Without it `admit()` returns the `skip` outcome, and R2.9 excludes a SKIP from the
-#     published PASS count. A SKIP is not a PASS (I-7).
-#   * The artifact's provenance record (`revision`, `run_id`) is compared against this
-#     job's `GITHUB_SHA` / `GITHUB_RUN_ID`, both of which GitHub sets for us. A stale or
-#     foreign artifact is inadmissible even if it is glowing.
-#   * `artifacts/uplift/result.json` is git-ignored (task 10.3 removed it from version
-#     control). An in-repo evidence path that no ignore rule covers is treated as read
-#     from version control and rejected outright, so the evidence is uploaded as a
-#     workflow artifact below and never committed.
+# C60 IS REPORTED, NOT JUDGED, BY DECISION 1=a. C60 reaches `proven` only with
+# `within_fidelity_bound is True`, which only the live divergence monitor sets and no CI job
+# runs (finding 71). `uplift_truth --check` would therefore exit 2 on every run -- a red decided
+# before the run starts, which is the defect this spec exists to remove. Its report mode exits 0
+# once the verdict is written, and the verdict travels in the uploaded JSON (`exit_code`,
+# `outcome`, `reasons`). Nothing in this file claims C60 proven, and a crash still fails the job.
 #
-# NO DISCARDING CONSTRUCTS ANYWHERE IN THIS FILE (I-7, R1.8).
-# No `|| true`, no `|| echo`, no `; exit 0`, no `continue-on-error`. Every gate step
-# exits with the exit code of the command it runs. A harness that cannot run is a
-# NON-PASSING result, never a skipped-and-green one:
+# NO DISCARDING CONSTRUCTS (I-7, R1.8, R7.15). No `|| true`, `|| echo`, `; exit 0` or
+# `continue-on-error`, and every step that pipes sets `pipefail`. `blocking-steps.yaml` declares
+# every step of the four new jobs, so `workflow_shape_truth` fails a future swallow by
+# declaration rather than by this paragraph.
 #
-#   * the harness step fails            -> the verdict step does not run, the job is red;
-#   * the consensus arm cannot be stood up in this environment -> the CLI records every
-#     consensus run as a failed run and marks the result `incomplete: true`, and the gate
-#     exits 2 (EXIT_UNAVAILABLE) on it, so the job is red;
-#   * the run exceeds `timeout-minutes`  -> the job is red.
+# NEVER RUN LOCALLY (I-0). Every job here drives the real SimPy twin at `MIN_SCENARIOS` scale, a
+# category-4 workload, so Linux CI is the only locus (R5.32, R6.12). A job that proves not to
+# fit its bound escalates to the GCP window (ADR-036), never to fewer replicates (INV-TW-002).
 #
-# In none of those cases does the repository get to claim a proven uplift.
-#
-# NEVER RUN LOCALLY (I-0, `.kiro/steering/local-compute-budget.md`).
-# A fully-powered proof is 4 adversarial scenarios x 5 arms x 1000 replicates per arm,
-# each replicate a closed loop over the real SimPy twin. That is the single most
-# expensive workload in this repository and `MIN_SCENARIOS`-scale runs are forbidden on
-# the development laptop. This workflow exists precisely to hold that workload. Its
-# wall-clock cost has therefore never been measured locally; if a run proves not to fit
-# inside the hosted-runner job limit, the escalation path is the GCP runner (cd-gcp.yml,
-# ADR-036 window) -- not a reduced `--smoke` run dressed up as a proof.
+# NOT REQUIRED CHECKS, AND NOT ABLE TO BE. A required status must report on every pull request
+# to `main`; these report only on the label event that names them. `required-checks.yaml` files
+# the four new jobs under `ineligible` as `conditioned-off-pull-request`, so the gap is declared
+# rather than invisible (R7.10); `twin-regret` still owns no entry (conflict G).
 name: SYNAPSE Uplift Proof
 
 on:
-  schedule:
-    # Nightly, 03:00 UTC (08:30 IST). Deliberately clear of the Sunday 02:00 UTC
-    # mutation sweep (mutation.yml) and the Monday 07:00 UTC reconciliation read, so the
-    # three long jobs do not contend for the runner queue.
-    - cron: "0 3 * * *"
-  workflow_dispatch:
-    # A JOB SELECTOR, BECAUSE A BARE DISPATCH IS NOT AFFORDABLE (decision-quality-proof
-    # checkpoint A). This block used to be `workflow_dispatch: {}`, and with two jobs in the
-    # file a bare dispatch ran BOTH -- spending up to ~350 minutes of runner time on
-    # `uplift-proof` for an operator who wanted `twin-regret`, and `uplift-proof` cannot
-    # produce an admissible artifact until E3/E5 anyway, so the spend bought nothing.
-    #
-    # Checkpoint A dispatches `twin-regret` alone. It is a decision gate that can end the
-    # spec, so it has to be cheap enough to re-run when a measurement needs repeating; a
-    # once-per-six-hours event is not a gate anybody will exercise twice.
-    #
-    # `default: both` is deliberate: it preserves the previous behaviour exactly, so nothing
-    # that dispatched this workflow before now does something different, and the `schedule`
-    # trigger is unaffected regardless (see each job's `if:`, which short-circuits on
-    # `github.event_name`).
-    inputs:
-      job:
-        description: "Which job to run. 'both' is the previous behaviour and the schedule's."
-        required: false
-        default: both
-        type: choice
-        options:
-          - both
-          - uplift-proof
-          - twin-regret
   pull_request:
-    # THE ON-DEMAND MECHANISM THAT ACTUALLY WORKS FROM A FEATURE BRANCH
-    # (decision-quality-proof finding 23).
+    # THE ON-DEMAND MECHANISM THAT WORKS FROM A FEATURE BRANCH (finding 23). A same-repo PR runs
+    # the workflow as defined in its own head, so no copy on `main` is needed; `truth-gates.yml`
+    # is likewise absent from `main` and runs on every PR, which is the empirical proof rather
+    # than an inference.
     #
-    # `workflow_dispatch` cannot reach this file from `feat/decision-quality-proof`.
-    # `gh workflow run uplift.yml --ref feat/decision-quality-proof` returns
-    # `HTTP 404: workflow uplift.yml not found on the default branch`. `--ref` selects which
-    # ref's CODE runs; it does not make a workflow dispatchable. GitHub requires the file on
-    # the default branch first, and `origin/main` carries 14 workflow files of which this is
-    # not one. So checkpoint A -- a gate that can END this spec -- had no way to run at all.
-    #
-    # `pull_request` has no such requirement: a same-repo PR runs the workflow as defined in
-    # its own head. `truth-gates.yml` is likewise absent from `main` and runs on every PR,
-    # which is the empirical proof that this works rather than an inference.
-    #
-    # `types: [labeled]` AND NOTHING ELSE, which is the whole point. Specifying `types`
-    # replaces the default `[opened, synchronize, reopened]`, so this trigger does NOT fire
-    # on pushes. A run happens only when a label is added, and each job's `if:` decides
-    # whether anything executes. An unrelated label creates a run in which every job is
-    # skipped, which costs no runner minutes.
-    #
-    # REJECTED ALTERNATIVES, recorded because each looked cheaper than it was:
-    #   * Land this file on `main` as-is. `uplift-proof` cannot produce an admissible
-    #     artifact until E3/E5 and this file's own header says an incomplete run exits 2 and
-    #     turns the job RED -- so the nightly would manufacture a permanent red on `main`
-    #     that means nothing. A gate with a foreordained verdict is the exact failure this
-    #     spec exists to remove; installing a second one while repairing the first would be
-    #     incoherent.
-    #   * Land it on `main` with the schedule stripped. Works, and gives correct provenance,
-    #     but diverges `main` from this branch on a workflow file and spends a change to the
-    #     shared default branch to buy a capability this branch can grant itself.
-    #   * Land only `regenerate-truth-docs.yml` on `main`. Unblocks task 26.2 -- whose
-    #     precondition (track A's margin commit) is itself blocked, so it buys nothing yet.
-    #   * A `push:` trigger on a magic branch prefix. Gives a real head SHA rather than a
-    #     merge SHA, but litters the remote with throwaway branches and hides the operator's
-    #     intent in a ref name instead of showing it on the PR.
-    #
-    # This trigger does NOT make any job here eligible to be a required status check.
-    # Eligibility needs a job that reports on EVERY pull request; `twin-regret` fires only
-    # when labelled and carries a per-job `if:`. `required-checks.yaml`'s `ineligibleEntry`
-    # enum has no member describing "label-conditioned", and `required_checks_truth`
-    # validates that declared jobs resolve rather than that the file is complete, so no entry
-    # is owed (conflict G).
+    # `types: [labeled]` AND NOTHING ELSE. Specifying `types` replaces the default
+    # `[opened, synchronize, reopened]`, so a push never starts a run here. Each job's `if:`
+    # selects its own label, and an unrelated label produces a run in which every job skips.
     types: [labeled]
     branches: [main]
 
 permissions:
   contents: read
 
-concurrency:
-  # Never two powered runs at once: they would write the same artifact path and each
-  # would be evaluating evidence the other was overwriting. `cancel-in-progress: false`
-  # because a run this expensive should finish and report rather than be discarded --
-  # and an abandoned run reports nothing, which is not a pass either.
-  #
-  # LEFT AT WORKFLOW SCOPE ON PURPOSE, and the consequence is recorded rather than removed.
-  # Because the group covers the whole workflow, a `twin-regret` dispatch that lands while a
-  # scheduled run is in flight QUEUES behind it rather than running beside it. Moving the
-  # group to job scope would let them run concurrently, but it would also stop being one
-  # group for two dispatches of `uplift-proof` under different input values -- and the
-  # guarantee this key exists for is "never two powered runs at once", which is worth more
-  # than saving an operator a wait. The nightly window is 03:00 UTC; outside it a dispatch
-  # starts immediately.
-  group: uplift-proof
-  cancel-in-progress: false
+# NO WORKFLOW-LEVEL `concurrency`, DELIBERATELY. Every label event on the PR starts a run, and a
+# workflow-wide group holds at most one PENDING run: an unrelated label added while a four-hour
+# proof was in flight would cancel a queued controls run. Each job therefore owns a group keyed
+# by job, pull request and matrix leg, with `cancel-in-progress: false`, so a repeat of one
+# measurement on one PR queues behind the running one instead of overlapping it, and different
+# measurements never wait for each other. A matrix job's key carries its leg: a group shared by
+# the legs would let one leg run and cancel the queued others.
 
 env:
   PYTHONPATH: "."
 
 jobs:
+  # =====================================================================================
+  # uplift-proof -- E5, the powered contrast (decision-quality-proof task 22.1; R7.1, R7.2)
+  # =====================================================================================
+  # E5 IS ONE CELL AND ONE CONTRAST (decision D12.2=a): the primary cell with NO SHOCK, the
+  # consensus arm against the tuned control E (`tuned_static`) -- a claim about the Tier-2
+  # pathway only.
+  #
+  # ONE JOB WITH PARALLEL WORKERS, NOT A REPLICATE-BLOCK MATRIX (task 22.1's re-scope).
+  # Unshocked, the projected cost is about 2 core-hours (B-prime: 2.16 s per replicate-arm over
+  # 24 h; the cost probe: 0.047 s per Tier-2 decision) -- a projection, not a measurement of
+  # this job. A per-shard split would also be refused by the harness's INV-TW-002 guard
+  # (n >= 1000 per run), which is not bypassed.
+  #
+  # THE SUPERVISOR NAMES HOW THE RUN ENDED (R7.2): `failed_to_start`, `exited_nonzero`,
+  # `exceeded_wall_clock` or `no_artifact`, each with its own message and exit status, or
+  # `completed` only when the command exited 0 AND wrote `result.json` in this run. Its 13500 s
+  # bound sits inside `timeout-minutes: 240`, so an overrun is named by the supervisor rather
+  # than by GitHub. The 15 minutes between the two must hold checkout, setup and the install:
+  # an install slower than that lets the job timeout pre-empt the supervisor, and the run is then
+  # red with no status record -- non-passing, but unnamed.
   uplift-proof:
-    name: Powered uplift harness + C60 verdict (one job -- shared run)
+    name: E5 powered uplift contrast + C60 report (one job - shared run)
     runs-on: ubuntu-latest
-    # AN ALLOW-LIST, AND IT WAS A DENY-LIST UNTIL FINDING 23. The previous form led with
-    # `github.event_name != 'workflow_dispatch'`, which was correct while the only other
-    # trigger was `schedule`: on `schedule` there are no inputs at all, so a guard written
-    # only against `inputs.job` would silently disable the scheduled proof -- a job that stops
-    # running is indistinguishable from a job that passes, which is the failure I-7 exists to
-    # prevent.
-    #
-    # That intent is preserved and the MECHANISM is inverted, because the deny-list form is
-    # fail-OPEN against a new trigger. Adding `pull_request` above would have made
-    # `github.event_name != 'workflow_dispatch'` true on every label event and fired THIS job
-    # -- ~350 minutes, on a run that cannot produce an admissible artifact until E3/E5. Naming
-    # the events that may start this job means a future trigger cannot enable it by accident,
-    # which for the most expensive workload in the repository is the correct direction to
-    # fail. `schedule` is named explicitly, so the nightly is protected by declaration rather
-    # than by a double negative.
-    #
-    # `pull_request` IS DELIBERATELY ABSENT, for a second reason beyond cost. On a
-    # `pull_request` event `GITHUB_SHA` is the synthetic MERGE commit, not the head. This
-    # job's gate compares the artifact's recorded `revision` against `GITHUB_SHA` to reject
-    # stale or foreign evidence, so a `pull_request`-triggered powered proof would be
-    # provenance-inadmissible by construction. `twin-regret` carries no such gate, which is
-    # why the label mechanism is safe there and would not be safe here.
-    #
-    # This is a SELECTOR and not a `continue-on-error`: when the job runs, every step's exit
-    # status still gates it.
     if: >-
-      github.event_name == 'schedule'
-      || (github.event_name == 'workflow_dispatch'
-      && (inputs.job == 'both' || inputs.job == 'uplift-proof'))
-    # Just inside the hosted-runner job ceiling. A timeout is a failed job, which is the
-    # honest outcome for a measurement that did not complete (I-7); it is not a partial
-    # result the gate may read.
-    timeout-minutes: 350
+      github.event_name == 'pull_request'
+      && github.event.label.name == 'measure-uplift-proof'
+    concurrency:
+      group: uplift-proof-${{ github.event.pull_request.number }}
+      cancel-in-progress: false
+    timeout-minutes: 240
+    env:
+      SYNAPSE_REVISION: ${{ github.event.pull_request.head.sha }}
+      SYNAPSE_RUN_ID: ${{ github.run_id }}
 
     steps:
       - uses: actions/checkout@v4
+        with:
+          # Finding 74: measure the PR head, the commit SYNAPSE_REVISION names.
+          ref: ${{ github.event.pull_request.head.sha }}
+
+      - name: Disclose the revision under measurement (attribution, not a gate)
+        # First after checkout, so a run that fails still records which revision failed. It
+        # asserts nothing, and its exit status propagates like every other step's.
+        run: |
+          echo "event=${{ github.event_name }}"
+          echo "github.sha=${{ github.sha }} (synthetic merge commit, not measured)"
+          echo "measured_revision=${SYNAPSE_REVISION}"
+          echo "run_id=${SYNAPSE_RUN_ID}"
+          echo "pull_request=${{ github.event.pull_request.number }}"
 
       - name: Set up Python 3.11
         uses: actions/setup-python@v5
@@ -194,13 +130,13 @@ jobs:
           cache: "pip"
 
       - name: Install dependencies
-        # Same dependency closure as ci.yml::uplift-verify, and for the same reason:
-        # `uplift.consensus_arm.build_consensus_arm` assembles all eight real agent A2A
-        # handlers plus the twin handler behind an in-process transport and a real
-        # ConsensusProtocol. A missing agent dependency does not crash the run -- it
-        # degrades the consensus arm to the honest-failure stub, which marks the result
-        # incomplete and makes the gate exit 2. Installing the full closure is what keeps
-        # a dependency gap from being reported as "no uplift measurable".
+        # THE FULL CLOSURE, NOT TWIN-REGRET'S THIN ONE. `uplift.consensus_arm` assembles all
+        # eight real agent A2A handlers plus the twin handler behind an in-process transport and
+        # a real ConsensusProtocol, and a missing agent dependency does not crash that assembly:
+        # it degrades the arm to the honest-failure stub, so every consensus replicate fails and
+        # the result is incomplete. The thin closure would make E5 a measurement of the stub.
+        # Same closure as `ci.yml::uplift-verify` and `uplift-cost-probe.yml`, which time the
+        # real arm.
         run: |
           pip install -r packages/requirements.txt -r packages/requirements-dev.txt
           pip install -e packages/
@@ -211,36 +147,49 @@ jobs:
           pip install -r agents/requirements-sprint3.txt
           pip install "starlette>=0.37.2,<0.38.0"
 
-      - name: Run the powered uplift harness (writes the C60 evidence)
-        # `--full` pins replicates per arm to
-        # `digital_twin.simulation.monte_carlo.MIN_SCENARIOS` (1000), which is the same
-        # number the gate independently enforces as
-        # `uplift.uplift_floor.MIN_POWERED_REPLICATES`. The literal is NOT restated here:
-        # a hardcoded count in the workflow is exactly the doc-vs-gate drift R7 reports,
-        # and a count that silently fell below the floor would make every run
-        # inadmissible. `--output` is the CLI's real flag for the artifact path and points
-        # at the canonical location `scripts/audit/uplift_truth.RESULT_ARTIFACT` reads.
-        run: python -m uplift.cli --full --output artifacts/uplift/result.json
+      - name: Run E5 under the proof supervisor (R7.1, R7.2)
+        id: e5
+        # `--full` pins replicates per arm to `MIN_SCENARIOS` (1000), the floor the gate enforces
+        # as `MIN_POWERED_REPLICATES`; the literal is not restated here. The supervisor refuses to
+        # start if `result.json` already exists (a file this run did not write cannot evidence
+        # it), kills the command's whole process group at the bound, writes
+        # `supervisor-status.json` as canonical JSON, and exits 0 only for `completed`.
+        run: |
+          mkdir -p artifacts/uplift
+          python -m uplift.proof_supervisor --wall-clock-seconds 13500 \
+            --expect-artifact artifacts/uplift/result.json \
+            --status-out artifacts/uplift/supervisor-status.json \
+            -- python -m uplift.cli --full --suite e5-primary --baseline-arm tuned_static \
+            --duration-hours 24 --output artifacts/uplift/result.json
 
-      - name: C60 uplift gate -- verdict from THIS run's evidence
-        # Exit 0 proven (is_proven_uplift holds against UPLIFT_FLOOR) / 1 regression
-        # (a powered, complete, in-bound measurement below the floor) / 2 unavailable
-        # (everything else, including an incomplete or under-powered run and any
-        # fidelity that is not demonstrably within bound). Only exit 0 is a pass.
-        run: python -m scripts.audit.uplift_truth --check --require-fresh-run
+      - name: Report C60 from this run's evidence (report mode - unavailable by decision 1=a)
+        # Runs whenever E5 ran, completed or not, because an inadmissible artifact's reasons are
+        # exactly what a reader needs; not after a cancellation, and not when E5 never started.
+        # `--require-fresh-run` makes this the generating job; without `--check` the gate REPORTS
+        # and exits 0 once its verdict is written (decision 1=a, see the header). The second
+        # command asserts the emitted file is one JSON document, so the `emits:` declaration in
+        # `blocking-steps.yaml` is checked in the run rather than trusted.
+        if: ${{ !cancelled() && steps.e5.outcome != 'skipped' }}
+        run: |
+          set -o pipefail
+          python -m scripts.audit.uplift_truth --json --require-fresh-run \
+            | tee artifacts/uplift/uplift-truth.json
+          python -c 'import json, sys; json.load(open(sys.argv[1], encoding="utf-8"))' \
+            artifacts/uplift/uplift-truth.json
 
-      - name: Upload the uplift evidence
-        # `if: always()` so a red run keeps its evidence -- an incomplete or
-        # out-of-fidelity artifact is precisely the artifact worth reading. This does not
-        # discard any exit status: the two gate steps above already decided the job's
-        # conclusion. `if-no-files-found: warn` because a missing artifact means the
-        # harness never got that far, and the harness step has already failed the job for
-        # that reason; failing the upload too would only bury the real cause.
+      - name: Upload the proof evidence
+        # `if: always()` so a red run keeps its evidence: an incomplete artifact and the named
+        # state are precisely what is worth reading. This discards no exit status -- the steps
+        # above already decided the job -- and `warn` because a missing file means an earlier
+        # step failed for its own, already-named reason.
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: uplift-result
-          path: artifacts/uplift/result.json
+          name: uplift-proof
+          path: |
+            artifacts/uplift/result.json
+            artifacts/uplift/supervisor-status.json
+            artifacts/uplift/uplift-truth.json
           if-no-files-found: warn
           retention-days: 90
 
@@ -249,10 +198,9 @@ jobs:
   # twin-regret -- E2b's (s, S) regret measurement (decision-quality-proof task 10.3)
   # =====================================================================================
   # ITS OWN JOB, not a step inside `uplift-proof`, and that is deliberate. The two-pass
-  # foresight protocol DOUBLES the twin cost of every replicate, so folding it into a job
-  # already sized at 350 minutes against a ~360-minute ceiling would make one measurement
-  # able to time out the other -- and a timeout is a red job, so the powered uplift proof
-  # would fail for a reason that has nothing to do with uplift.
+  # foresight protocol DOUBLES the twin cost of every replicate, so folding it into the proof's
+  # job would make one measurement able to time out the other -- and a timeout is a red job, so
+  # the powered uplift proof would fail for a reason that has nothing to do with uplift.
   #
   # WHY THIS CANNOT RUN LOCALLY (I-0). A scenario sweep at `MIN_SCENARIOS` scale
   # (`digital_twin/simulation/monte_carlo.py:22`, `MIN_SCENARIOS = 1000`) is a category-4
@@ -303,28 +251,26 @@ jobs:
           - lead_time_high
           - amplitude_quarter
           - amplitude_half
-    # Same allow-list shape as `uplift-proof` and the same reason for inverting it, plus one
-    # disjunct that job must never have: the LABEL path, which is how checkpoint A actually
-    # runs (finding 23). `schedule` is named explicitly so the nightly is protected by
-    # declaration rather than by a double negative.
+    # THE LABEL PATH, which is how checkpoint A runs (finding 23). The `schedule` and
+    # `workflow_dispatch` disjuncts this condition used to carry went with those triggers
+    # (decision D12.2=a; see the header); the label condition itself is unchanged.
     #
-    # WHY THE LABEL IS SAFE HERE AND NOT ON `uplift-proof`. That job's gate compares the
-    # artifact's `revision` against `GITHUB_SHA`, which on a `pull_request` event is the
-    # synthetic merge commit -- so a labelled powered proof would be provenance-inadmissible
-    # by construction. This job carries no such gate: it MEASURES and does not judge, and its
-    # artifact is read by a human at checkpoint A. The merge-SHA subtlety is therefore not a
-    # correctness problem here, but it IS an attribution problem, and the disclosure step
-    # below closes it rather than leaving the reader to know about it.
+    # WHY THE MERGE SHA IS NOT A CORRECTNESS PROBLEM HERE. This job carries no provenance gate:
+    # it MEASURES and does not judge, and its artifact is read by a human at checkpoint A. The
+    # merge-SHA subtlety is therefore an attribution problem, closed by checking out the head
+    # (finding 74) and by the disclosure step below.
     #
-    # To run it: add the `measure-twin-regret` label to the pull request. Remove it afterwards
-    # so the next label event does not re-measure. The label is visible on the PR, which makes
-    # the operator's intent auditable in a way a dispatch is not.
+    # To run it: add the `measure-twin-regret` label to the pull request. Remove it afterwards:
+    # this condition reads the PR's CURRENT labels, so while it stays attached every later label
+    # event re-measures. The label is visible on the PR, which makes the operator's intent
+    # auditable in a way a dispatch is not.
     if: >-
-      github.event_name == 'schedule'
-      || (github.event_name == 'workflow_dispatch'
-      && (inputs.job == 'both' || inputs.job == 'twin-regret'))
-      || (github.event_name == 'pull_request'
-      && contains(github.event.pull_request.labels.*.name, 'measure-twin-regret'))
+      github.event_name == 'pull_request'
+      && contains(github.event.pull_request.labels.*.name, 'measure-twin-regret')
+    concurrency:
+      # Per cell, for the reason the concurrency note above `env:` gives.
+      group: twin-regret-${{ github.event.pull_request.number }}-${{ matrix.cell }}
+      cancel-in-progress: false
     # Well under the ceiling: this measurement is far cheaper than the powered proof, and
     # sizing it honestly leaves the difference visible rather than reserving budget nobody
     # uses. A timeout is a failed job, which is the honest outcome for an incomplete
@@ -347,11 +293,11 @@ jobs:
         # branch's history, so a reader asking "which code produced this number?" would get a
         # commit they cannot find.
         #
-        # `github.event.pull_request.head.sha` is the real head on a labelled run and empty
-        # otherwise, so the fallback yields `github.sha` on `schedule` and `workflow_dispatch`
-        # where that is already the right answer. Checkpoint A can END this spec; the verdict
-        # it records must be attributable to a commit that exists -- the same concern task
-        # 17.7 gates mechanically for the powered proof.
+        # `github.event.pull_request.head.sha` is the real head on a labelled run, and the
+        # label is now the only trigger, so the `|| github.sha` fallback no longer selects
+        # anything. Checkpoint A can END this spec; the verdict it records must be attributable
+        # to a commit that exists -- the same concern task 17.7 gates mechanically for the
+        # powered proof.
         #
         # Disclosure only: it asserts nothing and gates nothing, and its exit status still
         # propagates like every other step in this file.
@@ -456,8 +402,8 @@ jobs:
         # catch this. Its `DISCARDING_CONSTRUCTS` is four literals -- `|| true`, `|| echo`,
         # `; exit 0`, bare `exit 0` -- and an unguarded pipeline is none of them, so a
         # declared-blocking step could discard its status with the gate reporting pass.
-        # `| tee` appears exactly ONCE in this workflow tree (this step), so the exposure is
-        # closed here; the gate gap is recorded for its owner rather than patched silently.
+        # Every step in this file that pipes sets `pipefail` first, so the exposure is closed
+        # here; the gate gap is recorded for its owner rather than patched silently.
         #
         # The replicate count is the one number here that is NOT yet committed to
         # policy.yaml, because R5.2's deferral covers the margin and not the sample size,
@@ -485,5 +431,230 @@ jobs:
         with:
           name: twin-regret-${{ matrix.cell }}
           path: artifacts/uplift/twin-regret-${{ matrix.cell }}.json
+          if-no-files-found: warn
+          retention-days: 90
+
+
+  # =====================================================================================
+  # uplift-controls-negative / uplift-controls-positive / uplift-controls -- E3's controls
+  # (decision-quality-proof task 16.7; R6.1, R6.2, R6.11, R6.12, R6.14, R6.15)
+  # =====================================================================================
+  # THE INSTRUMENT IS SHOWN ABLE TO SEE AN EFFECT BEFORE E5's NUMBER IS READ. Both controls run
+  # in the primary cell's world against one named comparator each, never the pooled default
+  # (R6.14), and each writes its own record, so the two contrasts are never classified under one
+  # contract instance. `uplift-controls` then writes the negative, positive and agreement records
+  # and the Power_Report from them.
+  #
+  # A FAILED CONTROL IS A RECORDED RESULT, NOT A RED JOB: `uplift.controls_run` exits 0 once it
+  # has written its record, whatever the verdict. A red job here means a measurement did not
+  # happen, and `uplift-controls` then does not run -- a verdict over a partial set of
+  # repetitions is the silent drop G5 forbids.
+  #
+  # TWIN-REGRET'S THIN INSTALL, NOT THE FULL CLOSURE: neither control runs the consensus arm (the
+  # negative control's arms are two copies of one comparator on disjoint seed sets; the positive
+  # control is arm O against arm E), and the thin closure is the one already proven to import
+  # `uplift` and drive the twin. That step's comment carries why each package is in it.
+  uplift-controls-negative:
+    name: E3 negative control - identical arms, disjoint seed sets [${{ matrix.repetition }}]
+    runs-on: ubuntu-latest
+    if: >-
+      github.event_name == 'pull_request'
+      && github.event.label.name == 'measure-uplift-controls'
+    concurrency:
+      group: >-
+        uplift-controls-negative-${{ github.event.pull_request.number }}-${{ matrix.repetition }}
+      cancel-in-progress: false
+    # A ceiling, not a measurement: one repetition is two arms at `MIN_SCENARIOS` replicates on
+    # the primary cell. A timeout is a failed job (I-7), never a partial record.
+    timeout-minutes: 90
+    strategy:
+      fail-fast: false
+      matrix:
+        # 0..19, written out so every leg is visible on the run page. The count is
+        # `negative_control.independent_seed_sets` in `digital_twin/simulation/policy.yaml`
+        # (20). That is a coupling, so `uplift-controls` re-reads the value and refuses a
+        # verdict unless exactly these repetitions arrived (G5).
+        repetition: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19]
+    env:
+      SYNAPSE_REVISION: ${{ github.event.pull_request.head.sha }}
+      SYNAPSE_RUN_ID: ${{ github.run_id }}
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+
+      - name: Disclose the revision under measurement (attribution, not a gate)
+        run: |
+          echo "event=${{ github.event_name }}"
+          echo "github.sha=${{ github.sha }} (synthetic merge commit, not measured)"
+          echo "measured_revision=${SYNAPSE_REVISION}"
+          echo "run_id=${SYNAPSE_RUN_ID}"
+          echo "repetition=${{ matrix.repetition }}"
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+
+      - name: Install dependencies
+        # Twin-regret's closure, verbatim.
+        run: |
+          pip install -r packages/requirements.txt
+          pip install -e packages/
+          pip install simpy numpy pyyaml "pydantic-settings>=2.2.0,<3.0" "scipy>=1.11,<2.0"
+
+      - name: Run one negative-control repetition (R6.1, R6.14, R6.15)
+        run: |
+          mkdir -p artifacts/uplift/controls
+          python -m uplift.controls_run negative --repetition "${{ matrix.repetition }}" \
+            --output "artifacts/uplift/controls/negative-${{ matrix.repetition }}.json"
+
+      - name: Upload the negative-control record
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: uplift-controls-negative-${{ matrix.repetition }}
+          path: artifacts/uplift/controls/negative-${{ matrix.repetition }}.json
+          if-no-files-found: warn
+          retention-days: 90
+
+  uplift-controls-positive:
+    name: E3 positive control - arm O against arm E on the primary cell
+    runs-on: ubuntu-latest
+    if: >-
+      github.event_name == 'pull_request'
+      && github.event.label.name == 'measure-uplift-controls'
+    concurrency:
+      group: uplift-controls-positive-${{ github.event.pull_request.number }}
+      cancel-in-progress: false
+    # A ceiling, not a measurement, sized like one negative repetition: two arms at
+    # `MIN_SCENARIOS` replicates on the primary cell.
+    timeout-minutes: 90
+    env:
+      SYNAPSE_REVISION: ${{ github.event.pull_request.head.sha }}
+      SYNAPSE_RUN_ID: ${{ github.run_id }}
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+
+      - name: Disclose the revision under measurement (attribution, not a gate)
+        run: |
+          echo "event=${{ github.event_name }}"
+          echo "github.sha=${{ github.sha }} (synthetic merge commit, not measured)"
+          echo "measured_revision=${SYNAPSE_REVISION}"
+          echo "run_id=${SYNAPSE_RUN_ID}"
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+
+      - name: Install dependencies
+        # Twin-regret's closure, verbatim.
+        run: |
+          pip install -r packages/requirements.txt
+          pip install -e packages/
+          pip install simpy numpy pyyaml "pydantic-settings>=2.2.0,<3.0" "scipy>=1.11,<2.0"
+
+      - name: Run the positive control (R6.2, R6.3, R6.14)
+        run: |
+          mkdir -p artifacts/uplift/controls
+          python -m uplift.controls_run positive --output artifacts/uplift/controls/positive.json
+
+      - name: Upload the positive-control record
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: uplift-controls-positive
+          path: artifacts/uplift/controls/positive.json
+          if-no-files-found: warn
+          retention-days: 90
+
+  uplift-controls:
+    name: E3 controls verdict - negative, positive, agreement and Power_Report
+    runs-on: ubuntu-latest
+    # Runs only when every leg succeeded: a failed leg skips this job, which is non-passing and
+    # leaves no verdict to misread.
+    needs: [uplift-controls-negative, uplift-controls-positive]
+    if: >-
+      github.event_name == 'pull_request'
+      && github.event.label.name == 'measure-uplift-controls'
+    concurrency:
+      group: uplift-controls-${{ github.event.pull_request.number }}
+      cancel-in-progress: false
+    # Reads 21 records and writes four, so the install dominates. A ceiling, not a measurement.
+    timeout-minutes: 20
+    env:
+      SYNAPSE_REVISION: ${{ github.event.pull_request.head.sha }}
+      SYNAPSE_RUN_ID: ${{ github.run_id }}
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+
+      - name: Disclose the revision under measurement (attribution, not a gate)
+        run: |
+          echo "event=${{ github.event_name }}"
+          echo "github.sha=${{ github.sha }} (synthetic merge commit, not measured)"
+          echo "measured_revision=${SYNAPSE_REVISION}"
+          echo "run_id=${SYNAPSE_RUN_ID}"
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+
+      - name: Install dependencies
+        # Twin-regret's closure, verbatim.
+        run: |
+          pip install -r packages/requirements.txt
+          pip install -e packages/
+          pip install simpy numpy pyyaml "pydantic-settings>=2.2.0,<3.0" "scipy>=1.11,<2.0"
+
+      - name: Download the control records
+        uses: actions/download-artifact@v4
+        with:
+          pattern: uplift-controls-*
+          path: artifacts/uplift/controls
+          merge-multiple: true
+
+      - name: Every declared negative repetition and the positive record arrived (G5 - BLOCKING)
+        # The 20-leg matrix SPLITS one control, so it is proven a partition here, predicted then
+        # measured (G5): the prediction is `independent_seed_sets` read from the committed policy,
+        # the measurement is the files that arrived. Equal counts plus every expected name present
+        # means exactly the declared set arrived -- a missing leg makes the count short and a
+        # stray file makes it long. A declared count of zero is refused, so this cannot hold over
+        # nothing.
+        run: |
+          set -euo pipefail
+          read_declared='import sys, yaml; print(yaml.safe_load(open(sys.argv[1], encoding="utf-8"))["negative_control"]["independent_seed_sets"])'
+          declared="$(python -c "$read_declared" digital_twin/simulation/policy.yaml)"
+          arrived="$(find artifacts/uplift/controls -maxdepth 1 -type f -name 'negative-*.json' | wc -l)"
+          printf 'negative repetitions: declared %s, arrived %s\n' "$declared" "$arrived"
+          test "$declared" -gt 0
+          test "$arrived" -eq "$declared"
+          for k in $(seq 0 $((declared - 1))); do
+            test -s "artifacts/uplift/controls/negative-${k}.json"
+          done
+          test -s artifacts/uplift/controls/positive.json
+
+      - name: Write the controls verdict, agreement record and Power_Report (R6.1-R6.5, R6.15)
+        run: |
+          python -m uplift.controls_run verdict --input-dir artifacts/uplift/controls \
+            --output-dir artifacts/uplift/controls-verdict
+
+      - name: Upload the controls verdict
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: uplift-controls
+          path: artifacts/uplift/controls-verdict/
           if-no-files-found: warn
           retention-days: 90

@@ -1902,8 +1902,9 @@ still pass after this design lands; several properties below exist to make sure 
 `tests/uplift/test_regret_decomposition_property.py` (62),
 `tests/verify/test_census_harvest_property.py` (63) and
 `tests/uplift/test_service_term_identity_property.py` (64) -- so this design's former 61-65 are
-renumbered 82-86 in `tasks.md`, which also declares 87-95. `tasks.md` is the authority for the
-mapping; the headings below keep their original numbers.
+renumbered 82-86 in `tasks.md`, which also declares 87-96 and 98 (98 is task 22.1's
+supervisor). `tasks.md` is the authority for the mapping; the headings below keep their original
+numbers.
 
 ### Index
 

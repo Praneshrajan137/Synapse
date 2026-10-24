@@ -254,6 +254,20 @@ pins:
     compare: numeric
     scale: identity
 
+  # R6's one introduced number (task 16.2): the positive control's pre-registered detection
+  # probability, which the Power_Report states its minimum detectable effect at (R6.5). The
+  # first pin whose document is a spec file. The requirement states the value on exactly one
+  # line, and `policy.yaml::positive_control` is its one committed home.
+  - id: positive-control-detection-probability
+    kind: threshold
+    required: true
+    document: .kiro/specs/decision-quality-proof/requirements.md
+    anchor: 'introduces is a detection probability of `(?P<value>[\d.]+)`'
+    source: digital_twin/simulation/policy.yaml
+    extractor: 'yaml_path:positive_control.detection_probability'
+    compare: numeric
+    scale: identity
+
   # ADR-055 D2.5. The materiality margin's DERIVATION RULE was pre-registered before
   # checkpoint A; its magnitude was instantiated afterwards from the measured
   # distribution (R5.2). Both pins are therefore live as of session 7: the rule's one
@@ -305,6 +319,38 @@ pins:
     anchor: 'derives `materiality_margin = (?P<value>[\d.]+)`'
     source: digital_twin/simulation/policy.yaml
     extractor: 'yaml_path:regret_objective.materiality_margin.value'
+    compare: numeric
+    scale: identity
+
+  # GRADUATED FROM `pending_pins:` IN SESSION 12 (task 26.5), in the data edit that precedes
+  # the second regeneration of CURRENT.md and README.md. Both pins land together, as their
+  # parked entries required: a reorder point pinned without its order-up-to level describes
+  # half a policy. The parking reason is now met: they waited on that regeneration so C56
+  # would not move for two causes in one diff, and C56's row carries no pin count, so landing
+  # them before the regeneration changes no projected byte. The anchors were probed on both
+  # sides as pure functions first: doc `50` / src `50` and doc `100` / src `100`, each on
+  # exactly one line (ADR-055:412 and :416). The ratchet judgement is unchanged: `s` and `S`
+  # are policy PARAMETERS of the control arm, not thresholds a gate is judged against, so
+  # neither carries a ratchets.json entry (AD-13).
+  - id: comparator-reference-reorder-point
+    kind: threshold
+    required: true
+    document: docs/adr/ADR-055-twin-decision-relevance.md
+    # `reorder point` rather than a bare `s`: the anchor must match EXACTLY ONE line, and a
+    # one-letter token would match D2.5's `(s, S)` prose in several places.
+    anchor: 'reference arm''s reorder point `s = (?P<value>[\d.]+)`'
+    source: digital_twin/simulation/policy.yaml
+    extractor: 'yaml_path:comparator.reference_policy.reorder_point_s'
+    compare: numeric
+    scale: identity
+
+  - id: comparator-reference-order-up-to
+    kind: threshold
+    required: true
+    document: docs/adr/ADR-055-twin-decision-relevance.md
+    anchor: 'reference arm''s order-up-to level `S = (?P<value>[\d.]+)`'
+    source: digital_twin/simulation/policy.yaml
+    extractor: 'yaml_path:comparator.reference_policy.order_up_to_S'
     compare: numeric
     scale: identity
 
@@ -377,75 +423,9 @@ pending_pins:
   # order that matters (document first, because no cheap gate can see that side), and the
   # probe was validated against the unamended document before its verdict was trusted.
 
-  # ---------------------------------------------------------------------------
-  # DRAFTED AND PARKED IN SESSION 5 (conflict M's repair, conflict N's correction).
-  #
-  # `digital_twin/simulation/policy.yaml`'s own contract 2 says "Every value here is
-  # PINNED in infrastructure/quality/doc-number-pins.yaml", and session 5 committed two
-  # new values there: the reference arm's `(s, S)` levels. So two pins are owed.
-  #
-  # THEY ARE PARKED FOR THE REASON THE ENTRY ABOVE IS PARKED, and the precedent is
-  # deliberate rather than convenient. Landing a pin adds a claim to `doc_truth`'s set,
-  # which can move C56, whose PASS/FAIL/SKIP status sits inside the counts `ledger_gen`
-  # and `readme_gen` project into docs/state/CURRENT.md and README.md. A SECOND
-  # REGENERATION IS ALREADY OWED for an unrelated reason -- session 4 measured that
-  # `ledger_gen` projects a top-level execution in which C56 is evaluated while C56 reads
-  # the README `readme_gen` rewrites AFTERWARDS, so the committed repair order is
-  # inverted -- and landing these two pins now would compound that with a second cause,
-  # making the next regeneration's diff describe two changes at once. Parking keeps the
-  # six cheap gates at their known expected values, so `pin_extractor_truth` stays at 14
-  # declared and a deviation in the closing sweep remains a signal rather than noise.
-  #
-  # THE ANCHORS EXIST ALREADY, which is what makes this parking different from the entry
-  # above. That pin was parked because ADR-055 D2.5 stated no literal to match; these two
-  # anchors match lines the session-5 D2.5 amendment lands in the same commit as the
-  # values. So both graduate on a single data edit with no document work outstanding --
-  # they wait on the regeneration, not on a missing sentence.
-  #
-  # NO ratchets.json ENTRY IS OWED FOR EITHER, and the absence is a judgement rather
-  # than an omission. A ratchet asserts a monotone better-direction. `s` and `S` are
-  # policy PARAMETERS of the control arm, not thresholds a gate is judged against:
-  # raising `S` is not "safer" than lowering it, it is a different incumbent. This is
-  # the same reasoning ratchets.json's own `$note_on_absent_siblings` records for the
-  # two regret weights, and inventing a direction here would be fabrication (AD-13).
-  - id: comparator-reference-reorder-point
-    kind: threshold
-    required: true
-    document: docs/adr/ADR-055-twin-decision-relevance.md
-    # `reorder point` rather than a bare `s`: the anchor must match EXACTLY ONE line, and a
-    # one-letter token would match D2.5's `(s, S)` prose in several places. The value sits
-    # INSIDE backticks, matching the `materiality-margin-derived-value` sibling's style --
-    # and this was probed against the document before the pin was written, because the first
-    # draft placed the backtick before `s` instead of after `point`, which matched ZERO lines.
-    # Zero matches is a non-maskable `skip` for a `required: true` pin, so it would have taken
-    # C56 to SKIP while `pin_extractor_truth` reported green (finding 20's mechanism).
-    anchor: 'reference arm''s reorder point `s = (?P<value>[\d.]+)`'
-    source: digital_twin/simulation/policy.yaml
-    extractor: 'yaml_path:comparator.reference_policy.reorder_point_s'
-    compare: numeric
-    scale: identity
-    activates_after: >-
-      the second regeneration of docs/state/CURRENT.md and README.md through
-      regenerate-truth-docs.yml -- the one already owed for the inverted
-      `ledger_gen`/`readme_gen` order. Both this entry and its sibling below move into
-      `pins:` in the same data edit, because they were committed in the same change and
-      splitting them would make the count move twice for one cause. The ADR-055 D2.5
-      amendment their anchors match landed in session 5, in the same commit as the
-      values, per D2.5's rule that an amendment lands BEFORE the run judged against it.
-
-  - id: comparator-reference-order-up-to
-    kind: threshold
-    required: true
-    document: docs/adr/ADR-055-twin-decision-relevance.md
-    anchor: 'reference arm''s order-up-to level `S = (?P<value>[\d.]+)`'
-    source: digital_twin/simulation/policy.yaml
-    extractor: 'yaml_path:comparator.reference_policy.order_up_to_S'
-    compare: numeric
-    scale: identity
-    activates_after: >-
-      the same data edit as `comparator-reference-reorder-point` above. See that entry
-      for the reasoning; the two are a pair and neither is meaningful alone, because a
-      reorder point pinned without its order-up-to level describes half a policy.
+  # The `comparator-reference-*` pair parked here in session 5 GRADUATED INTO `pins:` in
+  # session 12 (task 26.5). Their reasoning now sits beside the live entries, which is
+  # where a reader who finds the pins will look.
 
 # ---------------------------------------------------------------------------
 # Known drift at the commit that introduced this file.

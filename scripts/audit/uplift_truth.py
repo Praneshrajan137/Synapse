@@ -322,7 +322,7 @@ def _read_artifact(artifact: Path) -> tuple["UpliftArtifact | None", str | None]
     if not path.is_file():
         return None, (
             f"no artifact at {display}: no uplift run wrote one in this job "
-            "(run `python -m uplift.cli --full --replicates "
+            "(run `python -m uplift.cli --full --n "
             f"{MIN_POWERED_REPLICATES}` first)"
         )
     try:
@@ -354,8 +354,21 @@ def _provenance_reasons(artifact: "UpliftArtifact", run: RunContext) -> tuple[st
 
     from uplift.harness import UpliftProvenance
 
+    # THE ARM SETS ARE COMPARED HERE, NOT THROUGH A RECORD BUILT OVER THE JOB'S ARMS (task 15.5).
+    # A provenance record now carries the role each arm declared, keyed by exactly its arms, and
+    # the gate is told at most the job's arm NAMES -- never their roles -- so it cannot build a
+    # record over them. The job-side record therefore adopts the artifact's arms and roles, and
+    # the arm sets are compared directly. The roles are adopted exactly as the arms and the seed
+    # set are when the caller states neither (no production caller does; see RunContext): the
+    # gate cannot know them independently, and `run_id` equality is what makes the artifact
+    # same-run. Building the record over the job's arms would refuse the construction and turn
+    # every attributed evaluation into a crash rather than a printed reason (I-7).
+    expected_arms = (
+        tuple(sorted(run.expected_arms)) if run.expected_arms is not None else recorded.arms
+    )
     expected = UpliftProvenance(
-        arms=run.expected_arms if run.expected_arms is not None else recorded.arms,
+        arms=recorded.arms,
+        arm_roles=recorded.arm_roles,
         replicates_per_arm=recorded.replicates_per_arm,
         revision=run.revision,
         run_id=run.run_id,
@@ -364,12 +377,12 @@ def _provenance_reasons(artifact: "UpliftArtifact", run: RunContext) -> tuple[st
     )
 
     reasons: list[str] = []
-    if not recorded.matches(expected):
+    if expected_arms != recorded.arms or not recorded.matches(expected):
         reasons.append(
             "provenance does not match the run performed in this job (R2.8): artifact "
             f"revision={recorded.revision!r} seeds={recorded.seeds} "
             f"arms={recorded.arms}; job revision={expected.revision!r} "
-            f"seeds={expected.seeds} arms={expected.arms}"
+            f"seeds={expected.seeds} arms={expected_arms}"
         )
     if recorded.run_id != run.run_id:
         reasons.append(

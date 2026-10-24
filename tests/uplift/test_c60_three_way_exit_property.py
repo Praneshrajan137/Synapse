@@ -35,6 +35,15 @@ headline is a regression below the floor. The mapping against a *non-zero* floor
 at the :func:`~scripts.audit.uplift_truth.verdict` level in
 ``test_uplift_truth_gate_property.py``, where the floor is a parameter.
 
+**Carried to the v2 artifact (decision-quality-proof task 15.1).** Every parseable case is a
+valid v2 artifact: a point-mass ``interval`` at the headline (the gate reads the headline,
+never the bounds), the verdict the committed rule derives from it, the committed
+materiality margin read from the contract, a pooled ``comparator`` and provenance
+``arm_roles``. A further class walks the shapes v2 refuses -- a proof-grade measurement
+relabelled version 1, an unknown key inside its interval block, a stored verdict its
+interval does not license, a headline off the interval's point, and a verdict left standing
+with no interval -- and each must be unavailable, never a pass.
+
 Every artifact is written under ``tmp_path``, so the repo's ``artifacts/uplift/result.json``
 path is never read or written. The property is pure and fast: no twin, no arm, no socket, $0.
 
@@ -46,6 +55,7 @@ import json
 import uuid
 from dataclasses import dataclass
 from pathlib import Path
+from typing import TYPE_CHECKING, Any, Final
 
 from hypothesis import given
 from hypothesis import strategies as st
@@ -57,19 +67,34 @@ from scripts.audit.uplift_truth import (
     EXIT_UNAVAILABLE,
     RESULT_ARTIFACT,
 )
+from uplift.contract import interval_verdict, load_contract
 from uplift.harness import (
+    ARTIFACT_SCHEMA_VERSION,
+    DEFAULT_CONSENSUS_ARM,
     UNATTRIBUTED,
     ArtifactFidelity,
+    ArtifactInterval,
     UpliftArtifact,
     UpliftProvenance,
+    comparator_label,
 )
+from uplift.interval import INTERVAL_SEED, METHOD, Interval
 from uplift.uplift_floor import MIN_POWERED_REPLICATES
+
+if TYPE_CHECKING:
+    from uplift.interfaces import ArmRole
 
 _EXIT_CODES = (EXIT_PASS, EXIT_REGRESSION, EXIT_UNAVAILABLE)
 
 # The identity the evaluating job declares; the artifact either matches it or does not.
 _REVISION = "0f1e2d3c4b5a"
 _RUN_ID = "run-20260101-01"
+
+#: The committed Metric_Contract v2. The margin and the objective KPI every artifact records
+#: are read through it, never written as literals.
+_CONTRACT = load_contract()
+_MARGIN: Final[float] = _CONTRACT.materiality_margin
+_ARMS: Final[tuple[str, ...]] = ("baseline-0", DEFAULT_CONSENSUS_ARM)
 
 
 # ---------------------------------------------------------------------------
@@ -94,6 +119,13 @@ class _Case:
         return path
 
 
+def _role(arm: str) -> ArmRole:
+    """The consensus arm is the subject; every other arm here is a declared baseline."""
+    if arm == DEFAULT_CONSENSUS_ARM:
+        return "consensus"
+    return "baseline"
+
+
 def _artifact(
     *,
     headline: float,
@@ -104,15 +136,37 @@ def _artifact(
     revision: str,
     run_id: str,
 ) -> bytes:
-    """Canonical bytes for a parseable artifact with the given honesty profile."""
+    """Canonical bytes for a parseable v2 artifact with the given honesty profile.
+
+    The interval is the point mass at ``headline``: the gate reads the headline through
+    ``PoweredProof`` and never the bounds, so the narrowest admissible interval keeps every
+    case about what the gate does read.
+    """
+    interval = ArtifactInterval.from_interval(
+        Interval(
+            method=METHOD,
+            alpha=_CONTRACT.alpha,
+            resamples=_CONTRACT.resamples,
+            seed=INTERVAL_SEED,
+            low=headline,
+            high=headline,
+            point=headline,
+        )
+    )
     return (
         UpliftArtifact(
+            schema_version=ARTIFACT_SCHEMA_VERSION,
             headline_uplift=headline,
-            primary_kpi="fill_rate",
+            primary_kpi=_CONTRACT.objective_kpi,
             noise_tolerance_pp=1.0,
             incomplete=incomplete,
             all_wins_warning=False,
             replicates_per_arm=replicates,
+            interval=interval,
+            headline_verdict=interval_verdict(interval.low, interval.high, margin=_MARGIN),
+            materiality_margin=_MARGIN,
+            comparator=comparator_label(None, [arm for arm in _ARMS if _role(arm) == "baseline"]),
+            run_incomplete=incomplete,
             fidelity=ArtifactFidelity(
                 kl_divergence=kl_divergence,
                 threshold=0.1,
@@ -121,7 +175,8 @@ def _artifact(
                 fidelity_bound_statement="bounded by twin fidelity",
             ),
             provenance=UpliftProvenance(
-                arms=("baseline-0", "consensus"),
+                arms=_ARMS,
+                arm_roles={arm: _role(arm) for arm in _ARMS},
                 replicates_per_arm=replicates,
                 revision=revision,
                 run_id=run_id,
@@ -140,6 +195,29 @@ def _json_bytes(obj: object) -> bytes:
 
 def _raw(text: str) -> bytes:
     return text.encode("utf-8")
+
+
+def _refused_shape(mutate: dict[str, object], *, inside: str | None = None) -> bytes:
+    """A proof-grade v2 measurement with one v2 shape obligation broken (task 15.1).
+
+    The base is the point mass at 0.5, which licenses a gain and never ``baseline_wins``
+    whatever the committed margin, so the stored ``baseline_wins`` below is always a verdict
+    the interval does not license.
+    """
+    payload: dict[str, Any] = json.loads(
+        _artifact(
+            headline=0.5,
+            replicates=MIN_POWERED_REPLICATES,
+            incomplete=False,
+            kl_divergence=0.02,
+            within=True,
+            revision=_REVISION,
+            run_id=_RUN_ID,
+        )
+    )
+    target: dict[str, Any] = payload if inside is None else payload[inside]
+    target.update(mutate)
+    return _json_bytes(payload)
 
 
 _positive = st.floats(min_value=1e-6, max_value=1e6, allow_nan=False, allow_infinity=False)
@@ -272,7 +350,22 @@ _unreadable = st.one_of(
     ),
 )
 
-_cases = st.one_of(_proven(), _not_proven(), _unreadable)
+# -- a proof-grade measurement in a shape v2 refuses: unavailable, never a pass ------
+_v2_refused = st.sampled_from(
+    [
+        ("version-1", _refused_shape({"schema_version": 1})),
+        ("interval-unknown-field", _refused_shape({"width": 0.0}, inside="interval")),
+        ("verdict-not-licensed", _refused_shape({"headline_verdict": "baseline_wins"})),
+        ("headline-off-the-interval-point", _refused_shape({"headline_uplift": 0.75})),
+        ("verdict-without-an-interval", _refused_shape({"interval": None})),
+    ]
+).map(
+    lambda case: _Case(
+        kind=f"v2-refused:{case[0]}", expected=EXIT_UNAVAILABLE, payload=case[1]
+    )
+)
+
+_cases = st.one_of(_proven(), _not_proven(), _unreadable, _v2_refused)
 
 
 # ---------------------------------------------------------------------------

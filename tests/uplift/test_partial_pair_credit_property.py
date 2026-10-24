@@ -19,6 +19,11 @@ credited to SYNAPSE.
 Synthetic ``HarnessResult`` / ``ScenarioRun`` data is constructed directly — no twin
 runs, no consensus assembly — so the property is pure, fast, and $0.
 
+Carried to Metric_Contract v2 and the v2 harness (decision-quality-proof tasks 29.4, 15.5):
+the judged KPI is the committed ``objective`` (a cost, so "strong" means cheap), every arm
+declares its role, and "the run is marked incomplete" is asserted on both predicates --
+``incomplete``, the consensus contrast, and ``run_incomplete``, the whole run.
+
 **Validates: Requirements 2.4, 2.5**
 """
 from __future__ import annotations
@@ -26,18 +31,17 @@ from __future__ import annotations
 from hypothesis import HealthCheck, given, settings
 from hypothesis import strategies as st
 
+from digital_twin.simulation.monte_carlo import ShockParams
 from uplift.contract import load_contract
 from uplift.fidelity import FidelityReport
 from uplift.harness import HarnessResult, aggregate_arm, assemble_uplift_result
 from uplift.interfaces import KpiVector, Outcome, Scenario, ScenarioRun
 
-from digital_twin.simulation.monte_carlo import ShockParams
-
-
-# The real, version-controlled metric contract: single primary KPI ``fill_rate``
-# (higher-is-better, Cohen's d MDE 0.2, Mann-Whitney U at alpha 0.05).
+# The real, version-controlled metric contract (v2): the sole primary KPI is the committed
+# objective, judged by the four-valued interval rule against the materiality margin.
 _CONTRACT = load_contract()
-_PRIMARY_KPI = "fill_rate"
+_PRIMARY_KPI = _CONTRACT.objective_kpi
+_MARGIN = _CONTRACT.materiality_margin
 _CONSENSUS_ARM = "consensus"
 _BASELINE_ARM = "baseline"
 
@@ -45,11 +49,17 @@ _BASELINE_ARM = "baseline"
 # C34 gauge (fidelity context is irrelevant to Property 5).
 _FIDELITY = FidelityReport(kl_divergence=0.02, threshold=0.1)
 
-# Replicate count per arm: large enough that a ~0.4 mean gap with tight within-arm
-# spread is Mann-Whitney significant with |d| far above the 0.2 MDE, so a *fully*
-# completed pair deterministically classifies SYNAPSE_WINS. That makes the affected
+# Replicate count per arm, kept from the v1 fixture: it bounds ``partial_failed``'s split
+# below. Under v2 a fully completed pair's paired difference is the same on every replicate,
+# so it deterministically classifies SYNAPSE_WINS at any count. That makes the affected
 # modes below adversarial: the completed consensus data always "looks" like a win.
 _N = 24
+
+# Objective levels (lower is better): a completed consensus replicate is four margins
+# cheaper than the baseline; failed ones carry a cost cheaper still.
+_CHEAP = 10.0
+_DEAR = _CHEAP + 4.0 * _MARGIN
+_TOO_GOOD = _CHEAP - 4.0 * _MARGIN
 
 # Modes with a KNOWN completeness state for the consensus pair.
 #   complete_win      -> control: all consensus replicates completed, clearly better
@@ -61,54 +71,56 @@ _AFFECTED_MODES = ("zero_all_failed", "zero_no_runs", "partial_failed")
 _ALL_MODES = _CONTROL_MODES + _AFFECTED_MODES
 
 
-def _kpi(fill_rate: float) -> KpiVector:
-    """A KpiVector varying only ``fill_rate``; the other fields are fixed constants."""
+def _kpi(objective: float) -> KpiVector:
+    """A KpiVector varying only ``objective``; the other fields are fixed constants."""
     return KpiVector(
-        fill_rate=fill_rate,
+        fill_rate=1.0,
         spoilage_rate=0.0,
         stockout_rate=0.0,
         avg_delivery_time_min=1.0,
         margin=1.0,
         co2_estimate=1.0,
+        avg_on_hand_units=1.0,
+        objective=objective,
     )
 
 
 def _series(base: float, n: int = _N) -> list[float]:
-    """A tight spread around ``base`` so a 0.4 mean gap is strongly significant."""
+    """A tight spread around ``base``, shared by both arms so paired differences are flat."""
     return [base + (i % 5) * 0.001 for i in range(n)]
 
 
-def _completed(arm: str, fill_rates: list[float]) -> list[ScenarioRun]:
+def _completed(arm: str, objectives: list[float]) -> list[ScenarioRun]:
     """Completed (non-failed) runs for ``arm``."""
     return [
-        ScenarioRun(arm=arm, seed=i, kpis=_kpi(fr), failed=False, error=None)
-        for i, fr in enumerate(fill_rates)
+        ScenarioRun(arm=arm, seed=i, kpis=_kpi(objective), failed=False, error=None)
+        for i, objective in enumerate(objectives)
     ]
 
 
-def _failed(arm: str, fill_rates: list[float]) -> list[ScenarioRun]:
+def _failed(arm: str, objectives: list[float]) -> list[ScenarioRun]:
     """Failed runs for ``arm``, carrying strong-looking (but uncreditable) KPIs."""
     return [
         ScenarioRun(
-            arm=arm, seed=1_000 + i, kpis=_kpi(fr), failed=True, error="injected failure"
+            arm=arm, seed=1_000 + i, kpis=_kpi(objective), failed=True, error="injected failure"
         )
-        for i, fr in enumerate(fill_rates)
+        for i, objective in enumerate(objectives)
     ]
 
 
 def _consensus_runs(mode: str, completed_count: int) -> list[ScenarioRun]:
     """The consensus-arm run list realising ``mode``'s completeness state."""
     if mode == "complete_win":
-        return _completed(_CONSENSUS_ARM, _series(0.9))
+        return _completed(_CONSENSUS_ARM, _series(_CHEAP))
     if mode == "zero_all_failed":
-        return _failed(_CONSENSUS_ARM, _series(0.99))
+        return _failed(_CONSENSUS_ARM, _series(_TOO_GOOD))
     if mode == "zero_no_runs":
         return []
     if mode == "partial_failed":
         # ``completed_count`` strong completed replicates plus the remainder failed:
         # some but not all replicates completed (R2.5).
-        completed = _completed(_CONSENSUS_ARM, _series(0.9, completed_count))
-        failed = _failed(_CONSENSUS_ARM, _series(0.99, _N - completed_count))
+        completed = _completed(_CONSENSUS_ARM, _series(_CHEAP, completed_count))
+        failed = _failed(_CONSENSUS_ARM, _series(_TOO_GOOD, _N - completed_count))
         return completed + failed
     raise ValueError(f"unknown mode {mode!r}")  # pragma: no cover
 
@@ -127,7 +139,7 @@ def _harness_result(grid: list[tuple[str, int]]) -> HarnessResult:
             Scenario(name=name, seed=index, shock=ShockParams(demand_multiplier=1.0))
         )
         runs_by_pair[(name, _CONSENSUS_ARM)] = _consensus_runs(mode, completed_count)
-        runs_by_pair[(name, _BASELINE_ARM)] = _completed(_BASELINE_ARM, _series(0.5))
+        runs_by_pair[(name, _BASELINE_ARM)] = _completed(_BASELINE_ARM, _series(_DEAR))
 
     arm_results = {
         pair: aggregate_arm(pair[1], runs) for pair, runs in runs_by_pair.items()
@@ -140,6 +152,7 @@ def _harness_result(grid: list[tuple[str, int]]) -> HarnessResult:
         results_path=None,
         scenarios=tuple(scenarios),
         arm_names=(_CONSENSUS_ARM, _BASELINE_ARM),
+        arm_roles={_CONSENSUS_ARM: "consensus", _BASELINE_ARM: "baseline"},
     )
 
 
@@ -161,7 +174,7 @@ def _grids(draw: st.DrawFn) -> list[tuple[str, int]]:
     return grid
 
 
-@settings(max_examples=120, deadline=None, suppress_health_check=[HealthCheck.too_slow])
+@settings(deadline=None, suppress_health_check=[HealthCheck.too_slow])
 @given(grid=_grids())
 def test_incomplete_or_partial_pairs_never_credited_to_synapse(
     grid: list[tuple[str, int]],
@@ -169,8 +182,10 @@ def test_incomplete_or_partial_pairs_never_credited_to_synapse(
     """Zero-completed or partially-failed consensus pairs -> incomplete + TIE, never a win."""
     result = assemble_uplift_result(_harness_result(grid), _CONTRACT, fidelity=_FIDELITY)
 
-    # The grid always contains at least one affected pair -> the whole run is incomplete.
+    # The grid always contains at least one affected pair -> the consensus contrast is
+    # incomplete, and so is the whole run.
     assert result.incomplete is True
+    assert result.run_incomplete is True
 
     for index, (mode, _count) in enumerate(grid):
         name = f"scenario-{index}-{mode}"

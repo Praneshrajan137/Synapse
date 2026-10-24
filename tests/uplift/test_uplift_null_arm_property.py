@@ -34,7 +34,9 @@ would be made to pass. The row's ``shipped`` block binds that bound to the live 
 ``uplift/cli.py::NOISE_TOLERANCE_PP``, and ``scripts/audit/ratchet_truth.py`` enforces
 the agreement (R7.8). Nothing in this file writes a tolerance literal;
 :func:`test_the_noise_tolerance_is_read_from_committed_configuration` asserts the two
-sources agree, so a tolerance quietly widened in either place is visible here.
+sources agree, so a tolerance quietly widened in either place is visible here. Under
+Metric_Contract v2 the headline it bounds is in objective units, not percentage points;
+the bound is applied unchanged.
 
 Deliberately **not** restated here
 ----------------------------------
@@ -64,21 +66,30 @@ Scope this property does **not** cover, stated plainly
 -----------------------------------------------------
 * **The replicate count is small and generated, never ``MIN_SCENARIOS``.** R2.6 states
   the experiment at ``MIN_POWERED_REPLICATES`` (1000) per arm and asks for a headline
-  whose 95% interval contains zero. **What the small count costs the claim:** no
-  interval is estimated here at all. With identical arms and shared replicate seeds the
-  two sample sets are *equal*, so the point estimate is exactly zero and there is no
-  sampling noise for an interval to bound -- which makes this a strictly stronger
-  statement about *this* configuration and a strictly weaker one about a powered run,
-  where the consensus arm is a genuinely different policy and the interval is the whole
-  question. Nothing here establishes that a powered 1000-replicate run of the real
-  Consensus_Arm reproduces the baseline within the tolerance; that measurement is owned
-  by ``.github/workflows/uplift.yml`` (task 10.5) and is forbidden on a dev box (I-0).
+  whose 95% interval contains zero. **What the small count costs the claim:** under
+  Metric_Contract v2 an interval *is* estimated here -- the paired bootstrap whose point
+  the headline is -- but with identical arms on shared replicate seeds every paired
+  difference is exactly zero, so the interval is the degenerate ``[0, 0]`` and its verdict
+  is ``inconclusive`` by construction. That cannot fail as a measure of noise (which is
+  why decision-quality-proof R6.1 was re-cut onto disjoint seed sets, finding 69); what it
+  does catch is an estimator or a pairing that cannot report zero, and the perturbation at
+  the end shows the same path reporting a non-zero headline and a different verdict. This
+  makes the test a strictly stronger statement about *this* configuration and a strictly
+  weaker one about a powered run, where the consensus arm is a genuinely different policy
+  and the interval is the whole question. Nothing here establishes that a powered
+  1000-replicate run of the real Consensus_Arm reproduces the baseline within the
+  tolerance; that measurement is owned by ``.github/workflows/uplift.yml`` (task 10.5) and
+  is forbidden on a dev box (I-0).
 * **The real Consensus_Arm is not exercised.** R2.6's experiment is "replace the
   Consensus_Arm with a copy of the Baseline_Arm", so the substituted arm is by
   construction a baseline; the eight-agent ``ConsensusProtocol`` is deliberately absent.
   The arm carries ``DEFAULT_CONSENSUS_ARM`` as its name, which is how result assembly
   identifies the consensus side, so the substitution reaches every code path the real
-  arm would.
+  arm would. It is registered under the ``consensus`` role and its copy under
+  ``baseline``, and the copy is NAMED as the comparator rather than pooled
+  (decision-quality-proof R6.14, AD-16): a negative control is a contrast between two
+  policies, and a pooled default would make its premise depend on which other arms happen
+  to be registered.
 * **The proof half is stipulated, not run.** The artifact this run honestly produces is
   under-powered, so ``is_proven_uplift`` would reject it for the power reason alone --
   a vacuous pass. To isolate R2.6's "SHALL NOT report a proven gain" clause, the
@@ -126,12 +137,14 @@ from uplift.harness import (
     assemble_uplift_result,
     build_uplift_artifact,
     build_uplift_report,
+    registered_roles,
     replicate_seed,
     resolve_provenance,
     run_closed_loop,
 )
 from uplift.interfaces import (
     ArmResult,
+    ArmSpec,
     DecisionPolicy,
     Direction,
     Outcome,
@@ -171,11 +184,14 @@ _REVISION: Final[str] = "prop16deadbeef"
 _RUN_ID: Final[str] = "prop16-local-run"
 _WRITTEN_AT: Final[str] = "2026-02-20T00:00:00Z"
 
-#: The two exact binary fractions used by the non-vacuity perturbation below. Chosen so
-#: the expected relative change is exactly +100.0 with no floating-point residue.
+#: The two exact binary fractions used by the non-vacuity perturbation below, written into
+#: the committed objective (the sole primary KPI under Metric_Contract v2). The headline is
+#: the mean paired objective difference, comparator minus subject, so the perturbed run's
+#: expected headline is exactly ``0.25 - 0.5 = -0.25`` objective units -- the perturbed
+#: consensus arm is the costlier one -- with no floating-point residue.
 _PERTURBED_BASELINE: Final[float] = 0.25
 _PERTURBED_CONSENSUS: Final[float] = 0.5
-_PERTURBED_HEADLINE_PP: Final[float] = 100.0
+_PERTURBED_HEADLINE: Final[float] = _PERTURBED_BASELINE - _PERTURBED_CONSENSUS
 
 
 # ---------------------------------------------------------------------------
@@ -234,8 +250,12 @@ TOLERANCE: Final[_CommittedTolerance] = _load_tolerance()
 # Generated configuration
 # ---------------------------------------------------------------------------
 @dataclasses.dataclass(frozen=True)
-class _ArmSpec:
-    """A pre-registered baseline policy, described so it can be built twice."""
+class _PolicySpec:
+    """A pre-registered baseline policy, described so it can be built twice.
+
+    Named ``_PolicySpec`` rather than ``_ArmSpec`` so it cannot be confused with
+    :class:`uplift.interfaces.ArmSpec`, the policy-plus-role registration it is built into.
+    """
 
     kind: str
     par_s: int
@@ -271,7 +291,7 @@ class _NullConfig:
     """One generated identical-arms experiment."""
 
     scenario: Scenario
-    arm: _ArmSpec
+    arm: _PolicySpec
     replicates: int
     loop: LoopConfig
     emission_factor: float
@@ -283,9 +303,9 @@ _multiplier = st.floats(
 
 
 @st.composite
-def _arm_specs(draw: st.DrawFn) -> _ArmSpec:
+def _policy_specs(draw: st.DrawFn) -> _PolicySpec:
     low = draw(st.integers(min_value=0, max_value=40))
-    return _ArmSpec(
+    return _PolicySpec(
         kind=draw(st.sampled_from(("par_level", "static_pricing"))),
         par_s=low,
         par_S=low + draw(st.integers(min_value=1, max_value=80)),
@@ -310,7 +330,7 @@ def _null_configs(draw: st.DrawFn) -> _NullConfig:
             ),
             cold_start=draw(st.booleans()),
         ),
-        arm=draw(_arm_specs()),
+        arm=draw(_policy_specs()),
         replicates=draw(st.integers(min_value=1, max_value=3)),
         loop=LoopConfig(
             duration_hours=draw(st.sampled_from((1.0, 2.0))), step_hours=1.0
@@ -327,36 +347,36 @@ def _null_configs(draw: st.DrawFn) -> _NullConfig:
 _BASELINE_ARM: Final[str] = "baseline-prop16"
 
 
-def _run_matrix(
-    config: _NullConfig, policies: tuple[DecisionPolicy, ...]
-) -> HarnessResult:
-    """Run one scenario x ``policies`` x ``replicates`` closed-loop matrix.
+def _run_matrix(config: _NullConfig, arms: tuple[ArmSpec, ...]) -> HarnessResult:
+    """Run one scenario x ``arms`` x ``replicates`` closed-loop matrix.
 
     Calls :func:`uplift.harness.run_closed_loop` directly with the same per-scenario
     replicate seed sequence for every arm (the attribution guarantee), which is the
     reduced-cost path ``uplift.cli`` uses in smoke mode. It deliberately bypasses the
     INV-TW-002 ``n >= MIN_SCENARIOS`` guard -- that guard is another property's subject,
-    and a powered run here is forbidden (I-0).
+    and a powered run here is forbidden (I-0). The role map is built by
+    :func:`uplift.harness.registered_roles`, the function that reduced path uses, so this
+    matrix and the CLI cannot disagree about what registering an arm means (AD-16).
     """
     seeds = [replicate_seed(config.scenario.seed, index) for index in range(config.replicates)]
     arm_results: dict[tuple[str, str], ArmResult] = {}
     runs_by_pair: dict[tuple[str, str], list[ScenarioRun]] = {}
     all_runs: list[ScenarioRun] = []
-    for policy in policies:
+    for spec in arms:
         runs = [
             run_closed_loop(
                 config.scenario,
-                policy,
+                spec.policy,
                 seed,
-                policy.name,
+                spec.name,
                 config.loop,
                 config.emission_factor,
             )
             for seed in seeds
         ]
-        pair = (config.scenario.name, policy.name)
+        pair = (config.scenario.name, spec.name)
         runs_by_pair[pair] = runs
-        arm_results[pair] = aggregate_arm(policy.name, runs)
+        arm_results[pair] = aggregate_arm(spec.name, runs)
         all_runs.extend(runs)
     return HarnessResult(
         arm_results=arm_results,
@@ -364,7 +384,8 @@ def _run_matrix(
         all_runs=all_runs,
         results_path=None,
         scenarios=(config.scenario,),
-        arm_names=tuple(policy.name for policy in policies),
+        arm_names=tuple(spec.name for spec in arms),
+        arm_roles=registered_roles(arms),
     )
 
 
@@ -389,12 +410,17 @@ def _with_headline_kpi(runs: list[ScenarioRun], value: float) -> list[ScenarioRu
 
 
 def _assemble(harness_result: HarnessResult) -> UpliftResult:
-    """Assemble under the pre-registered contract with fidelity held fixed."""
+    """Assemble under the pre-registered contract with fidelity held fixed.
+
+    The comparator is the baseline copy, NAMED rather than pooled (R6.14, AD-16), so the
+    contrast is between the two identical policies and nothing else.
+    """
     return assemble_uplift_result(
         harness_result,
         _CONTRACT,
         fidelity=_FIDELITY,
         consensus_arm=DEFAULT_CONSENSUS_ARM,
+        baseline_arm=_BASELINE_ARM,
     )
 
 
@@ -470,7 +496,9 @@ def test_identical_arms_measure_no_uplift(config: _NullConfig) -> None:
     assert consensus.name == DEFAULT_CONSENSUS_ARM
     assert baseline.name == _BASELINE_ARM
 
-    harness_result = _run_matrix(config, (consensus, baseline))
+    harness_result = _run_matrix(
+        config, (ArmSpec(consensus, "consensus"), ArmSpec(baseline, "baseline"))
+    )
     consensus_pair = (config.scenario.name, DEFAULT_CONSENSUS_ARM)
     baseline_pair = (config.scenario.name, _BASELINE_ARM)
     consensus_runs = harness_result.runs_by_pair[consensus_pair]
@@ -514,12 +542,23 @@ def test_identical_arms_measure_no_uplift(config: _NullConfig) -> None:
     result = _assemble(harness_result)
     assert math.isfinite(result.headline_uplift)
     assert abs(result.headline_uplift) <= TOLERANCE.bound, (
-        f"identical arms measured {result.headline_uplift} pp, outside the committed "
-        f"noise tolerance of {TOLERANCE.bound} pp ({RATCHET_ID})"
+        f"identical arms measured {result.headline_uplift} objective units, outside the "
+        f"committed noise tolerance of {TOLERANCE.bound} ({RATCHET_ID})"
     )
     # Stronger than the tolerance band, and true by construction: identical arms on
     # shared replicate seeds produce equal samples, so the point estimate is exact.
     assert result.headline_uplift == 0.0
+
+    # -- v2: the named copy was the comparator, and the interval contains zero --------
+    # Under Metric_Contract v2 the headline is the point of a paired interval; R2.6's own
+    # form is "an interval that contains zero", and the verdict it licenses is
+    # `inconclusive`. Degenerate at [0, 0] here (see the module docstring), but it must be
+    # ESTIMATED: a None interval would mean the estimator cannot report zero at all.
+    assert result.comparator == _BASELINE_ARM
+    assert result.interval is not None, "no interval was estimated over the completed pairs"
+    assert result.interval.point == result.headline_uplift
+    assert result.interval.low <= 0.0 <= result.interval.high
+    assert result.headline_verdict == "inconclusive"
 
     # -- no pair is credited to SYNAPSE ----------------------------------------------
     assert result.per_scenario, "no (scenario, KPI) pair was classified"
@@ -552,6 +591,7 @@ def test_identical_arms_measure_no_uplift(config: _NullConfig) -> None:
         report,
         resolve_provenance(
             arms=[consensus.name, baseline.name],
+            arm_roles=harness_result.arm_roles,
             replicates_per_arm=config.replicates,
             seeds=[config.scenario.seed],
             revision=_REVISION,
@@ -562,6 +602,8 @@ def test_identical_arms_measure_no_uplift(config: _NullConfig) -> None:
         harness_result=harness_result,
     )
     assert artifact.headline_uplift == 0.0
+    assert artifact.headline_verdict == "inconclusive"
+    assert artifact.comparator == _BASELINE_ARM
     assert artifact.noise_tolerance_pp == TOLERANCE.bound
     assert artifact.is_proof_grade is False
     assert any("powered" in reason for reason in artifact.unavailable_reasons), (
@@ -592,13 +634,16 @@ def test_identical_arms_measure_no_uplift(config: _NullConfig) -> None:
         results_path=None,
         scenarios=(config.scenario,),
         arm_names=(DEFAULT_CONSENSUS_ARM, _BASELINE_ARM),
+        arm_roles=harness_result.arm_roles,
     )
-    expected = (
-        _PERTURBED_HEADLINE_PP
-        if _HEADLINE_DIRECTION is Direction.HIGHER_IS_BETTER
-        else -_PERTURBED_HEADLINE_PP
-    )
-    assert _assemble(perturbed).headline_uplift == expected, (
+    # The committed objective is a cost (lower is better), so the headline is comparator
+    # minus subject in objective units: the perturbed consensus arm costs MORE, the
+    # headline is negative, and the interval -- degenerate at that one difference -- lies
+    # wholly below zero, so the verdict moves off `inconclusive` too.
+    assert _HEADLINE_DIRECTION is Direction.LOWER_IS_BETTER
+    perturbed_result = _assemble(perturbed)
+    assert perturbed_result.headline_uplift == _PERTURBED_HEADLINE, (
         "the headline did not move when the arms were made to differ, so the zero "
         "measured above is not evidence that the arms were identical"
     )
+    assert perturbed_result.headline_verdict == "baseline_wins"

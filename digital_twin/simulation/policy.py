@@ -38,6 +38,7 @@ __all__ = [
     "ReferencePolicySpec",
     "comparator_reference_policy",
     "comparator_restock_threshold",
+    "detection_probability",
     "load_policy",
     "materiality_margin",
     "materiality_margin_rule",
@@ -280,6 +281,37 @@ def negative_control_settings(path: Path = POLICY_PATH) -> tuple[int, float]:
     sets = int(require(document, "negative_control.independent_seed_sets", path=path))
     rate = float(require(document, "negative_control.max_proven_gain_rate", path=path))
     return sets, rate
+
+
+def detection_probability(path: Path = POLICY_PATH) -> float:
+    """The Power_Report's detection probability (R6, R6.5; task 16.2).
+
+    A PRE-REGISTERED TARGET carried from the blueprint, not a measurement: the probability at
+    which ``uplift/power.py`` states the minimum effect the harness detects. Refused, never
+    defaulted or coerced: a missing key, a value that is not a real number (a boolean or a
+    string included), and one outside the open interval ``(0, 1)``, which has no finite normal
+    quantile -- the quantity the Power_Report reads -- so no minimum detectable effect could
+    be stated against it.
+
+    Raises:
+        PolicyUnavailableError: On any of the three.
+    """
+    key = "positive_control.detection_probability"
+    raw = require(load_policy(path), key, path=path)
+    if isinstance(raw, bool) or not isinstance(raw, (int, float)):
+        raise PolicyUnavailableError(
+            f"{path.as_posix()} declares {key} as {raw!r}, which is not a real number. It is "
+            "not coerced: a probability the reader had to guess at is not the one committed"
+        )
+    # An integer is never inside (0, 1), so it is refused before any float conversion -- which
+    # also keeps an integer too large for a float from escaping as an OverflowError.
+    if isinstance(raw, int) or not 0.0 < raw < 1.0:
+        raise PolicyUnavailableError(
+            f"{path.as_posix()} declares {key} = {raw!r}, outside the open interval (0, 1): "
+            "a probability there has no finite normal quantile, so no minimum detectable "
+            "effect could be stated against it"
+        )
+    return float(raw)
 
 
 # ---------------------------------------------------------------------------

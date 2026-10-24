@@ -378,8 +378,8 @@ def test_a_raised_floor_is_backed_by_a_committed_powered_proof() -> None:
         "UPLIFT_FLOOR was raised above 0.0 with no readable proof artifact (R4.7)"
     )
     assert proof.supports(UPLIFT_FLOOR), (
-        f"committed proof (headline {proof.headline_uplift} pp over {proof.replicates} "
-        f"replicates/arm, incomplete={proof.incomplete}, "
+        f"committed proof (headline {proof.headline_uplift} objective units over "
+        f"{proof.replicates} replicates/arm, incomplete={proof.incomplete}, "
         f"within_fidelity_bound={proof.within_fidelity_bound}) does not support "
         f"UPLIFT_FLOOR={UPLIFT_FLOOR} (R4.7)"
     )
@@ -756,6 +756,10 @@ def test_reproduction_path_is_zero_cost_network_free_and_synthetic_only(tmp_path
     )
     if completed == 0:  # pragma: no cover — environment-dependent degradation
         assert payload["incomplete"] is True
+        # v2: with no consensus sample there is no paired interval, so there is no verdict
+        # to credit at all -- not a verdict defaulted to anything (I-7).
+        assert payload["interval"] is None
+        assert payload["headline_verdict"] is None
     else:
         assert all(
             run.kpis is not None
@@ -771,25 +775,52 @@ def test_c60_verification_path_is_network_free(tmp_path, monkeypatch) -> None:
     a bare ``headline_uplift``, so the fixture is a proof-grade
     :class:`~uplift.harness.UpliftArtifact` -- complete, powered at
     ``MIN_POWERED_REPLICATES``, within the twin fidelity bound, and attributed to the
-    evaluating run. The preserved claim is unchanged: verification touches no socket, no
-    paid client, and no real-data file.
+    evaluating run. Carried to the v2 artifact (decision-quality-proof tasks 15.1 and 29.4):
+    the headline is the point of an interval on the committed objective whose low bound
+    clears the materiality margin, so the stored verdict is the ``win`` the decision rule
+    re-derives, and the provenance declares every arm's role. The preserved claim is
+    unchanged: verification touches no socket, no paid client, and no real-data file.
     """
     from scripts.audit import uplift_truth
+    from uplift.contract import interval_verdict, load_contract
     from uplift.harness import (
+        ARTIFACT_SCHEMA_VERSION,
         ArtifactFidelity,
+        ArtifactInterval,
         UpliftArtifact,
         UpliftProvenance,
+        comparator_label,
     )
+    from uplift.interval import INTERVAL_SEED, METHOD
     from uplift.uplift_floor import MIN_POWERED_REPLICATES, UPLIFT_FLOOR
 
     revision, run_id = "c0ffee", "run-4242"
     monkeypatch.setenv("SYNAPSE_REVISION", revision)
     monkeypatch.setenv("SYNAPSE_RUN_ID", run_id)
 
+    # Read, never restated: the margin is the committed one the contract resolves, and the
+    # headline sits a full unit above both it and the floor, so the fixture is a v2 win and
+    # a proven gain under every reading the gate could apply.
+    contract = load_contract()
+    margin = contract.materiality_margin
+    headline = max(float(UPLIFT_FLOOR), margin) + 1.0
+    interval = ArtifactInterval(
+        method=METHOD,
+        alpha=contract.alpha,
+        resamples=contract.resamples,
+        seed=INTERVAL_SEED,
+        low=headline - 0.5,
+        high=headline + 0.5,
+        point=headline,
+    )
+    verdict = interval_verdict(interval.low, interval.high, margin=margin)
+    assert verdict == "win", verdict
+
     artifact = tmp_path / "result.json"
     UpliftArtifact(
-        headline_uplift=float(UPLIFT_FLOOR) + 1.0,
-        primary_kpi="fill_rate",
+        schema_version=ARTIFACT_SCHEMA_VERSION,
+        headline_uplift=headline,
+        primary_kpi=contract.objective_kpi,
         noise_tolerance_pp=1.0,
         incomplete=False,
         all_wins_warning=False,
@@ -803,12 +834,18 @@ def test_c60_verification_path_is_network_free(tmp_path, monkeypatch) -> None:
         ),
         provenance=UpliftProvenance(
             arms=("baseline-0", "consensus"),
+            arm_roles={"baseline-0": "baseline", "consensus": "consensus"},
             replicates_per_arm=MIN_POWERED_REPLICATES,
             revision=revision,
             run_id=run_id,
             seeds=(4001,),
             written_at="2026-01-01T00:00:00Z",
         ),
+        interval=interval,
+        headline_verdict=verdict,
+        materiality_margin=margin,
+        comparator=comparator_label(None, ["baseline-0"]),
+        run_incomplete=False,
     ).write(artifact)
 
     with _ZeroCostGuard() as guard:

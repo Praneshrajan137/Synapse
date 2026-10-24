@@ -418,6 +418,24 @@ negative_control:
   max_proven_gain_rate: 0.20
 
 # =======================================================================================
+# 3b. Positive-control detection probability (R6, R6.5; task 16.2)
+# =======================================================================================
+# A PRE-REGISTERED TARGET carried from the blueprint ("detects a >=X% effect with >=80%
+# power at N replicates", docs/decision-quality-proof-blueprint.md), NOT A MEASUREMENT.
+# It is the probability at which the Power_Report states the minimum effect the harness
+# detects (R6.5). Its reader is `policy.py::detection_probability`, which refuses a missing
+# key, a non-number and any value outside the open interval (0, 1); `uplift/power.py`
+# takes it as an input and names that reader as its source.
+#
+# R6.3's NUMERIC oracle tolerance is deliberately NOT committed here: the re-scope of
+# 2026-09-29 (ADR-055 D2.8) superseded it with a RULE, cross-instrument agreement
+# (`uplift/controls.py::AGREEMENT_RULE`), because no closed-form optimum exists for lost
+# sales with a lead time, so there is no distance to an optimum for a number to bound. The
+# pinned value R6.3 asks for is that rule, so no number is committed for it.
+positive_control:
+  detection_probability: 0.80
+
+# =======================================================================================
 # 4. DELIBERATELY NOT COMMITTED YET -- and each absence is a requirement, not an omission
 # =======================================================================================
 # Every key below is named here so a reader knows it is owed and by whom. None is given a

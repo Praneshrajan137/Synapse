@@ -57,8 +57,9 @@
 # wording as `uplift.yml::twin-regret` (conflict G).
 #
 # Precedent agrees: `required-checks-reconcile.yml`, `publish-audit-anchor.yml`,
-# `uplift.yml`, `live-truth.yml`, `cd.yml`, `cd-recovery.yml`, `eval-llm-judge.yml` and
-# `sprint6-e2e-oracle.yml` have no entry in that file either.
+# `uplift.yml::twin-regret`, `live-truth.yml`, `cd.yml`, `cd-recovery.yml`, `eval-llm-judge.yml`
+# and `sprint6-e2e-oracle.yml` have no entry in that file either. (`uplift.yml`'s four
+# label-triggered measurement jobs do, as `conditioned-off-pull-request`: tasks 16.7 and 22.2.)
 #
 # IT DOES OWE `blocking-steps.yaml` AND `gate_surface --write`, and both land in the same
 # commit as this file. The `blocking-steps.yaml` entry is a judgement rather than an
@@ -161,6 +162,14 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+        with:
+          # FINDING 74. Without `ref:` a labelled run checks out the synthetic MERGE commit,
+          # so the documents this job uploads were projections of a tree that is in no
+          # branch's history -- and a reviewer commits them onto the PR HEAD. The two trees
+          # agree only while `origin/main` stays an ancestor of the head. Regenerating the
+          # head itself makes the artifact a projection of the tree it will be committed to.
+          # `|| github.sha` keeps `workflow_dispatch`, where `github.sha` is already right.
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
 
       - name: Set up Python 3.11
         uses: actions/setup-python@v5

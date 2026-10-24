@@ -2832,6 +2832,40 @@ def check_pin_extractors() -> CheckResult:
     )
 
 
+@register("C76", "The external benchmark record is honest and its expectation was pre-registered")
+def check_benchmark_record() -> CheckResult:
+    """R8.5-R8.8, R8.11, R8.14, R8.15, R8.18 (decision-quality-proof tasks 19.4 and 24.1).
+
+    `benchmark_truth` was complete and tested, and no job ran it: no workflow invoked the
+    module and this file carried no row for it, so a mechanism that could fail on a bare
+    baseline number, a rank without comparability, "free" without its three cost exclusions or
+    a prediction committed after its result could fail nowhere. This row is its call site:
+    `truth-gates.yml::truth-gates` executes the registry on every push and pull request, so the
+    gate now bites wherever the registry does.
+
+    `assess` reads two committed artifacts -- `infrastructure/ml/training_runs.json` and
+    `infrastructure/quality/benchmark-expectations.yaml` -- and asks git about ancestry only for
+    a recorded run. It never raises.
+
+    **Today this row reads SKIP, by decision rather than by omission.** M5 was declined
+    (2026-09-29), so no scored run exists: `no-scored-run` and the unconfirmed baseline are
+    `unavailable` -> SKIP, which is excluded from the published PASS count and is never a PASS
+    (I-7). A false self-statement in either artifact -- a rank beside a declared difference, a
+    `zero_cost` flag its own exclusions contradict, a prediction other than
+    `competitive-not-dominant` -- is a FAIL here today, with no run needed.
+    """
+    try:
+        from scripts.audit.benchmark_truth import assess as _assess_benchmark
+    except ImportError as exc:
+        return CheckResult(
+            "C76", "Benchmark record", "SKIP", f"benchmark_truth import failed: {exc}"
+        )
+    report = _assess_benchmark()
+    return CheckResult(
+        "C76", "Benchmark record", GATE_STATUS[report.verdict], report.reason
+    )
+
+
 # ---------------------------------------------------------------------------
 # Main entry
 # ---------------------------------------------------------------------------

@@ -1,16 +1,31 @@
 """
-SYNAPSE Decision-Integrity Uplift Proof — pre-registered metric contract.
+SYNAPSE Decision-Integrity Uplift Proof — pre-registered metric contract, version 2.
 
 Loads the version-controlled ``uplift/metric_contract.yaml`` artifact into an
 immutable :class:`MetricContract` (R3.1, R3.3, R3.4, R3.6, R3.9) and exposes the
-deterministic decision rule ``MetricContract.classify`` (implemented in task 5.3).
+deterministic decision rule ``MetricContract.classify``.
 
-The contract is *pre-registered*: it declares the primary KPI(s) + directions, the
-effect-size measure, the significance test, the significance level ``alpha``, the
-per-KPI Minimum_Detectable_Effect, and the decision rule BEFORE any result is
-produced, so an uplift result cannot be manufactured by metric-shopping after the
-fact. The harness reads the contract from this file rather than embedding thresholds
-ad hoc in analysis code.
+The contract is *pre-registered*: it declares the primary KPI and its direction, the
+effect-size measure, the interval estimator, the significance level ``alpha``, the
+Minimum_Detectable_Effect, and the decision rule BEFORE any result is produced, so an
+uplift result cannot be manufactured by metric-shopping after the fact. The harness reads
+the contract from this file rather than embedding thresholds ad hoc in analysis code.
+
+**Version 2 (decision-quality-proof task 29.4, decision 2=a, finding 64).** Version 1 judged
+``fill_rate`` alone with a two-sample Mann-Whitney test and a Cohen's-d MDE. ``fill_rate``
+rises with stock, so an arm that simply holds more inventory beat the lean tuned control on
+it while LOSING on the committed objective (inferred from the metric, not measured). Version 2
+makes the ADR-055 D2 scalar objective the sole primary KPI, lower is better; every other
+``KpiVector`` field is secondary (R7.19). The decision rule is four-valued and is read off the
+``1 - alpha`` paired interval on the mean objective difference (comparator minus subject) --
+see :func:`interval_verdict`. This reader accepts version 2 ONLY: a version-1 contract is
+refused, not translated, because a v1 MDE is a Cohen's d and the v2 rule reads a margin in
+objective units -- silently reusing one as the other is exactly the defect this repairs.
+
+**The MDE is not a number in this file.** It is the committed materiality margin, resolved at
+load time from :func:`digital_twin.simulation.policy.materiality_margin`, which re-derives it
+from its pre-registered rule (ADR-055 D2.5) and refuses a value the rule does not produce.
+One canonical home for that number; this contract names it rather than restating it.
 
 A missing or malformed contract is a first-class, honest failure: :func:`load_contract`
 raises a typed :class:`MetricContractError`, and the harness/CLI exits with a failure
@@ -22,34 +37,85 @@ import dataclasses
 import math
 import numbers
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any, Final
 
 import numpy as np
 import yaml
-from scipy import stats
 
-from uplift.interfaces import Direction, KpiVector, Outcome
+from digital_twin.simulation.policy import PolicyUnavailableError, materiality_margin
+from uplift.interfaces import Direction, HeadlineVerdict, KpiVector, Outcome
+from uplift.interval import (
+    INTERVAL_SEED,
+    METHOD,
+    Interval,
+    IntervalUnavailableError,
+    paired_difference_interval,
+    resamples_for,
+)
+
+if TYPE_CHECKING:
+    from collections.abc import Mapping, Sequence
 
 # Canonical location of the version-controlled metric-contract artifact.
 DEFAULT_CONTRACT_PATH: Path = Path(__file__).with_name("metric_contract.yaml")
 
+#: The one contract version this reader accepts. Any other is refused (task 29.4).
+CONTRACT_VERSION: Final[int] = 2
+
+#: The sole primary KPI of version 2: the ADR-055 D2 committed scalar objective.
+OBJECTIVE_KPI: Final[str] = "objective"
+
 # The set of KPI names the contract may reference: exactly the KpiVector fields.
 _VALID_KPIS: frozenset[str] = frozenset(f.name for f in dataclasses.fields(KpiVector))
 
-# The only effect-size measure and decision rule this contract version supports
-# (R3.2, R3.5). The declared values must match these exactly.
-_SUPPORTED_EFFECT_SIZE: str = "cohens_d+rel_pct"
-_SUPPORTED_DECISION_RULE: str = "significant_and_favorable_and_meets_mde"
+#: The effect-size measure version 2 declares: the mean paired difference of the objective,
+#: comparator minus subject, on matched replicate seeds -- the estimator ADR-055 D2.4 commits.
+_SUPPORTED_EFFECT_SIZE: Final[str] = "mean_paired_difference"
 
-# The significance test the decision rule knows how to run. Any other declared test
-# is treated deterministically as "no significant result" (never raises) so that
-# ``classify`` remains a total function (Property 12).
-_MANN_WHITNEY_U: str = "mann_whitney_u"
+#: The interval estimator version 2 declares. Read from ``uplift.interval`` so the contract
+#: and the estimator cannot name two different methods.
+_SUPPORTED_SIGNIFICANCE_TEST: Final[str] = METHOD
 
-# The required top-level keys of the contract schema.
-_REQUIRED_KEYS: frozenset[str] = frozenset(
-    {"primary_kpis", "effect_size", "significance_test", "alpha", "mde", "decision_rule"}
+#: The decision rule version 2 declares (R7.19); see :func:`interval_verdict`.
+_SUPPORTED_DECISION_RULE: Final[str] = "interval_position_against_materiality_margin"
+
+#: The only value an ``mde`` entry may carry: a reference to the committed materiality margin,
+#: resolved at load time. A number written here would be a second opinion about that margin.
+MDE_FROM_POLICY: Final[str] = "materiality_margin"
+
+#: The decision rule in words, reported beside every verdict so a reader never has to infer it.
+DECISION_RULE_TEXT: Final[str] = (
+    "win iff the 1 - alpha interval's LOW bound is strictly above the materiality margin; "
+    "sub_margin_gain iff it is strictly above 0 but not above the margin; inconclusive iff the "
+    "interval contains 0; baseline_wins iff its HIGH bound is strictly below 0"
 )
+
+# The required top-level keys of the contract schema. ``version`` is required: an absent
+# version cannot be assumed to be 2, because assuming it would be a default.
+_REQUIRED_KEYS: frozenset[str] = frozenset(
+    {
+        "version",
+        "primary_kpis",
+        "effect_size",
+        "significance_test",
+        "alpha",
+        "mde",
+        "decision_rule",
+    }
+)
+
+#: How each headline verdict maps onto the legacy per-(scenario, KPI) ``Outcome`` grid.
+#: ``sub_margin_gain`` maps to ``TIE_INCONCLUSIVE``, which is how version 1 treated a
+#: significant gain below its MDE (significant but ``|d| < mde`` was a tie): a gain that does
+#: not clear the margin is not a material win. ``baseline_wins`` needs no margin -- a loss the
+#: interval excludes from zero is a loss at any size, which is stricter AGAINST the subject
+#: than version 1 (a significant sub-MDE loss was a tie there).
+_VERDICT_OUTCOMES: Final[Mapping[HeadlineVerdict, Outcome]] = {
+    "win": Outcome.SYNAPSE_WINS,
+    "sub_margin_gain": Outcome.TIE_INCONCLUSIVE,
+    "inconclusive": Outcome.TIE_INCONCLUSIVE,
+    "baseline_wins": Outcome.BASELINE_WINS,
+}
 
 
 class MetricContractError(Exception):
@@ -59,12 +125,14 @@ class MetricContractError(Exception):
     failure status reporting the contract as invalid and never produces an uplift
     outcome. It is intentionally a single typed error so every malformed-contract
     path — missing file, unparseable YAML, schema violation, out-of-range ``alpha``,
-    empty primary KPIs, non-numeric MDE — is caught uniformly.
+    a version other than 2, a primary KPI other than the objective, a numeric or
+    unresolvable MDE — is caught uniformly.
     """
 
 
 # ---------------------------------------------------------------------------
-# Effect-size computation (R3.2) — importable, referenced by property task 5.4
+# Effect-size helpers (R3.2). No longer the decision rule under version 2; retained because
+# they are importable, independently tested measures (Property 13) that reports may quote.
 # ---------------------------------------------------------------------------
 def _as_finite_float_array(samples: Any) -> np.ndarray:
     """Coerce ``samples`` to a 1-D float ``ndarray``; empty on any coercion failure.
@@ -92,8 +160,7 @@ def cohens_d(consensus: Any, baseline: Any) -> float:
 
     where ``var`` is the sample variance (``ddof=1``). A positive ``d`` means the
     consensus arm's mean is higher than the baseline arm's mean; a negative ``d``
-    means it is lower. The sign is interpreted against the KPI's improvement
-    direction by :meth:`MetricContract.classify`.
+    means it is lower.
 
     Total and deterministic: returns ``0.0`` (no measurable effect) for any degenerate
     input — an empty array, a combined sample too small to pool (``n1 + n2 - 2 <= 0``),
@@ -143,50 +210,70 @@ def relative_pct_change(consensus: Any, baseline: Any) -> float:
     return rel if math.isfinite(rel) else 0.0
 
 
-def _significance_pvalue(test_name: str, consensus: Any, baseline: Any) -> float | None:
-    """Return the declared significance test's p-value, or ``None`` when undefined.
+# ---------------------------------------------------------------------------
+# The version-2 decision rule (R7.19)
+# ---------------------------------------------------------------------------
+def interval_verdict(low: float, high: float, *, margin: float) -> HeadlineVerdict:
+    """The four-valued verdict an interval licenses against the materiality margin (R7.19).
 
-    Runs the declared ``test_name`` on the two sample arrays and returns its
-    two-sided p-value. Returns ``None`` — meaning "no significant result can be
-    established" — for any degenerate input (empty array, non-finite value, both
-    samples identical so the test is undefined) or an unrecognized test name, so
-    the decision rule never raises and remains deterministic (Property 12).
+    STRICT bounds, and the strictness is the point: a closed interval whose low bound sits
+    exactly ON the margin contains it, so it is a ``sub_margin_gain`` and not a ``win``; one
+    whose low or high bound is exactly ``0`` contains zero, so it is ``inconclusive``.
+
+    * ``win`` iff ``low > margin``;
+    * ``sub_margin_gain`` iff ``0 < low <= margin``;
+    * ``inconclusive`` iff ``low <= 0 <= high``;
+    * ``baseline_wins`` iff ``high < 0``.
+
+    Exhaustive and mutually exclusive whenever ``low <= high`` and ``margin > 0``, which is
+    why both are REFUSED rather than assumed: an inverted or non-finite interval, or a margin
+    that is not strictly positive, has no verdict, and returning one would be a fabrication.
+
+    Raises:
+        ValueError: On a non-finite bound or margin, ``low > high``, or ``margin <= 0``.
     """
-    c = _as_finite_float_array(consensus)
-    b = _as_finite_float_array(baseline)
-    if c.size == 0 or b.size == 0:
-        return None
-    if not (np.all(np.isfinite(c)) and np.all(np.isfinite(b))):
-        return None
-    if test_name != _MANN_WHITNEY_U:
-        # Deterministic totality: an unknown test cannot establish significance.
-        return None
-    try:
-        _, p_value = stats.mannwhitneyu(c, b, alternative="two-sided")
-    except ValueError:
-        # scipy raises when all values across both samples are identical.
-        return None
-    if p_value is None or not math.isfinite(float(p_value)):
-        return None
-    return float(p_value)
+    for name, value in (("low", low), ("high", high), ("margin", margin)):
+        if not math.isfinite(value):
+            raise ValueError(f"no verdict for a non-finite {name}={value!r}")
+    if low > high:
+        raise ValueError(f"no verdict for an inverted interval: low={low!r} > high={high!r}")
+    if margin <= 0.0:
+        raise ValueError(
+            f"no verdict against margin={margin!r}: the materiality margin must be strictly "
+            "positive, or every gain would be material by construction"
+        )
+    if low > margin:
+        return "win"
+    if low > 0.0:
+        return "sub_margin_gain"
+    if high >= 0.0:
+        return "inconclusive"
+    return "baseline_wins"
+
+
+def outcome_for_verdict(verdict: HeadlineVerdict) -> Outcome:
+    """The legacy ``Outcome`` a headline verdict maps to (see :data:`_VERDICT_OUTCOMES`)."""
+    return _VERDICT_OUTCOMES[verdict]
 
 
 @dataclasses.dataclass(frozen=True)
 class MetricContract:
-    """Immutable, validated view of the pre-registered metric contract (R3).
+    """Immutable, validated view of the pre-registered metric contract, version 2 (R3).
 
-    Built exclusively by :func:`load_contract` from the version-controlled
-    ``metric_contract.yaml`` artifact. All fields are validated at load time so an
-    in-memory ``MetricContract`` is always well-formed:
+    Built by :func:`load_contract` from the version-controlled ``metric_contract.yaml``.
+    **Construction itself validates** (``__post_init__``), so no in-memory contract can be a
+    version-1 contract, judge a KPI other than the objective, or carry a margin that is not a
+    strictly positive finite number -- including one made by ``dataclasses.replace``:
 
-    - ``primary_kpis`` — non-empty mapping of primary KPI name -> improvement
-      :class:`Direction` (R3.1).
-    - ``effect_size`` — the declared effect-size measure, ``"cohens_d+rel_pct"`` (R3.2).
-    - ``significance_test`` — the declared significance test, e.g. ``"mann_whitney_u"`` (R3.3).
-    - ``alpha`` — significance level in the open interval ``(0, 1)`` (R3.3).
-    - ``mde`` — per-primary-KPI numeric Minimum_Detectable_Effect (Cohen's d floor) (R3.4).
-    - ``decision_rule`` — the declared decision-rule identifier (R3.5).
-    - ``version`` — the artifact schema version.
+    - ``primary_kpis`` — exactly ``{"objective": Direction.LOWER_IS_BETTER}`` (R3.1, R7.19).
+    - ``effect_size`` — ``"mean_paired_difference"`` (R3.2, ADR-055 D2.4).
+    - ``significance_test`` — the interval estimator, ``uplift.interval.METHOD`` (R3.3).
+    - ``alpha`` — significance level in the open interval ``(0, 1)`` (R3.3); the interval is
+      estimated at ``1 - alpha``.
+    - ``mde`` — ``{"objective": m}``, where ``m`` is the committed materiality margin resolved
+      at load time, in objective units (R3.4).
+    - ``decision_rule`` — ``"interval_position_against_materiality_margin"`` (R3.5).
+    - ``version`` — exactly :data:`CONTRACT_VERSION`.
     """
 
     primary_kpis: dict[str, Direction]
@@ -195,63 +282,122 @@ class MetricContract:
     alpha: float
     mde: dict[str, float]
     decision_rule: str
-    version: int = 1
+    version: int
 
-    def effect_sizes(self, consensus: Any, baseline: Any) -> tuple[float, float]:
-        """Return ``(cohens_d, relative_pct_change)`` for consensus vs baseline (R3.2).
+    def __post_init__(self) -> None:
+        """Refuse any contract this reader cannot apply exactly as declared (R3.7)."""
+        if isinstance(self.version, bool) or self.version != CONTRACT_VERSION:
+            raise MetricContractError(
+                f"metric contract version {self.version!r} is not supported: this reader "
+                f"accepts version {CONTRACT_VERSION} only. Version 1 judged fill_rate with a "
+                "Cohen's-d MDE; version 2 judges the committed objective against the "
+                "materiality margin, and one is never silently read as the other"
+            )
+        if self.primary_kpis != {OBJECTIVE_KPI: Direction.LOWER_IS_BETTER}:
+            raise MetricContractError(
+                f"primary_kpis must be exactly {{{OBJECTIVE_KPI!r}: 'lower'}} under version "
+                f"{CONTRACT_VERSION}; got {self.primary_kpis!r}. The objective is a cost and the "
+                "sole primary KPI; every other KpiVector field is secondary (R7.19)"
+            )
+        if self.effect_size != _SUPPORTED_EFFECT_SIZE:
+            raise MetricContractError(
+                f"effect_size must be '{_SUPPORTED_EFFECT_SIZE}'; got {self.effect_size!r}"
+            )
+        if self.significance_test != _SUPPORTED_SIGNIFICANCE_TEST:
+            raise MetricContractError(
+                f"significance_test must be '{_SUPPORTED_SIGNIFICANCE_TEST}', the interval "
+                f"estimator uplift.interval implements; got {self.significance_test!r}"
+            )
+        if (
+            isinstance(self.alpha, bool)
+            or not isinstance(self.alpha, numbers.Real)
+            or not math.isfinite(float(self.alpha))
+            or not 0.0 < float(self.alpha) < 1.0
+        ):
+            raise MetricContractError(
+                f"alpha must be in the open interval (0, 1); got {self.alpha!r}"
+            )
+        if set(self.mde) != {OBJECTIVE_KPI}:
+            raise MetricContractError(
+                f"mde must declare exactly the primary KPI {OBJECTIVE_KPI!r}; got keys "
+                f"{sorted(self.mde)}"
+            )
+        margin = self.mde[OBJECTIVE_KPI]
+        if (
+            isinstance(margin, bool)
+            or not isinstance(margin, numbers.Real)
+            or not math.isfinite(float(margin))
+            or float(margin) <= 0.0
+        ):
+            raise MetricContractError(
+                f"the objective's MDE (the materiality margin) must be a strictly positive "
+                f"finite number; got {margin!r}"
+            )
+        if self.decision_rule != _SUPPORTED_DECISION_RULE:
+            raise MetricContractError(
+                f"decision_rule must be '{_SUPPORTED_DECISION_RULE}'; got {self.decision_rule!r}"
+            )
 
-        Convenience accessor exposing both declared effect-size measures for
-        reporting alongside the classification. Both values are total and
-        deterministic (see :func:`cohens_d` and :func:`relative_pct_change`).
+    @property
+    def objective_kpi(self) -> str:
+        """The sole primary KPI's name, ``"objective"``."""
+        return OBJECTIVE_KPI
+
+    @property
+    def materiality_margin(self) -> float:
+        """The MDE, in objective units: the committed materiality margin resolved at load."""
+        return float(self.mde[OBJECTIVE_KPI])
+
+    @property
+    def resamples(self) -> int:
+        """The bootstrap resample count ``alpha`` derives (``uplift.interval.resamples_for``)."""
+        return resamples_for(self.alpha)
+
+    def interval(self, subject: Sequence[float], comparator: Sequence[float]) -> Interval:
+        """The ``1 - alpha`` paired interval on ``mean(comparator - subject)``, objective units.
+
+        Signed so a POSITIVE value means the subject is cheaper -- the subject wins on a cost.
+        ``alpha`` is this contract's, the resample count is the one ``alpha`` derives, and the
+        seed is the committed ``uplift.interval.INTERVAL_SEED``, so the interval replays from
+        the recorded fields. The two sequences must already be paired element by element on
+        matched replicate seeds; pairing is the caller's job and is never done by position here.
+
+        Raises:
+            IntervalUnavailableError: On unequal or empty inputs, a non-finite difference, or
+                an estimated interval that does not bracket its point estimate.
         """
-        return cohens_d(consensus, baseline), relative_pct_change(consensus, baseline)
+        return paired_difference_interval(
+            comparator, subject, alpha=self.alpha, resamples=self.resamples, seed=INTERVAL_SEED
+        )
 
-    def classify(self, consensus: Any, baseline: Any, kpi: str) -> Outcome:
-        """Return the one-of-three :class:`Outcome` for a primary KPI comparison (R3.5).
+    def verdict(self, interval: Interval) -> HeadlineVerdict:
+        """The four-valued verdict ``interval`` licenses against this contract's margin."""
+        return interval_verdict(interval.low, interval.high, margin=self.materiality_margin)
 
-        Total, deterministic mapping of ``(consensus samples, baseline samples, kpi)``
-        to exactly one of ``{SYNAPSE_WINS, BASELINE_WINS, TIE_INCONCLUSIVE}`` applying
-        the ``significant_and_favorable_and_meets_mde`` rule:
+    def classify(
+        self, consensus: Sequence[float], baseline: Sequence[float], kpi: str
+    ) -> Outcome:
+        """Return the one-of-three :class:`Outcome` for one primary-KPI comparison (R3.5).
 
-        - SYNAPSE_WINS iff the significance test is significant at ``alpha`` **and**
-          ``|d| >= mde[kpi]`` **and** the effect favors the consensus arm in the KPI's
-          improvement direction.
-        - BASELINE_WINS iff significant **and** ``|d| >= mde[kpi]`` **and** the effect
-          favors the baseline arm.
-        - TIE_INCONCLUSIVE otherwise.
+        ``consensus`` and ``baseline`` are per-replicate objective samples ALREADY PAIRED on
+        matched replicate seeds (element ``i`` of each comes from one seed). The rule is the
+        version-2 interval rule, applied exactly as declared: estimate :meth:`interval`, read
+        :meth:`verdict`, map it through :func:`outcome_for_verdict`.
 
-        Totality (Property 12): the function returns exactly one ``Outcome`` for any
-        input and never raises. Non-primary KPIs, degenerate/empty/NaN/zero-variance
-        arrays, and undefined significance tests all resolve deterministically to
-        ``TIE_INCONCLUSIVE``. Identical inputs always yield the identical outcome.
+        Totality (Property 12): the function returns exactly one ``Outcome`` for any float
+        input and never raises. A KPI that is not the primary KPI, and any input for which no
+        interval can be estimated -- unequal or empty samples, a non-finite difference, an
+        arithmetic overflow -- resolve deterministically to ``TIE_INCONCLUSIVE``: no interval
+        is never a verdict. Identical inputs always yield the identical outcome, because the
+        estimator is seeded.
         """
-        # A KPI the contract does not declare as primary has no MDE / direction; it
-        # cannot be adjudicated, so it is deterministically inconclusive (R3.8 labels
-        # such KPIs secondary; here they never win or lose).
-        direction = self.primary_kpis.get(kpi)
-        if direction is None or kpi not in self.mde:
+        if kpi not in self.primary_kpis:
             return Outcome.TIE_INCONCLUSIVE
-
-        d = cohens_d(consensus, baseline)
-        p_value = _significance_pvalue(self.significance_test, consensus, baseline)
-
-        significant = p_value is not None and p_value < self.alpha
-        meets_mde = abs(d) >= self.mde[kpi]
-
-        # The rule requires significance, a large-enough effect, and a directional
-        # winner. Any missing precondition (incl. a zero-effect tie) is inconclusive.
-        if not (significant and meets_mde) or d == 0.0:
+        try:
+            estimated = self.interval(consensus, baseline)
+        except (IntervalUnavailableError, OverflowError):
             return Outcome.TIE_INCONCLUSIVE
-
-        # Interpret the sign of d against the KPI's improvement direction. For a
-        # higher-is-better KPI a positive d (consensus mean higher) favors consensus;
-        # for a lower-is-better KPI a negative d (consensus mean lower) favors consensus.
-        if direction is Direction.HIGHER_IS_BETTER:
-            consensus_favored = d > 0.0
-        else:  # Direction.LOWER_IS_BETTER
-            consensus_favored = d < 0.0
-
-        return Outcome.SYNAPSE_WINS if consensus_favored else Outcome.BASELINE_WINS
+        return outcome_for_verdict(self.verdict(estimated))
 
 
 def _coerce_direction(kpi: str, raw: Any) -> Direction:
@@ -269,11 +415,48 @@ def _coerce_direction(kpi: str, raw: Any) -> Direction:
     )
 
 
+def _resolve_mde(raw_mde: Any, source: Path) -> dict[str, float]:
+    """Resolve the ``mde`` block: each entry must NAME the committed margin, never state it.
+
+    Raises:
+        MetricContractError: On a non-mapping or empty block, an entry that is not the
+            :data:`MDE_FROM_POLICY` reference (a number included), or a margin the policy
+            reader cannot supply -- unreadable, refused by its own rule, or not yet instantiated.
+    """
+    if not isinstance(raw_mde, dict) or not raw_mde:
+        raise MetricContractError(
+            f"mde must be a non-empty mapping of primary KPI -> {MDE_FROM_POLICY!r}"
+        )
+    for kpi, raw_value in raw_mde.items():
+        if raw_value != MDE_FROM_POLICY:
+            raise MetricContractError(
+                f"mde['{kpi}'] must be the reference {MDE_FROM_POLICY!r}; got {raw_value!r}. "
+                "The MDE is the committed materiality margin, resolved from "
+                "digital_twin/simulation/policy.py::materiality_margin() -- a number written "
+                "here would be a second home for it"
+            )
+    try:
+        margin = materiality_margin()
+    except PolicyUnavailableError as exc:
+        raise MetricContractError(
+            f"metric contract at {source} resolves its MDE from the committed materiality "
+            f"margin, which could not be read: {exc}"
+        ) from exc
+    if margin is None:
+        raise MetricContractError(
+            f"metric contract at {source} resolves its MDE from the committed materiality "
+            "margin, which is not instantiated (regret_objective.materiality_margin.value is "
+            "null). A version-2 contract cannot judge anything without it"
+        )
+    return {str(kpi): float(margin) for kpi in raw_mde}
+
+
 def _validate_and_build(data: Any, source: Path) -> MetricContract:
     """Validate the parsed contract mapping and build an immutable ``MetricContract``.
 
-    Enforces the schema, ``alpha ∈ (0, 1)``, non-empty primary KPIs, and numeric MDEs
-    (R3.1, R3.3, R3.4). Any violation raises :class:`MetricContractError` (R3.10).
+    Enforces the schema, known KPI names and directions, a numeric ``alpha``, and the MDE
+    reference here; :meth:`MetricContract.__post_init__` then refuses anything version 2 does
+    not declare (R3.1, R3.3, R3.4). Any violation raises :class:`MetricContractError` (R3.10).
     """
     if not isinstance(data, dict):
         raise MetricContractError(
@@ -285,6 +468,10 @@ def _validate_and_build(data: Any, source: Path) -> MetricContract:
         raise MetricContractError(
             f"metric contract at {source} is missing required keys: {sorted(missing)}"
         )
+
+    version = data["version"]
+    if isinstance(version, bool) or not isinstance(version, int):
+        raise MetricContractError(f"version must be an integer; got {version!r}")
 
     # --- primary_kpis: non-empty mapping of known KPI -> direction (R3.1) ---
     raw_primary = data["primary_kpis"]
@@ -301,66 +488,23 @@ def _validate_and_build(data: Any, source: Path) -> MetricContract:
             )
         primary_kpis[kpi] = _coerce_direction(kpi, raw_dir)
 
-    # --- effect_size: must be the supported measure (R3.2) ---
-    effect_size = data["effect_size"]
-    if effect_size != _SUPPORTED_EFFECT_SIZE:
-        raise MetricContractError(
-            f"effect_size must be '{_SUPPORTED_EFFECT_SIZE}'; got {effect_size!r}"
-        )
-
-    # --- significance_test: non-empty string (R3.3) ---
+    # --- significance_test: non-empty string (R3.3); its value is checked on construction ---
     significance_test = data["significance_test"]
     if not isinstance(significance_test, str) or not significance_test.strip():
         raise MetricContractError("significance_test must be a non-empty string")
 
-    # --- alpha: numeric in the open interval (0, 1) (R3.3) ---
+    # --- alpha: a real number (R3.3); its range is checked on construction ---
     alpha = data["alpha"]
     if isinstance(alpha, bool) or not isinstance(alpha, numbers.Real):
         raise MetricContractError(f"alpha must be a real number; got {alpha!r}")
-    alpha = float(alpha)
-    if not (0.0 < alpha < 1.0):
-        raise MetricContractError(
-            f"alpha must be in the open interval (0, 1); got {alpha}"
-        )
-
-    # --- mde: numeric MDE per primary KPI (R3.4) ---
-    raw_mde = data["mde"]
-    if not isinstance(raw_mde, dict) or not raw_mde:
-        raise MetricContractError(
-            "mde must be a non-empty mapping of primary KPI -> numeric effect-size floor"
-        )
-    mde: dict[str, float] = {}
-    for kpi, raw_value in raw_mde.items():
-        if isinstance(raw_value, bool) or not isinstance(raw_value, numbers.Real):
-            raise MetricContractError(
-                f"mde['{kpi}'] must be a real number; got {raw_value!r}"
-            )
-        mde[kpi] = float(raw_value)
-    missing_mde = set(primary_kpis) - set(mde)
-    if missing_mde:
-        raise MetricContractError(
-            f"mde must declare a value for every primary KPI; missing: {sorted(missing_mde)}"
-        )
-
-    # --- decision_rule: must be the supported rule (R3.5) ---
-    decision_rule = data["decision_rule"]
-    if decision_rule != _SUPPORTED_DECISION_RULE:
-        raise MetricContractError(
-            f"decision_rule must be '{_SUPPORTED_DECISION_RULE}'; got {decision_rule!r}"
-        )
-
-    # --- version: optional positive integer, defaults to 1 ---
-    version = data.get("version", 1)
-    if isinstance(version, bool) or not isinstance(version, int) or version < 1:
-        raise MetricContractError(f"version must be a positive integer; got {version!r}")
 
     return MetricContract(
         primary_kpis=primary_kpis,
-        effect_size=effect_size,
+        effect_size=data["effect_size"],
         significance_test=significance_test,
-        alpha=alpha,
-        mde=mde,
-        decision_rule=decision_rule,
+        alpha=float(alpha),
+        mde=_resolve_mde(data["mde"], source),
+        decision_rule=data["decision_rule"],
         version=version,
     )
 
@@ -369,12 +513,13 @@ def load_contract(path: str | Path = DEFAULT_CONTRACT_PATH) -> MetricContract:
     """Load and validate the metric contract into an immutable :class:`MetricContract`.
 
     Reads the version-controlled YAML artifact at ``path`` (defaults to the
-    co-located ``metric_contract.yaml``), validates it (schema, ``alpha ∈ (0, 1)``,
-    non-empty primary KPIs, numeric MDEs), and returns the immutable contract.
+    co-located ``metric_contract.yaml``), validates it, resolves its MDE from the committed
+    materiality margin, and returns the immutable contract.
 
     Raises :class:`MetricContractError` on any missing or malformed contract — a
-    non-existent file, unreadable/unparseable YAML, or any schema/range violation —
-    so the caller exits with a failure status and produces no uplift outcome (R3.10).
+    non-existent file, unreadable/unparseable YAML, a version other than 2, or any
+    schema/range violation — so the caller exits with a failure status and produces no
+    uplift outcome (R3.10).
     """
     contract_path = Path(path)
     try:
@@ -399,3 +544,19 @@ def load_contract(path: str | Path = DEFAULT_CONTRACT_PATH) -> MetricContract:
         raise MetricContractError(f"metric contract at {contract_path} is empty")
 
     return _validate_and_build(data, contract_path)
+
+
+__all__ = [
+    "CONTRACT_VERSION",
+    "DECISION_RULE_TEXT",
+    "DEFAULT_CONTRACT_PATH",
+    "MDE_FROM_POLICY",
+    "OBJECTIVE_KPI",
+    "MetricContract",
+    "MetricContractError",
+    "cohens_d",
+    "interval_verdict",
+    "load_contract",
+    "outcome_for_verdict",
+    "relative_pct_change",
+]

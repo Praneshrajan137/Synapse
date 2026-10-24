@@ -69,6 +69,20 @@ five things that leaves unpinned:
    the generating job is excluded from the PASS count on every artifact class, not just
    on a proof-grade one.
 
+Carried to the v2 artifact (decision-quality-proof task 15.1)
+-------------------------------------------------------------
+
+Every artifact here is a valid v2 artifact: a point-mass ``interval`` at the headline (the
+gate reads the headline through ``PoweredProof`` and never the bounds), the verdict the
+committed rule derives from it, the committed materiality margin read from the contract, a
+pooled ``comparator``, and provenance ``arm_roles``. The shape-broken class gains the three
+shapes v2 must refuse -- a version-1 payload, an unknown key inside the interval block, and
+a stored verdict the interval does not license -- and four more v2 makes refusable: a
+headline off the interval's point, an absent interval, the version-1 headline KPI, and
+absent arm roles. The admissible class draws ``run_incomplete`` freely, because it is the
+whole-run flag and admission must not read it (task 15.5): only the contrast's
+``incomplete`` is a reason.
+
 Independent oracle
 ------------------
 
@@ -105,7 +119,7 @@ import re
 import uuid
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any, Final
 
 import pytest
 from hypothesis import given
@@ -126,12 +140,18 @@ from scripts.audit.uplift_truth import (
     registry_status,
     verdict,
 )
+from uplift.contract import interval_verdict, load_contract
 from uplift.harness import (
+    ARTIFACT_SCHEMA_VERSION,
+    DEFAULT_CONSENSUS_ARM,
     UNATTRIBUTED,
     ArtifactFidelity,
+    ArtifactInterval,
     UpliftArtifact,
     UpliftProvenance,
+    comparator_label,
 )
+from uplift.interval import INTERVAL_SEED, METHOD, Interval
 from uplift.uplift_floor import (
     MIN_POWERED_REPLICATES,
     UPLIFT_FLOOR,
@@ -140,6 +160,9 @@ from uplift.uplift_floor import (
     is_proven_uplift,
     ratchet_to_measured,
 )
+
+if TYPE_CHECKING:
+    from uplift.interfaces import ArmRole
 
 ROOT = Path(gate.__file__).resolve().parents[2]
 
@@ -176,15 +199,47 @@ _powered = st.integers(
 )
 _unpowered = st.integers(min_value=0, max_value=MIN_POWERED_REPLICATES - 1)
 
+#: The committed Metric_Contract v2. The margin and the objective KPI every artifact records
+#: are read through it, never written as literals.
+_CONTRACT = load_contract()
+_MARGIN: Final[float] = _CONTRACT.materiality_margin
+
 
 # ---------------------------------------------------------------------------
 # Artifact construction (no harness run: every field is supplied)
 # ---------------------------------------------------------------------------
+def _role(arm: str) -> ArmRole:
+    """The consensus arm is the subject; every other arm here is a declared baseline."""
+    if arm == DEFAULT_CONSENSUS_ARM:
+        return "consensus"
+    return "baseline"
+
+
+def _point_interval(headline: float) -> ArtifactInterval:
+    """The point-mass interval at ``headline``, at the committed ``alpha``.
+
+    The gate reads the headline through ``PoweredProof`` and never the bounds, so the
+    narrowest admissible interval keeps every case here about what the gate does read.
+    """
+    return ArtifactInterval.from_interval(
+        Interval(
+            method=METHOD,
+            alpha=_CONTRACT.alpha,
+            resamples=_CONTRACT.resamples,
+            seed=INTERVAL_SEED,
+            low=headline,
+            high=headline,
+            point=headline,
+        )
+    )
+
+
 def _artifact(
     *,
     headline: float,
     replicates: int = MIN_POWERED_REPLICATES,
     incomplete: bool = False,
+    run_incomplete: bool | None = None,
     kl_divergence: float | None = 0.02,
     within: bool | None = True,
     revision: str = _REVISION,
@@ -192,14 +247,26 @@ def _artifact(
     seeds: tuple[int, ...] = _SEEDS,
     arms: tuple[str, ...] = _ARMS,
 ) -> UpliftArtifact:
-    """A parseable artifact with the requested honesty profile."""
+    """A parseable v2 artifact with the requested honesty profile.
+
+    ``run_incomplete`` follows ``incomplete`` unless given: a contrast that did not complete
+    is a run that did not complete. It is drawn separately only where the whole-run flag is
+    itself the subject.
+    """
+    interval = _point_interval(headline)
     return UpliftArtifact(
+        schema_version=ARTIFACT_SCHEMA_VERSION,
         headline_uplift=headline,
-        primary_kpi="fill_rate",
+        primary_kpi=_CONTRACT.objective_kpi,
         noise_tolerance_pp=1.0,
         incomplete=incomplete,
         all_wins_warning=False,
         replicates_per_arm=replicates,
+        interval=interval,
+        headline_verdict=interval_verdict(interval.low, interval.high, margin=_MARGIN),
+        materiality_margin=_MARGIN,
+        comparator=comparator_label(None, [arm for arm in arms if _role(arm) == "baseline"]),
+        run_incomplete=incomplete if run_incomplete is None else run_incomplete,
         fidelity=ArtifactFidelity(
             kl_divergence=kl_divergence,
             threshold=0.1,
@@ -209,6 +276,7 @@ def _artifact(
         ),
         provenance=UpliftProvenance(
             arms=arms,
+            arm_roles={arm: _role(arm) for arm in arms},
             replicates_per_arm=replicates,
             revision=revision,
             run_id=run_id,
@@ -222,19 +290,26 @@ def _bytes(artifact: UpliftArtifact) -> bytes:
     return artifact.to_canonical_json().encode("utf-8")
 
 
-def _mutated(mutate: dict[str, Any] | None, drop: tuple[str, ...] = ()) -> bytes:
+def _mutated(
+    mutate: dict[str, Any] | None,
+    drop: tuple[str, ...] = (),
+    *,
+    inside: str | None = None,
+) -> bytes:
     """A payload that parses as JSON but not as an :class:`UpliftArtifact`.
 
     Built by mutating a proof-grade payload so exactly one shape obligation is broken -
     R2.3's finite ``headline_uplift``, the replicate/provenance agreement, or the
     presence of the provenance record itself. ``allow_nan=True`` is deliberate: the
     ``NaN``/``Infinity`` tokens are how a non-finite headline reaches a reader, and R2.3
-    requires the artifact to be rejected rather than read.
+    requires the artifact to be rejected rather than read. ``inside`` names a nested record
+    (``interval``, ``provenance``) to break instead of the top level.
     """
     payload = _artifact(headline=0.5).to_payload()
+    target: dict[str, Any] = payload if inside is None else payload[inside]
     for key in drop:
-        payload.pop(key, None)
-    payload.update(mutate or {})
+        target.pop(key, None)
+    target.update(mutate or {})
     return json.dumps(payload, allow_nan=True).encode("utf-8")
 
 
@@ -446,6 +521,46 @@ _shape_broken = st.sampled_from(
             payload=_mutated({"measured_by": "an undeclared writer"}),
             tokens=("result.json",),
         ),
+        # Metric_Contract v2 (task 15.1). A version-1 payload, an unknown key inside the
+        # interval block, and a stored verdict the interval does not license: the gate can be
+        # handed neither a pre-v2 artifact nor a verdict the committed rule would not derive.
+        # The base interval is the point mass at 0.5, which licenses a gain and never
+        # ``baseline_wins`` whatever the committed margin.
+        _Case(
+            kind="schema-version-1",
+            payload=_mutated({"schema_version": 1}),
+            tokens=("result.json", "schema_version"),
+        ),
+        _Case(
+            kind="interval-unknown-field",
+            payload=_mutated({"width": 0.0}, inside="interval"),
+            tokens=("result.json", "interval"),
+        ),
+        _Case(
+            kind="verdict-the-interval-does-not-license",
+            payload=_mutated({"headline_verdict": "baseline_wins"}),
+            tokens=("result.json",),
+        ),
+        _Case(
+            kind="headline-off-the-interval-point",
+            payload=_mutated({"headline_uplift": 0.75}),
+            tokens=("result.json",),
+        ),
+        _Case(
+            kind="interval-absent",
+            payload=_mutated(None, drop=("interval",)),
+            tokens=("result.json", "interval"),
+        ),
+        _Case(
+            kind="primary-kpi-not-the-objective",
+            payload=_mutated({"primary_kpi": "fill_rate"}),
+            tokens=("result.json",),
+        ),
+        _Case(
+            kind="arm-roles-absent",
+            payload=_mutated(None, drop=("arm_roles",), inside="provenance"),
+            tokens=("result.json", "arm_roles"),
+        ),
     )
 )
 
@@ -470,7 +585,14 @@ def _admissible(draw: st.DrawFn) -> _Case:
     return _Case(
         kind="admissible",
         payload=_bytes(
-            _artifact(headline=headline, replicates=draw(_powered), incomplete=False)
+            _artifact(
+                headline=headline,
+                replicates=draw(_powered),
+                incomplete=False,
+                # Whether an arm OUTSIDE the contrast failed a replicate. Admission reads
+                # the contrast's ``incomplete`` only, so either value is admissible (15.5).
+                run_incomplete=draw(st.booleans()),
+            )
         ),
         expected_seeds=draw(st.sampled_from((None, _SEEDS))),
         expected_arms=draw(st.sampled_from((None, _ARMS))),
