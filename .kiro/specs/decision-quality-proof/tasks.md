@@ -2605,11 +2605,15 @@ tests in the interim, and that is a stated sequencing gap, not an omission.
     run starts: a `Par_Level_Reorder` copy of the consensus arm is still compared against a pool
     of four.
 
-  - [~] 15.1 Add the versioned interval block to `UpliftArtifact`
+  - [x] 15.1 Add the versioned interval block to `UpliftArtifact`
     - discharge: ci.yml::uplift-verify fast shard 1/4 (Property 82) and fast shard 2/4
       (purpose-achievement-audit Property 14, the canonical-roundtrip file)
-    - last-checked: run 38298457507 (SYNAPSE CI, sha ecf517b) -- PRE-CHANGE:
-      the subject did not exist at that sha, so the discharging run is session 12's P1.
+    - **DISCHARGED: run 40086235858 (SYNAPSE CI, sha d8aafe6, 2026-10-24),
+      fast shards 1/4 and 2/4 `success`; the aggregate `uplift-verify` `success`.**
+      Read per test id, 0 failed:
+      Property 82's file 21 PASSED (shard 1); the canonical round-trip file 11 PASSED
+      (shard 2).
+    - previously: last-checked run 38298457507 (sha ecf517b) -- pre-change.
     - **AUTHORED, SESSION 12.** `UpliftArtifact` is schema version 2.
       - New fields: `ArtifactInterval` (the seven `Interval` fields; admissibility is
         delegated to `Interval`), `headline_verdict`, `materiality_margin`, `comparator`
@@ -2644,10 +2648,14 @@ tests in the interim, and that is a stated sequencing gap, not an omission.
       interval inside the byte-pinned model rather than in a second file nobody keeps in sync.
     - _Requirements: 6.13, 7.14, 7.17_
 
-  - [~] 15.2 Implement the interval estimator and read `alpha` from the contract
+  - [x] 15.2 Implement the interval estimator and read `alpha` from the contract
     - discharge: ci.yml::uplift-verify fast shard 1/4 (Properties 82 and 94)
-    - last-checked: run 38298457507 (SYNAPSE CI, sha ecf517b) -- PRE-CHANGE:
-      the subject did not exist at that sha, so the discharging run is session 12's P1.
+    - **DISCHARGED: run 40086235858 (SYNAPSE CI, sha d8aafe6, 2026-10-24),
+      fast shard 1/4 `success`; the aggregate `uplift-verify` `success`.**
+      Read per test id, 0 failed:
+      Property 82's file 21 PASSED, Property 94's 8, and the carried estimator file
+      (Property 60) 20.
+    - previously: last-checked run 38298457507 (sha ecf517b) -- pre-change.
     - **CALL-SITE HALF AUTHORED, SESSION 12.** `assemble_uplift_result` estimates the
       contract's `1 - alpha` interval on the seed-paired objective difference and
       sets the headline from its point. `alpha` and the resample count are read from
@@ -2721,10 +2729,13 @@ tests in the interim, and that is a stated sequencing gap, not an omission.
     - Locus: `ci.yml::uplift-verify` fast step.
     - _Requirements: 6.13, 7.14_
 
-  - [~] 15.4 Write property test for the interval-carrying artifact's canonical form
+  - [x] 15.4 Write property test for the interval-carrying artifact's canonical form
     - discharge: ci.yml::uplift-verify fast shard 1/4
-    - last-checked: run 38298457507 (SYNAPSE CI, sha ecf517b) -- PRE-CHANGE:
-      the subject did not exist at that sha, so the discharging run is session 12's P1.
+    - **DISCHARGED: run 40086235858 (SYNAPSE CI, sha d8aafe6, 2026-10-24),
+      fast shard 1/4 `success`; the aggregate `uplift-verify` `success`.**
+      Read per test id, 0 failed:
+      `test_interval_artifact_roundtrip_property.py` 21 PASSED.
+    - previously: last-checked run 38298457507 (sha ecf517b) -- pre-change.
     - **AUTHORED, SESSION 12:** `tests/uplift/test_interval_artifact_roundtrip_property.py`.
       Its digest clause is recomputed with `hashlib` over the aggregates alone.
     - `# Feature: decision-quality-proof, Property 82: An interval-carrying artifact round-trips canonically and leaves the aggregate digest unchanged`
@@ -2743,11 +2754,15 @@ tests in the interim, and that is a stated sequencing gap, not an omission.
     - Locus: `ci.yml::uplift-verify` fast step.
     - _Requirements: 7.17_
 
-  - [~] 15.5 Make the comparator explicit and scope incompleteness by contrast
+  - [x] 15.5 Make the comparator explicit and scope incompleteness by contrast
     - discharge: ci.yml::uplift-verify fast shard 1/4 (Property 83) and fast shard 2/4
       (the carried CLI and reproduction files)
-    - last-checked: run 38298457507 (SYNAPSE CI, sha ecf517b) -- PRE-CHANGE:
-      the subject did not exist at that sha, so the discharging run is session 12's P1.
+    - **DISCHARGED: run 40086235858 (SYNAPSE CI, sha d8aafe6, 2026-10-24),
+      fast shards 1/4 and 2/4 `success`; the aggregate `uplift-verify` `success`.**
+      Read per test id, 0 failed:
+      Property 83's file 16 PASSED (shard 1); the carried CLI integration file 4, the
+      disclosures file 1 and the stability file 1 (shard 2).
+    - previously: last-checked run 38298457507 (sha ecf517b) -- pre-change.
     - **AUTHORED, SESSION 12.**
       - `ArmRole` and `ArmSpec` have no default role, and an arm without one is
         refused before any replicate runs.
@@ -2788,10 +2803,13 @@ tests in the interim, and that is a stated sequencing gap, not an omission.
       is correct, because C60's subject is consensus.
     - _Requirements: 6.14_
 
-  - [~] 15.6 Write property test for comparator resolution
+  - [x] 15.6 Write property test for comparator resolution
     - discharge: ci.yml::uplift-verify fast shard 1/4
-    - last-checked: run 38298457507 (SYNAPSE CI, sha ecf517b) -- PRE-CHANGE:
-      the subject did not exist at that sha, so the discharging run is session 12's P1.
+    - **DISCHARGED: run 40086235858 (SYNAPSE CI, sha d8aafe6, 2026-10-24),
+      fast shard 1/4 `success`; the aggregate `uplift-verify` `success`.**
+      Read per test id, 0 failed:
+      `test_named_comparator_property.py` 16 PASSED (14 test functions).
+    - previously: last-checked run 38298457507 (sha ecf517b) -- pre-change.
     - **AUTHORED, SESSION 12:** `tests/uplift/test_named_comparator_property.py`.
     - `# Feature: decision-quality-proof, Property 83: A named comparator is never pooled, and an oracle-role arm is never absorbed`
     - File: `tests/uplift/test_named_comparator_property.py`
@@ -2838,8 +2856,14 @@ tests in the interim, and that is a stated sequencing gap, not an omission.
     - discharge: truth-gates.yml::truth-gates (the registry: C70 ratchets, C75 pin
       extractors, C56 per-pin lines) and ci.yml::uplift-verify fast shard 1/4 (the reader
       clauses of Property 85)
-    - last-checked: run 38298457581 (SYNAPSE Truth Gates, sha ecf517b) -- PRE-CHANGE:
-      the subject did not exist at that sha, so the discharging run is session 12's P1.
+    - last-checked: run 40086235844 (SYNAPSE Truth Gates, sha d8aafe6) -- step 5 failed on C56 alone
+      (the README counts, as predicted), so steps 6-12 were skipped. Read again at P2.
+      - Inside step 5: C70 SKIP (27 ratchets, 23 unmeasured) and C75 PASS.
+      - The pins, read in quality-gates step 17 of run 40086235858:
+        `positive-control-detection-probability` 0.80 == 0.80, and both graduated
+        `s`/`S` pins (50 == 50, 100 == 100), each OK.
+      - The Property 85 reader clauses passed in fast shard 1/4 of that run.
+    - previously: last-checked run 38298457581 (sha ecf517b) -- pre-change.
     - **AUTHORED, SESSION 12, at the path this body's path note anticipated.**
       - `policy.yaml::positive_control.detection_probability: 0.80`, labelled a
         pre-registered target, with the reader `policy.py::detection_probability`.
@@ -2882,10 +2906,13 @@ tests in the interim, and that is a stated sequencing gap, not an omission.
       (`primary_kpis: fill_rate` across four scenarios), and four pairs cannot estimate a rate.
     - _Requirements: 6.15_
 
-  - [~] 16.4 Implement control classification by interval position
+  - [x] 16.4 Implement control classification by interval position
     - discharge: ci.yml::uplift-verify fast shard 1/4 (Properties 84 and 85)
-    - last-checked: run 38298457507 (SYNAPSE CI, sha ecf517b) -- PRE-CHANGE:
-      the subject did not exist at that sha, so the discharging run is session 12's P1.
+    - **DISCHARGED: run 40086235858 (SYNAPSE CI, sha d8aafe6, 2026-10-24),
+      fast shard 1/4 `success`; the aggregate `uplift-verify` `success`.**
+      Read per test id, 0 failed:
+      Property 84's file 33 PASSED and Property 85's 47.
+    - previously: last-checked run 38298457507 (sha ecf517b) -- pre-change.
     - **AUTHORED, SESSION 12: `uplift/controls.py`.**
       - Negative control: E against E on disjoint seed ranges. A proven gain iff
         `low > 0`. Below the declared repetition count the verdict is `unavailable`;
@@ -2938,12 +2965,15 @@ tests in the interim, and that is a stated sequencing gap, not an omission.
       (R6.14).
     - _Requirements: 6.1, 6.2, 6.4, 6.14, 6.15_
 
-  - [~] 16.5 Write property test for control classification and the repetition rate
+  - [x] 16.5 Write property test for control classification and the repetition rate
     - discharge: ci.yml::uplift-verify fast shard 1/4
-    - last-checked: run 38298457507 (SYNAPSE CI, sha ecf517b) -- PRE-CHANGE:
-      the subject did not exist at that sha, so the discharging run is session 12's P1.
+    - **DISCHARGED: run 40086235858 (SYNAPSE CI, sha d8aafe6, 2026-10-24),
+      fast shard 1/4 `success`; the aggregate `uplift-verify` `success`.**
+      Read per test id, 0 failed:
+      `test_control_classification_property.py` 33 PASSED (24 test functions).
+    - previously: last-checked run 38298457507 (sha ecf517b) -- pre-change.
     - **AUTHORED, SESSION 12:** `tests/uplift/test_control_classification_property.py`,
-      24 tests. With Property 85: 80 passed at `HYPOTHESIS_PROFILE=ci` locally
+      24 test functions. With Property 85: 80 passed at `HYPOTHESIS_PROFILE=ci` locally
       (measured).
     - **NOT slow-marked, a re-scope.** After the re-cut moved the controls' execution
       into `uplift.yml`, its subject is pure arithmetic; the slow locus below predates
@@ -2957,11 +2987,15 @@ tests in the interim, and that is a stated sequencing gap, not an omission.
     - Budget inherited from the profile; no `max_examples` literal.
     - _Requirements: 6.1, 6.2, 6.15_
 
-  - [~] 16.6 Write property test for the oracle tolerance verdict
+  - [x] 16.6 Write property test for the oracle tolerance verdict
     - discharge: ci.yml::uplift-verify fast shard 1/4
-    - last-checked: run 38298457507 (SYNAPSE CI, sha ecf517b) -- PRE-CHANGE:
-      the subject did not exist at that sha, so the discharging run is session 12's P1.
-    - **AUTHORED, SESSION 12:** `tests/uplift/test_oracle_tolerance_property.py`, 18 tests.
+    - **DISCHARGED: run 40086235858 (SYNAPSE CI, sha d8aafe6, 2026-10-24),
+      fast shard 1/4 `success`; the aggregate `uplift-verify` `success`.**
+      Read per test id, 0 failed:
+      `test_oracle_tolerance_property.py` 47 PASSED (18 test functions).
+    - previously: last-checked run 38298457507 (sha ecf517b) -- pre-change.
+    - **AUTHORED, SESSION 12:** `tests/uplift/test_oracle_tolerance_property.py`, 18 test
+      functions.
     - `# Feature: decision-quality-proof, Property 85: An out-of-tolerance oracle effect is a mis-measurement, never under-performance`
     - File: `tests/uplift/test_oracle_tolerance_property.py`
     - Budget inherited from the root `conftest.py` profile.
@@ -2973,8 +3007,11 @@ tests in the interim, and that is a stated sequencing gap, not an omission.
       resolution, gate surface) AND uplift.yml::uplift-controls (the labelled run
       that writes the negative, positive and agreement records and the
       Power_Report). Two subjects, and both must report.
-    - last-checked: run 38298457581 (SYNAPSE Truth Gates, sha ecf517b) -- PRE-CHANGE:
-      the subject did not exist at that sha, so the discharging run is session 12's P1.
+    - last-checked: run 40086235844 (SYNAPSE Truth Gates, sha d8aafe6) -- step 5 failed on C56 alone
+      (the README counts, as predicted), so steps 6-12 were skipped. Read again at P2.
+      - The first subject's three checks are steps 9-11, all skipped. The second
+        subject waits for wave 2's `uplift.controls_run`.
+    - previously: last-checked run 38298457581 (sha ecf517b) -- pre-change.
     - **AUTHORED, SESSION 12.**
       - Three jobs on the label `measure-uplift-controls`:
         `uplift-controls-negative` (a 20-leg matrix), `uplift-controls-positive`, and
@@ -3021,10 +3058,13 @@ tests in the interim, and that is a stated sequencing gap, not an omission.
   - `MIN_POWERED_REPLICATES = 1000` is **assumed** adequate until R6.5 measures otherwise (A-1);
     R6.9 and R6.10 state what happens if it is not.
 
-  - [~] 17.1 Implement the Power_Report as a generated, version-controlled artifact
+  - [x] 17.1 Implement the Power_Report as a generated, version-controlled artifact
     - discharge: ci.yml::uplift-verify fast shard 2/4 (Property 86)
-    - last-checked: run 38298457507 (SYNAPSE CI, sha ecf517b) -- PRE-CHANGE:
-      the subject did not exist at that sha, so the discharging run is session 12's P1.
+    - **DISCHARGED: run 40086235858 (SYNAPSE CI, sha d8aafe6, 2026-10-24),
+      fast shard 2/4 `success`; the aggregate `uplift-verify` `success`.**
+      Read per test id, 0 failed:
+      Property 86's file 40 PASSED (15 test functions).
+    - previously: last-checked run 38298457507 (sha ecf517b) -- pre-change.
     - **AUTHORED, SESSION 12: `uplift/power.py`.**
       - `kind: power-report`, and every derived field is re-derived on read.
       - A comparator other than `tuned_static` is refused: D2.7, made mechanical.
@@ -3051,11 +3091,14 @@ tests in the interim, and that is a stated sequencing gap, not an omission.
       the distinction, committing the Power_Report trips that gate.
     - _Requirements: 6.5, 6.6, 6.8_
 
-  - [~] 17.2 Make the replicate floor a floor, and move its pin in the same change
+  - [x] 17.2 Make the replicate floor a floor, and move its pin in the same change
     - discharge: ci.yml::uplift-verify fast shard 2/4 (`test_uplift_floor_data_gate.py`,
       Property 86)
-    - last-checked: run 38298457507 (SYNAPSE CI, sha ecf517b) -- PRE-CHANGE:
-      the subject did not exist at that sha, so the discharging run is session 12's P1.
+    - **DISCHARGED: run 40086235858 (SYNAPSE CI, sha d8aafe6, 2026-10-24),
+      fast shard 2/4 `success`; the aggregate `uplift-verify` `success`.**
+      Read per test id, 0 failed:
+      `test_uplift_floor_data_gate.py` 20 PASSED and Property 86's file 40.
+    - previously: last-checked run 38298457507 (sha ecf517b) -- pre-change.
     - **AUTHORED, SESSION 12.**
       - `powered_replicate_floor(report)` = max(the constant, the derived
         requirement).
@@ -3097,10 +3140,13 @@ tests in the interim, and that is a stated sequencing gap, not an omission.
       publication step conditional rather than scheduled.
     - _Requirements: 6.7_
 
-  - [~] 17.4 Write property test for the Power_Report's contract
+  - [x] 17.4 Write property test for the Power_Report's contract
     - discharge: ci.yml::uplift-verify fast shard 2/4
-    - last-checked: run 38298457507 (SYNAPSE CI, sha ecf517b) -- PRE-CHANGE:
-      the subject did not exist at that sha, so the discharging run is session 12's P1.
+    - **DISCHARGED: run 40086235858 (SYNAPSE CI, sha d8aafe6, 2026-10-24),
+      fast shard 2/4 `success`; the aggregate `uplift-verify` `success`.**
+      Read per test id, 0 failed:
+      `test_power_report_property.py` 40 PASSED.
+    - previously: last-checked run 38298457507 (sha ecf517b) -- pre-change.
     - **AUTHORED, SESSION 12:** `tests/uplift/test_power_report_property.py`.
       - With the data gate it is 60 tests, taking 316 s at `ci` locally (measured).
         That is the largest single addition to shard 2, which ran 12.9 of its 45
@@ -3365,8 +3411,12 @@ data and scored against an external benchmark has no demonstrable value.
   - [~] 19.4 Record the benchmark score with its metric identity and a non-bare baseline
     - discharge: truth-gates.yml::truth-gates (the registry run executes C76) and
       regenerate-truth-docs.yml::regenerate (24.2 publishes it)
-    - last-checked: run 38298457581 (SYNAPSE Truth Gates, sha ecf517b) -- PRE-CHANGE:
-      the subject did not exist at that sha, so the discharging run is session 12's P1.
+    - last-checked: run 40086235844 (SYNAPSE Truth Gates, sha d8aafe6) -- step 5 failed on C56 alone
+      (the README counts, as predicted), so steps 6-12 were skipped. Read again at P2.
+      - Inside step 5: C76 SKIP on `baseline-unconfirmed, no-scored-run`, never on its
+        import guard.
+      - Regenerate run 40086253239 published the row: `| C76 | ... | SKIP |`.
+    - previously: last-checked run 38298457581 (sha ecf517b) -- pre-change.
     - **AUTHORED, SESSION 12.**
       - `@register("C76", ...)` is `check_benchmark_record`, returning
         `GATE_STATUS[assess().verdict]`.
@@ -3610,8 +3660,10 @@ data and scored against an external benchmark has no demonstrable value.
 
   - [~] 22.1 Regenerate the artifact in the generating job and co-locate the interval
     - discharge: uplift.yml::uplift-proof (the labelled `measure-uplift-proof` run, task 25)
-    - last-checked: run 36860454801 (SYNAPSE Uplift Proof, sha ec0eb91) -- PRE-CHANGE:
-      twin-regret only; `uplift-proof` did not exist in this shape.
+    - last-checked: run 40086253063 (SYNAPSE Uplift Proof, sha d8aafe6) -- every job
+      skipped, as designed: the `regenerate-truth-docs` label started it. Property 98
+      passed in run 40086235858: 19 fast in shard 1/4, 6 slow in the slow selection.
+    - previously: last-checked run 36860454801 (sha ec0eb91) -- pre-change.
     - **AUTHORED, SESSION 12, with this re-scope recorded.**
       - ONE job of 240 minutes, on the primary cell unshocked, under
         `uplift.proof_supervisor`. The supervisor names exactly one of five states
@@ -3677,8 +3729,10 @@ data and scored against an external benchmark has no demonstrable value.
   - [~] 22.2 Declare the job that is the only place C60 can pass
     - discharge: truth-gates.yml::truth-gates ("Required-check declaration resolves to
       real jobs" and "Declared-blocking steps propagate their exit status")
-    - last-checked: run 38298457581 (SYNAPSE Truth Gates, sha ecf517b) -- PRE-CHANGE:
-      the subject did not exist at that sha, so the discharging run is session 12's P1.
+    - last-checked: run 40086235844 (SYNAPSE Truth Gates, sha d8aafe6) -- step 5 failed on C56 alone
+      (the README counts, as predicted), so steps 6-12 were skipped. Read again at P2.
+      - Both of this leaf's steps, 10 and 11, were skipped.
+    - previously: last-checked run 38298457581 (sha ecf517b) -- pre-change.
     - **AUTHORED, SESSION 12.** `uplift-proof` is declared `all_steps` and filed as
       `ineligible/conditioned-off-pull-request` (conflict U).
     - Local reads (measured):
@@ -3957,8 +4011,10 @@ data and scored against an external benchmark has no demonstrable value.
 
   - [~] 24.1 Assign identifiers and complete the registrations
     - discharge: truth-gates.yml::truth-gates (the registry executes C76)
-    - last-checked: run 38298457581 (SYNAPSE Truth Gates, sha ecf517b) -- PRE-CHANGE:
-      the subject did not exist at that sha, so the discharging run is session 12's P1.
+    - last-checked: run 40086235844 (SYNAPSE Truth Gates, sha d8aafe6) -- step 5 failed on C56 alone
+      (the README counts, as predicted), so steps 6-12 were skipped. Read again at P2.
+      - Inside step 5: C76 registered and executed, `TOTAL=68 REGISTERED=68`.
+    - previously: last-checked run 38298457581 (sha ecf517b) -- pre-change.
     - **AUTHORED, SESSION 12.**
       - C76 is registered; the identifier was re-derived (the highest was C75).
       - The README and CURRENT.md counts move: one more check and one more SKIP.
@@ -3991,9 +4047,16 @@ data and scored against an external benchmark has no demonstrable value.
       non-goal).
     - _Requirements: 9.12_
 
-  - [ ] 24.2 Regenerate the ledger, the gate surface and the README from one execution
+  - [~] 24.2 Regenerate the ledger, the gate surface and the README from one execution
     - discharge: regenerate-truth-docs.yml::regenerate (labelled, on the head carrying C76)
       -- its artifact committed unedited
+    - last-checked: run 40086253239 (SYNAPSE Regenerate Truth Docs, sha d8aafe6) -- `success`.
+      - It checked out `d8aafe6`, the head (finding 74's repair, measured).
+      - Its own `--stat`: README.md 2 lines, CURRENT.md 15 (8 in, 7 out). My byte diff of
+        the downloaded artifact against the commit agrees; GATE_SURFACE.md is
+        byte-identical.
+      - Committed UNEDITED at P2. truth-gates steps 7 and 8 at P2 are the confirmation
+        finding 51 says the skipped steps never gave.
     - Session 12: `docs/state/GATE_SURFACE.md` was rewritten LOCALLY with
       `gate_surface --write`, a LOCAL gate. The ledger and the README cannot be,
       because `ledger_gen` and `readme_gen` are never run locally.
@@ -4282,8 +4345,17 @@ data and scored against an external benchmark has no demonstrable value.
       not. `ledger_gen` and `readme_gen` must never be run locally in any form (I-0).
     - _Requirements: 4.4, 4.5, 10.1, 11.7_
 
-  - [ ] 26.5 Dispatch the second regeneration and commit its artifact unedited
+  - [~] 26.5 Dispatch the second regeneration and commit its artifact unedited
     - discharge: regenerate-truth-docs.yml::regenerate
+    - last-checked: run 40086253239 (SYNAPSE Regenerate Truth Docs, sha d8aafe6) -- `success`.
+      - It checked out `d8aafe6`, the head (finding 74's repair, measured).
+      - Its own `--stat`: README.md 2 lines, CURRENT.md 15 (8 in, 7 out). My byte diff of
+        the downloaded artifact against the commit agrees; GATE_SURFACE.md is
+        byte-identical.
+      - Committed UNEDITED at P2. truth-gates steps 7 and 8 at P2 are the confirmation
+        finding 51 says the skipped steps never gave.
+    - It is the regeneration this leaf owes: after `df0f3ff`'s swap, `readme_gen` ran
+      before `ledger_gen`, so the projected C56 row reads PASS -- the fixed point.
     - Files: `docs/state/CURRENT.md`, `README.md`,
       `infrastructure/quality/doc-number-pins.yaml`
     - **CI-gated: the only sanctioned route to the `--write` form is the label**
@@ -5632,6 +5704,63 @@ progress ledger; design reasoning is ADR-055.
     - **P2**, that artifact committed unedited, turns `truth-gates`, `quality-gates` and the sweep
       green: 16 of 16 operators `falsified` and `doc_truth` 20 of 20. It is the run 16.2, 16.7,
       19.4, 22.2 and 24.1 are read at, and the run whose artifact discharges 24.2 and 26.5.
+    - **MEASURED at P1 (`d8aafe6`, 2026-10-24). Every prediction held but two, and one clause.**
+      - CI run 40086235858:
+        - `shard files 42/39/31/29 = 141; pytest universe = 141`;
+        - `shards selected 367/359/373/265 = 1364; unsharded selection = 1364`;
+        - `slow selection: 91 test(s) selected`, 91 passed;
+        - shard 1 took 9.7 minutes (367 passed), shard 2 12.0 (358 passed, 1 skipped);
+        - `quality-gates` failed at step 17 on `headline-counts` alone (19 of 20 claims OK),
+          and steps 18-23 were skipped.
+      - Truth Gates run 40086235844: step 5 read `PASS=56 FAIL=1 PARTIAL=0 SKIP=11 TOTAL=68`
+        with C56 the FAIL and C76 SKIP on `no-scored-run`; steps 6-12 were skipped.
+      - The sweep: `REGISTERED=68 DECLARED=14 FALSIFIED=13 PASS_ELIGIBLE=13 EXCLUDED=54`, 16
+        operators probed, C56's two `indeterminate`, the other 14 operators falsified.
+      - **MISS 1.** The sweep's step 6 ("C72 row projects the counts of the run that produced
+        them") failed too. It had not been predicted at step level. Its cause is the same: an
+        unavailable sweep makes C72 SKIP.
+      - Regenerate run 40086253239 `success`, as predicted, but for one clause: three rows of
+        the counts table (`SKIP`, `TOTAL`, `REGISTERED`) also moved, which "no other line
+        moves" excluded. Same counts; GATE_SURFACE.md byte-identical.
+      - Frontend CI run 40086235866: `effectiveness-ratchet` and `fe-invariants` failed on the
+        identical recorded reasons (five `missing-stamp` and `uniform-metrics`; the same six
+        `not_executed`). 11 jobs succeeded.
+      - **MISS 2. `audit-supply` FAILED, against a predicted `success`: finding 105.**
+      - Security, Policy, Terraform, Integration and Mutation succeeded. Every `uplift.yml` job
+        skipped.
+    - **FINDING 105 (measured; the publication inferred).**
+      - `audit-supply`'s `pnpm audit --audit-level=high --prod` refused one high advisory,
+        GHSA-mrhx-c7xc-m3w5 (CVE-2023-54404): zod below 4.6.6 can exhaust memory validating
+        oversized input. The path is the direct dependency `. > zod@3.25.76`;
+        `frontend/package.json` declares `^3.23.8`.
+      - It passed at `ecf517b` on 2026-10-15, and P1 changed no frontend file. So the
+        advisory's arrival is the change (inferred; its publication date was not read).
+      - The patched range is a major version, and 29 files import zod directly
+        (`frontend/src/domain`, `src/lib`, `spec`; grep). The repair is a migration with the
+        lockfile regenerated on a runner, not a bump.
+      - Rejected: an audit exception, a lower `--audit-level`, dropping `--prod`. Each removes
+        a refusal.
+      - `audit-supply` is not in `required-checks.yaml` (read). The migration is owed, and is
+        not started here.
+  - **SESSION 12 -- P2 PREDICTIONS, registered before the push.** P2 is P1 plus the regenerated
+    README.md and CURRENT.md, committed unedited, and this ledger edit. No code changes.
+    - `truth-gates.yml`:
+      - `truth-gates` succeeds on all 12 steps. Step 5 reads `PASS=57 FAIL=0 PARTIAL=0 SKIP=11
+        TOTAL=68`. `readme_gen --check` reads `56 PASS / 0 FAIL / 0 PARTIAL / 12 SKIP / 68
+        TOTAL`; `ledger_gen --check`, 68 rows. The gate surface keeps 689 rows, workflow shape
+        455 steps, and required checks 32 jobs.
+      - `falsification-sweep` succeeds: verdict `pass`, 16 of 16 operators probed, 14 checks
+        falsified, 0 unproven; `REGISTERED=68 DECLARED=14 FALSIFIED=14 PASS_ELIGIBLE=14
+        EXCLUDED=54`. Step 6 prints `[PASS] C72`.
+    - `ci.yml`: `quality-gates` succeeds. Step 17 reads 20 of 20 claims; steps 18-23 run and
+      pass, as at `ecf517b`. The digital twin's fast tests run here for the first time since P1
+      changed `policy.py` and `policy.yaml`; none reads either change (grep). The shards
+      select exactly what they selected at P1, and all succeed.
+    - Frontend CI as at P1: `audit-supply` fails on finding 105, while `effectiveness-ratchet` and
+      `fe-invariants` fail by design. The other 11 jobs succeed. The other five workflows succeed,
+      as at P1.
+    - If all of that holds, P2 discharges 16.2, 19.4, 22.2, 24.1, 24.2 and 26.5. 16.7 keeps its
+      second subject.
 
   - [x] 29.1 Deferral is a terminal state the census reports
     - discharge: ci.yml::uplift-verify fast shard 3/4 (tests/verify a-o)
@@ -5694,11 +5823,17 @@ progress ledger; design reasoning is ADR-055.
       cost is lower by exactly 8 x its mean `stockout_rate`.
     - _Requirements: 5.2, 5.33_
 
-  - [~] 29.4 The headline is the committed objective: metric contract v2
+  - [x] 29.4 The headline is the committed objective: metric contract v2
     - discharge: ci.yml::uplift-verify fast shards 1/4 and 2/4 (the carried contract,
       classification and harness properties)
-    - last-checked: run 38298457507 (SYNAPSE CI, sha ecf517b) -- PRE-CHANGE:
-      the subject did not exist at that sha, so the discharging run is session 12's P1.
+    - **DISCHARGED: run 40086235858 (SYNAPSE CI, sha d8aafe6, 2026-10-24),
+      fast shards 1/4 and 2/4 `success`; the aggregate `uplift-verify` `success`.**
+      Read per test id, 0 failed:
+      shard 1 367 passed; shard 2 358 passed and 1 skipped, the pre-existing
+      `test_a_raised_floor_is_backed_by_a_committed_powered_proof`, which skips while
+      the floor is 0.0. The slow selection's 91 passed include the two carried
+      slow-marked files never run locally (1 each).
+    - previously: last-checked run 38298457507 (sha ecf517b) -- pre-change.
     - **AUTHORED, SESSION 12.**
       - Metric_Contract v2:
         - `version: 2`;
@@ -5759,10 +5894,13 @@ progress ledger; design reasoning is ADR-055.
     - Demo: Property 94 green in CI.
     - _Requirements: 5.2, 7.19_
 
-  - [~] 29.5 Property 94: a higher fill rate bought with a worse objective never reports a win
+  - [x] 29.5 Property 94: a higher fill rate bought with a worse objective never reports a win
     - discharge: ci.yml::uplift-verify fast shard 1/4
-    - last-checked: run 38298457507 (SYNAPSE CI, sha ecf517b) -- PRE-CHANGE:
-      the subject did not exist at that sha, so the discharging run is session 12's P1.
+    - **DISCHARGED: run 40086235858 (SYNAPSE CI, sha d8aafe6, 2026-10-24),
+      fast shard 1/4 `success`; the aggregate `uplift-verify` `success`.**
+      Read per test id, 0 failed:
+      `test_objective_headline_property.py` 8 PASSED.
+    - previously: last-checked run 38298457507 (sha ecf517b) -- pre-change.
     - **AUTHORED, SESSION 12:** `tests/uplift/test_objective_headline_property.py`.
     - `# Feature: decision-quality-proof, Property 94: A higher fill rate bought with a worse objective never reports a win`
     - File: `tests/uplift/test_objective_headline_property.py` (new)

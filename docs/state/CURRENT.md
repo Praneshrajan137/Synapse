@@ -33,7 +33,7 @@ be a second execution and therefore a second truth. `NOT EXECUTED` means the che
 is registered but emitted no result - not a pass, and already a build failure
 (R1.7).
 
-**Registry verdict:** `PASS` - 57 PASS of 67 registered check(s), no FAIL (0 PARTIAL, 10 SKIP not counted as passes)
+**Registry verdict:** `PASS` - 57 PASS of 68 registered check(s), no FAIL (0 PARTIAL, 11 SKIP not counted as passes)
 
 | # | Subject (as registered) | Status | Detail |
 | --- | --- | --- | --- |
@@ -98,12 +98,13 @@ is registered but emitted no result - not a pass, and already a build failure
 | C67 | Audit-chain anchors are fresh enough to verify the chain externally | SKIP | chain=unverifiable, 0 anchor file(s); no anchor exists; the chain is unverifiable (R6.11) |
 | C68 | World-feed provenance: the declared source class matches the code | PASS | - |
 | C69 | Completed task records resolve to landed work, not a placeholder | PASS | - |
-| C70 | Ratcheted thresholds never regress and agree with what they guard | SKIP | 26 ratchet(s) hold their recorded bounds; 22 carry no measurement, so they are declared values only (SKIP, never PASS) |
+| C70 | Ratcheted thresholds never regress and agree with what they guard | SKIP | 27 ratchet(s) hold their recorded bounds; 23 carry no measurement, so they are declared values only (SKIP, never PASS) |
 | C71 | Replayed KV-cache and tier-routing metrics meet their committed floors | SKIP | 200 golden trace(s) from tests/eval/golden_traces; kv_cache_hit_rate=unmeasured vs floor 0.70 [declared-unmeasurable]: synapse_ollama_cache_hit_rate has no samples -- the replay took no cache observation (Ollama offline); no hit rate was measured; declared unmeasurable in CI -- blocked on A GitHub-hosted runner has no Ollama. Standing one up inside the job is a category-1 service workload under I-0 on the development machine and a multi-gigabyte model pull in CI, and I-1 forbids substituting a paid API for it. Neither is a measurement of THIS repository's cache behaviour, and inferring a hit rate from anything other than the gauge would be fabricating the number the gate exists to stop being fabricated (I-7). Voided by: A `synapse_ollama_cache_hit_rate` gauge carrying at least one sample after the replay, which requires a reachable Ollama serving the completions the cache is meant to be reused across. Present => this declaration is void.; tier_routing_accuracy=1.0000 vs floor 0.80 [pass]: 200/200 traces classified into their expected tier |
-| C72 | Every gate declares a mutation that falsifies it | SKIP | 14 of 67 registered check(s) declare a falsification over 16 operator(s), 52 undeclared and excluded from PASS-eligibility; declaration is valid for 14 check(s) but no falsification was probed; absence of proof is not a pass (I-7) - run with --sweep in CI; no sweep report at artifacts/audit/fault-injection.json (default path) |
+| C72 | Every gate declares a mutation that falsifies it | SKIP | 14 of 68 registered check(s) declare a falsification over 16 operator(s), 53 undeclared and excluded from PASS-eligibility; declaration is valid for 14 check(s) but no falsification was probed; absence of proof is not a pass (I-7) - run with --sweep in CI; no sweep report at artifacts/audit/fault-injection.json (default path) |
 | C73 | The falsification sweep's cost budget is an arithmetic claim that holds | PASS | - |
 | C74 | External-dataset licence terms are recorded, schema-valid and confirmed | SKIP | 1 of 1 dataset(s) carry unestablished licence terms, each named in the findings; the terms sit behind an operator acceptance gate, so this reports SKIP rather than PASS - absence of proof is never a pass (I-7) |
 | C75 | Every declared document pin's extractor resolves when actually run | PASS | - |
+| C76 | The external benchmark record is honest and its expectation was pre-registered | SKIP | nothing is established yet (baseline-unconfirmed, no-scored-run): no leaderboard number was invented to fill the gap, so this reports SKIP rather than PASS - absence of proof is never a pass (I-7) |
 
 ### Summary counts - one Check_Registry execution
 
@@ -112,14 +113,14 @@ is registered but emitted no result - not a pass, and already a build failure
 | PASS | 57 |
 | FAIL | 0 |
 | PARTIAL | 0 |
-| SKIP | 10 |
-| TOTAL | 67 |
-| REGISTERED | 67 |
+| SKIP | 11 |
+| TOTAL | 68 |
+| REGISTERED | 68 |
 | NOT EXECUTED | 0 |
 
 `TOTAL` is the number of results this execution emitted; `REGISTERED` is the number of `@register` declarations. They differ only when a registered check emits nothing, which is a failure, never a rounding difference.
 
-`README.md` headline counts, from this same execution (R10.9): **57 PASS / 0 FAIL / 0 PARTIAL / 10 SKIP / 67 TOTAL**
+`README.md` headline counts, from this same execution (R10.9): **57 PASS / 0 FAIL / 0 PARTIAL / 11 SKIP / 68 TOTAL**
 <!-- generated:end -->
 
 ---
