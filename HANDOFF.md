@@ -1,12 +1,14 @@
 # HANDOFF — decision-quality-proof
 
-**State at end of session 11 (2026-09-29 to 2026-10-12).** Branch `feat/decision-quality-proof`,
-PR **#84** open against `main`. The commit carrying this file — **P2**, the documents push — also
-carries `NEXT_SESSION_PROMPT.md` and `SESSION_PROTOCOL.md`'s session-11 row and batch table.
-**P1** (`ba02a1b`) was planned as one confirmation push and took three: **P1b** `5c2f2b3` repaired a
-Node-engine refusal it shipped (finding 93), and **P1c** `0745290` repaired a latent harness race
-its timing exposed (finding 94). **The repository is PUBLIC again** (operator, 2026-10-02):
-standard runners are 4-vCPU and Actions minutes are unmetered.
+**State at end of session 12 (2026-10-15 to 2026-11-01).** Branch `feat/decision-quality-proof`,
+PR **#84** open against `main`. The commit carrying this file, **P6**, also carries
+`NEXT_SESSION_PROMPT.md`, `SESSION_PROTOCOL.md`'s session-12 row and the ledger edit that
+discharges 22.1 and 25. Earlier commits, oldest first: `e5d43c1` (A/A and LCP pre-registration),
+`d8aafe6` (P1), `b3a98a8` (P2), `2b82e03` (steering G8), `af950f3` (P3), `209c6dc` (P4),
+`732ecd9` (P5). **E5's re-run, run `41289052859` at `732ecd9`, completed, and task 25's claim is
+stated in its body (headline 1).** The repository was observed private around 2026-11-01 05:40Z
+and made public again by the operator; the run-timing API reports 0 billable ms for every run
+that day.
 
 **This file is DERIVED and short.** Per `.kiro/steering/throughput-with-integrity.md`, every finding
 has **one canonical home** — the ADR for design facts, the task body for ledger facts — and this
@@ -20,96 +22,106 @@ repeated here. A finding number resolves to its body with
 python -m scripts.audit.spec_ledger_census --files --next 40
 ```
 
-It reported `147 / 92 / 2 / 53` at session 10's close and `155 / 106 / 0 / 49` at this session's
-close (22 authorable, 2 CI-gated, 25 deferred, `unharvested: 0`). **14 leaves discharged.** The
-re-cut added task 29's leaves and made every `deferred:` leaf terminal (task 29.1), so neither the
-`done` delta nor the total's delta is the discharge count.
+It reported `155 / 106 / 0 / 49` at session 11's close (22 authorable, 2 CI-gated, 25 deferred)
+and `155 / 130 / 0 / 25` at this session's close (0 authorable, 0 CI-gated, 25 deferred,
+`unharvested: 0`, `complete: yes`). **24 leaves discharged.** Every open leaf is `deferred:`, and
+a `deferred:` leaf is terminal, so **the spec is complete.**
 
 ---
 
 ## The headline
 
-### 1. Checkpoint B-prime PASSED — `room_to_win` in the primary cell
+### 1. E5 completed; the claim is stated, negative, in task 25's body
 
-Canonical record **ADR-055 D2.9**; the P1–P5 scorecard is **task 14**. Uplift Proof run
-`36860454801`, sha `ec0eb91`. Information ceiling E − D `0.630`, out-of-sample `[0.596, 0.666]`,
-in-sample `[0.595, 0.664]` — both wholly above the committed `0.40`, so the rule committed before
-the run binds. **E3 and E5 are licensed by measurement.** P5 failed on one clause in three
-descriptive cells and is recorded as failed (**finding 79**): its error direction is conservative,
-and a restatement is owed before E3 cites arm D as a bound.
+The claim is stated once, in **task 25's body** (`tasks.md`, "THE CLAIM (2026-11-01)"); this file
+quotes its headline sentence only. On the declared twin's primary cell, unshocked, the consensus
+arm's recommendations, if executed, cost 4.40 objective units more per 24-hour replicate than the
+tuned control E: headline **-4.4026**, 95% interval **[-4.4218, -4.3843]**, verdict
+**`baseline_wins`**. The pre-commitment held: the number is reported as negative, its cause beside
+it (**finding 112**), never relabelled. Every E5 prediction, registered before the push, held
+(parent 29, "MEASURED at P5").
 
-### 2. 14 leaves discharged against a target of >= 11
+### 2. 24 leaves discharged against a target of >= 11
 
-12.1, 12.2, 13.1, 13.2, 13.7, 14, 16.1, 20.7, 20.8, 29.1, 29.2, 29.3, 29.7, 29.8 — each on its
-naming job's own run, recorded in its `DISCHARGED:` line.
+Harvested at P2: 15.1, 15.2, 15.4–15.6, 16.4–16.6, 17.1, 17.2, 17.4, 29.4, 29.5. At P3: 16.2,
+19.4, 22.2, 24.1, 24.2, 26.5. At P5: 16.7, 17.3 and 29.6, then 22.1 and 25 on P5's own runs,
+recorded at P6. Each on its naming job's own run, in its `DISCHARGED:` line.
 
-### 3. The falsification sweep passes for the first time
+### 3. The controls ran, the Power_Report is committed, and clause (f) passed
 
-Truth Gates run `38287788451` (`ba02a1b`, task 29.7): 16/16 operators probed, all 14 checks
-falsified, the four SKIP baselines admitted by R1.5a. **One prediction missed:** C69 is counted on
-an abstention, not a FAIL (**finding 85**, now measured) — so "14 falsified" overstates by one until
-its operator changes.
+Controls run `41268743674` (`209c6dc`): negative `pass`, positive `detected` (E - O
+`[0.1875, 0.2200]`), and arms E, E' and O reproduced B-prime exactly. The Power_Report (MDE
+`0.0235` at n = 1000) is committed as `docs/state/uplift-power-report.json`, and its harness
+revision equalled the tree's `POWER_SOURCE_SET` digest at P5 (measured). **Agreement reads
+`harness_mis_measuring` (finding 117), and the verdict stands as recorded:** clause (f) passed at
+P5, so the gap is the seed sets'. Records: `tasks.md`, parent 29, "MEASURED at P4", and finding
+117's "MEASURED at P5".
 
-### 4. E5 is fundable
+### 4. Finding 89 has a draft PR
 
-`25.9 s` per Tier-4 consensus decision and `518.6` core-hours at `MIN_SCENARIOS`, about 26
-five-hour jobs at four workers (finding 70, ADR-055 D2.9) — measured on the private 2-vCPU class.
-Public runners are unmetered and run jobs in parallel, which is what makes the run affordable.
+**PR #85 (draft)**, `fix/open-access-mode` @ `828742e`, cut from `main` `045f44c`, worktree
+`.claude/worktrees/open-access`: open preview access now, sign-in built and dormant (ADR-057 on
+that branch). Its CI, the first execution of its vitest and Playwright changes, was not read when
+this was written. It overlaps PR #84 in `CLAUDE.md`, both compose files and
+`orchestrator/inference/serve.py`; whichever merges second rebases.
 
 ---
 
 ## Binding decisions — pointers only
 
-- **The session-11 re-cut:** operator decisions **1=a, 2=a, 3=a/c/d/e, Q1=a, Q2=a, Q3=c**, listed
-  once in `requirements.md` R5.46; design ADR-055 **D2.8**; the re-cut's own leaves are task 29.
-  A `deferred:` leaf is terminal and carries its reason in that line.
-- **Still binding from session 10:** no claim may be denominated against the incumbent arm. The
-  honest baseline is the tuned control **E**, re-derived per cell by task 13.7's committed search;
-  task 25's re-scope names E of the primary cell. **17.2 and 25 sit under this prohibition.**
-  Reasoning: ADR-055 D2.7.
-- **Declined, or deferred to specs that are named and NOT created:** the Kaggle M5 terms (C74
-  non-passing by decision); task 23 → `.kiro/specs/external-audit-anchor/`; 20.3 and 21 →
-  `.kiro/specs/forecaster-publication/` (3=c).
-- **The repository went public again** after a pre-publication secrets audit (finding 80).
-- **Taken under the operator's delegation of 2026-10-02:** maplibre-gl 6 (finding 83); the
-  frontend toolchain on Node 22.23 LTS (finding 93).
+- **The session-11 re-cut** (1=a, 2=a, 3=a/c/d/e, Q1=a, Q2=a, Q3=c): R5.46, ADR-055 **D2.8**,
+  task 29. A `deferred:` leaf is terminal.
+- **No claim against the incumbent arm:** the baseline is the primary cell's tuned control E
+  (ADR-055 D2.7; task 25's re-scope), and task 25's claim is stated under it.
+- **The committed Power_Report binds `POWER_SOURCE_SET`:** moving the digest voids it. The claim
+  is published, so finding 116's code repair may land now; a new claim after it needs the controls
+  re-run.
+- **Conflict U adopted** (task 16.7): the labelled jobs are filed
+  `ineligible/conditioned-off-pull-request`, and the operator may object.
+- **Steering G8:** authoring agents in alternating batches of at most five, then at most three.
+- **Unchanged:** the M5 terms declined (C74); 23, 20.3 and 21 deferred to named, uncreated specs;
+  maplibre-gl 6 (83) and Node 22.23 (93) under the 2026-10-02 delegation.
 
 ## Open operator decisions — surfaced, NOT resolved
 
 | | Decision owed | Finding |
 |---|---|---|
-| (a) | The effectiveness ratchet's latency tolerance against its measured noise. Red **by design** until then; a strict A/A (re-run `e2e-harness` once on one sha) is the next measurement. | 88 |
-| (b) | The sweep's PASS-baseline branch credits an abstention or a crash. C69 is the measured case; its operator could re-tick a record instead. | 85 |
-| (c) | **Live exposure — ask about it first.** The deployed console signs every visitor in as admin (`frontend/src/surfaces/auth/useBootAutoLogin.ts`), and its default credential is compiled into the public bundle. | 89 |
-| (d) | Arm D's "pointwise best" claim: restate it as unmet-pointwise-least, or make D cost-optimal — owed **before** E3 cites D as a bound. | 79 |
-| (e) | Lighthouse asserts LCP at `warn`. LCP now passes the spec's own budget (2292 ms, one sample), so flipping it to `error` is cheaper than it was. | 86 |
+| (a) | The effectiveness ratchet's tolerance against its measured noise; red **by design** until decided. The strict A/A ran and AA1–AA3 held (`tasks.md`, "SESSION 12, 2026-10-15"). | 88 |
+| (b) | The sweep's PASS-baseline branch credits an abstention or a crash; C69 is the measured case. | 85 |
+| (c) | **Live exposure:** the deployed console signs every visitor in as admin. Its repair is PR #85 (draft), for the operator to review, merge and activate. | 89 |
+| (d) | Arm D's "pointwise best" claim: restate it as unmet-pointwise-least, or make D cost-optimal, **before** E3 cites D as a bound. | 79 |
+| (e) | Lighthouse LCP at `warn` or `error`. New evidence: `error` turns `mobile-lighthouse` red (95), and the 2500 ms budget sits inside runner variation (114); at P5 it read inside budget. | 95, 114 |
+| new | The claim's cause: every agent reads its request one level too shallow. Its repair lies outside decision 3=a, so commissioning it is the operator's. | 112 |
+| new | Conflict S: the negative control is judged on gains only (task 16.4). | 101 |
+| new | Conflict V: the agreement rule under proven per-seed identity, which clause (f) measured at P5. | 117 |
+| new | The reorders-only lever set for E5 and the controls: the main agent's choice, the operator's to overturn. | none |
+| new | The zod 4 migration. | 105 |
+| new | The chromatic race, ADR-025's owner's call. | 106 |
 
-**Owed work, not decisions:** **92** (the 14 lazy routes have no failed-chunk state — **before
-PR #84 merges**); **91** (the smoke a11y matrix has only ever scanned `/login`); **90**
-(`fe-invariants`' unobservable set, and its path-matching defect — the owner's); **93's tail** (two Node 20 pins that install nothing
-frontend); forbidding `viz-`/`visx-` in the entry-preload guard now that a CI table shows them
-absent.
+**Owed work, not decisions:** 116's code repair (allowed now; it voids the Power_Report, so the
+controls re-run before any new claim); 118 and 120, both Stryker's (118's next measurement is one
+Stryker run on `src/lib/universal-state.ts` alone, in CI); 119's small defects; 90 and 91 (other
+owners', from session 11).
 
 ## CI state, read from the runs
 
-- **Required checks green at `ba02a1b` and `5c2f2b3`:** SYNAPSE CI (`quality-gates`,
-  `uplift-verify`) and Truth Gates (`truth-gates`, `falsification-sweep`). Integration, Mutation,
-  Security, Policy and Terraform `success` at `5c2f2b3`.
-- **Frontend CI run `38291036628` (`5c2f2b3`):** `e2e` 21 passed / 0 failed / 8 skipped (19/1/8 at
-  `5eef6ee`); `mobile-reality` "/" LCP **2292 ms** (CLS 0, INP 112 ms) — one sample; the
-  entry-preload guard passed with exactly the five predicted eager chunks, 240.8 KiB gzip against
-  916.6 KiB before (finding 86); `audit-supply` green and `map-worker.spec.ts` passed (finding 83);
-  quality, build, visual, Lighthouse, license, SBOM, spec-typecheck, contract-fidelity green.
-  `e2e-harness` failed there (finding 94).
-- **At P1c (`0745290`, Frontend CI run `38293903740`):** `e2e-harness` `success` (run `38293903740`), finding 94's
-  repair holding; `effectiveness-ratchet` `failure`, on exactly the R8.10 rejection read at `5eef6ee` — red by design (88); `fe-invariants`
-  ran for the first time and FAILED: six declared-unobservable invariants plus six top-level e2e
-  specs a path-matching defect misreads as never executed (90); Stryker `success` (28.4 min). Every
-  other workflow green.
-- **Path filters on `pull_request` read the PR's whole diff against `main`**, so every push to
-  PR #84 — documents-only included — runs Frontend CI and Mutation Testing, and with
-  `cancel-in-progress` a newer push cancels the older head's run. **Never push while a run you
-  need is in flight.**
+- **P4 (`209c6dc`):** CI `41268715083` held in full (slow selection 98 of 98) and Truth Gates
+  `41268714944` read `success` on both jobs. Frontend CI `41268714970`: `e2e` red on LCP (114),
+  `audit-supply` (105) and `effectiveness-ratchet` (88, by design); Stryker timed out (118).
+- **P5 (`732ecd9`):** CI `41289022422` `success`: G5's partition exact, the slow selection 99 of
+  99, clause (f) among them. Truth Gates `41289022401` as at P4; Mutation `41289022389`, Policy
+  `41289022451`, Integration, Security and Terraform `success`. Frontend CI `41289022398`: `e2e`
+  passed (21 passed, 8 skipped; 114's LCP inside budget); `audit-supply` (105),
+  `effectiveness-ratchet` (88) and `fe-invariants` (90: the same six `not_executed`,
+  `ATTESTED=60`) red; Stryker red in its dry run on the key `__proto__` (120), not on time.
+- **P6 (this commit):** documents only; its CI had not run when this was written. Expect it as at
+  P5.
+- **Labelled:** controls `41268743674` (22 jobs `success`); E5 `41268752414` (`failure`, at its
+  bound); E5 `41289052859`, job `124796295692` (`success`; the supervisor `completed` after
+  3646.5 s).
+- **Hazards:** a push to PR #84 runs Frontend CI and Mutation Testing, and `cancel-in-progress`
+  cancels the older head's run; re-running an older run cancels the newer one's job (115).
+  `uplift.yml` is label-only and never cancels in progress: a push cannot cancel its runs (read).
 
 ---
 
@@ -117,60 +129,71 @@ absent.
 
 ### Executed and measured
 
-- **B-prime:** eight cells × 200 replicates, split residual `0.0` in each (D2.9); cost probe run
-  `36860581054`.
-- **Every CI number above**, each read from its own job, log or artifact.
-- **The pre-publication secrets audit:** 132 remote refs, 439 commits, ~528k added lines —
-  **0 high-confidence hits**, 56 low-confidence, all dev defaults.
-- **Every discharge**, read per test id or per artifact field as its `DISCHARGED:` line states.
+- **The controls, and E5 at P4 and at P5**, from their artifacts and logs; E5's 556 MB log at P4
+  was profiled gap by gap (116). E5 at P5 yielded task 25's numbers, and every E5 prediction held.
+- **Clause (f)**, in P5's slow selection: passed at the positive range's first three seeds, so
+  finding 117's gap is the seed sets'.
+- **The strict A/A** for (a), and the LCP samples behind (e) (95, 114).
+- **The Power_Report's harness revision against the tree's digest**, at P5.
+- **Five pre-registered CI rounds, P1–P5**, misses recorded as misses (parent 29); every CI number
+  and every discharge read from its own job, log or artifact.
 
 ### The four throughput numbers (steering G6)
 
-- **Leaves DISCHARGED: 14** against a target of **>= 11.**
-- **Core-seconds: ~1,900–2,400, ESTIMATED**, all single-process: ~430 for the last segment from
-  command wall times, 1,500–2,000 estimated for the earlier segment, which was not metered per
-  command. No repo-wide run, no `--cov`, no `-n auto`, no pnpm/Playwright/tsc locally.
-- **CI critical path: 151 min** from push to required-checks-done over seven pushes (30.6,
-  27.6, 18.6, 26.4, 16.2, 15.7, 15.8): ~16 min per push on public runners against ~26 on the
-  private class. "All done" is set by Stryker: 28.4 min public, 46.2 min private.
-- **Parallel agents: ~41 productive / 6–8 failed** on usage limits (the pre-summary dispatches were
-  not logged one by one), beside exactly one executor.
+- **Leaves DISCHARGED: 24** against a target of **>= 11.**
+- **Core-seconds: about 4,600, ESTIMATED**, single process, one executor: about 3,700 by P4 and
+  about 900 on 2026-11-01 (three login-branch verifications, the E5 log profiling over 556 MB,
+  scoped tests and gates). No repo-wide run, no simulation locally. The estimate predates E5's
+  result; the reads after it are not added.
+- **CI critical path:** five rounds (P1–P5) of about 20–25 min each to required checks; the
+  controls about 25 min; E5 at P4 229 min, failing at its bound, and at P5 3646.5 s to
+  `completed`.
+- **Agents: 63 dispatched**, beside one executor, and **36 finished**. Dispatched (finished):
+  the opening research, 18 read-only agents in two turns, r1 7 (2) and r2 11 (9); wider than
+  five, d1 7 (0) and d2 11 (4); at most five, b1 5 (5), b2 5 (1) and b3 4 (4); under G8, B4 1 (1),
+  R1+R2 2 (2), X1–X3 3 (3), two introspect queries 1 and 1 (both cancelled), Q1+Q2+introspect
+  3 (3), and the documents agent D1 1 (1) with its amendment 1 (1).
 
-### G6 and G7
+### G6, G7 and G8
 
-- **G6 met. G7 met** — waves of 4–5 authoring agents beside exactly one executor.
-- **Underperformed, named:** dispatches lost to usage limits; **three CI rounds where one was
-  planned, and the confirmation push itself took three** (findings 93 and 94).
+- **G6 met:** 24 against >= 11. **G7 met:** 63 dispatches beside one executor; wave 3 ran one
+  agent (B4) because its work was one coupling closure, the probe into the E5 CLI (G7's stated
+  exception).
+- **G8 came from these losses:** dispatches wider than five finished 4 of 18, batches of at most
+  five 10 of 14. Under G8, 13 were dispatched and 11 finished; the 2 cancelled were documentation
+  queries, and none was lost to the usage limit.
+- **Underperformed, named:** E5's first run produced no headline (116); P3 missed three
+  predictions, P4 four (one the executor's own cancellation of Stryker, 115) and P5 two in the
+  frontend: `e2e` passed, a miss in the safe direction, and Stryker failed its dry run (120).
 
 ### NOT verified. Must not be claimed.
 
-- **That LCP holds** — 2292 ms is one sample with 208 ms of margin.
-- **That a drawn map renders tiles** — `map-worker.spec.ts` proves the worker boots; CI serves no
-  tiles, so no check sees a decoded tile.
-- **That consensus captures any of the ceiling** — E5's question, unmeasured.
-- **That the declared world describes a real store** — every value is `chosen` (1=a); fidelity is
-  `unknown` and C60 `unavailable` by decision.
-- **That the ceiling is the EVPI** — it is a lower bound (D2.9).
-- **Finding 89 on the live console** — read from source, not probed.
-- **Findings 77 and 82** — read, not executed; other owners'.
-- **Finding 94's interleaving** — the mechanism is read in query-core; why P1's timing exposed it
-  is inferred.
+- **P6's CI** had not run when this was written.
+- **PR #85's vitest and Playwright changes never ran locally**; its CI is their first execution,
+  and it was not read when this was written.
+- **The core-seconds are estimated**, not metered per command.
+- **Inferred:** finding 112's consequence (no consensus decision depends on the world), and the
+  causes of findings 118 and 120. **Not known:** why the resolver slowed at 04:01Z (116).
+- **That a drawn map renders tiles; that the declared world describes a real store** (1=a:
+  fidelity `unknown`, C60 `unavailable`); **that the ceiling is the EVPI** (D2.9: a lower bound);
+  **finding 89 on the live console** (read from source, never probed).
 
 ---
 
-## What session 12 does
+## What session 13 does
 
-Raise finding 89 first. Then the census's authorable list, **re-derived with `--next 40`** (at
-close: `15.1`, `15.2`, `15.4`–`15.6`, `16.2`, `16.4`–`16.7`, `17.1`–`17.4`, `19.4`, `22.1`,
-`22.2`, `24.1`, `24.2`, `29.4`–`29.6`), and finding 92 before PR #84 merges. Barriers **25**
-(`uplift.yml::uplift-proof`) and **26.5** (`regenerate-truth-docs.yml::regenerate`) are CI-gated.
-`NEXT_SESSION_PROMPT.md` carries the procedure, a coupling partition and the stop conditions.
+No leaf is left to discharge. Read P6's CI (documents only: expect it as at P5) and PR #85's CI.
+Then surface task 25's claim to the operator with its cause (finding 112, whose repair lies
+outside decision 3=a); put the open operator decisions; take the owed work in G8 batches; and lay
+out PR #84's merge path (its required checks were green at P5) and PR #85's review, both the
+operator's to decide. `NEXT_SESSION_PROMPT.md` carries the procedure, the plan and the stop
+conditions.
 
 ## The lesson
 
-**A premise can go false without a diff.** `execution-routing.md`'s "free and unmetered" was false
-for as long as the repository was private, and it was found by measuring runner speed, not by
-reading the file (finding 80). **A measured baseline is not automatically an honest one:** when the
-measurement's own noise exceeds the tolerance, committing it trades a true red for a false one
-(finding 88). **And a confirmation push is only as good as the closure it read:** P1 read
-maplibre's own `engines` and not its transitive tree (finding 93).
+**Read the log before naming a cause.** E5's first run spent its bound on a DNS lookup; logging,
+the cause inferred before the log was read, was not the term (finding 116). **A comparison across
+disjoint seeds can see only sampling once both paths agree per seed**, and clause (f) measured
+that they do (finding 117), so a well-formed guard can be blind to the bias it is named for
+(conflict V). **And dispatch width has a price:** batches wider than five finished 4 of 18
+agents, which is why G8 exists.

@@ -3701,19 +3701,20 @@ data and scored against an external benchmark has no demonstrable value.
     `test_declared_floor_holds_under_the_data_gate`; R7.18 by
     `tests/uplift/test_headline_fidelity_colocation_property.py`. Every one must still pass.
 
-  - [~] 22.1 Regenerate the artifact in the generating job and co-locate the interval
+  - [x] 22.1 Regenerate the artifact in the generating job and co-locate the interval
     - discharge: uplift.yml::uplift-proof (the labelled `measure-uplift-proof` run, task 25)
       AND ci.yml::uplift-verify fast shard 1/4 plus the slow selection (Property 97, the E5
       suite's code half). Two subjects; both must report.
-    - last-checked: run 41268752414 (SYNAPSE Uplift Proof, sha 209c6dc, 2026-11-01) -- the
-      labelled subject did NOT discharge: the supervisor read `exceeded_wall_clock` at
-      13500 s (finding 116), so no artifact exists. The CI subject reported green at
-      run 41268715083 (SYNAPSE CI, sha 209c6dc, 2026-11-01): fast shard 1/4 and the slow
-      selection, `test_e5_suite_property.py` 164 PASSED (all five slow clauses), the
-      aggregate `uplift-verify` `success`. P5 adds clause (f) to that file, so the CI
-      subject is read again at P5, and the labelled run re-runs at P5's head.
-    - previously: last-checked run 41265189389 (sha af950f3) -- the slow job failed on 29.6's
-      test; the labelled subject had not run.
+    - **DISCHARGED: both subjects reported at P5.** The labelled subject: run 41289052859
+      (SYNAPSE Uplift Proof, sha 732ecd9, 2026-11-01), job 124796295692 `success`; the
+      supervisor read `completed` after 3646.5 s, and `result.json` was regenerated in that job
+      with its interval beside the headline (`paired_percentile_bootstrap`, [-4.4218,
+      -4.3843]), C60 reported from the same run. The CI subject: run 41289022422 (SYNAPSE CI,
+      sha 732ecd9), fast shard 1/4 785 passed and the slow selection 99 passed;
+      `test_e5_suite_property.py` 165 PASSED per test id, clause (f) included; the aggregate
+      `uplift-verify` `success`.
+    - previously: last-checked run 41268752414 (sha 209c6dc) -- the labelled subject exceeded
+      its bound (finding 116); the CI subject reported green at run 41268715083.
     - previously: last-checked run 36860454801 (sha ec0eb91) -- pre-change.
     - **AUTHORED, SESSION 12, with this re-scope recorded.**
       - ONE job of 240 minutes, on the primary cell unshocked, under
@@ -4176,8 +4177,52 @@ data and scored against an external benchmark has no demonstrable value.
       and every byte outside them survives.
     - _Requirements: 9.12_
 
-- [ ] 25. Final checkpoint — state the claim, and state it honestly
+- [x] 25. Final checkpoint — state the claim, and state it honestly
   - discharge: uplift.yml::uplift-proof
+  - **DISCHARGED: run 41289052859 (SYNAPSE Uplift Proof, sha 732ecd9, 2026-11-01), job
+    124796295692 `success`.** The supervisor read `completed` after 3646.5 s, the artifact was
+    regenerated in the job that evaluated it, and every number below is read from that run's
+    `uplift-proof` artifact unless it names another run. The claim is stated once, here;
+    `HANDOFF.md` points to it.
+  - **THE CLAIM (2026-11-01), as the re-scope below requires. Recommendations, if executed.**
+    - **On the declared twin's primary cell, unshocked, the consensus arm's recommendations, if
+      executed, cost 4.40 objective units MORE per 24-hour replicate than the tuned control E:
+      headline -4.4026, 95% interval [-4.4218, -4.3843] (paired percentile bootstrap, 2000
+      resamples), verdict `baseline_wins`.** The run is complete: 1000 replicates per arm, 0
+      failed, `incomplete: false`. Arm means: consensus 6.883 (sd 0.266), E 2.480 (sd 0.307),
+      E' 2.480 (sd 0.306). E' - E is -0.0008, so the winner's-curse guard finds nothing.
+    - **The cause, stated beside the number and never in place of it (the pre-commitment).**
+      The consensus arm applied NONE of its 24000 binding decisions: `dispatch.json` records
+      24000 `untranslatable` and a dispatch rate of 0.0. Its pathway probe found all three
+      world inputs unresponsive, 0 of 3 pairs changed for each. Finding 112 is why: every agent
+      reads its request one level too shallow, so the Inventory Sentinel always reorders
+      `SKU001`, which the primary world does not stock (finding 113). The arm therefore ran the
+      do-nothing physics, and its 6.883 sits beside B-prime's no-op mean of 6.870. This measures
+      the system as wired today. It says nothing about consensus whose agents read the request.
+    - **The instrument.** The Power_Report (`docs/state/uplift-power-report.json`, committed at
+      P5) describes this revision: harness revision `0dd399e2...`, equal to the tree's digest.
+      It states a minimum detectable effect of 0.0235 at n = 1000 (alpha 0.05, detection 0.8),
+      far below 4.40. The controls (run 41268743674): negative `pass` (0 of 20 proven gains),
+      positive `detected` (E - O [0.1875, 0.2200]), and agreement `harness_mis_measuring`
+      under R6.4. That verdict stands as recorded; its cause, measured at P5, is the seed sets,
+      because clause (f) shows the harness prices arm O exactly as B-prime's path does
+      (finding 117).
+    - **B-prime.** Arms E and E' reproduced B-prime's means exactly in this job (seeds 0..199),
+      and arm O did in the controls' job. B-prime's split and its ceiling are ADR-055 D2.9's.
+    - **Unavailable by decision, and not claimed:** fidelity and C60 (decision 1=a; this run's
+      C60 report reads `unavailable`, exit 2, with no `kl_divergence` recorded); M5 (C74,
+      declined); the audit anchor (task 23, deferred); the published model (20.3 and 21,
+      deferred). So this is a TWIN result in objective units, bounded by a fidelity that is
+      `unknown`.
+    - **The retained conditions below, each answered:** the `--gate C60` probe reads
+      `falsified` in every sweep since P2 (operator `untrack-the-evidence-path`); `uplift.yml`'s
+      steps are declared in `blocking-steps.yaml` and its jobs filed `ineligible` (conflict U);
+      the publish-audit-anchor half went with task 23; `ratchets.json` carries 16.2's three
+      thresholds and 10.4's margin, and `ratchet_truth` finds every clause holding while 23 of
+      its 27 entries read SKIP for want of a measurement, which is not a pass. This session did
+      not re-audit 8.2's, 12.x's or 13.x's thresholds against `ratchets.json`. The ledger, the
+      gate surface and the README are projections of one execution (task 26; `ledger_gen` and
+      `readme_gen` `[OK]` at P5).
   - Narrowed 2026-09-29: the publish-audit-anchor.yml half is dropped because task 23 is deferred.
   - **RE-SCOPED 2026-09-29 (session-11 plan, operator-approved).** The claim is a measured TWIN
     result in objective units against the named tuned control E of the primary cell, with its
@@ -6084,6 +6129,10 @@ progress ledger; design reasoning is ADR-055.
         instrument bias, yet reports `harness_mis_measuring` 5% of the time. Comparing on
         shared seeds, or reading a firing against the identity test, is a design decision this
         ledger does not make.
+      - **MEASURED at P5: clause (f) PASSED** (CI run 41289022422's slow selection). The
+        harness prices arm O exactly as B-prime's path does at the positive range's first
+        three seeds, as clause (a) shows for arm E, so the gap is the seed sets', about 2.4
+        standard errors. The verdict stands as recorded, with that reading beside it.
     - **FINDING 118 (measured; cause inferred). Stryker's run time more than tripled at P3.**
       - The same 23 files and 1846 mutants. P2 (`b3a98a8`) finished in 20.5 minutes; P3 was
         cancelled at 36.6 minutes (finding 115); P4 timed out at 60.3 (`timeout-minutes: 60`).
@@ -6140,6 +6189,45 @@ progress ledger; design reasoning is ADR-055.
       - E' sits within 0.01 of E;
       - C60 reads `unavailable` (exit 2) under decision 1=a; its stated reason is not predicted.
     - If E5 completes, P6 discharges 22.1 and states task 25's claim. If it does not, both wait.
+    - **MEASURED at P5 (`732ecd9`, 2026-11-01). Every E5 prediction held; the frontend missed
+      twice.**
+      - Held, read from the runs:
+        - CI run 41289022422: `shard files 45/39/31/29 = 144; pytest universe = 144` and
+          `shards selected 785/378/373/265 = 1801; unsharded selection = 1801`, exactly. The
+          slow selection selected 99 and passed 99, clause (f) among them. The aggregate
+          `uplift-verify` and `quality-gates` `success`.
+        - Truth Gates run 41289022401: every count as at P4 (57/0/0/11/68; readme 56/0/0/12/68;
+          68 ledger rows; 689 surface rows; 455 steps; 32 of 32 jobs). The sweep falsified 14
+          of 14 declared.
+        - E5 run 41289052859: the supervisor read `completed` after 3646.5 s, inside 90
+          minutes. The probe read as at P4, and E and E' reproduced exactly. `dispatch.json`
+          shows 0 applied of 24000, all `untranslatable`. The headline, -4.4026, sits inside
+          [-4.9, -3.9], verdict `baseline_wins`. E' - E is -0.0008. C60 reads `unavailable`,
+          exit 2, its reason fidelity (no `kl_divergence`). Finding 116's repair held: the same
+          command that ran past 13500 s at P4 finished in 3646 s.
+        - Frontend CI run 41289022398: `audit-supply` (finding 105) and `effectiveness-ratchet`
+          red, as predicted. Mutation, Policy, Integration, Security and Terraform `success`.
+      - **MISS 1, in the safe direction:** `e2e` passed (21 passed, 8 skipped); finding 114's
+        LCP read inside its budget this time.
+      - **MISS 2:** Stryker failed in its dry run, not on time (finding 120).
+      - Read for the first time this session, because `e2e` passed: `fe-invariants` FAILED on
+        the same six `not_executed` (FE-INV-010, 011, 022, 029, 056 and 063; finding 90), with
+        `ATTESTED=60`. FE-INV-025 now reads `[--] declared enforced by frontend.yml::build`.
+      - Harvest: 22.1 and 25 move to `[x]`.
+    - **FINDING 120 (measured; cause inferred). A frontend property fails on the key
+      `__proto__`.**
+      - Stryker's dry run (job 124796687310) runs the whole vitest suite under a fresh
+        fast-check seed. It failed `src/transport/__tests__/schema-boundary.property.test.ts:164`,
+        "Property 4: fail-closed and forward-compatible parses a valid payload with arbitrary
+        disjoint extra keys and preserves known fields", after 64 runs at seed 931787931. The
+        counterexample adds the extra key `__proto__` (`{["__proto__"]:false}`). The plain
+        vitest run passed under its own seeds, so the failure depends on the seed, not on P5,
+        which changed no frontend file.
+      - Inferred: object spread, or the schema's strip step, treats `__proto__` as the
+        prototype rather than as an own key. Whether the generator should exclude that key or
+        the parser must handle it is the frontend owner's decision. A parser that lets a payload
+        key set a prototype is the security-relevant reading.
+      - It pre-empts finding 118: with the dry run red, P5 measured no Stryker time.
 
   - [x] 29.1 Deferral is a terminal state the census reports
     - discharge: ci.yml::uplift-verify fast shard 3/4 (tests/verify a-o)
