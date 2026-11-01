@@ -64,7 +64,8 @@ function isViolationSeverity(value: unknown): value is ViolationSeverity {
   return value === "low" || value === "medium" || value === "high" || value === "critical";
 }
 
-const ZRecommendedAction = z.record(z.unknown()).optional();
+// zod 4: z.record() takes an explicit key schema; an enum key would be exhaustive.
+const ZRecommendedAction = z.record(z.string(), z.unknown()).optional();
 
 export const EscalationMessageSchema = z
   .object({
@@ -72,7 +73,7 @@ export const EscalationMessageSchema = z
     decision_id: ZUuid,
     tier: ZTier.optional(),
     confidence: ZConfidence,
-    proposals: z.array(z.record(z.unknown())).default([]),
+    proposals: z.array(z.record(z.string(), z.unknown())).default([]),
     recommended_action: ZRecommendedAction,
     violations: z.array(ZViolation).default([]),
     reason: z.string().optional(),
@@ -88,7 +89,7 @@ export const OverrideResponseSchema = z
     decision_id: ZUuid,
     response: z.object({
       action: z.enum(["approved", "rejected", "modified"]),
-      modified_action: z.record(z.unknown()).optional(),
+      modified_action: z.record(z.string(), z.unknown()).optional(),
       reason: z.string().min(1).optional(),
     }),
   })

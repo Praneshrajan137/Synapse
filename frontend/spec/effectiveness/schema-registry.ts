@@ -14,7 +14,7 @@
  * this is a move-and-re-export with no schema changes.
  */
 
-import type { ZodTypeAny } from "zod";
+import type { z } from "zod";
 
 import { AgentHealthResponseSchema } from "@domain/agent-health";
 import { AuditListResponseSchema } from "@domain/audit-row";
@@ -54,7 +54,7 @@ export type SchemaId = string;
  * This is the authoritative "domain schema registry": a capability
  * `hasDomainSchema` iff its `schemaId` resolves here.
  */
-export const DOMAIN_SCHEMA_REGISTRY: Readonly<Record<SchemaId, ZodTypeAny>> = {
+export const DOMAIN_SCHEMA_REGISTRY: Readonly<Record<SchemaId, z.ZodType>> = {
   // HTTP response schemas (schemaId === the value passed to http-client).
   AgentHealthResponse: AgentHealthResponseSchema,
   AuditListResponse: AuditListResponseSchema,
@@ -83,7 +83,7 @@ export const DOMAIN_SCHEMA_REGISTRY: Readonly<Record<SchemaId, ZodTypeAny>> = {
 };
 
 /** The registered schema for `id`, or `undefined` when none is registered. */
-export function getSchema(id: SchemaId): ZodTypeAny | undefined {
+export function getSchema(id: SchemaId): z.ZodType | undefined {
   return Object.hasOwn(DOMAIN_SCHEMA_REGISTRY, id) ? DOMAIN_SCHEMA_REGISTRY[id] : undefined;
 }
 

@@ -9,7 +9,7 @@ import { type PricingUpdate, PricingUpdateSchema } from "@domain/pricing-update"
 import type { City } from "@domain/primitives";
 import { type RoutePlan, RoutePlanSchema } from "@domain/route-plan";
 import { type TwinDivergenceEvent, TwinDivergenceEventSchema } from "@domain/twin-state";
-import type { ZodIssue } from "zod";
+import type { z } from "zod";
 import { type WsMultiplex, createWsMultiplex } from "./ws-multiplex";
 
 // Typed wrapper around the WS multiplex pointed at /ws/firehose.
@@ -104,10 +104,14 @@ export interface CreateFirehoseOptions {
   readonly sinceSeq?: number | undefined;
 }
 
-/** The first schema issue as `path: message`, which is what a rejection reports. */
-function describeIssue(issue: ZodIssue | undefined): string {
+/**
+ * The first schema issue as `path: message`, which is what a rejection reports. A zod path is
+ * `PropertyKey[]`, so each segment goes through `String()`: `join` would throw on a symbol.
+ */
+function describeIssue(issue: z.core.$ZodIssue | undefined): string {
   if (issue === undefined) return "payload: failed schema validation";
-  const where = issue.path.length > 0 ? issue.path.join(".") : "payload";
+  const where =
+    issue.path.length > 0 ? issue.path.map((segment) => String(segment)).join(".") : "payload";
   return `${where}: ${issue.message}`;
 }
 

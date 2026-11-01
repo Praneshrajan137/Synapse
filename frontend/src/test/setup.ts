@@ -1,3 +1,4 @@
+import "../lib/zod-config";
 import "@testing-library/jest-dom/vitest";
 import { cleanup } from "@testing-library/react";
 import fc from "fast-check";

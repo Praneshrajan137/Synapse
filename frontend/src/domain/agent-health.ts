@@ -20,7 +20,8 @@ export const AgentStatusEnum = z.enum(["healthy", "degraded", "unhealthy", "unkn
 export type AgentStatus = z.infer<typeof AgentStatusEnum>;
 
 // Pre-P2 shape (status-only). Kept for backwards-compatibility tests.
-export const AgentHealthMapSchema = z.record(AgentStatusEnum);
+// zod 4: z.record() takes an explicit key schema; an enum key would be exhaustive.
+export const AgentHealthMapSchema = z.record(z.string(), AgentStatusEnum);
 
 // P2 shape: per-agent metric overlay merged with status probe.
 export const AgentMetricsSchema = z
@@ -36,7 +37,7 @@ export const AgentMetricsSchema = z
 
 export const AgentHealthResponseSchema = z
   .object({
-    agents: z.union([AgentHealthMapSchema, z.record(AgentMetricsSchema)]),
+    agents: z.union([AgentHealthMapSchema, z.record(z.string(), AgentMetricsSchema)]),
     count: z.number().int().min(0),
   })
   .passthrough();

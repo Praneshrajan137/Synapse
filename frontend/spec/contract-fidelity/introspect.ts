@@ -34,8 +34,9 @@
  */
 
 import { readFile } from "node:fs/promises";
+import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import type { ZodTypeAny } from "zod";
+import { z } from "zod";
 
 import { createSynapseApi } from "@transport/synapse-api";
 
@@ -366,80 +367,168 @@ export const ALL_ENTITLEMENTS: readonly CapabilityEntitlement[] = [
 ];
 
 // ─────────────────────────────────────────────────────────────────────────
-// Zod field-name extraction
+// Zod field-name extraction (zod 4: `schema._zod.def`, discriminated by `type`)
 // ─────────────────────────────────────────────────────────────────────────
 
 /**
- * The top-level field names of a Zod object schema, unwrapping the common
- * wrappers (`.optional()`, `.nullable()`, `.default()`, `.catch()`, effects,
- * readonly) and flattening `.and()` intersections. Returns `[]` for
- * non-object schemas (unions, records, primitives) — those are compared as
- * open shapes, not by field.
+ * The members of a zod 4 definition (`schema._zod.def`) this reader uses. zod declares only the
+ * base `$ZodTypeDef`, so the kind-specific members are `unknown` here and each schema-valued one
+ * passes {@link schemaMember} before it is used.
+ */
+interface ZodDefView {
+  readonly type?: string;
+  readonly innerType?: unknown;
+  readonly in?: unknown;
+  readonly out?: unknown;
+  readonly getter?: unknown;
+  readonly shape?: unknown;
+  readonly left?: unknown;
+  readonly right?: unknown;
+}
+
+/** Kinds that wrap exactly one schema, which is the one that owns the fields. */
+const WRAPPER_KINDS: ReadonlySet<string> = new Set([
+  "optional",
+  "nullable",
+  "default",
+  "prefault",
+  "nonoptional",
+  "catch",
+  "readonly",
+  "lazy",
+  "pipe",
+]);
+
+/**
+ * Every zod 4.6.7 kind that is neither an object nor a wrapper. These are compared as open shapes
+ * and have no field names. The list is explicit on purpose: a kind outside it, or no kind at all,
+ * throws. Under zod 4 the zod 3 reader's `_def.typeName` is `undefined` on every schema, so it
+ * returned `[]` for all of them and the over-strict drift rows went empty without failing.
+ */
+const NON_OBJECT_KINDS: ReadonlySet<string> = new Set([
+  "string",
+  "number",
+  "int",
+  "boolean",
+  "bigint",
+  "symbol",
+  "null",
+  "undefined",
+  "void",
+  "never",
+  "any",
+  "unknown",
+  "date",
+  "nan",
+  "enum",
+  "literal",
+  "template_literal",
+  "file",
+  "array",
+  "tuple",
+  "record",
+  "map",
+  "set",
+  "union",
+  "transform",
+  "success",
+  "promise",
+  "function",
+  "custom",
+]);
+
+/** The definition of a schema, or `undefined` when the value carries none (not a zod schema). */
+function defOf(schema: z.core.$ZodType): ZodDefView | undefined {
+  const internals: { readonly def?: ZodDefView } | undefined = schema._zod;
+  return internals?.def;
+}
+
+/** A schema-valued member of a definition, or a refusal naming where the walk broke. */
+function schemaMember(value: unknown, where: string): z.core.$ZodType {
+  if (value instanceof z.core.$ZodType) return value;
+  throw new Error(`schemaFieldNames: ${where} is not a zod schema; no field can be read from it`);
+}
+
+/**
+ * The top-level field names of a Zod object schema, unwrapping every wrapper kind
+ * (`.optional()`, `.nullable()`, `.default()`, `.prefault()`, `.nonoptional()`, `.catch()`,
+ * `.readonly()`, `z.lazy()`, and the pipe a `.transform()` or `z.preprocess()` builds) and
+ * flattening `.and()` intersections. zod 4 refinements are checks on the schema itself, so they
+ * need no unwrapping. Returns `[]` only for the kinds in {@link NON_OBJECT_KINDS} (unions,
+ * records, primitives...), which are compared as open shapes, not by field. Any other kind throws.
  *
  * @param requiredOnly when true, omit fields whose schema is optional — the
  *   "required field set" used for over-strict drift detection.
  */
-export function schemaFieldNames(schema: ZodTypeAny, requiredOnly = false): string[] {
+export function schemaFieldNames(schema: z.core.$ZodType, requiredOnly = false): string[] {
   const inner = unwrapSchema(schema);
-  const def = (inner as { _def?: { typeName?: string } })._def;
-  if (!def) return [];
+  const def = defOf(inner);
+  const kind = def?.type;
 
-  if (def.typeName === "ZodObject") {
-    const shape = (inner as unknown as { shape: Record<string, ZodTypeAny> }).shape;
-    const keys = Object.keys(shape);
-    if (!requiredOnly) return keys;
-    return keys.filter((key) => {
-      const field = shape[key];
-      return field !== undefined && !isOptionalField(field);
-    });
+  if (def !== undefined && kind === "object") {
+    const shape = def.shape;
+    if (typeof shape !== "object" || shape === null) {
+      throw new Error("schemaFieldNames: an object schema carries no shape");
+    }
+    const fields = Object.entries(shape);
+    if (!requiredOnly) return fields.map(([key]) => key);
+    return fields
+      .filter(([key, field]) => !isOptionalField(schemaMember(field, `shape.${key}`)))
+      .map(([key]) => key);
   }
 
-  if (def.typeName === "ZodIntersection") {
-    const { left, right } = def as unknown as { left: ZodTypeAny; right: ZodTypeAny };
-    return [...new Set([...schemaFieldNames(left, requiredOnly), ...schemaFieldNames(right, requiredOnly)])];
+  if (def !== undefined && kind === "intersection") {
+    const left = schemaMember(def.left, "intersection.left");
+    const right = schemaMember(def.right, "intersection.right");
+    const leftNames = schemaFieldNames(left, requiredOnly);
+    const rightNames = schemaFieldNames(right, requiredOnly);
+    return [...new Set([...leftNames, ...rightNames])];
   }
 
-  return [];
+  if (kind !== undefined && NON_OBJECT_KINDS.has(kind)) return [];
+
+  throw new Error(
+    `schemaFieldNames: no rule for schema kind ${JSON.stringify(kind ?? "undefined")}; refusing to report it as fieldless, which would silence the drift check`,
+  );
 }
 
-/** Peel `.optional()/.nullable()/.default()/.catch()/effects/readonly` off a schema. */
-function unwrapSchema(schema: ZodTypeAny): ZodTypeAny {
-  let current: ZodTypeAny = schema;
+/** Peel every wrapper kind off a schema, down to the schema that owns the fields. */
+export function unwrapSchema(schema: z.core.$ZodType): z.core.$ZodType {
+  let current = schema;
   for (let guard = 0; guard < 16; guard += 1) {
-    const def = (current as { _def?: { typeName?: string } })._def;
-    if (!def) return current;
-    switch (def.typeName) {
-      case "ZodEffects":
-        current = (def as unknown as { schema: ZodTypeAny }).schema;
-        break;
-      case "ZodOptional":
-      case "ZodNullable":
-      case "ZodReadonly":
-      case "ZodDefault":
-      case "ZodCatch":
-      case "ZodBranded":
-        current = (def as unknown as { innerType: ZodTypeAny }).innerType;
-        break;
-      default:
-        return current;
-    }
+    const def = defOf(current);
+    const kind = def?.type;
+    if (def === undefined || kind === undefined || !WRAPPER_KINDS.has(kind)) return current;
+    current = innerOf(def, kind);
   }
-  return current;
+  throw new Error("unwrapSchema: more than 16 nested wrappers; refusing to guess the shape");
 }
 
-/** Whether a Zod field is optional (`.optional()` or `.default()` present). */
-function isOptionalField(field: ZodTypeAny): boolean {
-  for (let guard = 0, current: ZodTypeAny = field; guard < 16; guard += 1) {
-    const def = (current as { _def?: { typeName?: string } })._def;
-    if (!def) return false;
-    if (def.typeName === "ZodOptional" || def.typeName === "ZodDefault") return true;
-    if (def.typeName === "ZodNullable" || def.typeName === "ZodReadonly") {
-      current = (def as unknown as { innerType: ZodTypeAny }).innerType;
-      continue;
-    }
-    return false;
+/** The schema a wrapper kind wraps. */
+function innerOf(def: ZodDefView, kind: string): z.core.$ZodType {
+  if (kind === "lazy") {
+    const getter = def.getter;
+    if (typeof getter !== "function") throw new Error("unwrapSchema: a lazy schema has no getter");
+    return schemaMember(getter(), "lazy.getter()");
   }
-  return false;
+  if (kind === "pipe") {
+    // `.transform()` builds pipe(schema -> transform); `z.preprocess()` builds
+    // pipe(transform -> schema). The fields live on the side that is not the transform.
+    const input = schemaMember(def.in, "pipe.in");
+    return defOf(input)?.type === "transform" ? schemaMember(def.out, "pipe.out") : input;
+  }
+  return schemaMember(def.innerType, `${kind}.innerType`);
+}
+
+/**
+ * Whether a field may be absent from the payload. This is the predicate zod 4's own object parse
+ * applies (`handlePropertyResult` in core/schemas.ts reports an absent key iff `optin` is
+ * `undefined`), so the answer is the parser's rather than a re-derivation: `.optional()`,
+ * `.default()`, `.prefault()` and `.catch()` are optional, and `.nullable()`, `.readonly()`,
+ * `z.lazy()` and a pipe take the answer of the schema they wrap (a pipe, of its input side).
+ */
+function isOptionalField(field: z.core.$ZodType): boolean {
+  return field._zod.optin !== undefined;
 }
 
 // ─────────────────────────────────────────────────────────────────────────
@@ -486,8 +575,18 @@ export interface LoadedContract {
   readonly fetchError?: string;
 }
 
-/** Absolute path to the checked-in OpenAPI snapshot fallback. */
-export const OPENAPI_SNAPSHOT_PATH = fileURLToPath(new URL("./openapi.snapshot.json", import.meta.url));
+/**
+ * Absolute path to the checked-in OpenAPI snapshot fallback, joined onto this module's own path.
+ * The form `fileURLToPath(new URL("./openapi.snapshot.json", import.meta.url))` threw
+ * `ERR_INVALID_URL_SCHEME` at import time when a vitest test imported a module written that way
+ * (recorded in `../effectiveness/check-baseline.ts`), and `__tests__/schema-field-names.test.ts`
+ * imports this module. check-baseline.ts still evaluates `fileURLToPath(import.meta.url)` at
+ * import time (`isDirectRun`) under its own test, so this form is inferred safe, not measured.
+ */
+export const OPENAPI_SNAPSHOT_PATH = join(
+  dirname(fileURLToPath(import.meta.url)),
+  "openapi.snapshot.json",
+);
 
 const HTTP_METHODS = new Set(["get", "put", "post", "delete", "patch", "options", "head", "trace"]);
 const SUCCESS_STATUSES = ["200", "201", "202", "203"] as const;
