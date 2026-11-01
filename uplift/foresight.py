@@ -537,8 +537,9 @@ def _drive_arm(
     cannot be SELECTED under one cadence and MEASURED under another.
     """
     # Imported here rather than at module scope, for the reason `regret.py` imports this module
-    # lazily: `uplift.harness` pulls numpy and pydantic, and `regret.py` is imported by the fast
-    # property suite. The functions are the harness's own on purpose -- see `observe`'s docstring.
+    # lazily: `uplift.harness` pulls numpy, pydantic and (through `uplift.contract`) scipy, and
+    # `regret.py` is imported by the fast property suite. The functions are the harness's own on
+    # purpose -- see `observe`'s docstring.
     from uplift.harness import _apply_reorders, observe
 
     for _ in range(slices):
@@ -589,8 +590,8 @@ def run_single_arm(
     It returns the simulation rather than a cost, for the same reason `run_three_pass` does: the
     objective lives in `uplift/regret.py` and this module does not import it.
     """
-    # Lazy, exactly as `run_three_pass` does it and for the same reason: keeping numpy and
-    # pydantic out of the fast suite's import closure.
+    # Lazy, exactly as `run_three_pass` does it and for the same reason: keeping numpy, pydantic
+    # and scipy out of the fast suite's import closure.
     from uplift.harness import _derive_unit_costs
 
     slices, slice_hours = _cadence(hours)
@@ -645,12 +646,12 @@ def run_three_pass(
     engine must run ``world``, or it is refused.
     """
     # Imported here rather than at module scope, for the reason `regret.py` imports this
-    # module lazily: `uplift.harness` pulls numpy and pydantic, and `regret.py` is imported by
-    # the fast property suite. The functions are the harness's own on purpose -- see
-    # `observe`'s docstring. Two implementations of "what an arm may see" and "how a reorder
-    # reaches the twin" would drift, and the arm that drifted would be the one task 11's
-    # verdict is about. `uplift.oracle_arm` reads the committed objective through
-    # `uplift.regret`, which is why it is lazy too.
+    # module lazily: `uplift.harness` pulls numpy, pydantic and (through `uplift.contract`)
+    # scipy, and `regret.py` is imported by the fast property suite. The functions are the
+    # harness's own on purpose -- see `observe`'s docstring. Two implementations of "what an
+    # arm may see" and "how a reorder reaches the twin" would drift, and the arm that
+    # drifted would be the one task 11's verdict is about. `uplift.oracle_arm` reads the
+    # committed objective through `uplift.regret`, which is why it is lazy too.
     from uplift.harness import _derive_unit_costs
     from uplift.oracle_arm import build_structure_aware_arm
 
