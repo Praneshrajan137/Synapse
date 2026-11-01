@@ -20,25 +20,50 @@ Property 1: Consensus arm decides only through the in-process transport (network
     ``ConsensusProtocol.run_consensus`` over the In_Process_Transport, without opening
     any network socket or contacting any external service."
 
+    A second clause closes what the stubs cannot see. It builds the REAL agent handlers
+    (:func:`uplift.consensus_arm.build_agent_handlers`) under the same guard and asks each
+    for one proposal in the protocol's own envelope, so a dial an agent's own pipeline makes
+    fails it: the Disruption Shield's reasoner dialed Ollama on every proposal until
+    finding 116. Example-based and not ``slow``: no twin and no ``run_consensus``.
+
+    A third clause covers a dial that depends on what is installed. CodeCarbon's tracker
+    queries ``169.254.169.254`` when it is built (finding 121), and only CI installs
+    codecarbon, so the second clause could not catch it on the laptop. The third installs a
+    stand-in ``codecarbon`` whose tracker dials when built, so it fails wherever it runs if
+    the arm's Sustainability Agent builds one.
+
 **Validates: Requirements 1.2**
 """
 from __future__ import annotations
 
+import asyncio
+import copy
+import inspect
 import socket
-from typing import Any
+import sys
+import types
+from typing import TYPE_CHECKING, Any
 from uuid import uuid4
 
 import pytest
 from hypothesis import HealthCheck, given, settings
 from hypothesis import strategies as st
+from synapse_common.a2a_envelope import decision_context
 from synapse_common.models import AgentName, AgentProposal, DecisionTier
 
 from uplift.consensus_arm import (
     ConsensusArmUnavailable,
+    build_agent_handlers,
     build_consensus_arm,
     build_consensus_protocol,
+    observation_to_decision_request,
 )
 from uplift.interfaces import Observation, PolicyAction
+
+if TYPE_CHECKING:
+    from collections.abc import Awaitable
+
+    from uplift.consensus_arm import A2AHandler
 
 _AGENT_NAMES: tuple[str, ...] = tuple(str(name) for name in AgentName)
 
@@ -281,3 +306,134 @@ def test_consensus_decides_only_through_in_process_transport(obs: Observation) -
 
     # And nothing dialed the network.
     assert guard.attempts == [], f"network access attempted: {guard.attempts}"
+
+
+# ---------------------------------------------------------------------------
+# The REAL agent handlers (finding 116): built and consulted under the same guard
+# ---------------------------------------------------------------------------
+#: The envelope test's stocked observation (test_agents_read_the_protocols_envelope_property.py),
+#: restated so that neither module imports the other's internals.
+_STOCKED = Observation(
+    inventory={"sku-a": 12, "sku-b": 0},
+    sim_time=90.0,
+    delivery_count=3,
+    spoilage_count=0,
+    stockout_count=1,
+    unit_costs={"sku-a": 2.5, "sku-b": 4.0},
+    on_order={"sku-b": 20.0},
+)
+
+#: A store, so the Freshness Guardian reaches its pipeline: it refuses a request naming none.
+_STORE_ID = "STORE_BLR_001"
+
+
+async def _awaited(pending: Awaitable[object]) -> object:
+    """``pending``'s result: ``asyncio.run`` takes a coroutine, not any awaitable."""
+    return await pending
+
+
+def _reply(handler: A2AHandler, envelope: dict[str, Any]) -> object:
+    """``handler``'s reply to ``envelope``, awaited if async, as the arm's transport does."""
+    reply: object = handler(envelope)
+    if inspect.isawaitable(reply):
+        reply = asyncio.run(_awaited(reply))
+    return reply
+
+
+def test_the_real_agent_handlers_build_and_propose_without_opening_a_socket(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Building the eight handlers E5's arm uses and asking each for a proposal dials nothing.
+
+    Each handler is sent the envelope ``ConsensusProtocol._request_proposal`` sends
+    (``params={"decision_context": request}``) inside :class:`_SocketGuard`, and the handlers
+    are BUILT inside it too, so a client a constructor dials is caught as well as a dial on the
+    proposal path. This clause fails if :func:`build_agent_handlers` stops giving the
+    Disruption Shield ``_offline_reasoner``: the default ``DeepSeekReasoner`` POSTs through
+    ``httpx`` on every proposal (finding 116). Where codecarbon is installed, as in CI, it
+    also fails if the Sustainability Agent loses ``_offline_carbon_tracker`` (finding 121);
+    the next clause checks that path on any machine.
+
+    Asserted: no dial, and all eight driven. Never that each proposed: a handler may answer
+    with a JSON-RPC error (the Pricing Oracle refuses this request by PRE-PO-001 and
+    PRE-PO-003), and a refusal opens no socket either.
+    """
+    # The code alone is checked. No environment workaround: finding 116's was this variable,
+    # pointed at a refused port. No Pinecone key, as in E5's job: given one, the playbook
+    # retriever builds its paid client by design (I-1), and that is not E5's path.
+    monkeypatch.delenv("DS_OLLAMA_BASE_URL", raising=False)
+    monkeypatch.delenv("PINECONE_API_KEY", raising=False)
+    request = {**observation_to_decision_request(_STOCKED), "store_id": _STORE_ID}
+    # The envelope reader every handler's `proposal` calls finds the request in these params,
+    # so no handler refuses the envelope before its pipeline runs. If one did, this clause would
+    # pass without reaching any code that could dial.
+    assert decision_context({"decision_context": request})["sku_ids"] == request["sku_ids"]
+
+    driven: list[str] = []
+    with _SocketGuard() as guard:
+        handlers = build_agent_handlers()
+        for index, agent in enumerate(sorted(handlers)):
+            envelope: dict[str, Any] = {
+                "jsonrpc": "2.0",
+                "method": "proposal",
+                "params": {"decision_context": copy.deepcopy(request)},
+                "id": str(index),
+            }
+            _reply(handlers[agent], envelope)
+            driven.append(agent)
+
+    assert guard.attempts == [], f"network access attempted: {guard.attempts}"
+    assert len(driven) == 8, f"{len(driven)} handler(s) were driven, not 8: {driven}"
+    assert driven == sorted(_AGENT_NAMES), driven
+
+
+#: Where codecarbon 2.8.4's tracker first looks itself up (``core/cloud.py``): the AWS, Azure and
+#: GCP instance-metadata address, the query PR #87's job 124890674288 recorded (finding 121).
+_METADATA_HOST = "169.254.169.254"
+
+
+def test_the_arms_sustainability_agent_reports_compute_co2_without_building_codecarbons_tracker(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The arm's Sustainability Agent proposes without constructing CodeCarbon's tracker.
+
+    ``CarbonTracker.track_compute`` builds ``codecarbon.EmissionsTracker`` on its first call,
+    and that constructor queries the instance-metadata address. A stand-in ``codecarbon``
+    module is installed whose tracker records its construction and dials that address, so this
+    clause can fail on a machine without codecarbon. It fails if :func:`build_agent_handlers`
+    stops giving the agent ``_offline_carbon_tracker``: the base tracker would build the
+    stand-in, which records itself and which the guard catches dialing. It also fails if the
+    offline tracker reports a compute CO2 other than the ``0.0`` the base reports without
+    CodeCarbon.
+    """
+    constructed: list[str] = []
+
+    class _DialingEmissionsTracker:
+        """Stands in for codecarbon 2.8.4's tracker: it looks itself up when it is built."""
+
+        def __init__(self, **_: object) -> None:
+            constructed.append("EmissionsTracker")
+            socket.getaddrinfo(_METADATA_HOST, 80)
+
+    stand_in = types.ModuleType("codecarbon")
+    monkeypatch.setattr(stand_in, "EmissionsTracker", _DialingEmissionsTracker, raising=False)
+    monkeypatch.setitem(sys.modules, "codecarbon", stand_in)
+    monkeypatch.delenv("PINECONE_API_KEY", raising=False)
+    request = {**observation_to_decision_request(_STOCKED), "store_id": _STORE_ID}
+    envelope: dict[str, Any] = {
+        "jsonrpc": "2.0",
+        "method": "proposal",
+        "params": {"decision_context": request},
+        "id": "carbon",
+    }
+
+    with _SocketGuard() as guard:
+        handlers = build_agent_handlers()
+        reply = _reply(handlers["sustainability_agent"], envelope)
+
+    assert guard.attempts == [], f"network access attempted: {guard.attempts}"
+    assert constructed == [], "the arm's Sustainability Agent built CodeCarbon's tracker"
+    assert isinstance(reply, dict), reply
+    assert "error" not in reply, reply
+    trace = reply["result"]["justification_trace"]
+    assert "Compute CO2: 0.000000 kg" in trace, trace

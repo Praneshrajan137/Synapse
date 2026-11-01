@@ -750,13 +750,20 @@ def _comparator_line(reproduction: BprimeReproduction) -> str:
 
 
 def _unconsultable_reason(arm: DecisionPolicy) -> str:
-    """Why an arm that is not a :class:`~uplift.dispatch.PathwayConsultant` cannot be probed."""
-    return (
+    """Why an arm that is not a :class:`~uplift.dispatch.PathwayConsultant` cannot be probed.
+
+    For the :class:`~uplift.policies.UnavailableConsensusArm` stand-in, the stand-in's own reason
+    is carried too, so the refusal says why there was no pathway as well as that there was none.
+    """
+    reason = (
         f"the consensus arm built for the probe is {type(arm).__name__}, not a pathway the probe "
         "can consult (a PathwayConsultant has levers and consult; UnavailableConsensusArm, the "
         "stand-in E5 builds when the in-process consensus network cannot be assembled, has "
         "neither), so there is no binding decision to withhold an input from"
     )
+    if isinstance(arm, UnavailableConsensusArm):
+        return f"{reason} (the stand-in's own reason: {arm.reason})"
+    return reason
 
 
 def _e5_pathway_probe(directory: Path) -> tuple[PathwayProbeReport | PathwayProbeRefusal, Path]:

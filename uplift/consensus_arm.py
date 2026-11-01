@@ -82,6 +82,9 @@ from uplift.interfaces import (
 
 if TYPE_CHECKING:  # imported lazily at runtime to avoid a heavy import at module load
     from synapse_common.models import ConsensusDecision
+
+    from agents.disruption_shield.models.reasoning import DeepSeekReasoner
+    from agents.sustainability_agent.models.carbon import CarbonTracker
     from orchestrator.consensus.protocol import ConsensusProtocol
 
 
@@ -922,6 +925,78 @@ class _OfflineLLMClient:
         return None
 
 
+def _offline_reasoner() -> DeepSeekReasoner:
+    """The Disruption Shield's own reasoner with its one HTTP call refused (finding 116, I-1).
+
+    ``DeepSeekReasoner.reason`` (``agents/disruption_shield/models/reasoning.py:44-71``) calls
+    ``_call_ollama`` (line 89), the class's only HTTP method, and on ``httpx.HTTPError``,
+    ``httpx.TimeoutException`` or ``json.JSONDecodeError`` (line 65) logs ``ollama_unavailable``
+    and returns ``_fallback_reasoning``, its rule-based chain. A refused port or a host name that
+    does not resolve fails that method's ``client.post`` (line 102) with ``httpx.ConnectError``,
+    an ``httpx.HTTPError``. The subclass overrides ``_call_ollama`` alone, raising that class
+    before any client is built, so the rest of ``reason`` runs unchanged: it returns what the E5
+    job's refused-port workaround returned, and only the warning's ``error`` text differs.
+
+    The class is defined in here because its base lives in ``agents``, which this module imports
+    only inside functions (``uplift/controls_run.py``'s thin-closure note). So it cannot be
+    pickled, which changes nothing: the assembled arm already holds the local factory
+    :func:`_in_process_session_factory` returns, and the harness runs an arm it cannot pickle
+    serially.
+    """
+    import httpx
+
+    from agents.disruption_shield.models import reasoning
+
+    class _OfflineReasoner(reasoning.DeepSeekReasoner):
+        """``DeepSeekReasoner`` with ``_call_ollama`` refused; every other line is the base's."""
+
+        #: Not called ``reason``: that name is the base's method, which must not be shadowed.
+        unavailable_reason = "no Ollama in the network-free in-process consensus arm ($0)"
+
+        def _call_ollama(self, prompt: str) -> dict[str, Any]:  # noqa: ARG002 - always refused
+            raise httpx.ConnectError(self.unavailable_reason)
+
+    return _OfflineReasoner()
+
+
+def _offline_carbon_tracker() -> CarbonTracker:
+    """The Sustainability Agent's carbon tracker, with CodeCarbon's tracker never built (I-1).
+
+    ``CarbonTracker.track_compute`` (``agents/sustainability_agent/models/carbon.py``) builds
+    CodeCarbon's ``EmissionsTracker`` on its first call, and that constructor looks up where it
+    runs. In codecarbon 2.8.4 it queries the AWS, Azure and GCP instance-metadata endpoint at
+    ``169.254.169.254`` and then, off a cloud, ``get.geojs.io`` (``core/cloud.py`` and
+    ``external/geography.py``; read from the source, not measured). CI installs that version
+    from the agent's requirements, and the handler clause of the network-free property caught
+    the first query on PR #87 (job 124890674288). The laptop has no codecarbon, so there the
+    base took its ``ImportError`` branch and the clause passed (finding 121).
+
+    The subclass overrides ``track_compute`` alone, returning ``0.0``: what the base returns
+    when CodeCarbon cannot be imported, so the arm's agent reports the same value wherever it
+    runs. The base's ``codecarbon_unavailable`` warning is logged once, when the tracker is
+    built, not on each of E5's consults. ``track_route``, the delivery CO2, is the base's.
+    Compute emissions reach no decision: the agent sets its ``utility_score`` from its waste
+    model's confidence, and the Pareto step scores a proposal by that score
+    (``orchestrator/consensus/pareto.py``; read, not measured).
+
+    Defined in here, not at module scope, for :func:`_offline_reasoner`'s reason.
+    """
+    from agents.sustainability_agent.models import carbon
+
+    class _OfflineCarbonTracker(carbon.CarbonTracker):
+        """``CarbonTracker`` with ``track_compute`` refused; every other line is the base's."""
+
+        def track_compute(self) -> float:
+            return 0.0
+
+    carbon.logger.warning(
+        "codecarbon_unavailable",
+        fallback="zero compute emissions",
+        reason="not consulted in the network-free in-process consensus arm ($0)",
+    )
+    return _OfflineCarbonTracker()
+
+
 #: HITL wait budget for the *unattended* uplift run, in seconds. Confidence-gated
 #: escalation stays fully intact (I-5): a guardrail-violating decision still escalates,
 #: still records ``escalated_to_human`` and the honest timeout override, and is still
@@ -1000,8 +1075,21 @@ def build_agent_handlers() -> dict[str, A2AHandler]:
     Each agent's existing ``*A2AHandler`` class is constructed with its default
     pipeline (which degrades honestly to a fallback when no trained model is published,
     I-7), no Kafka producer, and — where the handler supports actuation — the
-    :class:`_OfflineActuator`, so nothing dials the network. The returned mapping's keys
-    are exactly the :data:`AGENT_ENDPOINTS` names.
+    :class:`_OfflineActuator`. The returned mapping's keys are exactly the
+    :data:`AGENT_ENDPOINTS` names.
+
+    **No agent pipeline opens a socket (finding 116, finding 121).** The debate's LLM client is
+    :class:`_OfflineLLMClient` (:func:`build_consensus_protocol`). Two agents' default pipelines
+    dial. The Disruption Shield's ``DeepSeekReasoner`` POSTs to ``http://ollama:11434`` on every
+    consult, so that handler is given a pipeline built with :func:`_offline_reasoner`, which
+    takes the reasoner's own rule-based fallback. The Sustainability Agent's ``CarbonTracker``
+    builds CodeCarbon's online tracker, which queries ``169.254.169.254`` wherever codecarbon is
+    installed, so that handler is given a pipeline built with :func:`_offline_carbon_tracker`.
+    Every other part of those two pipelines is its default. The claim that assembling these
+    handlers and consulting each for a proposal opens no socket is checked by
+    ``tests/uplift/test_consensus_network_free_property.py``, under a guard that fails every
+    non-loopback dial and every ``httpx`` send. A further clause there checks the CodeCarbon
+    path with a stand-in module, so it can fail on a machine without codecarbon too.
 
     Raises:
         ConsensusArmUnavailable: if any agent handler cannot be imported or constructed
@@ -1018,6 +1106,23 @@ def build_agent_handlers() -> dict[str, A2AHandler]:
             kwargs: dict[str, Any] = {"kafka_producer": None}
             if _supports_kwarg(handler_cls.__init__, "actuator"):
                 kwargs["actuator"] = _OfflineActuator()
+            if name == "disruption_shield":
+                # Read through importlib, as each handler class is, so mypy does not follow the
+                # agent's model imports into this module's type check.
+                pipeline_module = importlib.import_module(
+                    "agents.disruption_shield.inference.pipeline"
+                )
+                kwargs["pipeline"] = pipeline_module.DisruptionShieldPipeline(
+                    reasoner=_offline_reasoner()
+                )
+            if name == "sustainability_agent":
+                # Through importlib for the same reason as the Disruption Shield's pipeline.
+                pipeline_module = importlib.import_module(
+                    "agents.sustainability_agent.inference.pipeline"
+                )
+                kwargs["pipeline"] = pipeline_module.SustainabilityPipeline(
+                    carbon_tracker=_offline_carbon_tracker()
+                )
             handler = handler_cls(**kwargs)
         except Exception as exc:  # noqa: BLE001 — assembly failure is loud, never a stub
             raise ConsensusArmUnavailable(

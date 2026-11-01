@@ -4,18 +4,37 @@ from __future__ import annotations
 
 import json
 from datetime import UTC, datetime
-from typing import Any
+from typing import TYPE_CHECKING, Any, Final
 from uuid import UUID, uuid4
 
 import structlog
+from synapse_common.a2a_envelope import MissingDecisionContext, decision_context
 from synapse_common.debate import build_debate_response
 from synapse_common.models import AgentName, AgentProposal, DecisionTier
 from synapse_common.schemas import validate_agent_payload
 from synapse_common.world import Actuator, WorldAction, WorldActionKind, WorldActuator
 
 from agents.inventory_sentinel.inference.pipeline import InventorySentinelPipeline
+from agents.inventory_sentinel.inference.request_state import (
+    forecast_from_request,
+    reading_trace,
+)
+
+if TYPE_CHECKING:
+    from collections.abc import Mapping
 
 logger = structlog.get_logger(__name__)
+
+#: The SKUs a proposal decides for when its request names none: the default this handler has
+#: always used, kept only for an absent ``sku_ids``. ADR-058 records it as an open decision.
+DEFAULT_SKU_IDS: Final[tuple[str, ...]] = ("SKU001",)
+
+#: The store a proposal names when its request names none: the default this handler has always
+#: used.
+DEFAULT_STORE_ID: Final[str] = "STORE_BLR_001"
+
+#: JSON-RPC 2.0's code for invalid method parameters.
+_INVALID_PARAMS: Final[int] = -32602
 
 
 class InventorySentinelA2AHandler:
@@ -40,7 +59,9 @@ class InventorySentinelA2AHandler:
         request_id = request.get("id", str(uuid4()))
         try:
             if method == "proposal":
-                result = self.proposal(params)
+                # Finding 112 / ADR-058: the protocol wraps the request as
+                # `params={"decision_context": request}` (protocol.py:1040).
+                result = self.proposal(decision_context(params))
             elif method == "debate_respond":
                 result = self.debate_respond(params)
             elif method == "execute":
@@ -52,6 +73,18 @@ class InventorySentinelA2AHandler:
                     "id": request_id,
                 }
             return {"jsonrpc": "2.0", "result": result, "id": request_id}
+        except MissingDecisionContext as e:
+            return {
+                "jsonrpc": "2.0",
+                "error": {
+                    "code": _INVALID_PARAMS,
+                    "message": (
+                        "Invalid params: a proposal reads params['decision_context'], the "
+                        f"consensus envelope (ADR-058): {e}"
+                    ),
+                },
+                "id": request_id,
+            }
         except Exception as e:
             return {
                 "jsonrpc": "2.0",
@@ -59,10 +92,18 @@ class InventorySentinelA2AHandler:
                 "id": request_id,
             }
 
-    def proposal(self, ctx: dict[str, Any]) -> dict[str, Any]:
-        sku_ids = ctx.get("sku_ids", ["SKU001"])
-        store_id = ctx.get("store_id", "STORE_BLR_001")
-        actions = self._pipeline.decide(sku_ids, store_id)
+    def proposal(self, ctx: Mapping[str, Any]) -> dict[str, Any]:
+        """One proposal for the decision context the consensus envelope carried (ADR-058).
+
+        The SKUs and the store are the request's own, with :data:`DEFAULT_SKU_IDS` and
+        :data:`DEFAULT_STORE_ID` only for a request that names none. The forecast is
+        :func:`forecast_from_request`'s: the request's position, demand rate and lead time, or
+        ``decide()``'s defaults when the request carries no state.
+        """
+        sku_ids = _requested_skus(ctx)
+        store_id = ctx.get("store_id", DEFAULT_STORE_ID)
+        forecast = forecast_from_request(ctx)
+        actions = self._pipeline.decide(sku_ids, store_id, demand_forecast=forecast)
         # I-5/ADR-040: proposal confidence is the mean of the per-action
         # confidences (forecast volatility) — never a constant, so the HITL
         # gate can actually fire on low-confidence decisions.
@@ -77,6 +118,7 @@ class InventorySentinelA2AHandler:
             justification_trace=[
                 f"Generated {len(actions)} inventory actions",
                 f"Average confidence: {avg_confidence:.3f}",
+                reading_trace(forecast, sku_ids),
             ],
             payload={"actions": [a.model_dump(mode="json") for a in actions]},
             tier=DecisionTier.TIER_2,
@@ -170,3 +212,18 @@ class InventorySentinelA2AHandler:
         except Exception as exc:  # noqa: BLE001 — a Kafka outage degrades honestly (I-7)
             logger.warning("inventory_reorder_publish_failed", error=str(exc))
             return False
+
+
+def _requested_skus(ctx: Mapping[str, Any]) -> list[str]:
+    """The request's ``sku_ids``, or :data:`DEFAULT_SKU_IDS` when it names none.
+
+    Raises:
+        ValueError: If ``sku_ids`` is present but is not a list of non-empty strings. A bare
+            string would otherwise be decided one character at a time.
+    """
+    requested = ctx.get("sku_ids", DEFAULT_SKU_IDS)
+    if not isinstance(requested, list | tuple) or not all(
+        isinstance(sku, str) and sku for sku in requested
+    ):
+        raise ValueError(f"decision_context.sku_ids must be a list of SKU ids, got {requested!r}")
+    return list(requested)
