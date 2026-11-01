@@ -77,6 +77,9 @@ category-2 load. Five is a throttle.
   more independent units dispatches two or more agents, and working serially requires a stated
   reason.** G7 also covers the wider tool surface — code intelligence, symbol and reference
   lookup, research powers — which sessions have left unused in favour of shell and text search.
+  **How many authoring agents run AT ONCE is capped separately**, by usage limits rather than
+  heat: alternating batches of at most five, then at most three, each released only when the
+  previous batch has fully returned (`throughput-with-integrity.md` G8).
 - **Sub-agents that execute code: exactly ONE at a time.** Not three, not two.
   When a batch needs a test run, exactly one agent in that batch gets the process
   budget and the rest are explicitly authoring-only.

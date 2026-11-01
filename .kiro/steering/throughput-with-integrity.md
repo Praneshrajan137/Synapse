@@ -141,6 +141,31 @@ ledger as a miss, not as a rounding error. **G7's first real test is the next se
 same standard applies: if it reports zero without a reason, the ledger says the reset failed here
 too.
 
+### G8 — Authoring agents run in alternating batches: at most FIVE, then at most THREE.
+
+**The operator's rule (2026-10-24).** It is written down because usage limits, not heat, are what
+stop authoring agents, and they stop them mid-write. Session 12 measured it: dispatches wider than
+five finished 4 of 18 agents (0 of 7, then 4 of 11), while batches of at most five finished 10 of
+14 (5 of 5, 1 of 5, 4 of 4).
+
+- **The cadence.** At most 5, then at most 3, then at most 5, and so on. Each number is a ceiling,
+  not a quota. G7 still requires two or more agents whenever two or more independent units exist,
+  and a wave with fewer units dispatches fewer.
+- **The barrier.** A batch is released only when EVERY agent of the previous batch has returned,
+  finished or failed. No agent is added to a running batch.
+- **Surplus units queue for the next batch.** Two coupling closures are never merged into one
+  agent to fit a ceiling (G2).
+- **A failed agent is resumed, never restarted, and never assumed done.** Its partial work is on
+  disk. Before re-dispatching, the executor measures it: syntax (`py_compile`), undefined names
+  (`ruff --select F`), `mypy --strict` on its modules, and its fast tests. It then appends a
+  RESUME NOTE to that agent's contract naming exactly what was measured failing or missing. The
+  re-dispatch reads the note and resumes, and it counts against the next batch's ceiling.
+- **Report per batch:** agents dispatched, finished, and failed on the limit. The session's
+  "agents dispatched" number is their sum, with the per-batch split beside it.
+
+G8 touches none of G7's three limits: exactly one agent executes code (G1), and
+`execution-routing.md` still decides where a workload runs.
+
 ## One document per fact
 
 One canonical home per finding: **the ADR** for design facts, **the task body** for ledger
