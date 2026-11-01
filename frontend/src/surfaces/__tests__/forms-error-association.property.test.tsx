@@ -15,7 +15,7 @@
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { HttpError } from "@transport/errors";
 import fc from "fast-check";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { ModifyForm } from "@surfaces/override-cockpit/ModifyForm";
 import { RejectForm } from "@surfaces/override-cockpit/RejectForm";
@@ -32,6 +32,7 @@ vi.mock("sonner", () => ({ toast: { error: vi.fn(), success: vi.fn(), warning: v
 
 import { useSessionStore } from "@state/session.store";
 import { Login } from "@surfaces/auth/Login";
+import { type ConsoleAccess, useAccessStore } from "@surfaces/auth/access.store";
 import { MemoryRouter } from "react-router-dom";
 
 afterEach(() => {
@@ -168,10 +169,23 @@ describe("ScenarioBuilder — Property 29", () => {
 
 // ─────────────────────────────────────────────────────────────────────────
 // Login — a rejected sign-in (401) marks the credential inputs invalid and
-// associates them with the sign-in error message.
+// associates them with the sign-in error message. The form exists only while
+// sign-in is active (ADR-057): before the access posture is read Login shows
+// the boot splash, and in open preview access it says sign-in is dormant. So
+// the access store reads authenticated mode first, and is restored afterwards.
 // ─────────────────────────────────────────────────────────────────────────
 
 describe("Login — Property 29", () => {
+  let accessBefore: ConsoleAccess;
+  beforeEach(() => {
+    accessBefore = useAccessStore.getState().access;
+    useAccessStore.setState({ access: { kind: "authenticated" } });
+  });
+  afterEach(() => {
+    cleanup();
+    useAccessStore.setState({ access: accessBefore });
+  });
+
   it("marks the credential inputs invalid and associates the error on a failed sign-in", async () => {
     loginMock.mockRejectedValueOnce(new HttpError(401, "Unauthorized", "unauthorized"));
 

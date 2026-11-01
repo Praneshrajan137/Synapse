@@ -9,10 +9,8 @@ interface ImportMetaEnv {
   readonly VITE_TELEMETRY_ENDPOINT?: string;
   readonly VITE_BUILD_SHA?: string;
   readonly VITE_BUILD_TIME?: string;
-  /** Sprint 16: "false" restores the login-first flow (default: auto-login). */
-  readonly VITE_AUTO_LOGIN?: string;
-  readonly VITE_AUTO_LOGIN_EMAIL?: string;
-  readonly VITE_AUTO_LOGIN_PASSWORD?: string;
+  // ADR-057 (finding 89): VITE_AUTO_LOGIN, VITE_AUTO_LOGIN_EMAIL and VITE_AUTO_LOGIN_PASSWORD
+  // are gone. Every VITE_ value ships in the public bundle, so none may hold a credential.
 }
 
 interface ImportMeta {

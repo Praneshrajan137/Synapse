@@ -7,17 +7,23 @@ Endpoints:
   GET  /metrics           — Prometheus scrape
   WS   /ws/escalation     — HITL escalation WebSocket
   POST /a2a               — A2A JSON-RPC handler
+
+ADR-057 (finding 89): the writes are internal-only. Their callers -- the API gateway, the
+traffic generator, the deploy probe, the agents and the twin -- reach this service on the
+compose network. A call that arrives through the edge proxy carries the forwarding headers
+nginx adds (``arrived_through_edge``): ``/a2a`` and the HITL resolve refuse it in every access
+posture, and the decision trigger accepts it only in the local stack's ``open`` + ``act``.
 """
 
 from __future__ import annotations
 
 import os
 from contextlib import asynccontextmanager
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Final
 from uuid import UUID
 
 import structlog
-from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
+from fastapi import Depends, FastAPI, HTTPException, Request, WebSocket, WebSocketDisconnect
 from fastapi.responses import JSONResponse, Response
 from pydantic import BaseModel, Field
 from sqlalchemy import text
@@ -43,7 +49,7 @@ from orchestrator.outbox.dispatcher import OutboxDispatcher
 from orchestrator.sensor import A2AWorldClient, SensorLoop
 
 if TYPE_CHECKING:
-    from collections.abc import AsyncIterator
+    from collections.abc import AsyncIterator, Mapping
 
 logger = structlog.get_logger(__name__)
 
@@ -57,11 +63,94 @@ _sensor_loop: SensorLoop | None = None
 _engine: AsyncEngine | None = None
 _kafka_ok: bool = False
 
+# ---------------------------------------------------------------------------
+# ADR-057 (finding 89): the orchestrator's writes are internal-only
+# ---------------------------------------------------------------------------
+
+#: Headers the edge proxy sets on every request it forwards (``infrastructure/nginx``). A call
+#: carrying any of them came through the public edge; the internal callers send none of them.
+EDGE_FORWARDING_HEADERS: Final = (
+    "forwarded",
+    "x-forwarded-for",
+    "x-forwarded-host",
+    "x-forwarded-proto",
+    "x-real-ip",
+)
+#: The API gateway's access settings (``api/access.py``), read here with the same defaults.
+ACCESS_MODE_ENV: Final = "SYNAPSE_ACCESS_MODE"
+OPEN_AUTHORITY_ENV: Final = "SYNAPSE_OPEN_AUTHORITY"
+
+
+def arrived_through_edge(headers: Mapping[str, str]) -> bool:
+    """True when a request or WebSocket handshake carries a header the edge proxy adds."""
+    return any(name in headers for name in EDGE_FORWARDING_HEADERS)
+
+
+def _access_setting(environ: Mapping[str, str], name: str, allowed: set[str], unset: str) -> str:
+    raw = environ.get(name)
+    if raw is None:
+        return unset
+    value = raw.strip()
+    if value not in allowed:
+        raise RuntimeError(
+            f"{name}={raw!r} is not an access setting this orchestrator knows. Set one of "
+            f"{sorted(allowed)}, or leave it unset for {unset!r}. Refusing to start (ADR-057)."
+        )
+    return value
+
+
+def edge_may_trigger_decisions(environ: Mapping[str, str]) -> bool:
+    """Whether ``POST /api/v1/decisions`` accepts a call that came through the edge.
+
+    Only ``SYNAPSE_ACCESS_MODE=open`` with ``SYNAPSE_OPEN_AUTHORITY=act`` says yes: the local
+    stack, which has no API gateway, so its nginx routes ``/api/`` straight here. Every other
+    posture sends an edge caller to the gateway's OPS-gated ``POST /api/v1/decisions/``. An
+    unknown value raises, which refuses startup (``lifespan``); the authority is not read in
+    authenticated mode, exactly as the gateway does not read it.
+    """
+    mode = _access_setting(environ, ACCESS_MODE_ENV, {"open", "authenticated"}, "open")
+    if mode == "authenticated":
+        return False
+    authority = _access_setting(environ, OPEN_AUTHORITY_ENV, {"view", "act"}, "view")
+    return authority == "act"
+
+
+def internal_only(request: Request) -> None:
+    """Refuse a write that came through the public edge, in every access posture.
+
+    ``POST /api/v1/hitl/{id}/resolve`` must follow the gateway's audit-row-first override
+    (FE-INV-021), and ``POST /a2a`` serves only the agents and the twin, so not even
+    ``open`` + ``act`` lets the edge reach either one.
+    """
+    if arrived_through_edge(request.headers):
+        logger.warning("edge_write_refused", path=request.url.path)
+        raise HTTPException(
+            status_code=403,
+            detail="internal-only route: operator actions go through the API gateway (ADR-057)",
+        )
+
+
+def decision_trigger_guard(request: Request) -> None:
+    """Refuse an edge-forwarded decision trigger unless the posture is ``open`` + ``act``."""
+    if arrived_through_edge(request.headers) and not edge_may_trigger_decisions(os.environ):
+        logger.warning("edge_write_refused", path=request.url.path)
+        raise HTTPException(
+            status_code=403,
+            detail=(
+                "decisions are triggered through the API gateway's POST /api/v1/decisions/ "
+                "with an OPS token (ADR-057)"
+            ),
+        )
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     global _config, _protocol, _ws_manager, _a2a_handler, _hitl, _outbox_dispatcher
     global _sensor_loop, _engine, _kafka_ok
+
+    # ADR-057: an access setting this service does not know refuses startup, as the gateway.
+    edge_decisions = edge_may_trigger_decisions(os.environ)
+    logger.info("access_posture", edge_may_trigger_decisions=edge_decisions)
 
     _config = OrchestratorConfig()
 
@@ -257,7 +346,11 @@ class DecisionResponse(BaseModel):
     escalated: bool = False
 
 
-@app.post("/api/v1/decisions", response_model=DecisionResponse)
+@app.post(
+    "/api/v1/decisions",
+    response_model=DecisionResponse,
+    dependencies=[Depends(decision_trigger_guard)],
+)
 async def create_decision(request: DecisionRequest) -> DecisionResponse:
     if _protocol is None:
         raise HTTPException(status_code=503, detail="Protocol not initialised")
@@ -332,7 +425,7 @@ async def metrics() -> Response:
     return Response(content=generate_latest(), media_type=CONTENT_TYPE_LATEST)
 
 
-@app.post("/a2a")
+@app.post("/a2a", dependencies=[Depends(internal_only)])
 async def a2a_endpoint(request: dict[str, Any]) -> dict[str, Any]:
     if _a2a_handler is None:
         raise HTTPException(status_code=503, detail="Handler not initialised")
@@ -347,13 +440,14 @@ class HitlResolveRequest(BaseModel):
     modified_action: dict[str, Any] | None = None
 
 
-@app.post("/api/v1/hitl/{decision_id}/resolve")
+@app.post("/api/v1/hitl/{decision_id}/resolve", dependencies=[Depends(internal_only)])
 async def hitl_resolve(decision_id: UUID, payload: HitlResolveRequest) -> dict[str, Any]:
     """Resolve a pending HITL escalation and broadcast override_confirm.
 
     Called by the gateway's ``POST /api/v1/decisions/{id}/override`` after
-    the audit row is persisted (FE-INV-021). Trust boundary is the gateway;
-    this endpoint is reachable only over the internal Docker network.
+    the audit row is persisted (FE-INV-021). Trust boundary is the gateway:
+    the edge proxy no longer forwards ``/orchestrator/`` (ADR-057), and
+    ``internal_only`` refuses an edge-forwarded call even if it ever did.
     """
     if _hitl is None or _ws_manager is None:
         raise HTTPException(status_code=503, detail="HITL not initialised")
@@ -381,6 +475,10 @@ async def hitl_resolve(decision_id: UUID, payload: HitlResolveRequest) -> dict[s
 
 @app.websocket("/ws/escalation")
 async def ws_escalation(websocket: WebSocket) -> None:
+    # ADR-057: a connection through the edge is listen-only. A human response sent on it
+    # would skip the gateway's audit-row-first override (FE-INV-021), so it is refused;
+    # the console only listens here and sends heartbeats, which carry no decision_id.
+    listen_only = arrived_through_edge(websocket.headers)
     await websocket.accept()
     if _ws_manager:
         _ws_manager.register(websocket)
@@ -388,6 +486,9 @@ async def ws_escalation(websocket: WebSocket) -> None:
         while True:
             data = await websocket.receive_json()
             decision_id_str = data.get("decision_id")
+            if decision_id_str and listen_only:
+                logger.warning("edge_escalation_response_refused", decision_id=decision_id_str)
+                continue
             if decision_id_str and _hitl:
                 await _hitl.receive_human_response(
                     UUID(decision_id_str),
