@@ -71,11 +71,50 @@
  * 3. A job present in the baseline but ABSENT from the fresh scorecard is skipped, not
  *    named — the audit's zero-comparison finding. R8.3 requires naming it; that clause
  *    belongs to Property 32 (task 11.3) and is deliberately not duplicated here.
+ *
+ * ── The k-leg median rule (ADR-059, operator decision S13.2=a) ───────────────
+ *
+ * The CI gate no longer compares one run with one run: it calls `compareLegMedians` over k = 5
+ * harness legs, and judges latency by `med_f - med_b > max(p * med_b, 3 * 1.4826 * MAD_b)`,
+ * with `med_b` and `MAD_b` from the BASELINE's samples only. The facets above still drive
+ * `compareScorecard`, whose steps / errorRate / interruptionPrecision code is the core both
+ * comparators share. The facets below drive the median rule against an oracle written apart
+ * from the module (`oracleMedian`, `oracleMad`, `oracleAllowance`, with the decision's literals
+ * 3 and 1.4826), and each can fail:
+ *
+ *   • a guard pins k = 5, 3, 1.4826 and `latencyPct` = 0.10 (widening it is forbidden), and
+ *     checks the module's median and MAD against the oracle at both parities;
+ *   • a median rise beyond the band regresses the row, naming both medians, and a rise of at
+ *     most the band does not;
+ *   • a pooled MAD would hide a shift the baseline's own MAD flags: the facet asserts that the
+ *     rejected pooled rule holds the row AND that the shipped rule regresses it;
+ *   • two arbitrarily slow legs of five cannot regress a row whose other three hold, and three
+ *     slow legs do (what the median absorbs, and where it stops);
+ *   • a zero-wide band (p = 0, identical samples) holds an equal median and regresses any rise;
+ *   • steps, errorRate and interruption precision are judged on k legs exactly as on one run;
+ *   • legs that agree on everything but latency pool into one sample per leg, and a leg that
+ *     disagrees on steps, errorRate, a row's seed or harness version, or interruption precision
+ *     is a named failure, never a value to take the median of.
  */
 
 import {
+  checkLegArrival,
+  compareLegMedians,
   compareScorecard,
   DEFAULT_RATCHET_TOLERANCE,
+  EFFECTIVENESS_LEG_COUNT,
+  type KSampleMeasurement,
+  type KSampleRow,
+  LATENCY_NOISE_MULTIPLIER,
+  type LatencyJudgement,
+  type LegDisagreementMetric,
+  type LegRatchetResult,
+  type LegScorecard,
+  MAD_NORMAL_CONSISTENCY,
+  median,
+  medianAbsoluteDeviation,
+  poolLegs,
+  type PoolVerdict,
   type RatchetMetric,
   type RatchetRegression,
   type RatchetResult,
@@ -84,6 +123,8 @@ import {
 } from "@lib/effectiveness-ratchet";
 import {
   buildScorecard,
+  EFFECTIVENESS_HARNESS_SEED,
+  EFFECTIVENESS_HARNESS_VERSION,
   type EffectivenessScorecard,
   JOB_ORDER,
   type JobToBeDone,
@@ -412,6 +453,229 @@ function degradeBeyondTolerance(
   };
 }
 
+// ---------------------------------------------------------------------------
+// The k-leg median rule (ADR-059) -- an oracle written apart from the module
+// ---------------------------------------------------------------------------
+
+/** k, the number of legs the CI gate judges together. */
+const K = EFFECTIVENESS_LEG_COUNT;
+
+/** How many slow legs per row the median of k absorbs: fewer than half. */
+const ABSORBED_SLOW_LEGS = Math.floor((K - 1) / 2);
+
+/** Leg positions 0..k-1; leg n sits at position n - 1. */
+const LEG_POSITIONS: readonly number[] = Array.from({ length: K }, (_, position) => position);
+
+/** The 1-based legs, in order. */
+const LEG_INDICES: readonly number[] = LEG_POSITIONS.map((position) => position + 1);
+
+/** A commit the legs below name. Its value is incidental here; Property 32 draws it. */
+const MEASURED_COMMIT = "0123456789abcdef0123456789abcdef01234567";
+
+/** The median by sorting a copy: the middle value, or the mean of the two middle values. */
+function oracleMedian(values: readonly number[]): number {
+  const sorted = [...values].sort((a, b) => a - b);
+  const upper = sorted[Math.floor(sorted.length / 2)];
+  const lower = sorted[Math.ceil(sorted.length / 2) - 1];
+  if (upper === undefined || lower === undefined) {
+    throw new Error("the oracle median of an empty set is undefined");
+  }
+  return (lower + upper) / 2;
+}
+
+/** The median absolute deviation about the oracle median. */
+function oracleMad(values: readonly number[]): number {
+  const centre = oracleMedian(values);
+  return oracleMedian(values.map((value) => Math.abs(value - centre)));
+}
+
+/** S13.2=a's band, from the BASELINE's samples only, written with the decision's literals. */
+function oracleAllowance(baseline: readonly number[], p: number): number {
+  return Math.max(p * oracleMedian(baseline), 3 * 1.4826 * oracleMad(baseline));
+}
+
+/**
+ * The pooled-MAD rule ADR-059 rejects: the noise width taken over the baseline's AND the fresh
+ * samples about their joint median. Written here only so a facet can show it decides differently.
+ */
+function pooledRuleRegresses(
+  baseline: readonly number[],
+  fresh: readonly number[],
+  p: number,
+): boolean {
+  const pooledMad = oracleMad([...baseline, ...fresh]);
+  const allowance = Math.max(p * oracleMedian(baseline), 3 * 1.4826 * pooledMad);
+  return oracleMedian(fresh) - oracleMedian(baseline) > allowance;
+}
+
+/** The item at `at`, throwing rather than asserting non-null (`noUncheckedIndexedAccess`). */
+function itemAt<T>(items: readonly T[], at: number, what: string): T {
+  const item = items[at];
+  if (item === undefined) {
+    throw new Error(`generator drift: no ${what} at ${at}`);
+  }
+  return item;
+}
+
+/**
+ * k latencies for one row, in milliseconds at the harness's tenth-of-a-millisecond resolution
+ * (finding 88 read values such as 85.3 and 2.9 ms). A centre, a spread and a per-leg jitter, so
+ * the draw reaches a noise-dominated band (a wide spread) and a relative-dominated one (spread
+ * 0, where MAD_b is 0).
+ */
+const kSamplesArb: fc.Arbitrary<readonly number[]> = fc
+  .tuple(
+    fc.integer({ min: 10, max: 1_000_000 }),
+    fc.integer({ min: 0, max: 5_000 }),
+    fc.array(fc.integer({ min: -100, max: 100 }), { minLength: K, maxLength: K }),
+  )
+  .map(([centre, spread, jitter]) =>
+    jitter.map((share) => Math.max(0, centre + Math.round((spread * share) / 100)) / 10),
+  );
+
+/** A row as the median rule reads it, from one generated row and its k samples. */
+function kRow(row: ScorecardRow, samples: readonly number[]): KSampleRow {
+  return {
+    job: row.job,
+    steps: row.steps,
+    errorRate: row.errorRate,
+    latencySamples: samples.map((latencyMs) => ({ latencyMs })),
+  };
+}
+
+/**
+ * A k-sample baseline: one row per declared job with k drawn samples each, `errorRate` banded
+ * as `baselineArb` bands it, and a run-level interruption precision.
+ */
+const kBaselineArb: fc.Arbitrary<KSampleMeasurement> = fc
+  .tuple(
+    scorecardRowsArb,
+    fc.array(kSamplesArb, { minLength: JOB_ORDER.length, maxLength: JOB_ORDER.length }),
+    fc.double({ min: 0.5, max: 0.95, noNaN: true }),
+  )
+  .map(([rows, samples, interruptionPrecision]) => ({
+    rows: rows.map((row, at) =>
+      kRow({ ...row, errorRate: bandErrorRate(row.errorRate) }, itemAt(samples, at, "sample set")),
+    ),
+    interruptionPrecision,
+  }));
+
+/** An interruption precision that may be absent, as either side of a comparison may carry it. */
+const nullablePrecisionArb: fc.Arbitrary<number | null> = fc.oneof(
+  fc.constant<number | null>(null),
+  fc.double({ min: 0, max: 1, noNaN: true }),
+);
+
+/** The k latencies of `job`'s row, in leg order. */
+function samplesOf(measurement: KSampleMeasurement, job: JobToBeDone): readonly number[] {
+  const row = measurement.rows.find((candidate) => candidate.job === job);
+  if (row === undefined) {
+    throw new Error(`the generated measurement carries no row for ${job}`);
+  }
+  return row.latencySamples.map((sample) => sample.latencyMs);
+}
+
+/** `measurement` with `job`'s k samples replaced; every other measurement held exactly. */
+function withSamples(
+  measurement: KSampleMeasurement,
+  job: JobToBeDone,
+  samples: readonly number[],
+): KSampleMeasurement {
+  return {
+    ...measurement,
+    rows: measurement.rows.map((row) =>
+      row.job === job
+        ? { ...row, latencySamples: samples.map((latencyMs) => ({ latencyMs })) }
+        : row,
+    ),
+  };
+}
+
+/** The median rule's judgement of `job`'s row. */
+function judgementFor(result: LegRatchetResult, job: JobToBeDone): LatencyJudgement {
+  const judgement = result.latency.find((candidate) => candidate.job === job);
+  if (judgement === undefined) {
+    throw new Error(`the comparison judged no latency for ${job}`);
+  }
+  return judgement;
+}
+
+/** `measurement` as one run, each row's latency its oracle median: Property 5's shape. */
+function asSingleRun(measurement: KSampleMeasurement): EffectivenessScorecard {
+  return buildScorecard({
+    rows: measurement.rows.map((row) => ({
+      job: row.job,
+      steps: row.steps,
+      latencyMs: oracleMedian(row.latencySamples.map((sample) => sample.latencyMs)),
+      errorRate: row.errorRate,
+    })),
+    interruptionPrecision: measurement.interruptionPrecision,
+  });
+}
+
+/** k legs measuring `measurement`: leg n reports sample n of every row and agrees on the rest. */
+function legsOf(measurement: KSampleMeasurement): readonly LegScorecard[] {
+  return LEG_POSITIONS.map(
+    (position): LegScorecard => ({
+      leg: { index: position + 1, count: K, commitSha: MEASURED_COMMIT },
+      harnessVersion: EFFECTIVENESS_HARNESS_VERSION,
+      seed: EFFECTIVENESS_HARNESS_SEED,
+      rows: measurement.rows.map((row, at) => ({
+        job: row.job,
+        steps: row.steps,
+        latencyMs: itemAt(row.latencySamples, position, "sample").latencyMs,
+        errorRate: row.errorRate,
+        harnessVersion: EFFECTIVENESS_HARNESS_VERSION,
+        seed: EFFECTIVENESS_HARNESS_SEED + 101 * (at + 1),
+        capturedAt: new Date(Date.UTC(2026, 10, 1, 12, 0, 0, position)).toISOString(),
+      })),
+      interruptionPrecision: measurement.interruptionPrecision,
+    }),
+  );
+}
+
+/** The legs pooled, after an arrival the generator guarantees. */
+function pooledLegs(legs: readonly LegScorecard[]): PoolVerdict {
+  const arrival = checkLegArrival(legs, K);
+  if (arrival.outcome !== "arrived") {
+    throw new Error("generator drift: k generated legs did not prove arrival");
+  }
+  return poolLegs(arrival);
+}
+
+/** The metrics a single leg can diverge on; `row` (a missing row) is Property 32's subject. */
+type Divergence = Exclude<LegDisagreementMetric, "row">;
+
+/** `scorecard` with one deterministic metric of `job` (or of the run) moved off the others. */
+function diverge(scorecard: LegScorecard, job: JobToBeDone, metric: Divergence): LegScorecard {
+  if (metric === "interruptionPrecision") {
+    const value = scorecard.interruptionPrecision;
+    const moved = value === null ? 0.5 : value <= 0.5 ? value + 0.25 : value - 0.25;
+    return { ...scorecard, interruptionPrecision: moved };
+  }
+  // A const with the narrowed type, so the closure below sees the narrowing on any compiler.
+  const rowMetric: Exclude<Divergence, "interruptionPrecision"> = metric;
+  return {
+    ...scorecard,
+    rows: scorecard.rows.map((row) => {
+      if (row.job !== job) return row;
+      switch (rowMetric) {
+        case "steps":
+          return { ...row, steps: row.steps + 1 };
+        case "errorRate":
+          return {
+            ...row,
+            errorRate: row.errorRate <= 0.5 ? row.errorRate + 0.25 : row.errorRate - 0.25,
+          };
+        case "seed":
+          return { ...row, seed: row.seed + 1 };
+        case "harnessVersion":
+          return { ...row, harnessVersion: `${row.harnessVersion}+diverged` };
+      }
+    }),
+  };
+}
+
 describe("Property 33: the ratchet is sensitive to any degradation", () => {
   // Feature: purpose-achievement-audit, Property 33: The ratchet is sensitive to any degradation
   it("guards that the metric table is exhaustive and covers every ratchet subject", () => {
@@ -616,6 +880,319 @@ describe("Property 33: the ratchet is sensitive to any degradation", () => {
         expect(copy.regressions).toHaveLength(0);
         expect(copy.passed).toBe(true);
         expect(copy.canAdvanceBaseline).toBe(true);
+      }),
+    );
+  });
+
+  // Feature: purpose-achievement-audit, Property 33: The ratchet is sensitive to any degradation
+  it("guards that the median rule carries the decision's constants and an independent oracle's statistics", () => {
+    // Operator decision S13.2=a (ADR-059): five legs, three MAD-scaled noise widths, the
+    // normal-consistency factor 1.4826, and the committed relative tolerance UNCHANGED at 10%.
+    // A widened `latencyPct` fails here before it can soften the gate.
+    expect(EFFECTIVENESS_LEG_COUNT).toBe(5);
+    expect(LATENCY_NOISE_MULTIPLIER).toBe(3);
+    expect(MAD_NORMAL_CONSISTENCY).toBe(1.4826);
+    expect(DEFAULT_RATCHET_TOLERANCE.latencyPct).toBe(0.1);
+    expect(ABSORBED_SLOW_LEGS).toBe(2);
+
+    const tenthsArb = fc.integer({ min: 0, max: 2_000_000 }).map((tenths) => tenths / 10);
+    fc.assert(
+      fc.property(fc.array(tenthsArb, { minLength: 1, maxLength: 12 }), (values) => {
+        // Both parities: an even count takes the mean of its two middle values.
+        expect(median(values)).toBe(oracleMedian(values));
+        expect(medianAbsoluteDeviation(values)).toBe(oracleMad(values));
+        expect(median([...values].reverse())).toBe(median(values));
+      }),
+    );
+
+    // A median of nothing is not a measurement, and neither is one over a non-finite value.
+    expect(() => median([])).toThrow(RangeError);
+    expect(() => median([1, Number.NaN])).toThrow(RangeError);
+    expect(() => median([Number.POSITIVE_INFINITY])).toThrow(RangeError);
+  });
+
+  // Feature: purpose-achievement-audit, Property 33: The ratchet is sensitive to any degradation
+  it("regresses a row whose median latency rises beyond max(p * med_b, 3 * 1.4826 * MAD_b), naming both medians", () => {
+    fc.assert(
+      fc.property(
+        kBaselineArb,
+        toleranceArb,
+        jobArb,
+        fc.double({ min: 0.1, max: 2, noNaN: true }),
+        (baseline, tol, job, margin) => {
+          const before = samplesOf(baseline, job);
+          const shift = oracleAllowance(before, tol.latencyPct) * (1 + margin) + 0.5;
+          const after = before.map((value) => value + shift);
+          const result = compareLegMedians(baseline, withSamples(baseline, job, after), tol);
+
+          expect(result.passed).toBe(false);
+          expect(result.canAdvanceBaseline).toBe(false);
+          // One row's latency moved, so exactly one regression is named, with both medians.
+          expect(result.regressions).toEqual([
+            {
+              job,
+              metric: "latencyMs",
+              baseline: oracleMedian(before),
+              observed: oracleMedian(after),
+            },
+          ]);
+          const judgement = judgementFor(result, job);
+          expect(judgement.regressed).toBe(true);
+          expect(judgement.baselineMad).toBe(oracleMad(before));
+          expect(judgement.relativeAllowance).toBe(tol.latencyPct * oracleMedian(before));
+          expect(judgement.noiseAllowance).toBe(3 * 1.4826 * oracleMad(before));
+          expect(judgement.allowance).toBe(oracleAllowance(before, tol.latencyPct));
+        },
+      ),
+    );
+  });
+
+  // Feature: purpose-achievement-audit, Property 33: The ratchet is sensitive to any degradation
+  it("holds a row whose median latency rises by no more than the allowance", () => {
+    fc.assert(
+      fc.property(
+        kBaselineArb,
+        toleranceArb,
+        jobArb,
+        fc.double({ min: 0, max: 0.95, noNaN: true }),
+        (baseline, tol, job, fraction) => {
+          const before = samplesOf(baseline, job);
+          const shift = oracleAllowance(before, tol.latencyPct) * fraction;
+          const after = before.map((value) => value + shift);
+          const result = compareLegMedians(baseline, withSamples(baseline, job, after), tol);
+
+          // Inside the band is not a regression: the gate is a floor on measured noise.
+          expect(result.regressions).toEqual([]);
+          expect(result.passed).toBe(true);
+          expect(judgementFor(result, job).regressed).toBe(false);
+          // Req 4.5: a rise inside the band still forfeits the advance; no rise keeps it.
+          expect(result.canAdvanceBaseline).toBe(!(oracleMedian(after) > oracleMedian(before)));
+        },
+      ),
+    );
+  });
+
+  // Feature: purpose-achievement-audit, Property 33: The ratchet is sensitive to any degradation
+  it("regresses a shift that a pooled MAD would absorb, because MAD_b is the baseline's own", () => {
+    fc.assert(
+      fc.property(kBaselineArb, toleranceArb, jobArb, (baseline, tol, job) => {
+        const before = samplesOf(baseline, job);
+        const range = Math.max(...before) - Math.min(...before);
+        // At least three baseline ranges: pooled with the shifted samples, the MAD then grows
+        // with the shift itself, to at least a third of it.
+        const shift = Math.max(2 * range, oracleAllowance(before, tol.latencyPct)) * 1.5 + 1;
+        const after = before.map((value) => value + shift);
+
+        // The case discriminates: the rejected pooled rule HOLDS this row...
+        expect(pooledRuleRegresses(before, after, tol.latencyPct)).toBe(false);
+        // ...and the shipped rule REGRESSES it, judging against the baseline's own spread.
+        const result = compareLegMedians(baseline, withSamples(baseline, job, after), tol);
+        expect(result.regressions.map(regressionKey)).toEqual([`${job}::latencyMs`]);
+        const judgement = judgementFor(result, job);
+        expect(judgement.baselineMad).toBe(oracleMad(before));
+        expect(judgement.baselineMad).toBeLessThan(oracleMad([...before, ...after]));
+      }),
+    );
+  });
+
+  // Feature: purpose-achievement-audit, Property 33: The ratchet is sensitive to any degradation
+  it("lets two arbitrarily slow legs of five pass a row whose other three hold, and regresses three slow legs", () => {
+    fc.assert(
+      fc.property(
+        kBaselineArb,
+        toleranceArb,
+        jobArb,
+        fc.shuffledSubarray([...LEG_POSITIONS], {
+          minLength: ABSORBED_SLOW_LEGS,
+          maxLength: ABSORBED_SLOW_LEGS,
+        }),
+        fc.shuffledSubarray([...LEG_POSITIONS], {
+          minLength: ABSORBED_SLOW_LEGS + 1,
+          maxLength: ABSORBED_SLOW_LEGS + 1,
+        }),
+        (baseline, tol, job, slowPair, slowTrio) => {
+          const before = samplesOf(baseline, job);
+          const centre = oracleMedian(before);
+          const allowance = oracleAllowance(before, tol.latencyPct);
+
+          // Fewer than half the legs slow: the other legs hold the median, however slow the two.
+          const outliers = LEG_POSITIONS.map((position) =>
+            slowPair.includes(position) ? centre + allowance + 1_000_000 : centre,
+          );
+          const held = compareLegMedians(baseline, withSamples(baseline, job, outliers), tol);
+          expect(held.regressions).toEqual([]);
+          expect(judgementFor(held, job).freshMedian).toBe(centre);
+
+          // A majority slow beyond the band: the median moves with them, and the row regresses.
+          const majority = LEG_POSITIONS.map((position) =>
+            slowTrio.includes(position) ? centre + allowance * 1.1 + 0.5 : 0,
+          );
+          const regressed = compareLegMedians(baseline, withSamples(baseline, job, majority), tol);
+          expect(regressed.regressions.map(regressionKey)).toEqual([`${job}::latencyMs`]);
+        },
+      ),
+    );
+  });
+
+  // Feature: purpose-achievement-audit, Property 33: The ratchet is sensitive to any degradation
+  it("holds a zero-allowance row at an equal median and regresses it at any rise", () => {
+    fc.assert(
+      fc.property(
+        kBaselineArb,
+        jobArb,
+        fc.integer({ min: 1, max: 1_000_000 }),
+        (baseline, job, tenths) => {
+          // p = 0 and identical baseline samples (MAD_b = 0): the band is exactly zero wide, so
+          // the comparison sits on the boundary `med_f - med_b > 0` itself.
+          const tol: RatchetTolerance = { ...DEFAULT_RATCHET_TOLERANCE, latencyPct: 0 };
+          const flat = LEG_POSITIONS.map(() => tenths / 10);
+          const pinned = withSamples(baseline, job, flat);
+
+          const same = compareLegMedians(pinned, pinned, tol);
+          expect(judgementFor(same, job).allowance).toBe(0);
+          expect(same.regressions).toEqual([]);
+          expect(same.canAdvanceBaseline).toBe(true);
+
+          const risen = withSamples(
+            pinned,
+            job,
+            flat.map((value) => value + 0.1),
+          );
+          const rose = compareLegMedians(pinned, risen, tol);
+          expect(rose.regressions.map(regressionKey)).toEqual([`${job}::latencyMs`]);
+        },
+      ),
+    );
+  });
+
+  // Feature: purpose-achievement-audit, Property 33: The ratchet is sensitive to any degradation
+  it("judges steps, errorRate and interruption precision on k legs exactly as on one run", () => {
+    const pairArb = fc.record({
+      drawn: kBaselineArb,
+      stepDelta: fc.array(fc.integer({ min: -5, max: 10 }), {
+        minLength: JOB_ORDER.length,
+        maxLength: JOB_ORDER.length,
+      }),
+      errorDelta: fc.array(fc.double({ min: -0.3, max: 0.3, noNaN: true }), {
+        minLength: JOB_ORDER.length,
+        maxLength: JOB_ORDER.length,
+      }),
+      baseIp: nullablePrecisionArb,
+      freshIp: nullablePrecisionArb,
+      tol: toleranceArb,
+    });
+    fc.assert(
+      fc.property(pairArb, ({ drawn, stepDelta, errorDelta, baseIp, freshIp, tol }) => {
+        const baseline: KSampleMeasurement = { ...drawn, interruptionPrecision: baseIp };
+        // The same latency samples on both sides: latency holds, only the exact metrics move.
+        const fresh: KSampleMeasurement = {
+          rows: baseline.rows.map((row, at) => ({
+            ...row,
+            steps: Math.max(0, row.steps + itemAt(stepDelta, at, "step delta")),
+            errorRate: Math.min(
+              1,
+              Math.max(0, row.errorRate + itemAt(errorDelta, at, "error delta")),
+            ),
+          })),
+          interruptionPrecision: freshIp,
+        };
+
+        // ADR-059 keeps their rules exactly: the k-leg comparator and the one-run comparator
+        // name the same regressions, in the same order, and agree on the advance.
+        const onLegs = compareLegMedians(baseline, fresh, tol);
+        const onOneRun = compareScorecard(asSingleRun(baseline), asSingleRun(fresh), tol);
+        expect(onLegs.regressions).toEqual(onOneRun.regressions);
+        expect(onLegs.passed).toBe(onOneRun.passed);
+        expect(onLegs.canAdvanceBaseline).toBe(onOneRun.canAdvanceBaseline);
+      }),
+    );
+  });
+
+  // Feature: purpose-achievement-audit, Property 33: The ratchet is sensitive to any degradation
+  it("pools k legs that differ only in latency into one sample per leg, in leg order", () => {
+    fc.assert(
+      fc.property(kBaselineArb, (measurement) => {
+        const verdict = pooledLegs(legsOf(measurement));
+
+        // Latency is the noisy metric: legs that differ ONLY in latency are not a disagreement.
+        expect(verdict.outcome).toBe("pooled");
+        if (verdict.outcome !== "pooled") return;
+        expect(verdict.measurement.legCount).toBe(K);
+        expect(verdict.measurement.commitSha).toBe(MEASURED_COMMIT);
+        expect(verdict.measurement.rows.map((row) => row.job)).toEqual([...JOB_ORDER]);
+        for (const row of verdict.measurement.rows) {
+          expect(row.latencySamples.map((sample) => sample.leg)).toEqual([...LEG_INDICES]);
+          expect(row.latencySamples.map((sample) => sample.latencyMs)).toEqual(
+            samplesOf(measurement, row.job),
+          );
+          const source = measurement.rows.find((candidate) => candidate.job === row.job);
+          expect(row.steps).toBe(source?.steps);
+          expect(row.errorRate).toBe(source?.errorRate);
+        }
+        // The pooled measurement IS the rule's fresh side: against its own source, nothing moved.
+        const result = compareLegMedians(
+          measurement,
+          verdict.measurement,
+          DEFAULT_RATCHET_TOLERANCE,
+        );
+        expect(result.regressions).toEqual([]);
+        expect(result.canAdvanceBaseline).toBe(true);
+      }),
+    );
+  });
+
+  // Feature: purpose-achievement-audit, Property 33: The ratchet is sensitive to any degradation
+  it("fails legs that disagree on steps, errorRate, a row's seed or harness version, or interruption precision", () => {
+    const divergenceArb = fc.constantFrom<Divergence>(
+      "steps",
+      "errorRate",
+      "seed",
+      "harnessVersion",
+      "interruptionPrecision",
+    );
+    fc.assert(
+      fc.property(
+        kBaselineArb,
+        jobArb,
+        fc.integer({ min: 0, max: K - 1 }),
+        divergenceArb,
+        (measurement, job, position, metric) => {
+          const legs = legsOf(measurement).map((scorecard, at) =>
+            at === position ? diverge(scorecard, job, metric) : scorecard,
+          );
+          const verdict = pooledLegs(legs);
+
+          // The harness claims these are deterministic, so one leg disagreeing is a failure,
+          // never a value to take the median of.
+          expect(verdict.outcome).toBe("disagreed");
+          if (verdict.outcome !== "disagreed") return;
+          const subject: RatchetSubject =
+            metric === "interruptionPrecision" ? "interruption-precision" : job;
+          expect(verdict.disagreements.map((entry) => `${entry.subject}::${entry.metric}`)).toEqual(
+            [`${subject}::${metric}`],
+          );
+
+          // Every leg's value is reported, and the diverging leg's differs from all the others.
+          const values = verdict.disagreements.flatMap((entry) => entry.values);
+          expect(values.map((entry) => entry.leg)).toEqual([...LEG_INDICES]);
+          const odd = values.find((entry) => entry.leg === position + 1);
+          for (const entry of values) {
+            if (entry.leg !== position + 1) expect(entry.value).not.toBe(odd?.value);
+          }
+        },
+      ),
+    );
+  });
+
+  // Feature: purpose-achievement-audit, Property 33: The ratchet is sensitive to any degradation
+  it("finds no regression when a k-sample measurement is compared against itself", () => {
+    fc.assert(
+      fc.property(kBaselineArb, toleranceArb, (measurement, tol) => {
+        const identity = compareLegMedians(measurement, measurement, tol);
+        expect(identity.regressions).toEqual([]);
+        expect(identity.passed).toBe(true);
+        expect(identity.canAdvanceBaseline).toBe(true);
+        expect(identity.latency).toHaveLength(JOB_ORDER.length);
       }),
     );
   });

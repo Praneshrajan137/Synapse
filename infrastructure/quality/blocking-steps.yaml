@@ -571,8 +571,15 @@ steps:
     job: e2e-harness
     step_names:
       - "Task_Completion_Tests + Resilience_Scenarios (seeded, no live network)"
+      # ADR-059: each matrix leg seals its scorecard with its leg index, the matrix size and
+      # the commit. A swallowed seal would leave the leg without a sealed scorecard, and the
+      # ratchet's arrival proof would then refuse the missing leg, so the swallow is not
+      # silent today. It is declared anyway because that safety is second-hand: it rests on
+      # the arrival proof staying in place, and a declaration does not. The name is quoted
+      # byte-for-byte from `.github/workflows/frontend.yml`; `match: exact` keeps a rename loud.
+      - "Seal the leg scorecard with its leg index, matrix size and commit (ADR-059)"
     match: exact
-    requirement: R8.9
+    requirement: "R8.9, ADR-059"
 
   - workflow: .github/workflows/frontend.yml
     job: e2e
@@ -584,20 +591,45 @@ steps:
     all_steps: true
     requirement: R8.9
 
-  # FE-INV-025's entry-preload guard, declared in the SAME change as the step: a
-  # declaration that resolves to no step FAILs as `blocking-unresolved`, so either half alone
-  # is red. `step_names`, not `all_steps: true`: this job's "Size budget (informational in P0;
-  # gated in P2)" keeps its `|| true` by the P0 -> P2 plan's decision, and `all_steps` would
-  # declare that advisory blocking. The guard is the job's only gate on WHAT the entry loads;
-  # it refuses a missing dist/index.html itself, so `Build` is not declared alongside it.
-  # `match: exact`: the name is plain ASCII, so normalisation buys nothing and a rename stays
-  # loud. Quoted byte-for-byte from `.github/workflows/frontend.yml`.
+  # The `build` job's two gates, each declared in the SAME change as its step: a declaration
+  # that resolves to no step FAILs as `blocking-unresolved`, so either half alone is red.
+  # FE-INV-025's entry-preload guard decides WHAT the entry loads. FE-INV-014's size step
+  # decides how large the entry chunk is, and react-vendor beside it; it lost its `|| true`
+  # on 2026-11-01 (operator decision S13.2=a) and was renamed in the same change, which is
+  # why this entry names it now. `step_names`, not `all_steps: true`, so a rename of either
+  # step FAILs by name, which `all_steps` cannot notice. `Build` is not declared alongside
+  # them because each gate refuses a missing build itself: check-entry-preloads.mjs on a
+  # missing dist/index.html, size-limit on a pattern that matches no file (`missed` in its
+  # calc.js, then exit 1 in run.js). One entry carrying both requirements rather than two
+  # entries, because `workflow_shape_truth._requirement_index` keys requirements by
+  # (workflow, job): a second `build` entry would relabel the first step's findings.
+  # `match: exact`: both names are plain ASCII, so normalisation buys nothing and a rename
+  # stays loud. Quoted byte-for-byte from `.github/workflows/frontend.yml`.
   - workflow: .github/workflows/frontend.yml
     job: build
     step_names:
       - "Entry preloads exclude the heavy viz chunks (FE-INV-025)"
+      - "Entry chunk <= 180 KB and react-vendor <= 70 KB, gzipped (FE-INV-014)"
     match: exact
-    requirement: "FE-INV-025"
+    requirement: "FE-INV-014, FE-INV-025"
+
+  # FE-INV-031's Storybook axe check, declared in the SAME change as the job. The three steps
+  # whose failure must redden it: the static build, the bounded wait for the file server
+  # (which refuses a build without iframe.html), and the test run, whose exit status carries
+  # every story's verdict. The test run is the one that matters most: `fe-invariants` reads
+  # this job's run record and counts FE-INV-031 attested when ANY attributed case passed, so
+  # a swallowed exit status would let a run with failing stories through as attested. Only
+  # this job's exit status says "every story". The `uses:` steps are left to the R11.3 name
+  # rule for the reason the `e4-published-artifact` entry gives. `match: exact`, quoted
+  # byte-for-byte from `.github/workflows/frontend.yml`.
+  - workflow: .github/workflows/frontend.yml
+    job: storybook-a11y
+    step_names:
+      - "Build the static Storybook"
+      - "Serve the static Storybook on 127.0.0.1:6006 (bounded wait)"
+      - "Every story has zero axe violations (WCAG 2.0/2.1 A and AA, FE-INV-031)"
+    match: exact
+    requirement: "FE-INV-031"
 
   # -------------------------------------------------------------------------
   # NOT YET DECLARED, AND THE REASON IS MECHANICAL, NOT A JUDGEMENT (task 3.3).
@@ -611,7 +643,7 @@ steps:
   # command with no `&&`/`||`/`;` list, so `final_list_element` returns it unchanged. The
   # case for declaring them is this file's standing one: the R11.3 name rule is satisfied
   # by renaming a step to carry `informational`, a declaration is not -- it FAILs as
-  # `blocking-unresolved`. And the weight is real: nine of frontend.yml's fourteen jobs
+  # `blocking-unresolved`. And the weight is real: nine of frontend.yml's fifteen jobs
   # are downstream of `pnpm typecheck`, so a swallowed type error would report the whole
   # console-effectiveness spine as passing while it was never checked (R2.11, I-7).
   #

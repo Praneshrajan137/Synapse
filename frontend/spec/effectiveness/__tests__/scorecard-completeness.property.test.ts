@@ -47,6 +47,13 @@
  *      a declared deferral does not make a complete run fail.
  *  13. Deferral cannot launder a skip — being on the deferral list buys no exemption: once a
  *      scenario appears in the ledger, or in the run record, reported skipped, it is charged.
+ *  14. Arrival (ADR-059) — exactly k scorecards from legs 1..k at one commit and one harness
+ *      prove arrival in any order; fewer than k, a duplicated leg, a second commit, a second
+ *      harness, or a stamp outside the k-leg design is refused, naming the leg. A missing leg
+ *      is a failure, never a median of fewer.
+ *  15. Seal (ADR-059) — a complete record seals with its leg stamp and reads back with the
+ *      same verdict; an incomplete record or an out-of-design stamp cannot be sealed, and an
+ *      unsealed or over-keyed record is not a leg's scorecard.
  *
  * Browser-driven cases are deliberately out of scope here: this file stays pure and fast
  * (no disk, no clock, no DOM), per task 11.3's split between fast-check in
@@ -56,6 +63,15 @@
 import fc from "fast-check";
 import { describe, expect, it } from "vitest";
 
+import {
+  type ArrivalFailureKind,
+  type ArrivalVerdict,
+  checkLegArrival,
+  EFFECTIVENESS_LEG_COUNT,
+  type LegRow,
+  type LegScorecard,
+  type LegStamp,
+} from "@lib/effectiveness-ratchet";
 import {
   EFFECTIVENESS_HARNESS_SEED,
   EFFECTIVENESS_HARNESS_VERSION,
@@ -87,9 +103,11 @@ import {
 } from "../scorecard-emission";
 import {
   checkFreshScorecard,
+  checkSealedLegScorecard,
   type HarnessSpecCategory,
   reviewHarnessRunRecord,
   scanHarnessRunRecord,
+  sealLegScorecard,
 } from "../scorecard-gate";
 
 // ---------------------------------------------------------------------------
@@ -176,12 +194,14 @@ function ledgerFor(opts: {
   readonly skipResilience: boolean;
   readonly skipFidelity: boolean;
 }): readonly ScenarioRecord<JobToBeDone>[] {
-  const jobs = opts.emitted.map((job): ScenarioRecord<JobToBeDone> => ({
-    scenario: jobScenarioId(job),
-    kind: "job",
-    job,
-    outcome: opts.skippedJobs.has(job) ? "skipped" : "executed",
-  }));
+  const jobs = opts.emitted.map(
+    (job): ScenarioRecord<JobToBeDone> => ({
+      scenario: jobScenarioId(job),
+      kind: "job",
+      job,
+      outcome: opts.skippedJobs.has(job) ? "skipped" : "executed",
+    }),
+  );
   return [
     ...jobs,
     {
@@ -379,12 +399,154 @@ const recordedSpecArb: fc.Arbitrary<CategorizedSpec> = fc
     fc.boolean(),
     fc.integer({ min: 1, max: 9 }),
   )
-  .map(([spec, skipped, ordinal]): CategorizedSpec => ({
-    file: spec.file,
-    title: `scenario ${ordinal}`,
-    category: spec.category,
-    skipped,
+  .map(
+    ([spec, skipped, ordinal]): CategorizedSpec => ({
+      file: spec.file,
+      title: `scenario ${ordinal}`,
+      category: spec.category,
+      skipped,
+    }),
+  );
+
+// ---------------------------------------------------------------------------
+// k legs (ADR-059): the arrival proof and the leg seal
+// ---------------------------------------------------------------------------
+
+/** k, the number of legs the ratchet judges together. */
+const K = EFFECTIVENESS_LEG_COUNT;
+
+/** Legs 1..k: the only leg set the arrival proof accepts. */
+const LEG_INDICES: readonly number[] = Array.from({ length: K }, (_, offset) => offset + 1);
+
+/** A 40-character lowercase hexadecimal commit, the form `github.sha` takes. */
+const commitShaArb: fc.Arbitrary<string> = fc
+  .array(fc.constantFrom(..."0123456789abcdef".split("")), { minLength: 40, maxLength: 40 })
+  .map((digits) => digits.join(""));
+
+/** A row the emission rule accepted, as the arrival proof and the pooling read it. */
+function asLegRow(row: CapturedRow<JobToBeDone>): LegRow {
+  const { harnessVersion, seed, capturedAt } = row;
+  if (harnessVersion === null || seed === null || capturedAt === null) {
+    throw new Error("generator drift: an accepting row carried a null stamp");
+  }
+  return {
+    job: row.job,
+    steps: row.steps,
+    latencyMs: row.latencyMs,
+    errorRate: row.errorRate,
+    harnessVersion,
+    seed,
+    capturedAt,
+  };
+}
+
+/** k complete scorecards of one commit and one harness: the set the arrival proof accepts. */
+interface LegSet {
+  readonly commitSha: string;
+  readonly legs: readonly LegScorecard[];
+}
+
+const legSetArb: fc.Arbitrary<LegSet> = fc
+  .tuple(stampedRowsArb, commitShaArb)
+  .map(([rows, commitSha]) => ({
+    commitSha,
+    legs: LEG_INDICES.map(
+      (index): LegScorecard => ({
+        leg: { index, count: K, commitSha },
+        harnessVersion: EFFECTIVENESS_HARNESS_VERSION,
+        seed: EFFECTIVENESS_HARNESS_SEED,
+        rows: rows.map(asLegRow),
+        interruptionPrecision: null,
+      }),
+    ),
   }));
+
+/** `legs` with the scorecard at `position` rewritten; every other leg held exactly. */
+function withLeg(
+  legs: readonly LegScorecard[],
+  position: number,
+  patch: (scorecard: LegScorecard) => LegScorecard,
+): readonly LegScorecard[] {
+  return legs.map((scorecard, at) => (at === position ? patch(scorecard) : scorecard));
+}
+
+/** `scorecard` with fields of its stamp rewritten. */
+function restamped(scorecard: LegScorecard, stamp: Partial<LegStamp>): LegScorecard {
+  return { ...scorecard, leg: { ...scorecard.leg, ...stamp } };
+}
+
+/** The kinds an arrival verdict refused on; empty when it arrived. */
+function arrivalKinds(arrival: ArrivalVerdict): readonly ArrivalFailureKind[] {
+  return arrival.outcome === "refused" ? arrival.failures.map((failure) => failure.kind) : [];
+}
+
+/** The subjects of one kind of refusal, in the order the proof reported them. */
+function arrivalSubjects(arrival: ArrivalVerdict, kind: ArrivalFailureKind): readonly string[] {
+  if (arrival.outcome !== "refused") return [];
+  return arrival.failures
+    .filter((failure) => failure.kind === kind)
+    .map((failure) => failure.subject);
+}
+
+/** The distinct kinds, sorted, so a facet can state the exact set it expects. */
+function kindSet(kinds: readonly ArrivalFailureKind[]): readonly ArrivalFailureKind[] {
+  return [...new Set(kinds)].sort();
+}
+
+/** How a generated stamp leaves the k-leg design. */
+type StampDefect = "index-zero" | "index-beyond" | "index-fraction" | "count" | "commit";
+
+/** Ways to spoil a commit so it is no longer a 40-character lowercase hex sha, deterministically. */
+const spoilCommitArb: fc.Arbitrary<(commitSha: string) => string> = fc.constantFrom(
+  (commitSha: string) => `A${commitSha.slice(1)}`,
+  (commitSha: string) => commitSha.slice(1),
+  (commitSha: string) => `${commitSha}0`,
+  (commitSha: string) => `${commitSha.slice(1)}g`,
+  () => "",
+);
+
+/** A k-leg set with one stamp defect injected, and the exact refusal kinds it must produce. */
+function stampDefectCase(
+  legs: readonly LegScorecard[],
+  commitSha: string,
+  position: number,
+  bump: number,
+  defect: StampDefect,
+  spoil: (commitSha: string) => string,
+): {
+  readonly candidate: readonly LegScorecard[];
+  readonly expected: readonly ArrivalFailureKind[];
+} {
+  const own = position + 1;
+  switch (defect) {
+    case "index-zero":
+      return {
+        candidate: withLeg(legs, position, (s) => restamped(s, { index: 0 })),
+        expected: ["leg-stamp", "missing-leg"],
+      };
+    case "index-beyond":
+      return {
+        candidate: withLeg(legs, position, (s) => restamped(s, { index: K + bump })),
+        expected: ["leg-stamp", "missing-leg"],
+      };
+    case "index-fraction":
+      return {
+        candidate: withLeg(legs, position, (s) => restamped(s, { index: own + 0.5 })),
+        expected: ["leg-stamp", "missing-leg"],
+      };
+    case "count":
+      return {
+        candidate: withLeg(legs, position, (s) => restamped(s, { count: K + bump })),
+        expected: ["leg-stamp"],
+      };
+    case "commit":
+      // Every leg agrees on the commit, so only its FORM is wrong: no mixed-commit.
+      return {
+        candidate: legs.map((s) => restamped(s, { commitSha: spoil(commitSha) })),
+        expected: ["leg-stamp"],
+      };
+  }
+}
 
 // ---------------------------------------------------------------------------
 
@@ -771,8 +933,7 @@ describe("Property 32: the scorecard is complete or the job fails", () => {
         expect(review.unnamedSkips.length).toBe(unnamed.length);
         expect(
           review.failures.every(
-            (failure) =>
-              failure.kind === "zero-executed" || failure.kind === "skipped-scenario",
+            (failure) => failure.kind === "zero-executed" || failure.kind === "skipped-scenario",
           ),
         ).toBe(true);
       }),
@@ -810,10 +971,7 @@ describe("Property 32: the scorecard is complete or the job fails", () => {
           const base = inputFor({ coverage: COMPLETE_COVERAGE, stamped, harnessReachable: true });
           const input: EmissionInput<JobToBeDone> = {
             ...base,
-            scenarios: [
-              ...base.scenarios,
-              { scenario: spec, kind, job: null, outcome: "skipped" },
-            ],
+            scenarios: [...base.scenarios, { scenario: spec, kind, job: null, outcome: "skipped" }],
           };
           const verdict = evaluateEmission(input);
           const failures = failuresOf(verdict);
@@ -844,6 +1002,240 @@ describe("Property 32: the scorecard is complete or the job fails", () => {
                 subject.includes(spec),
               ),
             ).toBe(true);
+          }
+        },
+      ),
+    );
+  });
+
+  // Feature: purpose-achievement-audit, Property 32: The scorecard is complete or the job fails
+  it("proves arrival exactly when k scorecards from legs 1..k carry one commit and one harness", () => {
+    const shuffledArb = legSetArb.chain((set) =>
+      fc
+        .shuffledSubarray([...set.legs], { minLength: K, maxLength: K })
+        .map((order) => ({ set, order })),
+    );
+    fc.assert(
+      fc.property(shuffledArb, ({ set, order }) => {
+        const arrival = checkLegArrival(order, K);
+
+        // The complement direction (ADR-059): a genuine k-leg set must ARRIVE, in whatever
+        // order the artifacts were downloaded, or the refusals below prove nothing.
+        expect(arrival.outcome).toBe("arrived");
+        if (arrival.outcome !== "arrived") return;
+        expect(arrival.legs.map((scorecard) => scorecard.leg.index)).toEqual([...LEG_INDICES]);
+        expect(arrival.commitSha).toBe(set.commitSha);
+        expect(arrival.harnessVersion).toBe(EFFECTIVENESS_HARNESS_VERSION);
+        expect(arrival.seed).toBe(EFFECTIVENESS_HARNESS_SEED);
+      }),
+    );
+  });
+
+  // Feature: purpose-achievement-audit, Property 32: The scorecard is complete or the job fails
+  it("refuses fewer than k scorecards and names every leg that did not arrive", () => {
+    const shortArb = legSetArb.chain((set) =>
+      fc.subarray([...set.legs], { minLength: 0, maxLength: K - 1 }),
+    );
+    fc.assert(
+      fc.property(shortArb, (kept) => {
+        const arrival = checkLegArrival(kept, K);
+
+        // A missing leg is a failure, never a median of fewer (ADR-059).
+        expect(arrival.outcome).toBe("refused");
+        const arrived = new Set(kept.map((scorecard) => scorecard.leg.index));
+        const absent = LEG_INDICES.filter((index) => !arrived.has(index));
+        expect(arrivalSubjects(arrival, "missing-leg")).toEqual(
+          absent.map((index) => `leg ${index}`),
+        );
+        // The legs that did arrive are sound, so nothing else is charged.
+        expect(kindSet(arrivalKinds(arrival))).toEqual(["leg-count", "missing-leg"]);
+      }),
+    );
+  });
+
+  // Feature: purpose-achievement-audit, Property 32: The scorecard is complete or the job fails
+  it("refuses a duplicated leg even when k scorecards arrived", () => {
+    const pairArb = fc
+      .tuple(fc.integer({ min: 1, max: K }), fc.integer({ min: 1, max: K }))
+      .filter(([claimed, lost]) => claimed !== lost);
+    fc.assert(
+      fc.property(legSetArb, pairArb, ({ legs }, [claimed, lost]) => {
+        // The leg at index `lost` claims `claimed`: k scorecards, but only k - 1 distinct legs.
+        // The count alone would pass; the leg set is what the proof is about.
+        const duplicated = withLeg(legs, lost - 1, (scorecard) =>
+          restamped(scorecard, { index: claimed }),
+        );
+        const arrival = checkLegArrival(duplicated, K);
+        expect(arrival.outcome).toBe("refused");
+        expect(kindSet(arrivalKinds(arrival))).toEqual(["duplicate-leg", "missing-leg"]);
+        expect(arrivalSubjects(arrival, "duplicate-leg")).toEqual([`leg ${claimed}`]);
+        expect(arrivalSubjects(arrival, "missing-leg")).toEqual([`leg ${lost}`]);
+      }),
+    );
+  });
+
+  // Feature: purpose-achievement-audit, Property 32: The scorecard is complete or the job fails
+  it("refuses k scorecards that name more than one commit", () => {
+    fc.assert(
+      fc.property(
+        legSetArb,
+        fc.integer({ min: 0, max: K - 1 }),
+        commitShaArb,
+        ({ legs, commitSha }, position, other) => {
+          fc.pre(other !== commitSha);
+          const mixed = withLeg(legs, position, (scorecard) =>
+            restamped(scorecard, { commitSha: other }),
+          );
+          const arrival = checkLegArrival(mixed, K);
+
+          // Medians over two commits would compare two pieces of code with each other.
+          expect(arrivalKinds(arrival)).toEqual(["mixed-commit"]);
+          const details = arrival.outcome === "refused" ? arrival.failures : [];
+          for (const failure of details) {
+            expect(failure.detail).toContain(commitSha);
+            expect(failure.detail).toContain(other);
+          }
+        },
+      ),
+    );
+  });
+
+  // Feature: purpose-achievement-audit, Property 32: The scorecard is complete or the job fails
+  it("refuses k scorecards that ran more than one harness version or master seed", () => {
+    fc.assert(
+      fc.property(
+        legSetArb,
+        fc.integer({ min: 0, max: K - 1 }),
+        fc.boolean(),
+        fc.integer({ min: 1, max: 9 }),
+        ({ legs }, position, byVersion, bump) => {
+          const mixed = withLeg(legs, position, (scorecard) =>
+            byVersion
+              ? { ...scorecard, harnessVersion: `${scorecard.harnessVersion}.${bump}` }
+              : { ...scorecard, seed: scorecard.seed + bump },
+          );
+          expect(arrivalKinds(checkLegArrival(mixed, K))).toEqual(["mixed-harness"]);
+        },
+      ),
+    );
+  });
+
+  // Feature: purpose-achievement-audit, Property 32: The scorecard is complete or the job fails
+  it("refuses a leg stamp that does not fit the k-leg design, naming the leg", () => {
+    const defectArb = fc.constantFrom<StampDefect>(
+      "index-zero",
+      "index-beyond",
+      "index-fraction",
+      "count",
+      "commit",
+    );
+    fc.assert(
+      fc.property(
+        legSetArb,
+        fc.integer({ min: 0, max: K - 1 }),
+        fc.integer({ min: 1, max: 9 }),
+        defectArb,
+        spoilCommitArb,
+        ({ legs, commitSha }, position, bump, defect, spoil) => {
+          const own = position + 1;
+          const { candidate, expected } = stampDefectCase(
+            legs,
+            commitSha,
+            position,
+            bump,
+            defect,
+            spoil,
+          );
+          const arrival = checkLegArrival(candidate, K);
+          expect(arrival.outcome).toBe("refused");
+          expect(kindSet(arrivalKinds(arrival))).toEqual([...expected].sort());
+          if (defect !== "commit") {
+            expect(arrivalSubjects(arrival, "leg-stamp")).toHaveLength(1);
+          }
+          if (expected.includes("missing-leg")) {
+            expect(arrivalSubjects(arrival, "missing-leg")).toEqual([`leg ${own}`]);
+          }
+        },
+      ),
+    );
+  });
+
+  // Feature: purpose-achievement-audit, Property 32: The scorecard is complete or the job fails
+  it("seals a complete scorecard with its leg stamp, and the gate reads the same verdict back", () => {
+    fc.assert(
+      fc.property(
+        stampedRowsArb,
+        commitShaArb,
+        fc.integer({ min: 1, max: K }),
+        (stamped, commitSha, index) => {
+          const input = inputFor({ coverage: COMPLETE_COVERAGE, stamped, harnessReachable: true });
+          const emitted = emitDocument(input, null);
+          const stamp: LegStamp = { index, count: K, commitSha };
+          const sealed = sealLegScorecard(emitted, stamp, K);
+          expect(sealed.outcome).toBe("sealed");
+          if (sealed.outcome !== "sealed") return;
+
+          // The seal adds the stamp and changes nothing the emission rule reads.
+          const reread = checkSealedLegScorecard(sealed.text);
+          expect(reread.leg).toEqual(stamp);
+          expect(reread.verdict.outcome).toBe("complete");
+          expect(reread.verdict).toEqual(checkFreshScorecard(emitted).verdict);
+
+          // A record no leg sealed cannot be attributed to a leg, so it is not a leg's scorecard.
+          const unsealed = checkSealedLegScorecard(emitted);
+          expect(unsealed.leg).toBeNull();
+          expect(kindsOf(failuresOf(unsealed.verdict))).toEqual(["malformed-record"]);
+
+          // The sealed shape is strict: an unexpected key is a shape failure, never ignored.
+          const overKeyed = checkSealedLegScorecard(sealed.text.replace(/^\{/, '{"extra":true,'));
+          expect(kindsOf(failuresOf(overKeyed.verdict))).toEqual(["malformed-record"]);
+        },
+      ),
+    );
+  });
+
+  // Feature: purpose-achievement-audit, Property 32: The scorecard is complete or the job fails
+  it("refuses to seal an incomplete scorecard, or a stamp outside the k-leg design", () => {
+    const incompleteArb = jobCoverageArb.filter((coverage) => coverage.kind !== "complete");
+    fc.assert(
+      fc.property(
+        incompleteArb,
+        stampedRowsArb,
+        commitShaArb,
+        fc.integer({ min: 1, max: K }),
+        fc.integer({ min: 1, max: 9 }),
+        (coverage, stamped, commitSha, index, bump) => {
+          const good: LegStamp = { index, count: K, commitSha };
+
+          // R8.2's failed result stays failed: an incomplete run has nothing to seal.
+          const partial = emitDocument(
+            inputFor({ coverage, stamped, harnessReachable: true }),
+            null,
+          );
+          const refusedPartial = sealLegScorecard(partial, good, K);
+          expect(refusedPartial.outcome).toBe("refused");
+          if (refusedPartial.outcome === "refused") {
+            expect(refusedPartial.emission.length).toBeGreaterThan(0);
+            expect(refusedPartial.stamp).toEqual([]);
+          }
+
+          // A complete run under a stamp the design does not have is refused, naming the stamp.
+          const complete = emitDocument(
+            inputFor({ coverage: COMPLETE_COVERAGE, stamped, harnessReachable: true }),
+            null,
+          );
+          const outOfDesign: readonly LegStamp[] = [
+            { ...good, index: 0 },
+            { ...good, index: K + bump },
+            { ...good, count: K + bump },
+            { ...good, commitSha: commitSha.slice(1) },
+          ];
+          for (const bad of outOfDesign) {
+            const refused = sealLegScorecard(complete, bad, K);
+            expect(refused.outcome).toBe("refused");
+            if (refused.outcome !== "refused") continue;
+            expect(refused.emission).toEqual([]);
+            expect(refused.stamp.length).toBeGreaterThan(0);
           }
         },
       ),

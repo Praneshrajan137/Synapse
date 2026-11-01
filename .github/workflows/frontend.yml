@@ -89,10 +89,11 @@ jobs:
         # `build` needs `quality`; `contract-fidelity` needs `quality`; `mutation`
         # needs `quality`; `e2e`, `e2e-visual`, `e2e-harness` and `mobile-lighthouse`
         # each need `build`; `effectiveness-ratchet` needs `e2e-harness`; and
-        # `fe-invariants` needs [quality, e2e, e2e-visual, e2e-harness]. NINE of this
-        # workflow's fourteen jobs are downstream of this one command; the five that
-        # are not are `quality` itself, `spec-typecheck`, `license-audit`, `sbom` and
-        # `audit-supply`. Property 31's file
+        # `fe-invariants` needs [quality, e2e, e2e-visual, e2e-harness,
+        # storybook-a11y]. NINE of this workflow's fifteen jobs are downstream of
+        # this one command; the six that are not are `quality` itself,
+        # `spec-typecheck`, `license-audit`, `sbom`, `audit-supply` and
+        # `storybook-a11y`. Property 31's file
         # (`src/surfaces/__tests__/degradation-rendering.property.test.ts`) is inside
         # `tsconfig.json`'s `include`, so one type error there skips the whole
         # console-effectiveness spine -- which R2.11 requires
@@ -225,20 +226,33 @@ jobs:
         # back on "/" stops them from running at all -- the mobile LCP spec would only
         # re-measure a regression this step has already named.
         run: node scripts/check-entry-preloads.mjs
-      - name: Size budget (informational in P0; gated in P2)
-        # decision-quality-proof task 3.3 (R11.3). Renamed exactly as
-        # `infrastructure/quality/blocking-steps.yaml` recorded the remediation: the
-        # trailing comment already said "informational in P0; gated in P2 per plan
-        # section 17", so the fix was to move that word out of a shell comment -- where
-        # only a human sees it -- and into the step name, where `workflow_shape_truth`
-        # and the run log both see it. The plan reference stays here rather than in the
-        # name: a run-log label should be short, and the name is now the ASCII string
-        # `blocking-steps.yaml` can quote byte-for-byte if this step is ever declared.
+      - name: Entry chunk <= 180 KB and react-vendor <= 70 KB, gzipped (FE-INV-014)
+        # FE-INV-014 as reworded on 2026-11-01 (operator decision S13.2=a): the ENTRY CHUNK
+        # ships <= 180 KB gzipped. `pnpm size` runs size-limit 11.2.0 over package.json's
+        # "size-limit" block. Each entry sets `gzip: true`, so @size-limit/file gzips at level 9
+        # where its default is brotli, and `running: false`, so no headless Chrome runs.
+        # size-limit reads "180 KB" as 180,000 bytes. The entry's pattern is
+        # `dist/assets/entry-*.js`, a prefix vite.config.ts's `entryFileNames` gives the entry
+        # chunk alone. The step exits 1 when a chunk exceeds its limit, and also when a pattern
+        # matches no file, so a rename cannot turn it into a pass.
         #
-        # `|| true` is unchanged. Promoting the size budget from measurement to gate is
-        # the P0 -> P2 plan's decision to make; doing it as a side effect of a naming fix
-        # would be a scope change disguised as a rename.
-        run: pnpm size || true
+        # What the old step measured, on PR #84's build job (run 41298456048, job
+        # 124824795769, sha 6ff4973): the check named "entry bundle (gzip)" printed 112.37 kB
+        # BROTLIED, and its pattern `dist/assets/index-*.js` matched two chunks, the entry and
+        # the lazy `index-yVVMv7SB.js` (6.17 kB gzip). react-vendor printed 67.84 kB gzip
+        # against its 70 KB limit. Its `|| true` meant none of it could fail the job.
+        #
+        # What this step cannot see: the rest of the eager set. dist/index.html also loads
+        # react-vendor, zod, query and runtime before the app renders, and the FE-INV-025 step
+        # above printed the eager JS as 216587 B gzip (211.5 KiB) at that sha, above 180 KB.
+        # FE-INV-014's description discloses that and claims nothing about it; the figure
+        # predates the zod 4 port (f167098). For the same file the two steps print slightly
+        # different gzip bytes: that table uses zlib's default level, this step level 9.
+        #
+        # Blocking, and declared so by this exact name in
+        # infrastructure/quality/blocking-steps.yaml: no `|| true`, no `continue-on-error`,
+        # one top-level command.
+        run: pnpm size
 
   contract-fidelity:
     name: Contract fidelity drift (Req 1)
@@ -271,20 +285,111 @@ jobs:
             frontend/spec/contract-fidelity/drift-report.md
           retention-days: 14
 
+  storybook-a11y:
+    name: Storybook a11y - zero axe violations per story (FE-INV-031)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    # FE-INV-031: every Storybook story has zero axe-core violations of the WCAG 2.0 and 2.1
+    # level A and AA rules. The check lives in frontend/.storybook/test-runner.ts: its
+    # `postVisit` hook runs @axe-core/playwright over `#storybook-root` after each story
+    # renders and throws, naming each violation's id, impact and targets, so that story's
+    # test fails. Every tool here is already in package.json (storybook,
+    # @storybook/test-runner, @axe-core/playwright, Playwright) or on the runner image
+    # (python3, curl): no new dependency (I-1).
+    #
+    # Same run policy as `e2e` (ADR-039): pull requests and `v*` tags only. No `needs:`, like
+    # `spec-typecheck`: the static Storybook build does not use `build`'s bundle, and a red
+    # `quality` would only hide this verdict, not change it.
+    #
+    # The run record is Jest's JSON (`--json --outputFile`), which
+    # frontend/spec/check_fe_invariants.py reads in its Vitest/Jest shape. In the
+    # test-runner's default mode every stories file IS a Jest test file, so
+    # `testResults[].name` is that file's absolute path, for example
+    # /home/runner/work/<repo>/<repo>/frontend/src/design-system/compounds/TierBadge.stories.tsx,
+    # whose trailing segments are the registry's frontend/src/... spelling. `--no-index-json`
+    # pins that mode: index-json mode would name generated files in a temporary directory,
+    # and FE-INV-031 would read `not_executed`.
+    #
+    # What the check cannot see is stated in test-runner.ts's header: nodes outside the story
+    # root, checks axe leaves incomplete (printed per story, never failed), and the
+    # full-motion rendering.
+    #
+    # EXPECTED RED ON LANDING (I-7): reading the components predicts colour-contrast
+    # violations in several stories. That red is the finding. It licenses no disabled rule and
+    # no excluded story; the repair is to the components. `fe-invariants` needs this job, so a
+    # red here also skips the registry gate, which scripts/audit/gate_surface.py renders as
+    # NOT EXECUTED rather than as a pass.
+    if: github.event_name == 'pull_request' || startsWith(github.ref, 'refs/tags/v')
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9.12.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22.23"
+          cache: "pnpm"
+          cache-dependency-path: frontend/pnpm-lock.yaml
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile=false
+      - name: Install Chromium for Playwright
+        run: pnpm exec playwright install --with-deps chromium
+      - name: Build the static Storybook
+        # package.json `storybook:build` = `storybook build -o .storybook-static`. Storybook's
+        # Vite builder keeps vite.config.ts's plugins and aliases and only `target` from its
+        # `build` block, so the production chunk names do not apply here.
+        run: pnpm storybook:build
+      - name: Serve the static Storybook on 127.0.0.1:6006 (bounded wait)
+        # Python's stdlib file server, backgrounded with its log in $RUNNER_TEMP so it holds no
+        # pipe of this step; the runner stops it when the job ends. The loop waits at most
+        # 30 s for iframe.html, the document the test-runner loads, and the final probe's exit
+        # status is the step's: a server that never answers, or a build that produced no
+        # iframe.html (a 404), fails here by name instead of as one refused story per test.
+        run: |
+          python3 -m http.server 6006 --bind 127.0.0.1 --directory .storybook-static > "$RUNNER_TEMP/storybook-http.log" 2>&1 &
+          for _ in $(seq 1 30); do
+            curl --silent --fail --output /dev/null http://127.0.0.1:6006/iframe.html && break
+            sleep 1
+          done
+          curl --silent --show-error --fail --output /dev/null http://127.0.0.1:6006/iframe.html
+      - name: Every story has zero axe violations (WCAG 2.0/2.1 A and AA, FE-INV-031)
+        # Blocking, and declared so by this exact name in blocking-steps.yaml: no `|| true`, no
+        # `continue-on-error`, and the test run is the last command, so one failing story fails
+        # the job. `--json --outputFile <path>` must stay LAST on the line: test-runner 0.19.1
+        # declares `--outputFile` as a flag and appends the leftover argument (the path) after
+        # every Jest option it forwards, so the path reaches Jest as `--outputFile`'s value only
+        # when nothing follows it. Jest writes the file when stories fail too, but does not
+        # create its directory, hence the `mkdir`.
+        run: |
+          mkdir -p artifacts/test-reports
+          pnpm storybook:test --no-index-json --url http://127.0.0.1:6006 --maxWorkers 2 --json --outputFile artifacts/test-reports/storybook-a11y.json
+      - name: Upload Storybook a11y run record (FE-INV attestation evidence, R8.7)
+        # `fe-invariants` attests FE-INV-031 from this file. Uploaded on failure too, since a
+        # record naming the failing stories is evidence; a missing record is an error here
+        # rather than an absent artifact for the registry gate to trip over.
+        if: success() || failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: fe-invariant-storybook-a11y-report
+          path: frontend/artifacts/test-reports/storybook-a11y.json
+          if-no-files-found: error
+          retention-days: 7
+
   fe-invariants:
     name: FE-INV registry coverage
     runs-on: ubuntu-latest
     timeout-minutes: 5
-    # The gate reads EXECUTED, non-skipped assertions from the Vitest/Playwright
+    # The gate reads EXECUTED, non-skipped assertions from the Vitest/Playwright/Jest
     # JSON run records (R8.7 / R12.4) instead of calling `.exists()` on the files
     # the registry lists — `FE-INV-056` was `enforced` on the strength of a suite
     # that skips on its first line. It therefore consumes the run records produced
-    # by `quality` (Vitest) and `e2e` / `e2e-visual` / `e2e-harness` (Playwright),
-    # and runs where those run. Push-to-main produces no Playwright record
+    # by `quality` (Vitest), `e2e` / `e2e-visual` / `e2e-harness` (Playwright) and
+    # `storybook-a11y` (Jest, through @storybook/test-runner), and runs where those
+    # run. Push-to-main produces neither the Playwright nor the Storybook record
     # (ADR-039: `pnpm preview` has no backend there), so this job does not execute
     # on that event; that gap is rendered by `scripts/audit/gate_surface.py` in
     # docs/state/GATE_SURFACE.md as NOT EXECUTED rather than reported as a pass.
-    needs: [quality, e2e, e2e-visual, e2e-harness]
+    needs: [quality, e2e, e2e-visual, e2e-harness, storybook-a11y]
     steps:
       - uses: actions/checkout@v4
       - name: Setup Python
@@ -304,6 +409,13 @@ jobs:
           pattern: fe-invariant-playwright-*-report
           merge-multiple: true
           path: frontend/artifacts/test-reports
+      - name: Download Storybook a11y run record
+        # Its own `name:`, outside the Playwright pattern above, so neither download can
+        # fetch the other's file. `storybook-a11y` uploads it on success and failure.
+        uses: actions/download-artifact@v4
+        with:
+          name: fe-invariant-storybook-a11y-report
+          path: frontend/artifacts/test-reports
       - name: Validate FE-INV registry against executed assertions
         working-directory: .
         # No `|| true` and no `continue-on-error` (R8.9): exit 1 = an `enforced`
@@ -317,7 +429,8 @@ jobs:
             --report frontend/artifacts/test-reports/vitest.json \
             --report frontend/artifacts/test-reports/playwright.json \
             --report frontend/artifacts/test-reports/playwright-visual.json \
-            --report frontend/artifacts/test-reports/playwright-harness.json
+            --report frontend/artifacts/test-reports/playwright-harness.json \
+            --report frontend/artifacts/test-reports/storybook-a11y.json
 
   e2e:
     name: Playwright E2E + axe
@@ -474,22 +587,51 @@ jobs:
           retention-days: 7
 
   e2e-harness:
-    name: Effectiveness harness (Req 1.3, 3, 7) — deterministic
+    name: Effectiveness harness leg ${{ matrix.leg }} of 5 (Req 1.3, 3, 7)
     runs-on: ubuntu-latest
     timeout-minutes: 25
     needs: build
     # Same run policy as `e2e` (ADR-039): PR-preview and `v*` tags only. The
-    # Effectiveness_Harness is a Scripted_Proxy driven entirely by the seeded
-    # MSW browser worker + stream driver — it makes ZERO calls to any live or
-    # third-party endpoint, so every measurement is byte-identical across runs
-    # (Req 1.3). That determinism is what lets the harness be a PR gate: it
-    # cannot flake on network or backend state. It runs the Task_Completion_Tests
-    # (Jobs-To-Be-Done, Req 3) and the Resilience_Scenarios (Req 7) on the fixed
-    # Linux/Chromium profile and emits the versioned Effectiveness_Scorecard
-    # (test-results/effectiveness/scorecard.json, Req 4.1) that the
-    # `effectiveness-ratchet` job below gates against. $0-cost / OSS only
-    # (Playwright + MSW, both already in package.json; Req 20.3).
+    # Effectiveness_Harness is a Scripted_Proxy driven entirely by the seeded MSW browser
+    # worker and stream driver: it makes ZERO calls to any live or third-party endpoint. It
+    # runs the Task_Completion_Tests (Jobs-To-Be-Done, Req 3) and the Resilience_Scenarios
+    # (Req 7) on the fixed Linux/Chromium profile and emits the versioned
+    # Effectiveness_Scorecard (test-results/effectiveness/scorecard.json, Req 4.1) that the
+    # `effectiveness-ratchet` job below gates against. $0-cost / OSS only (Playwright + MSW,
+    # both already in package.json; Req 20.3).
+    #
+    # WHAT IS DETERMINISTIC AND WHAT IS NOT (ADR-059, measured). The seed fixes the path, so
+    # `steps`, `errorRate` and `interruptionPrecision` repeat exactly: the strict A/A of
+    # finding 88 (run 38298457463, job 116358160071) read them identical in both attempts.
+    # Millisecond latency does NOT repeat: the same A/A moved two of five JTBD latencies by
+    # more than 10% at one sha and one seed. So this job is a MATRIX OF FIVE LEGS, each a whole
+    # harness run on its own runner, and `effectiveness-ratchet` judges latency by the median
+    # of the five against the baseline's own five samples, and requires the other three
+    # metrics to be identical in all five. A disagreement among legs is a failure, because the
+    # harness claims determinism for them.
+    #
+    # ARRIVAL. Each leg seals its scorecard with its leg index, the matrix size and the commit,
+    # and uploads it with its harness run record as `effectiveness-leg-<n>`. The ratchet
+    # refuses unless exactly legs 1..5 arrived, at one commit and one harness version: a
+    # missing leg is a failure, never a median of fewer.
+    #
+    # THE FE-INV CONTRACT. `fe-invariants` downloads the pattern
+    # `fe-invariant-playwright-*-report` with merge-multiple and reads `playwright-harness.json`.
+    # Exactly ONE leg, leg 1, uploads `fe-invariant-playwright-harness-report`; legs 2..5 upload
+    # nothing matching that pattern, so the merge cannot overwrite leg 1's record with another
+    # leg's. Every leg's record also travels in its own `effectiveness-leg-<n>` artifact, which
+    # the ratchet reads for R8.6/R8.8: a skip that happens in one leg shows only in that leg's
+    # record.
     if: github.event_name == 'pull_request' || startsWith(github.ref, 'refs/tags/v')
+    strategy:
+      # One red leg must not cancel the other legs' measurements. The ratchet needs all five
+      # anyway, and a failed leg skips it: non-passing, never a shorter verdict.
+      fail-fast: false
+      matrix:
+        # 1..5, written out so every leg is visible on the run page. k = 5 is
+        # `EFFECTIVENESS_LEG_COUNT` in frontend/src/lib/effectiveness-ratchet.ts. That is a
+        # coupling, so each leg's seal refuses unless `strategy.job-total` equals it.
+        leg: [1, 2, 3, 4, 5]
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
@@ -511,7 +653,7 @@ jobs:
         run: pnpm build:e2e
       - name: Task_Completion_Tests + Resilience_Scenarios (seeded, no live network)
         # `test:e2e:harness` runs `playwright.harness.config.ts`, whose `testMatch`
-        # IS `HARNESS_SPEC_PATTERN` — the six harness specs, on the deterministic
+        # IS `HARNESS_SPEC_PATTERN` — the seven harness specs, on the deterministic
         # chromium project, against `dist-e2e/`.
         #
         # This replaces `pnpm test:e2e --project=chromium task-completion.jtbd
@@ -529,69 +671,97 @@ jobs:
         # `afterAll` throws rather than emit a shorter scorecard.
         env:
           # A distinct run record so the `fe-invariants` gate can tell a
-          # harness-mode execution from the plain `e2e` one (R8.7). This is also
-          # the record `effectiveness-ratchet` reads to detect a skipped
-          # resilience scenario (R8.6) and a run that selected no spec at all.
+          # harness-mode execution from the plain `e2e` one (R8.7). Every leg writes
+          # one, and `effectiveness-ratchet` reads all five to detect a skipped
+          # resilience scenario (R8.6) and a leg that selected no spec at all.
           PLAYWRIGHT_JSON_OUTPUT_NAME: artifacts/test-reports/playwright-harness.json
         run: pnpm test:e2e:harness
+      - name: Seal the leg scorecard with its leg index, matrix size and commit (ADR-059)
+        # Re-checks `scorecard.json` against the complete-or-failed emission rule and writes
+        # `test-results/effectiveness/scorecard.leg.json`: the same record plus
+        # `leg: { index, count, commitSha }`. It refuses an incomplete record, an index
+        # outside 1..k, a `strategy.job-total` other than k (`EFFECTIVENESS_LEG_COUNT`) and a
+        # commit that is not a 40-character sha, so a mis-sized matrix fails every leg by name.
+        # Runs only when the harness step succeeded: a failed harness has no scorecard to seal,
+        # and the leg is already red. The values reach the script through `env:`, never
+        # spliced into `run:`.
+        env:
+          HARNESS_LEG: ${{ matrix.leg }}
+          HARNESS_LEG_TOTAL: ${{ strategy.job-total }}
+          HARNESS_COMMIT_SHA: ${{ github.sha }}
+        run: pnpm effectiveness:ratchet seal
       - name: Upload Playwright harness run record (FE-INV attestation evidence, R8.7)
-        # This is the run in which FE-INV-054..057 are asserted, and it is also the
-        # evidence `effectiveness-ratchet` reads for R8.6/R8.8. Uploaded on failure
-        # too: a record showing what was skipped is exactly what must reach the
-        # gate, rather than a green "the file exists".
-        if: always()
+        # LEG 1 ONLY, and that is the whole contract with `fe-invariants`: it downloads
+        # `fe-invariant-playwright-*-report` with merge-multiple, so a second leg uploading
+        # this name would collide on upload, and a second leg uploading any matching name would
+        # merge a second `playwright-harness.json` over this one. This is the run in which
+        # FE-INV-054..057 are asserted. Uploaded on failure too: a record showing what was
+        # skipped is exactly what must reach the gate, rather than a green "the file exists".
+        if: always() && matrix.leg == 1
         uses: actions/upload-artifact@v4
         with:
           name: fe-invariant-playwright-harness-report
           path: frontend/artifacts/test-reports/playwright-harness.json
           retention-days: 7
-      - name: Upload effectiveness scorecard
+      - name: Upload the leg scorecard and harness run record (ADR-059)
         uses: actions/upload-artifact@v4
         if: success() || failure()
         with:
-          # `scorecard.json` is written ONLY by a complete run (one stamped row per
-          # declared Job_To_Be_Done). An incomplete run writes
-          # `scorecard.incomplete.json` instead and fails the step above: R8.2
-          # forbids emitting a scorecard with fewer rows, so the partial
-          # measurement goes to a path nothing consumes as a scorecard. Both are
-          # listed so the evidence survives either way.
-          name: effectiveness-scorecard
+          # One artifact per leg, named by the leg, so five legs never collide. The sealed
+          # scorecard is what the ratchet reads; `scorecard.json` (written ONLY by a complete
+          # run) and `scorecard.incomplete.json` (an incomplete run's partial measurement,
+          # which R8.2 keeps away from the canonical path) travel for diagnosis. The paths
+          # span `test-results/` and `artifacts/`, so the artifact is rooted at their common
+          # ancestor, `frontend/`, and each downloaded leg directory mirrors a leg's
+          # `frontend/` root -- the layout `run-ratchet.ts` reads.
+          name: effectiveness-leg-${{ matrix.leg }}
           path: |
+            frontend/test-results/effectiveness/scorecard.leg.json
             frontend/test-results/effectiveness/scorecard.json
             frontend/test-results/effectiveness/scorecard.incomplete.json
+            frontend/artifacts/test-reports/playwright-harness.json
           retention-days: 14
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: harness-playwright-report
+          name: harness-playwright-report-leg-${{ matrix.leg }}
           path: frontend/playwright-report
           retention-days: 7
 
   effectiveness-ratchet:
-    name: Effectiveness ratchet (Req 4.3/4.4) — deterministic
+    name: Effectiveness ratchet (Req 4.3/4.4) - median of five legs
     runs-on: ubuntu-latest
     timeout-minutes: 10
     needs: e2e-harness
-    # Downloads the fresh scorecard the harness emitted and compares it against
-    # the committed baseline (spec/effectiveness/scorecard.baseline.json) via the
-    # pure Effectiveness_Ratchet comparator (`pnpm effectiveness:ratchet`). It
-    # exits NON-ZERO naming the regressed job + metric when steps/latency/error-
-    # rate (or Interruption_Precision) regress beyond tolerance (Req 4.3). Both
-    # sides derive from seeded, byte-identical harness measurements, so the gate
-    # is deterministic and non-flaky (Req 4.4, 20.3). $0-cost / OSS only.
+    # Downloads every leg's sealed scorecard and harness run record and compares the five legs
+    # against the committed baseline (spec/effectiveness/scorecard.baseline.json) through the
+    # pure comparator in @lib/effectiveness-ratchet (`pnpm effectiveness:ratchet`). It exits
+    # NON-ZERO, naming the subject, when:
+    #   * the arrival proof fails: not exactly legs 1..5, a leg claimed twice, or two commits
+    #     or harness versions among them (ADR-059);
+    #   * the legs disagree on steps, errorRate, a row's seed or harness version, or
+    #     interruptionPrecision -- metrics the harness claims are deterministic;
+    #   * steps, errorRate or interruptionPrecision regress beyond tolerance (Req 4.3), by the
+    #     same rules as before;
+    #   * a row's MEDIAN latency regresses: med_f - med_b > max(p * med_b, 3 * 1.4826 * MAD_b),
+    #     where med_b and MAD_b come from the baseline's own five samples, never pooled with the
+    #     fresh ones, and p is the committed `latencyPct`, 0.10, unchanged.
+    # Latency is a noisy measurement, not a deterministic one, so the gate is a band around
+    # measured noise rather than a byte comparison; ADR-059 records what it cannot see.
+    # $0-cost / OSS only.
     #
     # R8.9: every step below exits with the exit status of the command it runs. No
     # `|| true`, no `continue-on-error`.
     #
-    # EXPECTED RED ON LANDING (task 11.2, I-7). The committed baseline carries
-    # `steps: 20` / `latencyMs: 15000` on all five rows and no per-row capture
-    # stamps, so `pnpm effectiveness:baseline` rejects it with five `missing-stamp`
-    # findings and one `uniform-metrics` (R8.10). That is the audit finding becoming
-    # mechanical. It clears when a complete harness run measures the five rows and
-    # the ratchet writes them through `buildBaseline` to the
-    # `effectiveness-baseline-candidate` artifact, which an operator then commits
-    # over the current baseline — never by editing a number, typing a `capturedAt`,
-    # or relaxing a threshold.
+    # EXPECTED RED ON LANDING (ADR-059, I-7). The committed baseline is still the one-run
+    # placeholder: `schemaVersion: 1`, `steps: 20` / `latencyMs: 15000` on all five rows, no
+    # stamps. The baseline check refuses that format BY NAME (`one-run-format`) before reading
+    # its numbers, so the ratchet step and the R8.10 step both fail on that one reason. It
+    # clears one way: a run whose five legs arrive, agree and carry clean records writes the
+    # k-sample candidate through `buildBaseline` to the `effectiveness-baseline-candidate`
+    # artifact, and an operator commits that file over the current baseline unedited, after
+    # reading it against ADR-059's pre-registered A/A predictions -- never by editing a number,
+    # typing a `capturedAt`, widening `latencyPct`, or relaxing a threshold.
     if: github.event_name == 'pull_request' || startsWith(github.ref, 'refs/tags/v')
     steps:
       - uses: actions/checkout@v4
@@ -604,31 +774,25 @@ jobs:
           cache: "pnpm"
           cache-dependency-path: frontend/pnpm-lock.yaml
       - run: pnpm install --frozen-lockfile=false
-      - name: Download fresh scorecard
-        # `download-artifact` is a `uses:` step, so the top-level
-        # `working-directory: frontend` default does not apply — the path is
-        # repo-root-relative and lands the artifact where the ratchet's default
-        # fresh path (test-results/effectiveness/scorecard.json, relative to the
-        # frontend root) expects it.
+      - name: Download every leg scorecard and harness run record (ADR-059)
+        # `download-artifact` is a `uses:` step, so the top-level `working-directory: frontend`
+        # default does not apply and the path is repo-root-relative. No `merge-multiple`: each
+        # `effectiveness-leg-<n>` artifact lands in its own directory under `legs/`, so no leg's
+        # files can overwrite another's. Each such directory mirrors that leg's `frontend/`
+        # root, and the ratchet reads `<leg>/test-results/effectiveness/scorecard.leg.json` and
+        # `<leg>/artifacts/test-reports/playwright-harness.json`. What arrived is the evidence:
+        # the ratchet counts the legs itself rather than trusting this step, and a leg whose
+        # artifact is missing is a refusal, never a median of fewer.
         uses: actions/download-artifact@v4
         with:
-          name: effectiveness-scorecard
-          path: frontend/test-results/effectiveness
-      - name: Download harness run record (skip + zero-execution evidence, R8.6/R8.8)
-        # The scorecard can only speak for the five Jobs-To-Be-Done. A SKIPPED
-        # resilience scenario lives in a sibling spec file, so the ratchet reads the
-        # Playwright run record to see it. A record holding zero specs — the state
-        # the old `pnpm test:e2e ... || true` step produced — is a failure here, so
-        # "nothing ran" can never again read as a pass.
-        uses: actions/download-artifact@v4
-        with:
-          name: fe-invariant-playwright-harness-report
-          path: frontend/artifacts/test-reports
-      - name: Effectiveness ratchet (fresh scorecard vs committed baseline)
-        # Also re-applies the complete-or-failed emission rule to the downloaded
-        # record against the real JOB_ORDER (R8.1, R8.2, R8.3, R8.8), and writes the
-        # measured baseline candidate before its own blocking decision so a rejected
-        # baseline has a measured replacement.
+          pattern: effectiveness-leg-*
+          path: frontend/test-results/effectiveness/legs
+      - name: Effectiveness ratchet (median of five legs vs committed baseline)
+        # Re-applies the complete-or-failed emission rule to every leg's sealed record against
+        # the real JOB_ORDER (R8.1, R8.2, R8.3, R8.8), reads all five harness run records for a
+        # skip or an empty run (R8.6, R8.8), proves arrival, pools the legs, and writes the
+        # measured k-sample candidate before its own blocking decision -- only from a clean
+        # measurement -- so a rejected baseline has a measured replacement.
         run: pnpm effectiveness:ratchet
       - name: Effectiveness baseline is a measurement, not a ceiling (R8.10)
         # Blocking. `if: success() || failure()` is NOT a discarding construct: the
@@ -682,7 +846,7 @@ jobs:
         run: pnpm build
       - name: Mobile-profile Lighthouse CI (key routes; budgets WARN on introduction)
         # Budgets are asserted at WARN in lighthouserc.mobile.json on introduction
-        # (informational-until-ready + ratchet, like `pnpm size || true`): the report
+        # (informational-until-ready + ratchet): the report
         # still records + uploads every metric and a crash still fails, but a cold
         # backend-free SPA missing the mobile Web-Vitals budget does not block the PR.
         # RATCHET: LCP/CLS/TBT return to `error` once prerender/critical-CSS/font work

@@ -18,11 +18,15 @@
  *   * the Playwright harness run record -- the only place a SKIPPED resilience scenario
  *     is observable. Those specs are sibling files, so the emitter's ledger structurally
  *     cannot see them (R8.6).
+ *   * the sealed leg scorecard (ADR-059) -- the record plus the stamp naming which of the k
+ *     `e2e-harness` legs produced it and at which commit. The seal refuses an incomplete record
+ *     or a stamp outside the design, and the sealed record is judged by the same rule.
  *
  * Nothing here reads the disk. `spec/effectiveness/run-ratchet.ts` does the I/O and
- * calls in; Property 32 (task 11.3) calls in with strings it builds itself.
+ * calls in; Properties 32 and 33 call in with strings and objects they build themselves.
  */
 
+import { type LegStamp, legStampProblems } from "@lib/effectiveness-ratchet";
 import { JOB_ORDER, type JobToBeDone } from "@lib/effectiveness-scorecard";
 import { z } from "zod";
 
@@ -127,6 +131,28 @@ function failed(failures: readonly EmissionFailure[], counts: EmissionCounts): F
 
 const ZERO_COUNTS: EmissionCounts = { executed: 0, skipped: 0, total: 0 };
 
+/** JSON text read once: the value, or why it is not JSON. */
+type JsonRead =
+  | { readonly ok: true; readonly value: unknown }
+  | { readonly ok: false; readonly detail: string };
+
+function readJson(text: string): JsonRead {
+  try {
+    const value: unknown = JSON.parse(text);
+    return { ok: true, value };
+  } catch (err) {
+    return { ok: false, detail: describeError(err) };
+  }
+}
+
+/** A record that is not JSON at all, as a `malformed-record` failure. */
+function unparseable(detail: string): FreshScorecardCheck {
+  return failed(
+    [{ kind: "malformed-record", subject: "record", detail: `not parseable as JSON: ${detail}` }],
+    ZERO_COUNTS,
+  );
+}
+
 /**
  * Validates an emitted run record and applies the emission rule to it against the real
  * `JOB_ORDER`.
@@ -137,23 +163,10 @@ const ZERO_COUNTS: EmissionCounts = { executed: 0, skipped: 0, total: 0 };
  * `undeclared-job`, named, and is NOT quietly dropped from the comparison.
  */
 export function checkFreshScorecard(text: string): FreshScorecardCheck {
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(text);
-  } catch (err) {
-    return failed(
-      [
-        {
-          kind: "malformed-record",
-          subject: "record",
-          detail: `not parseable as JSON: ${describeError(err)}`,
-        },
-      ],
-      ZERO_COUNTS,
-    );
-  }
+  const read = readJson(text);
+  if (!read.ok) return unparseable(read.detail);
 
-  const result = FreshScorecardSchema.safeParse(parsed);
+  const result = FreshScorecardSchema.safeParse(read.value);
   if (!result.success) {
     return failed(
       [
@@ -166,8 +179,15 @@ export function checkFreshScorecard(text: string): FreshScorecardCheck {
       ZERO_COUNTS,
     );
   }
-  const document = result.data;
+  return judgeRecord(result.data);
+}
 
+/**
+ * The emission rule applied to a record that already passed its schema, against the real
+ * `JOB_ORDER`. Shared by {@link checkFreshScorecard} and {@link checkSealedLegScorecard}, so
+ * a leg's sealed scorecard is judged by exactly the rule its unsealed record was.
+ */
+function judgeRecord(document: FreshScorecard): FreshScorecardCheck {
   // Partition the rows by whether their job is declared. An undeclared job cannot be
   // narrowed to `JobToBeDone`, so it is reported here and excluded from the rule's
   // input -- which then reports the declared job it failed to cover.
@@ -246,6 +266,100 @@ export function checkFreshScorecard(text: string): FreshScorecardCheck {
   const merged: readonly EmissionFailure[] =
     verdict.outcome === "failed" ? [...preFailures, ...verdict.failures] : preFailures;
   return { document, verdict: { outcome: "failed", failures: merged, counts: verdict.counts } };
+}
+
+// ---------------------------------------------------------------------------
+// The sealed leg scorecard (ADR-059)
+// ---------------------------------------------------------------------------
+
+/**
+ * The leg stamp a sealed scorecard carries. Loose here on purpose: whether the index, the
+ * matrix size and the commit fit the k-leg design is `legStampProblems`' question, answered by
+ * name, not a shape error.
+ */
+const LegStampSchema = z
+  .object({
+    index: z.number(),
+    count: z.number(),
+    commitSha: z.string(),
+  })
+  .strict();
+
+/**
+ * What one `e2e-harness` leg uploads at `SCORECARD_LEG_RELPATH`: the emitted record, unchanged,
+ * plus the leg that produced it. `.strict()` like the record, so an unexpected key is a shape
+ * failure, and a record carrying no `leg` is not a leg's scorecard at all.
+ */
+export const SealedLegScorecardSchema = z
+  .object({ ...FreshScorecardSchema.shape, leg: LegStampSchema })
+  .strict();
+
+/** The outcome of checking one sealed leg scorecard. */
+export interface SealedLegCheck extends FreshScorecardCheck {
+  /** The leg stamp, or `null` when the text was not a sealed scorecard. */
+  readonly leg: LegStamp | null;
+}
+
+/**
+ * Validates a sealed leg scorecard and applies the emission rule to its record (R8.1, R8.2,
+ * R8.3, R8.8). Whether its stamp fits the design is the arrival proof's to decide, over all k
+ * legs together (`checkLegArrival` in `@lib/effectiveness-ratchet`).
+ */
+export function checkSealedLegScorecard(text: string): SealedLegCheck {
+  const read = readJson(text);
+  if (!read.ok) return { ...unparseable(read.detail), leg: null };
+
+  const result = SealedLegScorecardSchema.safeParse(read.value);
+  if (!result.success) {
+    return {
+      ...failed(
+        [
+          {
+            kind: "malformed-record",
+            subject: "record",
+            detail: `not a sealed leg scorecard: ${result.error.message}`,
+          },
+        ],
+        ZERO_COUNTS,
+      ),
+      leg: null,
+    };
+  }
+  const { leg, ...record } = result.data;
+  return { ...judgeRecord(record), leg };
+}
+
+/** The seal's outcome: the sealed text, or why this leg cannot name itself. */
+export type LegSeal =
+  | { readonly outcome: "sealed"; readonly text: string }
+  | {
+      readonly outcome: "refused";
+      /** Why the record is not a complete scorecard; empty when it is one. */
+      readonly emission: readonly EmissionFailure[];
+      /** Why the stamp does not fit the k-leg design; empty when it does. */
+      readonly stamp: readonly string[];
+    };
+
+/**
+ * Seals one leg's emitted record with its leg stamp (ADR-059). The record must be complete under
+ * the emission rule against the real `JOB_ORDER`, and the stamp must fit a design of
+ * `legCount` legs: an index in 1..legCount, a matrix of exactly `legCount` legs, and a 40-character
+ * commit. Either failure refuses the seal, so a leg that cannot name itself uploads no sealed
+ * scorecard and the arrival proof then refuses the missing leg. The sealed text is the parsed
+ * record plus `leg`, pretty-printed with a trailing newline.
+ */
+export function sealLegScorecard(freshText: string, stamp: LegStamp, legCount: number): LegSeal {
+  const check = checkFreshScorecard(freshText);
+  const emission = check.verdict.outcome === "failed" ? check.verdict.failures : [];
+  const problems = legStampProblems(stamp, legCount);
+  if (check.document === null || emission.length > 0 || problems.length > 0) {
+    return { outcome: "refused", emission, stamp: problems };
+  }
+  const sealed = {
+    ...check.document,
+    leg: { index: stamp.index, count: stamp.count, commitSha: stamp.commitSha },
+  };
+  return { outcome: "sealed", text: `${JSON.stringify(sealed, null, 2)}\n` };
 }
 
 // ---------------------------------------------------------------------------

@@ -153,6 +153,19 @@ export interface EffectivenessScorecard {
   readonly proxyCeiling: string;
 }
 
+/**
+ * A latency sample of a committed k-leg baseline row (ADR-059): one leg's measurement of the
+ * row. Tolerated by this loader and validated only in `@lib/effectiveness-baseline`, where the
+ * median rule depends on it.
+ */
+const BaselineLatencySampleSchema = z
+  .object({
+    leg: z.number(),
+    latencyMs: z.number(),
+    capturedAt: z.string().nullable().optional(),
+  })
+  .strict();
+
 /** Zod schema mirroring {@link ScorecardRow}, used to validate a loaded scorecard. */
 const ScorecardRowSchema = z
   .object({
@@ -166,15 +179,17 @@ const ScorecardRowSchema = z
     steps: z.number().finite().nonnegative(),
     latencyMs: z.number().finite().nonnegative(),
     errorRate: z.number().finite().min(0).max(1),
-    // R8.10 (task 11.7): the COMMITTED baseline stamps every row with the run
-    // that produced it. Tolerated here as optional so this loader keeps reading a
-    // stamped baseline -- `spec/effectiveness/run-ratchet.ts` parses the baseline
-    // through `parseScorecard`, and a `.strict()` row would report a measured,
-    // stamped baseline as malformed the day one lands. The stamps are REQUIRED and
-    // validated only where they are load-bearing: `@lib/effectiveness-baseline`.
+    // R8.10 (task 11.7) and ADR-059: the COMMITTED baseline stamps every row with the
+    // run that produced it and carries one latency sample per harness leg. Tolerated
+    // here as optional so this loader keeps reading a measured baseline: the committed-
+    // baseline tests in `src/lib/__tests__/effectiveness-scorecard.test.ts` parse it
+    // through `parseScorecard`, and a `.strict()` row would report a measured baseline
+    // as malformed the day one lands. The stamps and samples are REQUIRED and validated
+    // only where they are load-bearing: `@lib/effectiveness-baseline`.
     harnessVersion: z.string().nullable().optional(),
     seed: z.number().nullable().optional(),
     capturedAt: z.string().nullable().optional(),
+    latencySamples: z.array(BaselineLatencySampleSchema).optional(),
   })
   .strict();
 
@@ -187,6 +202,10 @@ export const EffectivenessScorecardSchema = z
     rows: z.array(ScorecardRowSchema),
     interruptionPrecision: z.number().finite().min(0).max(1).nullable(),
     proxyCeiling: z.string().min(1),
+    // ADR-059: a committed k-leg baseline names the commit its legs measured and how
+    // many legs there were. Tolerated for the reason given on the row stamps above.
+    commitSha: z.string().optional(),
+    legCount: z.number().optional(),
   })
   .strict();
 
