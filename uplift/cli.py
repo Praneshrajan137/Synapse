@@ -47,10 +47,13 @@ Honesty invariants surfaced by this command:
   defect is a missing required input like a missing contract; it requires
   ``--baseline-arm tuned_static`` and refuses ``--pooled-baseline``, ``--smoke``, fewer than
   ``MIN_SCENARIOS`` replicates, and a cadence other than B-prime's -- each before any replicate
-  runs. Before its harness runs it re-measures B-prime's arms E and E' at B-prime's own seeds
-  and writes ``reproduction.json``; beside the headline it prints whether that reproduced
-  exactly, and the dispatch line R7.20 asks for, worded as "recommendations, if executed"
-  (Q2=a); and it writes ``dispatch.json`` beside the artifact.
+  runs. After those refusals and before anything is measured, it runs R7.21's pathway probe
+  over a FRESH consensus arm and writes ``pathway-probe.json``, or ``pathway-probe-refused.json``
+  naming why no rate exists; the probe never refuses the run. Before its harness runs it
+  re-measures B-prime's arms E and E' at B-prime's own seeds and writes ``reproduction.json``.
+  Beside the headline it prints whether that reproduced exactly, the dispatch line R7.20 asks
+  for, worded as "recommendations, if executed" (Q2=a), and the probe's line per input; and it
+  writes ``dispatch.json`` beside the artifact.
 
 Cost / runtime (INV-TW-002 tradeoff). A real, fully-powered proof requires ``n >= 1000``
 completed scenarios per arm (:data:`digital_twin.simulation.monte_carlo.MIN_SCENARIOS`)
@@ -72,6 +75,7 @@ Run::
     python -m uplift.cli --full --suite e5-primary --baseline-arm tuned_static \\
         --duration-hours 24                      # E5, exactly as uplift.yml runs it (CI only)
 """
+
 from __future__ import annotations
 
 import argparse
@@ -82,7 +86,6 @@ from typing import TYPE_CHECKING, Final
 
 from digital_twin.simulation.monte_carlo import MIN_SCENARIOS
 from digital_twin.simulation.policy import PolicyUnavailableError
-
 from uplift.baselines import (
     Greedy_Routing,
     NoOpDisruption,
@@ -97,13 +100,25 @@ from uplift.bprime_record import (
 )
 from uplift.consensus_arm import build_consensus_arm
 from uplift.contract import MetricContractError, load_contract
-from uplift.dispatch import summarise_dispatch, write_dispatch_report
+from uplift.dispatch import (
+    PathwayConsultant,
+    PathwayProbeError,
+    PathwayProbeRefusal,
+    PathwayProbeReport,
+    run_pathway_probe,
+    summarise_dispatch,
+    write_dispatch_report,
+    write_probe_refusal,
+    write_probe_report,
+)
 from uplift.e5_suite import (
     E5_COMPARATOR,
     E5_LOOP,
     E5_REPRODUCED_ARMS,
     E5_SUITE,
     build_e5_arms,
+    e5_consensus_policy,
+    e5_probe_observations,
     e5_replicate_seeds,
     e5_scenario,
     measure_bprime_reproduction,
@@ -198,6 +213,15 @@ DISPATCH_FILENAME: Final[str] = "dispatch.json"
 #: artifact BEFORE the E5 harness runs (API2 amendment 2).
 REPRODUCTION_FILENAME: Final[str] = "reproduction.json"
 
+#: R7.21's pathway probe report, written beside the dispatch record before anything is measured
+#: (finding 109: until then only a slow test produced one, under ``tmp_path``).
+PROBE_FILENAME: Final[str] = "pathway-probe.json"
+
+#: Written IN PLACE of :data:`PROBE_FILENAME` when the probe states no rate: the arm has no
+#: pathway to consult, an input has zero pairs, or the probe could not run. A run's directory
+#: holds exactly one of the two.
+PROBE_REFUSAL_FILENAME: Final[str] = "pathway-probe-refused.json"
+
 #: The repository root the committed B-prime record is read under. A module global, read at
 #: call time, so a test can point the E5 suite at a tree with no record (or a fixture record)
 #: and prove every refusal before a replicate runs.
@@ -210,6 +234,8 @@ __all__ = [
     "DISPATCH_FILENAME",
     "EXIT_MISSING_INPUT",
     "NOISE_TOLERANCE_PP",
+    "PROBE_FILENAME",
+    "PROBE_REFUSAL_FILENAME",
     "REPO_ROOT",
     "REPRODUCTION_FILENAME",
     "SUITES",
@@ -246,8 +272,7 @@ def _build_consensus_arm() -> DecisionPolicy:
         return build_consensus_arm()
     except Exception as exc:  # noqa: BLE001 — any assembly failure ⇒ honest stub
         return _UnavailableConsensusArm(
-            f"consensus arm unavailable in this environment: "
-            f"{type(exc).__name__}: {exc}"
+            f"consensus arm unavailable in this environment: {type(exc).__name__}: {exc}"
         )
 
 
@@ -582,9 +607,7 @@ def _resolve_run_config(args: argparse.Namespace) -> tuple[int, LoopConfig, bool
     if args.duration_hours is not None:
         loop = LoopConfig(duration_hours=args.duration_hours, step_hours=args.step_hours)
     elif reduced:
-        loop = LoopConfig(
-            duration_hours=SMOKE_LOOP.duration_hours, step_hours=args.step_hours
-        )
+        loop = LoopConfig(duration_hours=SMOKE_LOOP.duration_hours, step_hours=args.step_hours)
     else:
         loop = LoopConfig(step_hours=args.step_hours)
 
@@ -726,6 +749,82 @@ def _comparator_line(reproduction: BprimeReproduction) -> str:
     return f"comparator at B-prime's levels, not reproduced in this environment: {missed}"
 
 
+def _unconsultable_reason(arm: DecisionPolicy) -> str:
+    """Why an arm that is not a :class:`~uplift.dispatch.PathwayConsultant` cannot be probed."""
+    return (
+        f"the consensus arm built for the probe is {type(arm).__name__}, not a pathway the probe "
+        "can consult (a PathwayConsultant has levers and consult; UnavailableConsensusArm, the "
+        "stand-in E5 builds when the in-process consensus network cannot be assembled, has "
+        "neither), so there is no binding decision to withhold an input from"
+    )
+
+
+def _e5_pathway_probe(directory: Path) -> tuple[PathwayProbeReport | PathwayProbeRefusal, Path]:
+    """R7.21's probe of a FRESH consensus arm, written to ``directory``: its report, or why none.
+
+    The arm is built anew by :func:`~uplift.e5_suite.e5_consensus_policy`, never the harness's
+    instance, so the probe moves neither the measured arm's tally nor its audit trail. Three
+    outcomes state no rate, and each writes a :class:`~uplift.dispatch.PathwayProbeRefusal` to
+    :data:`PROBE_REFUSAL_FILENAME` naming its reason: an arm that is not a
+    :class:`~uplift.dispatch.PathwayConsultant` (the
+    :class:`~uplift.policies.UnavailableConsensusArm` stand-in), a probe that refuses a rate
+    (:class:`~uplift.dispatch.PathwayProbeError`: zero pairs), and a probe that could not run.
+    Otherwise the report is written to :data:`PROBE_FILENAME`. The other file, if an earlier run
+    left one here, is removed, so the directory never holds both. NEVER a refusal of the E5
+    run: the probe's absence is a finding reported beside the headline (R7.21).
+
+    ``e5_consensus_policy``, ``e5_probe_observations`` and ``run_pathway_probe`` are read from
+    this module's globals at call time: the seam a fast test injects, so that no twin and no
+    protocol runs there.
+    """
+    arm = e5_consensus_policy()
+    outcome: PathwayProbeReport | PathwayProbeRefusal
+    if not isinstance(arm, PathwayConsultant):
+        outcome = PathwayProbeRefusal.of(arm=arm.name, reason=_unconsultable_reason(arm))
+    else:
+        try:
+            outcome = run_pathway_probe(arm, e5_probe_observations())
+        except PathwayProbeError as exc:
+            outcome = PathwayProbeRefusal.of(
+                arm=arm.name,
+                reason=f"the probe states no rate: {type(exc).__name__}: {exc}",
+            )
+        except Exception as exc:  # noqa: BLE001 - the probe's failure is a finding, never E5's
+            outcome = PathwayProbeRefusal.of(
+                arm=arm.name,
+                reason=f"the probe could not run: {type(exc).__name__}: {exc}",
+            )
+    if isinstance(outcome, PathwayProbeReport):
+        (directory / PROBE_REFUSAL_FILENAME).unlink(missing_ok=True)
+        return outcome, write_probe_report(directory / PROBE_FILENAME, outcome)
+    (directory / PROBE_FILENAME).unlink(missing_ok=True)
+    return outcome, write_probe_refusal(directory / PROBE_REFUSAL_FILENAME, outcome)
+
+
+def _probe_lines(outcome: PathwayProbeReport | PathwayProbeRefusal) -> list[str]:
+    """R7.21's lines beside the headline, read off the record the probe step wrote.
+
+    One line per input, then the inputs no pair changed -- or, when the probe stated no rate,
+    the refusal's reason. Worded so that no input's silence relabels the headline: an
+    unresponsive pathway, and a probe that could not run, are findings beside E5's number.
+    """
+    if isinstance(outcome, PathwayProbeRefusal):
+        return [
+            f"pathway probe (R7.21): refused: {outcome.reason} -- the probe's absence is a "
+            "finding beside the headline, which it does not relabel"
+        ]
+    lines = [
+        f"pathway probe (R7.21): {result.input_name} changed {result.changed}/{result.pairs} "
+        "binding decisions"
+        for result in outcome.inputs
+    ]
+    lines.append(
+        f"unresponsive inputs: {list(outcome.unresponsive_inputs)} -- a finding beside the "
+        "headline; no input's silence relabels it (R7.21)"
+    )
+    return lines
+
+
 def _refuse_e5(reason: str, what: str) -> int:
     """Print an E5 refusal naming the input, and no headline (R7.8)."""
     print(f"[FAIL] {reason}", file=sys.stderr)
@@ -741,20 +840,24 @@ def _run_e5_suite(args: argparse.Namespace, contract: MetricContract) -> int:
     B-prime record (:class:`~uplift.bprime_record.BprimeRecordError`), E5 seeds colliding with
     B-prime's, a world that cannot be resolved, or arms that cannot be built. Then, in order:
 
-    1. B-prime's comparator is re-measured in this environment -- arms E and E' at B-prime's
+    1. R7.21's pathway probe over a FRESH consensus arm (:func:`_e5_pathway_probe`), written to
+       ``pathway-probe.json`` -- or ``pathway-probe-refused.json``, naming why no rate exists --
+       before anything is measured, because it costs seconds. It refuses nothing: the probe's
+       absence is a finding beside the headline, and the headline still runs.
+    2. B-prime's comparator is re-measured in this environment -- arms E and E' at B-prime's
        measurement seeds, by :func:`~uplift.e5_suite.measure_bprime_reproduction` priced with
        :func:`~uplift.e5_suite.production_arm_cost` -- and ``reproduction.json`` is written,
        BEFORE the harness runs. ``production_arm_cost`` is read from this module's globals at
        call time, which is the seam a test injects so that no twin runs. A non-reproduction is
        printed beside the headline and is not a refusal (API2 amendment 2).
-    2. ``UpliftHarness(loop_config=E5_LOOP).run([e5_scenario()], build_e5_arms(record), n)``.
-    3. R7.20's dispatch record, summarised from the consensus arm's runs ALONE --
+    3. ``UpliftHarness(loop_config=E5_LOOP).run([e5_scenario()], build_e5_arms(record), n)``.
+    4. R7.20's dispatch record, summarised from the consensus arm's runs ALONE --
        ``summarise_dispatch`` refuses another arm's (API2 amendment 1.1). It is built before
        anything is printed or written, so a tally the record refuses -- a defect in what the
        consensus arm counted -- raises, and no headline is published without its record.
-    4. The headline, assembled against ``tuned_static`` alone, with the reproduction verdict and
-       the dispatch line beside it; then the result artifact, written exactly as the canonical
-       suite writes it, and ``dispatch.json`` beside it.
+    5. The headline, assembled against ``tuned_static`` alone, with the reproduction verdict,
+       the dispatch line and the probe's lines beside it; then the result artifact, written
+       exactly as the canonical suite writes it, and ``dispatch.json`` beside it.
     """
     n, _canonical_loop, reduced = _resolve_run_config(args)
     refusals = _e5_refusals(args, n=n, reduced=reduced)
@@ -805,7 +908,10 @@ def _run_e5_suite(args: argparse.Namespace, contract: MetricContract) -> int:
         f"artifact sha256 {record.artifact_sha256}"
     )
 
-    # --- 1. B-prime's comparator, re-measured here BEFORE the harness runs (amendment 2) ---
+    # --- 1. R7.21's pathway probe of a FRESH arm, before anything is measured (finding 109) ---
+    probe, probe_path = _e5_pathway_probe(output_path.parent)
+
+    # --- 2. B-prime's comparator, re-measured here BEFORE the harness runs (amendment 2) ---
     reproduction = measure_bprime_reproduction(
         record, E5_REPRODUCED_ARMS, cost_of=production_arm_cost
     )
@@ -816,7 +922,7 @@ def _run_e5_suite(args: argparse.Namespace, contract: MetricContract) -> int:
     for line in _reproduction_lines(reproduction):
         print(line)
 
-    # --- 2. the harness, then 3. R7.20's record from the consensus arm's runs alone ---
+    # --- 3. the harness, then 4. R7.20's record from the consensus arm's runs alone ---
     harness = UpliftHarness(loop_config=E5_LOOP, emission_factor=emission_factor)
     harness_result = harness.run([scenario], arms, n_per_arm=n)
     dispatch = summarise_dispatch(
@@ -831,11 +937,13 @@ def _run_e5_suite(args: argparse.Namespace, contract: MetricContract) -> int:
     )
     report = build_uplift_report(result)
 
-    # --- 4. the headline, with the reproduction verdict and the dispatch line beside it ---
+    # --- 5. the headline; beside it the reproduction verdict, the dispatch and probe lines ---
     print()
     print(report.render())
     print(_comparator_line(reproduction))
     for line in _dispatch_lines(dispatch):
+        print(line)
+    for line in _probe_lines(probe):
         print(line)
 
     _print_disclosures(result, reduced=False)
@@ -855,7 +963,9 @@ def _run_e5_suite(args: argparse.Namespace, contract: MetricContract) -> int:
         provenance=provenance,
     )
     dispatch_path = write_dispatch_report(output_path.parent / DISPATCH_FILENAME, dispatch)
+    probe_kind = "refusal" if isinstance(probe, PathwayProbeRefusal) else "record"
     print()
+    print(f"wrote pathway probe {probe_kind}: {probe_path}")
     print(f"wrote reproduction record: {reproduction_path}")
     print(f"wrote result artifact: {written}")
     print(f"wrote dispatch record: {dispatch_path}")
@@ -891,14 +1001,11 @@ def main(argv: Sequence[str] | None = None) -> int:
     # malformed contract exits failure naming the input with no number ever emitted.
     contract_path = args.contract
     try:
-        contract = (
-            load_contract(contract_path) if contract_path is not None else load_contract()
-        )
+        contract = load_contract(contract_path) if contract_path is not None else load_contract()
     except MetricContractError as exc:
         named = contract_path if contract_path is not None else "uplift/metric_contract.yaml"
         print(
-            f"[FAIL] required input missing or malformed: metric contract "
-            f"({named}): {exc}",
+            f"[FAIL] required input missing or malformed: metric contract ({named}): {exc}",
             file=sys.stderr,
         )
         print(
@@ -941,8 +1048,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     mode = "reduced-cost SMOKE (NOT a fully-powered proof)" if reduced else "fully-powered PROOF"
     print(f"uplift reproduction -- mode: {mode}")
     print(
-        f"  scenarios: {len(scenarios)} adversarial seeds "
-        f"({', '.join(s.name for s in scenarios)})"
+        f"  scenarios: {len(scenarios)} adversarial seeds ({', '.join(s.name for s in scenarios)})"
     )
     print(f"  replicates per arm: {n} (INV-TW-002 floor: {MIN_SCENARIOS})")
     print(f"  closed-loop horizon: {loop.duration_hours}h in {loop.step_hours}h steps")

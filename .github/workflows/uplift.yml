@@ -192,6 +192,8 @@ jobs:
             artifacts/uplift/uplift-truth.json
             artifacts/uplift/dispatch.json
             artifacts/uplift/reproduction.json
+            artifacts/uplift/pathway-probe.json
+            artifacts/uplift/pathway-probe-refused.json
           if-no-files-found: warn
           retention-days: 90
 

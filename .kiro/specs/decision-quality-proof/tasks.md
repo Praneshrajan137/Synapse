@@ -3154,8 +3154,10 @@ tests in the interim, and that is a stated sequencing gap, not an omission.
     - discharge: ci.yml::uplift-verify fast shards 1/4 and 2/4 (the C60 files:
       `test_c60_three_way_exit_property.py`; `test_uplift_admissibility_property.py`,
       `test_uplift_truth_gate_property.py` and `test_preserved_baseline_regression.py`)
-    - last-checked: run 40095429857 (SYNAPSE CI, sha b3a98a8) -- PRE-CHANGE: the refusal
-      lands at P3.
+    - last-checked: run 41265189389 (SYNAPSE CI, sha af950f3, 2026-11-01) -- both of this leaf's
+      shards `success` (shard 1/4 771 passed; shard 2/4 377 passed, 1 skipped), but the
+      aggregate `uplift-verify` FAILED on 29.6's slow test (finding 113). Kept `[~]`, as
+      29.1's precedent requires: read again at P4.
     - **AUTHORED, SESSION 12 (wave 2, agent B3).**
       - In `admit`'s generating branch, an artifact that parses is admitted only beside a
         Power_Report at `RunContext.tree_root / POWER_REPORT_PATH` that meets three
@@ -3695,10 +3697,11 @@ data and scored against an external benchmark has no demonstrable value.
     - discharge: uplift.yml::uplift-proof (the labelled `measure-uplift-proof` run, task 25)
       AND ci.yml::uplift-verify fast shard 1/4 plus the slow selection (Property 97, the E5
       suite's code half). Two subjects; both must report.
-    - last-checked: run 40095429857 (SYNAPSE CI, sha b3a98a8) -- PRE-CHANGE for the code
-      half: `--suite e5-primary`, Property 97 and the B-prime record land at P3. The
-      labelled subject has not run; Uplift Proof run 40086253063 (sha d8aafe6) skipped
-      every job.
+    - last-checked: run 41265189389 (SYNAPSE CI, sha af950f3, 2026-11-01) -- the CI subject's own
+      tests passed, read per test id: Property 97's fast clauses in shard 1/4, and all five
+      slow ones, including arm E's harness-vs-regret EXACT equality at three seeds. The
+      slow JOB failed on 29.6's test, so this reads again at P4. The labelled subject has
+      not run (Uplift Proof run 40086253063, sha d8aafe6, skipped every job).
     - previously: last-checked run 36860454801 (sha ec0eb91) -- pre-change.
     - **AUTHORED, SESSION 12, with this re-scope recorded.**
       - ONE job of 240 minutes, on the primary cell unshocked, under
@@ -3739,13 +3742,20 @@ data and scored against an external benchmark has no demonstrable value.
         `uplift.yml` uploads all three.
       - Property 97 is `tests/uplift/test_e5_suite_property.py`: 150 fast tests (passed locally;
         30 s at `ci`) and 5 slow (CI only).
+    - **WAVE 3, SESSION 12 (agent B4): the pathway probe runs in the E5 job (finding 109).**
+      - Before the reproduction, the e5 suite probes a FRESH consensus arm over three states of
+        the primary cell's twin. The one sampler, `e5_probe_observations`, moved out of the test.
+      - It writes `pathway-probe.json`, or `pathway-probe-refused.json` naming why, and never
+        refuses the E5 run.
+      - It prints, beside the headline, each input's `changed/pairs` and the unresponsive inputs.
+      - `uplift.yml` uploads both files. Property 97: 159 fast tests (passed locally; 33 s at `ci`).
     - **FINDING 110 (measured locally; the cost inferred).** Neither arm E nor E' pickles:
       `GroupParLevelReorder` holds a `mappingproxy`. Nor does the consensus arm (a local
       session-factory closure). Arm O and the scenario do. So `_run_arm_runs` logs
       `uplift_parallel_fallback` and E5 and the controls run sequentially.
       - Projected E5 is about 30 minutes:
-        - the consensus arm at 1000 x 1.39 s, the Tier-2 replicate of cost-probe run 36860581040
-          (sha ec0eb91);
+        - the consensus arm at 1000 x 1.39 s, the Tier-2 replicate of cost-probe run 36860581054
+          (sha ec0eb91; CORRECTED at P4 from 36860581040, that sha's skipped Uplift Proof run);
         - E and E' at 2 x 1000 x 0.116 s;
         - the reproduction, about 46 s.
       - The supervisor's bound is 225 minutes. The risk is a 1 s HITL wait per withheld decision:
@@ -5908,6 +5918,74 @@ progress ledger; design reasoning is ADR-055.
         `[??] ... no out-of-suite enforcer is declared`, and the summary keeps `ATTESTED=60`;
       - `audit-supply` fails on finding 105, and `effectiveness-ratchet` fails by design.
     - If that holds, P3's harvest moves 17.3 and 29.6 to `[x]` and discharges 22.1's CI subject.
+    - **MEASURED at P3 (`af950f3`, 2026-11-01).**
+      - Held, all read from the runs:
+        - CI run 41265189389: `shard files 45/39/31/29 = 144; pytest universe = 144` and
+          `shards selected 771/378/373/265 = 1787; unsharded selection = 1787`, exactly;
+        - shard 1/4 passed 771, shard 2/4 passed 377 and skipped 1;
+        - the slow selection selected 98;
+        - `quality-gates` `success`;
+        - `chromatic-color-gates` ran on `node: v22.23.4` and passed 68 tests.
+      - Also held: Truth Gates run 41265189444, both jobs `success`, with step 5 at
+        `PASS=57 FAIL=0 PARTIAL=0 SKIP=11 TOTAL=68`, readme 56/0/0/12/68, ledger 68 rows,
+        689 surface rows, 455 steps and 32 jobs.
+      - Frontend CI run 41265189394: `build` printed `forbidden eager prefixes: deck-, map-,
+        graph-, viz-, visx-` and passed on 5 eager files. `quality` passed, and so did
+        `audit-supply` (finding 105) and `effectiveness-ratchet`.
+      - **MISS 1:** the slow selection failed 1 of 98 (finding 113).
+      - **MISS 2:** `e2e` failed `mobile-reality` "/" on LCP (finding 114). So `fe-invariants`
+        was skipped, and its prediction is unread.
+      - **MISS 3, my own:** Stryker was cancelled at 03:07:39Z (finding 115).
+    - **FINDING 114 (measured; cause unknown).** P3's `e2e` failed `mobile-reality` "/" at LCP
+      2588 ms, then 2812 ms on its retry (CLS 0.0012; INP 200 and 136 ms).
+      - P3 is not the cause. The same test on `b3a98a8`, which has none of P3's frontend changes,
+        passed on its first attempt that morning, then failed at 3100 ms when re-run (job
+        124734436451).
+      - P3's eager JS grew 0.8 KiB gzip (210.7 to 211.5 KiB).
+      - The October samples were 2292, 2428 and 2300 ms. The budget now sits inside the runner's
+        variation. Decision (e) stays the operator's, and this is new evidence for it.
+    - **FINDING 115 (timing measured, mechanism read; a process error, mine).**
+      - Re-running P2's `e2e` job started at 03:07:43Z and cancelled P3's in-progress Stryker job
+        at 03:07:39Z.
+      - `frontend.yml`'s concurrency group is keyed by PR number, with `cancel-in-progress` on
+        `pull_request`, and a re-run joins the group.
+      - Rule: never re-run an older run of a PR-keyed workflow while a newer run of it is in
+        flight.
+  - **SESSION 12 -- P4 PREDICTIONS, registered before the push.** P4 carries wave 3 (agent B4),
+    finding 113's repair, the upload lines, and this ledger edit. No frontend file changes.
+    - `ci.yml`:
+      - `shard files 45/39/31/29 = 144` (no new file);
+      - `shards selected 785/378/373/265 = 1801; unsharded selection = 1801`;
+      - the slow selection selects 98 and passes all 98;
+      - `quality-gates` succeeds;
+      - every shard succeeds, and so does the aggregate `uplift-verify`.
+    - `truth-gates.yml` as at P3, every count unchanged.
+    - Frontend CI as at P3: `e2e` is likely red on finding 114, and is not predicted green.
+    - If that holds, P4 discharges 17.3 and 29.6, and 22.1's CI subject.
+    - **The labelled runs, registered before either label is applied, at P4's head.**
+      - `measure-uplift-controls` (thin closure):
+        - the 20 negative legs complete, and the verdict is `pass`: 0 to 2 proven gains, and 0 to
+          2 proven losses, recorded beside them;
+        - the positive control is `detected`, with E - O between 0.21 and 0.28 (B-prime: 0.246);
+        - arms E, E' and O reproduce B-prime's means EXACTLY. That is inferred, about 70%
+          confidence: the job installs the numpy release current at run time;
+        - with that, the agreement verdict is `agrees`;
+        - the Power_Report's minimum detectable effect at 1000 is about 0.02 objective units,
+          and the replicate floor stays 1000 (`inv_tw_002_binding`).
+      - `measure-uplift-proof` (full closure):
+        - the supervisor reads `completed`, inside 90 minutes;
+        - `pathway-probe.json` names all three inputs unresponsive (finding 112);
+        - `dispatch.json` shows 0 applied of 24000 binding decisions, every one `untranslatable`
+          or `guardrail_blocked`;
+        - so the consensus arm runs the no-op arm's physics, and the headline reads about -4.4,
+          inside [-4.9, -3.9]: B-prime's E 2.459 minus its no-op 6.870. The verdict is
+          `baseline_wins`;
+        - E' sits within 0.01 of E;
+        - C60's report reads `unavailable` (decision 1=a; no Power_Report is committed at P4);
+        - `reproduction.json`: E and E' either reproduce exactly or say they do not (finding 111).
+          Not predicted either way.
+      - Task 25's pre-commitment governs a negative headline: it is reported as negative. Its
+        cause is stated beside it (finding 112), and it is never relabelled.
 
   - [x] 29.1 Deferral is a terminal state the census reports
     - discharge: ci.yml::uplift-verify fast shard 3/4 (tests/verify a-o)
@@ -6059,8 +6137,9 @@ progress ledger; design reasoning is ADR-055.
   - [~] 29.6 Forward what the world rewards, apply recommendations, count dispatch, probe the pathway
     - discharge: ci.yml::uplift-verify fast shard 1/4 (Property 95's fast clauses and the two
       consensus-arm unit files) and the slow selection (Property 95's two slow tests)
-    - last-checked: run 40095429857 (SYNAPSE CI, sha b3a98a8) -- PRE-CHANGE: the subject
-      lands at P3.
+    - last-checked: run 41265189389 (SYNAPSE CI, sha af950f3, 2026-11-01) -- the slow selection
+      FAILED 1 of 98: Property 95's closed-loop clause (finding 113, repaired for P4). Its
+      probe clause PASSED, as did the fast shard. Read again at P4.
     - **AUTHORED, SESSION 12 (wave 2, agent B2).**
       - The consensus request carries on-order stock, inventory position, demand to date,
         supplier lead-time history, `sku_supplier` and the start weekday. Every mapping is
@@ -6095,6 +6174,33 @@ progress ledger; design reasoning is ADR-055.
     - **FINDING 109 (read).** The slow probe writes its per-input counts under `tmp_path`,
       and no job uploads that, so R7.21's "report how often" cannot be read from CI. Wave
       3 moves the probe into the E5 job, beside `dispatch.json`.
+    - **FINDING 112 (read; consequence inferred). Every agent reads its request one level too
+      shallow.**
+      - The protocol sends `params={"decision_context": request}` (protocol.py:1040), and every
+        handler passes `params` straight to `proposal` (`agents/*/a2a/handler.py`, e.g. the
+        Inventory Sentinel's :43).
+      - `proposal` reads its keys at the top level. The Sentinel reads `ctx.get("sku_ids",
+        ["SKU001"])` (:63), so it always decides for `SKU001` at `STORE_BLR_001`. Demand
+        Prophet and Freshness Guardian read `[]`. No agent reads any key of the request.
+      - The tests miss it: they send flat params (`tests/integration/test_agent_pipeline.py:69`).
+      - Consequence (inferred): no consensus decision depends on the world. Finding 108 follows
+        from this, and in E5 no binding reorder names a stocked SKU.
+      - Repair, outside decision 3=a and so the operator's call: one line per handler,
+        `params.get("decision_context", params)`, or the protocol sending the request unwrapped.
+        Fixing only the harness's transport would measure a system that does not exist.
+    - **FINDING 113 (measured; repaired at P4).**
+      - P3's slow selection (job 124726430786) failed
+        `test_a_real_closed_loop_run_counts_every_decision_it_made_in_exactly_one_bucket` with
+        `ValueError: SKU 'SKU001' has no supplier in world.structure_3.sku_supplier`.
+      - Wave 2 made the Sentinel's `actions` translate into reorders (they used to be
+        stringified into disruption names). With structure 3 on, the twin refuses an order for a
+        SKU it does not stock.
+      - Repair: `classify_dispatch` makes a reorder for a SKU outside the observed inventory
+        `untranslatable`. It applies nothing and is counted, as a lever outside the suite's set
+        is. This is stricter for the canonical world too, where the order would have added stock
+        no demand reaches.
+      - Two fast tests: one asserts the bucket that the old rule reads `dispatched`; the other
+        keeps a blocked decision blocked.
     - Files: `uplift/consensus_arm.py`, `uplift/harness.py`,
       `tests/uplift/test_information_pathway_probe.py` (new; `@pytest.mark.slow`, Property 95)
     - Decisions 3=a and Q2=a (finding 68): the obligations are R7.20 and R7.21 as written, and

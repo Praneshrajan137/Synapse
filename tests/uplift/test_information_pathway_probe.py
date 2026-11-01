@@ -25,11 +25,15 @@ Task 29.6 (R7.20, R7.21; finding 68; decisions 3=a and Q2=a). Subjects:
    decisions (never 0); a foreign arm's run, and a completed run with no tally, are refused; a
    failed run carrying a tally cannot even be constructed.
 6. The probe: a rate over zero pairs fails, by construction; a pair is counted only where an
-   input was carried and the full request replayed to the same binding decision.
-7. (``slow``, CI only) Over real twin states and the real protocol and agents, the probe reports
-   a non-empty pair count for every input, to a canonical-JSON artifact whose schema is asserted.
-   It asserts NOTHING about whether any input changes the decision: by R7.21 an unresponsive
-   pathway is a finding reported beside E5, never a relabelling of it.
+   input was carried and the full request replayed to the same binding decision. The real
+   ``ConsensusArm`` is a ``PathwayConsultant`` and the ``UnavailableConsensusArm`` stand-in is
+   not: the structural check the E5 CLI's probe step makes before it consults anything.
+7. (``slow``, CI only) Over real twin states -- ``uplift.e5_suite.e5_probe_observations``, the
+   one sampler the E5 CLI's probe step also calls (finding 109) -- and the real protocol and
+   agents, the probe reports a non-empty pair count for every input, to a canonical-JSON
+   artifact whose schema is asserted. It asserts NOTHING about whether any input changes the
+   decision: by R7.21 an unresponsive pathway is a finding reported beside E5, never a
+   relabelling of it.
 8. (``slow``, CI only) One real reorders-only closed-loop run through the harness counts every
    decide it made in exactly one bucket, and its dispatch record round-trips canonically -- the
    per-run dispatched/withheld/blocked/untranslatable count of task 29.6's Demo.
@@ -60,9 +64,7 @@ from synapse_common.models import (
     DecisionTier,
 )
 
-from digital_twin.simulation.engine import SupplyChainSimulation
 from digital_twin.simulation.monte_carlo import ShockParams
-from digital_twin.simulation.policy import comparator_restock_threshold
 from digital_twin.simulation.world import load_world
 from uplift.consensus_arm import (
     ALL_LEVERS,
@@ -80,6 +82,7 @@ from uplift.dispatch import (
     DecisionCountsRecord,
     DispatchReport,
     DispatchReportError,
+    PathwayConsultant,
     PathwayProbeError,
     PathwayProbeReport,
     ProbeInputResult,
@@ -94,7 +97,13 @@ from uplift.dispatch import (
     write_dispatch_report,
     write_probe_report,
 )
-from uplift.harness import LoopConfig, _derive_unit_costs, observe, run_closed_loop
+from uplift.e5_suite import (
+    E5_CONSENSUS_LEVERS,
+    E5_PROBE_OBSERVE_AT_HOURS,
+    E5_PROBE_TWIN_SEED,
+    e5_probe_observations,
+)
+from uplift.harness import LoopConfig, run_closed_loop
 from uplift.interfaces import (
     DecisionCounts,
     KpiVector,
@@ -104,6 +113,7 @@ from uplift.interfaces import (
     Scenario,
     ScenarioRun,
 )
+from uplift.policies import UnavailableConsensusArm
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
@@ -661,6 +671,55 @@ def test_an_excluded_lever_is_untranslatable_and_its_reason_names_the_suites_lev
 
 
 @pytest.mark.parametrize(
+    "payload",
+    [
+        {"reorder_quantities": {"SKU001": 10.0}},
+        {"reorder_quantities": {"sku_0": 5.0, "SKU001": 10.0}},
+        {"actions": [_sentinel_entry("SKU001", "reorder", 7.5)]},
+    ],
+    ids=["an_unstocked_sku", "a_stocked_and_an_unstocked_sku", "the_sentinels_default_sku"],
+)
+def test_a_reorder_for_a_sku_the_world_does_not_stock_is_untranslatable_and_applies_nothing(
+    payload: dict[str, Any],
+) -> None:
+    """Finding 112: every agent reads its request one level too shallow, so the Inventory
+    Sentinel orders its default ``SKU001``, which no twin stocks. Under structure 3 the twin
+    refuses that order, failing the run (CI run 41265189389). The arm must not hand it over.
+    A recommendation naming a stocked SKU beside an unstocked one applies nothing at all."""
+    arm = _arm([_dispatched(payload)], levers=frozenset({"reorder"}))
+    observation = _observation()
+    assert "SKU001" not in observation.inventory
+
+    outcome = arm.consult(observation)
+    assert outcome.dispatch.bucket == "untranslatable", outcome.dispatch.reason
+    assert "['SKU001']" in outcome.dispatch.reason
+    assert outcome.action == PolicyAction()
+
+    arm.begin_run(7)
+    assert arm.decide(observation) == PolicyAction()
+    assert arm.end_run() == DecisionCounts(
+        dispatched=0, withheld_for_confidence=0, guardrail_blocked=0, untranslatable=1
+    )
+
+
+def test_a_blocked_reorder_for_an_unstocked_sku_stays_blocked_by_the_precedence() -> None:
+    """blocked > untranslatable: an unstocked SKU never lifts a refusal into another bucket."""
+    blocked = next(withhold for withhold in _WITHHOLDS if withhold.blocked)
+    binding = _Binding(
+        name="unstocked",
+        payload={"reorder_quantities": {"SKU001": 10.0}},
+        levers=frozenset({"reorder"}),
+        reorders={"SKU001": 10.0},
+        price=None,
+    )
+    outcome = _arm([_decision_for(blocked, binding)], levers=frozenset({"reorder"})).consult(
+        _observation()
+    )
+    assert outcome.dispatch.bucket == "guardrail_blocked", outcome.dispatch.reason
+    assert outcome.action == PolicyAction()
+
+
+@pytest.mark.parametrize(
     "levers",
     [frozenset(), frozenset({"reorders"}), frozenset({"reorder", "markdown"})],
     ids=["empty", "misspelt", "unknown_lever"],
@@ -925,40 +984,22 @@ def test_a_probe_with_no_contrast_for_an_input_fails_rather_than_reporting() -> 
         run_pathway_probe(replay_fails, [_observation(sim_time=60.0)])
 
 
+def test_the_consensus_arm_is_a_pathway_the_probe_can_consult_and_its_stand_in_is_not() -> None:
+    arm = _arm([_dispatched({"price": 1.0})], levers=E5_CONSENSUS_LEVERS)
+    assert isinstance(arm, PathwayConsultant)
+    assert arm.levers == E5_CONSENSUS_LEVERS
+
+    stand_in = UnavailableConsensusArm("no network here")
+    assert not isinstance(stand_in, PathwayConsultant)
+    assert not hasattr(stand_in, "consult")
+    assert not hasattr(stand_in, "levers")
+    # Clause 6's double passes the same structural check, so the CLI would probe it too.
+    assert isinstance(_OnOrderOnlyPathway(unstable_at=frozenset()), PathwayConsultant)
+
+
 # ---------------------------------------------------------------------------
 # Clause 7 -- the probe over real twin states and the real pathway (slow, CI only)
 # ---------------------------------------------------------------------------
-#: The E5 suite's lever set (API2: E5 is reorders-only), so the probe consults the arm E5 runs.
-_E5_LEVERS: Final[frozenset[str]] = frozenset({"reorder"})
-
-#: Fixed, and immaterial beyond being fixed: the probe is not a measurement replicate.
-_PROBE_TWIN_SEED: Final[int] = 296
-
-#: Orders every three hours keep stock in transit (supplier means 4/6/8 h, policy.yaml) while
-#: earlier orders land, so the observations carry on-order stock AND realised lead times.
-_ORDER_EVERY_HOURS: Final[int] = 3
-_ORDER_UNITS: Final[float] = 25.0
-_OBSERVE_AT_HOURS: Final[tuple[int, ...]] = (10, 12, 14)
-
-
-def _real_twin_observations() -> list[Observation]:
-    """Observations of the primary cell's twin, taken through the harness's one ``observe``."""
-    spec = load_world()
-    sim = SupplyChainSimulation(seed=_PROBE_TWIN_SEED, world=spec.resolve(spec.primary_cell))
-    sim.start()
-    sim.set_policy(restock_threshold=comparator_restock_threshold())
-    unit_costs = _derive_unit_costs()
-    observations: list[Observation] = []
-    for hour in range(max(_OBSERVE_AT_HOURS) + 1):
-        if hour in _OBSERVE_AT_HOURS:
-            observations.append(observe(sim, unit_costs=unit_costs))
-        if hour % _ORDER_EVERY_HOURS == 0:
-            for sku in sorted(sim.inventory):
-                sim.place_order(sku, _ORDER_UNITS)
-        sim.advance(1.0)
-    return observations
-
-
 def _twin_unavailable(request: dict[str, Any]) -> dict[str, Any]:
     """An honest JSON-RPC error: unshocked requests route to Tier 2 and never dial the twin."""
     return {
@@ -971,15 +1012,15 @@ def _twin_unavailable(request: dict[str, Any]) -> dict[str, Any]:
 @functools.lru_cache(maxsize=1)
 def _probe_arm() -> ConsensusArm:
     """The arm E5 runs -- the eight real agents and the real protocol -- assembled once."""
-    return build_consensus_arm(twin_handler=_twin_unavailable, levers=_E5_LEVERS)
+    return build_consensus_arm(twin_handler=_twin_unavailable, levers=E5_CONSENSUS_LEVERS)
 
 
 @pytest.mark.slow
 def test_the_probe_over_real_twin_states_reports_a_non_empty_pair_count_for_every_input(
     tmp_path: Path,
 ) -> None:
-    observations = _real_twin_observations()
-    assert len(observations) == len(_OBSERVE_AT_HOURS)
+    observations = e5_probe_observations()
+    assert len(observations) == len(E5_PROBE_OBSERVE_AT_HOURS)
     for name in PROBE_INPUTS:
         assert any(carries_input(obs, name) for obs in observations), name
 
@@ -1044,12 +1085,12 @@ def test_a_real_closed_loop_run_counts_every_decision_it_made_in_exactly_one_buc
     spec = load_world()
     scenario = Scenario(
         name="probe_primary_unshocked",
-        seed=_PROBE_TWIN_SEED,
+        seed=E5_PROBE_TWIN_SEED,
         shock=ShockParams(),
         world=spec.resolve(spec.primary_cell),
     )
 
-    run = run_closed_loop(scenario, arm, _PROBE_TWIN_SEED, arm.name, _PROBE_LOOP)
+    run = run_closed_loop(scenario, arm, E5_PROBE_TWIN_SEED, arm.name, _PROBE_LOOP)
 
     assert not run.failed, run.error
     assert run.decision_counts is not None
@@ -1060,7 +1101,7 @@ def test_a_real_closed_loop_run_counts_every_decision_it_made_in_exactly_one_buc
     report = summarise_dispatch([run], arm=arm.name)
     assert report.counts == DecisionCountsRecord.of(run.decision_counts)
     seen = [(record.seed, record.failed) for record in report.per_run]
-    assert seen == [(_PROBE_TWIN_SEED, False)]
+    assert seen == [(E5_PROBE_TWIN_SEED, False)]
     assert report.dispatch_rate == run.decision_counts.dispatched / _PROBE_LOOP.n_steps
     assert report.wording == DISPATCH_WORDING
 

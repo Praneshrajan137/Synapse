@@ -56,7 +56,10 @@ no agent is touched (decision 3=a).
   opens a tally and ``end_run`` returns the run's :class:`~uplift.interfaces.DecisionCounts`.
 * ``levers`` names what a suite applies. A binding action expressing a lever outside it is
   untranslatable and applies nothing: executing part of a recommendation is not executing it.
+  So is a reorder for a SKU the observed twin does not stock (finding 112: every agent reads its
+  request one level too shallow, so the Inventory Sentinel orders its default ``SKU001``).
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -273,9 +276,7 @@ def observation_to_decision_request(obs: Observation) -> dict[str, Any]:
         "inventory_position": {
             sku: float(obs.inventory[sku]) + float(obs.on_order.get(sku, 0.0)) for sku in skus
         },
-        "demand_to_date": {
-            sku: int(obs.demand_to_date[sku]) for sku in sorted(obs.demand_to_date)
-        },
+        "demand_to_date": {sku: int(obs.demand_to_date[sku]) for sku in sorted(obs.demand_to_date)},
         "supplier_lead_time_history": {
             supplier: [float(minutes) for minutes in obs.supplier_lead_time_history[supplier]]
             for supplier in sorted(obs.supplier_lead_time_history)
@@ -285,8 +286,7 @@ def observation_to_decision_request(obs: Observation) -> dict[str, Any]:
     }
     if obs.active_shock is not None:
         request["shock"] = {
-            key: float(val)
-            for key, val in sorted(dataclasses.asdict(obs.active_shock).items())
+            key: float(val) for key, val in sorted(dataclasses.asdict(obs.active_shock).items())
         }
     if obs.pending_order is not None:
         request["pending_order"] = {
@@ -474,9 +474,7 @@ class DispatchClassification:
 
     def __post_init__(self) -> None:
         if self.bucket not in DISPATCH_BUCKETS:
-            raise ValueError(
-                f"bucket {self.bucket!r} is not one of {list(DISPATCH_BUCKETS)}"
-            )
+            raise ValueError(f"bucket {self.bucket!r} is not one of {list(DISPATCH_BUCKETS)}")
         if not self.reason.strip():
             raise ValueError("a dispatch classification must state why it holds")
 
@@ -521,9 +519,7 @@ def _masked_guardrail_refusal(decision: ConsensusDecision) -> str | None:
     """
     from orchestrator.guardrails.rules import GuardrailEngine
 
-    probe = decision.model_copy(
-        update={"selected_action": copy.deepcopy(decision.selected_action)}
-    )
+    probe = decision.model_copy(update={"selected_action": copy.deepcopy(decision.selected_action)})
     try:
         passed, violations = GuardrailEngine(confidence_threshold=0.0).validate_decision(probe)
     except (TypeError, ValueError) as exc:
@@ -588,6 +584,7 @@ def classify_dispatch(
     translated: PolicyAction,
     *,
     levers: frozenset[str],
+    stocked: frozenset[str],
 ) -> DispatchClassification:
     """Put one decision in exactly one bucket: blocked > untranslatable > withheld > dispatched.
 
@@ -597,7 +594,10 @@ def classify_dispatch(
     * ``guardrail_blocked`` -- withheld by anything but the confidence floor alone (a hard
       guardrail, the Tier-4 twin, an unreadable record), or neither withheld nor confirmed as
       executed. With no evidence the protocol ratified it, the I-6-safe reading applies.
-    * ``untranslatable`` -- expresses no lever, or a lever outside ``levers``.
+    * ``untranslatable`` -- expresses no lever, a lever outside ``levers``, or a reorder for a SKU
+      outside ``stocked``, the SKUs the observed twin holds. An order for a SKU the world does not
+      stock is not one the twin can place: with structure 3 on, ``place_order`` refuses it, and with
+      it off it would add stock to a SKU no demand ever reaches.
     * ``withheld_for_confidence`` -- withheld for confidence alone (I-5); applied (Q2=a).
     * ``dispatched`` -- ratified and handed to execution; applied.
     """
@@ -632,6 +632,17 @@ def classify_dispatch(
             reason=(
                 f"the binding action expresses {sorted(excluded)}, outside this suite's lever "
                 f"set {sorted(levers)}; executing part of a recommendation is not executing it, "
+                "so nothing is applied"
+            ),
+        )
+    unstocked = sorted(set(translated.reorder_quantities) - stocked)
+    if unstocked:
+        return DispatchClassification(
+            bucket="untranslatable",
+            reason=(
+                f"the binding action reorders {unstocked}, which the observed world does not "
+                f"stock ({len(stocked)} SKUs stocked); an order the twin cannot place is not a "
+                "recommendation it can execute, and executing part of one is not executing it, "
                 "so nothing is applied"
             ),
         )
@@ -764,9 +775,7 @@ class ConsensusArm:
         try:
             built = protocol_factory()
         except Exception as exc:  # construction failure surfaces as a failed run
-            raise ConsensusArmUnavailable(
-                f"consensus protocol construction failed: {exc}"
-            ) from exc
+            raise ConsensusArmUnavailable(f"consensus protocol construction failed: {exc}") from exc
         if built is None:
             raise ConsensusArmUnavailable("protocol_factory returned None")
         return built
@@ -792,7 +801,9 @@ class ConsensusArm:
             request=decision_request,
             decision=decision,
             translated=translated,
-            dispatch=classify_dispatch(decision, translated, levers=self._levers),
+            dispatch=classify_dispatch(
+                decision, translated, levers=self._levers, stocked=frozenset(obs.inventory)
+            ),
         )
 
     def decide(self, obs: Observation) -> PolicyAction:
@@ -844,9 +855,7 @@ class ConsensusArm:
         protocol_mod.send_a2a_request = self._transport  # type: ignore[assignment]
         loop = asyncio.new_event_loop()
         try:
-            return loop.run_until_complete(
-                self._protocol.run_consensus(decision_request)
-            )
+            return loop.run_until_complete(self._protocol.run_consensus(decision_request))
         finally:
             protocol_mod.send_a2a_request = original_transport
             asyncio.set_event_loop(None)
@@ -1173,9 +1182,7 @@ def build_consensus_arm(
     twin = twin_handler if twin_handler is not None else build_twin_handler()
     transport = InProcessA2ATransport.from_agents(handlers, twin_handler=twin)
     resolved_protocol = protocol if protocol is not None else build_consensus_protocol()
-    return ConsensusArm(
-        protocol=resolved_protocol, transport=transport, name=name, levers=checked
-    )
+    return ConsensusArm(protocol=resolved_protocol, transport=transport, name=name, levers=checked)
 
 
 __all__ = [

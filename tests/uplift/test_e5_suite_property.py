@@ -3,11 +3,13 @@
 """The E5 suite measures arm E as checkpoint B-prime tuned it, on seeds disjoint from its tuning.
 
 Feature: decision-quality-proof, session 12 (wave 2; task 22.1's code half; R2.1, R2.5, R7.1,
-R7.14, R7.19, R7.20). Subjects: ``uplift/bprime_record.py`` (the record, read or refused),
-``uplift/e5_suite.py`` (scenario, seeds, arms, loop, and the reproduction of B-prime's
+R7.14, R7.19, R7.20, R7.21). Subjects: ``uplift/bprime_record.py`` (the record, read or
+refused), ``uplift/e5_suite.py`` (scenario, seeds, arms, loop, and the reproduction of B-prime's
 comparator, API2 amendment 2), ``uplift/policies.py`` (``NamedPolicy``), the harness's
 session-12 surface (``Scenario.world``, ``LoopConfig.levers``, ``RunScoped``, ``DecisionCounts``,
-``run_arm_on_seeds``, ``decision_count_totals``) and ``python -m uplift.cli --suite e5-primary``.
+``run_arm_on_seeds``, ``decision_count_totals``), ``python -m uplift.cli --suite e5-primary``,
+and that command's R7.21 pathway-probe step with ``uplift/dispatch.py``'s refusal record (wave 3,
+finding 109: the E5 job itself writes the probe's report, or why it has none).
 
 **Fast and pure.** Records are built in memory, or written with the real builder into a fake
 repository under ``tmp_path`` whose physics files are one-line fixtures -- so the digest is
@@ -15,9 +17,9 @@ the real :func:`uplift.power.source_set_digest` over a tree whose every byte the
 Every refusal is proven by construction: the defect is injected, and the refusal names it. Some
 clauses construct and start an engine without advancing it (``_build_twin``, ``stocked_skus``,
 arm O's SKU count), which processes no simulation event. The reproduction is priced by an
-injected cost, so no twin runs; the CLI clauses also replace the harness with a stand-in, and a
-refused invocation's stand-ins fail if they are ever reached, so "refused before any replicate
-runs" is a fact, not a hope.
+injected cost, so no twin runs; the CLI clauses also replace the harness, the probe's fresh arm,
+its sampler and the probe itself with stand-ins, and a refused invocation's stand-ins fail if
+they are ever reached, so "refused before any replicate runs" is a fact, not a hope.
 
 **Slow (``@pytest.mark.slow``, CI only), five clauses that drive the real SimPy twin:**
 
@@ -68,7 +70,18 @@ from uplift.bprime_record import (
 )
 from uplift.consensus_arm import ConsensusArmUnavailable
 from uplift.controls import SeedRange
-from uplift.dispatch import DispatchReport, summarise_dispatch
+from uplift.dispatch import (
+    DecisionCountsRecord,
+    DispatchReport,
+    PathwayConsultant,
+    PathwayProbeError,
+    PathwayProbeRefusal,
+    PathwayProbeReport,
+    ProbeInputResult,
+    read_probe_refusal,
+    read_probe_report,
+    summarise_dispatch,
+)
 from uplift.e5_suite import (
     BPRIME_REPRODUCTION_KIND,
     E5_COMPARATOR,
@@ -136,6 +149,7 @@ if TYPE_CHECKING:
     from pathlib import Path
 
     from digital_twin.simulation.world import ResolvedWorld
+    from uplift.consensus_arm import ConsensusOutcome
     from uplift.tuned_static import GroupLevels
 
 
@@ -1393,6 +1407,9 @@ def test_the_e5_suite_refuses_each_forbidden_flag_before_reading_or_running_anyt
     monkeypatch.setattr(cli, "build_e5_arms", _forbidden)
     monkeypatch.setattr(cli, "production_arm_cost", _forbidden_cost)
     monkeypatch.setattr(cli, "UpliftHarness", _ForbiddenHarness)
+    monkeypatch.setattr(cli, "e5_consensus_policy", _forbidden)
+    monkeypatch.setattr(cli, "e5_probe_observations", _forbidden)
+    monkeypatch.setattr(cli, "run_pathway_probe", _forbidden)
     output = tmp_path / "out" / "result.json"
     code, out, err = _cli([*argv, "--output", str(output)], capsys)
     assert code == cli.EXIT_MISSING_INPUT
@@ -1408,6 +1425,9 @@ def test_the_workflows_e5_invocation_without_a_committed_record_is_a_missing_inp
     monkeypatch.setattr(cli, "build_e5_arms", _forbidden)
     monkeypatch.setattr(cli, "production_arm_cost", _forbidden_cost)
     monkeypatch.setattr(cli, "UpliftHarness", _ForbiddenHarness)
+    monkeypatch.setattr(cli, "e5_consensus_policy", _forbidden)
+    monkeypatch.setattr(cli, "e5_probe_observations", _forbidden)
+    monkeypatch.setattr(cli, "run_pathway_probe", _forbidden)
     output = tmp_path / "out" / "result.json"
     code, out, err = _cli([*_WORKFLOW_ARGV, "--output", str(output)], capsys)
     assert code == cli.EXIT_MISSING_INPUT
@@ -1452,15 +1472,87 @@ def _stub_e5_result(arms: Sequence[ArmSpec], runs_per_arm: int) -> HarnessResult
     )
 
 
-def test_the_workflows_e5_invocation_writes_the_reproduction_artifact_and_dispatch_record(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
-) -> None:
-    """The workflow's argv end to end, with the harness and the reproduction's cost stood in.
+# ---------------------------------------------------------------------------
+# The CLI end to end, every CI workload stood in -- R7.21's probe step included (finding 109)
+# ---------------------------------------------------------------------------
+#: The lines the CLI prints beside the headline for :func:`_probe_report`, in this order.
+_PROBE_LINES: Final[tuple[str, ...]] = (
+    "pathway probe (R7.21): on_order changed 2/3 binding decisions",
+    "pathway probe (R7.21): supplier_lead_time_history changed 0/2 binding decisions",
+    "pathway probe (R7.21): demand_to_date changed 1/3 binding decisions",
+    "unresponsive inputs: ['supplier_lead_time_history'] -- a finding beside the headline; "
+    "no input's silence relabels it (R7.21)",
+)
 
-    The cost is :class:`_RecordingCost`, so arm E's recorded mean (2.375 here) is reproduced
-    exactly while arm E-prime's (B-prime's own) is not, and both verdicts are printed. The
-    dispatch record is B2's ``uplift/dispatch.py`` over the consensus arm's runs alone (API2
-    amendment 1.1): handed every arm's runs, ``summarise_dispatch`` refuses.
+
+class _ConsultablePathway:
+    """The probe step's FRESH arm in a fast clause: a ``PathwayConsultant`` never consulted.
+
+    Wherever this arm is built the probe callable is stood in, so ``consult`` fails if it is
+    reached (no protocol runs) and so does ``decide`` (the probe's arm never reaches the
+    harness).
+    """
+
+    name = DEFAULT_CONSENSUS_ARM
+    levers = E5_CONSENSUS_LEVERS
+
+    def decide(self, obs: Observation) -> PolicyAction:
+        raise AssertionError("the probe's fresh arm decided: it reached the harness")
+
+    def consult(self, obs: Observation) -> ConsensusOutcome:
+        raise AssertionError("a stood-in probe consulted the fresh arm")
+
+
+def _probe_report() -> PathwayProbeReport:
+    """A report as ``run_pathway_probe`` states one: on-order stock moved 2 of 3 decisions."""
+    return PathwayProbeReport(
+        kind="consensus-pathway-probe",
+        schema_version=1,
+        arm=DEFAULT_CONSENSUS_ARM,
+        levers=("reorder",),
+        observations=3,
+        replay_unstable=0,
+        full_request_buckets=DecisionCountsRecord(
+            dispatched=2,
+            withheld_for_confidence=1,
+            guardrail_blocked=0,
+            untranslatable=0,
+            total=3,
+        ),
+        inputs=(
+            ProbeInputResult(input_name="on_order", carried=3, pairs=3, changed=2, rate=2 / 3),
+            ProbeInputResult(
+                input_name="supplier_lead_time_history", carried=2, pairs=2, changed=0, rate=0.0
+            ),
+            ProbeInputResult(
+                input_name="demand_to_date", carried=3, pairs=3, changed=1, rate=1 / 3
+            ),
+        ),
+        unresponsive_inputs=("supplier_lead_time_history",),
+    )
+
+
+@dataclasses.dataclass(frozen=True)
+class _StubbedE5:
+    """The workflow's E5 invocation with every CI workload stood in, and what each one saw."""
+
+    output: Path
+    arms: tuple[ArmSpec, ...]
+    cost: _RecordingCost
+    seen: dict[str, object]
+    fresh: _ConsultablePathway
+    sampled: list[Observation]
+
+
+def _stub_e5(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> _StubbedE5:
+    """Stand in for every CI workload of the workflow's E5 invocation: no twin and no protocol.
+
+    The fake repository's B-prime record sets arm E's mean to 2.375, which the stand-in cost
+    (:class:`_RecordingCost`) reproduces exactly, and keeps arm E-prime's, which it does not.
+    The harness returns :func:`_stub_e5_result`. The probe step's fresh arm is a
+    :class:`_ConsultablePathway`, its sampler returns one hand-built state, and the probe returns
+    :func:`_probe_report`, recording what it was handed and how much had run by then. Each is a
+    global of ``uplift.cli`` read at call time, which a clause re-patches to inject its case.
     """
     root = tmp_path / "repo"
     _write_tree(root, _artifact_payload(mean_tuned_static_cost=2.375))
@@ -1472,6 +1564,8 @@ def test_the_workflows_e5_invocation_writes_the_reproduction_artifact_and_dispat
     stub = _stub_e5_result(arms, runs_per_arm=40)
     cost = _RecordingCost()
     seen: dict[str, object] = {}
+    fresh = _ConsultablePathway()
+    sampled = [_observation()]
 
     class _StubHarness:
         def __init__(self, **kwargs: object) -> None:
@@ -1484,11 +1578,44 @@ def test_the_workflows_e5_invocation_writes_the_reproduction_artifact_and_dispat
             seen["priced_before_the_run"] = len(cost.calls)
             return stub
 
+    def _probe(arm: PathwayConsultant, observations: Sequence[Observation]) -> PathwayProbeReport:
+        seen["probe"] = (arm, observations, len(cost.calls), "run" in seen)
+        return _probe_report()
+
     monkeypatch.setattr(cli, "REPO_ROOT", root)
     monkeypatch.setattr(cli, "build_e5_arms", lambda record: arms)
     monkeypatch.setattr(cli, "UpliftHarness", _StubHarness)
     monkeypatch.setattr(cli, "production_arm_cost", cost)
-    output = tmp_path / "out" / "result.json"
+    monkeypatch.setattr(cli, "e5_consensus_policy", lambda: fresh)
+    monkeypatch.setattr(cli, "e5_probe_observations", lambda: sampled)
+    monkeypatch.setattr(cli, "run_pathway_probe", _probe)
+    return _StubbedE5(
+        output=tmp_path / "out" / "result.json",
+        arms=arms,
+        cost=cost,
+        seen=seen,
+        fresh=fresh,
+        sampled=sampled,
+    )
+
+
+def test_the_workflows_e5_invocation_writes_the_reproduction_artifact_and_dispatch_record(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """The workflow's argv end to end, with every CI workload stood in (:func:`_stub_e5`).
+
+    The cost is :class:`_RecordingCost`, so arm E's recorded mean (2.375 here) is reproduced
+    exactly while arm E-prime's (B-prime's own) is not, and both verdicts are printed. The
+    dispatch record is B2's ``uplift/dispatch.py`` over the consensus arm's runs alone (API2
+    amendment 1.1): handed every arm's runs, ``summarise_dispatch`` refuses. R7.21's probe runs
+    first, on a FRESH arm; its report is written beside the dispatch record and its lines print
+    beside the headline (finding 109), and a refusal an earlier run left behind is removed.
+    """
+    stubbed = _stub_e5(tmp_path, monkeypatch)
+    output, arms, cost, seen = stubbed.output, stubbed.arms, stubbed.cost, stubbed.seen
+    stale = output.parent / cli.PROBE_REFUSAL_FILENAME
+    stale.parent.mkdir(parents=True)
+    stale.write_text("{}", encoding="utf-8")
     code, out, err = _cli([*_WORKFLOW_ARGV, "--output", str(output)], capsys)
 
     assert code == 0, err
@@ -1528,6 +1655,157 @@ def test_the_workflows_e5_invocation_writes_the_reproduction_artifact_and_dispat
     assert (dispatch.arm, dispatch.runs, dispatch.failed_runs) == (DEFAULT_CONSENSUS_ARM, 40, 0)
     assert (dispatch.counts.dispatched, dispatch.counts.total) == (120, 160)
     assert dispatch.dispatch_rate == 0.75
+
+    # R7.21 (finding 109): the probe ran FIRST -- before any arm was priced and before the
+    # harness -- on the FRESH arm, never the measured one, over the sampler's states.
+    assert isinstance(stubbed.fresh, PathwayConsultant)
+    probed = cast("tuple[object, object, int, bool]", seen["probe"])
+    probed_arm, probed_states, priced_by_then, harness_ran = probed
+    assert probed_arm is stubbed.fresh
+    assert probed_arm is not arms[0].policy
+    assert probed_states is stubbed.sampled
+    assert (priced_by_then, harness_ran) == (0, False)
+    probe_path = output.parent / cli.PROBE_FILENAME
+    text = probe_path.read_text(encoding="utf-8")
+    assert text == json.dumps(json.loads(text), sort_keys=True, separators=(",", ":"))
+    assert read_probe_report(probe_path) == _probe_report()
+    assert not stale.exists()
+    positions = [out.index(line) for line in _PROBE_LINES]
+    assert out.index("headline uplift:") < positions[0]
+    assert positions == sorted(positions)
+    assert positions[-1] < out.index("applied noise tolerance")
+    assert f"wrote pathway probe record: {probe_path}" in out
+
+
+def test_a_probe_that_states_no_rate_is_recorded_as_a_refusal_and_the_e5_run_completes(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    stubbed = _stub_e5(tmp_path, monkeypatch)
+    message = "no observation carries 'on_order': withholding it changes no request"
+
+    def _zero_pairs(
+        arm: PathwayConsultant, observations: Sequence[Observation]
+    ) -> PathwayProbeReport:
+        raise PathwayProbeError(message)
+
+    monkeypatch.setattr(cli, "run_pathway_probe", _zero_pairs)
+    output = stubbed.output
+    stale = output.parent / cli.PROBE_FILENAME
+    stale.parent.mkdir(parents=True)
+    stale.write_text("{}", encoding="utf-8")
+    code, out, err = _cli([*_WORKFLOW_ARGV, "--output", str(output)], capsys)
+
+    assert code == 0, err
+    refusal_path = output.parent / cli.PROBE_REFUSAL_FILENAME
+    text = refusal_path.read_text(encoding="utf-8")
+    assert text == json.dumps(json.loads(text), sort_keys=True, separators=(",", ":"))
+    refusal = read_probe_refusal(refusal_path)
+    assert (refusal.kind, refusal.schema_version) == ("consensus-pathway-probe-refusal", 1)
+    assert refusal.arm == DEFAULT_CONSENSUS_ARM
+    assert refusal.reason == f"the probe states no rate: PathwayProbeError: {message}"
+    assert not stale.exists()
+
+    # The probe's absence refused nothing: the harness ran and every record was written, and
+    # beside the headline the refusal's reason is printed where the per-input lines would be.
+    assert stubbed.seen["run"] == ([e5_scenario()], list(stubbed.arms), MIN_SCENARIOS)
+    assert UpliftArtifact.read(output).comparator == E5_COMPARATOR
+    assert (output.parent / cli.REPRODUCTION_FILENAME).is_file()
+    assert (output.parent / cli.DISPATCH_FILENAME).is_file()
+    refused_line = f"pathway probe (R7.21): refused: {refusal.reason}"
+    assert out.index("headline uplift:") < out.index(refused_line)
+    assert "pathway probe (R7.21): on_order" not in out
+    assert "unresponsive inputs:" not in out
+    assert f"wrote pathway probe refusal: {refusal_path}" in out
+
+
+def test_a_stand_in_consensus_arm_is_recorded_as_a_refusal_before_any_state_is_sampled(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    stubbed = _stub_e5(tmp_path, monkeypatch)
+    stand_in = UnavailableConsensusArm("no network here")
+    reached: list[str] = []
+
+    def _sampler() -> list[Observation]:
+        reached.append("sampler")
+        return list(stubbed.sampled)
+
+    def _probe(arm: PathwayConsultant, observations: Sequence[Observation]) -> PathwayProbeReport:
+        reached.append("probe")
+        return _probe_report()
+
+    monkeypatch.setattr(cli, "e5_consensus_policy", lambda: stand_in)
+    monkeypatch.setattr(cli, "e5_probe_observations", _sampler)
+    monkeypatch.setattr(cli, "run_pathway_probe", _probe)
+    output = stubbed.output
+    code, out, err = _cli([*_WORKFLOW_ARGV, "--output", str(output)], capsys)
+
+    assert code == 0, err
+    assert reached == []
+    refusal = read_probe_refusal(output.parent / cli.PROBE_REFUSAL_FILENAME)
+    assert refusal.arm == stand_in.name == DEFAULT_CONSENSUS_ARM
+    assert refusal.reason.startswith(
+        "the consensus arm built for the probe is UnavailableConsensusArm, not a pathway the "
+        "probe can consult"
+    )
+    assert not (output.parent / cli.PROBE_FILENAME).exists()
+    assert stubbed.seen["run"] == ([e5_scenario()], list(stubbed.arms), MIN_SCENARIOS)
+    assert UpliftArtifact.read(output).comparator == E5_COMPARATOR
+    refused_line = f"pathway probe (R7.21): refused: {refusal.reason}"
+    assert out.index("headline uplift:") < out.index(refused_line)
+
+
+# ---------------------------------------------------------------------------
+# The probe's refusal record (finding 109)
+# ---------------------------------------------------------------------------
+def _refusal_payload(**overrides: object) -> dict[str, object]:
+    """An admissible refusal as its JSON carries it, with any field overridden."""
+    payload: dict[str, object] = {
+        "kind": "consensus-pathway-probe-refusal",
+        "schema_version": 1,
+        "arm": DEFAULT_CONSENSUS_ARM,
+        "reason": "the probe states no rate: PathwayProbeError: zero pairs",
+    }
+    payload.update(overrides)
+    return payload
+
+
+_REFUSAL_DEFECTS: Final[dict[str, tuple[dict[str, object], str]]] = {
+    "a blank reason": ({"reason": " \t\n"}, "states no reason"),
+    "another kind": ({"kind": "consensus-pathway-probe"}, "kind\n.*literal_error"),
+    "another schema version": ({"schema_version": 2}, "schema_version\n.*literal_error"),
+    "a blank arm": ({"arm": "   "}, "does not name an arm"),
+    "an arm padded with space": ({"arm": f" {DEFAULT_CONSENSUS_ARM}"}, "does not name an arm"),
+    "an unrecorded field": ({"rate": 0.0}, "rate\n.*extra_forbidden"),
+}
+
+
+@pytest.mark.parametrize("defect", sorted(_REFUSAL_DEFECTS))
+def test_a_probe_refusal_names_an_arm_and_a_reason_and_is_of_its_own_kind(defect: str) -> None:
+    overrides, needle = _REFUSAL_DEFECTS[defect]
+    admitted = PathwayProbeRefusal.model_validate(_refusal_payload())
+    assert admitted == PathwayProbeRefusal.of(arm=DEFAULT_CONSENSUS_ARM, reason=admitted.reason)
+    with pytest.raises(ValidationError, match=needle):
+        PathwayProbeRefusal.model_validate(_refusal_payload(**overrides))
+
+
+_stated_arms = _names.filter(lambda name: name == name.strip())
+_stated_reasons = st.text(min_size=1).filter(lambda text: bool(text.strip()))
+
+
+@given(arm=_stated_arms, reason=_stated_reasons)
+def test_a_probe_refusal_round_trips_canonically_whatever_reason_it_states(
+    arm: str, reason: str
+) -> None:
+    refusal = PathwayProbeRefusal.of(arm=arm, reason=reason)
+    text = refusal.to_canonical_json()
+    assert text == json.dumps(json.loads(text), sort_keys=True, separators=(",", ":"))
+    assert json.loads(text) == {
+        "arm": arm,
+        "kind": "consensus-pathway-probe-refusal",
+        "reason": reason,
+        "schema_version": 1,
+    }
+    assert PathwayProbeRefusal.model_validate_json(text) == refusal
 
 
 def test_the_dispatch_line_states_why_no_rate_exists_and_never_prints_a_rate_of_zero() -> None:

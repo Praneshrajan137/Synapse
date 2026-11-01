@@ -34,6 +34,11 @@ driver, and a cost objective with no revenue term would let an arm that may also
 "win" by suppressing demand. Assembly failure degrades to
 :class:`~uplift.policies.UnavailableConsensusArm`, exactly as the canonical suite degrades.
 
+**R7.21's probe states come from ONE sampler (finding 109).** :func:`e5_probe_observations`
+observes one primary-cell twin run through ``uplift.harness.observe``. The E5 CLI's probe step
+calls it, and so does the slow probe test, so the states a published probe report describes are
+the states its test checks.
+
 **The reproduction (API2 amendment 2): ONE implementation, which the E5 CLI and the controls
 both call.** A physics digest names a tree; it is not evidence that the tree reproduces
 B-prime. :func:`measure_bprime_reproduction` re-measures arms E, E' and O at B-prime's own
@@ -56,13 +61,20 @@ from typing import TYPE_CHECKING, Final, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, StrictBool, field_validator, model_validator
 
+from digital_twin.simulation.engine import SupplyChainSimulation
 from digital_twin.simulation.monte_carlo import ShockParams
 from digital_twin.simulation.policy import comparator_restock_threshold
 from digital_twin.simulation.world import load_world
 from uplift.consensus_arm import build_consensus_arm
 from uplift.controls import SeedRange
 from uplift.foresight import _cadence, run_single_arm, stocked_skus
-from uplift.harness import DEFAULT_CONSENSUS_ARM, LoopConfig, replicate_seed
+from uplift.harness import (
+    DEFAULT_CONSENSUS_ARM,
+    LoopConfig,
+    _derive_unit_costs,
+    observe,
+    replicate_seed,
+)
 from uplift.interfaces import ArmSpec, Scenario
 from uplift.kpi import committed_objective
 from uplift.oracle_arm import build_structure_aware_arm
@@ -74,7 +86,7 @@ if TYPE_CHECKING:  # pragma: no cover - annotations only
 
     from digital_twin.simulation.world import ResolvedWorld
     from uplift.bprime_record import BprimeRecord
-    from uplift.interfaces import DecisionPolicy
+    from uplift.interfaces import DecisionPolicy, Observation
 
 __all__ = [
     "BPRIME_REPRODUCTION_KIND",
@@ -83,6 +95,10 @@ __all__ = [
     "E5_HOURS",
     "E5_IN_SAMPLE_ARM",
     "E5_LOOP",
+    "E5_PROBE_OBSERVE_AT_HOURS",
+    "E5_PROBE_ORDER_EVERY_HOURS",
+    "E5_PROBE_ORDER_UNITS",
+    "E5_PROBE_TWIN_SEED",
     "E5_REPRODUCED_ARMS",
     "E5_SCENARIO_NAME",
     "E5_SCENARIO_SEED",
@@ -95,6 +111,7 @@ __all__ = [
     "build_e5_arms",
     "e5_baseline_arms",
     "e5_consensus_policy",
+    "e5_probe_observations",
     "e5_replicate_seeds",
     "e5_scenario",
     "e5_world",
@@ -281,6 +298,55 @@ def build_e5_arms(record: BprimeRecord) -> tuple[ArmSpec, ...]:
             "result assembly identifies the subject by that name"
         )
     return (ArmSpec(consensus, "consensus"), *e5_baseline_arms(record))
+
+
+# ---------------------------------------------------------------------------
+# R7.21's probe states (finding 109): the one production sampler
+# ---------------------------------------------------------------------------
+#: The twin seed the probe's states are drawn at. Fixed, and immaterial beyond being fixed: the
+#: probe is not a measurement replicate.
+E5_PROBE_TWIN_SEED: Final[int] = 296
+
+#: Orders every three hours keep stock in transit (supplier means 4/6/8 h, policy.yaml) while
+#: earlier orders land, so the observations carry on-order stock AND realised lead times.
+E5_PROBE_ORDER_EVERY_HOURS: Final[int] = 3
+
+#: The units of every SKU each of those orders places.
+E5_PROBE_ORDER_UNITS: Final[float] = 25.0
+
+#: The simulated hours the twin is observed at, each before that hour's order is placed.
+E5_PROBE_OBSERVE_AT_HOURS: Final[tuple[int, ...]] = (10, 12, 14)
+
+
+def e5_probe_observations() -> list[Observation]:
+    """The states R7.21's pathway probe decides: one primary-cell twin run, observed three times.
+
+    The ONE production sampler (G2), moved from the slow probe test: the E5 CLI's probe step and
+    that test both call it. The twin is built in :func:`e5_world` at :data:`E5_PROBE_TWIN_SEED`,
+    started, and given the committed restock threshold. Then, for each simulated hour from 0:
+    the twin is observed through ``uplift.harness.observe`` (the one construction of what a
+    policy sees) if the hour is in :data:`E5_PROBE_OBSERVE_AT_HOURS`; every
+    :data:`E5_PROBE_ORDER_EVERY_HOURS` hours it orders :data:`E5_PROBE_ORDER_UNITS` of every
+    SKU; and it advances one hour. The states are returned in the order they were observed.
+
+    Drives the real twin for 15 simulated hours: a CI workload, never a fast test's.
+
+    Raises:
+        PolicyUnavailableError: The committed world or restock threshold cannot be read.
+    """
+    sim = SupplyChainSimulation(seed=E5_PROBE_TWIN_SEED, world=e5_world())
+    sim.start()
+    sim.set_policy(restock_threshold=comparator_restock_threshold())
+    unit_costs = _derive_unit_costs()
+    observations: list[Observation] = []
+    for hour in range(max(E5_PROBE_OBSERVE_AT_HOURS) + 1):
+        if hour in E5_PROBE_OBSERVE_AT_HOURS:
+            observations.append(observe(sim, unit_costs=unit_costs))
+        if hour % E5_PROBE_ORDER_EVERY_HOURS == 0:
+            for sku in sorted(sim.inventory):
+                sim.place_order(sku, E5_PROBE_ORDER_UNITS)
+        sim.advance(1.0)
+    return observations
 
 
 # ---------------------------------------------------------------------------

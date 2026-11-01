@@ -13,9 +13,12 @@ the headline and neither may be read as part of it:
   carries -- on-order stock, supplier lead-time history, demand to date -- how many observations
   were decided both with it and without it, and how often the binding decision changed. A probe
   showing no response is a finding reported beside E5's number, never a relabelling of it; a
-  rate over zero pairs is refused, because it measures nothing.
+  rate over zero pairs is refused, because it measures nothing. When the probe states no rate
+  -- the arm has no pathway to consult, an input has zero pairs, or the probe could not run --
+  a :class:`PathwayProbeRefusal` is written in its place, naming the arm and why (finding 109):
+  the probe's absence is a finding too, and it refuses nothing else.
 
-Both are frozen pydantic records with ``extra="forbid"``, written in the repository's one
+Each is a frozen pydantic record with ``extra="forbid"``, written in the repository's one
 canonical JSON form, and every derived field is re-derived on construction and refused if it
 disagrees.
 """
@@ -25,7 +28,7 @@ from __future__ import annotations
 import dataclasses
 import json
 from pathlib import Path
-from typing import TYPE_CHECKING, Final, Literal, Protocol
+from typing import TYPE_CHECKING, Final, Literal, Protocol, runtime_checkable
 
 import structlog
 from pydantic import BaseModel, ConfigDict, Field, model_validator
@@ -47,7 +50,10 @@ class DispatchReportError(ValueError):
 
 
 class PathwayProbeError(ValueError):
-    """A pathway probe that would report a rate it did not measure."""
+    """A pathway probe record that would state what nobody measured.
+
+    A rate over zero pairs, or a refusal that names no arm or no reason.
+    """
 
 
 def _canonical(payload: object) -> str:
@@ -455,10 +461,14 @@ class PathwayProbeReport(BaseModel):
         return _canonical(self.model_dump(mode="json"))
 
 
+@runtime_checkable
 class PathwayConsultant(Protocol):
     """What the probe needs of an arm: its name, its lever set, and a consult that counts nothing.
 
-    :class:`~uplift.consensus_arm.ConsensusArm` satisfies it.
+    :class:`~uplift.consensus_arm.ConsensusArm` satisfies it. Runtime-checkable, so a caller can
+    tell an arm with a pathway from the :class:`~uplift.policies.UnavailableConsensusArm`
+    stand-in, which has neither ``levers`` nor ``consult``, before consulting anything; the check
+    is structural, by member presence, as every runtime protocol check is.
     """
 
     @property
@@ -580,6 +590,72 @@ def read_probe_report(path: Path) -> PathwayProbeReport:
     return PathwayProbeReport.model_validate_json(Path(path).read_text(encoding="utf-8"))
 
 
+class PathwayProbeRefusal(BaseModel):
+    """Why R7.21's probe states no rate for a run, written in place of its report (finding 109).
+
+    Two causes, each named in ``reason``: the arm has no pathway to consult (the
+    :class:`~uplift.policies.UnavailableConsensusArm` stand-in is not a
+    :class:`PathwayConsultant`), or the probe states no rate (:class:`PathwayProbeError`: an
+    input with zero pairs) or cannot run. This record never refuses the run it sits beside. The
+    probe's absence is a finding reported beside E5's number, exactly as an unresponsive input
+    is, and it relabels nothing. ``arm`` names an arm, and ``reason`` is not blank, because a
+    refusal that states no reason explains nothing.
+    """
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    kind: Literal["consensus-pathway-probe-refusal"]
+    schema_version: Literal[1]
+    arm: str
+    reason: str
+
+    @model_validator(mode="after")
+    def _names_an_arm_and_a_reason(self) -> PathwayProbeRefusal:
+        refusals: list[str] = []
+        if not self.arm.strip() or self.arm != self.arm.strip():
+            refusals.append(f"arm {self.arm!r} does not name an arm")
+        if not self.reason.strip():
+            refusals.append("a refusal that states no reason explains nothing")
+        if refusals:
+            raise PathwayProbeError(
+                "the pathway probe refusal is refused rather than recorded: " + "; ".join(refusals)
+            )
+        return self
+
+    @classmethod
+    def of(cls, *, arm: str, reason: str) -> PathwayProbeRefusal:
+        """The refusal for ``arm`` stating ``reason``, at this record's kind and version."""
+        return cls(
+            kind="consensus-pathway-probe-refusal",
+            schema_version=1,
+            arm=arm,
+            reason=reason,
+        )
+
+    def to_canonical_json(self) -> str:
+        """The refusal in this repository's one canonical JSON form."""
+        return _canonical(self.model_dump(mode="json"))
+
+
+def write_probe_refusal(path: Path, refusal: PathwayProbeRefusal) -> Path:
+    """Write ``refusal``'s canonical JSON to ``path`` (no trailing newline) and return the path."""
+    target = Path(path)
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_text(refusal.to_canonical_json(), encoding="utf-8")
+    logger.info(
+        "pathway_probe_refusal_written",
+        path=str(target),
+        arm=refusal.arm,
+        reason=refusal.reason,
+    )
+    return target
+
+
+def read_probe_refusal(path: Path) -> PathwayProbeRefusal:
+    """Read a refusal written by :func:`write_probe_refusal`, re-checking every field."""
+    return PathwayProbeRefusal.model_validate_json(Path(path).read_text(encoding="utf-8"))
+
+
 __all__ = [
     "DISPATCH_WORDING",
     "PROBE_INPUTS",
@@ -588,6 +664,7 @@ __all__ = [
     "DispatchReportError",
     "PathwayConsultant",
     "PathwayProbeError",
+    "PathwayProbeRefusal",
     "PathwayProbeReport",
     "ProbeInput",
     "ProbeInputResult",
@@ -595,11 +672,13 @@ __all__ = [
     "binding_fingerprint",
     "carries_input",
     "read_dispatch_report",
+    "read_probe_refusal",
     "read_probe_report",
     "response_rate",
     "run_pathway_probe",
     "summarise_dispatch",
     "withhold_input",
     "write_dispatch_report",
+    "write_probe_refusal",
     "write_probe_report",
 ]
