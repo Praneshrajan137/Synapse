@@ -106,6 +106,13 @@ jobs:
     env:
       SYNAPSE_REVISION: ${{ github.event.pull_request.head.sha }}
       SYNAPSE_RUN_ID: ${{ github.run_id }}
+      # FINDING 116 (measured from run 41268752414's log). The consensus arm's Disruption Shield
+      # calls `http://ollama:11434` on every consult, and no Ollama runs here. From 04:01Z each
+      # failed lookup of the name `ollama` took 10.04 s instead of 0.033 s, so that run made 6805
+      # of its 24000 decisions before the 13500 s bound. A refused local port fails the same call
+      # at once and takes the same rule-based fallback, so no decision changes. `uplift/*.py` is
+      # untouched, so the controls' Power_Report still describes the revision.
+      DS_OLLAMA_BASE_URL: "http://127.0.0.1:9"
 
     steps:
       - uses: actions/checkout@v4

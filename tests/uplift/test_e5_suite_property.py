@@ -21,7 +21,7 @@ injected cost, so no twin runs; the CLI clauses also replace the harness, the pr
 its sampler and the probe itself with stand-ins, and a refused invocation's stand-ins fail if
 they are ever reached, so "refused before any replicate runs" is a fact, not a hope.
 
-**Slow (``@pytest.mark.slow``, CI only), five clauses that drive the real SimPy twin:**
+**Slow (``@pytest.mark.slow``, CI only), six clauses that drive the real SimPy twin:**
 
 * (a) arm E's objective under the harness EQUALS the regret comparator's for the same engine
   physics, at three E5 seeds, compared with ``==`` on floats -- the claim that E5 measures the
@@ -31,7 +31,10 @@ they are ever reached, so "refused before any replicate runs" is a fact, not a h
   records ``None``, and the run is closed either way;
 * (d) under ``reorders_only`` a price the policy sets is never applied;
 * (e) ``production_arm_cost`` at one seed is the committed objective of a ``run_single_arm``
-  replicate, its five reads taken here.
+  replicate, its five reads taken here;
+* (f) arm O as the positive control drives it through the harness EQUALS arm O as the B-prime
+  reproduction prices it, at the positive control's first three seeds -- the premise of the
+  R6.3 agreement rule, which compares the two instruments' E - O (finding 117).
 
 Budget inherited from the root ``conftest.py`` profile: no example count is set or asserted.
 """
@@ -70,6 +73,7 @@ from uplift.bprime_record import (
 )
 from uplift.consensus_arm import ConsensusArmUnavailable
 from uplift.controls import SeedRange
+from uplift.controls_run import ARM_CONSTRUCTION_SEED, POSITIVE_START, structure_aware_arm
 from uplift.dispatch import (
     DecisionCountsRecord,
     DispatchReport,
@@ -98,6 +102,7 @@ from uplift.e5_suite import (
     BprimeReproduction,
     BprimeReproductionError,
     ReproducedArm,
+    _structure_aware_arm,
     build_e5_arms,
     e5_baseline_arms,
     e5_consensus_policy,
@@ -2000,3 +2005,40 @@ def test_production_arm_cost_is_the_committed_objective_of_one_single_arm_replic
     assert math.isfinite(expected)
     assert expected > 0.0
     assert production_arm_cost(seed, arm_e, world) == expected
+
+
+@pytest.mark.slow
+def test_the_positive_controls_arm_o_prices_exactly_as_the_reproduction_measures_it() -> None:
+    """(f) Arm O through the harness, as the positive control drives it, equals B-prime's arm O.
+
+    The R6.3 agreement rule compares the harness's E - O, from ``uplift.controls_run``'s positive
+    leg, with B-prime's, measured through ``foresight.run_single_arm``. Clause (a) pins arm E
+    across those two paths; this pins arm O, each side built as its own measurement builds it:
+    the positive leg's ONE arm O (``structure_aware_arm`` at ``ARM_CONSTRUCTION_SEED``) driven
+    through ``run_arm_on_seeds`` over the first three seeds of the positive range, sequentially
+    (one instance across seeds, the stricter of the harness's two drives: a pool hands each
+    worker a copy), and the reproduction's FRESH arm O per seed (``e5_suite``'s builder) priced
+    by ``production_arm_cost``. Equal at every seed, a disagreement between the two estimates of
+    E - O is their seed sets', not the instrument's (finding 117).
+    """
+    defaults = TwinConfig()
+    assert (defaults.order_arrival_rate, defaults.pick_pack_mean_min) == (2.0, 8.0)
+    scenario = e5_scenario()
+    world = scenario.world
+    assert world is not None
+    arm_o = structure_aware_arm(world, stocked_skus(ARM_CONSTRUCTION_SEED, world=world), E5_LOOP)
+    seeds = [POSITIVE_START + offset for offset in range(3)]
+    runs = _UnflooredHarness(loop_config=E5_LOOP).run_arm_on_seeds(
+        scenario, ArmSpec(arm_o, "baseline"), seeds, parallel=False
+    )
+    assert [run.seed for run in runs] == seeds
+    harness_costs: list[float] = []
+    for run in runs:
+        assert not run.failed, run.error
+        assert run.kpis is not None
+        harness_costs.append(run.kpis.objective)
+    reproduced_costs = [
+        production_arm_cost(seed, _structure_aware_arm(world, seed), world) for seed in seeds
+    ]
+    assert harness_costs == reproduced_costs
+    assert len(set(reproduced_costs)) == len(seeds), "three seeds priced alike: the seed is unread"
