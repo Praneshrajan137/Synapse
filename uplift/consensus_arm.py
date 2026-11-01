@@ -84,6 +84,7 @@ if TYPE_CHECKING:  # imported lazily at runtime to avoid a heavy import at modul
     from synapse_common.models import ConsensusDecision
 
     from agents.disruption_shield.models.reasoning import DeepSeekReasoner
+    from agents.sustainability_agent.models.carbon import CarbonTracker
     from orchestrator.consensus.protocol import ConsensusProtocol
 
 
@@ -958,6 +959,44 @@ def _offline_reasoner() -> DeepSeekReasoner:
     return _OfflineReasoner()
 
 
+def _offline_carbon_tracker() -> CarbonTracker:
+    """The Sustainability Agent's carbon tracker, with CodeCarbon's tracker never built (I-1).
+
+    ``CarbonTracker.track_compute`` (``agents/sustainability_agent/models/carbon.py``) builds
+    CodeCarbon's ``EmissionsTracker`` on its first call, and that constructor looks up where it
+    runs. In codecarbon 2.8.4 it queries the AWS, Azure and GCP instance-metadata endpoint at
+    ``169.254.169.254`` and then, off a cloud, ``get.geojs.io`` (``core/cloud.py`` and
+    ``external/geography.py``; read from the source, not measured). CI installs that version
+    from the agent's requirements, and the handler clause of the network-free property caught
+    the first query on PR #87 (job 124890674288). The laptop has no codecarbon, so there the
+    base took its ``ImportError`` branch and the clause passed (finding 121).
+
+    The subclass overrides ``track_compute`` alone, returning ``0.0``: what the base returns
+    when CodeCarbon cannot be imported, so the arm's agent reports the same value wherever it
+    runs. The base's ``codecarbon_unavailable`` warning is logged once, when the tracker is
+    built, not on each of E5's consults. ``track_route``, the delivery CO2, is the base's.
+    Compute emissions reach no decision: the agent sets its ``utility_score`` from its waste
+    model's confidence, and the Pareto step scores a proposal by that score
+    (``orchestrator/consensus/pareto.py``; read, not measured).
+
+    Defined in here, not at module scope, for :func:`_offline_reasoner`'s reason.
+    """
+    from agents.sustainability_agent.models import carbon
+
+    class _OfflineCarbonTracker(carbon.CarbonTracker):
+        """``CarbonTracker`` with ``track_compute`` refused; every other line is the base's."""
+
+        def track_compute(self) -> float:
+            return 0.0
+
+    carbon.logger.warning(
+        "codecarbon_unavailable",
+        fallback="zero compute emissions",
+        reason="not consulted in the network-free in-process consensus arm ($0)",
+    )
+    return _OfflineCarbonTracker()
+
+
 #: HITL wait budget for the *unattended* uplift run, in seconds. Confidence-gated
 #: escalation stays fully intact (I-5): a guardrail-violating decision still escalates,
 #: still records ``escalated_to_human`` and the honest timeout override, and is still
@@ -1039,15 +1078,18 @@ def build_agent_handlers() -> dict[str, A2AHandler]:
     :class:`_OfflineActuator`. The returned mapping's keys are exactly the
     :data:`AGENT_ENDPOINTS` names.
 
-    **Neither Ollama path opens a socket (finding 116).** The debate's LLM client is
-    :class:`_OfflineLLMClient` (:func:`build_consensus_protocol`). The Disruption Shield is the
-    one agent whose default pipeline dials on every consult: its ``DeepSeekReasoner`` POSTs to
-    ``http://ollama:11434``. So that handler alone is given a pipeline built with
-    :func:`_offline_reasoner`, which takes the reasoner's own rule-based fallback with no socket;
-    every other part of that pipeline is its default. The claim that assembling these handlers
-    and consulting each for a proposal opens no socket is checked by
+    **No agent pipeline opens a socket (finding 116, finding 121).** The debate's LLM client is
+    :class:`_OfflineLLMClient` (:func:`build_consensus_protocol`). Two agents' default pipelines
+    dial. The Disruption Shield's ``DeepSeekReasoner`` POSTs to ``http://ollama:11434`` on every
+    consult, so that handler is given a pipeline built with :func:`_offline_reasoner`, which
+    takes the reasoner's own rule-based fallback. The Sustainability Agent's ``CarbonTracker``
+    builds CodeCarbon's online tracker, which queries ``169.254.169.254`` wherever codecarbon is
+    installed, so that handler is given a pipeline built with :func:`_offline_carbon_tracker`.
+    Every other part of those two pipelines is its default. The claim that assembling these
+    handlers and consulting each for a proposal opens no socket is checked by
     ``tests/uplift/test_consensus_network_free_property.py``, under a guard that fails every
-    non-loopback dial and every ``httpx`` send.
+    non-loopback dial and every ``httpx`` send. A further clause there checks the CodeCarbon
+    path with a stand-in module, so it can fail on a machine without codecarbon too.
 
     Raises:
         ConsensusArmUnavailable: if any agent handler cannot be imported or constructed
@@ -1072,6 +1114,14 @@ def build_agent_handlers() -> dict[str, A2AHandler]:
                 )
                 kwargs["pipeline"] = pipeline_module.DisruptionShieldPipeline(
                     reasoner=_offline_reasoner()
+                )
+            if name == "sustainability_agent":
+                # Through importlib for the same reason as the Disruption Shield's pipeline.
+                pipeline_module = importlib.import_module(
+                    "agents.sustainability_agent.inference.pipeline"
+                )
+                kwargs["pipeline"] = pipeline_module.SustainabilityPipeline(
+                    carbon_tracker=_offline_carbon_tracker()
                 )
             handler = handler_cls(**kwargs)
         except Exception as exc:  # noqa: BLE001 — assembly failure is loud, never a stub

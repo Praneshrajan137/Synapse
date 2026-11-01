@@ -122,10 +122,11 @@ def _stated_preconditions(agent: str) -> frozenset[str]:
 # Strategies
 # ---------------------------------------------------------------------------
 #: Lower-case, so the upper-case ``SKU001`` that agents and old tests default to is never drawn:
-#: a forecast naming it can only be a default leaking through.
-#: Drawn with ``st.text`` over an explicit alphabet rather than ``st.from_regex``: the regex
-#: strategy tripped Hypothesis's ``too_slow`` health check on its first draws (measured locally,
-#: session 13), and the alphabet alone carries the property's precondition.
+#: a forecast naming it can only be a default leaking through. The alphabet alone carries that
+#: precondition. Measured locally in session 13: Hypothesis's ``too_slow`` health check fired on
+#: this module's first property in two combined runs with other test files, once under
+#: ``st.from_regex`` and once under this ``st.text``, and never when this file ran alone or in
+#: CI's fast shard. So the strategy is not shown to be the cause, and no cause is established.
 _SKUS = st.text(alphabet=string.ascii_lowercase + string.digits + "_-", min_size=1, max_size=12)
 _STORES = st.text(alphabet=string.ascii_uppercase + string.digits + "_", min_size=1, max_size=16)
 _SCALARS = st.one_of(st.none(), st.booleans(), st.integers(), st.text(max_size=8))
