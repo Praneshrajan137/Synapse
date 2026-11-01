@@ -101,6 +101,18 @@ because the measurement fell short.
 ``MIN_POWERED_REPLICATES`` and ``UPLIFT_FLOOR`` are imported from committed
 configuration, never written as literals, so a change to either moves this test with it.
 
+Carried to task 17.3 (R6.7, R6.9)
+---------------------------------
+
+The generating branch now admits an artifact only beside a Power_Report that describes the
+revision under measurement and whose replicate floor the artifact meets. Every generating-branch
+context here names a tree this file owns -- one stand-in file per declared source pattern, never
+the repository's -- whose report leaves the INV-TW-002 floor in force, so every case above keeps
+its outcome. Section 6 asserts the new refusals: an otherwise admissible artifact beside a tree
+naming no report, an absent, malformed, tampered, foreign-comparator, superseded or
+under-replicating one is unavailable, with exactly one reason naming which, ordered after every
+reason the artifact already earned.
+
 Cost, and why this is not slow-marked
 -------------------------------------
 
@@ -125,6 +137,7 @@ import pytest
 from hypothesis import given
 from hypothesis import strategies as st
 
+from digital_twin.simulation.policy import detection_probability
 from scripts.audit import uplift_truth as gate
 from scripts.audit.uplift_truth import (
     EXIT_PASS,
@@ -152,12 +165,23 @@ from uplift.harness import (
     comparator_label,
 )
 from uplift.interval import INTERVAL_SEED, METHOD, Interval
+from uplift.power import (
+    POWER_REPORT_PATH,
+    POWER_SOURCE_SET,
+    PowerReportError,
+    build_power_report,
+    describes_revision,
+    read_power_report,
+    write_power_report,
+)
+from uplift.tuned_static import TUNED_STATIC_ARM
 from uplift.uplift_floor import (
     MIN_POWERED_REPLICATES,
     UPLIFT_FLOOR,
     FloorRatchetError,
     UnprovenFloorRaiseError,
     is_proven_uplift,
+    powered_replicate_floor,
     ratchet_to_measured,
 )
 
@@ -203,6 +227,46 @@ _unpowered = st.integers(min_value=0, max_value=MIN_POWERED_REPLICATES - 1)
 #: are read through it, never written as literals.
 _CONTRACT = load_contract()
 _MARGIN: Final[float] = _CONTRACT.materiality_margin
+
+#: A variance whose derived replicate requirement exceeds every count ``_powered`` draws
+#: (``ceil(((z_alpha + z_beta) * 10 / margin) ** 2)``, about 4906 at the committed values), so a
+#: report built on it refuses an otherwise admissible artifact under R6.9.
+_UNDER_REPLICATING_VARIANCE: Final[float] = 100.0
+
+
+def _power_tree(root: Path, *, variance: float = 1.0) -> Path:
+    """A tree this test owns whose Power_Report describes it (task 17.3, R6.7).
+
+    One stand-in file per ``POWER_SOURCE_SET`` pattern, so ``describes_revision`` digests this
+    tree and never the repository's, and a report built over it at ``variance``. At ``1.0`` the
+    derived requirement is about 50, below INV-TW-002, so the replicate floor stays
+    ``MIN_POWERED_REPLICATES`` (R6.16). Idempotent per ``root``: Hypothesis shares ``tmp_path``
+    across examples, so a root is built once, at the variance of its first call.
+    """
+    report = root / POWER_REPORT_PATH
+    if report.is_file():
+        return root
+    for pattern in POWER_SOURCE_SET:
+        stand_in = root / pattern.replace("*", "stand_in")
+        stand_in.parent.mkdir(parents=True, exist_ok=True)
+        stand_in.write_text(f"# stands in for {pattern}\n", encoding="utf-8")
+    write_power_report(
+        build_power_report(
+            root=root,
+            source_set=POWER_SOURCE_SET,
+            source_run_id="run-power-fixture",
+            source_revision_sha="0" * 40,
+            replicates_per_arm=MIN_POWERED_REPLICATES,
+            observed_variance=variance,
+            variance_source="a test fixture: no run measured this variance",
+            alpha=_CONTRACT.alpha,
+            detection_probability=detection_probability(),
+            materiality_margin=_MARGIN,
+            comparator=TUNED_STATIC_ARM,
+        ),
+        report,
+    )
+    return root
 
 
 # ---------------------------------------------------------------------------
@@ -340,7 +404,7 @@ class _Case:
             path.write_bytes(self.payload)
         return path
 
-    def context(self, *, generating_job: bool) -> RunContext:
+    def context(self, *, generating_job: bool, tree_root: Path | None) -> RunContext:
         return RunContext(
             revision=_REVISION,
             run_id=_RUN_ID,
@@ -348,6 +412,7 @@ class _Case:
             artifact_tracked=self.tracked,
             expected_seeds=self.expected_seeds,
             expected_arms=self.expected_arms,
+            tree_root=tree_root,
         )
 
 
@@ -636,7 +701,9 @@ def test_each_inadmissible_class_is_rejected_with_a_reason_naming_its_cause(
     path = case.materialise(tmp_path)
     assert path != RESULT_ARTIFACT  # the repo's own evidence path is never touched
 
-    admission = admit(path, case.context(generating_job=True))
+    admission = admit(
+        path, case.context(generating_job=True, tree_root=_power_tree(tmp_path / "power-tree"))
+    )
     reasons = _joined(admission)
 
     assert admission.outcome == "unavailable", case.kind
@@ -688,7 +755,9 @@ def test_a_complete_powered_in_bound_same_run_artifact_is_admitted(
     headline number.
     """
     path = case.materialise(tmp_path)
-    admission = admit(path, case.context(generating_job=True))
+    admission = admit(
+        path, case.context(generating_job=True, tree_root=_power_tree(tmp_path / "power-tree"))
+    )
 
     assert admission.outcome == "admitted", (case.kind, _joined(admission))
     assert admission.admitted
@@ -738,7 +807,11 @@ def test_the_same_headline_reaches_different_verdicts(
     assert degraded.headline_uplift == proof_grade.headline_uplift
 
     context = RunContext(
-        revision=_REVISION, run_id=_RUN_ID, generating_job=True, artifact_tracked=False
+        revision=_REVISION,
+        run_id=_RUN_ID,
+        generating_job=True,
+        artifact_tracked=False,
+        tree_root=_power_tree(tmp_path / "power-tree"),
     )
 
     def _code(artifact: UpliftArtifact, name: str) -> int:
@@ -765,7 +838,9 @@ def test_substituting_the_proven_uplift_predicate_changes_the_exit_code(
     the code unchanged.
     """
     path = case.materialise(tmp_path)
-    admission = admit(path, case.context(generating_job=True))
+    admission = admit(
+        path, case.context(generating_job=True, tree_root=_power_tree(tmp_path / "power-tree"))
+    )
     assert admission.admitted
     baseline = verdict(admission.proof)
 
@@ -791,7 +866,9 @@ def test_no_floor_raise_survives_an_inadmissible_artifact(
 ) -> None:
     """R2.10: rejected evidence offers no proof, so it can back no raise."""
     path = case.materialise(tmp_path)
-    admission = admit(path, case.context(generating_job=True))
+    admission = admit(
+        path, case.context(generating_job=True, tree_root=_power_tree(tmp_path / "power-tree"))
+    )
     assert admission.proof is None
 
     with pytest.raises(UnprovenFloorRaiseError):
@@ -813,6 +890,7 @@ def test_a_raise_is_bounded_by_the_measurement_and_never_lowers_the_floor(
             run_id=_RUN_ID,
             generating_job=True,
             artifact_tracked=False,
+            tree_root=_power_tree(tmp_path / "power-tree"),
         ),
     )
     assert admission.admitted
@@ -857,6 +935,7 @@ def test_a_raise_needs_a_same_run_proof_not_merely_a_supporting_measurement(
             run_id=_RUN_ID,
             generating_job=True,
             artifact_tracked=False,
+            tree_root=_power_tree(tmp_path / "power-tree"),
         ),
     )
     assert not admission.admitted
@@ -880,7 +959,8 @@ def test_outside_the_generating_job_no_artifact_class_can_pass(
     not one the scheduled job alone can see.
     """
     path = case.materialise(tmp_path)
-    admission = admit(path, case.context(generating_job=False))
+    # No tree is named: outside the generating job no Power_Report is ever consulted.
+    admission = admit(path, case.context(generating_job=False, tree_root=None))
     code = _gate_exit(admission)
     status, detail = registry_status(admission, code)
 
@@ -923,11 +1003,14 @@ def test_the_reported_status_says_pass_only_for_a_proven_same_run_measurement(
     monkeypatch.setenv("SYNAPSE_REVISION", _REVISION)
     monkeypatch.setenv("SYNAPSE_RUN_ID", _RUN_ID)
     path = case.materialise(tmp_path)
+    tree = _power_tree(tmp_path / "power-tree")
 
-    exit_code = gate.run(check=True, require_fresh_run=True, artifact=path)
+    exit_code = gate.run(check=True, require_fresh_run=True, artifact=path, tree_root=tree)
     printed = capsys.readouterr().out
 
-    admission = admit(path, gate.resolve_run_context(generating_job=True, artifact=path))
+    admission = admit(
+        path, gate.resolve_run_context(generating_job=True, artifact=path, tree_root=tree)
+    )
     code = _gate_exit(admission)
     status = registry_status(admission, code)[0]
 
@@ -1000,3 +1083,167 @@ def test_the_committed_declaration_still_ignores_the_c60_evidence_path() -> None
     """
     assert is_git_ignored(RESULT_ARTIFACT) is True
     assert artifact_is_version_controlled(RESULT_ARTIFACT) is False
+
+
+# ---------------------------------------------------------------------------
+# 6. No Power_Report describing the revision, no admission (task 17.3, R6.7, R6.9)
+# ---------------------------------------------------------------------------
+#: Each way a generating-branch tree refuses publication: the clause its one reason cites, and a
+#: phrase of that reason (lower-cased) naming which way.
+_REPORT_REFUSALS: Final[dict[str, tuple[str, str]]] = {
+    "no tree": ("(R6.7)", "names no tree"),
+    "absent": ("(R6.7)", "no power_report exists"),
+    "malformed": ("(R6.7)", "not an admissible power_report"),
+    "tampered": ("(R6.7)", "not an admissible power_report"),
+    "foreign comparator": ("(R6.7)", "not an admissible power_report"),
+    "superseded": ("(R6.7)", "superseded instrument"),
+    "under-replicating": ("(R6.9)", "replicates per arm"),
+}
+
+#: What ``uplift.power``'s own readers make of each tree that names one -- found without the gate,
+#: so every fixture is proven to be what it is named before the gate is judged against it.
+_READER_FINDS: Final[dict[str, str]] = {
+    "absent": "no report",
+    "malformed": "refused",
+    "tampered": "refused",
+    "foreign comparator": "refused",
+    "superseded": "superseded",
+    "under-replicating": "under-replicating",
+}
+
+
+def _rewrite_report(tree: Path, **changes: object) -> None:
+    """Rewrite ``tree``'s report with ``changes`` applied, canonical in every other byte."""
+    report = tree / POWER_REPORT_PATH
+    payload = json.loads(report.read_text(encoding="utf-8"))
+    payload.update(changes)
+    report.write_text(json.dumps(payload, sort_keys=True, separators=(",", ":")), encoding="utf-8")
+
+
+def _refusing_tree(root: Path, state: str) -> Path | None:
+    """A tree whose Power_Report refuses publication in exactly the named way; ``None``: none."""
+    if state == "no tree":
+        return None
+    if state == "absent":
+        root.mkdir(parents=True)
+        return root
+    if state == "under-replicating":
+        return _power_tree(root, variance=_UNDER_REPLICATING_VARIANCE)
+    tree = _power_tree(root)
+    if state == "superseded":
+        moved = tree / POWER_SOURCE_SET[0].replace("*", "stand_in")
+        moved.write_text("# the instrument moved after its report\n", encoding="utf-8")
+    elif state == "malformed":
+        (tree / POWER_REPORT_PATH).write_text("{not json", encoding="utf-8")
+    elif state == "tampered":
+        stored = json.loads((tree / POWER_REPORT_PATH).read_text(encoding="utf-8"))
+        _rewrite_report(tree, minimum_detectable_effect=2.0 * stored["minimum_detectable_effect"])
+    elif state == "foreign comparator":
+        _rewrite_report(tree, comparator="Par_Level_Reorder")
+    else:
+        raise AssertionError(f"no refusing tree is declared for {state!r}")
+    return tree
+
+
+def _reader_finds(tree: Path) -> str:
+    """What ``uplift.power``'s readers make of ``tree``'s report, independently of the gate."""
+    try:
+        report = read_power_report(tree / POWER_REPORT_PATH)
+    except PowerReportError:
+        return "refused"
+    if report is None:
+        return "no report"
+    if not describes_revision(report, tree, POWER_SOURCE_SET):
+        return "superseded"
+    # Above every count `_powered` draws, so no admissible case here meets the floor.
+    if powered_replicate_floor(report) > MIN_POWERED_REPLICATES * 2:
+        return "under-replicating"
+    return "licensing"
+
+
+@pytest.mark.parametrize("state", sorted(_READER_FINDS))
+def test_each_refusing_tree_is_what_its_name_says(state: str, tmp_path: Path) -> None:
+    """The fixtures, checked against ``uplift.power`` alone, never against the gate they judge."""
+    tree = _refusing_tree(tmp_path / "tree", state)
+
+    assert set(_READER_FINDS) == set(_REPORT_REFUSALS) - {"no tree"}
+    assert tree is not None
+    assert _reader_finds(tree) == _READER_FINDS[state]
+    # And the tree every other case stands beside licenses.
+    assert _reader_finds(_power_tree(tmp_path / "power-tree")) == "licensing"
+
+
+# Feature: purpose-achievement-audit, Property 13: The uplift gate rejects inadmissible evidence
+@given(case=_admissible(), state=st.sampled_from(sorted(_REPORT_REFUSALS)))
+def test_an_admissible_artifact_is_unavailable_while_no_power_report_licenses_it(
+    case: _Case, state: str, tmp_path: Path
+) -> None:
+    """Task 17.3 (R6.7, R6.9): exactly one reason, naming which rule refused, and no proof.
+
+    Metamorphic: the same artifact is admitted beside a report that describes the revision, so
+    the report is the only thing that moved the outcome.
+    """
+    path = case.materialise(tmp_path)
+    licensing = _power_tree(tmp_path / "power-tree")
+    admitted = admit(path, case.context(generating_job=True, tree_root=licensing))
+    refusing = _refusing_tree(tmp_path / uuid.uuid4().hex, state)
+    refused = admit(path, case.context(generating_job=True, tree_root=refusing))
+    clause, phrase = _REPORT_REFUSALS[state]
+
+    assert admitted.admitted, (case.kind, _joined(admitted))
+    assert refused.outcome == "unavailable", (state, case.kind)
+    assert refused.proof is None
+    assert len(refused.reasons) == 1, (state, refused.reasons)
+    assert clause in refused.reasons[0], (state, refused.reasons)
+    assert phrase in refused.reasons[0].lower(), (state, refused.reasons)
+    assert refused.reasons[0].isascii()
+    code = _gate_exit(refused)
+    assert code == EXIT_UNAVAILABLE
+    assert registry_status(refused, code)[0] == "FAIL"
+
+
+# Feature: purpose-achievement-audit, Property 13: The uplift gate rejects inadmissible evidence
+@given(case=_admissible())
+def test_an_under_replicated_artifact_is_refused_naming_its_count_and_the_reports_floor(
+    case: _Case, tmp_path: Path
+) -> None:
+    """R6.9: a derived requirement above the constant replaces it, and the reason says both."""
+    tree = _power_tree(tmp_path / "under-replicating", variance=_UNDER_REPLICATING_VARIANCE)
+    report = read_power_report(tree / POWER_REPORT_PATH)
+    assert report is not None
+    floor = powered_replicate_floor(report)
+    path = case.materialise(tmp_path)
+    recorded = json.loads(path.read_text(encoding="utf-8"))["replicates_per_arm"]
+    admission = admit(path, case.context(generating_job=True, tree_root=tree))
+
+    assert recorded < floor
+    assert len(admission.reasons) == 1, admission.reasons
+    assert "(R6.9)" in admission.reasons[0]
+    assert {recorded, floor} <= _integers_in(admission.reasons[0])
+
+
+# Feature: purpose-achievement-audit, Property 13: The uplift gate rejects inadmissible evidence
+@given(
+    case=st.one_of(_incomplete(), _out_of_fidelity(), _provenance_mismatch()),
+    state=st.sampled_from(sorted(_REPORT_REFUSALS)),
+)
+def test_a_report_refusal_follows_every_reason_the_artifact_already_earned(
+    case: _Case, state: str, tmp_path: Path
+) -> None:
+    """Task 17.3: appended after the artifact's own reasons, never in place of one.
+
+    These three classes parse at ``MIN_POWERED_REPLICATES``, so beside the licensing report they
+    earn their own reasons and no report reason; the refusing report adds exactly one more.
+    """
+    path = case.materialise(tmp_path)
+    licensing = _power_tree(tmp_path / "power-tree")
+    earned = admit(path, case.context(generating_job=True, tree_root=licensing)).reasons
+    refusing = _refusing_tree(tmp_path / uuid.uuid4().hex, state)
+    refused = admit(path, case.context(generating_job=True, tree_root=refusing)).reasons
+    clause, phrase = _REPORT_REFUSALS[state]
+
+    assert earned, case.kind
+    assert refused[: len(earned)] == earned, (case.kind, state)
+    assert len(refused) == len(earned) + 1, (case.kind, state, refused)
+    assert clause in refused[-1], (state, refused[-1])
+    assert phrase in refused[-1].lower(), (state, refused[-1])

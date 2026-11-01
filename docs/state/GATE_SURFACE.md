@@ -349,7 +349,7 @@ Why each job runs, does not run, or runs conditionally under each trigger. `need
 | push:main | .github/workflows/ci.yml::v4-compliance | uses: actions/checkout@v4 | CONDITIONAL | conditional - advisory (named at job level) |
 | push:main | .github/workflows/ci.yml::v4-compliance | Compliance gate | CONDITIONAL | conditional - advisory (named at job level) |
 | push:main | .github/workflows/ci.yml::chromatic-color-gates | uses: actions/checkout@v4 | CONDITIONAL | conditional - blocking |
-| push:main | .github/workflows/ci.yml::chromatic-color-gates | Set up Node.js 20 | CONDITIONAL | conditional - blocking |
+| push:main | .github/workflows/ci.yml::chromatic-color-gates | Set up Node.js 22.23 | CONDITIONAL | conditional - blocking |
 | push:main | .github/workflows/ci.yml::chromatic-color-gates | Install chromatic core dependencies | CONDITIONAL | conditional - blocking |
 | push:main | .github/workflows/ci.yml::chromatic-color-gates | Dependency licence audit (I-1) | CONDITIONAL | conditional - blocking |
 | push:main | .github/workflows/ci.yml::chromatic-color-gates | Build tokens + SDD/TDD/BDD suite (INV-CLR incl. atlas-console 019-025) | CONDITIONAL | conditional - blocking |
@@ -570,7 +570,7 @@ Why each job runs, does not run, or runs conditionally under each trigger. `need
 | pull_request | .github/workflows/ci.yml::v4-compliance | uses: actions/checkout@v4 | no | advisory (named at job level) |
 | pull_request | .github/workflows/ci.yml::v4-compliance | Compliance gate | no | advisory (named at job level) |
 | pull_request | .github/workflows/ci.yml::chromatic-color-gates | uses: actions/checkout@v4 | yes | blocking |
-| pull_request | .github/workflows/ci.yml::chromatic-color-gates | Set up Node.js 20 | yes | blocking |
+| pull_request | .github/workflows/ci.yml::chromatic-color-gates | Set up Node.js 22.23 | yes | blocking |
 | pull_request | .github/workflows/ci.yml::chromatic-color-gates | Install chromatic core dependencies | yes | blocking |
 | pull_request | .github/workflows/ci.yml::chromatic-color-gates | Dependency licence audit (I-1) | yes | blocking |
 | pull_request | .github/workflows/ci.yml::chromatic-color-gates | Build tokens + SDD/TDD/BDD suite (INV-CLR incl. atlas-console 019-025) | yes | blocking |

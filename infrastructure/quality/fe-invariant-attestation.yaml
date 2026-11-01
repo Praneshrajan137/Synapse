@@ -41,13 +41,13 @@ suite_extensions:
 #               itself. Nothing asserts the English-only i18n catalog. This is
 #               the Requirement 12 "the registry gate validates the registry"
 #               finding, in the registry.
-#   FE-INV-014  the entry-bundle budget these name is `pnpm size || true` in
-#   FE-INV-025  `frontend.yml::build` -- an informational step is not a gate.
-#               Since decision-quality-proof task 29's CI block, that job's
+#   FE-INV-014  the entry-bundle budget it names is `pnpm size || true` in
+#               `frontend.yml::build` -- an informational step is not a gate.
+#               FE-INV-025 shared this entry until 2026-10-24: that job's
 #               "Entry preloads exclude the heavy viz chunks (FE-INV-025)" step
-#               DOES block `deck-`/`map-`/`graph-` chunks on the entry -- but
-#               not `visx-`, which FE-INV-025 also names, so naming `build` as
-#               its enforcer here would still overclaim.
+#               blocked `deck-`/`map-`/`graph-` but only listed `visx-`, which
+#               FE-INV-025 also names (finding 90's narrowing). It now forbids
+#               `visx-` and `viz-` as well, so FE-INV-025 is declared below.
 #   FE-INV-020  `tests: .github/workflows/frontend.yml` names no job, and no job
 #   FE-INV-024  in that file asserts tile egress.
 #   FE-INV-031  names "the a11y job"; `frontend.yml` defines no such job.
@@ -80,6 +80,32 @@ out_of_suite:
       dangerouslySetInnerHTML and asserts the served CSP header, the way
       `src/theme/__tests__/no-legacy-js.test.ts` asserts the absence of legacy
       theme JavaScript for FE-INV-071.
+
+  - id: FE-INV-025
+    workflow: .github/workflows/frontend.yml
+    job: build
+    rationale: >
+      Which chunks load on the entry's critical path is a property of the built
+      dist/, not of a rendered component. The `build` job's step "Entry
+      preloads exclude the heavy viz chunks (FE-INV-025)", declared blocking by
+      that exact name in blocking-steps.yaml, runs
+      `frontend/scripts/check-entry-preloads.mjs`: it follows dist/index.html's
+      scripts, preloads and static imports, and exits 1 when an eager JS file
+      starts with deck-, map-, graph-, viz- or visx-, or when one of those
+      prefixes names no emitted chunk. viz- and visx- were forbidden on
+      2026-10-24, after Frontend CI runs 38291036628 (sha 5c2f2b3) and
+      38298457463 (sha ecf517b) printed an eager JS set of exactly index,
+      react-vendor, zod, query and runtime. What it cannot see: it reads chunk
+      names, so a heavy sub-package that vite.config.ts does not name, imported
+      by the entry alone, would pass. And this checker confirms only that the
+      `build` job exists; that the step exists and blocks is workflow_shape_truth's
+      check of the blocking-steps.yaml declaration, not this file's.
+    dated: "2026-10-24"
+    removal_condition: >
+      Delete when an assertion tagged FE-INV-025, run in the reporter-observed
+      suite, reads a built dist/ and finds no deck.gl, maplibre,
+      sigma/graphology or visx module reachable from the entry, at which point
+      the invariant is observable like every other enforced entry.
 
   - id: FE-INV-058
     workflow: .github/workflows/integration.yml

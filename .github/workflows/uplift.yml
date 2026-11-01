@@ -190,6 +190,8 @@ jobs:
             artifacts/uplift/result.json
             artifacts/uplift/supervisor-status.json
             artifacts/uplift/uplift-truth.json
+            artifacts/uplift/dispatch.json
+            artifacts/uplift/reproduction.json
           if-no-files-found: warn
           retention-days: 90
 

@@ -82,11 +82,11 @@ literal `max_examples=` or a per-call `numRuns`** — that is what amplified the
 incident, and CF-13 records that the tree already carries more violations than the steering
 file states.
 
-**Properties: ~~38-79~~ ~~38-95~~ 38-96 and 98.** *[CORRECTED 2026-09-29 (finding 72): 38-81
+**Properties: ~~38-79~~ ~~38-95~~ 38-98.** *[CORRECTED 2026-09-29 (finding 72): 38-81
 are landed, in flight or deferred in place; 82-95 are declared by the session-11 re-cut -- 82-86
 renumber the design's former 61-65 and 87-95 are new. Task 15.4 carries the mapping; the phase
 split below names 38-79 only.]* *[CORRECTED SESSION 12: 96 is task 13.7's comparator-under-delay
-file and 98 is task 22.1's supervisor; 97 is unassigned.]* Each gets its own sub-task, tagged
+file; 97 and 98 are task 22.1's E5 suite and its supervisor.]* Each gets its own sub-task, tagged
 `# Feature: decision-quality-proof, Property {N}: {title}`. Properties 38-59 land in phases 0-2;
 properties 60-79 land in phases 3-5. Properties **68** and **69** belong to E4a's subject but are
 numbered inside E4's block, so they land in task 19 rather than task 7 — task 7.5 carries unit
@@ -2852,17 +2852,18 @@ tests in the interim, and that is a stated sequencing gap, not an omission.
       analytically derivable cannot support R6.3's tolerance comparison.
     - _Requirements: 6.2, 6.3_
 
-  - [~] 16.2 Commit the control policy values and pin them before any run judged against them
+  - [x] 16.2 Commit the control policy values and pin them before any run judged against them
     - discharge: truth-gates.yml::truth-gates (the registry: C70 ratchets, C75 pin
       extractors, C56 per-pin lines) and ci.yml::uplift-verify fast shard 1/4 (the reader
       clauses of Property 85)
-    - last-checked: run 40086235844 (SYNAPSE Truth Gates, sha d8aafe6) -- step 5 failed on C56 alone
-      (the README counts, as predicted), so steps 6-12 were skipped. Read again at P2.
-      - Inside step 5: C70 SKIP (27 ratchets, 23 unmeasured) and C75 PASS.
-      - The pins, read in quality-gates step 17 of run 40086235858:
-        `positive-control-detection-probability` 0.80 == 0.80, and both graduated
-        `s`/`S` pins (50 == 50, 100 == 100), each OK.
-      - The Property 85 reader clauses passed in fast shard 1/4 of that run.
+    - **DISCHARGED: run 40095429848 (SYNAPSE Truth Gates, sha b3a98a8, 2026-10-24),
+      all 12 steps `success`.** Step 5 read `PASS=57 FAIL=0 PARTIAL=0 SKIP=11 TOTAL=68`,
+      with `pin_extractor` at 18 declared and 18 resolved. Step 8's `ledger_gen --check`
+      matched the committed CURRENT.md, whose C70 row reads 27 ratchets with 23 unmeasured,
+      and whose C75 row reads PASS. Step 6 read 20 of 20 doc claims, including
+      `positive-control-detection-probability` at 0.80 == 0.80. Property 85's reader
+      clauses passed in fast shard 1/4 of runs 40086235858 and 40095429857.
+    - previously: last-checked run 40086235844 (sha d8aafe6) -- step 5 failed on C56 alone.
     - previously: last-checked run 38298457581 (sha ecf517b) -- pre-change.
     - **AUTHORED, SESSION 12, at the path this body's path note anticipated.**
       - `policy.yaml::positive_control.detection_probability: 0.80`, labelled a
@@ -3007,10 +3008,26 @@ tests in the interim, and that is a stated sequencing gap, not an omission.
       resolution, gate surface) AND uplift.yml::uplift-controls (the labelled run
       that writes the negative, positive and agreement records and the
       Power_Report). Two subjects, and both must report.
-    - last-checked: run 40086235844 (SYNAPSE Truth Gates, sha d8aafe6) -- step 5 failed on C56 alone
-      (the README counts, as predicted), so steps 6-12 were skipped. Read again at P2.
-      - The first subject's three checks are steps 9-11, all skipped. The second
-        subject waits for wave 2's `uplift.controls_run`.
+    - last-checked: run 40095429848 (SYNAPSE Truth Gates, sha b3a98a8, 2026-10-24)
+      -- the FIRST SUBJECT IS DISCHARGED: steps 9 (gate surface, 689 rows), 10 (455 steps)
+      and 11 (32 jobs) `success`. The second, `uplift.yml::uplift-controls`, has not run.
+      `uplift.controls_run` lands at P3, and the label follows a green P3.
+    - previously: last-checked run 40086235844 (sha d8aafe6) -- step 5 failed on C56 alone.
+    - **SECOND SUBJECT AUTHORED, SESSION 12 (wave 2, agent B3): `uplift/controls_run.py`.**
+      - Committed seed plan:
+        - negative repetition K uses seeds `100000 + 2000K` (subject) and `101000 + 2000K`
+          (comparator), 1000 each;
+        - the positive control uses `140000` (1000 seeds, shared).
+        - Every overlap is refused before any engine starts: with B-prime's seeds, with E5's
+          derived seeds, and across repetitions.
+      - The positive leg re-measures arms E, E' and O at B-prime's measurement seeds through
+        `measure_bprime_reproduction`. `agreement.json` is `unavailable`, naming each arm, unless
+        all three reproduce exactly.
+      - `verdict` writes `negative.json`, `positive.json`, `agreement.json` and `power-report.json`.
+        It exits 0 whatever the controls conclude, and refuses missing, extra or duplicate
+        repetitions.
+      - `tests/uplift/test_controls_run_property.py`: 56 fast tests (passed locally, 3 s at `ci`).
+        No slow test: the only honest one is a full-n leg, which is the labelled run itself.
     - previously: last-checked run 38298457581 (sha ecf517b) -- pre-change.
     - **AUTHORED, SESSION 12.**
       - Three jobs on the label `measure-uplift-controls`:
@@ -3133,7 +3150,22 @@ tests in the interim, and that is a stated sequencing gap, not an omission.
       Mark unchanged; ADR-055 **D2.7** carries the reasoning.
     - _Requirements: 6.9, 6.10, 6.16_
 
-  - [ ] 17.3 Refuse publication while no Power_Report describes the revision under measurement
+  - [~] 17.3 Refuse publication while no Power_Report describes the revision under measurement
+    - discharge: ci.yml::uplift-verify fast shards 1/4 and 2/4 (the C60 files:
+      `test_c60_three_way_exit_property.py`; `test_uplift_admissibility_property.py`,
+      `test_uplift_truth_gate_property.py` and `test_preserved_baseline_regression.py`)
+    - last-checked: run 40095429857 (SYNAPSE CI, sha b3a98a8) -- PRE-CHANGE: the refusal
+      lands at P3.
+    - **AUTHORED, SESSION 12 (wave 2, agent B3).**
+      - In `admit`'s generating branch, an artifact that parses is admitted only beside a
+        Power_Report at `RunContext.tree_root / POWER_REPORT_PATH` that meets three
+        conditions: it loads, it describes the revision (`describes_revision` over
+        `POWER_SOURCE_SET`), and the artifact meets its `powered_replicate_floor`.
+      - Each failure is `unavailable` naming which (R6.7, R6.9), after the artifact's own
+        reasons.
+      - `tree_root` is REQUIRED, so no test reads the real tree by default.
+      - Measured locally: the four C60 files, 29 passed at `dev`; the two property files at
+        `ci`, 23 passed in 160 s.
     - File: `scripts/audit/uplift_truth.py`
     - An unpowered null is not evidence of absence, and a Power_Report describing a **superseded**
       revision does not license publication (R6.7). This is the constraint that makes E5's
@@ -3408,14 +3440,15 @@ data and scored against an external benchmark has no demonstrable value.
       a source that actually yields rows, or it inherits the same vacuity.
     - _Requirements: 8.3, 8.17_
 
-  - [~] 19.4 Record the benchmark score with its metric identity and a non-bare baseline
+  - [x] 19.4 Record the benchmark score with its metric identity and a non-bare baseline
     - discharge: truth-gates.yml::truth-gates (the registry run executes C76) and
       regenerate-truth-docs.yml::regenerate (24.2 publishes it)
-    - last-checked: run 40086235844 (SYNAPSE Truth Gates, sha d8aafe6) -- step 5 failed on C56 alone
-      (the README counts, as predicted), so steps 6-12 were skipped. Read again at P2.
-      - Inside step 5: C76 SKIP on `baseline-unconfirmed, no-scored-run`, never on its
-        import guard.
-      - Regenerate run 40086253239 published the row: `| C76 | ... | SKIP |`.
+    - **DISCHARGED: run 40095429848 (SYNAPSE Truth Gates, sha b3a98a8, 2026-10-24),
+      all 12 steps `success`.** Step 5 executed C76: SKIP on `baseline-unconfirmed,
+      no-scored-run`, never on its import guard (read per row). For the second subject,
+      regenerate run 40086253239 published the row, and step 8's `ledger_gen --check`
+      confirmed it against step 5's own execution.
+    - previously: last-checked run 40086235844 (sha d8aafe6) -- step 5 failed on C56 alone.
     - previously: last-checked run 38298457581 (sha ecf517b) -- pre-change.
     - **AUTHORED, SESSION 12.**
       - `@register("C76", ...)` is `check_benchmark_record`, returning
@@ -3660,9 +3693,12 @@ data and scored against an external benchmark has no demonstrable value.
 
   - [~] 22.1 Regenerate the artifact in the generating job and co-locate the interval
     - discharge: uplift.yml::uplift-proof (the labelled `measure-uplift-proof` run, task 25)
-    - last-checked: run 40086253063 (SYNAPSE Uplift Proof, sha d8aafe6) -- every job
-      skipped, as designed: the `regenerate-truth-docs` label started it. Property 98
-      passed in run 40086235858: 19 fast in shard 1/4, 6 slow in the slow selection.
+      AND ci.yml::uplift-verify fast shard 1/4 plus the slow selection (Property 97, the E5
+      suite's code half). Two subjects; both must report.
+    - last-checked: run 40095429857 (SYNAPSE CI, sha b3a98a8) -- PRE-CHANGE for the code
+      half: `--suite e5-primary`, Property 97 and the B-prime record land at P3. The
+      labelled subject has not run; Uplift Proof run 40086253063 (sha d8aafe6) skipped
+      every job.
     - previously: last-checked run 36860454801 (sha ec0eb91) -- pre-change.
     - **AUTHORED, SESSION 12, with this re-scope recorded.**
       - ONE job of 240 minutes, on the primary cell unshocked, under
@@ -3679,6 +3715,49 @@ data and scored against an external benchmark has no demonstrable value.
         label is not applied before then.
     - Property 98 is `tests/uplift/test_proof_supervisor_property.py`: 19 fast tests
       (passed locally) and 6 slow tests (CI only).
+    - **CODE HALF AUTHORED, SESSION 12 (wave 2, agent B1). Two subjects now discharge it.**
+      - `uplift/e5_suite.py`: the primary cell unshocked, base seed 5001, and `E5_LOOP` at
+        regret's cadence (`_cadence(24.0)` = 24 steps of 1 h) with `levers="reorders_only"`.
+        Arms are `consensus`, E and E' (`tuned_static_in_sample`, a `NamedPolicy`).
+        `e5_replicate_seeds` refuses any seed shared with B-prime's tuning or measurement seeds.
+      - `uplift/bprime_record.py`: reads B-prime's committed record and refuses it by name, never
+        defaulting, when a file is missing, a digest moved, or the cell, the replicates or the
+        convergence are wrong. It carries B-prime's three arm means.
+      - The record is committed byte-exact:
+        - `docs/state/bprime/twin-regret-primary.json` is uplift.yml run 36860454801's
+          `twin-regret-primary` artifact, re-downloaded, sha256 `d176e735...`;
+        - `provenance.json` beside it carries the physics digest `dbedae9d...`;
+        - `.gitattributes` exempts both from line-ending conversion, so the digest holds on
+          every checkout.
+      - The harness: `Scenario.world` reaches the engine; `LoopConfig.levers`; `RunScoped` tallies
+        attached to each `ScenarioRun`; `run_arm_on_seeds` with seeds as given. Persistence is
+        schema 3.
+      - `python -m uplift.cli --suite e5-primary` refuses every flag the suite forbids before any
+        replicate runs. It then re-measures arms E and E' at B-prime's seeds and writes
+        `reproduction.json`, exact and never refused. Next it runs the harness, and it writes
+        `result.json` and `dispatch.json` (R7.20, "recommendations, if executed").
+        `uplift.yml` uploads all three.
+      - Property 97 is `tests/uplift/test_e5_suite_property.py`: 150 fast tests (passed locally;
+        30 s at `ci`) and 5 slow (CI only).
+    - **FINDING 110 (measured locally; the cost inferred).** Neither arm E nor E' pickles:
+      `GroupParLevelReorder` holds a `mappingproxy`. Nor does the consensus arm (a local
+      session-factory closure). Arm O and the scenario do. So `_run_arm_runs` logs
+      `uplift_parallel_fallback` and E5 and the controls run sequentially.
+      - Projected E5 is about 30 minutes:
+        - the consensus arm at 1000 x 1.39 s, the Tier-2 replicate of cost-probe run 36860581040
+          (sha ec0eb91);
+        - E and E' at 2 x 1000 x 0.116 s;
+        - the reproduction, about 46 s.
+      - The supervisor's bound is 225 minutes. The risk is a 1 s HITL wait per withheld decision:
+        withholding all 24 decisions in every replicate would cost 6.7 hours. That cost-probe
+        replicate withheld none. Not repaired; recorded so that an `exceeded_wall_clock` can be
+        attributed.
+    - **FINDING 111 (measured).** B-prime ran in `twin-regret`'s thin closure on numpy 2.4.6 (job
+      110363093430). The E5 job's full closure installs numpy 1.26.4 last (slow-selection job
+      120876556968's log), and numpy promises no Generator stream across versions. So the record's
+      physics digest names a tree and does not show that the tree reproduces B-prime. The
+      behavioural check is `reproduction.json`, exact per arm in the E5 job, and `positive.json` in
+      the controls' thin closure. A non-reproduction is printed beside the headline, not hidden.
     - **FINDING 104 (read).**
       - In report mode, `uplift-truth.json` carries `registry_status: FAIL` beside
         `exit_code: 2` and `outcome: unavailable`.
@@ -3726,12 +3805,14 @@ data and scored against an external benchmark has no demonstrable value.
       asks for.
     - _Requirements: 7.1, 7.2, 7.14, 7.18_
 
-  - [~] 22.2 Declare the job that is the only place C60 can pass
+  - [x] 22.2 Declare the job that is the only place C60 can pass
     - discharge: truth-gates.yml::truth-gates ("Required-check declaration resolves to
       real jobs" and "Declared-blocking steps propagate their exit status")
-    - last-checked: run 40086235844 (SYNAPSE Truth Gates, sha d8aafe6) -- step 5 failed on C56 alone
-      (the README counts, as predicted), so steps 6-12 were skipped. Read again at P2.
-      - Both of this leaf's steps, 10 and 11, were skipped.
+    - **DISCHARGED: run 40095429848 (SYNAPSE Truth Gates, sha b3a98a8, 2026-10-24),
+      steps 10 and 11 `success`.** "Declared-blocking steps propagate their exit status"
+      read 455 steps, and "Required-check declaration resolves to real jobs" read 32
+      declared jobs.
+    - previously: last-checked run 40086235844 (sha d8aafe6) -- step 5 failed on C56 alone.
     - previously: last-checked run 38298457581 (sha ecf517b) -- pre-change.
     - **AUTHORED, SESSION 12.** `uplift-proof` is declared `all_steps` and filed as
       `ineligible/conditioned-off-pull-request` (conflict U).
@@ -4009,11 +4090,12 @@ data and scored against an external benchmark has no demonstrable value.
     execution diffs against it. Generation is therefore last, after every `@register` in both
     halves.
 
-  - [~] 24.1 Assign identifiers and complete the registrations
+  - [x] 24.1 Assign identifiers and complete the registrations
     - discharge: truth-gates.yml::truth-gates (the registry executes C76)
-    - last-checked: run 40086235844 (SYNAPSE Truth Gates, sha d8aafe6) -- step 5 failed on C56 alone
-      (the README counts, as predicted), so steps 6-12 were skipped. Read again at P2.
-      - Inside step 5: C76 registered and executed, `TOTAL=68 REGISTERED=68`.
+    - **DISCHARGED: run 40095429848 (SYNAPSE Truth Gates, sha b3a98a8, 2026-10-24),
+      all 12 steps `success`.** Step 5 executed C76 with `TOTAL=68 REGISTERED=68`. Steps 7
+      and 8 confirmed the README and CURRENT.md counts that the one added check moves.
+    - previously: last-checked run 40086235844 (sha d8aafe6) -- step 5 failed on C56 alone.
     - previously: last-checked run 38298457581 (sha ecf517b) -- pre-change.
     - **AUTHORED, SESSION 12.**
       - C76 is registered; the identifier was re-derived (the highest was C75).
@@ -4047,16 +4129,17 @@ data and scored against an external benchmark has no demonstrable value.
       non-goal).
     - _Requirements: 9.12_
 
-  - [~] 24.2 Regenerate the ledger, the gate surface and the README from one execution
+  - [x] 24.2 Regenerate the ledger, the gate surface and the README from one execution
     - discharge: regenerate-truth-docs.yml::regenerate (labelled, on the head carrying C76)
       -- its artifact committed unedited
-    - last-checked: run 40086253239 (SYNAPSE Regenerate Truth Docs, sha d8aafe6) -- `success`.
-      - It checked out `d8aafe6`, the head (finding 74's repair, measured).
-      - Its own `--stat`: README.md 2 lines, CURRENT.md 15 (8 in, 7 out). My byte diff of
-        the downloaded artifact against the commit agrees; GATE_SURFACE.md is
-        byte-identical.
-      - Committed UNEDITED at P2. truth-gates steps 7 and 8 at P2 are the confirmation
-        finding 51 says the skipped steps never gave.
+    - **DISCHARGED: regenerate-truth-docs run 40086253239 (sha d8aafe6) `success`, its
+      artifact committed unedited at `b3a98a8`, and steps 7 and 8 of
+      run 40095429848 (SYNAPSE Truth Gates, sha b3a98a8, 2026-10-24) `success`.**
+      They read `readme-gen: OK` at 56 PASS / 0 FAIL / 0 PARTIAL / 12 SKIP / 68 TOTAL, with
+      C56 SKIP in that nested execution, and `ledger-gen: OK` at 68 rows. Step 9 matched
+      GATE_SURFACE.md at 689 rows.
+    - previously: last-checked run 40086253239 (sha d8aafe6) -- the regeneration itself,
+      before its artifact was committed.
     - Session 12: `docs/state/GATE_SURFACE.md` was rewritten LOCALLY with
       `gate_surface --write`, a LOCAL gate. The ledger and the README cannot be,
       because `ledger_gen` and `readme_gen` are never run locally.
@@ -4345,15 +4428,16 @@ data and scored against an external benchmark has no demonstrable value.
       not. `ledger_gen` and `readme_gen` must never be run locally in any form (I-0).
     - _Requirements: 4.4, 4.5, 10.1, 11.7_
 
-  - [~] 26.5 Dispatch the second regeneration and commit its artifact unedited
+  - [x] 26.5 Dispatch the second regeneration and commit its artifact unedited
     - discharge: regenerate-truth-docs.yml::regenerate
-    - last-checked: run 40086253239 (SYNAPSE Regenerate Truth Docs, sha d8aafe6) -- `success`.
-      - It checked out `d8aafe6`, the head (finding 74's repair, measured).
-      - Its own `--stat`: README.md 2 lines, CURRENT.md 15 (8 in, 7 out). My byte diff of
-        the downloaded artifact against the commit agrees; GATE_SURFACE.md is
-        byte-identical.
-      - Committed UNEDITED at P2. truth-gates steps 7 and 8 at P2 are the confirmation
-        finding 51 says the skipped steps never gave.
+    - **DISCHARGED: regenerate-truth-docs run 40086253239 (sha d8aafe6) `success`, its
+      artifact committed unedited at `b3a98a8`, and steps 7 and 8 of
+      run 40095429848 (SYNAPSE Truth Gates, sha b3a98a8, 2026-10-24) `success`.**
+      They read `readme-gen: OK` at 56 PASS / 0 FAIL / 0 PARTIAL / 12 SKIP / 68 TOTAL, with
+      C56 SKIP in that nested execution, and `ledger-gen: OK` at 68 rows. Step 9 matched
+      GATE_SURFACE.md at 689 rows.
+    - previously: last-checked run 40086253239 (sha d8aafe6) -- the regeneration itself,
+      before its artifact was committed.
     - It is the regeneration this leaf owes: after `df0f3ff`'s swap, `readme_gen` ran
       before `ledger_gen`, so the projected C56 row reads PASS -- the fixed point.
     - Files: `docs/state/CURRENT.md`, `README.md`,
@@ -5761,6 +5845,69 @@ progress ledger; design reasoning is ADR-055.
       as at P1.
     - If all of that holds, P2 discharges 16.2, 19.4, 22.2, 24.1, 24.2 and 26.5. 16.7 keeps its
       second subject.
+    - **MEASURED at P2 (`b3a98a8`, 2026-10-24). Every prediction held but one.**
+      - Truth Gates run 40095429848: both jobs `success`, every step.
+        - Step 5 read `PASS=57 FAIL=0 PARTIAL=0 SKIP=11 TOTAL=68`.
+        - readme 56/0/0/12/68; ledger 68 rows; gate surface 689; workflow shape 455 steps;
+          required checks 32 jobs.
+        - The sweep read `pass`: 16 of 16 operators probed, 14 checks falsified,
+          `REGISTERED=68 EXCLUDED=54`, and `[PASS] C72`.
+      - CI run 40095429857: `quality-gates` `success`, with 20 of 20 doc claims and 1610 unit
+        tests passed. The shards and both partition proofs read as at P1 (141 files, 1364
+        selected); the slow selection passed 91.
+      - **MISS: attempt 1's `chromatic-color-gates` FAILED (finding 106). Attempt 2 passed on the
+        same sha.**
+      - Frontend CI run 40095429838 read as at P1: `audit-supply` failed (finding 105), and
+        `effectiveness-ratchet` and `fe-invariants` failed; 11 jobs succeeded. The other five
+        workflows succeeded.
+    - **FINDING 106 (measured flake; mechanism read, interleaving inferred).**
+      - Attempt 1 (job 120876557048) failed `npm run verify` with `SyntaxError: Unexpected end of
+        JSON input` at `design-system/color/tests/_load.mjs:9`, which `mutation.test.mjs` imports.
+      - Attempt 2 (job 120916343168) passed at the same sha. That run used Node 20, and this
+        branch has not changed `design-system/color` (`git diff origin/main...HEAD`, empty).
+      - Mechanism (read): INV-CLR-010 in `invariants.test.mjs` calls `build()`. `build()` rewrites
+        `dist/tokens.json` with `writeFileSync`, truncating it first. Meanwhile `_load.mjs` reads
+        that file at import time, in another vitest worker. A read that lands between the two
+        sees an empty file.
+      - Not repaired; it is ADR-025's owner's call. Options: write each artifact to a temporary
+        file and rename it into place, or give INV-CLR-010 its own output directory. The job is a
+        `candidates:` entry in `required-checks.yaml`, not a `required:` one.
+  - **SESSION 12 -- P3 PREDICTIONS, registered before the push.** Every number below was measured
+    or read unless it is marked otherwise. P3 carries:
+    - wave 2: agents B1, B2 and B3, with the E5 suite's code half, task 29.6,
+      `uplift.controls_run` and task 17.3;
+    - agent F's frontend failed-chunk state, FE-INV-025's enforcer and the move to Node 22.23;
+    - the committed B-prime record, steering G8, and this ledger edit.
+    - `ci.yml`:
+      - G5 file partition: `shard files 45/39/31/29 = 144; pytest universe = 144`.
+      - G5 selection: `shards selected 771/378/373/265 = 1787; unsharded selection = 1787`. This
+        is local collection, calibrated as at P1.
+      - `slow selection: 98 test(s) selected` (91, plus Property 97's five and Property 95's two),
+        all passing. None of the seven new slow tests was run locally. Their claims:
+        - under the harness, arm E's objective EQUALS regret's `run_single_arm` at three seeds:
+          exact float equality, both in the full closure;
+        - the real arm's 2-step closed loop counts every decision in exactly one bucket;
+        - the probe finds at least one pair for each of its three inputs.
+      - Shard 1/4 passes 771 inside 20 minutes (9.6 minutes at P2; the new files take 34 s at
+        `ci` locally). Shard 2/4 passes 377 and skips 1.
+      - `quality-gates` succeeds as at P2.
+      - `chromatic-color-gates` prints `node: v22.23.x`, `npm ci` installs, and the suite passes.
+        If finding 106's race recurs, it reads the same `SyntaxError`; that is not a Node 22
+        failure.
+    - `truth-gates.yml` reads as at P2, every count unchanged, and no byte of CURRENT.md or
+      README.md moves:
+      - step 5 reads `PASS=57 FAIL=0 PARTIAL=0 SKIP=11 TOTAL=68`;
+      - 689 surface rows, two renamed and none added;
+      - 455 steps;
+      - the sweep probes 16 of 16 and falsifies 14.
+    - Frontend CI:
+      - `build` prints `forbidden eager prefixes: deck-, map-, graph-, viz-, visx-` and passes on
+        the same five eager files P2 measured;
+      - `quality` passes, `LazyChunkBoundary.test.tsx`'s 12 tests among its tests;
+      - `fe-invariants` still FAILS on the same six `not_executed`. FE-INV-025 no longer reads
+        `[??] ... no out-of-suite enforcer is declared`, and the summary keeps `ATTESTED=60`;
+      - `audit-supply` fails on finding 105, and `effectiveness-ratchet` fails by design.
+    - If that holds, P3's harvest moves 17.3 and 29.6 to `[x]` and discharges 22.1's CI subject.
 
   - [x] 29.1 Deferral is a terminal state the census reports
     - discharge: ci.yml::uplift-verify fast shard 3/4 (tests/verify a-o)
@@ -5909,7 +6056,45 @@ progress ledger; design reasoning is ADR-055.
       and mutually exclusive.
     - _Requirements: 7.19_
 
-  - [ ] 29.6 Forward what the world rewards, apply recommendations, count dispatch, probe the pathway
+  - [~] 29.6 Forward what the world rewards, apply recommendations, count dispatch, probe the pathway
+    - discharge: ci.yml::uplift-verify fast shard 1/4 (Property 95's fast clauses and the two
+      consensus-arm unit files) and the slow selection (Property 95's two slow tests)
+    - last-checked: run 40095429857 (SYNAPSE CI, sha b3a98a8) -- PRE-CHANGE: the subject
+      lands at P3.
+    - **AUTHORED, SESSION 12 (wave 2, agent B2).**
+      - The consensus request carries on-order stock, inventory position, demand to date,
+        supplier lead-time history, `sku_supplier` and the start weekday. Every mapping is
+        sorted (I-13).
+      - Each decision lands in exactly one bucket, by the precedence blocked >
+        untranslatable > withheld > dispatched.
+      - A recommendation withheld for confidence alone is applied (Q2=a). One withheld by a
+        guardrail BLOCK, a twin veto or an unreadable record is not: I-6 outranks Q2=a.
+      - `ConsensusArm` is `RunScoped`, and each run's tally reaches its `ScenarioRun`.
+        `uplift/dispatch.py` summarises the tallies. Over zero decisions its rate is
+        `None` with a reason, never 0.
+      - The `send_a2a_request` import at `orchestrator/consensus/protocol.py:44` is now an
+        explicit re-export. That is a declaration repair: it cleared mypy's three
+        `attr-defined` errors in `consensus_arm.py` and the ignore they made unused.
+      - Property 95, `tests/uplift/test_information_pathway_probe.py`: 197 fast tests
+        (passed locally) and 2 slow (CI only).
+    - **FINDING 107 (read; resolved toward I-6).**
+      - `withheld_by=guardrail_violation` (protocol.py:962-964) marks four withholds alike:
+        a privacy BLOCK, a rider-shift REJECT, the service-level ESCALATE and the
+        confidence floor.
+      - `validate_decision` stops at its first failing rule. So a service-level failure
+        behind a confidence failure never reaches the record.
+      - The arm re-runs the real engine at floor 0.0 on a deep copy to separate them.
+        Whatever it cannot separate counts `guardrail_blocked` and applies nothing.
+    - **FINDING 108 (read; consequence inferred).**
+      - No agent reads any newly forwarded key. The Inventory Sentinel passes only
+        `sku_ids` and `store_id` to its pipeline (handler.py:63-65).
+      - That pipeline defaults every SKU to mean 10, std 3 and on hand 0
+        (pipeline.py:131-133).
+      - So the probe is expected to report all three inputs unresponsive. By R7.21 that is
+        a finding reported beside E5's number, and it never relabels that number.
+    - **FINDING 109 (read).** The slow probe writes its per-input counts under `tmp_path`,
+      and no job uploads that, so R7.21's "report how often" cannot be read from CI. Wave
+      3 moves the probe into the E5 job, beside `dispatch.json`.
     - Files: `uplift/consensus_arm.py`, `uplift/harness.py`,
       `tests/uplift/test_information_pathway_probe.py` (new; `@pytest.mark.slow`, Property 95)
     - Decisions 3=a and Q2=a (finding 68): the obligations are R7.20 and R7.21 as written, and

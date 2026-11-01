@@ -42,6 +42,10 @@ def _decision(selected_action: dict[str, Any], *, with_proposal: bool = True) ->
                 tier=DecisionTier.TIER_2,
             )
         )
+    # A dispatched decision, as `ConsensusProtocol._phase_execute` returns one: one execution
+    # confirmation per proposal. Task 29.6 made the arm require that evidence before it applies
+    # anything -- a decision recording neither a withheld nor an executed dispatch is counted
+    # `guardrail_blocked` -- so the double now carries what the real protocol always carries.
     return ConsensusDecision(
         decision_id=uuid4(),
         tier=DecisionTier.TIER_2,
@@ -51,6 +55,7 @@ def _decision(selected_action: dict[str, Any], *, with_proposal: bool = True) ->
         confidence=0.7,
         audit_trace=["tier=2"],
         phase_reached=4,
+        execution_confirmations=["acknowledged" for _ in proposals],
     )
 
 

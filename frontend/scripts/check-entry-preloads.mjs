@@ -10,21 +10,26 @@
 // default level, the one Vite's own build report uses), then the totals.
 //
 // Exits 1, naming the file and what pulls it in, when an eagerly loaded JS asset starts with
-// a forbidden prefix (`deck-`, `map-`, `graph-`): those chunks may load behind a lazy
-// boundary, never on the entry's critical path. Exits 1 too when there is nothing to judge --
-// no dist/index.html, no module script, an asset the document names that is not in dist/, or
-// a forbidden prefix that names no emitted chunk -- because an empty listing is not a pass
-// (I-7).
+// a forbidden prefix (`deck-`, `map-`, `graph-`, `viz-`, `visx-`): those chunks may load
+// behind a lazy boundary, never on the entry's critical path. Exits 1 too when there is
+// nothing to judge -- no dist/index.html, no module script, an asset the document names that
+// is not in dist/, or a forbidden prefix that names no emitted chunk -- because an empty
+// listing is not a pass (I-7).
 //
-// `viz-` and `visx-` are listed with their sizes but NOT forbidden, because no build has yet
-// shown "/" free of them. The last build read -- a local one of 2026-08-01, not a CI run --
+// `viz-` (recharts) and `visx-` were listed but not forbidden until a CI run's table showed
+// "/" free of them. The build read before that -- a local one of 2026-08-01, not a CI run --
 // loaded both eagerly: the entry imported `clsx` from `viz-*.js`, and Vite's preload helper
 // and three tslib helpers from `deck-*.js` (Rollup puts a manual chunk's static dependencies
 // into that chunk), while the then-eager Cockpit and Decision Detail rendered ParetoFrontier,
 // hence visx. vite.config.ts's `runtime` chunk now claims those shared modules and both
-// surfaces are route-split, so neither chunk is EXPECTED on the entry any more -- an
-// inference from the code, not a measurement. Forbid a prefix only after a CI run's table
-// shows that chunk absent.
+// surfaces are route-split. MEASURED on Frontend CI runs 38291036628 (sha 5c2f2b3) and
+// 38298457463 (sha ecf517b, job "Vite build + size budget"): the eager JS set was exactly
+// index, react-vendor, zod, query and runtime. So both prefixes are forbidden as of
+// 2026-10-24, and, like the other three, each must name a chunk the build emitted (step 0).
+//
+// What the verdict cannot see: it judges chunk FILE NAMES. A module of a heavy library's
+// sub-package that vite.config.ts's VENDOR_CHUNKS does not name, imported by the entry
+// alone, lands in the entry's own chunk, where no prefix rule reaches it.
 //
 // Not a byte budget: the sizes are printed for the reader and compared with nothing.
 // Node stdlib only; ASCII output.
@@ -34,10 +39,12 @@ import { dirname, posix, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { gzipSync } from "node:zlib";
 
-/** Chunk-name prefixes that must never be on the entry's critical path (FE-INV-025). */
-const FORBIDDEN_EAGER_PREFIXES = ["deck-", "map-", "graph-"];
-/** Printed beside the verdict so a reader sees the decision, not only the rule. */
-const LISTED_NOT_FORBIDDEN = ["viz-", "visx-"];
+/**
+ * Chunk-name prefixes that must never be on the entry's critical path (FE-INV-025), each of
+ * which must also name a chunk this build emitted (step 0). `viz-` and `visx-` joined on
+ * 2026-10-24, after the two CI runs cited in the header showed "/" free of them.
+ */
+const FORBIDDEN_EAGER_PREFIXES = ["deck-", "map-", "graph-", "viz-", "visx-"];
 
 const distDir = resolve(dirname(fileURLToPath(import.meta.url)), "..", "dist");
 const indexPath = resolve(distDir, "index.html");
@@ -237,10 +244,7 @@ console.log(
   `all listed: ${rows.length} file(s), raw ${allTotal.raw} B (${kib(allTotal.raw)} KiB), ` +
     `gzip ${allTotal.gzip} B (${kib(allTotal.gzip)} KiB)`,
 );
-console.log(
-  `forbidden eager prefixes: ${FORBIDDEN_EAGER_PREFIXES.join(", ")}; ` +
-    `listed, not forbidden: ${LISTED_NOT_FORBIDDEN.join(", ")}`,
-);
+console.log(`forbidden eager prefixes: ${FORBIDDEN_EAGER_PREFIXES.join(", ")}`);
 for (const note of notes) console.log(`note: ${note}`);
 
 for (const problem of problems) console.error(`FAIL: ${problem}`);

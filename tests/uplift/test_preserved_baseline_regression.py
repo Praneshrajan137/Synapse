@@ -778,9 +778,14 @@ def test_c60_verification_path_is_network_free(tmp_path, monkeypatch) -> None:
     evaluating run. Carried to the v2 artifact (decision-quality-proof tasks 15.1 and 29.4):
     the headline is the point of an interval on the committed objective whose low bound
     clears the materiality margin, so the stored verdict is the ``win`` the decision rule
-    re-derives, and the provenance declares every arm's role. The preserved claim is
-    unchanged: verification touches no socket, no paid client, and no real-data file.
+    re-derives, and the provenance declares every arm's role. Carried to task 17.3 (R6.7,
+    R6.9): the generating branch now also reads a Power_Report and digests its declared
+    source set, so the gate is handed a tree this test owns under ``tmp_path`` -- one stand-in
+    file per ``POWER_SOURCE_SET`` pattern and a report built over them -- and every one of
+    those reads stays under ``tmp_path``. The preserved claim is unchanged: verification
+    touches no socket, no paid client, and no real-data file.
     """
+    from digital_twin.simulation.policy import detection_probability
     from scripts.audit import uplift_truth
     from uplift.contract import interval_verdict, load_contract
     from uplift.harness import (
@@ -792,6 +797,13 @@ def test_c60_verification_path_is_network_free(tmp_path, monkeypatch) -> None:
         comparator_label,
     )
     from uplift.interval import INTERVAL_SEED, METHOD
+    from uplift.power import (
+        POWER_REPORT_PATH,
+        POWER_SOURCE_SET,
+        build_power_report,
+        write_power_report,
+    )
+    from uplift.tuned_static import TUNED_STATIC_ARM
     from uplift.uplift_floor import MIN_POWERED_REPLICATES, UPLIFT_FLOOR
 
     revision, run_id = "c0ffee", "run-4242"
@@ -815,6 +827,31 @@ def test_c60_verification_path_is_network_free(tmp_path, monkeypatch) -> None:
     )
     verdict = interval_verdict(interval.low, interval.high, margin=margin)
     assert verdict == "win", verdict
+
+    # The tree the gate's Power_Report rule reads (task 17.3). At a variance of 1.0 the derived
+    # requirement is far below INV-TW-002, so the replicate floor stays MIN_POWERED_REPLICATES
+    # and the artifact below meets it exactly.
+    tree = tmp_path / "power-tree"
+    for pattern in POWER_SOURCE_SET:
+        stand_in = tree / pattern.replace("*", "stand_in")
+        stand_in.parent.mkdir(parents=True, exist_ok=True)
+        stand_in.write_text(f"# stands in for {pattern}\n", encoding="utf-8")
+    write_power_report(
+        build_power_report(
+            root=tree,
+            source_set=POWER_SOURCE_SET,
+            source_run_id="run-power-fixture",
+            source_revision_sha="0" * 40,
+            replicates_per_arm=MIN_POWERED_REPLICATES,
+            observed_variance=1.0,
+            variance_source="a test fixture: no run measured this variance",
+            alpha=contract.alpha,
+            detection_probability=detection_probability(),
+            materiality_margin=margin,
+            comparator=TUNED_STATIC_ARM,
+        ),
+        tree / POWER_REPORT_PATH,
+    )
 
     artifact = tmp_path / "result.json"
     UpliftArtifact(
@@ -851,12 +888,12 @@ def test_c60_verification_path_is_network_free(tmp_path, monkeypatch) -> None:
     with _ZeroCostGuard() as guard:
         with redirect_stdout(io.StringIO()):
             exit_code = uplift_truth.run(
-                check=True, require_fresh_run=True, artifact=artifact
+                check=True, require_fresh_run=True, artifact=artifact, tree_root=tree
             )
 
     assert exit_code == uplift_truth.EXIT_PASS
-    # The gate reads its result artifact and nothing else: no dial at all, no paid
-    # client, no real-data file.
+    # The gate reads its result artifact, the Power_Report and the stand-in source set -- all
+    # under tmp_path -- and nothing else: no dial at all, no paid client, no real-data file.
     assert guard.network_attempts == []
     assert guard.paid_client_attempts == []
     assert guard.data_file_reads == []

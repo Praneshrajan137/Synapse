@@ -47,6 +47,13 @@ with no interval -- and each must be unavailable, never a pass.
 Every artifact is written under ``tmp_path``, so the repo's ``artifacts/uplift/result.json``
 path is never read or written. The property is pure and fast: no twin, no arm, no socket, $0.
 
+**Carried to task 17.3 (R6.7, R6.9).** The generating branch now publishes only beside a
+Power_Report describing the revision under measurement, so every ``run`` names a tree this file
+owns -- one stand-in file per declared source pattern, never the repository's -- whose report's
+derived requirement leaves the INV-TW-002 floor in force, and every case keeps the exit code it
+had. One more property walks the report states that refuse publication: an admitted, proven
+artifact is then the distinct unavailable code, never a pass.
+
 **Validates: Requirements 4.4, 4.5, 4.6**
 """
 from __future__ import annotations
@@ -60,6 +67,7 @@ from typing import TYPE_CHECKING, Any, Final
 from hypothesis import given
 from hypothesis import strategies as st
 
+from digital_twin.simulation.policy import detection_probability
 from scripts.audit import uplift_truth as gate
 from scripts.audit.uplift_truth import (
     EXIT_PASS,
@@ -79,9 +87,18 @@ from uplift.harness import (
     comparator_label,
 )
 from uplift.interval import INTERVAL_SEED, METHOD, Interval
+from uplift.power import (
+    POWER_REPORT_PATH,
+    POWER_SOURCE_SET,
+    build_power_report,
+    write_power_report,
+)
+from uplift.tuned_static import TUNED_STATIC_ARM
 from uplift.uplift_floor import MIN_POWERED_REPLICATES
 
 if TYPE_CHECKING:
+    import pytest
+
     from uplift.interfaces import ArmRole
 
 _EXIT_CODES = (EXIT_PASS, EXIT_REGRESSION, EXIT_UNAVAILABLE)
@@ -95,6 +112,46 @@ _RUN_ID = "run-20260101-01"
 _CONTRACT = load_contract()
 _MARGIN: Final[float] = _CONTRACT.materiality_margin
 _ARMS: Final[tuple[str, ...]] = ("baseline-0", DEFAULT_CONSENSUS_ARM)
+
+#: A variance whose derived replicate requirement exceeds every count ``_proven`` draws
+#: (``ceil(((z_alpha + z_beta) * 10 / margin) ** 2)``, about 4906 at the committed values), so a
+#: report built on it refuses a proven artifact under R6.9.
+_UNDER_REPLICATING_VARIANCE: Final[float] = 100.0
+
+
+def _power_tree(root: Path, *, variance: float = 1.0) -> Path:
+    """A tree this test owns whose Power_Report describes it (task 17.3, R6.7).
+
+    One stand-in file per ``POWER_SOURCE_SET`` pattern, so ``describes_revision`` digests this
+    tree and never the repository's, and a report built over it at ``variance``. At ``1.0`` the
+    derived requirement is about 50, below INV-TW-002, so the replicate floor stays
+    ``MIN_POWERED_REPLICATES`` (R6.16). Idempotent per ``root``: Hypothesis shares ``tmp_path``
+    across examples, so a root is built once, at the variance of its first call.
+    """
+    report = root / POWER_REPORT_PATH
+    if report.is_file():
+        return root
+    for pattern in POWER_SOURCE_SET:
+        stand_in = root / pattern.replace("*", "stand_in")
+        stand_in.parent.mkdir(parents=True, exist_ok=True)
+        stand_in.write_text(f"# stands in for {pattern}\n", encoding="utf-8")
+    write_power_report(
+        build_power_report(
+            root=root,
+            source_set=POWER_SOURCE_SET,
+            source_run_id="run-power-fixture",
+            source_revision_sha="0" * 40,
+            replicates_per_arm=MIN_POWERED_REPLICATES,
+            observed_variance=variance,
+            variance_source="a test fixture: no run measured this variance",
+            alpha=_CONTRACT.alpha,
+            detection_probability=detection_probability(),
+            materiality_margin=_MARGIN,
+            comparator=TUNED_STATIC_ARM,
+        ),
+        report,
+    )
+    return root
 
 
 # ---------------------------------------------------------------------------
@@ -373,7 +430,10 @@ _cases = st.one_of(_proven(), _not_proven(), _unreadable, _v2_refused)
 # ---------------------------------------------------------------------------
 @given(case=_cases)
 def test_c60_gate_exit_is_a_total_three_way_mapping(
-    case: _Case, tmp_path: Path, monkeypatch, capsys
+    case: _Case,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     """Property 15: pass / regression / distinct-unavailable, and never a false pass.
 
@@ -384,8 +444,9 @@ def test_c60_gate_exit_is_a_total_three_way_mapping(
 
     path = case.materialise(tmp_path)
     assert path != RESULT_ARTIFACT  # the repo's own artifact path is never touched
+    tree = _power_tree(tmp_path / "power-tree")
 
-    exit_code = gate.run(check=True, require_fresh_run=True, artifact=path)
+    exit_code = gate.run(check=True, require_fresh_run=True, artifact=path, tree_root=tree)
     out = capsys.readouterr().out
 
     # Totality: exactly one of the three declared codes, and the three are distinct.
@@ -428,3 +489,63 @@ def test_proof_grade_artifact_still_skips_outside_the_generating_job(
     assert not admission.admitted
     assert admission.proof is None
     assert gate.registry_status(admission, EXIT_UNAVAILABLE)[0] == "SKIP"
+
+
+# ---------------------------------------------------------------------------
+# Task 17.3 (R6.7, R6.9): no Power_Report describing the revision, no pass
+# ---------------------------------------------------------------------------
+_REPORT_STATES: Final[tuple[str, ...]] = ("absent", "superseded", "under-replicated")
+
+
+def _refusing_tree(root: Path, state: str) -> Path:
+    """A tree whose Power_Report refuses publication in exactly the named way."""
+    if state == "absent":
+        root.mkdir(parents=True)
+        return root
+    if state == "under-replicated":
+        return _power_tree(root, variance=_UNDER_REPLICATING_VARIANCE)
+    tree = _power_tree(root)
+    # Superseded: the instrument moved after its report was written.
+    (tree / POWER_SOURCE_SET[0].replace("*", "stand_in")).write_text(
+        "# the instrument moved after the report\n", encoding="utf-8"
+    )
+    return tree
+
+
+@given(case=_proven(), state=st.sampled_from(_REPORT_STATES))
+def test_a_proven_artifact_is_unavailable_while_no_power_report_licenses_it(
+    case: _Case,
+    state: str,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """Task 17.3: the exit that was a pass becomes the distinct unavailable code (R6.7, R6.9).
+
+    Metamorphic: the same artifact exits pass beside a report describing the revision, so the
+    report is the only thing that moved the code -- and the printed reason names which rule.
+    """
+    monkeypatch.setenv("SYNAPSE_REVISION", _REVISION)
+    monkeypatch.setenv("SYNAPSE_RUN_ID", _RUN_ID)
+    path = case.materialise(tmp_path)
+
+    licensed = gate.run(
+        check=True,
+        require_fresh_run=True,
+        artifact=path,
+        tree_root=_power_tree(tmp_path / "power-tree"),
+    )
+    capsys.readouterr()
+    refused = gate.run(
+        check=True,
+        require_fresh_run=True,
+        artifact=path,
+        tree_root=_refusing_tree(tmp_path / uuid.uuid4().hex, state),
+    )
+    out = capsys.readouterr().out
+
+    assert licensed == EXIT_PASS
+    assert refused == EXIT_UNAVAILABLE
+    assert refused not in (EXIT_PASS, EXIT_REGRESSION)
+    assert out.strip()
+    assert ("(R6.9)" if state == "under-replicated" else "(R6.7)") in out

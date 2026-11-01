@@ -40,19 +40,38 @@ protocol (``name`` + ``decide``): it maps each :class:`~uplift.interfaces.Observ
 to a ``decision_request`` dict, runs ``run_consensus`` on a per-scenario event loop,
 and translates the binding :class:`~synapse_common.models.ConsensusDecision` action
 into a :class:`~uplift.interfaces.PolicyAction` applied back into the twin.
+
+**decision-quality-proof task 29.6 (R7.20, R7.21, finding 68).** Every change is in this arm;
+no agent is touched (decision 3=a).
+
+* The request forwards what a planner knows and the world rewards -- on-order stock, inventory
+  position, demand to date, supplier lead-time history, the SKU-to-supplier map and the start
+  weekday -- every mapping in sorted key order (I-13). It used to be an on-hand snapshot.
+* :func:`classify_dispatch` puts each decision in exactly one of four buckets, by the precedence
+  blocked > untranslatable > withheld > dispatched. A recommendation withheld for confidence
+  alone is applied (decision Q2=a); one a hard guardrail, the Tier-4 twin, or an unreadable
+  record withheld is not, because I-6 outranks Q2=a and an ambiguity is never resolved toward
+  applying.
+* :class:`ConsensusArm` is run-scoped (:class:`~uplift.interfaces.RunScoped`): ``begin_run``
+  opens a tally and ``end_run`` returns the run's :class:`~uplift.interfaces.DecisionCounts`.
+* ``levers`` names what a suite applies. A binding action expressing a lever outside it is
+  untranslatable and applies nothing: executing part of a recommendation is not executing it.
 """
 from __future__ import annotations
 
 import asyncio
+import copy
 import dataclasses
 import inspect
-from typing import TYPE_CHECKING, Any, Awaitable, Callable, Mapping
+import math
+from typing import TYPE_CHECKING, Any, Awaitable, Callable, Final, Literal, Mapping
 from uuid import uuid4
 
 from synapse_common.a2a_sdk import A2AResponse
 
 from uplift.harness import DEFAULT_CONSENSUS_ARM
 from uplift.interfaces import (
+    DecisionCounts,
     Observation,
     PolicyAction,
     RoutingAssignment,
@@ -79,6 +98,49 @@ RequestBuilder = Callable[[Observation], "dict[str, Any]"]
 
 #: Translates a binding consensus decision (+ the observation) into a PolicyAction.
 ActionTranslator = Callable[["ConsensusDecision", Observation], PolicyAction]
+
+#: Every lever a :class:`~uplift.interfaces.PolicyAction` can carry, by the name a suite's lever
+#: set uses (task 29.6). :func:`build_consensus_arm`'s default, so an arm built without naming a
+#: lever set translates exactly what it translated before the set existed.
+ALL_LEVERS: Final[frozenset[str]] = frozenset({"reorder", "price", "routing", "disruption"})
+
+#: The bucket one decision lands in (R7.20). The names are
+#: :class:`~uplift.interfaces.DecisionCounts`'s fields, so a tally converts field for field.
+DispatchBucket = Literal[
+    "dispatched", "withheld_for_confidence", "guardrail_blocked", "untranslatable"
+]
+
+#: Every :data:`DispatchBucket`, in :class:`~uplift.interfaces.DecisionCounts` field order.
+DISPATCH_BUCKETS: Final[tuple[DispatchBucket, ...]] = (
+    "dispatched",
+    "withheld_for_confidence",
+    "guardrail_blocked",
+    "untranslatable",
+)
+
+#: The buckets whose binding recommendation reaches the twin. Q2=a adds the second; I-6 keeps
+#: ``guardrail_blocked`` out of it whatever Q2 says.
+_APPLIED_BUCKETS: Final[frozenset[str]] = frozenset({"dispatched", "withheld_for_confidence"})
+
+# The protocol's own audit vocabulary, restated because the protocol exports no constant for it.
+# `ConsensusProtocol._record_withheld_dispatch` is the protocol's ONLY withhold path and stamps
+# the first three into `audit_trace` (orchestrator/consensus/protocol.py:962-964); `_phase_execute`
+# is its only dispatch path and fills `execution_confirmations`, one entry per proposal.
+_WITHHELD_MARKER: Final[str] = "dispatch=withheld"
+_WITHHELD_BY_PREFIX: Final[str] = "withheld_by="
+_GUARDRAIL_WITHHOLD: Final[str] = "guardrail_violation"
+_TWIN_WITHHOLD: Final[str] = "twin_disagreement"
+_BINDING_SELECTED_PREFIX: Final[str] = "binding_selected="
+#: The context record `_ratify_and_dispatch` appends BEFORE it withholds or dispatches
+#: (protocol.py:869-887): `passed`, `violations`, `twin_veto`.
+_RATIFICATION_RECORD: Final[str] = "dispatch_ratification"
+#: Both confidence-floor violation strings begin with this: the engine's
+#: (orchestrator/guardrails/rules.py:462) and the protocol's pre-flight (protocol.py:848). A
+#: reworded message reads as "not the confidence floor", which fails toward NOT applying -- the
+#: direction I-6 requires.
+_CONFIDENCE_VIOLATION_PREFIX: Final[str] = "Confidence "
+#: A clip is the one violation that still passes (`validate_decision`'s own rule, rules.py:381).
+_CLIP_MARKER: Final[str] = "clipped"
 
 
 class ConsensusArmUnavailable(RuntimeError):
@@ -182,23 +244,49 @@ def observation_to_decision_request(obs: Observation) -> dict[str, Any]:
     routes the decision to Tier 4 so the real twin-verification phase engages. All
     values are plain JSON-safe primitives so the request round-trips through the
     protocol's canonical-JSON audit path unchanged.
+
+    **What the world rewards (task 29.6, R7.21, finding 68).** The request used to be an on-hand
+    snapshot: no stock in transit, no demand history, no supplier history. It now forwards all
+    five of the observation's task-13.1 fields -- ``on_order``, ``demand_to_date``,
+    ``supplier_lead_time_history``, ``sku_supplier``, ``start_weekday`` -- and
+    ``inventory_position``, which is ``on hand + on order`` per stocked SKU: the expression
+    ``tuned_static.py``, ``baselines/par_level_reorder.py`` and ``oracle_arm.py`` already use, a
+    SKU absent from ``on_order`` having nothing in transit. Every mapping is built in sorted key
+    order and ``sku_ids`` is sorted, so equal observations give byte-identical requests however
+    their mappings were assembled (I-13). ``start_weekday`` is ``None`` when demand has no weekly
+    shape: forwarded as unknown, never defaulted to a day. Whether an agent READS these keys is
+    the agents' business (decision 3=a); the pathway probe measures it (R7.21).
     """
     shocked = obs.active_shock is not None
+    skus = sorted(obs.inventory)
     request: dict[str, Any] = {
-        "sku_ids": list(obs.inventory.keys()),
-        "inventory": {sku: int(level) for sku, level in obs.inventory.items()},
-        "unit_costs": {sku: float(cost) for sku, cost in obs.unit_costs.items()},
+        "sku_ids": skus,
+        "inventory": {sku: int(obs.inventory[sku]) for sku in skus},
+        "unit_costs": {sku: float(obs.unit_costs[sku]) for sku in sorted(obs.unit_costs)},
         "sim_time": float(obs.sim_time),
         "delivery_count": int(obs.delivery_count),
         "spoilage_count": int(obs.spoilage_count),
         "stockout_count": int(obs.stockout_count),
         "disruption_active": shocked,
         "requires_twin_simulation": shocked,
+        "on_order": {sku: float(obs.on_order[sku]) for sku in sorted(obs.on_order)},
+        "inventory_position": {
+            sku: float(obs.inventory[sku]) + float(obs.on_order.get(sku, 0.0)) for sku in skus
+        },
+        "demand_to_date": {
+            sku: int(obs.demand_to_date[sku]) for sku in sorted(obs.demand_to_date)
+        },
+        "supplier_lead_time_history": {
+            supplier: [float(minutes) for minutes in obs.supplier_lead_time_history[supplier]]
+            for supplier in sorted(obs.supplier_lead_time_history)
+        },
+        "sku_supplier": {sku: str(obs.sku_supplier[sku]) for sku in sorted(obs.sku_supplier)},
+        "start_weekday": None if obs.start_weekday is None else int(obs.start_weekday),
     }
     if obs.active_shock is not None:
         request["shock"] = {
             key: float(val)
-            for key, val in dataclasses.asdict(obs.active_shock).items()
+            for key, val in sorted(dataclasses.asdict(obs.active_shock).items())
         }
     if obs.pending_order is not None:
         request["pending_order"] = {
@@ -220,6 +308,12 @@ _REORDER_MAP_KEYS = ("reorder_quantities", "order_quantities", "reorder", "quant
 _STORE_KEYS = ("store_id", "assigned_store", "selected_store")
 _DISRUPTION_KEYS = ("disruption_actions", "actions", "mitigations")
 
+#: The Inventory Sentinel proposes ``{"actions": [InventoryAction, ...]}``, and its own
+#: ``execute`` enacts exactly the entries whose ``action_type`` is ``"reorder"``
+#: (``agents/inventory_sentinel/a2a/handler.py::execute``), so those are what translate.
+_ACTION_LIST_KEY: Final[str] = "actions"
+_REORDER_ACTION_TYPE: Final[str] = "reorder"
+
 
 def _coerce_price(payload: Mapping[str, Any]) -> float | None:
     for key in _PRICE_KEYS:
@@ -227,6 +321,36 @@ def _coerce_price(payload: Mapping[str, Any]) -> float | None:
         if isinstance(value, (int, float)) and not isinstance(value, bool):
             return float(value)
     return None
+
+
+def _coerce_reorder_actions(value: Any) -> dict[str, float]:
+    """Per-SKU reorder quantities from an ``actions`` list, as the agent's own execute reads it.
+
+    Task 29.6. Before this, the list reached :func:`_coerce_disruption_actions` instead, which
+    stringified each reorder into a "disruption action" the harness never actuates -- so a
+    binding Inventory Sentinel reorder applied nothing. Entries for one SKU add, because the
+    agent enacts each one. A zero quantity is kept: "reorder nothing" is a recommendation and
+    keeps the lever expressed, and :func:`uplift.harness._apply_reorders` places no zero order.
+    Markdown and transfer entries, negative and non-finite quantities, are what the agent does
+    not enact either, so they translate to nothing.
+    """
+    if not isinstance(value, (list, tuple)):
+        return {}
+    out: dict[str, float] = {}
+    for item in value:
+        if not isinstance(item, Mapping) or item.get("action_type") != _REORDER_ACTION_TYPE:
+            continue
+        sku = item.get("sku_id")
+        qty = item.get("quantity")
+        if not isinstance(sku, str) or not sku:
+            continue
+        if isinstance(qty, bool) or not isinstance(qty, (int, float)):
+            continue
+        quantity = float(qty)
+        if not math.isfinite(quantity) or quantity < 0.0:
+            continue
+        out[sku] = out.get(sku, 0.0) + quantity
+    return out
 
 
 def _coerce_reorder_quantities(payload: Mapping[str, Any]) -> dict[str, float]:
@@ -239,6 +363,9 @@ def _coerce_reorder_quantities(payload: Mapping[str, Any]) -> dict[str, float]:
                     out[str(sku)] = float(qty)
             if out:
                 return out
+    listed = _coerce_reorder_actions(payload.get(_ACTION_LIST_KEY))
+    if listed:
+        return listed
     # Single (sku_id, quantity) shape used by InventoryAction-style payloads.
     sku = payload.get("sku_id")
     qty = payload.get("quantity", payload.get("reorder_qty"))
@@ -248,10 +375,19 @@ def _coerce_reorder_quantities(payload: Mapping[str, Any]) -> dict[str, float]:
 
 
 def _coerce_disruption_actions(payload: Mapping[str, Any]) -> frozenset[str]:
+    """Named disruption actions. A name is a non-empty string; a dict is not a name.
+
+    Task 29.6: the stringified-dict reading (``str(item)`` over any list) turned the Inventory
+    Sentinel's reorder list into disruption actions, so a key whose list holds no name now
+    yields nothing and the next key is read.
+    """
     for key in _DISRUPTION_KEYS:
         value = payload.get(key)
         if isinstance(value, (list, tuple, set, frozenset)):
-            return frozenset(str(item) for item in value)
+            names = frozenset(item for item in value if isinstance(item, str) and item)
+            if names:
+                return names
+            continue
         if isinstance(value, str) and value:
             return frozenset({value})
     return frozenset()
@@ -293,6 +429,272 @@ def consensus_decision_to_policy_action(
     )
 
 
+def expressed_levers(action: PolicyAction) -> frozenset[str]:
+    """The levers ``action`` sets, by :data:`ALL_LEVERS` name; a neutral lever is not expressed.
+
+    A reorder map whose quantities are all zero IS expressed: it says "order nothing", which is
+    a recommendation, not the absence of one.
+    """
+    named: set[str] = set()
+    if action.reorder_quantities:
+        named.add("reorder")
+    if action.price is not None:
+        named.add("price")
+    if action.routing_assignment is not None:
+        named.add("routing")
+    if action.disruption_actions:
+        named.add("disruption")
+    return frozenset(named)
+
+
+def binding_agent_of(decision: ConsensusDecision) -> str | None:
+    """The agent whose proposal bound, or ``None`` when the decision cannot name one.
+
+    The full path stamps ``binding_selected=<agent>``; the fast path binds the highest-utility
+    proposal, whose payload IS the selected action, so the first proposal carrying it is named.
+    """
+    for line in decision.audit_trace:
+        if line.startswith(_BINDING_SELECTED_PREFIX):
+            return line[len(_BINDING_SELECTED_PREFIX) :]
+    for proposal in decision.proposals:
+        if proposal.payload == decision.selected_action:
+            return str(proposal.agent_name)
+    return None
+
+
+# ---------------------------------------------------------------------------
+# Dispatch classification (R7.20, task 29.6)
+# ---------------------------------------------------------------------------
+@dataclasses.dataclass(frozen=True)
+class DispatchClassification:
+    """The one bucket a decision lands in, and why. :attr:`applies` is its consequence."""
+
+    bucket: DispatchBucket
+    reason: str
+
+    def __post_init__(self) -> None:
+        if self.bucket not in DISPATCH_BUCKETS:
+            raise ValueError(
+                f"bucket {self.bucket!r} is not one of {list(DISPATCH_BUCKETS)}"
+            )
+        if not self.reason.strip():
+            raise ValueError("a dispatch classification must state why it holds")
+
+    @property
+    def applies(self) -> bool:
+        """Whether the binding recommendation reaches the twin (dispatched, or withheld for
+        confidence alone); a blocked or untranslatable decision applies nothing."""
+        return self.bucket in _APPLIED_BUCKETS
+
+
+def _withheld_by(decision: ConsensusDecision) -> tuple[str, ...]:
+    return tuple(
+        line[len(_WITHHELD_BY_PREFIX) :]
+        for line in decision.audit_trace
+        if line.startswith(_WITHHELD_BY_PREFIX)
+    )
+
+
+def _is_withheld(decision: ConsensusDecision) -> bool:
+    return _WITHHELD_MARKER in decision.audit_trace or bool(_withheld_by(decision))
+
+
+def _ratification_record(decision: ConsensusDecision) -> Mapping[str, Any] | None:
+    """The last ``dispatch_ratification`` record in the decision's append-only context."""
+    for message in reversed(decision.context_messages):
+        content = message.content
+        if message.source == "orchestrator" and content.get("type") == _RATIFICATION_RECORD:
+            return content
+    return None
+
+
+def _masked_guardrail_refusal(decision: ConsensusDecision) -> str | None:
+    """Re-run every hard guardrail except the confidence floor; the refusal found, or ``None``.
+
+    ``GuardrailEngine.validate_decision`` returns at the first failing blocking rule, and it
+    checks the confidence floor BEFORE the service-level minimum (rules.py:376-379). So a
+    decision recorded as failing confidence alone was never judged against the service level,
+    and applying it on that record would be a guess. The real engine is re-run, over a deep copy
+    (the price-cap rule clips the action it is handed in place), at a zero floor that no
+    confidence in ``[0, 1]`` fails. A rule that cannot be evaluated is a refusal, never a pass
+    (I-7).
+    """
+    from orchestrator.guardrails.rules import GuardrailEngine
+
+    probe = decision.model_copy(
+        update={"selected_action": copy.deepcopy(decision.selected_action)}
+    )
+    try:
+        passed, violations = GuardrailEngine(confidence_threshold=0.0).validate_decision(probe)
+    except (TypeError, ValueError) as exc:
+        return (
+            "the hard guardrails could not be evaluated on the selected action "
+            f"({type(exc).__name__}: {exc})"
+        )
+    if passed:
+        return None
+    return "a hard guardrail the confidence floor masked refuses it: " + "; ".join(violations)
+
+
+def _withhold_refusal(decision: ConsensusDecision) -> str | None:
+    """Why a withheld decision may not be applied, or ``None`` when confidence alone withheld it.
+
+    Settled by reading (task 29.6). ``withheld_by=guardrail_violation`` is stamped for a privacy
+    BLOCK, a rider-shift REJECT, the service-level ESCALATE and the confidence floor alike
+    (protocol.py:898), so the marker cannot tell them apart. What can is the
+    ``dispatch_ratification`` record's violation strings (protocol.py:869-887) plus a re-run of
+    the rules the engine's early return skipped. Every shape that is not exactly "the
+    confidence floor, plus clips at most" is refused -- never guessed toward applying.
+    """
+    markers = _withheld_by(decision)
+    marker_count = decision.audit_trace.count(_WITHHELD_MARKER)
+    if marker_count != 1 or len(markers) != 1:
+        return (
+            f"the audit trace carries {marker_count} withheld marker(s) and {len(markers)} "
+            "withheld_by marker(s); the protocol's one withhold path stamps exactly one of each"
+        )
+    if decision.execution_confirmations:
+        return "a withheld dispatch carries execution confirmations, so its record is incoherent"
+    (gate,) = markers
+    if gate == _TWIN_WITHHOLD:
+        return (
+            "the Tier-4 twin vetoed dispatch (ADR-054 D3); R7.20 licenses applying a "
+            "recommendation withheld for confidence, and a veto is not that"
+        )
+    if gate != _GUARDRAIL_WITHHOLD:
+        return f"dispatch was withheld by {gate!r}, which is not the confidence floor"
+    record = _ratification_record(decision)
+    if record is None:
+        return "no dispatch_ratification record names the violations that withheld dispatch"
+    if record.get("passed") is not False or record.get("twin_veto") is not False:
+        return "the ratification record does not describe a guardrail withhold and nothing else"
+    violations = record.get("violations")
+    if not isinstance(violations, list) or not all(isinstance(v, str) for v in violations):
+        return "the ratification record's violations are not a list of stated reasons"
+    if not any(v.startswith(_CONFIDENCE_VIOLATION_PREFIX) for v in violations):
+        return "no recorded violation names the confidence floor: " + "; ".join(violations)
+    unexplained = [
+        v
+        for v in violations
+        if not v.startswith(_CONFIDENCE_VIOLATION_PREFIX) and _CLIP_MARKER not in v.lower()
+    ]
+    if unexplained:
+        return "a recorded violation is not the confidence floor: " + "; ".join(unexplained)
+    return _masked_guardrail_refusal(decision)
+
+
+def classify_dispatch(
+    decision: ConsensusDecision,
+    translated: PolicyAction,
+    *,
+    levers: frozenset[str],
+) -> DispatchClassification:
+    """Put one decision in exactly one bucket: blocked > untranslatable > withheld > dispatched.
+
+    ``translated`` is the binding action in :class:`PolicyAction` vocabulary, before anything is
+    withheld from it. Pure: reads the decision and the translation, applies nothing.
+
+    * ``guardrail_blocked`` -- withheld by anything but the confidence floor alone (a hard
+      guardrail, the Tier-4 twin, an unreadable record), or neither withheld nor confirmed as
+      executed. With no evidence the protocol ratified it, the I-6-safe reading applies.
+    * ``untranslatable`` -- expresses no lever, or a lever outside ``levers``.
+    * ``withheld_for_confidence`` -- withheld for confidence alone (I-5); applied (Q2=a).
+    * ``dispatched`` -- ratified and handed to execution; applied.
+    """
+    withheld = _is_withheld(decision)
+    if withheld:
+        refusal = _withhold_refusal(decision)
+        if refusal is not None:
+            return DispatchClassification(
+                bucket="guardrail_blocked", reason=f"{refusal}; nothing is applied (I-6)"
+            )
+    elif not decision.execution_confirmations:
+        return DispatchClassification(
+            bucket="guardrail_blocked",
+            reason=(
+                "the protocol recorded neither a withheld dispatch nor an execution "
+                "confirmation, so nothing shows it ratified the action; nothing is applied (I-6)"
+            ),
+        )
+    expressed = expressed_levers(translated)
+    if not expressed:
+        return DispatchClassification(
+            bucket="untranslatable",
+            reason=(
+                f"the binding action expresses none of the levers {sorted(ALL_LEVERS)}; "
+                "nothing is applied"
+            ),
+        )
+    excluded = expressed - levers
+    if excluded:
+        return DispatchClassification(
+            bucket="untranslatable",
+            reason=(
+                f"the binding action expresses {sorted(excluded)}, outside this suite's lever "
+                f"set {sorted(levers)}; executing part of a recommendation is not executing it, "
+                "so nothing is applied"
+            ),
+        )
+    if withheld:
+        return DispatchClassification(
+            bucket="withheld_for_confidence",
+            reason=(
+                "dispatch was withheld for confidence alone (I-5); the binding recommendation "
+                "is applied, as a recommendation if executed (R7.20, decision Q2=a)"
+            ),
+        )
+    return DispatchClassification(
+        bucket="dispatched", reason="the protocol ratified the binding action and dispatched it"
+    )
+
+
+@dataclasses.dataclass(frozen=True)
+class ConsensusOutcome:
+    """One consultation of the consensus pathway: request, decision, translation and bucket.
+
+    Returned by :meth:`ConsensusArm.consult`, which counts nothing, so the pathway probe can
+    consult the arm without moving a run's tally. :meth:`ConsensusArm.decide` is ``consult``
+    plus the tally plus :attr:`action`.
+    """
+
+    request: Mapping[str, Any]
+    decision: ConsensusDecision
+    translated: PolicyAction
+    dispatch: DispatchClassification
+
+    @property
+    def action(self) -> PolicyAction:
+        """What reaches the twin: the translation when it applies, the neutral action if not."""
+        return self.translated if self.dispatch.applies else PolicyAction()
+
+    @property
+    def binding_agent(self) -> str | None:
+        """The agent whose proposal bound (:func:`binding_agent_of`)."""
+        return binding_agent_of(self.decision)
+
+
+def _checked_levers(levers: frozenset[str]) -> frozenset[str]:
+    """Refuse a lever set that names no lever, or a lever no :class:`PolicyAction` carries."""
+    if not isinstance(levers, frozenset):
+        raise TypeError(f"levers must be a frozenset of lever names, not {type(levers).__name__}")
+    unknown = sorted(str(name) for name in levers - ALL_LEVERS)
+    if unknown:
+        raise ValueError(
+            f"levers {unknown} are not PolicyAction levers; the admissible names are "
+            f"{sorted(ALL_LEVERS)}"
+        )
+    if not levers:
+        raise ValueError(
+            "an empty lever set makes every decision untranslatable: an arm that applies "
+            "nothing while it is named consensus"
+        )
+    return levers
+
+
+def _empty_tally() -> dict[DispatchBucket, int]:
+    return {bucket: 0 for bucket in DISPATCH_BUCKETS}
+
+
 # ---------------------------------------------------------------------------
 # The consensus arm
 # ---------------------------------------------------------------------------
@@ -304,6 +706,13 @@ class ConsensusArm:
     ``decision_request``, runs the real ``run_consensus`` on a fresh per-scenario
     event loop with the in-process transport installed, and translates the binding
     decision into a :class:`PolicyAction`.
+
+    **Run-scoped (task 29.6, R7.20).** The arm satisfies :class:`~uplift.interfaces.RunScoped`:
+    ``begin_run`` opens a fresh tally, every ``decide`` that returns lands in exactly one
+    :data:`DispatchBucket`, and ``end_run`` returns the run's
+    :class:`~uplift.interfaces.DecisionCounts`. A ``decide`` that raises counts nothing, because
+    the run it belongs to fails honestly (R2.7). ``levers`` names the levers this arm's suite
+    applies (:data:`ALL_LEVERS` by default, which is the behaviour before the set existed).
     """
 
     def __init__(
@@ -315,7 +724,9 @@ class ConsensusArm:
         request_builder: RequestBuilder = observation_to_decision_request,
         action_translator: ActionTranslator = consensus_decision_to_policy_action,
         name: str = "consensus",
+        levers: frozenset[str] = ALL_LEVERS,
     ) -> None:
+        checked = _checked_levers(levers)
         if transport is None:
             raise ConsensusArmUnavailable(
                 "ConsensusArm requires an in-process A2A transport; none was injected"
@@ -330,6 +741,14 @@ class ConsensusArm:
         self._transport = transport
         self._build_request = request_builder
         self._translate = action_translator
+        self._levers = checked
+        self._tally: dict[DispatchBucket, int] = _empty_tally()
+        self._run_seed: int | None = None
+
+    @property
+    def levers(self) -> frozenset[str]:
+        """The levers this arm's suite applies; a binding action outside them applies nothing."""
+        return self._levers
 
     @staticmethod
     def _resolve_protocol(
@@ -352,12 +771,12 @@ class ConsensusArm:
             raise ConsensusArmUnavailable("protocol_factory returned None")
         return built
 
-    def decide(self, obs: Observation) -> PolicyAction:
-        """Run real consensus for ``obs`` and return the binding decision's action.
+    def consult(self, obs: Observation) -> ConsensusOutcome:
+        """Run real consensus for ``obs`` and classify it, counting nothing.
 
-        On any failure to reach a decision — ``run_consensus`` raising, or consensus
-        completing without reaching a single agent — the failure is surfaced (raised),
-        so the harness records the run as failed (R2.7) and never applies a fabricated
+        On any failure to reach a decision -- ``run_consensus`` raising, or consensus
+        completing without reaching a single agent -- the failure is surfaced (raised), so
+        the harness records the run as failed (R2.7) and never applies a fabricated
         consensus decision.
         """
         decision_request = self._build_request(obs)
@@ -368,7 +787,47 @@ class ConsensusArm:
                 "consensus completed without any agent proposals; "
                 "in-process agent network unavailable"
             )
-        return self._translate(decision, obs)
+        translated = self._translate(decision, obs)
+        return ConsensusOutcome(
+            request=decision_request,
+            decision=decision,
+            translated=translated,
+            dispatch=classify_dispatch(decision, translated, levers=self._levers),
+        )
+
+    def decide(self, obs: Observation) -> PolicyAction:
+        """Run real consensus for ``obs``, count its bucket, and return what reaches the twin.
+
+        That is the binding recommendation when it was dispatched or withheld for confidence
+        alone (R7.20), and the neutral action when it was blocked or is untranslatable.
+        """
+        outcome = self.consult(obs)
+        self._tally[outcome.dispatch.bucket] += 1
+        return outcome.action
+
+    def begin_run(self, seed: int) -> None:
+        """Open run ``seed``'s tally: every count starts again at zero."""
+        if isinstance(seed, bool) or not isinstance(seed, int):
+            raise TypeError(f"a run seed is an int, not {type(seed).__name__}")
+        self._tally = _empty_tally()
+        self._run_seed = seed
+
+    def end_run(self) -> DecisionCounts:
+        """Close the open run and return its tally (R7.20).
+
+        Raises:
+            RuntimeError: if no run is open -- a tally attributed to no run is not a run's.
+        """
+        if self._run_seed is None:
+            raise RuntimeError("end_run() with no run open; begin_run(seed) opens one")
+        tally = self._tally
+        self._run_seed = None
+        return DecisionCounts(
+            dispatched=tally["dispatched"],
+            withheld_for_confidence=tally["withheld_for_confidence"],
+            guardrail_blocked=tally["guardrail_blocked"],
+            untranslatable=tally["untranslatable"],
+        )
 
     def _run_consensus(self, decision_request: dict[str, Any]) -> "ConsensusDecision":
         """Run ``run_consensus`` on a fresh event loop with the transport installed.
@@ -389,7 +848,7 @@ class ConsensusArm:
                 self._protocol.run_consensus(decision_request)
             )
         finally:
-            protocol_mod.send_a2a_request = original_transport  # type: ignore[assignment]
+            protocol_mod.send_a2a_request = original_transport
             asyncio.set_event_loop(None)
             loop.close()
 
@@ -669,6 +1128,7 @@ def build_consensus_arm(
     agent_handlers: Mapping[str, A2AHandler] | None = None,
     twin_handler: A2AHandler | None = None,
     protocol: "ConsensusProtocol | None" = None,
+    levers: frozenset[str] = ALL_LEVERS,
 ) -> ConsensusArm:
     """Assemble a real in-process consensus arm (R1.1, R1.2, R1.6).
 
@@ -689,6 +1149,9 @@ def build_consensus_arm(
             dispatch (:func:`build_twin_handler`).
         protocol: an already-configured protocol; defaults to
             :func:`build_consensus_protocol`.
+        levers: the levers the arm's suite applies (task 29.6). :data:`ALL_LEVERS` is the
+            behaviour before the set existed; the E5 suite passes ``frozenset({"reorder"})``,
+            and a binding action expressing any other lever is then untranslatable.
 
     Returns:
         A :class:`ConsensusArm` wired to the in-process network.
@@ -697,7 +1160,10 @@ def build_consensus_arm(
         ConsensusArmUnavailable: if the agent/twin network or the protocol cannot be
             assembled in this environment (R1.5). The caller records the affected runs
             as failed runs; no stub arm is fabricated and no decision is invented.
+        ValueError: if ``levers`` names no lever or one no ``PolicyAction`` carries --
+            refused before anything is assembled.
     """
+    checked = _checked_levers(levers)
     handlers = dict(agent_handlers) if agent_handlers is not None else build_agent_handlers()
     if not handlers:
         raise ConsensusArmUnavailable(
@@ -707,22 +1173,32 @@ def build_consensus_arm(
     twin = twin_handler if twin_handler is not None else build_twin_handler()
     transport = InProcessA2ATransport.from_agents(handlers, twin_handler=twin)
     resolved_protocol = protocol if protocol is not None else build_consensus_protocol()
-    return ConsensusArm(protocol=resolved_protocol, transport=transport, name=name)
+    return ConsensusArm(
+        protocol=resolved_protocol, transport=transport, name=name, levers=checked
+    )
 
 
 __all__ = [
+    "ALL_LEVERS",
     "A2AHandler",
     "ActionTranslator",
     "ConsensusArm",
     "ConsensusArmUnavailable",
+    "ConsensusOutcome",
     "DEFAULT_CONSENSUS_ARM",
+    "DISPATCH_BUCKETS",
+    "DispatchBucket",
+    "DispatchClassification",
     "InProcessA2ATransport",
     "RequestBuilder",
     "Transport",
+    "binding_agent_of",
     "build_agent_handlers",
     "build_consensus_arm",
     "build_consensus_protocol",
     "build_twin_handler",
+    "classify_dispatch",
     "consensus_decision_to_policy_action",
+    "expressed_levers",
     "observation_to_decision_request",
 ]

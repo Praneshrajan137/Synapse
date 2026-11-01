@@ -14,6 +14,13 @@ decision-quality-proof tasks 15.5 and 29.4 add three vocabulary items here, beca
 module every other one already shares: :data:`ArmRole` and :class:`ArmSpec` (an arm is
 registered WITH the role it plays in a contrast, never with a defaulted one), and
 :data:`HeadlineVerdict` (the four-valued interval verdict R7.19 declares).
+
+Session 12 (wave 2, the E5 suite) adds two more for the same reason: :class:`DecisionCounts`,
+R7.20's per-run tally of the consensus arm's binding decisions, and :class:`RunScoped`, the
+protocol a policy that keeps per-run state implements so the harness can hand each run's tally
+back on its :class:`ScenarioRun`. ``Scenario`` gains the world cell it runs in and
+``ScenarioRun`` the tally, both as LAST fields defaulting to "none", so every existing
+construction is unchanged.
 """
 from __future__ import annotations
 
@@ -24,6 +31,9 @@ from typing import TYPE_CHECKING, Final, Literal, Mapping, Protocol, runtime_che
 from digital_twin.simulation.monte_carlo import ShockParams
 
 if TYPE_CHECKING:  # avoid a runtime import cycle; fidelity.py is built in a later task
+    # `world.py` pulls in the YAML policy reader, which `engine.py` keeps out of a world-less
+    # import closure on purpose; an annotation needs none of it at run time.
+    from digital_twin.simulation.world import ResolvedWorld
     from uplift.fidelity import FidelityReport
     from uplift.interval import Interval
 
@@ -151,6 +161,83 @@ class DecisionPolicy(Protocol):
 
 
 # ---------------------------------------------------------------------------
+# Per-run decision tallies (R7.20, session 12) -- what a run-scoped policy reports
+# ---------------------------------------------------------------------------
+@dataclasses.dataclass(frozen=True)
+class DecisionCounts:
+    """R7.20's per-run tally of the consensus arm's binding decisions.
+
+    Four disjoint outcomes of one binding decision, so ``total`` counts each decision once. Under
+    decision Q2=a the first two reach the twin and the last two do not
+    (``uplift.consensus_arm._APPLIED_BUCKETS``):
+
+    * ``dispatched`` -- the recommendation was dispatched and reached the twin;
+    * ``withheld_for_confidence`` -- withheld by the confidence gate ALONE, and applied all the
+      same (Q2=a: applied unless BLOCKed); counted apart, as the gate would have escalated it;
+    * ``guardrail_blocked`` -- blocked, or withheld for any other reason, so nothing applied;
+    * ``untranslatable`` -- it named no lever this run may actuate, so nothing applied.
+
+    Construction refuses a negative count and anything that is not an ``int``. A ``bool`` is
+    refused too, although Python makes it one: ``True`` is a flag, and a tally that reads one as
+    a count has stopped counting decisions.
+    """
+
+    dispatched: int
+    withheld_for_confidence: int
+    guardrail_blocked: int
+    untranslatable: int
+
+    def __post_init__(self) -> None:
+        for name, value in (
+            ("dispatched", self.dispatched),
+            ("withheld_for_confidence", self.withheld_for_confidence),
+            ("guardrail_blocked", self.guardrail_blocked),
+            ("untranslatable", self.untranslatable),
+        ):
+            if isinstance(value, bool) or not isinstance(value, int):
+                raise ValueError(
+                    f"decision count {name}={value!r} is a {type(value).__name__}, not an int; "
+                    "a tally counts decisions, and neither a flag nor a fraction is a count"
+                )
+            if value < 0:
+                raise ValueError(f"decision count {name}={value!r} is negative")
+
+    @property
+    def total(self) -> int:
+        """Every binding decision the run made: the sum of the four outcomes."""
+        return (
+            self.dispatched
+            + self.withheld_for_confidence
+            + self.guardrail_blocked
+            + self.untranslatable
+        )
+
+
+@runtime_checkable
+class RunScoped(Protocol):
+    """A policy that keeps per-run state. The harness calls begin_run before the first
+    decide of a run and end_run after its last; end_run returns that run's tally.
+
+    **The pairing is total.** ``uplift.harness.run_closed_loop`` calls :meth:`end_run` exactly
+    once for every :meth:`begin_run` that returned -- INCLUDING a run that failed part-way, whose
+    tally it then discards (a failed run records ``decision_counts=None``). So an implementation
+    holds at most one open run at a time and may refuse a second :meth:`begin_run` while one is
+    open. A :meth:`begin_run` that raises opened nothing, and no :meth:`end_run` follows it.
+
+    Satisfied structurally: any object with both methods is ``RunScoped``, which is what lets a
+    wrapper (``uplift.policies.NamedPolicy``) be run-scoped exactly when what it wraps is.
+    """
+
+    def begin_run(self, seed: int) -> None:
+        """Open a run at twin ``seed`` with a fresh tally."""
+        ...
+
+    def end_run(self) -> DecisionCounts:
+        """Close the open run and return its tally."""
+        ...
+
+
+# ---------------------------------------------------------------------------
 # Arm registration -- every arm declares the role it plays (AD-16, task 15.5)
 # ---------------------------------------------------------------------------
 #: What an arm is FOR in a contrast. ``consensus`` is the subject a headline is about;
@@ -268,23 +355,50 @@ class Scenario:
     Identical ``seed`` ⇒ identical demand realization + ``shock`` across all arms
     (the attribution guarantee, R2.1/R2.5). ``cold_start`` empties initial
     inventory/freshness for the cold-start-city scenario.
+
+    ``world`` (session 12, LAST field) is the resolved world cell every arm's twin runs, passed
+    to ``SupplyChainSimulation`` by ``uplift.harness._build_twin``. ``None`` is the world before
+    structures 1 and 3, exactly as ``Observation``'s task-13.1 fields default to "no world", so
+    every scenario built before this field existed runs the twin it always ran.
     """
 
     name: str
     seed: int
     shock: ShockParams
     cold_start: bool = False
+    world: ResolvedWorld | None = None
 
 
 @dataclasses.dataclass(frozen=True)
 class ScenarioRun:
-    """The result of one (arm, seed) run. ``kpis`` is ``None`` when the run failed."""
+    """The result of one (arm, seed) run. ``kpis`` is ``None`` when the run failed.
+
+    ``decision_counts`` (session 12, LAST field) is the run's :class:`DecisionCounts` when the
+    arm is :class:`RunScoped`; ``None`` means the arm keeps no tally or the run failed. A failed
+    run carrying a tally is refused at construction: a failed run's decisions are not R7.20's
+    evidence, because the run they were made in has no outcome.
+    """
 
     arm: str
     seed: int
     kpis: KpiVector | None
     failed: bool
     error: str | None
+    decision_counts: DecisionCounts | None = None
+
+    def __post_init__(self) -> None:
+        if self.decision_counts is None:
+            return
+        if not isinstance(self.decision_counts, DecisionCounts):
+            raise ValueError(
+                f"run ({self.arm!r}, seed {self.seed}) carries decision_counts of type "
+                f"{type(self.decision_counts).__name__}, not DecisionCounts"
+            )
+        if self.failed:
+            raise ValueError(
+                f"run ({self.arm!r}, seed {self.seed}) failed and still carries a decision "
+                "tally; a failed run records decision_counts=None"
+            )
 
 
 @dataclasses.dataclass

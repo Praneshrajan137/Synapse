@@ -26,6 +26,18 @@ Three entry points (design "UpliftHarness (R2)"):
   every recorded run via :mod:`uplift.persistence` (R2.6) and returning a
   :class:`HarnessResult`.
 
+A fourth, added in session 12 for the controls: :meth:`UpliftHarness.run_arm_on_seeds` runs one
+registered arm with each GIVEN seed used as the twin seed itself (no :func:`replicate_seed`
+hash), refusing duplicate or negative seeds and keeping the under-power guard.
+
+**The world and the levers (session 12, the E5 suite).** A scenario's ``world`` reaches the twin
+through :func:`_build_twin`, and :attr:`LoopConfig.levers` decides which levers a run applies:
+``"all"`` is the historical loop, ``"reorders_only"`` applies ``reorder_quantities`` alone
+through :func:`_apply_reorders`, exactly as ``uplift.foresight._drive_arm`` does -- the physics
+checkpoint B-prime tuned and measured arm E under. A policy that is
+:class:`~uplift.interfaces.RunScoped` is told where each run begins and ends, and the tally it
+returns is attached to the completed :class:`~uplift.interfaces.ScenarioRun` (R7.20).
+
 **Attribution by construction (R2.1/R2.5, Property 6).** Replicate seeds are derived by
 :func:`replicate_seed` from *only* ``(scenario.seed, replicate_index)`` — never from the
 arm — so replicate ``i`` of every arm is fed the identical seeded demand realization and
@@ -62,6 +74,7 @@ import json
 import math
 import os
 import statistics
+from collections import Counter
 from concurrent.futures import ProcessPoolExecutor
 from datetime import datetime, timezone
 from pathlib import Path
@@ -89,12 +102,14 @@ from uplift.interfaces import (
     ArmResult,
     ArmRole,
     ArmSpec,
+    DecisionCounts,
     DecisionPolicy,
     HeadlineVerdict,
     KpiVector,
     Observation,
     Outcome,
     PolicyAction,
+    RunScoped,
     Scenario,
     ScenarioRun,
     UpliftResult,
@@ -152,6 +167,21 @@ _MAX_DEMAND_MULT: float = 2.0
 # ---------------------------------------------------------------------------
 # Loop configuration
 # ---------------------------------------------------------------------------
+#: Which of a ``PolicyAction``'s levers a closed loop applies (session 12).
+#:
+#: * ``"all"`` -- price (through demand elasticity) and reorders: the historical loop.
+#: * ``"reorders_only"`` -- ``reorder_quantities`` alone, through :func:`_apply_reorders`, exactly
+#:   as ``uplift.foresight._drive_arm`` applies them. A price the policy sets is never applied,
+#:   so the margin accumulator prices every delivery at the reference price. This is the physics
+#:   checkpoint B-prime tuned and measured arm E under; an arm measured against E under any other
+#:   physics would not be measured against the arm B-prime tuned.
+LoopLevers = Literal["all", "reorders_only"]
+
+#: Every admissible :data:`LoopLevers`, for runtime refusal: a ``Literal`` is not checked at run
+#: time, and a lever set read from a caller is exactly the value that must be checked.
+LOOP_LEVERS: Final[tuple[LoopLevers, ...]] = ("all", "reorders_only")
+
+
 @dataclasses.dataclass(frozen=True)
 class LoopConfig:
     """Closed-loop cadence: total horizon and the per-step advance duration (R2.2).
@@ -159,10 +189,21 @@ class LoopConfig:
     ``duration_hours`` is the scenario horizon; the loop advances in ``step_hours``
     increments, so it runs ``round(duration_hours / step_hours)`` observe → decide →
     apply → advance cycles. Both arms use the identical cadence (arm symmetry).
+
+    ``levers`` (session 12, LAST field) names which levers a run applies (:data:`LoopLevers`);
+    its default ``"all"`` is the loop every caller before it ran. An unknown value is refused.
     """
 
     duration_hours: float = 4.0
     step_hours: float = 1.0
+    levers: LoopLevers = "all"
+
+    def __post_init__(self) -> None:
+        if self.levers not in LOOP_LEVERS:
+            raise ValueError(
+                f"LoopConfig.levers={self.levers!r} is not one of {list(LOOP_LEVERS)}; a lever "
+                "set the loop does not implement would be read as one it does"
+            )
 
     @property
     def n_steps(self) -> int:
@@ -182,6 +223,31 @@ def replicate_seed(base_seed: int, index: int) -> int:
     """
     seq = np.random.SeedSequence([int(base_seed), int(index)])
     return int(seq.generate_state(1, dtype=np.uint32)[0])
+
+
+def _admissible_twin_seeds(seeds: Sequence[int]) -> list[int]:
+    """``seeds`` as a list, in order, or a refusal naming every defect of its kind.
+
+    A twin seed is a non-negative ``int`` (``SeedSequence`` refuses a negative one, and a
+    ``bool`` is a flag, not a seed), and no seed may appear twice: two runs at one seed are one
+    demand realisation, so counting both would report a replicate that was never drawn.
+    """
+    if isinstance(seeds, (str, bytes)):
+        raise ValueError(f"seeds must be a sequence of integers, not the string {seeds!r}")
+    ordered = list(seeds)
+    malformed = [seed for seed in ordered if isinstance(seed, bool) or not isinstance(seed, int)]
+    if malformed:
+        raise ValueError(f"twin seeds must be integers, got {malformed[:5]!r}")
+    negative = sorted({seed for seed in ordered if seed < 0})
+    if negative:
+        raise ValueError(f"twin seeds must be non-negative, got negative seed(s) {negative[:5]}")
+    repeated = sorted(seed for seed, count in Counter(ordered).items() if count > 1)
+    if repeated:
+        raise ValueError(
+            f"twin seed(s) {repeated[:5]} are given more than once; a repeated seed is one demand "
+            "realisation counted as two replicates"
+        )
+    return ordered
 
 
 # ---------------------------------------------------------------------------
@@ -213,6 +279,16 @@ def _build_twin(scenario: Scenario, seed: int) -> SupplyChainSimulation:
     multipliers are passed to the engine constructor, so the harness and the twin's
     own Monte Carlo path realise a shock identically, save that the lead-time multiplier also
     reaches ``set_policy`` for structure 3's ``place_order`` (inert without a world; see below).
+
+    **The scenario's world reaches the engine here (session 12).** ``scenario.world`` is passed
+    to ``SupplyChainSimulation`` as ``uplift.foresight._new_arm_engine`` passes it, so a scenario
+    built in a world cell runs that cell's structures in every arm; ``None`` is the world before
+    structures 1 and 3, the twin this function built before the field existed. With the neutral
+    shock this construction and ``_new_arm_engine``'s agree field for field -- the two
+    ``TwinConfig`` values stated here are ``TwinConfig``'s defaults, every multiplier is 1.0
+    (the engine's own neutral), and the restock threshold is the same committed read -- PROVIDED
+    no ``TW_ORDER_ARRIVAL_RATE`` or ``TW_PICK_PACK_MEAN_MIN`` is set in the environment: this
+    function pins both values, while ``_new_arm_engine``'s bare ``TwinConfig()`` reads them.
     """
     shock = scenario.shock
     config = TwinConfig(
@@ -224,6 +300,7 @@ def _build_twin(scenario: Scenario, seed: int) -> SupplyChainSimulation:
         seed=seed,
         failure_rate_multiplier=shock.failure_rate_multiplier,
         spoilage_rate_multiplier=shock.spoilage_rate_multiplier,
+        world=scenario.world,
     )
     sim.start()
     # ── decision-quality-proof task 9.6 (R5.36) ───────────────────────────────────
@@ -304,10 +381,11 @@ def _apply_reorders(sim: SupplyChainSimulation, reorder_quantities: Mapping[str,
     """Apply per-SKU reorder quantities to the twin via ``place_order`` (R2.2 mapping).
 
     decision-quality-proof task 13.1 (finding 66): orders go through ``place_order``, which IS
-    ``add_stock`` whenever structure 3 is off -- and it is off in every twin this harness builds
-    today, because ``_build_twin`` passes no world -- so every seeded expectation is unchanged.
-    With structure 3 on, the stock lands after its supplier's lead time instead of at once: the
-    delay lives where arms order, rather than in an engine loop the comparator switches off.
+    ``add_stock`` whenever structure 3 is off -- as it is in every twin built from a scenario
+    with no world (``Scenario.world is None``, every scenario before session 12) -- so every
+    seeded expectation is unchanged. With structure 3 on, the stock lands after its supplier's
+    lead time instead of at once: the delay lives where arms order, rather than in an engine
+    loop the comparator switches off.
 
     The annotation is the one ``mypy --strict`` had been asking for at this signature (it
     was one of the seven pre-existing ``uplift/`` errors, in a tree CI's mypy scope never
@@ -418,17 +496,34 @@ def run_closed_loop(
     ``uplift.regret.load_objective`` on first use in each process and returns the same object
     thereafter. This signature is unchanged on purpose: ``uplift/cost_probe.py`` calls it with
     five positional arguments.
+
+    **Session 12.** ``loop_config.levers`` gates what is applied: under ``"reorders_only"`` only
+    ``action.reorder_quantities`` reaches the twin, through :func:`_apply_reorders`, exactly as
+    ``uplift.foresight._drive_arm`` applies them, and a price is never applied. A policy that is
+    :class:`~uplift.interfaces.RunScoped` has ``begin_run(seed)`` called before the first
+    ``decide`` and ``end_run()`` after the last, and the tally ``end_run`` returns is attached to
+    the completed run. A run that fails after ``begin_run`` returned still has its run closed --
+    ``end_run`` is called and its tally discarded, so the pairing the protocol documents is
+    total -- and records ``decision_counts=None``; if that closing call raises too, its error is
+    appended to the run's recorded error rather than lost.
     """
+    scoped = policy if isinstance(policy, RunScoped) else None
+    run_open = False
     try:
         sim = _build_twin(scenario, seed)
         unit_costs = _derive_unit_costs()
         reference_price = _mean_unit_cost(unit_costs)
         active_shock = scenario.shock if scenario.shock != _NEUTRAL_SHOCK else None
         extractor = KpiExtractor(emission_factor, objective=committed_objective())
+        reorders_only = loop_config.levers == "reorders_only"
 
         current_price: float | None = None
         delivered_orders: list[DeliveredOrder] = []
         prev_delivered = int(sim.metrics.orders_delivered)
+
+        if scoped is not None:
+            scoped.begin_run(seed)
+            run_open = True
 
         for _ in range(loop_config.n_steps):
             obs = observe(sim, unit_costs=unit_costs, active_shock=active_shock)
@@ -436,8 +531,13 @@ def run_closed_loop(
             # observe -> decide (may raise -> honest failed run, R2.7)
             action = policy.decide(obs)
 
-            # decide -> apply (before advancing, closing the loop, R2.2)
-            current_price = _apply_action(sim, action, reference_price, current_price)
+            # decide -> apply (before advancing, closing the loop, R2.2). Under reorders-only
+            # the reorder path is `foresight._drive_arm`'s, call for call; no price is applied.
+            if reorders_only:
+                if action.reorder_quantities:
+                    _apply_reorders(sim, action.reorder_quantities)
+            else:
+                current_price = _apply_action(sim, action, reference_price, current_price)
 
             # apply -> advance one step
             sim.advance(loop_config.step_hours)
@@ -465,6 +565,13 @@ def run_closed_loop(
             # counter is already cumulative and adding to it per step would
             # double-count.
 
+        # The policy's last decision has been made: close its run now, so a refusal by the
+        # extractor below fails the run with the policy's run already closed.
+        decision_counts: DecisionCounts | None = None
+        if scoped is not None:
+            run_open = False
+            decision_counts = _closed_tally(scoped.end_run(), arm_name)
+
         applied = AppliedDecisions(
             delivered_orders=tuple(delivered_orders),
             unmet_demand_events=int(sim.metrics.unmet_demand_events),
@@ -472,15 +579,48 @@ def run_closed_loop(
             delivered_volume=float(sim.metrics.orders_delivered),
         )
         kpis = extractor.extract(sim.metrics, applied, sim_time_min=sim.sim_time_min)
-        return ScenarioRun(arm=arm_name, seed=seed, kpis=kpis, failed=False, error=None)
+        return ScenarioRun(
+            arm=arm_name,
+            seed=seed,
+            kpis=kpis,
+            failed=False,
+            error=None,
+            decision_counts=decision_counts,
+        )
     except Exception as exc:  # noqa: BLE001 — every failure is an honest failed run (R2.7)
+        error = f"{type(exc).__name__}: {exc}"
+        if run_open and scoped is not None:
+            error += _close_failed_run(scoped)
         return ScenarioRun(
             arm=arm_name,
             seed=seed,
             kpis=None,
             failed=True,
-            error=f"{type(exc).__name__}: {exc}",
+            error=error,
         )
+
+
+def _closed_tally(tally: object, arm_name: str) -> DecisionCounts:
+    """The tally a run-scoped policy's ``end_run`` returned, or a refusal that fails the run."""
+    if not isinstance(tally, DecisionCounts):
+        raise TypeError(
+            f"arm {arm_name!r} end_run returned {type(tally).__name__}, not DecisionCounts; a "
+            "tally of another shape is not R7.20's, so the run is failed rather than read"
+        )
+    return tally
+
+
+def _close_failed_run(scoped: RunScoped) -> str:
+    """Close a run that failed after ``begin_run``; its tally is discarded (R7.20).
+
+    Returns ``""`` when the run closed cleanly, or the closing error, worded to be appended to
+    the run's recorded error -- so a second failure is reported beside the first, never lost.
+    """
+    try:
+        scoped.end_run()
+    except Exception as exc:  # noqa: BLE001 — recorded on the failed run, never swallowed
+        return f"; end_run after the failure also raised {type(exc).__name__}: {exc}"
+    return ""
 
 
 def _scenario_worker(
@@ -550,6 +690,30 @@ def aggregate_arm(arm_name: str, runs: Sequence[ScenarioRun]) -> ArmResult:
         failed=failed_count,
         kpi_mean=kpi_mean,
         kpi_std=kpi_std,
+    )
+
+
+def decision_count_totals(runs: Iterable[ScenarioRun], *, arm: str) -> DecisionCounts | None:
+    """``arm``'s per-run decision tallies (R7.20) summed over its COMPLETED runs, or ``None``.
+
+    ``None`` -- never a zero tally -- when no completed run of ``arm`` carries one: an arm that
+    keeps no tally, or whose every run failed, has made no decision anyone can count, and a
+    stated zero would read as "made none". A failed run never carries a tally
+    (:class:`~uplift.interfaces.ScenarioRun` refuses one), so nothing here can mix a run that has
+    no outcome into the count.
+    """
+    tallies = [
+        run.decision_counts
+        for run in runs
+        if run.arm == arm and not run.failed and run.decision_counts is not None
+    ]
+    if not tallies:
+        return None
+    return DecisionCounts(
+        dispatched=sum(tally.dispatched for tally in tallies),
+        withheld_for_confidence=sum(tally.withheld_for_confidence for tally in tallies),
+        guardrail_blocked=sum(tally.guardrail_blocked for tally in tallies),
+        untranslatable=sum(tally.untranslatable for tally in tallies),
     )
 
 
@@ -714,6 +878,36 @@ class UpliftHarness:
         resolved_name = self._resolve_arm_name(policy, arm_name)
         return aggregate_arm(resolved_name, runs)
 
+    # -- one arm on explicit twin seeds (session 12) ---------------------------
+    def run_arm_on_seeds(
+        self,
+        scenario: Scenario,
+        spec: ArmSpec,
+        seeds: Sequence[int],
+        *,
+        parallel: bool = True,
+    ) -> list[ScenarioRun]:
+        """Run ONE registered arm with each given seed used AS the twin seed, in the given order.
+
+        No :func:`replicate_seed` hash is applied: seed ``s`` builds the twin at ``s``, which is
+        what lets a control name its seed ranges directly -- the shape
+        ``uplift.controls.SeedRange`` and ``uplift.tuning.seed_overlap_refusal`` reason in. Runs
+        come back in the order the seeds were given, unaggregated and unpersisted; the caller
+        owns both. Execution is the same parallel-with-sequential-fallback seam :meth:`run_arm`
+        uses, so a policy that cannot be pickled degrades to sequential exactly as it does there.
+
+        Refused BEFORE any twin is built (``ValueError``): an entry that is not an
+        :class:`~uplift.interfaces.ArmSpec`; a seed that is not an ``int`` (a ``bool`` included);
+        a negative seed; a seed given twice (one realisation would be counted as two replicates);
+        and fewer than ``MIN_SCENARIOS`` seeds, the INV-TW-002 guard :meth:`run_arm` applies.
+        """
+        registered_roles([spec])
+        ordered = _admissible_twin_seeds(seeds)
+        self._check_power(len(ordered))
+        return self._execute(
+            scenario, spec.policy, None, spec.name, ordered, parallel=parallel
+        )
+
     # -- full matrix --------------------------------------------------------
     def run(
         self,
@@ -833,18 +1027,37 @@ class UpliftHarness:
         self._check_power(n)
         resolved_name = self._resolve_arm_name(policy, arm_name)
         seeds = [replicate_seed(scenario.seed, index) for index in range(n)]
+        return self._execute(
+            scenario, policy, policy_factory, resolved_name, seeds, parallel=parallel
+        )
 
+    def _execute(
+        self,
+        scenario: Scenario,
+        policy: DecisionPolicy | None,
+        policy_factory: Callable[[], DecisionPolicy] | None,
+        arm_name: str,
+        seeds: Sequence[int],
+        *,
+        parallel: bool,
+    ) -> list[ScenarioRun]:
+        """Run the closed loop once per seed: in parallel, degrading honestly to sequential.
+
+        The one execution seam :meth:`_run_arm_runs` and :meth:`run_arm_on_seeds` share, so the
+        two cannot drift in how a seed becomes a run. A seed reaches :func:`run_closed_loop`
+        unchanged, so it is the twin seed.
+        """
         if parallel and self._max_workers > 1:
             try:
-                return self._run_parallel(scenario, policy, policy_factory, resolved_name, seeds)
+                return self._run_parallel(scenario, policy, policy_factory, arm_name, seeds)
             except Exception as exc:  # noqa: BLE001 — honest degrade to sequential
                 logger.warning(
                     "uplift_parallel_fallback",
-                    arm=resolved_name,
+                    arm=arm_name,
                     scenario=scenario.name,
                     error=f"{type(exc).__name__}: {exc}",
                 )
-        return self._run_sequential(scenario, policy, policy_factory, resolved_name, seeds)
+        return self._run_sequential(scenario, policy, policy_factory, arm_name, seeds)
 
     def _run_parallel(
         self,
@@ -2073,6 +2286,7 @@ __all__ = [
     "EXIT_NO_COMPLETED_RUN",
     "EXIT_SUCCESS",
     "KPI_FIELDS",
+    "LOOP_LEVERS",
     "NO_ESTIMATE_HEADLINE",
     "POOLED_COMPARATOR_PREFIX",
     "UNATTRIBUTED",
@@ -2081,6 +2295,7 @@ __all__ = [
     "ArtifactInterval",
     "HarnessResult",
     "LoopConfig",
+    "LoopLevers",
     "UpliftArtifact",
     "UpliftHarness",
     "UpliftProvenance",
@@ -2095,6 +2310,7 @@ __all__ = [
     "canonical_json",
     "comparator_label",
     "completed_run_count",
+    "decision_count_totals",
     "registered_roles",
     "replicate_seed",
     "resolve_provenance",

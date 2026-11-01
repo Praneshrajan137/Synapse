@@ -47,6 +47,16 @@ the published PASS count. ``artifacts/uplift/result.json`` is no longer in versi
 control and is git-ignored; an in-repo artifact that is *not* ignored is treated as
 version-controlled and rejected outright.
 
+Publication refused without a Power_Report (task 17.3, R6.7, R6.9)
+------------------------------------------------------------------
+In the generating job an artifact that parses is admitted only beside a Power_Report
+(``uplift/power.py``) at ``POWER_REPORT_PATH`` under the evaluated tree that is admissible,
+describes the revision under measurement (``describes_revision`` over ``POWER_SOURCE_SET``),
+and whose replicate floor (``powered_replicate_floor``) the artifact meets: an unpowered null
+is not evidence of absence, and a report on a superseded instrument licenses nothing. The tree
+is named by the caller through the required ``RunContext.tree_root``: the CLI names ``ROOT``,
+a test names a tree it owns, and ``None`` names none, which refuses publication.
+
 Run::
 
     python -m scripts.audit.uplift_truth                       # human summary
@@ -81,6 +91,7 @@ from uplift.uplift_floor import (  # noqa: E402
     FloorRatchetError,
     PoweredProof,
     is_proven_uplift,
+    powered_replicate_floor,
     ratchet_to_measured,
 )
 
@@ -226,6 +237,11 @@ class RunContext(BaseModel):
             set -- the seed set is not independently knowable by the gate, and it is the
             ``run_id`` equality check that makes the artifact same-run.
         expected_arms: As ``expected_seeds``, for the arm identifiers.
+        tree_root: The checkout this evaluation describes. The generating branch reads its
+            Power_Report at ``tree_root / POWER_REPORT_PATH`` and digests ``POWER_SOURCE_SET``
+            under it (R6.7, R6.9; task 17.3). REQUIRED, with no default, so no evaluation reads
+            the real tree unless its caller names it; ``None`` names no tree, and the
+            generating branch then refuses publication rather than guessing one.
     """
 
     model_config = ConfigDict(frozen=True, extra="forbid")
@@ -236,6 +252,7 @@ class RunContext(BaseModel):
     artifact_tracked: bool = False
     expected_seeds: tuple[int, ...] | None = None
     expected_arms: tuple[str, ...] | None = None
+    tree_root: Path | None
 
     @property
     def is_attributed(self) -> bool:
@@ -253,6 +270,7 @@ def resolve_run_context(
     generating_job: bool = False,
     artifact: Path = RESULT_ARTIFACT,
     tracked: bool | None = None,
+    tree_root: Path | None = None,
 ) -> RunContext:
     """Build a :class:`RunContext` from the environment, recording absence honestly.
 
@@ -260,12 +278,18 @@ def resolve_run_context(
     ``$SYNAPSE_RUN_ID`` then ``$GITHUB_RUN_ID``. When neither resolves the field records
     :data:`UNATTRIBUTED`, and an unattributed evaluating job can never satisfy R2.8 --
     which is the honest outcome for a run taken outside a CI job (I-7).
+
+    ``tree_root`` is passed through, and its ``None`` fails CLOSED: the generating branch then
+    refuses publication (R6.7) rather than reading a tree nobody named. It stays optional here
+    only because ``verify_claims``' C60 check calls this for the non-generating branch, which
+    never consults a Power_Report; :func:`run` requires it.
     """
     return RunContext(
         revision=_from_env(_REVISION_ENV_KEYS) or UNATTRIBUTED,
         run_id=_from_env(_RUN_ID_ENV_KEYS) or UNATTRIBUTED,
         generating_job=generating_job,
         artifact_tracked=artifact_is_version_controlled(artifact, tracked=tracked),
+        tree_root=tree_root,
     )
 
 
@@ -392,6 +416,74 @@ def _provenance_reasons(artifact: "UpliftArtifact", run: RunContext) -> tuple[st
     return tuple(reasons)
 
 
+def _power_report_reasons(artifact: UpliftArtifact, run: RunContext) -> tuple[str, ...]:
+    """Why no Power_Report licenses publishing this artifact's headline (R6.7, R6.9; task 17.3).
+
+    Empty iff ``run.tree_root`` holds, at ``POWER_REPORT_PATH``, an admissible Power_Report that
+    describes the revision under measurement (``describes_revision`` over ``POWER_SOURCE_SET``)
+    and whose replicate floor (``powered_replicate_floor``) the artifact meets. Otherwise exactly
+    one reason, naming which of the five failed. Imported here, as ``_read_artifact`` imports
+    the harness, so a reader that cannot load is a refusal rather than a crash (I-7).
+    """
+    try:
+        from uplift.power import (
+            POWER_REPORT_PATH,
+            POWER_SOURCE_SET,
+            PowerReportError,
+            describes_revision,
+            read_power_report,
+        )
+    except ImportError as exc:
+        return (
+            "the Power_Report reader could not be imported, so no Power_Report can be shown to "
+            f"describe the revision under measurement and publication is refused (R6.7): {exc}",
+        )
+    root = run.tree_root
+    if root is None:
+        return (
+            "this evaluation names no tree, so no Power_Report can be consulted: a headline "
+            "uplift is published only beside a Power_Report describing the revision under "
+            "measurement (R6.7)",
+        )
+    tree = Path(root)
+    try:
+        report = read_power_report(tree / POWER_REPORT_PATH)
+    except PowerReportError as exc:
+        return (
+            f"the Power_Report at {POWER_REPORT_PATH} is not an admissible Power_Report, so none "
+            f"describes the revision under measurement and publication is refused (R6.7): {exc}",
+        )
+    if report is None:
+        return (
+            f"no Power_Report exists at {POWER_REPORT_PATH}: an unpowered null is not evidence of "
+            "absence, so no headline uplift is published until a Power_Report describes the "
+            "revision under measurement (R6.7)",
+        )
+    try:
+        current = describes_revision(report, tree, POWER_SOURCE_SET)
+    except PowerReportError as exc:
+        return (
+            "the revision under measurement cannot be named, because its declared source set "
+            f"could not be read, so no Power_Report can be shown to describe it (R6.7): {exc}",
+        )
+    if not current:
+        return (
+            f"the Power_Report at {POWER_REPORT_PATH} describes harness revision "
+            f"{report.harness_revision}, a superseded instrument: a report on another revision "
+            "licenses no publication (R6.7)",
+        )
+    floor = powered_replicate_floor(report)
+    if artifact.replicates_per_arm < floor:
+        return (
+            f"the artifact records {artifact.replicates_per_arm} replicates per arm, below the "
+            f"{floor} the committed Power_Report requires (its derived requirement "
+            f"{report.derived_replicate_requirement}, the INV-TW-002 floor "
+            f"{MIN_POWERED_REPLICATES}): a derived requirement above the constant replaces it "
+            "(R6.9)",
+        )
+    return ()
+
+
 def admit(
     artifact: Path = RESULT_ARTIFACT,
     run: RunContext | None = None,
@@ -414,8 +506,13 @@ def admit(
     5. The provenance does not match the run performed in this job -> ``unavailable``
        (R2.8).
     6. The payload cannot evidence its own power at all -> ``unavailable`` (R2.2).
+    7. No admissible Power_Report under ``run.tree_root`` describes the revision under
+       measurement, or the artifact records fewer replicates than that report's floor ->
+       ``unavailable``, naming which (R6.7, R6.9; task 17.3). Appended AFTER every reason
+       4-6 gives, never instead of one, so no existing refusal is masked.
 
-    Anything surviving all six is ``admitted`` and carries the
+    Reasons 4 to 7 accumulate rather than short-circuit, so a rejected artifact names every
+    cause. Anything surviving all seven is ``admitted`` and carries the
     :class:`~uplift.uplift_floor.PoweredProof` :func:`verdict` derives from.
     """
     context = run if run is not None else resolve_run_context(artifact=artifact)
@@ -466,6 +563,8 @@ def admit(
             "the artifact cannot evidence its own power: no usable headline/replicate "
             "pair was recoverable from the payload (R2.2)",
         )
+    # Task 17.3 (R6.7, R6.9): after every existing refusal, never in place of one.
+    reasons += _power_report_reasons(parsed, context)
     return Admission(
         artifact_path=display,
         outcome="unavailable" if reasons else "admitted",
@@ -645,14 +744,21 @@ def run(
     require_fresh_run: bool = False,
     propose_floor: float | None = None,
     artifact: Path | None = None,
+    tree_root: Path,
 ) -> int:
     """Evaluate the gate and report. Returns the exit code when ``check`` is set.
 
     Without ``--check`` this is a reporting run and always returns :data:`EXIT_PASS`,
     matching the other audit gates' summary mode.
+
+    ``tree_root`` is REQUIRED (task 17.3): the checkout whose Power_Report the generating
+    branch consults. The CLI passes :data:`ROOT`; a test passes a tree it owns, so no test can
+    read the real tree by omission.
     """
     target = RESULT_ARTIFACT if artifact is None else Path(artifact)
-    context = resolve_run_context(generating_job=require_fresh_run, artifact=target)
+    context = resolve_run_context(
+        generating_job=require_fresh_run, artifact=target, tree_root=tree_root
+    )
     admission = admit(target, context)
     # A skip and an inadmissible artifact are both EXIT_UNAVAILABLE for the *step*: a
     # SKIP is not a PASS (I-7). The registry projection is what distinguishes them
@@ -726,6 +832,8 @@ if __name__ == "__main__":
             check=args.check,
             require_fresh_run=args.require_fresh_run,
             propose_floor=args.propose_floor,
+            # Task 17.3: the CLI is the one caller that names the real tree.
+            tree_root=ROOT,
         )
     )
 

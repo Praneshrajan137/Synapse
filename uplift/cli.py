@@ -40,6 +40,17 @@ Honesty invariants surfaced by this command:
   contract (:class:`~uplift.contract.MetricContractError`), or a comparator that cannot be
   resolved, exits with a non-zero status naming the input and prints **no** headline
   number.
+* **Two suites (session 12).** ``--suite canonical`` (the default) is everything above,
+  unchanged. ``--suite e5-primary`` is :mod:`uplift.e5_suite`: the consensus arm against arm E
+  of checkpoint B-prime in the primary world cell, unshocked, reorders only, at B-prime's 24 h
+  cadence. It reads the committed B-prime record (:mod:`uplift.bprime_record`), whose absence or
+  defect is a missing required input like a missing contract; it requires
+  ``--baseline-arm tuned_static`` and refuses ``--pooled-baseline``, ``--smoke``, fewer than
+  ``MIN_SCENARIOS`` replicates, and a cadence other than B-prime's -- each before any replicate
+  runs. Before its harness runs it re-measures B-prime's arms E and E' at B-prime's own seeds
+  and writes ``reproduction.json``; beside the headline it prints whether that reproduced
+  exactly, and the dispatch line R7.20 asks for, worded as "recommendations, if executed"
+  (Q2=a); and it writes ``dispatch.json`` beside the artifact.
 
 Cost / runtime (INV-TW-002 tradeoff). A real, fully-powered proof requires ``n >= 1000``
 completed scenarios per arm (:data:`digital_twin.simulation.monte_carlo.MIN_SCENARIOS`)
@@ -58,6 +69,8 @@ Run::
     python -m uplift.cli --n 2000                # explicit replicate count
     python -m uplift.cli --contract path.yaml    # alternate pre-registered contract
     python -m uplift.cli --smoke --baseline-arm Par_Level_Reorder   # one named comparator
+    python -m uplift.cli --full --suite e5-primary --baseline-arm tuned_static \\
+        --duration-hours 24                      # E5, exactly as uplift.yml runs it (CI only)
 """
 from __future__ import annotations
 
@@ -68,6 +81,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Final
 
 from digital_twin.simulation.monte_carlo import MIN_SCENARIOS
+from digital_twin.simulation.policy import PolicyUnavailableError
 
 from uplift.baselines import (
     Greedy_Routing,
@@ -75,8 +89,27 @@ from uplift.baselines import (
     Par_Level_Reorder,
     Static_Pricing,
 )
-from uplift.consensus_arm import ConsensusArmUnavailable, build_consensus_arm
+from uplift.bprime_record import (
+    BPRIME_ARTIFACT_PATH,
+    BPRIME_PROVENANCE_PATH,
+    BprimeRecordError,
+    read_bprime_record,
+)
+from uplift.consensus_arm import build_consensus_arm
 from uplift.contract import MetricContractError, load_contract
+from uplift.dispatch import summarise_dispatch, write_dispatch_report
+from uplift.e5_suite import (
+    E5_COMPARATOR,
+    E5_LOOP,
+    E5_REPRODUCED_ARMS,
+    E5_SUITE,
+    build_e5_arms,
+    e5_replicate_seeds,
+    e5_scenario,
+    measure_bprime_reproduction,
+    production_arm_cost,
+    write_bprime_reproduction,
+)
 from uplift.harness import (
     DEFAULT_CONSENSUS_ARM,
     EXIT_SUCCESS,
@@ -99,17 +132,21 @@ from uplift.interfaces import (
     ArmResult,
     ArmSpec,
     DecisionPolicy,
-    Observation,
-    PolicyAction,
     Scenario,
     ScenarioRun,
     UpliftResult,
 )
 from uplift.kpi import DEFAULT_EMISSION_FACTOR_KG_PER_DELIVERY
+from uplift.policies import UnavailableConsensusArm
 from uplift.scenarios import adversarial_suite
+from uplift.tuning import TuningUnavailableError
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
+
+    from uplift.contract import MetricContract
+    from uplift.dispatch import DispatchReport
+    from uplift.e5_suite import BprimeReproduction
 
 # ---------------------------------------------------------------------------
 # Version-controlled constants
@@ -149,11 +186,33 @@ CANONICAL_ARM_NAMES: Final[tuple[str, ...]] = (
     "no_op_disruption",
 )
 
+#: ``--suite`` values. ``canonical`` is the adversarial five-arm suite this command has always
+#: run; ``e5-primary`` is :mod:`uplift.e5_suite` (session 12).
+CANONICAL_SUITE: Final[str] = "canonical"
+SUITES: Final[tuple[str, ...]] = (CANONICAL_SUITE, E5_SUITE)
+
+#: The dispatch record the E5 suite writes beside the result artifact (R7.20).
+DISPATCH_FILENAME: Final[str] = "dispatch.json"
+
+#: The record of B-prime's comparator re-measured in this environment, written beside the result
+#: artifact BEFORE the E5 harness runs (API2 amendment 2).
+REPRODUCTION_FILENAME: Final[str] = "reproduction.json"
+
+#: The repository root the committed B-prime record is read under. A module global, read at
+#: call time, so a test can point the E5 suite at a tree with no record (or a fixture record)
+#: and prove every refusal before a replicate runs.
+REPO_ROOT: Final[Path] = Path(__file__).resolve().parents[1]
+
 # The public surface: the constants and the comparator vocabulary callers and tests name.
 __all__ = [
     "CANONICAL_ARM_NAMES",
+    "CANONICAL_SUITE",
+    "DISPATCH_FILENAME",
     "EXIT_MISSING_INPUT",
     "NOISE_TOLERANCE_PP",
+    "REPO_ROOT",
+    "REPRODUCTION_FILENAME",
+    "SUITES",
     "ControlSpec",
     "build_arms",
     "main",
@@ -164,25 +223,10 @@ __all__ = [
 # ---------------------------------------------------------------------------
 # Consensus arm (honest-failure path)
 # ---------------------------------------------------------------------------
-class _UnavailableConsensusArm:
-    """A stand-in consensus arm whose every decision fails honestly (R2.7, R7.6).
-
-    The real :class:`~uplift.consensus_arm.ConsensusArm` needs an injected in-process
-    consensus protocol + A2A transport (the full eight-agent + twin network), which a
-    plain ``$0`` environment cannot stand up. Rather than crash the whole run or
-    fabricate a decision, the CLI substitutes this arm under the canonical consensus
-    name: each :meth:`decide` raises :class:`ConsensusArmUnavailable`, so the harness
-    records every consensus run as a *failed* run, excludes it from aggregation, and
-    continues -- exactly the honest-failure contract. The assembled result is then marked
-    incomplete and the consensus-vs-baseline headline is not credited to SYNAPSE.
-    """
-
-    def __init__(self, reason: str, name: str = DEFAULT_CONSENSUS_ARM) -> None:
-        self.name = name
-        self._reason = reason
-
-    def decide(self, obs: Observation) -> PolicyAction:  # noqa: ARG002 — always fails
-        raise ConsensusArmUnavailable(self._reason)
+#: The stand-in consensus arm whose every decision fails honestly (R2.7, R7.6). It lives in
+#: :mod:`uplift.policies` from session 12, so the E5 suite degrades exactly as this suite does
+#: without importing the CLI; the private name is kept because tests and two specs cite it.
+_UnavailableConsensusArm = UnavailableConsensusArm
 
 
 def _build_consensus_arm() -> DecisionPolicy:
@@ -502,6 +546,17 @@ def _build_parser() -> argparse.ArgumentParser:
             "(R6.14). Mutually exclusive with --pooled-baseline."
         ),
     )
+    parser.add_argument(
+        "--suite",
+        choices=SUITES,
+        default=CANONICAL_SUITE,
+        help=(
+            f"Which experiment to run (default: {CANONICAL_SUITE}, the adversarial five-arm "
+            f"suite). {E5_SUITE}: the consensus arm against B-prime's arm E in the primary "
+            f"cell, unshocked; requires the committed B-prime record, --baseline-arm "
+            f"{E5_COMPARATOR} and a powered replicate count, and runs B-prime's 24 h cadence."
+        ),
+    )
     return parser
 
 
@@ -536,6 +591,284 @@ def _resolve_run_config(args: argparse.Namespace) -> tuple[int, LoopConfig, bool
     return n, loop, reduced
 
 
+def _print_disclosures(result: UpliftResult, *, reduced: bool) -> None:
+    """The honesty disclosures every suite prints after its headline (R7.5, R7.6).
+
+    One copy for both suites, so the canonical output is byte-for-byte what it was and the E5
+    output cannot omit a line the canonical one carries.
+    """
+    print()
+    print(
+        f"applied noise tolerance: <= {NOISE_TOLERANCE_PP:.1f} percentage point "
+        "(version-controlled reproduction tolerance, committed for the version-1 fill-rate "
+        "headline; the headline above is in objective units)"
+    )
+    print("data provenance: synthetic seed-generated data only (no real/scraped/paid data)")
+    print("external services: none -- fully in-process (no external paid service)")
+    if reduced:
+        print(
+            "note: reduced-cost smoke run -- a fully-powered proof requires "
+            f"n >= {MIN_SCENARIOS} per arm (--full)."
+        )
+    if result.incomplete:
+        print(
+            "note: result marked INCOMPLETE -- the consensus arm or a comparator arm could "
+            "not complete every scenario; no incomplete pair is credited to SYNAPSE."
+        )
+    elif result.run_incomplete:
+        print(
+            "note: an arm outside this contrast failed a replicate (run_incomplete); the "
+            "contrast itself completed, so its verdict is unaffected."
+        )
+    if result.all_wins_warning:
+        print(
+            "self-scrutiny warning: every classified pair is SYNAPSE_WINS -- scrutinize "
+            "for measurement bias before trusting this result."
+        )
+
+
+# ---------------------------------------------------------------------------
+# The E5 suite (session 12; task 22.1's code half)
+# ---------------------------------------------------------------------------
+def _e5_refusals(args: argparse.Namespace, *, n: int, reduced: bool) -> list[str]:
+    """Every flag the E5 suite refuses, each named with why; empty when all are admissible.
+
+    E5 exists to be powered, so it never runs reduced; it is one named contrast against arm E
+    (R6.14), so it neither pools nor names another comparator; and arm E was tuned at B-prime's
+    cadence and horizon, so neither may move. ``--duration-hours`` may be omitted -- E5 runs
+    :data:`~uplift.e5_suite.E5_LOOP` -- but a different value is refused rather than ignored.
+    """
+    reasons: list[str] = []
+    if args.smoke:
+        reasons.append("--smoke: the E5 suite exists to be powered and never runs reduced")
+    elif reduced:
+        reasons.append(
+            f"{n} replicates per arm is below the INV-TW-002 floor {MIN_SCENARIOS}: pass --full "
+            f"or --n >= {MIN_SCENARIOS}; the E5 suite never runs reduced"
+        )
+    if args.pooled_baseline:
+        reasons.append(
+            "--pooled-baseline: E5 is one named contrast against arm E, never a pool (R6.14)"
+        )
+    elif args.baseline_arm != E5_COMPARATOR:
+        reasons.append(
+            f"--baseline-arm {args.baseline_arm!r}: E5 requires --baseline-arm {E5_COMPARATOR}"
+        )
+    if args.step_hours != E5_LOOP.step_hours:
+        reasons.append(
+            f"--step-hours {args.step_hours!r}: E5 runs at the cadence B-prime tuned arm E at, "
+            f"{E5_LOOP.step_hours!r} h"
+        )
+    if args.duration_hours is not None and args.duration_hours != E5_LOOP.duration_hours:
+        reasons.append(
+            f"--duration-hours {args.duration_hours!r}: E5 runs the horizon B-prime tuned arm E "
+            f"over, {E5_LOOP.duration_hours!r} h"
+        )
+    return reasons
+
+
+def _dispatch_lines(report: DispatchReport) -> list[str]:
+    """The claim's scope and R7.20's dispatch line, read off the record ``dispatch.json`` holds.
+
+    One source: what is printed is what is recorded. The rate is ``dispatched / total``, or --
+    when no decision was counted -- unavailable with the record's own stated reason, never 0.
+    Under Q2=a a recommendation withheld for confidence ALONE is applied
+    (``uplift.consensus_arm._APPLIED_BUCKETS``), so the line names it applied; a blocked or an
+    untranslatable one reaches no lever.
+    """
+    counts = report.counts
+    if report.dispatch_rate is None:
+        rate = f"rate unavailable: {report.rate_unavailable_reason}"
+    else:
+        rate = f"rate {report.dispatch_rate:.4f}"
+    scope = (
+        f"claim scope: {report.wording} (Q2=a) -- a binding recommendation of the "
+        "consensus arm reached the twin if it was dispatched or withheld for confidence alone; "
+        "a blocked or untranslatable one applied nothing"
+    )
+    dispatch = (
+        f"dispatch: {counts.dispatched}/{counts.total} binding decisions dispatched ({rate}); "
+        f"withheld for confidence {counts.withheld_for_confidence} (applied, Q2=a); "
+        f"guardrail-blocked {counts.guardrail_blocked}, untranslatable {counts.untranslatable} "
+        "(neither applied)"
+    )
+    return [scope, dispatch]
+
+
+def _reproduction_lines(reproduction: BprimeReproduction) -> list[str]:
+    """One line per re-measured arm: its mean here beside the mean B-prime recorded."""
+    seeds = reproduction.seeds.describe()
+    lines = [f"B-prime's comparator re-measured in this environment ({seeds}, exact):"]
+    for arm in reproduction.arms:
+        verdict = "reproduces" if arm.reproduces else "NOT reproduced"
+        lines.append(
+            f"  {arm.arm}: measured {arm.measured_mean!r}, B-prime recorded "
+            f"{arm.recorded_mean!r} -- {verdict}"
+        )
+    return lines
+
+
+def _comparator_line(reproduction: BprimeReproduction) -> str:
+    """Beside the headline: whether this environment reproduced B-prime's comparator exactly.
+
+    API2 amendment 2's wording. A non-reproduction is reported, never refused: E5 runs in the
+    full closure (numpy 1.26.4) and B-prime ran in the thin one (numpy 2.4.6), and what a claim
+    may then say is the main agent's decision, not this command's.
+    """
+    if reproduction.all_reproduce:
+        arms = ", ".join(arm.arm for arm in reproduction.arms)
+        return f"comparator at B-prime's levels, reproduced exactly in this environment ({arms})"
+    missed = "; ".join(
+        f"{arm.arm} measured {arm.measured_mean!r}, recorded {arm.recorded_mean!r}"
+        for arm in reproduction.arms
+        if not arm.reproduces
+    )
+    return f"comparator at B-prime's levels, not reproduced in this environment: {missed}"
+
+
+def _refuse_e5(reason: str, what: str) -> int:
+    """Print an E5 refusal naming the input, and no headline (R7.8)."""
+    print(f"[FAIL] {reason}", file=sys.stderr)
+    print(f"No headline uplift number is produced without {what}.", file=sys.stderr)
+    return EXIT_MISSING_INPUT
+
+
+def _run_e5_suite(args: argparse.Namespace, contract: MetricContract) -> int:
+    """``--suite e5-primary``: the consensus arm against B-prime's arm E (task 22.1).
+
+    Every refusal comes before any replicate runs, and each is a missing required input
+    (:data:`EXIT_MISSING_INPUT`) printing no headline: a refused flag, a missing or defective
+    B-prime record (:class:`~uplift.bprime_record.BprimeRecordError`), E5 seeds colliding with
+    B-prime's, a world that cannot be resolved, or arms that cannot be built. Then, in order:
+
+    1. B-prime's comparator is re-measured in this environment -- arms E and E' at B-prime's
+       measurement seeds, by :func:`~uplift.e5_suite.measure_bprime_reproduction` priced with
+       :func:`~uplift.e5_suite.production_arm_cost` -- and ``reproduction.json`` is written,
+       BEFORE the harness runs. ``production_arm_cost`` is read from this module's globals at
+       call time, which is the seam a test injects so that no twin runs. A non-reproduction is
+       printed beside the headline and is not a refusal (API2 amendment 2).
+    2. ``UpliftHarness(loop_config=E5_LOOP).run([e5_scenario()], build_e5_arms(record), n)``.
+    3. R7.20's dispatch record, summarised from the consensus arm's runs ALONE --
+       ``summarise_dispatch`` refuses another arm's (API2 amendment 1.1). It is built before
+       anything is printed or written, so a tally the record refuses -- a defect in what the
+       consensus arm counted -- raises, and no headline is published without its record.
+    4. The headline, assembled against ``tuned_static`` alone, with the reproduction verdict and
+       the dispatch line beside it; then the result artifact, written exactly as the canonical
+       suite writes it, and ``dispatch.json`` beside it.
+    """
+    n, _canonical_loop, reduced = _resolve_run_config(args)
+    refusals = _e5_refusals(args, n=n, reduced=reduced)
+    if refusals:
+        return _refuse_e5(
+            f"required input unresolvable: suite {E5_SUITE} refuses " + "; ".join(refusals),
+            "an admissible E5 invocation",
+        )
+    try:
+        record = read_bprime_record(REPO_ROOT)
+    except BprimeRecordError as exc:
+        return _refuse_e5(
+            f"required input missing or malformed: B-prime record ({BPRIME_PROVENANCE_PATH}, "
+            f"{BPRIME_ARTIFACT_PATH}): {exc}",
+            "the committed B-prime record",
+        )
+    try:
+        e5_replicate_seeds(n, record)
+        scenario = e5_scenario()
+        arms = build_e5_arms(record)
+        arm_names = [spec.name for spec in arms]
+        roles = registered_roles(arms)
+        control = resolve_control_spec(
+            baseline_arm=args.baseline_arm, pooled_baseline=False, arm_names=arm_names
+        )
+    except (KeyError, PolicyUnavailableError, TuningUnavailableError, ValueError) as exc:
+        return _refuse_e5(
+            f"required input unresolvable: suite {E5_SUITE}: {type(exc).__name__}: {exc}",
+            "a resolvable E5 suite",
+        )
+
+    emission_factor = DEFAULT_EMISSION_FACTOR_KG_PER_DELIVERY
+    output_path = args.output if args.output is not None else _default_artifact_path()
+    print(f"uplift reproduction -- suite: {E5_SUITE} -- mode: fully-powered PROOF")
+    print(
+        f"  scenario: {scenario.name} (world cell {record.cell}, no shock, base seed "
+        f"{scenario.seed})"
+    )
+    print(f"  replicates per arm: {n} (INV-TW-002 floor: {MIN_SCENARIOS})")
+    print(
+        f"  closed-loop horizon: {E5_LOOP.duration_hours}h in {E5_LOOP.step_hours}h steps "
+        f"(levers: {E5_LOOP.levers})"
+    )
+    print(f"  arms: {', '.join(arm_names)}")
+    print(f"  comparator: {_describe_control(control)}")
+    print(
+        f"  B-prime record: run {record.source_run_id} at {record.source_revision_sha}, "
+        f"artifact sha256 {record.artifact_sha256}"
+    )
+
+    # --- 1. B-prime's comparator, re-measured here BEFORE the harness runs (amendment 2) ---
+    reproduction = measure_bprime_reproduction(
+        record, E5_REPRODUCED_ARMS, cost_of=production_arm_cost
+    )
+    reproduction_path = write_bprime_reproduction(
+        output_path.parent / REPRODUCTION_FILENAME, reproduction
+    )
+    print()
+    for line in _reproduction_lines(reproduction):
+        print(line)
+
+    # --- 2. the harness, then 3. R7.20's record from the consensus arm's runs alone ---
+    harness = UpliftHarness(loop_config=E5_LOOP, emission_factor=emission_factor)
+    harness_result = harness.run([scenario], arms, n_per_arm=n)
+    dispatch = summarise_dispatch(
+        harness_result.runs_by_pair[(scenario.name, DEFAULT_CONSENSUS_ARM)],
+        arm=DEFAULT_CONSENSUS_ARM,
+    )
+    result = assemble_uplift_result(
+        harness_result,
+        contract,
+        consensus_arm=DEFAULT_CONSENSUS_ARM,
+        baseline_arm=control.baseline_arm,
+    )
+    report = build_uplift_report(result)
+
+    # --- 4. the headline, with the reproduction verdict and the dispatch line beside it ---
+    print()
+    print(report.render())
+    print(_comparator_line(reproduction))
+    for line in _dispatch_lines(dispatch):
+        print(line)
+
+    _print_disclosures(result, reduced=False)
+
+    # --- persist the artifact C60 reads, then the dispatch record beside it ---
+    provenance = resolve_provenance(
+        arms=arm_names,
+        arm_roles=roles,
+        replicates_per_arm=n,
+        seeds=[scenario.seed],
+    )
+    written = _write_result_artifact(
+        output_path,
+        result,
+        report,
+        harness_result=harness_result,
+        provenance=provenance,
+    )
+    dispatch_path = write_dispatch_report(output_path.parent / DISPATCH_FILENAME, dispatch)
+    print()
+    print(f"wrote reproduction record: {reproduction_path}")
+    print(f"wrote result artifact: {written}")
+    print(f"wrote dispatch record: {dispatch_path}")
+
+    exit_code = uplift_exit_code(harness_result)
+    if exit_code != EXIT_SUCCESS:
+        print(
+            "[FAIL] no scenario completed for any arm -- nothing to report.",
+            file=sys.stderr,
+        )
+    return exit_code
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     """Entry point for ``python -m uplift.cli`` (R7.2, R7.5-R7.8, R6.14).
 
@@ -545,6 +878,10 @@ def main(argv: Sequence[str] | None = None) -> int:
     no headline number (R7.8), or the harness's ``EXIT_NO_COMPLETED_RUN`` when nothing
     completed. ``--pooled-baseline`` with ``--baseline-arm`` is refused by the argument
     parser itself (exit status 2, its usage message).
+
+    ``--suite e5-primary`` (session 12) runs :func:`_run_e5_suite` after the contract is
+    loaded; its own refusals, and a missing or defective B-prime record, are missing required
+    inputs too. The default ``--suite canonical`` is the path below, unchanged.
     """
     parser = _build_parser()
     args = parser.parse_args(argv)
@@ -569,6 +906,9 @@ def main(argv: Sequence[str] | None = None) -> int:
             file=sys.stderr,
         )
         return EXIT_MISSING_INPUT
+
+    if args.suite == E5_SUITE:
+        return _run_e5_suite(args, contract)
 
     n, loop, reduced = _resolve_run_config(args)
     scenarios = adversarial_suite()
@@ -628,34 +968,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     print(report.render())
 
     # --- honesty disclosures (R7.5, R7.6) + version-controlled noise tolerance ---
-    print()
-    print(
-        f"applied noise tolerance: <= {NOISE_TOLERANCE_PP:.1f} percentage point "
-        "(version-controlled reproduction tolerance, committed for the version-1 fill-rate "
-        "headline; the headline above is in objective units)"
-    )
-    print("data provenance: synthetic seed-generated data only (no real/scraped/paid data)")
-    print("external services: none -- fully in-process (no external paid service)")
-    if reduced:
-        print(
-            "note: reduced-cost smoke run -- a fully-powered proof requires "
-            f"n >= {MIN_SCENARIOS} per arm (--full)."
-        )
-    if result.incomplete:
-        print(
-            "note: result marked INCOMPLETE -- the consensus arm or a comparator arm could "
-            "not complete every scenario; no incomplete pair is credited to SYNAPSE."
-        )
-    elif result.run_incomplete:
-        print(
-            "note: an arm outside this contrast failed a replicate (run_incomplete); the "
-            "contrast itself completed, so its verdict is unaffected."
-        )
-    if result.all_wins_warning:
-        print(
-            "self-scrutiny warning: every classified pair is SYNAPSE_WINS -- scrutinize "
-            "for measurement bias before trusting this result."
-        )
+    _print_disclosures(result, reduced=reduced)
 
     # --- persist the artifact the C60 uplift_truth gate reads ---
     # The provenance record is what makes this run attributable: the seed set is the

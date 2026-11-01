@@ -41,7 +41,7 @@ import deal
 import structlog
 import yaml
 from pydantic import BaseModel, ConfigDict, Field
-from synapse_common.a2a_sdk import send_a2a_request
+from synapse_common.a2a_sdk import send_a2a_request as send_a2a_request
 from synapse_common.metrics import (
     CONSENSUS_DEBATE_ROUNDS,
     CONSENSUS_DECISIONS_TOTAL,
