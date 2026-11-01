@@ -169,6 +169,80 @@ def select_binding_action(
     )
 
 
+@dataclass(frozen=True)
+class SelectionFront:
+    """The candidate set selection ran over, as recorded on the decision (R13.5).
+
+    ADR-054 D3 / purpose-achievement-audit R13.5: a Pareto front recorded on a
+    decision must be *the set the ratified action was selected from*, and the
+    ratified action must be a member of it. The front the NSGA-II arbitration
+    returns is a front over **weight vectors** - selection never ran over it - so
+    recording that as the decision's front satisfied neither half of R13.5.
+
+    Attributes:
+        members: one row per **evaluated (eligible)** candidate, in input order.
+            Each row is that candidate's per-objective utility vector - the exact
+            row ``_build_utility_matrix`` builds for it - plus two decidable
+            identity keys, ``candidate_index`` (its index into the input
+            ``proposals``) and ``weighted_score`` (the knee-weighted score
+            selection scored it with, taken from the ``BindingSelection`` rather
+            than recomputed, so the two can never drift).
+        ratified_member_index: index into ``members`` of the ratified action, or
+            ``None`` when selection had no eligible candidate. Membership of the
+            ratified action is therefore decidable from the recorded front alone.
+        excluded_agents: candidates with no ``_AGENT_TO_OBJECTIVE`` entry. They
+            were never selectable, so they are **not** members of the set
+            selection ran over, and they carry no fabricated score (R1.5, I-7).
+    """
+
+    members: tuple[dict[str, float], ...]
+    ratified_member_index: int | None
+    excluded_agents: tuple[str, ...]
+
+
+#: Identity keys carried alongside the 8 objective values in a front row. Neither
+#: collides with an entry of ``OBJECTIVES``.
+FRONT_INDEX_KEY = "candidate_index"
+FRONT_SCORE_KEY = "weighted_score"
+
+
+def build_selection_front(
+    proposals: list[AgentProposal],
+    selection: BindingSelection,
+    *,
+    neutral_baseline: float = 0.5,
+) -> SelectionFront:
+    """Project the set ``select_binding_action`` ran over into a recordable front (R13.5).
+
+    Pure: no I/O, no globals, and it recomputes no score - the weighted scores come
+    from ``selection``, so the recorded front and the selection that produced it
+    cannot disagree. Each member's objective vector mirrors ``_build_utility_matrix``
+    (own objective = ``utility_score``, every other objective = ``neutral_baseline``),
+    which is the vector arbitration actually evaluated.
+    """
+    members: list[dict[str, float]] = []
+    ratified_member_index: int | None = None
+
+    for index, proposal in enumerate(proposals):
+        agent_name = str(proposal.agent_name)
+        objective = _AGENT_TO_OBJECTIVE.get(agent_name)
+        if objective is None or agent_name not in selection.weighted_scores:
+            continue
+        row: dict[str, float] = {obj: neutral_baseline for obj in OBJECTIVES}
+        row[objective] = float(proposal.utility_score)
+        row[FRONT_INDEX_KEY] = float(index)
+        row[FRONT_SCORE_KEY] = float(selection.weighted_scores[agent_name])
+        if index == selection.selected_index:
+            ratified_member_index = len(members)
+        members.append(row)
+
+    return SelectionFront(
+        members=tuple(members),
+        ratified_member_index=ratified_member_index,
+        excluded_agents=tuple(selection.excluded_agents),
+    )
+
+
 def _build_utility_matrix(proposals: list[AgentProposal]) -> FloatArray:
     """Build an (N x 8) utility matrix from agent proposals.
 

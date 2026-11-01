@@ -13,6 +13,14 @@ pair is a SYNAPSE win.
 Synthetic ``HarnessResult`` / ``ScenarioRun`` data is constructed directly — no twin
 runs, no consensus assembly — so the property is pure, fast, and $0.
 
+Carried to Metric_Contract v2 (decision-quality-proof task 29.4). The committed contract is
+loaded, so each scenario is classified by the four-valued interval rule on the ``objective``
+(a cost, lower is better) against the committed materiality margin ``m``, and each mode is
+engineered as a flat paired difference, comparator minus consensus, on every seed-paired
+replicate. v2 adds the ``sub_margin`` mode -- a gain of ``m/2``, real but not material, which
+is ``TIE_INCONCLUSIVE`` -- so a grid of material wins with one such gain in it must not fire the
+guard. Budget inherited from the root ``conftest.py`` profile; no ``max_examples`` literal.
+
 **Validates: Requirements 6.7**
 """
 from __future__ import annotations
@@ -28,10 +36,11 @@ from uplift.interfaces import KpiVector, Outcome, Scenario, ScenarioRun
 from digital_twin.simulation.monte_carlo import ShockParams
 
 
-# The real, version-controlled metric contract: single primary KPI ``fill_rate``
-# (higher-is-better, Cohen's d MDE 0.2, Mann-Whitney U at alpha 0.05).
+# The real, version-controlled metric contract (v2): single primary KPI ``objective``
+# (lower is better), judged by its 1 - alpha paired interval against the materiality margin.
 _CONTRACT = load_contract()
-_PRIMARY_KPI = "fill_rate"
+_PRIMARY_KPI = _CONTRACT.objective_kpi
+_MARGIN = _CONTRACT.materiality_margin
 _CONSENSUS_ARM = "consensus"
 _BASELINE_ARM = "baseline"
 
@@ -39,18 +48,26 @@ _BASELINE_ARM = "baseline"
 # C34 gauge (fidelity context is irrelevant to Property 21).
 _FIDELITY = FidelityReport(kl_divergence=0.02, threshold=0.1)
 
-# Replicate count per arm: large enough that a ~0.4 mean gap with tight within-arm
-# spread is Mann-Whitney significant with |d| far above the 0.2 MDE.
-_N = 24
+# Replicate count per arm. Both arms share ``_series``'s spread, so every paired difference
+# is the mode's difference and the verdict does not depend on how many replicates there are;
+# v1's 24 was what a rank test needed for significance.
+_N = 8
+
+# Objective levels, in units of the margin above the cheapest.
+_CHEAP = 10.0
+_NEAR = _CHEAP + 0.5 * _MARGIN  # half a margin dearer: a sub-margin gain for the cheaper arm
+_DEAR = _CHEAP + 4.0 * _MARGIN  # four margins dearer: a material gain for the cheaper arm
 
 # Per-scenario modes, each with a KNOWN classified outcome under the real contract.
-#   win     -> consensus clearly higher on a higher-is-better KPI  -> SYNAPSE_WINS
-#   tie     -> identical distributions (no significance)           -> TIE_INCONCLUSIVE
-#   loss    -> baseline clearly higher                             -> BASELINE_WINS
-#   partial -> win-looking samples + one failed consensus replicate
-#              -> TIE_INCONCLUSIVE per R2.5 (never credited to SYNAPSE)
+#   win        -> consensus four margins cheaper          -> SYNAPSE_WINS
+#   sub_margin -> consensus half a margin cheaper         -> TIE_INCONCLUSIVE
+#   tie        -> identical objectives (interval [0, 0])  -> TIE_INCONCLUSIVE
+#   loss       -> baseline four margins cheaper           -> BASELINE_WINS
+#   partial    -> win-looking samples + one failed consensus replicate
+#                 -> TIE_INCONCLUSIVE per R2.5 (never credited to SYNAPSE)
 _MODE_OUTCOME = {
     "win": Outcome.SYNAPSE_WINS,
+    "sub_margin": Outcome.TIE_INCONCLUSIVE,
     "tie": Outcome.TIE_INCONCLUSIVE,
     "loss": Outcome.BASELINE_WINS,
     "partial": Outcome.TIE_INCONCLUSIVE,
@@ -58,43 +75,43 @@ _MODE_OUTCOME = {
 _MODES = tuple(_MODE_OUTCOME)
 
 
-def _kpi(fill_rate: float) -> KpiVector:
-    """A KpiVector varying only ``fill_rate``; the other fields are fixed constants."""
+def _kpi(objective: float) -> KpiVector:
+    """A KpiVector varying only ``objective``; the other fields are fixed constants."""
     return KpiVector(
-        fill_rate=fill_rate,
+        fill_rate=1.0,
         spoilage_rate=0.0,
         stockout_rate=0.0,
         avg_delivery_time_min=1.0,
         margin=1.0,
         co2_estimate=1.0,
+        avg_on_hand_units=1.0,
+        objective=objective,
     )
 
 
 def _series(base: float, n: int = _N) -> list[float]:
-    """A tight spread around ``base`` so a 0.4 mean gap is strongly significant."""
+    """A tight spread around ``base``, shared by both arms so the paired differences are flat."""
     return [base + (i % 5) * 0.001 for i in range(n)]
 
 
-def _completed(arm: str, fill_rates: list[float]) -> list[ScenarioRun]:
-    """Completed (non-failed) runs for ``arm``."""
+def _completed(arm: str, objectives: list[float]) -> list[ScenarioRun]:
+    """Completed (non-failed) runs for ``arm``; replicate ``i`` runs at seed ``i``."""
     return [
-        ScenarioRun(arm=arm, seed=i, kpis=_kpi(fr), failed=False, error=None)
-        for i, fr in enumerate(fill_rates)
+        ScenarioRun(arm=arm, seed=i, kpis=_kpi(value), failed=False, error=None)
+        for i, value in enumerate(objectives)
     ]
 
 
 def _consensus_runs(mode: str) -> list[ScenarioRun]:
     """The consensus-arm run list realising ``mode``."""
-    if mode == "win":
-        return _completed(_CONSENSUS_ARM, _series(0.9))
+    if mode in ("win", "sub_margin", "tie"):
+        return _completed(_CONSENSUS_ARM, _series(_CHEAP))
     if mode == "loss":
-        return _completed(_CONSENSUS_ARM, _series(0.5))
-    if mode == "tie":
-        return _completed(_CONSENSUS_ARM, _series(0.6))
+        return _completed(_CONSENSUS_ARM, _series(_DEAR))
     if mode == "partial":
         # Win-looking completed replicates plus one failed replicate: some but not all
         # replicates completed, so the pair resolves TIE_INCONCLUSIVE (R2.5).
-        runs = _completed(_CONSENSUS_ARM, _series(0.9, _N - 1))
+        runs = _completed(_CONSENSUS_ARM, _series(_CHEAP, _N - 1))
         runs.append(
             ScenarioRun(
                 arm=_CONSENSUS_ARM,
@@ -110,11 +127,11 @@ def _consensus_runs(mode: str) -> list[ScenarioRun]:
 
 def _baseline_runs(mode: str) -> list[ScenarioRun]:
     """The baseline-arm run list for ``mode`` (always fully completed)."""
-    if mode == "loss":
-        return _completed(_BASELINE_ARM, _series(0.9))
-    if mode == "tie":
-        return _completed(_BASELINE_ARM, _series(0.6))
-    return _completed(_BASELINE_ARM, _series(0.5))
+    if mode in ("loss", "tie"):
+        return _completed(_BASELINE_ARM, _series(_CHEAP))
+    if mode == "sub_margin":
+        return _completed(_BASELINE_ARM, _series(_NEAR))
+    return _completed(_BASELINE_ARM, _series(_DEAR))
 
 
 def _harness_result(modes: list[str]) -> HarnessResult:
@@ -144,6 +161,7 @@ def _harness_result(modes: list[str]) -> HarnessResult:
         results_path=None,
         scenarios=tuple(scenarios),
         arm_names=(_CONSENSUS_ARM, _BASELINE_ARM),
+        arm_roles={_CONSENSUS_ARM: "consensus", _BASELINE_ARM: "baseline"},
     )
 
 
@@ -152,7 +170,7 @@ def _harness_result(modes: list[str]) -> HarnessResult:
 _mode_grids = st.lists(st.sampled_from(_MODES), min_size=0, max_size=5)
 
 
-@settings(max_examples=150, deadline=None, suppress_health_check=[HealthCheck.too_slow])
+@settings(deadline=None, suppress_health_check=[HealthCheck.too_slow])
 @given(modes=_mode_grids)
 def test_all_wins_guard_fires_iff_every_pair_is_a_synapse_win(modes: list[str]) -> None:
     """all_wins_warning is True IFF the grid is non-empty and every pair is a win."""

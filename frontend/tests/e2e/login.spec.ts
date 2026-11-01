@@ -64,8 +64,9 @@ test("Login form is accessible (a11y) @a11y", async ({ page }) => {
   // In authenticated mode the sign-in surface stays directly reachable and accessible.
   await page.route("**/api/v1/auth/mode", (route) => route.fulfill({ json: AUTHENTICATED }));
   await page.goto("/login");
-  // Login shows the boot splash until the posture is read, so wait for the form itself;
-  // count() does not wait (session 12, F-Q2 review).
+  // Wait for the form itself before counting its fields (`count()` does not retry): Login is
+  // route-split, so its fields exist only once its chunk has rendered, and it shows the boot
+  // splash until the access posture is read (session 12, F-Q2 review).
   await expect(page.getByRole("form", { name: /Operator sign-in/i })).toBeVisible();
   const inputs = await page.getByRole("textbox").count();
   expect(inputs).toBeGreaterThanOrEqual(1);

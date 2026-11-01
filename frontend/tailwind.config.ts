@@ -61,7 +61,17 @@ export default {
         // Self-hosted faces (ADR-045; see public/fonts/FONTS.md). Family
         // names must match the @font-face declarations in styles/fonts.css.
         display: ['"Space Grotesk"', '"Inter Variable"', "ui-sans-serif", "system-ui", "sans-serif"],
-        sans: ['"Inter Variable"', "Inter", "ui-sans-serif", "system-ui", "sans-serif"],
+        // "Inter Variable Fallback" is a metric-matched local face (styles/fonts.css) that
+        // holds Inter's line boxes while InterVariable.woff2 downloads, which it now does
+        // after first paint: index.html no longer preloads it.
+        sans: [
+          '"Inter Variable"',
+          '"Inter Variable Fallback"',
+          "Inter",
+          "ui-sans-serif",
+          "system-ui",
+          "sans-serif",
+        ],
         mono: ['"JetBrains Mono"', "ui-monospace", "SFMono-Regular", "monospace"],
       },
       fontSize: {

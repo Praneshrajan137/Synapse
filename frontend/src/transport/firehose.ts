@@ -9,6 +9,7 @@ import { type PricingUpdate, PricingUpdateSchema } from "@domain/pricing-update"
 import type { City } from "@domain/primitives";
 import { type RoutePlan, RoutePlanSchema } from "@domain/route-plan";
 import { type TwinDivergenceEvent, TwinDivergenceEventSchema } from "@domain/twin-state";
+import type { ZodIssue } from "zod";
 import { type WsMultiplex, createWsMultiplex } from "./ws-multiplex";
 
 // Typed wrapper around the WS multiplex pointed at /ws/firehose.
@@ -63,14 +64,37 @@ const SCHEMAS = {
   metric: AgentMetricSchema,
 } as const;
 
+/** A validated payload on channel `C`, with the envelope it arrived in. */
+export type FirehoseListener<C extends FirehoseChannel> = (
+  payload: ChannelPayloadMap[C],
+  envelope: { seq: number; ts: string },
+) => void;
+
+/**
+ * A frame whose envelope was well-formed but whose payload FAILED its channel's
+ * Domain_Schema, so it never reached app code (Req 8.2). It is reported to
+ * {@link FirehoseClient.onRejection} subscribers instead of staying a console
+ * line, so a surface can render the schema-violation state rather than keep
+ * presenting its last good data as a healthy live feed.
+ */
+export interface FirehoseRejection {
+  readonly channel: FirehoseChannel;
+  /** Envelope sequence number of the rejected frame. */
+  readonly seq: number;
+  /** The first schema issue as `path: message`, for diagnosis. */
+  readonly reason: string;
+}
+
 export interface FirehoseClient {
   state: WsMultiplex["state"];
   onState: WsMultiplex["onState"];
   close: WsMultiplex["close"];
-  on<C extends FirehoseChannel>(
-    channel: C,
-    listener: (payload: ChannelPayloadMap[C], envelope: { seq: number; ts: string }) => void,
-  ): () => void;
+  on<C extends FirehoseChannel>(channel: C, listener: FirehoseListener<C>): () => void;
+  /**
+   * Subscribe to payload rejections; returns the unsubscribe. A rejected frame
+   * is reported once per `on()` subscription that received it.
+   */
+  onRejection(listener: (rejection: FirehoseRejection) => void): () => void;
 }
 
 export interface CreateFirehoseOptions {
@@ -78,6 +102,13 @@ export interface CreateFirehoseOptions {
   readonly topics: ReadonlyArray<FirehoseChannel>;
   readonly city: City;
   readonly sinceSeq?: number | undefined;
+}
+
+/** The first schema issue as `path: message`, which is what a rejection reports. */
+function describeIssue(issue: ZodIssue | undefined): string {
+  if (issue === undefined) return "payload: failed schema validation";
+  const where = issue.path.length > 0 ? issue.path.join(".") : "payload";
+  return `${where}: ${issue.message}`;
 }
 
 export function createFirehose(opts: CreateFirehoseOptions): FirehoseClient {
@@ -92,6 +123,7 @@ export function createFirehose(opts: CreateFirehoseOptions): FirehoseClient {
     return `${proto}://${host}/ws/firehose?${params.toString()}`;
   };
   const mux = createWsMultiplex({ url, heartbeatMs: 20_000 });
+  const rejectionListeners = new Set<(rejection: FirehoseRejection) => void>();
 
   return {
     state: mux.state.bind(mux),
@@ -108,6 +140,15 @@ export function createFirehose(opts: CreateFirehoseOptions): FirehoseClient {
         if (!parsed.success) {
           // eslint-disable-next-line no-console
           console.warn(`firehose_${channel}_rejected`, parsed.error.issues);
+          // The payload still never reaches app code, but the rejection is
+          // reported, not swallowed: a silent drop is what let a surface keep
+          // rendering its last good rows as if the feed were healthy.
+          const rejection: FirehoseRejection = {
+            channel,
+            seq: envelope.seq,
+            reason: describeIssue(parsed.error.issues[0]),
+          };
+          for (const notify of rejectionListeners) notify(rejection);
           return;
         }
         listener(parsed.data as ChannelPayloadMap[typeof channel], {
@@ -115,6 +156,12 @@ export function createFirehose(opts: CreateFirehoseOptions): FirehoseClient {
           ts: envelope.ts,
         });
       });
+    },
+    onRejection(listener) {
+      rejectionListeners.add(listener);
+      return () => {
+        rejectionListeners.delete(listener);
+      };
     },
   };
 }

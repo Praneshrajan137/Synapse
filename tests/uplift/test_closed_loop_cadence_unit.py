@@ -2,7 +2,7 @@
 Unit (example-based) tests for the closed-loop cadence and the INV-TW-002 under-power
 guard (task 7.6).
 
-Two behaviors are pinned down here:
+Two behaviors are pinned down here, plus the v2 carry described at the end:
 
 * **Closed-loop cadence (R2.2).** ``uplift.harness.run_closed_loop`` must run the
   observe → decide → apply → advance loop exactly ``LoopConfig.n_steps`` times, calling
@@ -17,15 +17,22 @@ Two behaviors are pinned down here:
   The guard is exercised directly via the static ``_check_power`` (so we never have to run
   1000 twin simulations) plus one integration-style assertion that ``run_arm`` with a small
   ``n`` raises before doing any work.
+
+Carried to the v2 harness (decision-quality-proof tasks 15.5 and 29.4): a completed closed-loop
+replicate is PRICED -- its committed objective is finite and its on-hand mean non-negative --
+and :meth:`UpliftHarness.run` refuses an arm registered without a role before any twin is
+built, the same up-front shape as the power guard.
 """
 from __future__ import annotations
+
+import math
+from typing import cast
 
 import pytest
 
 from digital_twin.simulation.monte_carlo import MIN_SCENARIOS, ShockParams
-
 from uplift.harness import LoopConfig, UpliftHarness, run_closed_loop
-from uplift.interfaces import Observation, PolicyAction, Scenario
+from uplift.interfaces import ArmSpec, Observation, PolicyAction, Scenario
 
 
 # A tiny, neutral (unshocked) scenario: the twin warms ``sku_0..sku_9`` to 100 units each,
@@ -85,6 +92,12 @@ def test_run_closed_loop_calls_decide_once_per_step_with_fresh_state() -> None:
     # The run completed (the spy raised nothing), so no fabricated failure occurred.
     assert run.failed is False
     assert run.kpis is not None
+
+    # A completed replicate is a priced one: the extractor refuses rather than clamps, so a
+    # completed run's committed objective is finite and its on-hand mean a real mean.
+    assert math.isfinite(run.kpis.objective)
+    assert math.isfinite(run.kpis.avg_on_hand_units)
+    assert run.kpis.avg_on_hand_units >= 0.0
 
     # observe -> decide happened exactly once per step.
     assert len(spy.observations) == loop.n_steps
@@ -168,4 +181,24 @@ def test_run_arm_raises_before_running_when_underpowered() -> None:
         UpliftHarness().run_arm(TINY_SCENARIO, spy, n=10)
 
     # The guard fired before the loop ran, so the spy was never asked to decide.
+    assert spy.observations == []
+
+
+def test_run_refuses_an_arm_registered_without_a_role_before_any_twin_runs() -> None:
+    """``run`` resolves every arm's declared role before any replicate (AD-16, task 15.5).
+
+    A bare policy is not a registration: its role would have to be guessed, and a guessed role
+    is how an oracle used to be pooled into the baseline. ``n=10`` would also trip the power
+    guard, so the matched message shows the role is resolved FIRST -- before the power check,
+    which itself precedes any twin -- and the spy is never asked to decide.
+
+    **Validates: decision-quality-proof Requirement 6.14 (task 15.5)**
+    """
+    spy = _SpyPolicy()
+    # Deliberately mistyped: the runtime refusal exists for the caller the annotation cannot stop.
+    unregistered = cast("list[ArmSpec]", [spy])
+
+    with pytest.raises(ValueError, match="registered without a role"):
+        UpliftHarness().run([TINY_SCENARIO], unregistered, 10, parallel=False)
+
     assert spy.observations == []

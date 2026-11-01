@@ -88,7 +88,12 @@ def _build_protocol() -> ConsensusProtocol:
     return ConsensusProtocol(
         config=cfg,
         tier_router=tier_router,
-        guardrails=MagicMock(**{"validate_decision.return_value": (True, [])}),
+        # Task 12.1a: `_ratify_and_dispatch` reads the boundary in force as well as the
+        # verdict, so the double states one - `0.0`, imposing no floor, which is what
+        # its `(True, [])` verdict already says. Ratification is not this test's subject.
+        guardrails=MagicMock(
+            **{"validate_decision.return_value": (True, []), "confidence_threshold": 0.0},
+        ),
         audit_logger=MagicMock(log_decision=AsyncMock(return_value=uuid4())),
         hitl_escalation=MagicMock(),
         context_builder=MagicMock(),

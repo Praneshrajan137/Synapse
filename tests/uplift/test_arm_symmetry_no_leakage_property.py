@@ -87,6 +87,13 @@ def _snapshot(obs: Observation) -> dict[str, object]:
         "active_shock": obs.active_shock,
         "pending_order": obs.pending_order,
         "eligible_stores": obs.eligible_stores,
+        # decision-quality-proof task 13.1 appended five fields. Omitting them would compare
+        # the arms on a subset of what they see while this docstring still said "complete".
+        "on_order": dict(obs.on_order),
+        "supplier_lead_time_history": dict(obs.supplier_lead_time_history),
+        "demand_to_date": dict(obs.demand_to_date),
+        "sku_supplier": dict(obs.sku_supplier),
+        "start_weekday": obs.start_weekday,
     }
 
 
@@ -172,6 +179,9 @@ def test_arms_share_cadence_costs_twin_and_observation_fields(
         # R6.8 — the observation exposes exactly the declared field set: no arm is handed
         # an extra channel, and none is denied one.
         assert frozenset(f.name for f in dataclasses.fields(obs)) == _OBSERVATION_FIELDS
+        # ...and the snapshot compared below covers every one of them, so "field-complete"
+        # is checked here rather than remembered when the next field is added.
+        assert frozenset(_snapshot(obs)) == _OBSERVATION_FIELDS
         # R6.3 — identical unit-cost derivation for every arm at every step.
         assert dict(obs.unit_costs) == expected_costs
 

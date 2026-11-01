@@ -62,6 +62,9 @@ class _StubProtocol:
             confidence=0.8,
             audit_trace=["tier=2"],
             phase_reached=4,
+            # Dispatched, as `_phase_execute` returns it: task 29.6's arm applies an action only
+            # with evidence the protocol ratified it (one confirmation per proposal).
+            execution_confirmations=["acknowledged"],
         )
 
 

@@ -43,7 +43,15 @@ docker/.env
 *.pkl
 *.joblib
 *.parquet
-data/
+# Anchored to the repository root. A bare `data/` matches a directory named
+# `data` at ANY depth, which silently ignored `infrastructure/data/` -- the
+# committed dataset-licence declaration and its JSON schema. Those are
+# governance artifacts CI must see, not datasets, and because an ignored path
+# is refused by `git add` without `-f`, task 7.1 could tick complete while its
+# deliverable never reached CI. Real data stays ignored: the root `data/` tree
+# by this rule, and every dataset artifact by the extension patterns above
+# (e.g. `data_fabric/feast/data/demand_signals.parquet` via `*.parquet`).
+/data/
 mlruns/
 mlartifacts/
 
@@ -98,6 +106,12 @@ dump.rdb
 # checkpoints here. CI-produced and consumed by checkpoint/calibration truth
 # gates; never committed (production checkpoints live in the MLflow registry).
 artifacts/
+# C60 uplift evidence (purpose-achievement-audit R2.8, AD-9/CF-4). Named
+# explicitly, not just covered by `artifacts/`, because scripts/audit/uplift_truth.py
+# reads this declaration: an in-repo artifact that no ignore rule covers is treated
+# as read from version control and rejected. A committed measurement is not evidence
+# of a run -- the artifact must be regenerated in the job that evaluates the gate.
+artifacts/uplift/result.json
 mlruns/
 *.pt
 *.ckpt

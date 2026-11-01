@@ -530,6 +530,16 @@ jobs:
             --expect-sha "${{ github.sha }}"
 
       - name: Audit-chain integrity (Sprint 9 verifier)
+        # BLOCKING (CF-6, R6.13). The step exits with the verifier's own exit code:
+        # `orchestrator/audit/cli.py` exists as of task 7.3 and the chain-migration
+        # boundary is committed in infrastructure/quality/audit-chain-bounds.yaml, so
+        # there is nothing left for a `|| echo` to excuse. The swallow that was here
+        # ("first deploy: empty chain is expected") is exactly what R6.9 forbids: an
+        # empty chain verifies nothing and now exits 2. Exit 1 = a break, named in the
+        # step log; exit 2 = unreadable, bound exceeded, or nothing verified. A red walk
+        # is fixed by the chain or by a reviewed boundary correction in that YAML - never
+        # by discarding the status again. scripts/audit/command_path_truth.py (R6.14) and
+        # scripts/audit/workflow_shape_truth.py (R6.13) both police this step.
         run: |
           gcloud compute ssh ${{ vars.GCP_VM }} \
             --zone=${{ vars.GCP_ZONE }} \
@@ -537,10 +547,9 @@ jobs:
             --quiet \
             --ssh-flag="-o ServerAliveInterval=30" \
             --ssh-flag="-o ServerAliveCountMax=20" \
-            --command="cd ~/synapse && \
+            --command="set -e; cd ~/synapse && \
                        docker compose -f docker/docker-compose.gcp.yml --env-file .env.gcp --env-file .env.gcp.local \
-                         exec -T orchestrator python -m orchestrator.audit.cli verify || \
-                       echo 'WARN: audit verify returned non-zero (first deploy: empty chain is expected)'"
+                         exec -T orchestrator python -m orchestrator.audit.cli verify"
 
       - name: Tag-deploy summary
         run: |
@@ -565,12 +574,31 @@ jobs:
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
 
-      - name: Stop VM after scheduled weekly run (preserve credits)
+      - name: Stop VM after scheduled weekly run (informational - best-effort, preserve credits)
         # The weekly schedule is the ONLY automated VM run. Bound it to ~30 min
         # by stopping the VM as soon as verification finishes. `always()` so a
         # failed verify never leaves the VM running and burning credits.
         # Manual `workflow_dispatch` / `v*`-tag deploys intentionally leave the
         # VM UP so the operator can show a live demo — only the schedule stops it.
+        #
+        # LABELLED, NOT MADE BLOCKING (decision-quality-proof task 3.2, R4.1, R4.10, R11.3).
+        # This is the finding the plan recorded as "not reproducible by reading" and told
+        # us not to invent. It was real: running the corrected gate named it, after a
+        # static census of six files had missed it. No ordinal or total is claimed here —
+        # the count is a function of the tree and of the gate's reading, both of which
+        # moved during that task, and `infrastructure/quality/blocking-steps.yaml` records
+        # why no fixed number is written down anywhere (R4.10). The lesson that survives
+        # is the method: re-deriving a count by reading is how the count was wrong in the
+        # first place.
+        #
+        # Kept advisory because the non-zero this swallows is a BENIGN RACE, not a
+        # failure: `gcloud compute instances stop` exits non-zero when the instance is
+        # already STOPPING or STOPPED, which is exactly what `if: always()` plus a
+        # preceding failed verify tends to produce. Making it propagate would redden a
+        # deploy for succeeding at its actual purpose. The `::warning::` annotation keeps
+        # a genuine failure visible in the run summary, and the cost of the real failure
+        # mode (a VM left running) is credit burn the weekly cadence already bounds — not
+        # a false claim about the deploy, which is what R11.3 exists to prevent.
         if: always() && github.event_name == 'schedule'
         run: |
           echo "Weekly run complete — stopping ${{ vars.GCP_VM }} to preserve credits."

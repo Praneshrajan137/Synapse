@@ -8,14 +8,18 @@ Property 16: Every executed scenario is reported without filtering.
     result equals the set of scenarios executed; no scenario is omitted or filtered on
     the basis of its outcome.
 
-The scenario outcome distribution is engineered per Hypothesis example by drawing a
-per-scenario *outcome intent* and choosing consensus/baseline sample values that force
-that intent through :meth:`uplift.contract.MetricContract.classify`:
+Carried to Metric_Contract v2 (decision-quality-proof task 29.4). The committed contract is
+loaded, so the judged KPI is the ``objective`` -- a cost, lower is better -- and each
+scenario is classified by the four-valued interval rule against the committed materiality
+margin ``m``. The outcome distribution is engineered per Hypothesis example by drawing a
+per-scenario *outcome intent* and a paired objective difference (baseline minus consensus,
+the same on every seed-paired replicate) that forces it through
+:meth:`uplift.contract.MetricContract.classify`:
 
-- WIN  -> consensus values clearly higher than baseline (higher-is-better KPI) so the
-          effect is significant, exceeds the MDE, and favors the consensus arm.
-- LOSS -> consensus values clearly lower than baseline so the effect favors baseline.
-- TIE  -> identical consensus/baseline distributions so the comparison is inconclusive.
+- WIN        -> the difference is ``4m``: the interval lies wholly above the margin.
+- SUB_MARGIN -> the difference is ``m / 2``: above zero, not above the margin -- a tie.
+- LOSS       -> the difference is ``-4m``: the interval lies wholly below zero.
+- TIE        -> identical objectives, so the interval is ``[0, 0]`` and contains zero.
 
 Regardless of how the intents are mixed across scenarios, the reported scenario set is
 asserted to be exactly the executed scenario set.
@@ -24,78 +28,76 @@ Validates: Requirements 4.4
 """
 from __future__ import annotations
 
-from hypothesis import given, settings
+from hypothesis import given
 from hypothesis import strategies as st
 
-from uplift.contract import MetricContract
+from digital_twin.simulation.monte_carlo import ShockParams
+from uplift.contract import load_contract
 from uplift.fidelity import FidelityReport
 from uplift.harness import HarnessResult, aggregate_arm, assemble_uplift_result
-from uplift.interfaces import Direction, KpiVector, Outcome, Scenario, ScenarioRun
-
-from digital_twin.simulation.monte_carlo import ShockParams
-
+from uplift.interfaces import KpiVector, Outcome, Scenario, ScenarioRun
 
 _CONSENSUS_ARM = "consensus"
 _BASELINE_ARM = "baseline"
 
-# A single higher-is-better primary KPI is enough to exercise the full outcome space;
-# the property is about the reported *scenario* set, not the KPI cross-product.
-_PRIMARY_KPI = "fill_rate"
-
-_CONTRACT = MetricContract(
-    primary_kpis={_PRIMARY_KPI: Direction.HIGHER_IS_BETTER},
-    effect_size="cohens_d+rel_pct",
-    significance_test="mann_whitney_u",
-    alpha=0.05,
-    mde={_PRIMARY_KPI: 0.2},
-    decision_rule="significant_and_favorable_and_meets_mde",
-)
+# The real, version-controlled metric contract (v2): one primary KPI, the objective, whose
+# MDE is the committed materiality margin. One primary KPI is enough to exercise the full
+# outcome space; the property is about the reported *scenario* set, not the KPI product.
+_CONTRACT = load_contract()
+_PRIMARY_KPI = _CONTRACT.objective_kpi
+_MARGIN = _CONTRACT.materiality_margin
 
 # A deterministic, available, within-bound fidelity report so assembly never depends on
 # the live C34 gauge (fidelity context is irrelevant to Property 16).
 _FIDELITY = FidelityReport(kl_divergence=0.02, threshold=0.1)
 
-# High / low fill-rate levels far enough apart that the higher level always wins the
-# significant-and-favorable-and-meets-MDE comparison against the lower level.
-_HIGH = 0.9
-_LOW = 0.5
-_TIE = 0.6
+# The consensus arm's objective level; each intent prices the baseline relative to it.
+_CONSENSUS_COST = 10.0
 
-# The three engineered outcome intents.
-_WIN, _LOSS, _TIE_INTENT = "win", "loss", "tie"
+# The four engineered outcome intents.
+_WIN, _SUB_MARGIN, _LOSS, _TIE_INTENT = "win", "sub_margin", "loss", "tie"
+
+# Paired difference (baseline minus consensus) per intent, in units of the margin.
+_DIFFERENCE_IN_MARGINS = {_WIN: 4.0, _SUB_MARGIN: 0.5, _LOSS: -4.0, _TIE_INTENT: 0.0}
+
+# The outcome each intent must classify as. A sub-margin gain is not a material win.
+_EXPECTED_OUTCOME = {
+    _WIN: Outcome.SYNAPSE_WINS,
+    _SUB_MARGIN: Outcome.TIE_INCONCLUSIVE,
+    _LOSS: Outcome.BASELINE_WINS,
+    _TIE_INTENT: Outcome.TIE_INCONCLUSIVE,
+}
 
 
-def _kpi(fill_rate: float) -> KpiVector:
-    """A KpiVector carrying ``fill_rate``; other fields are irrelevant here."""
+def _kpi(objective: float) -> KpiVector:
+    """A KpiVector carrying ``objective``; the secondary fields are irrelevant here."""
     return KpiVector(
-        fill_rate=fill_rate,
+        fill_rate=1.0,
         spoilage_rate=0.0,
         stockout_rate=0.0,
         avg_delivery_time_min=1.0,
         margin=1.0,
         co2_estimate=1.0,
+        avg_on_hand_units=1.0,
+        objective=objective,
     )
 
 
 def _series(base: float, n: int = 40) -> list[float]:
-    """A small spread around ``base`` so the significance test is well-defined."""
+    """A small spread around ``base``; both arms share it, so paired differences are flat."""
     return [base + (i % 5) * 0.001 for i in range(n)]
 
 
-def _runs(arm: str, fill_rates: list[float]) -> list[ScenarioRun]:
+def _runs(arm: str, objectives: list[float]) -> list[ScenarioRun]:
     return [
-        ScenarioRun(arm=arm, seed=i, kpis=_kpi(fr), failed=False, error=None)
-        for i, fr in enumerate(fill_rates)
+        ScenarioRun(arm=arm, seed=i, kpis=_kpi(objective), failed=False, error=None)
+        for i, objective in enumerate(objectives)
     ]
 
 
 def _levels_for_intent(intent: str) -> tuple[float, float]:
-    """Return (consensus_base, baseline_base) engineered to force ``intent``."""
-    if intent == _WIN:
-        return _HIGH, _LOW
-    if intent == _LOSS:
-        return _LOW, _HIGH
-    return _TIE, _TIE  # identical distributions -> tie / inconclusive
+    """Return (consensus_base, baseline_base) objectives engineered to force ``intent``."""
+    return _CONSENSUS_COST, _CONSENSUS_COST + _DIFFERENCE_IN_MARGINS[intent] * _MARGIN
 
 
 # Distinct scenario names crossed with a per-scenario engineered outcome intent. Drawing
@@ -103,7 +105,7 @@ def _levels_for_intent(intent: str) -> tuple[float, float]:
 _scenarios_with_intents = st.lists(
     st.tuples(
         st.text(alphabet="abcdefghijklmnopqrstuvwxyz-", min_size=1, max_size=12),
-        st.sampled_from([_WIN, _LOSS, _TIE_INTENT]),
+        st.sampled_from([_WIN, _SUB_MARGIN, _LOSS, _TIE_INTENT]),
     ),
     min_size=1,
     max_size=6,
@@ -111,7 +113,6 @@ _scenarios_with_intents = st.lists(
 )
 
 
-@settings(max_examples=200)
 @given(scenarios_with_intents=_scenarios_with_intents)
 def test_every_executed_scenario_is_reported(
     scenarios_with_intents: list[tuple[str, str]],
@@ -144,6 +145,7 @@ def test_every_executed_scenario_is_reported(
         results_path=None,
         scenarios=scenarios,
         arm_names=(_CONSENSUS_ARM, _BASELINE_ARM),
+        arm_roles={_CONSENSUS_ARM: "consensus", _BASELINE_ARM: "baseline"},
     )
 
     result = assemble_uplift_result(harness_result, _CONTRACT, fidelity=_FIDELITY)
@@ -160,13 +162,5 @@ def test_every_executed_scenario_is_reported(
 
     # Sanity: the engineered intents actually span the outcome space, so this example
     # exercises a genuine distribution rather than a single uniform outcome.
-    expected_outcomes = {
-        name: {
-            _WIN: Outcome.SYNAPSE_WINS,
-            _LOSS: Outcome.BASELINE_WINS,
-            _TIE_INTENT: Outcome.TIE_INCONCLUSIVE,
-        }[intent]
-        for name, intent in scenarios_with_intents
-    }
-    for name, expected in expected_outcomes.items():
-        assert result.per_scenario[(name, _PRIMARY_KPI)] is expected
+    for name, intent in scenarios_with_intents:
+        assert result.per_scenario[(name, _PRIMARY_KPI)] is _EXPECTED_OUTCOME[intent]

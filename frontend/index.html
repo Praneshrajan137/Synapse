@@ -10,14 +10,11 @@
     />
     <meta name="theme-color" content="#06080f" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-    <!-- Paint-critical self-hosted faces (ADR-045); mono swaps late by design. -->
-    <link
-      rel="preload"
-      as="font"
-      type="font/woff2"
-      crossorigin
-      href="/fonts/InterVariable.woff2"
-    />
+    <!-- Paint-critical self-hosted face (ADR-045): Space Grotesk sets the Shell wordmark and
+         Mission Control's hero title above the fold, and is 22 KB. Inter is deliberately NOT
+         preloaded: its 344 KB competed with the entry JS for the 3G mobile profile's whole
+         bandwidth before first render, and font-display: swap never makes the first paint
+         wait for it (styles/fonts.css). Mono swaps late by design. -->
     <link
       rel="preload"
       as="font"

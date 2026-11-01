@@ -1,0 +1,179 @@
+{
+  "$comment": "Dialect: JSON Schema draft-07. The dialect keyword is intentionally omitted so nothing has to be fetched over the network to validate this file; scripts/audit/required_checks_truth.py selects jsonschema.Draft7Validator explicitly.",
+  "$id": "synapse.quality.required_checks",
+  "title": "SYNAPSE required status-check declaration",
+  "description": "Schema for infrastructure/quality/required-checks.yaml (E1.7; R14.1). scripts/audit/required_checks_truth.py validates the file against this schema before resolving each declared job against the workflow that defines it (R14.2). Structural validity is a precondition of the consistency check, not a substitute for it: a schema-valid file whose jobs do not resolve still FAILs.",
+  "type": "object",
+  "required": ["version", "branch", "declared_by", "required", "reconciliation"],
+  "additionalProperties": false,
+  "properties": {
+    "version": {"type": "integer", "minimum": 1},
+    "branch": {
+      "type": "string",
+      "minLength": 1,
+      "description": "The protected branch whose required-check set this file declares."
+    },
+    "declared_by": {"type": "string", "minLength": 1},
+    "required": {
+      "type": "array",
+      "minItems": 1,
+      "description": "The declared required set. Every entry must report on every pull request to `branch`.",
+      "items": {"$ref": "#/definitions/requiredEntry"}
+    },
+    "candidates": {
+      "type": "array",
+      "description": "Eligible but not declared required. Never treated as required.",
+      "items": {"$ref": "#/definitions/candidateEntry"}
+    },
+    "ineligible": {
+      "type": "array",
+      "description": "Jobs that cannot be a required status check as currently triggered. Not an exemption from gating -- a statement that branch protection cannot cover them.",
+      "items": {"$ref": "#/definitions/ineligibleEntry"}
+    },
+    "pending": {
+      "type": "array",
+      "description": "Jobs that join `required` once they exist. Job names here are deliberately NOT resolved.",
+      "items": {"$ref": "#/definitions/pendingEntry"}
+    },
+    "reconciliation": {"$ref": "#/definitions/reconciliation"}
+  },
+  "definitions": {
+    "jobRef": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "^[A-Za-z0-9_-]+$",
+      "description": "A workflow job id as written under `jobs:`."
+    },
+    "workflowRef": {
+      "type": "string",
+      "pattern": "^\\.github/workflows/[A-Za-z0-9._-]+\\.ya?ml$"
+    },
+    "requiredEntry": {
+      "type": "object",
+      "required": ["job", "workflow", "check_name", "gates", "rationale"],
+      "additionalProperties": false,
+      "properties": {
+        "job": {"$ref": "#/definitions/jobRef"},
+        "workflow": {"$ref": "#/definitions/workflowRef"},
+        "check_name": {
+          "type": "string",
+          "minLength": 1,
+          "description": "What GitHub matches: the job's `name:` if present, else the job id. Must byte-match the workflow."
+        },
+        "gates": {
+          "type": "array",
+          "minItems": 1,
+          "items": {"type": "string", "minLength": 1},
+          "description": "The gates this job executes, so R14.3's document-to-job mapping is checkable."
+        },
+        "rationale": {"type": "string", "minLength": 1}
+      }
+    },
+    "candidateEntry": {
+      "type": "object",
+      "required": ["job", "workflow", "check_name", "reason"],
+      "additionalProperties": false,
+      "properties": {
+        "job": {"$ref": "#/definitions/jobRef"},
+        "workflow": {"$ref": "#/definitions/workflowRef"},
+        "check_name": {"type": "string", "minLength": 1},
+        "reason": {"type": "string", "minLength": 1}
+      }
+    },
+    "ineligibleEntry": {
+      "type": "object",
+      "required": ["job", "workflow", "reason", "detail"],
+      "additionalProperties": false,
+      "properties": {
+        "job": {"$ref": "#/definitions/jobRef"},
+        "workflow": {"$ref": "#/definitions/workflowRef"},
+        "reason": {
+          "type": "string",
+          "enum": [
+            "path-filtered",
+            "path-filtered-and-conditioned",
+            "branch-push-only",
+            "conditioned-off-pull-request",
+            "self-labelled-informational",
+            "post-merge"
+          ]
+        },
+        "detail": {
+          "type": "string",
+          "minLength": 1,
+          "description": "The trigger or condition that makes the job ineligible, in enough detail to re-derive from the workflow file."
+        }
+      }
+    },
+    "pendingEntry": {
+      "type": "object",
+      "required": ["job", "workflow", "lands_in", "requirement", "reason"],
+      "additionalProperties": false,
+      "properties": {
+        "job": {"$ref": "#/definitions/jobRef"},
+        "workflow": {"$ref": "#/definitions/workflowRef"},
+        "check_name": {
+          "type": ["string", "null"],
+          "description": "null while the job does not exist. A pending entry never contributes a required check."
+        },
+        "lands_in": {"type": "string", "minLength": 1},
+        "requirement": {"type": "string", "minLength": 1},
+        "reason": {"type": "string", "minLength": 1}
+      }
+    },
+    "reconciliation": {
+      "type": "object",
+      "required": ["workflow", "api_path", "artifact", "status", "live_read", "policy"],
+      "additionalProperties": false,
+      "properties": {
+        "workflow": {"$ref": "#/definitions/workflowRef"},
+        "api_path": {"type": "string", "minLength": 1},
+        "artifact": {"type": "string", "minLength": 1},
+        "status": {
+          "type": "string",
+          "enum": ["unverified", "verified", "mismatch"],
+          "description": "I-7: `unverified` is a first-class state and is never a pass. Only a run that read the live configuration may write `verified` or `mismatch`."
+        },
+        "live_read": {"$ref": "#/definitions/liveRead"},
+        "policy": {"type": "string", "minLength": 1}
+      },
+      "allOf": [
+        {
+          "description": "A `verified` or `mismatch` status requires a real read: read_at and contexts must both be populated (R14.5, R14.6).",
+          "if": {"properties": {"status": {"enum": ["verified", "mismatch"]}}},
+          "then": {
+            "properties": {
+              "live_read": {
+                "required": ["read_at", "contexts"],
+                "properties": {
+                  "read_at": {"type": "string"},
+                  "contexts": {"type": "array"}
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    "liveRead": {
+      "type": "object",
+      "required": ["read_at", "contexts", "strict"],
+      "additionalProperties": false,
+      "properties": {
+        "read_at": {
+          "type": ["string", "null"],
+          "description": "ISO-8601 UTC timestamp of the read performed during the reporting run (R14.6). null means no read has happened."
+        },
+        "contexts": {
+          "type": ["array", "null"],
+          "items": {"type": "string"},
+          "description": "The live required-status-check contexts as returned by the hosting platform."
+        },
+        "strict": {
+          "type": ["boolean", "null"],
+          "description": "The live `strict` (require-branches-up-to-date) flag."
+        }
+      }
+    }
+  }
+}

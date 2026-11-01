@@ -1,0 +1,141 @@
+# SYNAPSE -- Checkpoint-proof SCOPE policy
+# (purpose-achievement-audit R3.8; design E5.2; task 10.10)
+#
+# R3.8: "WHERE the serving-path proof constructs its checkpoint in a temporary
+# directory, THE proof SHALL be reported as validating the transport and adapter,
+# and SHALL NOT be counted as evidence that a checkpoint is published."
+#
+# Why this file exists. `ModelRegistry._resolve_checkpoint_path`
+# (packages/synapse_common/model_registry.py) PREFERS a local checkpoint over the
+# remote. So a proof that builds a checkpoint in a pytest `tmp_path` and watches it
+# resolve non-degraded is a proof about the *transport* (dir -> loader -> sidecar) and
+# the *adapter* (injected builder -> LoadedModel) -- never a proof that anybody
+# published anything. A comment saying so is not a mechanism: delete the comment and
+# nothing breaks. This file plus its consumer make the label mechanical -- remove the
+# scope statement or the scope constants from a listed proof and the consumer FAILs.
+#
+# Read contract: `encoding='utf-8'` on every read (E-S13-07). ASCII-only.
+# Consumer: packages/tests/test_checkpoint_scope_labelling.py (runs anywhere; needs
+#   no checkpoint, no torch, and no network).
+# Related policy: infrastructure/quality/checkpoint-truth.yaml owns the floors,
+#   tolerances, markers, and the `source.allow_local_substitution: false` pin. This
+#   file adds no threshold of its own -- it declares only which proofs must carry a
+#   scope label and what that label must say.
+#
+# I-7: a proof that cannot be counted as publication evidence must SAY it cannot, in
+# a place that fails when the statement is removed.
+
+version: 1
+requirement: "3.8"
+
+# ---------------------------------------------------------------------------
+# The two module-level constants every listed proof must expose
+# ---------------------------------------------------------------------------
+# Prose can be reworded; a constant cannot be quietly softened. The consumer
+# imports each listed proof module and reads these two names, so deleting either
+# one is a failure rather than a silent loss of scope.
+scope_constant: SERVING_PROOF_SCOPE
+evidence_constant: PUBLICATION_EVIDENCE
+
+# ---------------------------------------------------------------------------
+# Scope vocabulary
+# ---------------------------------------------------------------------------
+# `id` is the exact value the proof's `SERVING_PROOF_SCOPE` must hold.
+# `required_tokens` must ALL appear verbatim in the proof module's source text, so
+# the human-readable statement and the machine-readable constant cannot drift apart.
+scopes:
+  - id: transport-and-adapter-only
+    required_tokens:
+      - "TRANSPORT AND ADAPTER VALIDATION ONLY"
+      - "not evidence that a checkpoint is published"
+    description: >-
+      The checkpoint is built inside a pytest `tmp_path` and resolved from that
+      temporary directory. What is validated is the checkpoint transport and the
+      serving adapter. Nothing about publication is validated, and no
+      published-checkpoint gate reads this proof.
+
+  - id: smoke-artifact-resolution-only
+    required_tokens:
+      - "SMOKE-ARTIFACT RESOLUTION ONLY"
+      - "not evidence that a checkpoint is published"
+    description: >-
+      The R3.2 resolution contract exercised against the artifact the ci.yml
+      training-smoke job just produced. It proves that a recorded entry resolves
+      through the production serving path to `degraded=false` with the recorded sha
+      in the version string. While the committed registry holds only
+      `__placeholder__`, the artifact resolved is the SMOKE one and the proof states
+      so -- a resolution contract is not a publication claim.
+
+# ---------------------------------------------------------------------------
+# The proofs that MUST carry a scope label
+# ---------------------------------------------------------------------------
+labelled_proofs:
+  - path: packages/tests/test_model_registry_checkpoint.py
+    scope: transport-and-adapter-only
+    note: >-
+      The ADR-043 $0 checkpoint-source proof named by audit Requirement 3. Every
+      test in it writes its artifact into `tmp_path` and injects a sentinel builder;
+      it is the proof R3.8 is written about.
+
+  - path: tests/integration/test_published_entry_serving_resolution.py
+    scope: smoke-artifact-resolution-only
+    note: >-
+      The R3.2 integration proof (task 10.10). It resolves the smoke-published
+      artifact through `agents.demand_prophet.inference.serve._build_model_registry`
+      -- the production wiring -- and carries the same non-publication label so a
+      green training-smoke run cannot be read as publication evidence either.
+
+# ---------------------------------------------------------------------------
+# Anti-vacuity: find a tmp-dir serving proof that was never labelled
+# ---------------------------------------------------------------------------
+# A registry nobody checks for completeness is a registry that stops being true. The
+# consumer scans the test trees for modules that resolve a checkpoint from a
+# directory AND assert a non-degraded / real resolution. Any such module that is
+# neither listed above nor allowlisted below is a FAIL naming the file, so adding a
+# new tmp-dir serving proof without a scope label cannot pass.
+discovery:
+  roots:
+    - packages/tests
+    - tests
+    - agents
+    - orchestrator
+    - digital_twin
+    - api
+  filename_glob: "test_*.py"
+  # A candidate must contain EVERY one of these ...
+  all_of:
+    - "checkpoint_dir="
+    - "tmp_path"
+  # ... and AT LEAST ONE of these.
+  any_of:
+    - "is_real is True"
+    - "degraded is False"
+  # The consumer and this policy name the markers above as data; scanning them would
+  # match on the vocabulary rather than on a proof.
+  exclude_paths:
+    - packages/tests/test_checkpoint_scope_labelling.py
+
+# ---------------------------------------------------------------------------
+# Disclosed, dated debt (the C61 ratchet shape, not an exemption)
+# ---------------------------------------------------------------------------
+# Every entry carries `rules`, a dated `rationale`, and a `removal_condition`; an
+# entry missing any of the three is itself a FAIL, and an entry naming a file the
+# scan no longer discovers is a FAIL too (a stale excuse is not an excuse). The
+# allowlist is a ratchet: it may shrink, never grow silently.
+unlabelled_allowlist:
+  - path: tests/verify/test_published_checkpoint_registry.py
+    rules:
+      - scope-label-absent
+    rationale: >-
+      2026-06-17: this module's `test_populated_record_loads_through_serving_path_non_degraded`
+      is the second tmp-dir serving proof (audit Requirement 3 cites it by name). Its
+      docstring already discloses that "only the transport is local instead of HF",
+      which is the right disclosure but not a mechanism. The file is owned by the
+      concurrent Property-17 work (task 10.9) and by the C46 re-pointing decision
+      (task 12.1), so task 10.10 declines to edit it rather than race another change
+      through it. The debt is the missing mechanical label, not a wrong claim.
+    dated: "2026-06-17"
+    removal_condition: >-
+      Delete this entry and move the path into `labelled_proofs` with scope
+      `transport-and-adapter-only` once the owning task adds the scope statement and
+      the two scope constants to that module.

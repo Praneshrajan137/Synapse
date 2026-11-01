@@ -21,14 +21,14 @@ Bengaluru traffic. The controller exposes Prometheus counter
 from __future__ import annotations
 
 from enum import IntEnum
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Protocol
 
 import structlog
 from synapse_common.metrics import BROWNOUT_DECISIONS_TOTAL
 from synapse_common.models import DecisionTier
 
 if TYPE_CHECKING:
-    from synapse_common.breakers import AsyncBreaker
+    from synapse_common.breakers import BreakerState
 
 logger = structlog.get_logger(__name__)
 
@@ -51,14 +51,34 @@ _TIER_ORDER: list[DecisionTier] = [
 ]
 
 
+class BreakerStateSource(Protocol):
+    """The only breaker surface this module consumes: a readable ``state``.
+
+    ``BrownoutController`` reads ``breaker.state`` and compares it against
+    ``BreakerState``. It calls no method on a breaker and mutates nothing, so
+    declaring the parameters as the whole ``AsyncBreaker`` overstated the
+    requirement. That overstatement was reported 24 times at the *call sites*
+    that supply honest test doubles rather than once here, where it lives.
+
+    ``AsyncBreaker`` satisfies this protocol structurally — its ``state`` is a
+    read-only property returning ``BreakerState`` — so no production call site
+    changes and no runtime behaviour changes. Declared read-only on purpose: the
+    controller never assigns to ``state``, and a mutable protocol member would
+    reject ``AsyncBreaker``'s property.
+    """
+
+    @property
+    def state(self) -> BreakerState: ...
+
+
 class BrownoutController:
     """Per-(city, tier) brownout decisions consulted by the tier router."""
 
     def __init__(
         self,
         city: str,
-        ollama_breaker: AsyncBreaker | None = None,
-        postgres_breaker: AsyncBreaker | None = None,
+        ollama_breaker: BreakerStateSource | None = None,
+        postgres_breaker: BreakerStateSource | None = None,
     ) -> None:
         self.city = city
         self._ollama_breaker = ollama_breaker
@@ -125,7 +145,7 @@ class BrownoutController:
         BROWNOUT_DECISIONS_TOTAL.labels(level=level.name, city=self.city).inc()
 
     @staticmethod
-    def _breaker_state(breaker: AsyncBreaker | None) -> int:
+    def _breaker_state(breaker: BreakerStateSource | None) -> int:
         """Map BreakerState to a comparable int.
 
         AsyncBreaker.state is a ``BreakerState`` *string* enum (CLOSED/

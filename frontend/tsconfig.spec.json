@@ -1,0 +1,67 @@
+{
+  // SYNAPSE Console -- type-check project for the SPEC and E2E trees.
+  //
+  // purpose-achievement-audit task 12.2. `tsconfig.json`'s `include` is
+  //
+  //   ["src", "src/test/**/*", "vite.config.ts", "vitest.config.ts",
+  //    "playwright.config.ts", "playwright.harness.config.ts",
+  //    "spec/effectiveness/harness.ts", "spec/effectiveness/e2e-entry.ts"]
+  //
+  // so `pnpm typecheck` (`tsc --noEmit`) and the `tsc --noEmit` inside `pnpm build`
+  // / `pnpm build:e2e` never checked:
+  //
+  //   * spec/effectiveness/arbitraries.ts, run-ratchet.ts, check-baseline.ts,
+  //     real-stack-fidelity.ts, scorecard-emission.ts, scorecard-gate.ts,
+  //     browser-worker.ts, handlers.ts, fixture-factory.ts, schema-registry.ts,
+  //     stream-driver.ts, stream-transport.ts, scenarios/*
+  //   * the EIGHT property tests in spec/effectiveness/__tests__/
+  //   * spec/contract-fidelity/** including its own property test
+  //   * every e2e spec under tests/**
+  //
+  // `pnpm lint` is `biome check ./src`, so none of them were linted either. They
+  // execute under vitest and Playwright, esbuild-transpiled with no type check, so a
+  // type error surfaces only if a run happens to reach that line. A directory CI runs
+  // but never checks is exactly the class of finding this audit exists to make
+  // mechanical.
+  //
+  // WHY A SEPARATE PROJECT INSTEAD OF WIDENING `tsconfig.json`'s `include`
+  // ---------------------------------------------------------------------
+  // Blast radius. `pnpm build` is `tsc --noEmit && vite build`, so widening the base
+  // `include` puts these files inside the BUILD's type check. In `frontend.yml`,
+  // `build` needs `quality`, and `e2e`, `e2e-visual`, `e2e-harness` and
+  // `mobile-lighthouse` all need `build`; `effectiveness-ratchet` needs
+  // `e2e-harness`, and `fe-invariants` needs [quality, e2e, e2e-visual,
+  // e2e-harness]. One pre-existing error in one e2e spec would therefore skip the
+  // entire console-effectiveness spine -- the harness run record, the scorecard, the
+  // ratchet, the FE-INV attestation -- and every one of those would render as NOT
+  // EXECUTED. This project isolates the new signal: it fails on its own, and nothing
+  // downstream depends on it.
+  //
+  // This is NOT a narrowed glob chosen to dodge files suspected of being dirty. It
+  // covers strictly MORE than widening the base `include` would have: `spec/**` and
+  // `tests/**` in full.
+  //
+  // EXPECTED RED ON THE FIRST CI RUN, and that is honest (I-7)
+  // ---------------------------------------------------------
+  // These files have never been compiled. This project inherits `strict`,
+  // `noUncheckedIndexedAccess`, `exactOptionalPropertyTypes`, `noUnusedLocals`,
+  // `noUnusedParameters`, `noImplicitReturns` and `verbatimModuleSyntax` from the
+  // base config and applies them to code that has only ever been transpiled. Errors
+  // in the four older property tests (`fixture-factory`, `harness-determinism`,
+  // `schema-less`, `unhandled-path`) and in the e2e specs are EXPECTED and are
+  // pre-existing debt becoming visible -- not a regression introduced by this file.
+  // The first `pnpm typecheck:spec` run in CI is the first real signal: it was
+  // authored, not executed (I-0 forbids the local run, and `getDiagnostics` returns
+  // no TypeScript signal in this workspace, so a clean local result would have
+  // proven nothing).
+  "extends": "./tsconfig.json",
+  "include": ["spec/**/*.ts", "tests/**/*.ts"],
+  "exclude": [
+    "node_modules",
+    "dist",
+    "dist-e2e",
+    "coverage",
+    "playwright-report",
+    "test-results"
+  ]
+}

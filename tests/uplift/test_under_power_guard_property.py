@@ -18,18 +18,33 @@ The property is pure and fast: it exercises the guard itself. The execution seam
 (``_run_sequential``) is stubbed, so no twin is built, no consensus arm is assembled, no
 socket is opened, $0.
 
+Carried to the v2 harness (decision-quality-proof task 15.5): ``run`` takes ``ArmSpec``
+registrations, so the full-matrix entry point is driven with a registered arm -- refused below
+the floor, and now also shown NOT to refuse at or above it.
+
 **Validates: Requirements 3.2**
 """
 from __future__ import annotations
+
+from typing import TYPE_CHECKING
 
 import pytest
 from hypothesis import given, settings
 from hypothesis import strategies as st
 
-from uplift.harness import MIN_SCENARIOS, UpliftHarness, replicate_seed
-from uplift.interfaces import Observation, PolicyAction, Scenario, ScenarioRun
+from digital_twin.simulation.monte_carlo import MIN_SCENARIOS, ShockParams
+from uplift.harness import UpliftHarness, replicate_seed
+from uplift.interfaces import (
+    ArmSpec,
+    DecisionPolicy,
+    Observation,
+    PolicyAction,
+    Scenario,
+    ScenarioRun,
+)
 
-from digital_twin.simulation.monte_carlo import ShockParams
+if TYPE_CHECKING:
+    from collections.abc import Callable, Sequence
 
 # Under-powered requests: the half-open interval the design names, [0, MIN_SCENARIOS).
 _under_powered = st.integers(min_value=0, max_value=MIN_SCENARIOS - 1)
@@ -64,8 +79,13 @@ class _NoTwinHarness(UpliftHarness):
         super().__init__()
         self.seed_counts: list[int] = []
 
-    def _run_sequential(  # type: ignore[override]
-        self, scenario, policy, policy_factory, arm_name, seeds
+    def _run_sequential(
+        self,
+        scenario: Scenario,
+        policy: DecisionPolicy | None,
+        policy_factory: Callable[[], DecisionPolicy] | None,
+        arm_name: str,
+        seeds: Sequence[int],
     ) -> list[ScenarioRun]:
         self.seed_counts.append(len(seeds))
         return []
@@ -83,7 +103,7 @@ def _assert_under_power_error(exc: pytest.ExceptionInfo[ValueError], n: int) -> 
     assert str(MIN_SCENARIOS) in message
 
 
-@settings(max_examples=200, deadline=None)
+@settings(deadline=None)
 @given(n=_requests)
 def test_under_power_guard_is_total_over_n(n: int) -> None:
     """Property 10: the guard's outcome is exactly ``n < MIN_SCENARIOS``, everywhere.
@@ -93,6 +113,8 @@ def test_under_power_guard_is_total_over_n(n: int) -> None:
     should_raise = n < MIN_SCENARIOS
     harness = _NoTwinHarness()
     policy = _StubPolicy()
+    # ``run`` takes registrations: the arm declares its role, so the guard is what refuses.
+    registered = [ArmSpec(policy, "baseline")]
     scenario = _scenario()
 
     # -- the guard predicate itself -------------------------------------------------
@@ -113,7 +135,7 @@ def test_under_power_guard_is_total_over_n(n: int) -> None:
 
         # The same guard covers the full matrix entry point (``run``).
         with pytest.raises(ValueError) as exc:
-            harness.run([scenario], [policy], n, parallel=False)
+            harness.run([scenario], registered, n, parallel=False)
         _assert_under_power_error(exc, n)
         assert harness.seed_counts == []
     else:
@@ -121,6 +143,11 @@ def test_under_power_guard_is_total_over_n(n: int) -> None:
         assert result.arm == policy.name
         # Exactly ``n`` replicate seeds were derived and handed to the execution seam.
         assert harness.seed_counts == [n]
+
+        # ``run`` does not refuse a powered request either: one more ``n`` reaches the seam.
+        matrix = harness.run([scenario], registered, n, parallel=False)
+        assert matrix.arm_roles == {policy.name: "baseline"}
+        assert harness.seed_counts == [n, n]
 
 
 def test_guard_boundary_is_exactly_min_scenarios() -> None:

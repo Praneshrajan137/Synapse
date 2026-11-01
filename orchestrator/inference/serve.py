@@ -40,6 +40,7 @@ from orchestrator.config import OrchestratorConfig
 from orchestrator.consensus.protocol import ConsensusProtocol
 from orchestrator.consensus.tier_router import TierRouter
 from orchestrator.guardrails.rules import GuardrailEngine
+from orchestrator.guardrails.thresholds import ConfigConfidenceThresholdProvider
 from orchestrator.hitl.escalation import HITLEscalation, WebSocketManager
 from orchestrator.llm.context_builder import ContextBuilder
 from orchestrator.llm.ollama_client import OllamaClient
@@ -184,7 +185,10 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         )
 
     tier_router = TierRouter()
-    guardrails = GuardrailEngine(confidence_threshold=_config.confidence_threshold)
+    # ADR-054 D4 / R5.4: bind a *provider*, not the float. The engine reads the
+    # boundary on every validation, so a configuration reload moves the I-5
+    # escalation boundary on every tier without restarting this process.
+    guardrails = GuardrailEngine(confidence_threshold=ConfigConfidenceThresholdProvider(_config))
     audit_logger = AuditLogger(session_factory)
 
     # ADR-044: register per-city brownout controllers at startup so the

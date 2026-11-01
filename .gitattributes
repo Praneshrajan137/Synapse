@@ -8,3 +8,13 @@
 # SQL init/migration files are read by psql inside the postgres container; keep
 # them LF for byte-stable behaviour and to silence autocrlf normalisation churn.
 *.sql text eol=lf
+
+# The committed B-prime record (uplift/bprime_record.py) is pinned by the sha256 of its EXACT
+# bytes: the CI artifact as uplift.yml run 36860454801 wrote it. A checkout that rewrote its
+# trailing LF as CRLF (core.autocrlf on Windows) would change that digest and refuse the record
+# on that machine alone, so no line-ending conversion is applied to it anywhere.
+docs/state/bprime/*.json -text
+
+# The committed Power_Report (uplift/power.py) is the controls' CI artifact, committed unedited
+# from uplift.yml run 41268743674; the same rule keeps its bytes exact on every checkout.
+docs/state/uplift-power-report.json -text

@@ -1,6 +1,8 @@
 import type { ScoredOutcome } from "@lib/trust-track-record";
 import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
+// Bootstrap i18n so the panel's "no data path" notice copy resolves (R13.6).
+import "@i18n/index";
 import { TrustTrackRecord } from "../TrustTrackRecord";
 
 const AS_OF = "2024-01-01T00:00:00.000Z";

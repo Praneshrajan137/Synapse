@@ -31,5 +31,6 @@ export * from "./AttentionBeacon";
 export * from "./SystemTrustTile";
 export * from "./CatchUpBanner";
 export * from "./UniversalStateView";
+export * from "./DataPathNotice";
 export * from "./SpatialErrorBoundary";
 export * from "./OversightControls";

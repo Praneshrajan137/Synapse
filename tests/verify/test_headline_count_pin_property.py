@@ -18,13 +18,21 @@ matches, else fails naming each drift.
     claimed and suite-reported values.
 
 Both sides of the comparison are generated: the README text is injected through
-``doc_truth._read`` and the suite summary through ``doc_truth._suite_counts``, so the
-real ``verify_claims`` suite (which shells out to git/docker probes and takes minutes)
-is never executed. ``doc_truth.subprocess`` is replaced with a booby-trapped stand-in so
-an accidental shell-out fails the test loudly instead of running for minutes.
+``doc_truth._read`` and the suite summary through ``doc_truth.nested_suite_counts``, so
+the real ``verify_claims`` suite (which shells out to git/docker probes and takes
+minutes) is never executed. ``doc_truth.subprocess`` is replaced with a booby-trapped
+stand-in so an accidental shell-out fails the test loudly instead of running for minutes.
+
+The seam is ``nested_suite_counts`` (public, returning a ``NestedVerdict``) since feature
+decision-quality-proof task 4.1 promoted it out of ``_suite_counts``; the promotion is
+what lets ``scripts/audit/readme_gen.py`` project the README from the same execution this
+claim compares against instead of modelling the recursion guard a second time (AD-21).
+This test moved with it in the same change, because a stub named after a function that no
+longer exists is an ``AttributeError``, not a skipped assertion.
 
 **Validates: Requirements 8.1, 8.2, 8.3**
 """
+
 from __future__ import annotations
 
 import subprocess
@@ -115,7 +123,13 @@ def test_headline_pin_passes_iff_every_count_matches_else_names_each_drift(
     with pytest.MonkeyPatch.context() as mp:
         mp.delenv(dt._NESTED_ENV, raising=False)
         mp.setattr(dt, "_read", lambda _path: _readme(headline))
-        mp.setattr(dt, "_suite_counts", lambda: (dict(actual), ""))
+        # `**_kwargs` absorbs `emit_to=`, which the claim passes through: the payload-emit
+        # request is orthogonal to the comparison this property is about.
+        mp.setattr(
+            dt,
+            "nested_suite_counts",
+            lambda **_kwargs: (dt.NestedVerdict(counts=dict(actual)), ""),
+        )
         mp.setattr(dt, "subprocess", _exploding_subprocess())
         result = dt._claim_readme_headline_counts()
 
