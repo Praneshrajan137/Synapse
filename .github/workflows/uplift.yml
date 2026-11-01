@@ -1,0 +1,671 @@
+# SYNAPSE uplift measurement -- the generating jobs for C60 and for E3's controls, and E2b's
+# twin regret (purpose-achievement-audit task 10.5; decision-quality-proof tasks 10.3, 16.7,
+# 22.1; design AD-9 / CF-4; requirements R2.7, R6.11, R6.12, R7.1, R7.2, R7.15).
+#
+# LABEL-TRIGGERED, AND NOTHING ELSE STARTS A JOB HERE. One label per measurement:
+#   measure-twin-regret      -> twin-regret (E2b, one job per declared world cell)
+#   measure-uplift-controls  -> uplift-controls-negative (20 legs) and uplift-controls-positive,
+#                               then uplift-controls (the verdict over both)
+#   measure-uplift-proof     -> uplift-proof (E5, under the proof supervisor)
+# The nightly `schedule` is dropped by operator decision D12.2=a. `workflow_dispatch` is
+# removed because nothing here can use it: GitHub cannot dispatch a workflow absent from the
+# default branch (finding 23, `HTTP 404`), and every measurement attributes itself to the pull
+# request's head, which a dispatch does not carry. A label is visible on the PR, which makes the
+# operator's intent auditable in a way a dispatch is not.
+#
+# EVIDENCE AND VERDICT SHARE ONE JOB (AD-9, CF-4, R2.7, R7.1). `uplift-proof` regenerates the
+# artifact and reads C60 from it in the same job. `scripts/audit/uplift_truth.py` enforces the
+# pairing rather than trusting this file: `--require-fresh-run` declares "the harness ran in
+# this job" (without it C60 is a SKIP, which R2.9 excludes from the PASS count); the artifact's
+# `revision`/`run_id` must equal this job's `SYNAPSE_REVISION`/`SYNAPSE_RUN_ID`; and
+# `artifacts/uplift/result.json` is git-ignored and uploaded, never committed (R2.8).
+# `SYNAPSE_REVISION` is the PR head because on a `pull_request` event `GITHUB_SHA` is a
+# synthetic merge commit in no branch's history, and every job checks out that same head
+# (finding 74), so the measured tree and the named tree are one tree by construction.
+#
+# C60 IS REPORTED, NOT JUDGED, BY DECISION 1=a. C60 reaches `proven` only with
+# `within_fidelity_bound is True`, which only the live divergence monitor sets and no CI job
+# runs (finding 71). `uplift_truth --check` would therefore exit 2 on every run -- a red decided
+# before the run starts, which is the defect this spec exists to remove. Its report mode exits 0
+# once the verdict is written, and the verdict travels in the uploaded JSON (`exit_code`,
+# `outcome`, `reasons`). Nothing in this file claims C60 proven, and a crash still fails the job.
+#
+# NO DISCARDING CONSTRUCTS (I-7, R1.8, R7.15). No `|| true`, `|| echo`, `; exit 0` or
+# `continue-on-error`, and every step that pipes sets `pipefail`. `blocking-steps.yaml` declares
+# every step of the four new jobs, so `workflow_shape_truth` fails a future swallow by
+# declaration rather than by this paragraph.
+#
+# NEVER RUN LOCALLY (I-0). Every job here drives the real SimPy twin at `MIN_SCENARIOS` scale, a
+# category-4 workload, so Linux CI is the only locus (R5.32, R6.12). A job that proves not to
+# fit its bound escalates to the GCP window (ADR-036), never to fewer replicates (INV-TW-002).
+#
+# NOT REQUIRED CHECKS, AND NOT ABLE TO BE. A required status must report on every pull request
+# to `main`; these report only on the label event that names them. `required-checks.yaml` files
+# the four new jobs under `ineligible` as `conditioned-off-pull-request`, so the gap is declared
+# rather than invisible (R7.10); `twin-regret` still owns no entry (conflict G).
+name: SYNAPSE Uplift Proof
+
+on:
+  pull_request:
+    # THE ON-DEMAND MECHANISM THAT WORKS FROM A FEATURE BRANCH (finding 23). A same-repo PR runs
+    # the workflow as defined in its own head, so no copy on `main` is needed; `truth-gates.yml`
+    # is likewise absent from `main` and runs on every PR, which is the empirical proof rather
+    # than an inference.
+    #
+    # `types: [labeled]` AND NOTHING ELSE. Specifying `types` replaces the default
+    # `[opened, synchronize, reopened]`, so a push never starts a run here. Each job's `if:`
+    # selects its own label, and an unrelated label produces a run in which every job skips.
+    types: [labeled]
+    branches: [main]
+
+permissions:
+  contents: read
+
+# NO WORKFLOW-LEVEL `concurrency`, DELIBERATELY. Every label event on the PR starts a run, and a
+# workflow-wide group holds at most one PENDING run: an unrelated label added while a four-hour
+# proof was in flight would cancel a queued controls run. Each job therefore owns a group keyed
+# by job, pull request and matrix leg, with `cancel-in-progress: false`, so a repeat of one
+# measurement on one PR queues behind the running one instead of overlapping it, and different
+# measurements never wait for each other. A matrix job's key carries its leg: a group shared by
+# the legs would let one leg run and cancel the queued others.
+
+env:
+  PYTHONPATH: "."
+
+jobs:
+  # =====================================================================================
+  # uplift-proof -- E5, the powered contrast (decision-quality-proof task 22.1; R7.1, R7.2)
+  # =====================================================================================
+  # E5 IS ONE CELL AND ONE CONTRAST (decision D12.2=a): the primary cell with NO SHOCK, the
+  # consensus arm against the tuned control E (`tuned_static`) -- a claim about the Tier-2
+  # pathway only.
+  #
+  # ONE JOB WITH PARALLEL WORKERS, NOT A REPLICATE-BLOCK MATRIX (task 22.1's re-scope).
+  # Unshocked, the projected cost is about 2 core-hours (B-prime: 2.16 s per replicate-arm over
+  # 24 h; the cost probe: 0.047 s per Tier-2 decision) -- a projection, not a measurement of
+  # this job. A per-shard split would also be refused by the harness's INV-TW-002 guard
+  # (n >= 1000 per run), which is not bypassed.
+  #
+  # THE SUPERVISOR NAMES HOW THE RUN ENDED (R7.2): `failed_to_start`, `exited_nonzero`,
+  # `exceeded_wall_clock` or `no_artifact`, each with its own message and exit status, or
+  # `completed` only when the command exited 0 AND wrote `result.json` in this run. Its 13500 s
+  # bound sits inside `timeout-minutes: 240`, so an overrun is named by the supervisor rather
+  # than by GitHub. The 15 minutes between the two must hold checkout, setup and the install:
+  # an install slower than that lets the job timeout pre-empt the supervisor, and the run is then
+  # red with no status record -- non-passing, but unnamed.
+  uplift-proof:
+    name: E5 powered uplift contrast + C60 report (one job - shared run)
+    runs-on: ubuntu-latest
+    if: >-
+      github.event_name == 'pull_request'
+      && github.event.label.name == 'measure-uplift-proof'
+    concurrency:
+      group: uplift-proof-${{ github.event.pull_request.number }}
+      cancel-in-progress: false
+    timeout-minutes: 240
+    env:
+      SYNAPSE_REVISION: ${{ github.event.pull_request.head.sha }}
+      SYNAPSE_RUN_ID: ${{ github.run_id }}
+      # FINDING 116 (measured from run 41268752414's log). The consensus arm's Disruption Shield
+      # calls `http://ollama:11434` on every consult, and no Ollama runs here. From 04:01Z each
+      # failed lookup of the name `ollama` took 10.04 s instead of 0.033 s, so that run made 6805
+      # of its 24000 decisions before the 13500 s bound. A refused local port fails the same call
+      # at once and takes the same rule-based fallback, so no decision changes. `uplift/*.py` is
+      # untouched, so the controls' Power_Report still describes the revision.
+      DS_OLLAMA_BASE_URL: "http://127.0.0.1:9"
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # Finding 74: measure the PR head, the commit SYNAPSE_REVISION names.
+          ref: ${{ github.event.pull_request.head.sha }}
+
+      - name: Disclose the revision under measurement (attribution, not a gate)
+        # First after checkout, so a run that fails still records which revision failed. It
+        # asserts nothing, and its exit status propagates like every other step's.
+        run: |
+          echo "event=${{ github.event_name }}"
+          echo "github.sha=${{ github.sha }} (synthetic merge commit, not measured)"
+          echo "measured_revision=${SYNAPSE_REVISION}"
+          echo "run_id=${SYNAPSE_RUN_ID}"
+          echo "pull_request=${{ github.event.pull_request.number }}"
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+
+      - name: Install dependencies
+        # THE FULL CLOSURE, NOT TWIN-REGRET'S THIN ONE. `uplift.consensus_arm` assembles all
+        # eight real agent A2A handlers plus the twin handler behind an in-process transport and
+        # a real ConsensusProtocol, and a missing agent dependency does not crash that assembly:
+        # it degrades the arm to the honest-failure stub, so every consensus replicate fails and
+        # the result is incomplete. The thin closure would make E5 a measurement of the stub.
+        # Same closure as `ci.yml::uplift-verify` and `uplift-cost-probe.yml`, which time the
+        # real arm.
+        run: |
+          pip install -r packages/requirements.txt -r packages/requirements-dev.txt
+          pip install -e packages/
+          pip install -r orchestrator/requirements.txt
+          pip install jsonschema pyyaml
+          for req in agents/*/requirements.txt; do pip install -r "$req"; done
+          pip install simpy sse-starlette
+          pip install -r agents/requirements-sprint3.txt
+          pip install "starlette>=0.37.2,<0.38.0"
+
+      - name: Run E5 under the proof supervisor (R7.1, R7.2)
+        id: e5
+        # `--full` pins replicates per arm to `MIN_SCENARIOS` (1000), the floor the gate enforces
+        # as `MIN_POWERED_REPLICATES`; the literal is not restated here. The supervisor refuses to
+        # start if `result.json` already exists (a file this run did not write cannot evidence
+        # it), kills the command's whole process group at the bound, writes
+        # `supervisor-status.json` as canonical JSON, and exits 0 only for `completed`.
+        run: |
+          mkdir -p artifacts/uplift
+          python -m uplift.proof_supervisor --wall-clock-seconds 13500 \
+            --expect-artifact artifacts/uplift/result.json \
+            --status-out artifacts/uplift/supervisor-status.json \
+            -- python -m uplift.cli --full --suite e5-primary --baseline-arm tuned_static \
+            --duration-hours 24 --output artifacts/uplift/result.json
+
+      - name: Report C60 from this run's evidence (report mode - unavailable by decision 1=a)
+        # Runs whenever E5 ran, completed or not, because an inadmissible artifact's reasons are
+        # exactly what a reader needs; not after a cancellation, and not when E5 never started.
+        # `--require-fresh-run` makes this the generating job; without `--check` the gate REPORTS
+        # and exits 0 once its verdict is written (decision 1=a, see the header). The second
+        # command asserts the emitted file is one JSON document, so the `emits:` declaration in
+        # `blocking-steps.yaml` is checked in the run rather than trusted.
+        if: ${{ !cancelled() && steps.e5.outcome != 'skipped' }}
+        run: |
+          set -o pipefail
+          python -m scripts.audit.uplift_truth --json --require-fresh-run \
+            | tee artifacts/uplift/uplift-truth.json
+          python -c 'import json, sys; json.load(open(sys.argv[1], encoding="utf-8"))' \
+            artifacts/uplift/uplift-truth.json
+
+      - name: Upload the proof evidence
+        # `if: always()` so a red run keeps its evidence: an incomplete artifact and the named
+        # state are precisely what is worth reading. This discards no exit status -- the steps
+        # above already decided the job -- and `warn` because a missing file means an earlier
+        # step failed for its own, already-named reason.
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: uplift-proof
+          path: |
+            artifacts/uplift/result.json
+            artifacts/uplift/supervisor-status.json
+            artifacts/uplift/uplift-truth.json
+            artifacts/uplift/dispatch.json
+            artifacts/uplift/reproduction.json
+            artifacts/uplift/pathway-probe.json
+            artifacts/uplift/pathway-probe-refused.json
+          if-no-files-found: warn
+          retention-days: 90
+
+
+  # =====================================================================================
+  # twin-regret -- E2b's (s, S) regret measurement (decision-quality-proof task 10.3)
+  # =====================================================================================
+  # ITS OWN JOB, not a step inside `uplift-proof`, and that is deliberate. The two-pass
+  # foresight protocol DOUBLES the twin cost of every replicate, so folding it into the proof's
+  # job would make one measurement able to time out the other -- and a timeout is a red job, so
+  # the powered uplift proof would fail for a reason that has nothing to do with uplift.
+  #
+  # WHY THIS CANNOT RUN LOCALLY (I-0). A scenario sweep at `MIN_SCENARIOS` scale
+  # (`digital_twin/simulation/monte_carlo.py:22`, `MIN_SCENARIOS = 1000`) is a category-4
+  # workload, `monte_carlo.py` also drives a `ProcessPoolExecutor`, and the two-pass
+  # protocol doubles it again. Linux CI is the only locus (R5.32).
+  #
+  # WHAT THIS MEASURES, STATED HONESTLY. The comparator is no-op versus perfect-foresight.
+  # That is NOT yet the `(s, S)` regret R5.1 asks for: `Par_Level_Reorder` is owned by
+  # `.kiro/specs/decision-integrity-uplift-proof/` and is a PRECONDITION of R5.1, not a
+  # deliverable of R5. What this job establishes is the comparator's own headroom, which
+  # BOUNDS the `(s, S)` regret from above -- so a small value here would already be
+  # informative, and the report says so in its own `comparator` field rather than leaving a
+  # reader to assume the stronger claim.
+  #
+  # NO MARGIN IS COMMITTED YET, BY DESIGN. R5.2 forbids pinning the materiality margin
+  # before a measurement exists, so this job reports `verdict: unavailable` and judges
+  # nothing. Task 10.4 reads this report and commits the margin; only SUBSEQUENT runs are
+  # judged against it. A job that judged a run against a threshold committed after that run
+  # is the exact defect R5.2 names.
+  #
+  # AND IT NOW REPORTS AN INTERVAL, WHICH IS WHAT MAKES THE NEXT RUN'S VERDICT ADMISSIBLE.
+  # `uplift/regret.py::_measure` estimates a paired percentile bootstrap over the per-seed
+  # costs (`uplift/interval.py`, design E3.1) at `1 - alpha` from the committed
+  # Metric_Contract, and passes it to `classify_regret`. Without it, `material` -- the verdict
+  # that FALSIFIES Finding 4 and stops the spec -- was reachable on a bare point estimate,
+  # because `classify_regret` treats an absent interval as "no interval clause to satisfy".
+  # A measurement whose dispersion cannot be estimated now reports `status: unavailable` and
+  # exits 2, which fails this job; it is never downgraded to a point-estimate verdict.
+  twin-regret:
+    name: E2b twin regret vs perfect foresight (measure, do not judge) [${{ matrix.cell }}]
+    runs-on: ubuntu-latest
+    # CHECKPOINT B-PRIME (decision-quality-proof task 14, session-11 re-cut): ONE JOB PER
+    # DECLARED WORLD CELL, read from `digital_twin/simulation/policy.yaml::world.cells`. The
+    # list below restates the cell NAMES only so the matrix is visible on the run page; the
+    # comparator refuses a name the committed file does not declare, so a drift fails loudly.
+    # Only `world.primary_cell` binds; the other seven are descriptive (task 14's body).
+    # `fail-fast: false` so one cell's failure cannot cancel the others' measurements -- each
+    # job's own exit status still propagates; nothing here discards a failure.
+    strategy:
+      fail-fast: false
+      matrix:
+        cell:
+          - off_off
+          - s3_only
+          - s1_only
+          - primary
+          - lead_time_low
+          - lead_time_high
+          - amplitude_quarter
+          - amplitude_half
+    # THE LABEL PATH, which is how checkpoint A runs (finding 23). The `schedule` and
+    # `workflow_dispatch` disjuncts this condition used to carry went with those triggers
+    # (decision D12.2=a; see the header); the label condition itself is unchanged.
+    #
+    # WHY THE MERGE SHA IS NOT A CORRECTNESS PROBLEM HERE. This job carries no provenance gate:
+    # it MEASURES and does not judge, and its artifact is read by a human at checkpoint A. The
+    # merge-SHA subtlety is therefore an attribution problem, closed by checking out the head
+    # (finding 74) and by the disclosure step below.
+    #
+    # To run it: add the `measure-twin-regret` label to the pull request. Remove it afterwards:
+    # this condition reads the PR's CURRENT labels, so while it stays attached every later label
+    # event re-measures. The label is visible on the PR, which makes the operator's intent
+    # auditable in a way a dispatch is not.
+    if: >-
+      github.event_name == 'pull_request'
+      && contains(github.event.pull_request.labels.*.name, 'measure-twin-regret')
+    concurrency:
+      # Per cell, for the reason the concurrency note above `env:` gives.
+      group: twin-regret-${{ github.event.pull_request.number }}-${{ matrix.cell }}
+      cancel-in-progress: false
+    # Well under the ceiling: this measurement is far cheaper than the powered proof, and
+    # sizing it honestly leaves the difference visible rather than reserving budget nobody
+    # uses. A timeout is a failed job, which is the honest outcome for an incomplete
+    # measurement (I-7), never a partial result the gate may read.
+    timeout-minutes: 120
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # FINDING 74. Without `ref:` a labelled run checks out the synthetic MERGE commit
+          # while the disclosure step below reports the PR head, so the measured tree and the
+          # named tree were the same only while `origin/main` stayed an ancestor of the head.
+          # Measuring the head itself makes the disclosure true by construction.
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+
+      - name: Disclose the revision under measurement (attribution, not a gate)
+        # FIRST, so a run that fails still records WHICH revision failed. This exists because
+        # the label path introduces one trap the dispatch path did not have: on a
+        # `pull_request` event `github.sha` is a SYNTHETIC MERGE COMMIT that appears in no
+        # branch's history, so a reader asking "which code produced this number?" would get a
+        # commit they cannot find.
+        #
+        # `github.event.pull_request.head.sha` is the real head on a labelled run, and the
+        # label is now the only trigger, so the `|| github.sha` fallback no longer selects
+        # anything. Checkpoint A can END this spec; the verdict it records must be attributable
+        # to a commit that exists -- the same concern task 17.7 gates mechanically for the
+        # powered proof.
+        #
+        # Disclosure only: it asserts nothing and gates nothing, and its exit status still
+        # propagates like every other step in this file.
+        run: |
+          echo "event=${{ github.event_name }}"
+          echo "github.sha=${{ github.sha }}"
+          echo "measured_revision=${{ github.event.pull_request.head.sha || github.sha }}"
+          echo "run_id=${{ github.run_id }}"
+          echo "cell=${{ matrix.cell }}"
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+
+      - name: Install dependencies
+        # THIS CLOSURE WAS WRONG UNTIL SESSION 2r-pre, AND ITS OWN COMMENT WAS THE REASON.
+        # It used to read "simpy + numpy are the whole closure this measurement needs; it
+        # touches neither the agents nor the orchestrator, so a thinner install is honest
+        # rather than risky here." The premise was almost right and the conclusion was
+        # wrong: the measurement does not touch the agents, but it DOES import the twin,
+        # and `digital_twin/config.py` reads its settings through
+        # `from pydantic_settings import BaseSettings`.
+        #
+        # `pydantic-settings` is in every `agents/*/requirements.txt` and is installed
+        # explicitly by integration.yml and policy.yml, but it is in NEITHER
+        # `packages/requirements.txt` (six packages) NOR `packages/pyproject.toml`'s
+        # `dependencies` (seven), which is all this job installed besides the three extras.
+        # So the unavoidable chain
+        #   uplift.regret -> _measure -> uplift.foresight
+        #     -> digital_twin.simulation.engine -> digital_twin.config -> pydantic_settings
+        # would have raised ModuleNotFoundError at import, inside the job that exists to run
+        # the measurement, on the first dispatch checkpoint A ever made. Same defect class as
+        # the `scipy` gap recorded as HANDOFF defect 14 -- found the same way, by reading the
+        # closure instead of paying for a CI round trip. A static walk of all 9 first-party
+        # modules reachable from `uplift.regret` reports this as the ONLY gap.
+        #
+        # FIXED NARROWLY, ON PURPOSE. The tempting repair is to add `pydantic-settings` to
+        # `packages/requirements.txt` so every job gets it. That is the dangerous one: several
+        # registered checks report SKIP when an optional import is missing, so widening the
+        # shared closure can turn a SKIP into a PASS and MOVE THE REGISTRY COUNTS that
+        # `doc_truth` pins and `ledger_gen`/`readme_gen` project. Adding a package to the
+        # shared file immediately before a regeneration is exactly the wrong time. This job
+        # gets what this job needs.
+        #
+        # Version bound matches `agents/*/requirements.txt` verbatim rather than being
+        # invented here, per CLAUDE.md's rule that every dependency is pinned with an upper
+        # bound.
+        #
+        # `scipy` ADDED SESSION 4, AND THE CLAIM BELOW WAS FALSIFIED BY THE FIRST REAL RUN.
+        # This comment used to end: "A static walk of all 9 first-party modules reachable
+        # from `uplift.regret` reports this as the ONLY gap." Run `34364879758` proved
+        # otherwise -- the measurement died at import on `ModuleNotFoundError: No module
+        # named 'scipy'`.
+        #
+        # WHY THE WALK MISSED IT, because the mechanism is the transferable part: it followed
+        # `import` statements FROM `uplift.regret`, but `python -m uplift.regret` first
+        # executes the PACKAGE initialiser, and `uplift/__init__.py` imports
+        # `uplift.consensus_arm` -> `uplift.harness` -> `uplift.contract` -> `from scipy
+        # import stats`. None of that is reachable from `regret.py`'s own import list. The
+        # walk was correct about the module graph and wrong about the ENTRY POINT'S import
+        # closure. A closure proof must start at the command the job actually runs.
+        #
+        # This is also HANDOFF defect 14 recurring: that defect named this exact `scipy`
+        # import, and the repair taken at the time was to route `uplift/interval.py` around
+        # `load_contract` rather than to widen this closure. The import was still on the
+        # package-initialisation path.
+        #
+        # `scipy` is pinned in NO requirements file in this repository (`policy.yml` installs
+        # it bare), so there is no bound to copy verbatim and `>=1.11,<2.0` is a CHOICE --
+        # flagged as one, shaped like the `numpy>=1.26,<2.0` and `pandas>=2.2,<3.0` bounds
+        # `policy.yml` uses beside it.
+        run: |
+          pip install -r packages/requirements.txt
+          pip install -e packages/
+          pip install simpy numpy pyyaml "pydantic-settings>=2.2.0,<3.0" "scipy>=1.11,<2.0"
+
+      - name: Measure one B-prime world cell against the six-arm comparator (R5.1, R5.33, R5.46)
+        # `set -o pipefail` IS LOAD-BEARING, AND ITS ABSENCE MADE THIS STEP LIE.
+        #
+        # This comment used to read "Exit status propagates. No `continue-on-error`, no
+        # `|| true`, no `|| echo`". That enumerated three discarding constructs and MISSED
+        # THE ONE THIS STEP ACTUALLY USES. Under `bash -e` a pipeline's status is the status
+        # of its LAST command, so `python -m uplift.regret ... | tee <file>` reports `tee`'s
+        # success even when the Python crashed. Measured on run `34364879758`: the
+        # measurement died at import with `ModuleNotFoundError: No module named 'scipy'`,
+        # `tee` wrote a ZERO-BYTE artifact, and this step reported **success** while
+        # `blocking-steps.yaml` declares it `role: producer` emitting canonical JSON.
+        #
+        # The job was red only because the *disclosure* step below -- explicitly "not a
+        # gate" -- failed on the same missing import. Without that step this job would have
+        # been GREEN with no measurement in it, which is precisely the defect this spec
+        # exists to eliminate: a gate that reports nothing is indistinguishable from a gate
+        # that passes (I-7).
+        #
+        # `| tee` is KEPT rather than replaced by a plain redirect, because seeing the JSON
+        # in the job log is what lets a reader check the artifact against the run. With
+        # `pipefail` that visibility is free; without it, it was the whole bug.
+        #
+        # NOTE FOR THE ENFORCEMENT SPINE: `scripts/audit/workflow_shape_truth.py` cannot
+        # catch this. Its `DISCARDING_CONSTRUCTS` is four literals -- `|| true`, `|| echo`,
+        # `; exit 0`, bare `exit 0` -- and an unguarded pipeline is none of them, so a
+        # declared-blocking step could discard its status with the gate reporting pass.
+        # Every step in this file that pipes sets `pipefail` first, so the exposure is closed
+        # here; the gate gap is recorded for its owner rather than patched silently.
+        #
+        # The replicate count is the one number here that is NOT yet committed to
+        # policy.yaml, because R5.2's deferral covers the margin and not the sample size,
+        # and the sample size needed follows from the variance this run reports. Stated as
+        # a CLI argument so the value used is visible in the job log.
+        run: |
+          set -o pipefail
+          mkdir -p artifacts/uplift
+          python -m uplift.regret --replicates 200 --hours 24 --cell "${{ matrix.cell }}" --json \
+            | tee "artifacts/uplift/twin-regret-${{ matrix.cell }}.json"
+
+      - name: Report the objective's insensitive KPIs (R5.34, R5.35)
+        # A separate, always-run step because it is the clause a reader most needs and most
+        # easily misses: while ANY objective KPI is recorded not observably sensitive, a
+        # sub-margin regret is INCONCLUSIVE and must not be read as confirming Finding 4.
+        # `always()` publishes it even when the measurement above failed; this step's own
+        # exit status still propagates.
+        if: always()
+        run: |
+          python -c "from uplift.regret import load_objective; o = load_objective(); print('insensitive objective KPIs:', [i.term for i in o.insensitive] or 'none'); [print(' -', i.term, '::', i.blocked_on.split(chr(46))[0]) for i in o.insensitive]"
+
+      - name: Upload the regret report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: twin-regret-${{ matrix.cell }}
+          path: artifacts/uplift/twin-regret-${{ matrix.cell }}.json
+          if-no-files-found: warn
+          retention-days: 90
+
+
+  # =====================================================================================
+  # uplift-controls-negative / uplift-controls-positive / uplift-controls -- E3's controls
+  # (decision-quality-proof task 16.7; R6.1, R6.2, R6.11, R6.12, R6.14, R6.15)
+  # =====================================================================================
+  # THE INSTRUMENT IS SHOWN ABLE TO SEE AN EFFECT BEFORE E5's NUMBER IS READ. Both controls run
+  # in the primary cell's world against one named comparator each, never the pooled default
+  # (R6.14), and each writes its own record, so the two contrasts are never classified under one
+  # contract instance. `uplift-controls` then writes the negative, positive and agreement records
+  # and the Power_Report from them.
+  #
+  # A FAILED CONTROL IS A RECORDED RESULT, NOT A RED JOB: `uplift.controls_run` exits 0 once it
+  # has written its record, whatever the verdict. A red job here means a measurement did not
+  # happen, and `uplift-controls` then does not run -- a verdict over a partial set of
+  # repetitions is the silent drop G5 forbids.
+  #
+  # TWIN-REGRET'S THIN INSTALL, NOT THE FULL CLOSURE: neither control runs the consensus arm (the
+  # negative control's arms are two copies of one comparator on disjoint seed sets; the positive
+  # control is arm O against arm E), and the thin closure is the one already proven to import
+  # `uplift` and drive the twin. That step's comment carries why each package is in it.
+  uplift-controls-negative:
+    name: E3 negative control - identical arms, disjoint seed sets [${{ matrix.repetition }}]
+    runs-on: ubuntu-latest
+    if: >-
+      github.event_name == 'pull_request'
+      && github.event.label.name == 'measure-uplift-controls'
+    concurrency:
+      group: >-
+        uplift-controls-negative-${{ github.event.pull_request.number }}-${{ matrix.repetition }}
+      cancel-in-progress: false
+    # A ceiling, not a measurement: one repetition is two arms at `MIN_SCENARIOS` replicates on
+    # the primary cell. A timeout is a failed job (I-7), never a partial record.
+    timeout-minutes: 90
+    strategy:
+      fail-fast: false
+      matrix:
+        # 0..19, written out so every leg is visible on the run page. The count is
+        # `negative_control.independent_seed_sets` in `digital_twin/simulation/policy.yaml`
+        # (20). That is a coupling, so `uplift-controls` re-reads the value and refuses a
+        # verdict unless exactly these repetitions arrived (G5).
+        repetition: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19]
+    env:
+      SYNAPSE_REVISION: ${{ github.event.pull_request.head.sha }}
+      SYNAPSE_RUN_ID: ${{ github.run_id }}
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+
+      - name: Disclose the revision under measurement (attribution, not a gate)
+        run: |
+          echo "event=${{ github.event_name }}"
+          echo "github.sha=${{ github.sha }} (synthetic merge commit, not measured)"
+          echo "measured_revision=${SYNAPSE_REVISION}"
+          echo "run_id=${SYNAPSE_RUN_ID}"
+          echo "repetition=${{ matrix.repetition }}"
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+
+      - name: Install dependencies
+        # Twin-regret's closure, verbatim.
+        run: |
+          pip install -r packages/requirements.txt
+          pip install -e packages/
+          pip install simpy numpy pyyaml "pydantic-settings>=2.2.0,<3.0" "scipy>=1.11,<2.0"
+
+      - name: Run one negative-control repetition (R6.1, R6.14, R6.15)
+        run: |
+          mkdir -p artifacts/uplift/controls
+          python -m uplift.controls_run negative --repetition "${{ matrix.repetition }}" \
+            --output "artifacts/uplift/controls/negative-${{ matrix.repetition }}.json"
+
+      - name: Upload the negative-control record
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: uplift-controls-negative-${{ matrix.repetition }}
+          path: artifacts/uplift/controls/negative-${{ matrix.repetition }}.json
+          if-no-files-found: warn
+          retention-days: 90
+
+  uplift-controls-positive:
+    name: E3 positive control - arm O against arm E on the primary cell
+    runs-on: ubuntu-latest
+    if: >-
+      github.event_name == 'pull_request'
+      && github.event.label.name == 'measure-uplift-controls'
+    concurrency:
+      group: uplift-controls-positive-${{ github.event.pull_request.number }}
+      cancel-in-progress: false
+    # A ceiling, not a measurement, sized like one negative repetition: two arms at
+    # `MIN_SCENARIOS` replicates on the primary cell.
+    timeout-minutes: 90
+    env:
+      SYNAPSE_REVISION: ${{ github.event.pull_request.head.sha }}
+      SYNAPSE_RUN_ID: ${{ github.run_id }}
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+
+      - name: Disclose the revision under measurement (attribution, not a gate)
+        run: |
+          echo "event=${{ github.event_name }}"
+          echo "github.sha=${{ github.sha }} (synthetic merge commit, not measured)"
+          echo "measured_revision=${SYNAPSE_REVISION}"
+          echo "run_id=${SYNAPSE_RUN_ID}"
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+
+      - name: Install dependencies
+        # Twin-regret's closure, verbatim.
+        run: |
+          pip install -r packages/requirements.txt
+          pip install -e packages/
+          pip install simpy numpy pyyaml "pydantic-settings>=2.2.0,<3.0" "scipy>=1.11,<2.0"
+
+      - name: Run the positive control (R6.2, R6.3, R6.14)
+        run: |
+          mkdir -p artifacts/uplift/controls
+          python -m uplift.controls_run positive --output artifacts/uplift/controls/positive.json
+
+      - name: Upload the positive-control record
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: uplift-controls-positive
+          path: artifacts/uplift/controls/positive.json
+          if-no-files-found: warn
+          retention-days: 90
+
+  uplift-controls:
+    name: E3 controls verdict - negative, positive, agreement and Power_Report
+    runs-on: ubuntu-latest
+    # Runs only when every leg succeeded: a failed leg skips this job, which is non-passing and
+    # leaves no verdict to misread.
+    needs: [uplift-controls-negative, uplift-controls-positive]
+    if: >-
+      github.event_name == 'pull_request'
+      && github.event.label.name == 'measure-uplift-controls'
+    concurrency:
+      group: uplift-controls-${{ github.event.pull_request.number }}
+      cancel-in-progress: false
+    # Reads 21 records and writes four, so the install dominates. A ceiling, not a measurement.
+    timeout-minutes: 20
+    env:
+      SYNAPSE_REVISION: ${{ github.event.pull_request.head.sha }}
+      SYNAPSE_RUN_ID: ${{ github.run_id }}
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+
+      - name: Disclose the revision under measurement (attribution, not a gate)
+        run: |
+          echo "event=${{ github.event_name }}"
+          echo "github.sha=${{ github.sha }} (synthetic merge commit, not measured)"
+          echo "measured_revision=${SYNAPSE_REVISION}"
+          echo "run_id=${SYNAPSE_RUN_ID}"
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+
+      - name: Install dependencies
+        # Twin-regret's closure, verbatim.
+        run: |
+          pip install -r packages/requirements.txt
+          pip install -e packages/
+          pip install simpy numpy pyyaml "pydantic-settings>=2.2.0,<3.0" "scipy>=1.11,<2.0"
+
+      - name: Download the control records
+        uses: actions/download-artifact@v4
+        with:
+          pattern: uplift-controls-*
+          path: artifacts/uplift/controls
+          merge-multiple: true
+
+      - name: Every declared negative repetition and the positive record arrived (G5 - BLOCKING)
+        # The 20-leg matrix SPLITS one control, so it is proven a partition here, predicted then
+        # measured (G5): the prediction is `independent_seed_sets` read from the committed policy,
+        # the measurement is the files that arrived. Equal counts plus every expected name present
+        # means exactly the declared set arrived -- a missing leg makes the count short and a
+        # stray file makes it long. A declared count of zero is refused, so this cannot hold over
+        # nothing.
+        run: |
+          set -euo pipefail
+          read_declared='import sys, yaml; print(yaml.safe_load(open(sys.argv[1], encoding="utf-8"))["negative_control"]["independent_seed_sets"])'
+          declared="$(python -c "$read_declared" digital_twin/simulation/policy.yaml)"
+          arrived="$(find artifacts/uplift/controls -maxdepth 1 -type f -name 'negative-*.json' | wc -l)"
+          printf 'negative repetitions: declared %s, arrived %s\n' "$declared" "$arrived"
+          test "$declared" -gt 0
+          test "$arrived" -eq "$declared"
+          for k in $(seq 0 $((declared - 1))); do
+            test -s "artifacts/uplift/controls/negative-${k}.json"
+          done
+          test -s artifacts/uplift/controls/positive.json
+
+      - name: Write the controls verdict, agreement record and Power_Report (R6.1-R6.5, R6.15)
+        run: |
+          python -m uplift.controls_run verdict --input-dir artifacts/uplift/controls \
+            --output-dir artifacts/uplift/controls-verdict
+
+      - name: Upload the controls verdict
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: uplift-controls
+          path: artifacts/uplift/controls-verdict/
+          if-no-files-found: warn
+          retention-days: 90

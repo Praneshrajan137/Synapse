@@ -2,37 +2,45 @@
 #
 # Pre-registered, version-controlled Metric_Contract artifact (R3.6, R3.9).
 #
-# This artifact declares — BEFORE any result is produced — the primary KPI(s) and
-# their improvement directions, the effect-size measure, the significance test and
-# its significance level (alpha), the per-KPI Minimum_Detectable_Effect (MDE), and
-# the deterministic decision rule that maps (effect size, significance, MDE) to
-# exactly one outcome. It is read by the Uplift_Harness rather than embedded ad hoc
-# in analysis code, so the result cannot be produced by metric-shopping after the
-# fact. Any change to this file must be committed to version control before results
-# generated under the new contract are reported (R3.9).
-version: 1
+# This artifact declares -- BEFORE any result is produced -- the primary KPI and its
+# improvement direction, the effect-size measure, the interval estimator and its
+# significance level (alpha), the Minimum_Detectable_Effect (MDE), and the deterministic
+# decision rule that maps an interval to exactly one verdict. It is read by the
+# Uplift_Harness rather than embedded ad hoc in analysis code, so the result cannot be
+# produced by metric-shopping after the fact. Any change to this file must be committed to
+# version control before results generated under the new contract are reported (R3.9).
+#
+# VERSION 2 (decision-quality-proof task 29.4, decision 2=a, finding 64). Version 1 judged
+# fill_rate alone, and fill_rate rises with stock: an arm that simply holds more inventory
+# beat the lean tuned control on it while losing on the committed objective. Version 2 makes
+# the ADR-055 D2 scalar objective the sole primary KPI; every other KpiVector field is
+# secondary (R7.19). uplift/contract.py accepts version 2 only and refuses any other.
+version: 2
 
-# Primary KPI(s): a non-empty subset of the KpiVector fields used to judge whether
-# SYNAPSE wins, each with its improvement direction (R3.1).
-#   higher -> a higher value is better (Direction.HIGHER_IS_BETTER)
-#   lower  -> a lower value is better  (Direction.LOWER_IS_BETTER)
+# The sole primary KPI: the committed scalar objective (ADR-055 D2), a COST, so lower is
+# better (Direction.LOWER_IS_BETTER). Any other primary KPI set is refused.
 primary_kpis:
-  fill_rate: higher
+  objective: lower
 
-# Effect-size measure: Cohen's d plus relative percentage change (R3.2).
-effect_size: cohens_d+rel_pct
+# Effect size: the mean paired difference of the objective, comparator minus subject, on
+# matched replicate seeds (ADR-055 D2.4). Positive means the subject is cheaper.
+effect_size: mean_paired_difference
 
-# Significance test applied to the per-scenario KPI distributions (R3.3).
-significance_test: mann_whitney_u
+# The interval estimator (uplift/interval.py::METHOD): a paired percentile bootstrap.
+significance_test: paired_percentile_bootstrap
 
-# Numeric significance level in the open interval (0, 1) (R3.3).
+# Numeric significance level in the open interval (0, 1) (R3.3). The interval is estimated
+# at 1 - alpha. Also read by uplift/interval.py::contract_alpha, held equal to this file's
+# validating reader by tests/uplift/test_interval_estimation_property.py.
 alpha: 0.05
 
-# Minimum_Detectable_Effect per primary KPI, expressed as a Cohen's d effect-size
-# value, fixed before any result is produced (R3.4).
+# The MDE is NOT written as a number here. It is the committed materiality margin, resolved
+# at load time from digital_twin/simulation/policy.py::materiality_margin(), which
+# re-derives it from its pre-registered rule (ADR-055 D2.5). One canonical home for it.
 mde:
-  fill_rate: 0.2
+  objective: materiality_margin
 
-# Deterministic decision rule mapping (effect size, significance, MDE) to exactly
-# one outcome (R3.5). Applied exactly as declared by the harness (R3.7).
-decision_rule: significant_and_favorable_and_meets_mde
+# Deterministic decision rule (R3.5, R7.19), applied exactly as declared (R3.7), with strict
+# bounds against the margin m: win iff low > m; sub_margin_gain iff 0 < low <= m;
+# inconclusive iff low <= 0 <= high; baseline_wins iff high < 0.
+decision_rule: interval_position_against_materiality_margin

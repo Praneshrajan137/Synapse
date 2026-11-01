@@ -11,8 +11,15 @@ The reproduction is deterministic *by construction*: ``replicate_seed`` derives 
 replicate's twin seed from ``(scenario.seed, index)`` alone, the SimPy twin is seeded,
 and the baseline policies are deterministic. So two runs with the *same configured
 seeds* produce the identical headline uplift number (a run-to-run difference of exactly
-``0.0``), which trivially satisfies the ``<= NOISE_TOLERANCE_PP`` (1.0 pp) tolerance the
+``0.0``), which trivially satisfies the ``<= NOISE_TOLERANCE_PP`` (1.0) tolerance the
 reproduction is judged against.
+
+**The headline's unit, stated rather than glossed (Metric_Contract v2).** The headline is
+now the mean paired difference of the committed objective, comparator minus subject, in
+objective units (positive means the consensus arm is cheaper) -- no longer a fill-rate
+relative percentage. ``NOISE_TOLERANCE_PP`` keeps its value and its name, so the bound
+asserted below is ``1.0`` objective units, applied unchanged to a number that is not a
+percentage. A run-to-run difference of exactly ``0.0`` satisfies it in either unit.
 
 This test drives the real SimPy twin exactly as ``make prove-uplift`` does — it reuses
 the CLI's reduced-cost reproduction path (:func:`uplift.cli._run_reduced`) plus
@@ -20,12 +27,15 @@ the CLI's reduced-cost reproduction path (:func:`uplift.cli._run_reduced`) plus
 ``report.headline_uplift`` — but with a reduced-cost seeded configuration: a small
 number of replicates over a short horizon, and a modest number of Hypothesis examples,
 because each example drives the twin many times (2 runs x scenarios x arms x replicates)
-and is therefore slow.
+and is therefore slow. The comparator is resolved the way the CLI resolves it with no
+comparator flag (:func:`uplift.cli.resolve_control_spec` over the canonical five arms:
+a pool of the four declared baselines, AD-16).
 
-The consensus arm is unavailable in-process (no injected protocol/transport), so its
-runs fail honestly and it contributes no samples; the deterministic baseline arms still
-complete and yield a deterministic headline. Determinism of that headline *across the
-two runs of the same config* is exactly what Property 23 requires.
+The consensus arm is whatever :func:`uplift.cli.build_arms` assembles in-process. Where
+the real arm stands up, its runs complete and are paired on seed against the pool; where
+it cannot, they fail honestly, no pair forms, and the headline is the no-estimate
+sentinel. Either way, the headline reproducing *across the two runs of the same config*
+is exactly what Property 23 requires and what this test asserts.
 
 Validates: Requirements 7.3
 """
@@ -34,7 +44,7 @@ from __future__ import annotations
 from hypothesis import HealthCheck, given, settings
 from hypothesis import strategies as st
 
-from uplift.cli import NOISE_TOLERANCE_PP, build_arms
+from uplift.cli import NOISE_TOLERANCE_PP, build_arms, resolve_control_spec
 from uplift.cli import _run_reduced  # reduced-cost smoke path used by prove-uplift
 from uplift.contract import load_contract
 from uplift.harness import (
@@ -63,8 +73,9 @@ def _headline_for_config(seed: int) -> float:
 
     Mirrors what ``make prove-uplift`` does: build the arm suite at the configured
     construction ``seed``, run the reduced-cost closed-loop matrix over the seeded
-    scenarios, assemble the result under the pre-registered contract, and read the
-    headline uplift off the fidelity-co-located report.
+    scenarios, resolve the comparator as the CLI does when no comparator flag is passed,
+    assemble the result under the pre-registered contract, and read the headline uplift
+    off the fidelity-co-located report.
     """
     arms = build_arms(seed=seed)
     harness_result = _run_reduced(
@@ -74,8 +85,16 @@ def _headline_for_config(seed: int) -> float:
         _REDUCED_LOOP,
         emission_factor=0.5,
     )
+    control = resolve_control_spec(
+        baseline_arm=None,
+        pooled_baseline=False,
+        arm_names=harness_result.arm_names,
+    )
     result = assemble_uplift_result(
-        harness_result, _CONTRACT, consensus_arm=DEFAULT_CONSENSUS_ARM
+        harness_result,
+        _CONTRACT,
+        consensus_arm=DEFAULT_CONSENSUS_ARM,
+        baseline_arm=control.baseline_arm,
     )
     report = build_uplift_report(result)
     return float(report.headline_uplift)
@@ -94,9 +113,10 @@ def test_reproduction_is_stable_within_declared_tolerance(seed: int) -> None:
 
     Each Hypothesis example runs the reduced-cost reproduction *twice* with the identical
     configured seed and asserts the absolute run-to-run difference of the headline uplift
-    number is within the version-controlled noise tolerance (<= 1.0 pp). Because the
-    harness is deterministic given a seed, the difference is exactly ``0.0`` in practice,
-    which is comfortably inside the tolerance (Property 23, Requirement 7.3).
+    number is within the version-controlled noise tolerance (<= 1.0, now applied to
+    objective units). Because the harness is deterministic given a seed, the difference is
+    exactly ``0.0`` in practice, which is comfortably inside the tolerance (Property 23,
+    Requirement 7.3).
     """
     headline_first = _headline_for_config(seed)
     headline_second = _headline_for_config(seed)
@@ -104,6 +124,6 @@ def test_reproduction_is_stable_within_declared_tolerance(seed: int) -> None:
     run_to_run_diff = abs(headline_first - headline_second)
 
     assert run_to_run_diff <= NOISE_TOLERANCE_PP, (
-        f"run-to-run headline diff {run_to_run_diff} pp exceeds declared noise "
-        f"tolerance {NOISE_TOLERANCE_PP} pp for seed {seed}"
+        f"run-to-run headline diff {run_to_run_diff} objective units exceeds the declared "
+        f"noise tolerance NOISE_TOLERANCE_PP={NOISE_TOLERANCE_PP} for seed {seed}"
     )

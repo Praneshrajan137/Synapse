@@ -14,11 +14,14 @@ import { expect, test, type Page, type TestInfo } from "@playwright/test";
  *     on one of these Surfaces (see task-completion.jtbd.spec.ts), so covering
  *     the terminal Surfaces covers JTBD reachability under the mobile profile.
  *   - Req 15.4 — the Web_Vitals_Budget is met on the measured key routes:
- *     CLS ≤ 0.1 (layout stability, network-independent) and INP ≤ 200 ms
+ *     CLS ≤ 0.1 (layout stability, network-independent), INP ≤ 200 ms
  *     (interaction responsiveness, measured via the Event Timing API after a
- *     real touch interaction). LCP is measured and annotated here; the
- *     authoritative LCP ≤ 2.5 s budget gate on the mobile profile is the
- *     `mobile-lighthouse` CI job (lighthouserc.mobile.json, Req 15.5).
+ *     real touch interaction) and LCP ≤ 2.5 s. This spec's LCP assertion is the
+ *     ONLY LCP check on the mobile profile that can fail: the `mobile-lighthouse`
+ *     CI job asserts `largest-contentful-paint` at `warn`
+ *     (lighthouserc.mobile.json), so it gates nothing — it measured LCP of
+ *     6042 ms and 7056 ms and still succeeded on Frontend CI run 36976628938
+ *     (sha 5eef6ee), the run in which this spec measured 6316 ms and failed.
  *
  * ── Profile & determinism ────────────────────────────────────────────────────
  * The literal Mobile_Reality_Profile (360px + touch + throttled 3G) is applied
@@ -251,7 +254,8 @@ test.describe("Mobile_Reality_Profile — key Surfaces reachable + Web Vitals (R
       }
 
       // Req 15.4 — LCP within budget. Only assert when an LCP candidate was
-      // observed; the authoritative mobile LCP gate is the Lighthouse job.
+      // observed. This is the only blocking LCP check on the mobile profile:
+      // the Lighthouse job asserts LCP at `warn` (see the header).
       if (vitals.lcp > 0) {
         expect(
           vitals.lcp,

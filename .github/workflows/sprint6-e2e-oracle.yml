@@ -53,7 +53,23 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Preflight — VM resources
+      - name: Preflight — VM resources (informational diagnostics)
+        # R11.3 (decision-quality-proof task 3.2). This step asserts nothing: it prints
+        # RAM, CPU count, disk, the Docker architecture line and whichever Ollama models
+        # the host reports, so that a later failure can be read against the machine it
+        # ran on. Its last command is `... || echo "Ollama not reachable on host"`, which
+        # makes the step's exit status unconditionally 0 -- correctly, because an
+        # unreachable Ollama is information the log should carry, not a reason to stop
+        # before the stack is even up.
+        #
+        # Labelled rather than made propagating. The alternative reading -- treat this as
+        # the job's Ollama precondition and let the probe fail the run -- would give the
+        # step a gating purpose it was never written for, and would ALSO make `docker
+        # info | grep -E ...` load-bearing, where grep exits 1 simply because a field
+        # name changed. The steps that actually need Ollama fail on their own terms with
+        # a message about the thing that was missing, which is the more actionable
+        # failure. Marker in the name so the shape gate reads the intent that the `||
+        # echo` already expresses (I-7: a step that measures is not a step that gates).
         run: |
           echo "=== RAM ==="
           free -h
@@ -148,7 +164,24 @@ jobs:
         if: ${{ inputs.run_demo }}
         run: bash scripts/demo/run_demo.sh mumbai ${{ inputs.speed_factor }}
 
-      - name: Capture evidence artifacts
+      - name: Capture evidence artifacts (informational, best-effort)
+        # R11.3 (decision-quality-proof task 3.2). Every command here is deliberately
+        # suppressed and the step is `if: always()`, because its whole job is to salvage
+        # whatever evidence exists AFTER a failure: `compose ps` when the stack is half
+        # down, `packages/coverage.xml` when the test step never got far enough to write
+        # one, an MLflow dump when the container is already gone, a Grafana render when
+        # port 3000 never came up. The absence of any one of those is a CONSEQUENCE of
+        # the failure being investigated, so failing here would replace a real
+        # diagnosis with a second, derivative failure and -- worse -- abort the
+        # remaining captures under `bash -e`.
+        #
+        # Labelled rather than made propagating, and the label is the honest one: the
+        # step's exit status has never meant anything, and the verdict of this job is
+        # owned by "M8b - Sprint 6 verification", which propagates. A capture that wrote
+        # nothing is still visible: "Upload evidence artifact" below leaves
+        # `if-no-files-found` at upload-artifact's default of `warn`, so an empty
+        # `artifacts/` surfaces in the run log rather than reading as a successful
+        # capture (I-7).
         if: always()
         run: |
           mkdir -p artifacts
@@ -172,7 +205,21 @@ jobs:
           path: artifacts/
           retention-days: 30
 
-      - name: Teardown (preserve volumes)
+      - name: Teardown (preserve volumes) — informational, best-effort
+        # R11.3 (decision-quality-proof task 3.2). `if: always()` plus three suppressed
+        # commands, on purpose: this runs on a SELF-HOSTED Oracle VM, so it is the only
+        # thing that returns the machine to a state the next run can use. Every command
+        # must be attempted even when an earlier one has nothing to act on -- `make
+        # mumbai-down` when the overlay never came up, `compose stop` when the base stack
+        # is already down, `image prune` when nothing is older than 168h. Under `bash -e`
+        # an unsuppressed first failure would skip the rest and leave the runner dirty,
+        # which is the opposite of what a teardown is for.
+        #
+        # Labelled rather than made propagating: a teardown's exit status is not a
+        # statement about the software under test, and turning cleanup noise into a red
+        # run would make every genuine failure of this job ambiguous. Volumes are
+        # preserved deliberately (`stop`, not `down -v`) so postgres/neo4j state survives
+        # between runs, which is also why nothing here may be allowed to abort early.
         if: always()
         run: |
           make mumbai-down || true

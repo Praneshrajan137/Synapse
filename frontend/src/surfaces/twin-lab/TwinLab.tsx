@@ -1,5 +1,6 @@
 import type { TwinState } from "@domain/twin-state";
 import {
+  DataPathNotice,
   DivergenceTrace,
   PageHeader,
   SpatialErrorBoundary,
@@ -16,6 +17,7 @@ import { Suspense, lazy, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 import { AutonomyPanel } from "../autonomy/AutonomyPanel";
+import { surfaceDataPath } from "../data-paths";
 import { DivergenceMeter } from "./DivergenceMeter";
 import { NodeInspector } from "./NodeInspector";
 import { ScenarioBuilder, type ScenarioRequest } from "./ScenarioBuilder";
@@ -68,7 +70,18 @@ export function TwinLab() {
     },
   });
 
-  const klValue = result?.kl_divergence ?? 0;
+  // R3.5. This was `result?.kl_divergence ?? 0`: before any scenario had run the
+  // meter drew 0.000 in the OK band, which on a KL gauge is the strongest
+  // fidelity claim the surface can make - a fabricated one. `null` now means
+  // "not measured" all the way to the render.
+  const klValue = result?.kl_divergence ?? null;
+  const klPath = surfaceDataPath("twin-lab.divergence", {
+    degraded: sim.isError ? true : klValue === null ? null : false,
+    // The twin's world is whatever the active WorldSource declares; the
+    // /simulate response carries no provenance block, so the console cannot
+    // claim either way and says so rather than implying live commerce.
+    synthetic: null,
+  });
 
   // The supply-network topology is the spatial surface's data spine: a failed
   // or offline load must render a distinct, non-blank state with retry rather
@@ -94,7 +107,10 @@ export function TwinLab() {
       />
 
       <div className="grid gap-4 lg:grid-cols-[1fr_minmax(0,2fr)]">
-        <DivergenceMeter value={klValue} />
+        <div className="space-y-1.5">
+          <DivergenceMeter value={klValue} />
+          <DataPathNotice state={klPath} />
+        </div>
         {divergenceSeries.length > 0 && (
           <DivergenceTrace series={divergenceSeries} className="syn-card p-3" />
         )}

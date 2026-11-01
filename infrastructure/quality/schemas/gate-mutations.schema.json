@@ -1,0 +1,193 @@
+{
+  "$comment": "Dialect: JSON Schema draft-07. The dialect keyword is intentionally omitted so nothing has to be fetched over the network to validate this file; the consumer selects jsonschema.Draft7Validator explicitly.",
+  "$id": "synapse.quality.gate_mutations",
+  "title": "SYNAPSE declared gate falsifications",
+  "description": "Schema for infrastructure/quality/gate-mutations.yaml (AD-4; R1.2, R9.5, R12.3, R12.7). scripts/audit/gate_fault_injection.py validates the file, then for each operator copies the real tree to a temporary directory, applies the operator, and runs the gate as a SUBPROCESS. It never monkeypatches a gate's evaluator. A registered check absent from both `gates` and `reporting_tools` is UNDECLARED and is excluded from PASS-eligibility -- absence of a falsification is absence of proof (I-7), never a pass.",
+  "type": "object",
+  "required": ["version", "gates", "reporting_tools", "completeness"],
+  "additionalProperties": false,
+  "properties": {
+    "version": {"type": "integer", "minimum": 1},
+    "gates": {
+      "type": "object",
+      "minProperties": 1,
+      "description": "Keyed by Check_Registry identifier (C<n>), matching the id the check is registered under in scripts/audit/verify_claims.py.",
+      "propertyNames": {"pattern": "^C[0-9]+$"},
+      "additionalProperties": {"$ref": "#/definitions/gateEntry"}
+    },
+    "reporting_tools": {
+      "type": "array",
+      "description": "Registered checks for which no falsifying mutation can be written. EXCLUDED from the PASS-eligible set. This is the honest label, not an exemption, and it never contributes a PASS.",
+      "items": {"$ref": "#/definitions/reportingTool"}
+    },
+    "completeness": {"$ref": "#/definitions/completeness"},
+    "sweep_budget": {"$ref": "#/definitions/sweepBudget"}
+  },
+  "definitions": {
+    "gateEntry": {
+      "type": "object",
+      "required": ["title", "operators"],
+      "additionalProperties": false,
+      "properties": {
+        "title": {"type": "string", "minLength": 1},
+        "operators": {
+          "type": "array",
+          "minItems": 1,
+          "description": "At least one mutation that MUST make this gate exit non-zero. A mutation the gate survives is a gate that does not gate.",
+          "items": {"$ref": "#/definitions/mutationOperator"}
+        }
+      }
+    },
+    "mutationOperator": {
+      "type": "object",
+      "required": ["id", "operator", "target", "expect_names"],
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[a-z0-9-]+$",
+          "description": "Stable identifier, unique within the gate; reported in the fault-injection result."
+        },
+        "operator": {
+          "type": "string",
+          "enum": [
+            "set_yaml_path",
+            "set_json_path",
+            "replace_regex",
+            "replace_function_body",
+            "create_file",
+            "delete_file"
+          ]
+        },
+        "target": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Repo-relative path, or `path.py::Class.func` for replace_function_body. Interpreted inside the temporary tree copy, never against the working tree."
+        },
+        "path": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Location within the target document. Dotted/bracketed for set_yaml_path, JSONPath for set_json_path."
+        },
+        "value": {
+          "type": ["number", "boolean", "string", "null"],
+          "description": "Replacement value for set_yaml_path / set_json_path."
+        },
+        "pattern": {"type": "string", "minLength": 1},
+        "replacement": {"type": "string"},
+        "body": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Source text: the new function body for replace_function_body, or the whole file for create_file."
+        },
+        "expect_names": {
+          "type": "array",
+          "minItems": 1,
+          "items": {"type": "string", "minLength": 1},
+          "description": "Substrings the gate's output MUST contain when it fails. `expect` is always \"exits non-zero NAMING the mutated subject\" -- a non-zero exit that names nothing does not satisfy the declaration."
+        },
+        "note": {"type": "string", "minLength": 1}
+      },
+      "allOf": [
+        {
+          "if": {"properties": {"operator": {"enum": ["set_yaml_path", "set_json_path"]}}, "required": ["operator"]},
+          "then": {"required": ["path", "value"]}
+        },
+        {
+          "if": {"properties": {"operator": {"const": "replace_regex"}}, "required": ["operator"]},
+          "then": {"required": ["pattern", "replacement"]}
+        },
+        {
+          "if": {"properties": {"operator": {"enum": ["replace_function_body", "create_file"]}}, "required": ["operator"]},
+          "then": {"required": ["body"]}
+        },
+        {
+          "if": {"properties": {"operator": {"const": "replace_function_body"}}, "required": ["operator"]},
+          "then": {"properties": {"target": {"pattern": "::"}}}
+        },
+        {
+          "if": {"properties": {"operator": {"const": "delete_file"}}, "required": ["operator"]},
+          "then": {
+            "not": {"anyOf": [{"required": ["path"]}, {"required": ["value"]}, {"required": ["pattern"]}, {"required": ["body"]}]}
+          }
+        }
+      ]
+    },
+    "reportingTool": {
+      "type": "object",
+      "required": ["check", "reason"],
+      "additionalProperties": false,
+      "properties": {
+        "check": {"type": "string", "pattern": "^C[0-9]+$"},
+        "reason": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Why no falsifying mutation exists. Must describe the check's nature, not the cost of writing the mutation."
+        },
+        "note": {"type": "string", "minLength": 1}
+      }
+    },
+    "sweepBudget": {
+      "type": "object",
+      "description": "AD-22 / R1.11: the sweep's cost budget as a pinned arithmetic claim. NOT in the root `required` set, deliberately: a declaration without it is still structurally valid, and the honest report of a missing budget belongs to the registered check (scripts/audit/sweep_budget_truth.py), not to a validation error that would make the whole declaration unusable. When present, that check asserts (baselines + operators) * per_subprocess_timeout_s + install_budget_s <= job_timeout_minutes * 60 over THIS file's own declared_gates and operator count, so the budget cannot silently stop fitting when another gate declares a mutation. The bounds are committed, not measured: a gate that cannot answer inside per_subprocess_timeout_s reports `indeterminate` naming the timeout, which is non-passing, never PASS-eligible, and therefore surfaces (I-7).",
+      "required": [
+        "per_subprocess_timeout_s",
+        "install_budget_s",
+        "job_timeout_minutes",
+        "invariant",
+        "derivation"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "per_subprocess_timeout_s": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "description": "Wall-clock bound on ONE gate subprocess, passed as --timeout under --sweep. Read from the declaration instead of scripts/audit/gate_fault_injection.py::DEFAULT_TIMEOUT_S, so the bound the job runs under is the bound the inequality was checked against."
+        },
+        "install_budget_s": {
+          "type": "number",
+          "minimum": 0,
+          "description": "Allowance for everything in the job that is not a gate subprocess (checkout, dependency install). An allowance, not an observation."
+        },
+        "job_timeout_minutes": {
+          "type": "integer",
+          "exclusiveMinimum": 0,
+          "description": "MUST equal `timeout-minutes` on the job that runs the sweep."
+        },
+        "invariant": {
+          "type": "string",
+          "minLength": 1,
+          "description": "The obligation in one line, for a reader. The check re-derives it from the terms; it does not parse this string."
+        },
+        "derivation": {
+          "type": "object",
+          "description": "Where the counts in the inequality come from, recorded as pointers so a consumer reads its terms out of this file rather than hardcoding a count.",
+          "required": ["baselines_from", "operators_from"],
+          "additionalProperties": false,
+          "properties": {
+            "baselines_from": {"type": "string", "minLength": 1},
+            "operators_from": {"type": "string", "minLength": 1}
+          }
+        }
+      }
+    },
+    "completeness": {
+      "type": "object",
+      "required": ["declared_gates", "registry_size_at_authoring", "enforced_by"],
+      "additionalProperties": false,
+      "properties": {
+        "declared_gates": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "MUST equal the number of keys under `gates`, so a hand edit that disagrees is itself detectable."
+        },
+        "registry_size_at_authoring": {"type": "integer", "minimum": 1},
+        "enforced_by": {
+          "type": "string",
+          "minLength": 1,
+          "description": "The task that turns the declared-vs-registered shortfall into a gate. Until it lands, an undeclared check is reported as undeclared -- never as a pass."
+        }
+      }
+    }
+  }
+}

@@ -24,6 +24,17 @@ FROM base AS serve
 COPY agents/demand_prophet/ /app/agents/demand_prophet/
 COPY proto/ /app/proto/
 COPY packages/synapse_common/ /app/packages/synapse_common/
+# purpose-achievement-audit R4.7 (task 10.14): the `stream-materialization`
+# compose service REUSES this image with a command override and runs
+# `python -m data_fabric.feast.stream_materialization` -- the DEPLOYED consumer of
+# synapse.orders.demand. It needs that module plus data_fabric.etl.quality_gates,
+# whose package __init__ imports pandas/numpy: both are already installed here
+# (agents/demand_prophet/requirements.txt), which is why this image hosts the
+# sidecar rather than the leaner api-gateway one. No new CD-matrix image, no new
+# dependency, no new AR pull -- C27/C49 lockstep untouched. Copied BEFORE the
+# chown so the loop's quarantine writes under /app stay writable as `synapse`.
+COPY data_fabric/etl/ /app/data_fabric/etl/
+COPY data_fabric/feast/*.py data_fabric/feast/feature_store.yaml /app/data_fabric/feast/
 
 RUN useradd -m -r synapse && chown -R synapse:synapse /app
 USER synapse

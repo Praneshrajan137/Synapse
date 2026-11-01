@@ -11,14 +11,19 @@ can drive it identically to every other arm.
 """
 from __future__ import annotations
 
-from uplift.interfaces import DecisionPolicy, Observation, PolicyAction
+from uplift.interfaces import Observation, PolicyAction
 
 
-class NoOpDisruption(DecisionPolicy):
+class NoOpDisruption:
     """Disruption-response baseline that takes no corrective action (R1.5).
 
     The control representing operation *without* SYNAPSE: on any disruption event it
     emits an empty action set, leaving the twin to absorb the shock unaided.
+
+    It satisfies :class:`~uplift.interfaces.DecisionPolicy` STRUCTURALLY, as every other
+    baseline does, rather than by inheriting the protocol: an explicit protocol subclass
+    inherits the protocol's read-only ``name`` property, which its own ``self.name``
+    assignment could then not set (decision-quality-proof task 15.5).
     """
 
     def __init__(self, name: str = "no_op_disruption") -> None:

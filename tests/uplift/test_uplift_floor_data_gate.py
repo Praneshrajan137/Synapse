@@ -6,30 +6,42 @@ A floor raise asserts a measured gain, so it is only accepted against a
 co-located, fully-powered, complete, within-fidelity-bound proof artifact whose
 headline uplift is at least the proposed floor (0 < v <= measured).
 
+Also decision-quality-proof task 17.2: the replicate floor is a floor, not a fixed
+point (R6.9, R6.10, R6.16) -- ``test_powered_replicate_floor_matches_inv_tw_002``.
+
 Validates: Requirements 4.1, 4.2, 4.3, 4.7
 """
 from __future__ import annotations
 
 import json
-from pathlib import Path
+import math
+from statistics import NormalDist
+from typing import TYPE_CHECKING
 
 import pytest
 
 from digital_twin.simulation.monte_carlo import MIN_SCENARIOS
-
+from uplift.power import build_power_report
+from uplift.tuned_static import TUNED_STATIC_ARM
 from uplift.uplift_floor import (
     MIN_POWERED_REPLICATES,
     UPLIFT_FLOOR,
     FloorRatchetError,
     PoweredProof,
     UnprovenFloorRaiseError,
+    powered_replicate_floor,
     ratchet,
     ratchet_to_measured,
 )
 
+if TYPE_CHECKING:
+    from pathlib import Path
 
-def _proof(**overrides) -> PoweredProof:
-    fields = {
+    from uplift.power import PowerReport
+
+
+def _proof(**overrides: object) -> PoweredProof:
+    fields: dict[str, object] = {
         "headline_uplift": 3.0,
         "replicates": MIN_POWERED_REPLICATES,
         "incomplete": False,
@@ -39,8 +51,8 @@ def _proof(**overrides) -> PoweredProof:
     return PoweredProof(**fields)  # type: ignore[arg-type]
 
 
-def _payload(**overrides) -> dict:
-    payload = {
+def _payload(**overrides: object) -> dict[str, object]:
+    payload: dict[str, object] = {
         "headline_uplift": 3.0,
         "replicates_per_arm": MIN_POWERED_REPLICATES,
         "incomplete": False,
@@ -50,15 +62,58 @@ def _payload(**overrides) -> dict:
     return payload
 
 
+def _power_report(root: Path, requirement: float) -> PowerReport:
+    """A report built as production builds one, deriving ``ceil(requirement)`` replicates.
+
+    The margin is solved so the squared ratio equals ``requirement``; ``z`` is computed here,
+    not read from :mod:`uplift.power`, so the report's own derivation is what is exercised.
+    """
+    alpha, detection_probability, variance = 0.05, 0.80, 1.0
+    standard = NormalDist()
+    z_sum = standard.inv_cdf(1.0 - alpha / 2.0) + standard.inv_cdf(detection_probability)
+    (root / "instrument.py").write_bytes(b"MEASURED_AGAINST = 'tuned_static'\n")
+    return build_power_report(
+        root=root,
+        source_set=("instrument.py",),
+        source_run_id="run-17-2",
+        source_revision_sha="a" * 40,
+        replicates_per_arm=MIN_POWERED_REPLICATES,
+        observed_variance=variance,
+        variance_source="a stated paired objective difference against tuned_static",
+        alpha=alpha,
+        detection_probability=detection_probability,
+        materiality_margin=z_sum * math.sqrt(variance) / math.sqrt(requirement),
+        comparator=TUNED_STATIC_ARM,
+    )
+
+
 # --- R4.1: single declared numeric constant, still at the honest 0.0 ----------
 def test_declared_floor_is_zero_until_a_powered_proof_lands() -> None:
     assert isinstance(UPLIFT_FLOOR, float)
     assert UPLIFT_FLOOR == 0.0
 
 
-def test_powered_replicate_floor_matches_inv_tw_002() -> None:
-    """The power bar mirrors the INV-TW-002 Monte-Carlo scenario floor."""
-    assert MIN_POWERED_REPLICATES == MIN_SCENARIOS
+def test_powered_replicate_floor_matches_inv_tw_002(tmp_path: Path) -> None:
+    """INV-TW-002 is a floor, not a fixed point (R6.10), and so is the floor a report sets.
+
+    ``MIN_POWERED_REPLICATES`` may rise above ``MIN_SCENARIOS`` when a Power_Report derives
+    a larger requirement (R6.9), and may never fall below it. The effective floor holds the
+    same line with no report, with a report whose requirement is below INV-TW-002 (recorded
+    as binding, R6.16), and with one whose requirement is above the constant -- which it
+    then adopts.
+    """
+    assert MIN_POWERED_REPLICATES >= MIN_SCENARIOS
+    assert powered_replicate_floor(None) == MIN_POWERED_REPLICATES
+
+    below = _power_report(tmp_path, MIN_SCENARIOS / 2 + 0.5)
+    above = _power_report(tmp_path, 3 * MIN_POWERED_REPLICATES + 0.5)
+    assert below.inv_tw_002_binding
+    assert not above.inv_tw_002_binding
+    assert above.derived_replicate_requirement > MIN_POWERED_REPLICATES
+    for report in (below, above):
+        assert powered_replicate_floor(report) >= MIN_SCENARIOS
+    assert powered_replicate_floor(below) == MIN_POWERED_REPLICATES
+    assert powered_replicate_floor(above) == above.derived_replicate_requirement
 
 
 # --- R4.3: monotonicity ------------------------------------------------------
@@ -117,7 +172,7 @@ def test_proof_never_supports_a_non_positive_floor() -> None:
         ["not", "a", "mapping"],
     ],
 )
-def test_unusable_payload_yields_no_proof(payload) -> None:
+def test_unusable_payload_yields_no_proof(payload: object) -> None:
     assert PoweredProof.from_payload(payload) is None
 
 

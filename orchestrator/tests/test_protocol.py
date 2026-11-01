@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
 from unittest.mock import MagicMock
 
 from synapse_common.models import AgentProposal, DecisionTier
@@ -9,6 +10,9 @@ from synapse_common.models import AgentProposal, DecisionTier
 from orchestrator.config import OrchestratorConfig
 from orchestrator.consensus.protocol import ConsensusProtocol
 from orchestrator.state_machine import OrchestratorState
+
+if TYPE_CHECKING:
+    import pytest
 
 
 def _build_protocol(config: OrchestratorConfig | None = None) -> ConsensusProtocol:
@@ -32,9 +36,17 @@ def _build_protocol(config: OrchestratorConfig | None = None) -> ConsensusProtoc
 class TestFSMTransitions:
     def test_idle_to_collecting(self) -> None:
         proto = _build_protocol()
-        assert proto._fsm.state == OrchestratorState.IDLE
+        # Bind each observation to a local at the moment it is observed. Asserting
+        # on `proto._fsm.state` directly narrows that member expression, and mypy
+        # does not discard the narrowing across the mutating `transition()` call --
+        # so the second assertion became one it could prove FALSE
+        # (`comparison-overlap`). A fresh local per observation keeps both
+        # assertions able to fail, which is the only reason to write them.
+        before = proto._fsm.state
+        assert before is OrchestratorState.IDLE
         proto._fsm.transition("decision_request_received")
-        assert proto._fsm.state == OrchestratorState.COLLECTING
+        after = proto._fsm.state
+        assert after is OrchestratorState.COLLECTING
 
     def test_invalid_transition_stays(self) -> None:
         proto = _build_protocol()
@@ -46,7 +58,7 @@ class TestFSMTransitions:
 class TestTierFastPath:
     """Tier 1-2 must bypass debate and arbitration (INV-ORC-006)."""
 
-    def test_tier1_skips_debate(self) -> None:
+    def test_tier1_skips_debate(self, monkeypatch: pytest.MonkeyPatch) -> None:
         from orchestrator.consensus.models import TierClassification
 
         proto = _build_protocol()
@@ -56,7 +68,11 @@ class TestTierFastPath:
             reasons=["single_agent"],
             latency_budget_ms=100,
         )
-        proto._tier_router.classify.return_value = tier_class
+        # `classify` is declared `Callable[[dict[str, Any]], TierClassification]`, so
+        # reaching through it for `.return_value` was an `attr-defined` error -- the
+        # attribute belongs to the mock, not to the declared type. `monkeypatch`
+        # replaces the whole attribute instead, and restores it after the test.
+        monkeypatch.setattr(proto._tier_router, "classify", MagicMock(return_value=tier_class))
         # Fast-path only reaches phase 4 (skipping 2, 3)
         # The fast_path method internally goes COLLECTING -> EXECUTING
         # We verify the phase_reached is 4

@@ -50,9 +50,9 @@ if ! python3.11 --version &>/dev/null; then
     sudo apt-get install -y python3.11 python3.11-venv python3.11-dev
 fi
 
-# ── Install Node.js 20 LTS (ARM64) ──
+# ── Install Node.js 22 LTS (ARM64) ──
 if ! command -v node &>/dev/null; then
-    curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
+    curl -fsSL https://deb.nodesource.com/setup_22.x | sudo -E bash -
     sudo apt-get install -y nodejs
 fi
 

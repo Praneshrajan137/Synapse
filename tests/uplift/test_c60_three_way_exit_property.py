@@ -2,70 +2,167 @@
 
 Feature: core-purpose-uplift, Property 15: The C60 gate exit is a total three-way mapping.
 
-    *For any* result artifact, the C60 gate exits pass (``0``) iff the measured headline
-    is available and ``>= UPLIFT_FLOOR``, regression (``1``) iff available and
-    ``< UPLIFT_FLOOR``, and the distinct unavailable code (``2``) iff the measurement is
-    unavailable (missing, unreadable, invalid, or non-finite) — the unavailable case never
-    maps to pass.
+    *For any* result artifact, the C60 gate lands on exactly one of three mutually
+    distinct exit codes -- pass (``0``), regression (``1``), and a distinct unavailable
+    code (``2``) -- and the unavailable case never maps to pass.
 
-    Requirement 4.4: a measured headline at or above the floor exits pass.
-    Requirement 4.5: a measured headline below the floor exits the regression code,
-    emitting the measured value, the floor, and a regression indication.
-    Requirement 4.6: an unavailable measurement exits a *distinct* non-zero code —
+    Requirement 4.4: an admissible, proven measurement exits pass.
+    Requirement 4.5: a real measurement below the floor exits the regression code.
+    Requirement 4.6: an unavailable measurement exits a *distinct* non-zero code --
     absence of proof is never a pass.
+
+**Restated for the purpose-achievement-audit R2 remediation.** The original version of
+this property derived its expectation from ``headline_uplift`` alone, which is precisely
+the read that let the gate report PASS on an artifact declaring ``incomplete: true`` with
+fidelity ``unknown``. Under R2.1/R2.2/R2.4/R2.8 an artifact is admissible only when it is
+complete, powered at ``MIN_POWERED_REPLICATES``, within the twin fidelity bound, and
+attributed to the run being evaluated; the headline is consulted only after that.
 
 The generator walks the whole artifact surface the gate can meet in the wild: the file
 absent, present-but-unreadable (a directory at the path, undecodable bytes), malformed
-JSON, valid JSON that is not an object, an object with no ``headline_uplift``, a
-non-numeric or boolean headline, a non-finite headline (``NaN`` / ``±Infinity``), and
-valid numbers on both sides of :data:`~uplift.uplift_floor.UPLIFT_FLOOR` including the
-exact boundary. The expected exit code is recomputed from the raw artifact description
-rather than from the gate's own reader, so this is an independent statement of the rule.
+JSON, valid JSON that is not an object, an object missing required fields, and -- for the
+shapes that do parse -- a proof-grade run plus every honest way a run falls short
+(incomplete, under-powered, fidelity unavailable, fidelity out of bound, unattributed,
+produced by a different run). The expected exit code is recomputed from the case
+description rather than from the gate's own predicates, so this is an independent
+statement of the rule.
 
-Every artifact is written under ``tmp_path`` and the gate's reader is bound to that path,
-so the repo's ``artifacts/uplift/result.json`` is never read or written. The property is
-pure and fast: no twin, no arm, no socket, $0.
+All three codes are reachable from an artifact at the committed
+:data:`~uplift.uplift_floor.UPLIFT_FLOOR` of ``0.0``: an admissible run with a strictly
+positive headline passes, one measuring exactly ``0.0`` is unavailable (a proven gain must
+be strictly positive, so "at least zero" is not "proven"), and one measuring a negative
+headline is a regression below the floor. The mapping against a *non-zero* floor is pinned
+at the :func:`~scripts.audit.uplift_truth.verdict` level in
+``test_uplift_truth_gate_property.py``, where the floor is a parameter.
+
+**Carried to the v2 artifact (decision-quality-proof task 15.1).** Every parseable case is a
+valid v2 artifact: a point-mass ``interval`` at the headline (the gate reads the headline,
+never the bounds), the verdict the committed rule derives from it, the committed
+materiality margin read from the contract, a pooled ``comparator`` and provenance
+``arm_roles``. A further class walks the shapes v2 refuses -- a proof-grade measurement
+relabelled version 1, an unknown key inside its interval block, a stored verdict its
+interval does not license, a headline off the interval's point, and a verdict left standing
+with no interval -- and each must be unavailable, never a pass.
+
+Every artifact is written under ``tmp_path``, so the repo's ``artifacts/uplift/result.json``
+path is never read or written. The property is pure and fast: no twin, no arm, no socket, $0.
+
+**Carried to task 17.3 (R6.7, R6.9).** The generating branch now publishes only beside a
+Power_Report describing the revision under measurement, so every ``run`` names a tree this file
+owns -- one stand-in file per declared source pattern, never the repository's -- whose report's
+derived requirement leaves the INV-TW-002 floor in force, and every case keeps the exit code it
+had. One more property walks the report states that refuse publication: an admitted, proven
+artifact is then the distinct unavailable code, never a pass.
 
 **Validates: Requirements 4.4, 4.5, 4.6**
 """
 from __future__ import annotations
 
 import json
-import math
 import uuid
 from dataclasses import dataclass
 from pathlib import Path
+from typing import TYPE_CHECKING, Any, Final
 
-from hypothesis import given, settings
+from hypothesis import given
 from hypothesis import strategies as st
 
+from digital_twin.simulation.policy import detection_probability
 from scripts.audit import uplift_truth as gate
 from scripts.audit.uplift_truth import (
     EXIT_PASS,
     EXIT_REGRESSION,
     EXIT_UNAVAILABLE,
     RESULT_ARTIFACT,
-    read_measured_uplift,
 )
+from uplift.contract import interval_verdict, load_contract
+from uplift.harness import (
+    ARTIFACT_SCHEMA_VERSION,
+    DEFAULT_CONSENSUS_ARM,
+    UNATTRIBUTED,
+    ArtifactFidelity,
+    ArtifactInterval,
+    UpliftArtifact,
+    UpliftProvenance,
+    comparator_label,
+)
+from uplift.interval import INTERVAL_SEED, METHOD, Interval
+from uplift.power import (
+    POWER_REPORT_PATH,
+    POWER_SOURCE_SET,
+    build_power_report,
+    write_power_report,
+)
+from uplift.tuned_static import TUNED_STATIC_ARM
+from uplift.uplift_floor import MIN_POWERED_REPLICATES
 
-_FLOOR: float = gate.UPLIFT_FLOOR
+if TYPE_CHECKING:
+    import pytest
+
+    from uplift.interfaces import ArmRole
+
 _EXIT_CODES = (EXIT_PASS, EXIT_REGRESSION, EXIT_UNAVAILABLE)
+
+# The identity the evaluating job declares; the artifact either matches it or does not.
+_REVISION = "0f1e2d3c4b5a"
+_RUN_ID = "run-20260101-01"
+
+#: The committed Metric_Contract v2. The margin and the objective KPI every artifact records
+#: are read through it, never written as literals.
+_CONTRACT = load_contract()
+_MARGIN: Final[float] = _CONTRACT.materiality_margin
+_ARMS: Final[tuple[str, ...]] = ("baseline-0", DEFAULT_CONSENSUS_ARM)
+
+#: A variance whose derived replicate requirement exceeds every count ``_proven`` draws
+#: (``ceil(((z_alpha + z_beta) * 10 / margin) ** 2)``, about 4906 at the committed values), so a
+#: report built on it refuses a proven artifact under R6.9.
+_UNDER_REPLICATING_VARIANCE: Final[float] = 100.0
+
+
+def _power_tree(root: Path, *, variance: float = 1.0) -> Path:
+    """A tree this test owns whose Power_Report describes it (task 17.3, R6.7).
+
+    One stand-in file per ``POWER_SOURCE_SET`` pattern, so ``describes_revision`` digests this
+    tree and never the repository's, and a report built over it at ``variance``. At ``1.0`` the
+    derived requirement is about 50, below INV-TW-002, so the replicate floor stays
+    ``MIN_POWERED_REPLICATES`` (R6.16). Idempotent per ``root``: Hypothesis shares ``tmp_path``
+    across examples, so a root is built once, at the variance of its first call.
+    """
+    report = root / POWER_REPORT_PATH
+    if report.is_file():
+        return root
+    for pattern in POWER_SOURCE_SET:
+        stand_in = root / pattern.replace("*", "stand_in")
+        stand_in.parent.mkdir(parents=True, exist_ok=True)
+        stand_in.write_text(f"# stands in for {pattern}\n", encoding="utf-8")
+    write_power_report(
+        build_power_report(
+            root=root,
+            source_set=POWER_SOURCE_SET,
+            source_run_id="run-power-fixture",
+            source_revision_sha="0" * 40,
+            replicates_per_arm=MIN_POWERED_REPLICATES,
+            observed_variance=variance,
+            variance_source="a test fixture: no run measured this variance",
+            alpha=_CONTRACT.alpha,
+            detection_probability=detection_probability(),
+            materiality_margin=_MARGIN,
+            comparator=TUNED_STATIC_ARM,
+        ),
+        report,
+    )
+    return root
 
 
 # ---------------------------------------------------------------------------
 # Artifact surface
 # ---------------------------------------------------------------------------
 @dataclass(frozen=True)
-class _Artifact:
-    """A description of one on-disk artifact state plus the headline it really carries.
-
-    ``headline`` is the finite float a correct reader must extract, or ``None`` when the
-    measurement is unavailable for any reason. It is carried alongside the bytes so the
-    expected exit code is derived from the *description*, never from the gate's reader.
-    """
+class _Case:
+    """One on-disk artifact state plus the exit code the rule requires for it."""
 
     kind: str
-    headline: float | None
+    expected: int
     payload: bytes | None = None  # ``None`` means "do not create the file"
     as_directory: bool = False
 
@@ -79,6 +176,76 @@ class _Artifact:
         return path
 
 
+def _role(arm: str) -> ArmRole:
+    """The consensus arm is the subject; every other arm here is a declared baseline."""
+    if arm == DEFAULT_CONSENSUS_ARM:
+        return "consensus"
+    return "baseline"
+
+
+def _artifact(
+    *,
+    headline: float,
+    replicates: int,
+    incomplete: bool,
+    kl_divergence: float | None,
+    within: bool | None,
+    revision: str,
+    run_id: str,
+) -> bytes:
+    """Canonical bytes for a parseable v2 artifact with the given honesty profile.
+
+    The interval is the point mass at ``headline``: the gate reads the headline through
+    ``PoweredProof`` and never the bounds, so the narrowest admissible interval keeps every
+    case about what the gate does read.
+    """
+    interval = ArtifactInterval.from_interval(
+        Interval(
+            method=METHOD,
+            alpha=_CONTRACT.alpha,
+            resamples=_CONTRACT.resamples,
+            seed=INTERVAL_SEED,
+            low=headline,
+            high=headline,
+            point=headline,
+        )
+    )
+    return (
+        UpliftArtifact(
+            schema_version=ARTIFACT_SCHEMA_VERSION,
+            headline_uplift=headline,
+            primary_kpi=_CONTRACT.objective_kpi,
+            noise_tolerance_pp=1.0,
+            incomplete=incomplete,
+            all_wins_warning=False,
+            replicates_per_arm=replicates,
+            interval=interval,
+            headline_verdict=interval_verdict(interval.low, interval.high, margin=_MARGIN),
+            materiality_margin=_MARGIN,
+            comparator=comparator_label(None, [arm for arm in _ARMS if _role(arm) == "baseline"]),
+            run_incomplete=incomplete,
+            fidelity=ArtifactFidelity(
+                kl_divergence=kl_divergence,
+                threshold=0.1,
+                confidence="high" if within else "unknown",
+                within_fidelity_bound=within,
+                fidelity_bound_statement="bounded by twin fidelity",
+            ),
+            provenance=UpliftProvenance(
+                arms=_ARMS,
+                arm_roles={arm: _role(arm) for arm in _ARMS},
+                replicates_per_arm=replicates,
+                revision=revision,
+                run_id=run_id,
+                seeds=(4001, 4002),
+                written_at="2026-01-01T00:00:00Z",
+            ),
+        )
+        .to_canonical_json()
+        .encode("utf-8")
+    )
+
+
 def _json_bytes(obj: object) -> bytes:
     return json.dumps(obj).encode("utf-8")
 
@@ -87,126 +254,298 @@ def _raw(text: str) -> bytes:
     return text.encode("utf-8")
 
 
-# -- available: a finite numeric headline, densely straddling the floor -----------
-_deltas = st.one_of(
-    st.floats(min_value=1e-9, max_value=1e6, allow_nan=False, allow_infinity=False),
-    st.sampled_from([1e-9, 1e-6, 0.5, 1.0, 7.5, 1e6]),
+def _refused_shape(mutate: dict[str, object], *, inside: str | None = None) -> bytes:
+    """A proof-grade v2 measurement with one v2 shape obligation broken (task 15.1).
+
+    The base is the point mass at 0.5, which licenses a gain and never ``baseline_wins``
+    whatever the committed margin, so the stored ``baseline_wins`` below is always a verdict
+    the interval does not license.
+    """
+    payload: dict[str, Any] = json.loads(
+        _artifact(
+            headline=0.5,
+            replicates=MIN_POWERED_REPLICATES,
+            incomplete=False,
+            kl_divergence=0.02,
+            within=True,
+            revision=_REVISION,
+            run_id=_RUN_ID,
+        )
+    )
+    target: dict[str, Any] = payload if inside is None else payload[inside]
+    target.update(mutate)
+    return _json_bytes(payload)
+
+
+_positive = st.floats(min_value=1e-6, max_value=1e6, allow_nan=False, allow_infinity=False)
+_negative = st.floats(
+    min_value=-1e6, max_value=-1e-6, allow_nan=False, allow_infinity=False
 )
 
 
+# -- admissible and proven: the only shape that may exit pass ---------------------
 @st.composite
-def _available(draw) -> _Artifact:
-    """A readable artifact whose headline lands above, below, or exactly on the floor."""
-    side = draw(st.sampled_from(["boundary", "above", "below", "arbitrary", "integer"]))
-    if side == "boundary":
-        headline = _FLOOR
-    elif side == "above":
-        headline = _FLOOR + draw(_deltas)
-    elif side == "below":
-        headline = _FLOOR - draw(_deltas)
-    elif side == "integer":
-        headline = float(draw(st.integers(min_value=-1_000, max_value=1_000)))
+def _proven(draw) -> _Case:
+    return _Case(
+        kind="proven",
+        expected=EXIT_PASS,
+        payload=_artifact(
+            headline=draw(_positive),
+            replicates=draw(
+                st.integers(
+                    min_value=MIN_POWERED_REPLICATES, max_value=MIN_POWERED_REPLICATES * 3
+                )
+            ),
+            incomplete=False,
+            kl_divergence=0.02,
+            within=True,
+            revision=_REVISION,
+            run_id=_RUN_ID,
+        ),
+    )
+
+
+# -- parseable, but honestly not a proof ------------------------------------------
+@st.composite
+def _not_proven(draw) -> _Case:
+    flaw = draw(
+        st.sampled_from(
+            [
+                "incomplete",
+                "under-powered",
+                "fidelity-absent",
+                "out-of-bound",
+                "unattributed",
+                "foreign-run",
+                "foreign-revision",
+                "zero-headline",
+                "negative-headline",
+            ]
+        )
+    )
+    headline = draw(_positive)
+    replicates = MIN_POWERED_REPLICATES
+    incomplete = False
+    kl: float | None = 0.02
+    within: bool | None = True
+    revision, run_id = _REVISION, _RUN_ID
+    # Admissible-but-not-proven and admissible-but-regressed are the two cases where the
+    # artifact is fine and the *measurement* is what falls short.
+    expected = EXIT_UNAVAILABLE
+
+    if flaw == "incomplete":
+        incomplete = True
+    elif flaw == "under-powered":
+        replicates = draw(st.integers(min_value=0, max_value=MIN_POWERED_REPLICATES - 1))
+    elif flaw == "fidelity-absent":
+        kl, within = None, None
+    elif flaw == "out-of-bound":
+        within = False
+    elif flaw == "unattributed":
+        revision, run_id = UNATTRIBUTED, UNATTRIBUTED
+    elif flaw == "foreign-run":
+        run_id = "run-somewhere-else"
+    elif flaw == "foreign-revision":
+        revision = "deadbeefdeadbeef"
+    elif flaw == "zero-headline":
+        headline = 0.0
     else:
-        headline = draw(
-            st.floats(min_value=-1e6, max_value=1e6, allow_nan=False, allow_infinity=False)
+        headline = draw(_negative)
+        expected = EXIT_REGRESSION  # below the committed floor of 0.0
+
+    return _Case(
+        kind=f"not-proven:{flaw}",
+        expected=expected,
+        payload=_artifact(
+            headline=headline,
+            replicates=replicates,
+            incomplete=incomplete,
+            kl_divergence=kl,
+            within=within,
+            revision=revision,
+            run_id=run_id,
+        ),
+    )
+
+
+# -- not even readable as an artifact ---------------------------------------------
+_unreadable = st.one_of(
+    st.just(_Case(kind="missing", expected=EXIT_UNAVAILABLE, payload=None)),
+    st.just(_Case(kind="directory", expected=EXIT_UNAVAILABLE, as_directory=True)),
+    st.just(
+        _Case(
+            kind="undecodable",
+            expected=EXIT_UNAVAILABLE,
+            payload=b"\xff\xfe\x00not utf-8",
         )
-    # Extra keys are ignored by the reader; include them sometimes for realism.
-    body: dict[str, object] = {"headline_uplift": headline}
-    if draw(st.booleans()):
-        body["incomplete"] = draw(st.booleans())
-    return _Artifact(kind=f"available:{side}", headline=headline, payload=_json_bytes(body))
-
-
-# -- unavailable: every way the measurement can fail to exist --------------------
-_unavailable = st.one_of(
-    # missing file
-    st.just(_Artifact(kind="missing", headline=None, payload=None)),
-    # unreadable: a directory sitting at the artifact path
-    st.just(_Artifact(kind="directory", headline=None, as_directory=True)),
-    # unreadable: bytes that are not valid UTF-8
-    st.just(_Artifact(kind="undecodable", headline=None, payload=b"\xff\xfe\x00not utf-8")),
-    # malformed JSON
+    ),
     st.sampled_from(["not valid json {", "", "   ", "{'headline_uplift': 1.0}", "{,}"]).map(
-        lambda text: _Artifact(kind="malformed", headline=None, payload=_raw(text))
+        lambda text: _Case(kind="malformed", expected=EXIT_UNAVAILABLE, payload=_raw(text))
     ),
-    # valid JSON that is not an object
     st.sampled_from([[1, 2, 3], "0.5", 12.5, None, True]).map(
-        lambda obj: _Artifact(kind="not-object", headline=None, payload=_json_bytes(obj))
-    ),
-    # object without the headline key
-    st.sampled_from([{}, {"other": 1.0}, {"uplift": 2.0}, {"incomplete": False}]).map(
-        lambda obj: _Artifact(kind="missing-key", headline=None, payload=_json_bytes(obj))
-    ),
-    # non-numeric headline (including bool, which must not read as 1.0 / 0.0)
-    st.sampled_from(["0.5", "", None, [1.0], {"value": 1.0}, True, False]).map(
-        lambda value: _Artifact(
-            kind="non-numeric", headline=None, payload=_json_bytes({"headline_uplift": value})
+        lambda obj: _Case(
+            kind="not-object", expected=EXIT_UNAVAILABLE, payload=_json_bytes(obj)
         )
     ),
-    # non-finite headline (JSON's non-standard NaN / Infinity tokens)
-    st.sampled_from(["NaN", "Infinity", "-Infinity"]).map(
-        lambda token: _Artifact(
-            kind="non-finite",
-            headline=None,
-            payload=_raw('{"headline_uplift": %s}' % token),
+    # Objects missing the fields R2.1/R2.2/R2.3 require the harness to write: a boolean
+    # `incomplete`, an integral replicates-per-arm count, and a provenance record.
+    st.sampled_from(
+        [
+            {},
+            {"other": 1.0},
+            {"headline_uplift": 0.5},
+            {"headline_uplift": 0.5, "incomplete": False},
+            {"headline_uplift": 0.5, "incomplete": "no", "replicates_per_arm": 1000},
+            {"headline_uplift": 0.5, "incomplete": False, "replicates_per_arm": "1000"},
+        ]
+    ).map(
+        lambda obj: _Case(
+            kind="missing-required-shape",
+            expected=EXIT_UNAVAILABLE,
+            payload=_json_bytes(obj),
         )
     ),
 )
 
-_artifacts = st.one_of(_available(), _unavailable)
+# -- a proof-grade measurement in a shape v2 refuses: unavailable, never a pass ------
+_v2_refused = st.sampled_from(
+    [
+        ("version-1", _refused_shape({"schema_version": 1})),
+        ("interval-unknown-field", _refused_shape({"width": 0.0}, inside="interval")),
+        ("verdict-not-licensed", _refused_shape({"headline_verdict": "baseline_wins"})),
+        ("headline-off-the-interval-point", _refused_shape({"headline_uplift": 0.75})),
+        ("verdict-without-an-interval", _refused_shape({"interval": None})),
+    ]
+).map(
+    lambda case: _Case(
+        kind=f"v2-refused:{case[0]}", expected=EXIT_UNAVAILABLE, payload=case[1]
+    )
+)
 
-
-def _expected_exit(artifact: _Artifact) -> int:
-    """Restate the three-way rule directly from the artifact description."""
-    headline = artifact.headline
-    if headline is None or not math.isfinite(headline):
-        return EXIT_UNAVAILABLE  # R4.6
-    return EXIT_PASS if headline >= _FLOOR else EXIT_REGRESSION  # R4.4 / R4.5
+_cases = st.one_of(_proven(), _not_proven(), _unreadable, _v2_refused)
 
 
 # ---------------------------------------------------------------------------
 # Property 15
 # ---------------------------------------------------------------------------
-@settings(max_examples=200, deadline=None)
-@given(artifact=_artifacts)
+@given(case=_cases)
 def test_c60_gate_exit_is_a_total_three_way_mapping(
-    artifact: _Artifact, tmp_path: Path, monkeypatch, capsys
+    case: _Case,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     """Property 15: pass / regression / distinct-unavailable, and never a false pass.
 
     **Validates: Requirements 4.4, 4.5, 4.6**
     """
-    path = artifact.materialise(tmp_path)
-    assert path != RESULT_ARTIFACT  # the repo's own artifact is never touched
+    monkeypatch.setenv("SYNAPSE_REVISION", _REVISION)
+    monkeypatch.setenv("SYNAPSE_RUN_ID", _RUN_ID)
 
-    # The gate reads through the module-level reader; bind the REAL reader to the
-    # generated artifact so the read logic under test is the shipped one.
-    monkeypatch.setattr(gate, "read_measured_uplift", lambda: read_measured_uplift(path))
+    path = case.materialise(tmp_path)
+    assert path != RESULT_ARTIFACT  # the repo's own artifact path is never touched
+    tree = _power_tree(tmp_path / "power-tree")
 
-    exit_code = gate.run(check=True)
+    exit_code = gate.run(check=True, require_fresh_run=True, artifact=path, tree_root=tree)
     out = capsys.readouterr().out
 
-    expected = _expected_exit(artifact)
-
-    # Totality: the gate always lands on exactly one of the three declared codes,
-    # and the three codes are mutually distinct.
-    assert exit_code in _EXIT_CODES
+    # Totality: exactly one of the three declared codes, and the three are distinct.
     assert len(set(_EXIT_CODES)) == 3
-    assert exit_code == expected
+    assert exit_code in _EXIT_CODES
+    assert exit_code == case.expected
 
-    if expected == EXIT_UNAVAILABLE:
-        # R4.6: unavailable -> a distinct NON-ZERO code that is neither pass nor regression.
+    if case.expected == EXIT_UNAVAILABLE:
+        # R4.6 / I-7: a distinct NON-ZERO code that is neither pass nor regression, and
+        # the reason it was treated as unavailable is printed (R2.1, R2.2, R2.8).
         assert exit_code != EXIT_PASS
         assert exit_code != EXIT_REGRESSION
         assert exit_code != 0
-        assert "UNAVAILABLE" in out.upper()
-    elif expected == EXIT_PASS:
-        # R4.4: available and at/above the floor -> pass.
-        assert exit_code == 0
-        assert artifact.headline is not None and artifact.headline >= _FLOOR
-    else:
-        # R4.5: available and below the floor -> regression, naming measured + floor.
+        assert out.strip()
+    elif case.expected == EXIT_REGRESSION:
+        # R4.5: a real measurement below the floor is named a regression.
         assert exit_code != 0
         assert "REGRESSION" in out.upper()
-        assert str(artifact.headline) in out
-        assert str(_FLOOR) in out
+    else:
+        assert exit_code == 0
+
+
+# ---------------------------------------------------------------------------
+# Trigger awareness (AD-9, CF-4): outside the generating job there is no verdict
+# ---------------------------------------------------------------------------
+@given(case=_proven())
+def test_proof_grade_artifact_still_skips_outside_the_generating_job(
+    case: _Case, tmp_path: Path, monkeypatch
+) -> None:
+    """Even an admissible, proven artifact yields a SKIP when this job did not run the
+    harness: C60 returns PASS/FAIL only in the job that produced its evidence (AD-9)."""
+    monkeypatch.setenv("SYNAPSE_REVISION", _REVISION)
+    monkeypatch.setenv("SYNAPSE_RUN_ID", _RUN_ID)
+
+    path = case.materialise(tmp_path)
+    context = gate.resolve_run_context(generating_job=False, artifact=path)
+    admission = gate.admit(path, context)
+
+    assert admission.outcome == "skip"
+    assert not admission.admitted
+    assert admission.proof is None
+    assert gate.registry_status(admission, EXIT_UNAVAILABLE)[0] == "SKIP"
+
+
+# ---------------------------------------------------------------------------
+# Task 17.3 (R6.7, R6.9): no Power_Report describing the revision, no pass
+# ---------------------------------------------------------------------------
+_REPORT_STATES: Final[tuple[str, ...]] = ("absent", "superseded", "under-replicated")
+
+
+def _refusing_tree(root: Path, state: str) -> Path:
+    """A tree whose Power_Report refuses publication in exactly the named way."""
+    if state == "absent":
+        root.mkdir(parents=True)
+        return root
+    if state == "under-replicated":
+        return _power_tree(root, variance=_UNDER_REPLICATING_VARIANCE)
+    tree = _power_tree(root)
+    # Superseded: the instrument moved after its report was written.
+    (tree / POWER_SOURCE_SET[0].replace("*", "stand_in")).write_text(
+        "# the instrument moved after the report\n", encoding="utf-8"
+    )
+    return tree
+
+
+@given(case=_proven(), state=st.sampled_from(_REPORT_STATES))
+def test_a_proven_artifact_is_unavailable_while_no_power_report_licenses_it(
+    case: _Case,
+    state: str,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """Task 17.3: the exit that was a pass becomes the distinct unavailable code (R6.7, R6.9).
+
+    Metamorphic: the same artifact exits pass beside a report describing the revision, so the
+    report is the only thing that moved the code -- and the printed reason names which rule.
+    """
+    monkeypatch.setenv("SYNAPSE_REVISION", _REVISION)
+    monkeypatch.setenv("SYNAPSE_RUN_ID", _RUN_ID)
+    path = case.materialise(tmp_path)
+
+    licensed = gate.run(
+        check=True,
+        require_fresh_run=True,
+        artifact=path,
+        tree_root=_power_tree(tmp_path / "power-tree"),
+    )
+    capsys.readouterr()
+    refused = gate.run(
+        check=True,
+        require_fresh_run=True,
+        artifact=path,
+        tree_root=_refusing_tree(tmp_path / uuid.uuid4().hex, state),
+    )
+    out = capsys.readouterr().out
+
+    assert licensed == EXIT_PASS
+    assert refused == EXIT_UNAVAILABLE
+    assert refused not in (EXIT_PASS, EXIT_REGRESSION)
+    assert out.strip()
+    assert ("(R6.9)" if state == "under-replicated" else "(R6.7)") in out

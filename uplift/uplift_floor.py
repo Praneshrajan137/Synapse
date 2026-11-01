@@ -31,6 +31,13 @@ guard that accepts a raise to ``0 < v <= measured`` only when such a proof backs
 it. The value bump itself is committed by the operator, atomically with the proof,
 after a powered run measures a positive within-bound headline — no powered proof
 exists yet, so the shipped floor stays at ``0.0``.
+
+The replicate floor (R6.9, R6.10, R6.16). :data:`MIN_POWERED_REPLICATES` is the
+committed INV-TW-002 floor, and :func:`powered_replicate_floor` is the count a run
+must record given the committed Power_Report (:mod:`uplift.power`): the report's
+derived requirement where that is larger (R6.9), the constant otherwise. A
+requirement below INV-TW-002 is recorded by the report as binding and never proposes
+a lower constant (R6.16), so INV-TW-002 is a floor rather than a fixed point (R6.10).
 """
 
 from __future__ import annotations
@@ -39,7 +46,12 @@ import json
 import math
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:  # pragma: no cover - annotations only
+    # Never at runtime: `uplift.power` imports MIN_POWERED_REPLICATES from this module, so a
+    # runtime import here would be an import cycle.
+    from uplift.power import PowerReport
 
 # Minimum sustained headline uplift, in percentage points of relative improvement
 # of the Consensus_Arm over the Baseline_Arm on the primary KPI. Ratchet UP only;
@@ -49,12 +61,32 @@ UPLIFT_FLOOR: float = 0.0
 #: Replicates per arm a proof artifact must record to count as *fully powered*.
 #: Mirrors the INV-TW-002 under-power floor
 #: (``digital_twin.simulation.monte_carlo.MIN_SCENARIOS``); declared locally so this
-#: module stays dependency-free for the C60 gate, and pinned to that constant by
-#: ``tests/uplift/test_uplift_floor_data_gate.py``.
+#: module stays dependency-free for the C60 gate, and held AT OR ABOVE that constant --
+#: a floor, not a fixed point (R6.10) -- by ``tests/uplift/test_uplift_floor_data_gate.py``.
 MIN_POWERED_REPLICATES: int = 1000
 
 #: Artifact keys that may carry the replicates-per-arm count, in priority order.
 _REPLICATE_KEYS = ("replicates_per_arm", "replicates", "n_per_arm")
+
+
+def powered_replicate_floor(report: PowerReport | None) -> int:
+    """Replicates per arm a run must record to be powered, given the committed Power_Report.
+
+    ``max(MIN_POWERED_REPLICATES, report.derived_replicate_requirement)``: a requirement the
+    report derives above the constant replaces it (R6.9), and one below it -- which the report
+    records as ``inv_tw_002_binding`` (R6.16) -- leaves the constant in force, so the result is
+    never below the constant, which the data-gate test holds at or above ``MIN_SCENARIOS``.
+    With no report the constant stands; that is not a licence to publish, because R6.7's
+    refusal belongs to the caller (task 17.3).
+
+    The report's requirement is used as given: :class:`uplift.power.PowerReport` re-derives it
+    at construction and refuses one its formula does not produce. Whether the report describes
+    the revision under measurement is :func:`uplift.power.describes_revision`'s question, which
+    the caller asks first.
+    """
+    if report is None:
+        return MIN_POWERED_REPLICATES
+    return max(MIN_POWERED_REPLICATES, report.derived_replicate_requirement)
 
 
 class FloorRatchetError(ValueError):
@@ -302,6 +334,7 @@ __all__ = [
     "UnprovenFloorRaiseError",
     "PoweredProof",
     "is_proven_uplift",
+    "powered_replicate_floor",
     "ratchet",
     "ratchet_to_measured",
 ]

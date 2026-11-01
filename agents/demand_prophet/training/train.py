@@ -26,11 +26,13 @@ import argparse
 import json
 import time
 from pathlib import Path
+from typing import Any, Final
 
 import numpy as np
 import structlog
 import torch
 import yaml
+from pydantic import BaseModel, ConfigDict
 from synapse_common.training_contract import TrainResult, save_checkpoint
 
 from agents.demand_prophet.config import DemandProphetConfig
@@ -62,6 +64,172 @@ try:
 except ImportError:
     HAS_MLFLOW = False
     logger.warning("mlflow_not_available", fallback="local checkpointing only")
+
+# ---------------------------------------------------------------------------
+# The published held-out block (decision-quality-proof R9.13, task 18.1, AD-19)
+# ---------------------------------------------------------------------------
+# Until this block existed the sidecar carried exactly `version`, `smoke`, `arch`
+# and `calibrator`, so BOTH recomputes in
+# scripts/audit/published_checkpoint_truth.py -- `recompute_final_crps` (R3.9) and
+# `recompute_coverage_p90` (R8.9) -- had no input and reported UNAVAILABLE for every
+# artifact this file produced. C46 read that UNAVAILABLE as `ok`, which is the hole
+# R9.14 closes; publishing the block is what stops R9.13 being unavailable by
+# construction.
+
+#: The minimum number of published held-out rows a recompute needs to be evidence.
+#: MIRRORS the committed declaration
+#: `infrastructure/quality/checkpoint-truth.yaml::tolerances.final_crps.min_samples`.
+#: It is mirrored rather than read because training must not acquire a runtime
+#: dependency on an audit policy file, and a read that degraded to a default on an
+#: unreadable policy would be guard-then-ignore (the C33 `substance_truth` defect).
+#: The equality of the two declarations is pinned mechanically -- by AST, without
+#: importing torch -- in `tests/verify/test_recompute_or_unavailable_property.py`.
+HELDOUT_MIN_ROWS: Final[int] = 32
+
+#: Cap on published rows PER HORIZON. A full train holds out ~225k windows across 5
+#: horizons; publishing all of them would make a ~50 MB sidecar out of a file the
+#: serving path and the gate each fetch on every start. The cap is a publication
+#: shape, not a threshold any gate compares against, so it is declared here rather
+#: than in `checkpoint-truth.yaml` -- whose committed draft-07 schema is
+#: `additionalProperties: false` at every level and so admits no new key.
+HELDOUT_MAX_ROWS_PER_HORIZON: Final[int] = 512
+
+
+class HeldoutHorizon(BaseModel):
+    """One horizon's published held-out evidence: the raw quantiles AND the bounds.
+
+    The distinction between the two is the subtle part and the reason both are
+    published. ``predictions`` carries the model's raw quantile forecasts at the
+    declared ``quantile_levels`` -- with ``[0.1, 0.5, 0.9]`` the span from the first
+    to the last is a nominal **80%** raw-quantile band. ``lower_90`` / ``upper_90``
+    carry the **conformal-adjusted** band produced by
+    ``ConformalCalibrator.predict_intervals``: a single symmetric CQR radius widens
+    both ends, giving the nominal **90%** interval INV-DP-002 is about
+    (``empirical_coverage(output.lower_90, output.upper_90, actuals) >= 0.85``,
+    severity critical, ``agents/demand_prophet/spec.yaml``).
+
+    A reader cannot infer the second from the first, so the coverage recompute reads
+    ``lower_90`` / ``upper_90`` and never the quantile columns: comparing actuals
+    against the 80% raw band would measure a different interval from the one
+    INV-DP-002 declares, and would under-report coverage against a 0.85 floor.
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    #: One row per held-out window, one value per declared quantile level.
+    predictions: tuple[tuple[float, ...], ...]
+    #: The realised value for each row. Same length as ``predictions``.
+    actuals: tuple[float, ...]
+    #: Conformal-adjusted lower bound per row (``max(q_lo - Q, 0)``).
+    lower_90: tuple[float, ...]
+    #: Conformal-adjusted upper bound per row (``q_hi + Q``).
+    upper_90: tuple[float, ...]
+
+
+class HeldoutBlock(BaseModel):
+    """The ``heldout`` block of the published serving sidecar (R9.13).
+
+    Its shape is the one
+    ``infrastructure/quality/checkpoint-truth.yaml::tolerances.final_crps`` declares
+    and ``published_checkpoint_truth._horizon_blocks`` normalises: a
+    ``quantile_levels`` list plus a ``horizons`` mapping. The two band widths are
+    stated as numbers rather than left to a reader's arithmetic, because conflating
+    them is the specific error this block exists to prevent.
+
+    Held out from *training*, in-sample for the *conformal radius*: these rows are
+    the calibration slice, excluded from every gradient step, and they are also the
+    rows the CQR radius was fitted on. That is exactly what
+    ``calibrator.last_coverage_p90`` already reports and what INV-DP-002 is measured
+    on today; the recompute makes that number checkable rather than asserted. It does
+    not turn it into an out-of-sample estimate, and this docstring is the only place
+    that says so, so do not read the block as one.
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    #: The levels ``predictions`` columns are ordered by (config.quantile_levels).
+    quantile_levels: tuple[float, ...]
+    #: ``levels[-1] - levels[0]`` -- the nominal width of the RAW quantile band.
+    raw_quantile_band: float
+    #: ``1 - alpha`` -- the nominal width of the CONFORMAL-ADJUSTED band.
+    conformal_adjusted_band: float
+    #: Total published rows across every horizon, the count the recomputes compare
+    #: against :data:`HELDOUT_MIN_ROWS`. Stated so a reader sees the count without
+    #: recounting; both recomputes count the lists themselves and never trust this.
+    rows: int
+    #: The minimum this artifact was published against, so a sidecar published under
+    #: an older minimum is legible after the committed value moves.
+    min_rows: int
+    horizons: dict[str, HeldoutHorizon]
+
+
+def _heldout_block(
+    calibrator: ConformalCalibrator,
+    predictions: dict[str, np.ndarray],
+    actuals: dict[str, np.ndarray],
+    quantile_levels: list[float],
+) -> HeldoutBlock:
+    """Build the published held-out block from the fitted calibrator's own output.
+
+    The adjusted bounds come from :meth:`ConformalCalibrator.predict_intervals` -- the
+    same call the serving path makes -- rather than from a re-derivation here, so the
+    published bounds cannot drift from the ones served. A recompute against
+    independently re-derived bounds would prove nothing about the artifact in use.
+
+    Rows are capped at :data:`HELDOUT_MAX_ROWS_PER_HORIZON` by taking a prefix. The
+    calibration indices were drawn by ``rng.permutation``, so a prefix is already a
+    seeded random sample of the slice, and taking it is deterministic and replayable
+    from the recorded seed.
+    """
+    intervals = calibrator.predict_intervals(predictions)
+    horizons: dict[str, HeldoutHorizon] = {}
+    total = 0
+    for horizon in sorted(predictions):
+        lower, upper = intervals[horizon]
+        keep = min(len(actuals[horizon]), HELDOUT_MAX_ROWS_PER_HORIZON)
+        horizons[horizon] = HeldoutHorizon(
+            predictions=tuple(
+                tuple(float(value) for value in row) for row in predictions[horizon][:keep]
+            ),
+            actuals=tuple(float(value) for value in actuals[horizon][:keep]),
+            lower_90=tuple(float(value) for value in lower[:keep]),
+            upper_90=tuple(float(value) for value in upper[:keep]),
+        )
+        total += keep
+    levels = tuple(float(level) for level in quantile_levels)
+    return HeldoutBlock(
+        quantile_levels=levels,
+        raw_quantile_band=float(levels[-1] - levels[0]) if levels else 0.0,
+        conformal_adjusted_band=float(1.0 - calibrator.alpha),
+        rows=total,
+        min_rows=HELDOUT_MIN_ROWS,
+        horizons=horizons,
+    )
+
+
+def _published_rows_coverage(block: HeldoutBlock) -> float | None:
+    """Empirical coverage of the adjusted bounds over the rows actually published.
+
+    Logged, never recorded as a claim: the operator's publish gate (runbook step 4)
+    needs to know whether the block it is about to upload will clear the 0.85 floor,
+    and ``calibrator.last_coverage_p90`` answers that for the *whole* slice rather
+    than for the capped prefix. ``published_checkpoint_truth.recompute_coverage_p90``
+    recomputes this independently from the published file and is the verdict; this is
+    a courtesy to the operator, ``None`` when nothing was published.
+    """
+    per_horizon: list[float] = []
+    for horizon in block.horizons.values():
+        if not horizon.actuals:
+            continue
+        covered = sum(
+            1
+            for actual, low, high in zip(
+                horizon.actuals, horizon.lower_90, horizon.upper_90, strict=True
+            )
+            if low <= actual <= high
+        )
+        per_horizon.append(covered / len(horizon.actuals))
+    return float(np.mean(per_horizon)) if per_horizon else None
 
 
 def _smoke_config() -> DemandProphetConfig:
@@ -123,12 +291,17 @@ def _fit_calibrator(
     window: WindowedData,
     quantile_levels: list[float],
     device: torch.device,
-) -> ConformalCalibrator:
-    """Fit the conformal calibrator on a holdout slice; return the *fitted* object.
+) -> tuple[ConformalCalibrator, dict[str, np.ndarray], dict[str, np.ndarray]]:
+    """Fit the conformal calibrator on a holdout slice; return it WITH its evidence.
 
     Returning the calibrator (not just its coverage number) is the ADR-043 fix:
     the fitted CQR adjustments are persisted in the serving sidecar so the serving
     path restores a calibrated model instead of rebuilding an unfit one.
+
+    Returning the ``(predictions, actuals)`` it was fitted on alongside it is the
+    R9.13 fix: those arrays are the only possible input to the published held-out
+    block, and re-running the forward pass to recover them would both double the
+    compute and risk publishing evidence the calibrator was never fitted against.
     """
     model.eval()
     idx = np.arange(len(window))
@@ -142,7 +315,7 @@ def _fit_calibrator(
     actuals = {h: window.targets[idx, h_idx] for h_idx, h in enumerate(HORIZONS)}
     calib = ConformalCalibrator(alpha=0.1, coverage_target=0.85)
     calib.fit(predictions, actuals)
-    return calib
+    return calib, predictions, actuals
 
 
 def _serving_arch(config: DemandProphetConfig) -> dict[str, int]:
@@ -248,8 +421,11 @@ def train(config: DemandProphetConfig | None = None, *, smoke: bool = False) -> 
             mlflow.log_metric("crps_loss", ep_loss, step=epoch)
 
     end_loss = epoch_losses[-1] if epoch_losses else float("nan")
-    calibrator = _fit_calibrator(model, cal_window, quantile_levels, device)
+    calibrator, cal_predictions, cal_actuals = _fit_calibrator(
+        model, cal_window, quantile_levels, device
+    )
     coverage_p90 = float(calibrator.last_coverage_p90 or 0.0)
+    heldout = _heldout_block(calibrator, cal_predictions, cal_actuals, quantile_levels)
 
     CHECKPOINT_DIR.mkdir(parents=True, exist_ok=True)
     # ADR-043: write the checkpoint under the *serving-resolved* name so the
@@ -263,17 +439,42 @@ def train(config: DemandProphetConfig | None = None, *, smoke: bool = False) -> 
     # ADR-043 serving sidecar: the architecture dims + the FITTED calibrator state
     # travel with the weights so serving reconstructs the exact model and a
     # calibrated interval, never an unfit calibrator (the latent-500 fix).
-    sidecar = {
+    #
+    # R9.13 adds `heldout`. Without it the two recomputes in
+    # scripts/audit/published_checkpoint_truth.py have no input, report UNAVAILABLE,
+    # and -- through the C46 surface this feature re-points -- that UNAVAILABLE read
+    # as `ok`. The block carries the raw quantile predictions AND the
+    # conformal-adjusted `lower_90`/`upper_90` bounds separately, because the
+    # declared quantile_levels span a nominal 80% band while INV-DP-002 is about the
+    # adjusted 90% one, and no reader can derive the second from the first.
+    sidecar: dict[str, Any] = {
         "version": f"{'smoke' if smoke else 'full'}_{sha}",
         "smoke": smoke,
         "arch": _serving_arch(config),
         "calibrator": calibrator.to_state(),
+        "heldout": heldout.model_dump(mode="json"),
     }
     sidecar_path = CHECKPOINT_DIR / f"{SERVING_NAME}.serving.json"
     sidecar_path.write_text(
         json.dumps(sidecar, sort_keys=True, separators=(",", ":")), encoding="utf-8"
     )
     logger.info("serving_sidecar_written", path=str(sidecar_path), coverage_p90=coverage_p90)
+    # The operator's publish gate (docs/runbooks/train-and-publish-checkpoint.md
+    # step 4) decides on the 0.85 floor, and the gate that judges the published file
+    # recomputes coverage over exactly these rows -- which are a capped prefix of the
+    # slice `coverage_p90` above summarises. Report both, and report the shortfall
+    # when the block is too short to be evidence at all, so a publication that will
+    # land UNAVAILABLE is visible before the upload rather than after it.
+    logger.info(
+        "heldout_block_written",
+        rows=heldout.rows,
+        min_rows=heldout.min_rows,
+        below_min_rows=heldout.rows < heldout.min_rows,
+        horizons=sorted(heldout.horizons),
+        raw_quantile_band=heldout.raw_quantile_band,
+        conformal_adjusted_band=heldout.conformal_adjusted_band,
+        coverage_p90_over_published_rows=_published_rows_coverage(heldout),
+    )
 
     if HAS_MLFLOW and not smoke and mlflow.active_run():
         try:

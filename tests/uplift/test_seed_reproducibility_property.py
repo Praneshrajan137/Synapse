@@ -22,6 +22,15 @@ same one the reproduction commits to: ``UpliftResult.headline_uplift`` produced 
 real :func:`~uplift.harness.assemble_uplift_result` under the pre-registered metric
 contract. Everything runs in-process on synthetic seeds, no sockets, $0.
 
+**The headline's unit under Metric_Contract v2.** ``headline_uplift`` is now the mean
+paired difference of the committed objective, comparator minus subject, in objective
+units -- no longer a fill-rate relative percentage. ``NOISE_TOLERANCE_PP`` keeps its value
+and its name, so the band asserted below is ``1.0`` objective units; the exact-zero clause
+beside it is unit-free and is the stronger of the two. Each arm is registered as an
+:class:`~uplift.interfaces.ArmSpec` declaring its role (AD-16): the stub carrying the
+consensus name as the subject, the other as the one ``baseline`` the pooled comparator
+may absorb.
+
 **Validates: Requirements 3.3**
 """
 from __future__ import annotations
@@ -43,7 +52,7 @@ from uplift.harness import (
     UpliftHarness,
     assemble_uplift_result,
 )
-from uplift.interfaces import Observation, PolicyAction, Scenario
+from uplift.interfaces import ArmSpec, Observation, PolicyAction, Scenario
 
 # Reduced-cost configuration: one seeded scenario, two arms, two replicates each, over a
 # short closed-loop horizon. Each Hypothesis example therefore drives the twin 8 times
@@ -108,8 +117,8 @@ def _headline_for_seeds(
 ) -> float:
     """Run the reduced-cost harness once on ``scenario`` and return the headline number."""
     arms = [
-        _DeterministicStub(DEFAULT_CONSENSUS_ARM, consensus_factor, 8.0),
-        _DeterministicStub(_BASELINE_ARM, baseline_factor, 4.0),
+        ArmSpec(_DeterministicStub(DEFAULT_CONSENSUS_ARM, consensus_factor, 8.0), "consensus"),
+        ArmSpec(_DeterministicStub(_BASELINE_ARM, baseline_factor, 4.0), "baseline"),
     ]
     harness = _UnpoweredHarness(loop_config=_LOOP)
     harness_result = harness.run([scenario], arms, _REPLICATES, parallel=False)
@@ -171,11 +180,12 @@ def test_identical_seeds_reproduce_within_noise_tolerance(
 
     delta = abs(first - second)
 
-    # R3.3 — the committed tolerance, read from the version-controlled constant.
+    # R3.3 — the committed tolerance, read from the version-controlled constant (and, under
+    # Metric_Contract v2, applied to a headline in objective units).
     assert NOISE_TOLERANCE_PP <= 1.0
     assert delta <= NOISE_TOLERANCE_PP, (
-        f"run-to-run headline delta {delta} pp exceeds the committed noise tolerance "
-        f"{NOISE_TOLERANCE_PP} pp for seed {seed}"
+        f"run-to-run headline delta {delta} objective units exceeds the committed noise "
+        f"tolerance NOISE_TOLERANCE_PP={NOISE_TOLERANCE_PP} for seed {seed}"
     )
 
     # Being seed-deterministic under identical stubs, the two runs agree exactly.

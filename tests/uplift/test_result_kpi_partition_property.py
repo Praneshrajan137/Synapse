@@ -9,25 +9,40 @@ Property 14: Reported KPIs partition into primary and secondary.
     and secondary labels are disjoint (primary ∩ secondary = ∅) and together cover
     exactly the six ``KpiVector`` fields (primary ∪ secondary == all KPI fields).
 
+Carried to Metric_Contract v2 (decision-quality-proof task 29.4). The claim -- every non-primary
+KPI is labelled secondary and none is labelled both -- is unchanged; two phrases in the statement
+no longer describe anything that exists. ``KpiVector`` has EIGHT fields (task 29.4 appended
+``avg_on_hand_units`` and ``objective``), read here from the dataclass rather than counted. And a
+contract can no longer vary which fields are primary: construction refuses every primary set
+except ``{objective: lower}`` (R7.19), so ``fill_rate``, v1's only primary KPI, is secondary. So:
+
+1. the partition is asserted for every contract that CAN exist -- any admissible ``alpha`` and
+   margin -- over runs whose verdicts vary, so no outcome can move a label; and
+2. the varied primary sets the statement ranges over are asserted REFUSED at construction,
+   which is why clause 1 has exactly one primary KPI to partition around.
+
+Budget inherited from the root ``conftest.py`` profile; no ``max_examples`` literal.
+
 Validates: Requirements 3.8
 """
 from __future__ import annotations
 
-from hypothesis import given, settings
+import dataclasses
+
+import pytest
+from hypothesis import given
 from hypothesis import strategies as st
 
-from uplift.contract import MetricContract
+from uplift.contract import MetricContractError, load_contract
 from uplift.fidelity import FidelityReport
-from uplift.harness import (
-    KPI_FIELDS,
-    HarnessResult,
-    aggregate_arm,
-    assemble_uplift_result,
-)
+from uplift.harness import HarnessResult, aggregate_arm, assemble_uplift_result
 from uplift.interfaces import Direction, KpiVector, Scenario, ScenarioRun
 
 from digital_twin.simulation.monte_carlo import ShockParams
 
+
+# The real, version-controlled metric contract (v2): the objective is its sole primary KPI.
+_CONTRACT = load_contract()
 
 # A deterministic, available, within-bound fidelity report so assembly does not depend
 # on the live C34 gauge (the fidelity context is irrelevant to Property 14).
@@ -37,13 +52,19 @@ _SCENARIO = Scenario(name="demand-spike", seed=1, shock=ShockParams(demand_multi
 _CONSENSUS_ARM = "consensus"
 _BASELINE_ARM = "baseline"
 
-# The six KpiVector fields the contract may declare primary (KPI_FIELDS is the harness's
-# canonical, declaration-order tuple of the same fields).
-_ALL_KPIS = list(KPI_FIELDS)
+# Every KpiVector field, read from the dataclass itself -- not from the harness's own
+# ``KPI_FIELDS`` -- so the coverage clause is checked against an independent source.
+_ALL_KPIS = [field.name for field in dataclasses.fields(KpiVector)]
+
+# The one primary-KPI set construction admits.
+_ADMISSIBLE_PRIMARY = {"objective": Direction.LOWER_IS_BETTER}
+
+# Replicates per arm. Each arm's objective is constant, so the interval is a point.
+_REPLICATES = 4
 
 
-def _kpi() -> KpiVector:
-    """A fixed, finite KpiVector; the partition does not depend on KPI values."""
+def _kpi(objective: float) -> KpiVector:
+    """A fixed, finite KpiVector but for ``objective``, which moves only the verdict."""
     return KpiVector(
         fill_rate=0.9,
         spoilage_rate=0.1,
@@ -51,22 +72,24 @@ def _kpi() -> KpiVector:
         avg_delivery_time_min=1.0,
         margin=1.0,
         co2_estimate=1.0,
+        avg_on_hand_units=1.0,
+        objective=objective,
     )
 
 
-def _runs(arm: str, n: int = 4) -> list[ScenarioRun]:
+def _runs(arm: str, objective: float) -> list[ScenarioRun]:
     """A few completed (non-failed) runs for ``arm`` with a constant KpiVector."""
     return [
-        ScenarioRun(arm=arm, seed=i, kpis=_kpi(), failed=False, error=None)
-        for i in range(n)
+        ScenarioRun(arm=arm, seed=i, kpis=_kpi(objective), failed=False, error=None)
+        for i in range(_REPLICATES)
     ]
 
 
-def _harness_result() -> HarnessResult:
+def _harness_result(consensus_cost: float, baseline_cost: float) -> HarnessResult:
     """Hand-build a single-scenario, consensus-vs-baseline HarnessResult fixture."""
     runs_by_pair = {
-        (_SCENARIO.name, _CONSENSUS_ARM): _runs(_CONSENSUS_ARM),
-        (_SCENARIO.name, _BASELINE_ARM): _runs(_BASELINE_ARM),
+        (_SCENARIO.name, _CONSENSUS_ARM): _runs(_CONSENSUS_ARM, consensus_cost),
+        (_SCENARIO.name, _BASELINE_ARM): _runs(_BASELINE_ARM, baseline_cost),
     }
     arm_results = {
         pair: aggregate_arm(pair[1], runs) for pair, runs in runs_by_pair.items()
@@ -79,42 +102,32 @@ def _harness_result() -> HarnessResult:
         results_path=None,
         scenarios=(_SCENARIO,),
         arm_names=(_CONSENSUS_ARM, _BASELINE_ARM),
+        arm_roles={_CONSENSUS_ARM: "consensus", _BASELINE_ARM: "baseline"},
     )
 
 
-# A non-empty subset of the six KpiVector fields, each paired with an improvement
-# direction — exactly the shape of a valid ``primary_kpis`` mapping.
-_primary_kpis = st.dictionaries(
-    keys=st.sampled_from(_ALL_KPIS),
-    values=st.sampled_from(list(Direction)),
-    min_size=1,
-    max_size=len(_ALL_KPIS),
-)
+# Every contract that can exist: the committed one, re-declared at another confidence level
+# and margin -- the only two rule inputs construction lets vary.
+_alphas = st.sampled_from((0.05, 0.1, 0.2, 0.5))
+_margins = st.floats(min_value=1e-6, max_value=100.0, allow_nan=False, allow_infinity=False)
+# Objective levels that put the verdict anywhere relative to 0 and to the drawn margin.
+_costs = st.floats(min_value=0.0, max_value=20.0, allow_nan=False, allow_infinity=False)
 
 
-def _contract(primary_kpis: dict[str, Direction]) -> MetricContract:
-    """A valid MetricContract with the given primary KPIs (MDE declared for each)."""
-    return MetricContract(
-        primary_kpis=primary_kpis,
-        effect_size="cohens_d+rel_pct",
-        significance_test="mann_whitney_u",
-        alpha=0.05,
-        mde={kpi: 0.2 for kpi in primary_kpis},
-        decision_rule="significant_and_favorable_and_meets_mde",
-    )
-
-
-@settings(max_examples=150)
-@given(primary_kpis=_primary_kpis)
+@given(alpha=_alphas, margin=_margins, consensus_cost=_costs, baseline_cost=_costs)
 def test_reported_kpis_partition_into_primary_and_secondary(
-    primary_kpis: dict[str, Direction],
+    alpha: float, margin: float, consensus_cost: float, baseline_cost: float
 ) -> None:
     """Every non-primary reported KPI is secondary; primary/secondary partition the fields."""
-    contract = _contract(primary_kpis)
+    contract = dataclasses.replace(
+        _CONTRACT, alpha=alpha, mde={_CONTRACT.objective_kpi: margin}
+    )
 
-    result = assemble_uplift_result(_harness_result(), contract, fidelity=_FIDELITY)
+    result = assemble_uplift_result(
+        _harness_result(consensus_cost, baseline_cost), contract, fidelity=_FIDELITY
+    )
 
-    primary = set(primary_kpis)
+    primary = set(contract.primary_kpis)
     secondary = set(result.secondary_kpis)
 
     # (a) every KPI labelled secondary is NOT a declared primary KPI.
@@ -124,9 +137,42 @@ def test_reported_kpis_partition_into_primary_and_secondary(
     # empty intersection over the reported KPI universe).
     assert primary & secondary == set()
 
-    # (c) primary ∪ secondary covers exactly the six reported KpiVector fields — so
-    # every reported non-primary KPI is labelled secondary (nothing is left unlabelled).
+    # (c) primary ∪ secondary covers exactly the reported KpiVector fields — so every
+    # reported non-primary KPI is labelled secondary (nothing is left unlabelled).
     assert primary | secondary == set(_ALL_KPIS)
 
     # secondary is precisely the complement of the primary KPIs over the KPI fields.
     assert secondary == set(_ALL_KPIS) - primary
+
+    # v2: the one primary KPI is the objective, so v1's primary KPI is now secondary
+    # (R7.19); each secondary KPI is labelled once; and the per-KPI verdict is reported for
+    # exactly the primary set.
+    assert primary == {"objective"}
+    assert "fill_rate" in secondary
+    assert len(result.secondary_kpis) == len(secondary)
+    assert set(result.per_kpi) == primary
+
+
+# Any primary-KPI map the statement ranges over -- a non-empty subset of the fields, each with
+# a direction -- with the admissible map drawn too, so both answers are exercised.
+_primary_kpi_maps = st.one_of(
+    st.just(_ADMISSIBLE_PRIMARY),
+    st.dictionaries(
+        keys=st.sampled_from(_ALL_KPIS),
+        values=st.sampled_from(list(Direction)),
+        min_size=1,
+        max_size=len(_ALL_KPIS),
+    ),
+)
+
+
+@given(primary_kpis=_primary_kpi_maps)
+def test_a_contract_declaring_any_other_primary_kpi_set_is_refused(
+    primary_kpis: dict[str, Direction],
+) -> None:
+    """Construction admits exactly ``{objective: lower}``; every other primary set is refused."""
+    if primary_kpis == _ADMISSIBLE_PRIMARY:
+        assert dataclasses.replace(_CONTRACT, primary_kpis=primary_kpis) == _CONTRACT
+    else:
+        with pytest.raises(MetricContractError, match="primary_kpis must be exactly"):
+            dataclasses.replace(_CONTRACT, primary_kpis=primary_kpis)

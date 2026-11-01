@@ -1,0 +1,99 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://synapse.local/schemas/dataset-licences.schema.json",
+  "title": "External dataset licence register",
+  "description": "R8.1 (decision-quality-proof task 7.1). One entry per external dataset, carrying the six fields R8.1 names. THE CENTRAL DESIGN DECISION: every one of the six keys is REQUIRED to be PRESENT, and each is typed ['string','null']. A key may therefore be null - meaning 'not yet read from the licence text' - but it may never be OMITTED. That asymmetry is deliberate and is what makes R8.1's 'an absent field is named rather than defaulted' mechanical: a reader cannot silently drop a term, and a null is a positive assertion of ignorance rather than an absence that a permissive default could fill. `scripts/audit/dataset_licence_truth.py` reports any null field as `unavailable` -> SKIP, naming the field. A SKIP is not a PASS (I-7).",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "datasets"],
+  "properties": {
+    "schema_version": {
+      "type": "integer",
+      "const": 1,
+      "description": "Pinned. A reader that does not recognise the version reports unavailable rather than guessing at the shape."
+    },
+    "datasets": {
+      "type": "array",
+      "description": "One entry per external dataset. Emptiness is deliberately NOT constrained here (no `minItems`): an empty register means nobody wrote a wrong term, there are simply no terms, which is the canonical `unavailable` shape rather than a document defect. `dataset_licence_truth` owns it as the `declaration-empty` rule -> SKIP. Constraining it here would make 'nothing is declared' a FAIL, which misreports an absence as a defect.",
+      "items": { "$ref": "#/definitions/datasetLicence" }
+    }
+  },
+  "definitions": {
+    "datasetLicence": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "ONE OWNER FOR COMPLETENESS. The six R8.1 fields are deliberately NOT in `required`. If the schema required them, a dropped key would surface as `schema-invalid` -> FAIL, and a null key as `field-absent` -> SKIP - two verdicts for one fact, decided by which of two mechanisms noticed first. Completeness is therefore owned entirely by `dataset_licence_truth`, which treats an ABSENT key and a NULL key identically: both are 'nobody established this term' -> unavailable, named. What the schema owns is the complementary half: a term that is PRESENT must be well-formed, so `read_date` must parse as a date and a string term must be non-empty. Present-and-wrong is somebody's defect in this tree -> FAIL. Absent-or-null is an unread term -> SKIP.",
+      "required": ["confirmation"],
+      "properties": {
+        "dataset_id": {
+          "type": ["string", "null"],
+          "minLength": 1,
+          "description": "R8.1 dataset identity. Null means not yet established."
+        },
+        "licence_id": {
+          "type": ["string", "null"],
+          "minLength": 1,
+          "description": "R8.1 licence identifier, as the licence text itself names it (e.g. an SPDX identifier, or the competition-rules clause reference when no SPDX identifier applies). NEVER a plausible guess: an invented identifier is worse than a null, because a null surfaces and a guess does not."
+        },
+        "licence_text_uri": {
+          "type": ["string", "null"],
+          "minLength": 1,
+          "description": "R8.1 licence-text URI. The location a human can read the terms at, not a landing page that merely mentions them."
+        },
+        "read_date": {
+          "type": ["string", "null"],
+          "format": "date",
+          "description": "R8.1 read date - when a human actually read the terms at that URI. Null while nobody has. This field is the reason the artifact cannot be filled in by an agent: reading requires accepting terms, which is an operator act."
+        },
+        "permitted_use": {
+          "type": ["string", "null"],
+          "minLength": 1,
+          "description": "R8.1 permitted use, stated in the licence's own scope terms. Null means unread, NOT 'any use'."
+        },
+        "dataset_revision": {
+          "type": ["string", "null"],
+          "minLength": 1,
+          "description": "R8.1 dataset revision. Pins which bytes the licence was read against, so a re-published dataset does not inherit a stale confirmation."
+        },
+        "redistribution": {
+          "type": ["string", "null"],
+          "enum": ["permitted", "prohibited", "permitted-with-attribution", "unknown", null],
+          "description": "The redistribution disposition task 7.1 names. `unknown` and null are distinct: `unknown` asserts that the terms were read and are genuinely silent or ambiguous; null asserts that they were not read. Neither is `permitted`."
+        },
+        "confirmation": {
+          "$ref": "#/definitions/confirmation"
+        },
+        "notes": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Free-form provenance notes. Never load-bearing for the verdict."
+        }
+      }
+    },
+    "confirmation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["confirmed", "procedure"],
+      "description": "Who established the terms, and - while nobody has - exactly what an operator must do. Recording the procedure in the artifact is what stops a null field becoming a mystery rather than a task.",
+      "properties": {
+        "confirmed": {
+          "type": "boolean",
+          "description": "True only when every one of the six R8.1 fields is non-null AND a human recorded that they read the terms. The gate does not trust this flag on its own: it re-derives field completeness and FAILs on a `confirmed: true` entry that still carries a null field, because a flag that can disagree with its own subject is a claim, not evidence."
+        },
+        "confirmed_by": {
+          "type": ["string", "null"],
+          "description": "The operator who read the terms. Null while unconfirmed."
+        },
+        "procedure": {
+          "type": "string",
+          "minLength": 1,
+          "description": "The steps an operator must take to confirm. Required even when confirmed, so the record states how the confirmation was obtained."
+        },
+        "blocked_on": {
+          "type": ["string", "null"],
+          "description": "Why this cannot be confirmed mechanically - e.g. terms behind an acceptance gate that an agent must not accept on an operator's behalf."
+        }
+      }
+    }
+  }
+}

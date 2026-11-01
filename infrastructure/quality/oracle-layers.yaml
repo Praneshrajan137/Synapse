@@ -1,0 +1,42 @@
+# SYNAPSE -- Oracle-layer membership configuration (R12; design E2.3, RC-3)
+#
+# Membership of the testing topology's Oracle layer is DERIVED from observable
+# properties of a test, never declared by its file path or its title (R12.6).
+# The numbers a derivation needs are pinned here rather than hardcoded in the
+# auditor, so they are reviewable and diffable (design AD-13).
+#
+# Read contract: `encoding='utf-8'` on every read (E-S13-07).
+# Consumer: `scripts/audit/oracle_truth.py` (surfaced as C61 in the
+# Check_Registry). A missing or unparseable file makes the auditor report
+# `unavailable` -- never a pass (I-7).
+
+version: 1
+
+# The layer number `references/testing_topology.md` reserves for the Oracle
+# layer. A test carrying `@pytest.mark.oracle` declares this layer, with or
+# without an explicit `layer=` keyword.
+oracle_layer: 6
+
+# Layer vocabulary, for reporting only. A test rejected from the Oracle layer
+# must register in one of the others -- `tests/oracle/test_pricing_impact_oracle.py`
+# is registered Metamorphic (4), which is what its own docstring always said it
+# was.
+layer_names:
+  "1": Unit
+  "2": Fuzz
+  "3": Contract
+  "4": Metamorphic
+  "5": DesignByContract
+  "6": Oracle
+  "7": Chaos
+
+# Largest admissible tolerance bound, as a fraction of the compared quantity,
+# for a test in the oracle suite (R12.7).
+#
+# Rationale for 0.50: a bound of half the compared quantity admits a two-fold
+# error in the implementation under test, at which point agreement no longer
+# distinguishes a correct mechanism from a coincidence. Anything at or above
+# this bound is reported `unconstraining` and the auditor fails naming the test
+# and the constant. The bound is a ceiling, not a target -- the committed
+# tolerances are far tighter (0.15 and 0.20).
+tolerance_ceiling: 0.50

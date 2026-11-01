@@ -51,9 +51,11 @@ import json
 import math
 import os
 import re
+import site
 import socket
 import subprocess
 import sys
+import sysconfig
 from contextlib import redirect_stdout
 from pathlib import Path
 from typing import Any, Iterable
@@ -376,8 +378,8 @@ def test_a_raised_floor_is_backed_by_a_committed_powered_proof() -> None:
         "UPLIFT_FLOOR was raised above 0.0 with no readable proof artifact (R4.7)"
     )
     assert proof.supports(UPLIFT_FLOOR), (
-        f"committed proof (headline {proof.headline_uplift} pp over {proof.replicates} "
-        f"replicates/arm, incomplete={proof.incomplete}, "
+        f"committed proof (headline {proof.headline_uplift} objective units over "
+        f"{proof.replicates} replicates/arm, incomplete={proof.incomplete}, "
         f"within_fidelity_bound={proof.within_fidelity_bound}) does not support "
         f"UPLIFT_FLOOR={UPLIFT_FLOOR} (R4.7)"
     )
@@ -414,6 +416,11 @@ _DATA_SUFFIXES = frozenset(
 #: Real-data directories the proof must never read from (R3.6, R10.1).
 _REAL_DATA_DIRS = (REPO_ROOT / "data", REPO_ROOT / "data_fabric")
 
+#: ``sysconfig`` keys naming where the interpreter's library and installed distributions live.
+#: A dependency's bundled file (codecarbon's ``cpu_power.csv`` is one instance) is read from
+#: under one of these, and is not this project's data (finding 57).
+_DISTRIBUTION_PATH_KEYS = ("purelib", "platlib", "stdlib", "platstdlib")
+
 #: Hosts that would cost money to reach. A blocked dial to any of these on a
 #: reproduction/verification path is an I-1 (``$0``) violation regardless of whether it
 #: degrades honestly, so the guard's recorded attempts are checked against this list.
@@ -431,6 +438,56 @@ _PAID_HOST_MARKERS: tuple[str, ...] = (
 )
 
 
+def _comparable(path: Path) -> Path | None:
+    """``path`` resolved and case-normalised for a containment test; ``None`` if unresolvable.
+
+    Resolution can fail on a symlink loop or an unencodable name. Such a path is never proven
+    to lie inside a distribution root, so a data-suffixed read of it stays flagged.
+    """
+    try:
+        return Path(os.path.normcase(path.resolve(strict=False)))
+    except (OSError, RuntimeError, ValueError):
+        return None
+
+
+def _installed_distribution_roots() -> tuple[Path, ...]:
+    """Where installed distributions and the interpreter's library live: sorted and unique.
+
+    The ``site`` accessors are guarded because some virtualenvs ship a ``site`` without them.
+    An empty or unresolvable candidate is ignored rather than becoming a root.
+    """
+    paths = sysconfig.get_paths()
+    candidates = [paths[key] for key in _DISTRIBUTION_PATH_KEYS if key in paths]
+    if hasattr(site, "getsitepackages"):
+        candidates.extend(site.getsitepackages())
+    if hasattr(site, "getusersitepackages"):
+        candidates.append(site.getusersitepackages())
+    roots = {_comparable(Path(candidate)) for candidate in candidates if candidate}
+    return tuple(sorted((root for root in roots if root is not None), key=str))
+
+
+def _is_project_data_read(path: Path, distribution_roots: tuple[Path, ...]) -> bool:
+    """Whether opening ``path`` for reading means *this project* read data (R3.6, R10.1)."""
+    anchored = path if path.is_absolute() else REPO_ROOT / path
+    resolved = _comparable(anchored)
+    spellings = [anchored] if resolved is None else [anchored, resolved]
+    if any(
+        str(spelling).lower().startswith(str(directory).lower())
+        for spelling in spellings
+        for directory in _REAL_DATA_DIRS
+    ):
+        return True  # a data-directory read is flagged whatever its suffix, before any exemption
+    if path.suffix.lower() not in _DATA_SUFFIXES:
+        return False
+    # Stricter than the rejected `suffix in _DATA_SUFFIXES and under_data`, which would let a
+    # purchased CSV read from anywhere outside data/ pass silently. A data-suffixed read stays
+    # flagged wherever it lands unless its resolved path lies, component by component, inside an
+    # installed distribution: a dependency's bundled file, never this project's data. Every
+    # approximation errs toward flagging: an unresolvable path or a lookalike such as
+    # site-packages2 stays recorded, and the data-directory test above matches by prefix.
+    return resolved is None or not any(resolved.is_relative_to(root) for root in distribution_roots)
+
+
 class _ZeroCostGuard:
     """Make every socket dial and paid-SDK client fail, and record real-data reads.
 
@@ -444,7 +501,8 @@ class _ZeroCostGuard:
       for any non-loopback address (loopback stays open because asyncio's event-loop
       self-pipe is a local ``socketpair`` on Windows);
     * constructing any installed paid/hosted SDK client fails loudly (I-1);
-    * every file *read* of a real-data directory or dataset suffix is recorded.
+    * every file *read* of a real-data directory is recorded, and so is every read with a
+      dataset suffix unless it resolves inside an installed distribution (finding 57).
 
     Each blocked dial is recorded with its target, so a test can assert the stronger
     property that matters: nothing paid was reachable, and the path still produced an
@@ -504,16 +562,13 @@ class _ZeroCostGuard:
         ]
 
     def _recording_open(self, original: Any) -> Any:
+        # Computed once, when ``__enter__`` (the only caller) installs the guard, never per read.
+        distribution_roots = _installed_distribution_roots()
+
         def guard(file: Any, mode: str = "r", *args: Any, **kwargs: Any) -> Any:
             if isinstance(file, (str, os.PathLike)) and "r" in mode and "+" not in mode:
                 path = Path(os.fspath(file))
-                suffix = path.suffix.lower()
-                resolved = path if path.is_absolute() else (REPO_ROOT / path)
-                under_data = any(
-                    str(resolved).lower().startswith(str(directory).lower())
-                    for directory in _REAL_DATA_DIRS
-                )
-                if suffix in _DATA_SUFFIXES or under_data:
+                if _is_project_data_read(path, distribution_roots):
                     self.data_file_reads.append(str(path))
             return original(file, mode, *args, **kwargs)
 
@@ -701,6 +756,10 @@ def test_reproduction_path_is_zero_cost_network_free_and_synthetic_only(tmp_path
     )
     if completed == 0:  # pragma: no cover — environment-dependent degradation
         assert payload["incomplete"] is True
+        # v2: with no consensus sample there is no paired interval, so there is no verdict
+        # to credit at all -- not a verdict defaulted to anything (I-7).
+        assert payload["interval"] is None
+        assert payload["headline_verdict"] is None
     else:
         assert all(
             run.kpis is not None
@@ -710,32 +769,131 @@ def test_reproduction_path_is_zero_cost_network_free_and_synthetic_only(tmp_path
 
 
 def test_c60_verification_path_is_network_free(tmp_path, monkeypatch) -> None:
-    """R9.2/R10.3: the C60 gate verifies from the committed artifact alone, no network."""
+    """R9.2/R10.3: the C60 gate verifies from its result artifact alone, no network.
+
+    Retargeted for the purpose-achievement-audit R2 remediation: the gate no longer reads
+    a bare ``headline_uplift``, so the fixture is a proof-grade
+    :class:`~uplift.harness.UpliftArtifact` -- complete, powered at
+    ``MIN_POWERED_REPLICATES``, within the twin fidelity bound, and attributed to the
+    evaluating run. Carried to the v2 artifact (decision-quality-proof tasks 15.1 and 29.4):
+    the headline is the point of an interval on the committed objective whose low bound
+    clears the materiality margin, so the stored verdict is the ``win`` the decision rule
+    re-derives, and the provenance declares every arm's role. Carried to task 17.3 (R6.7,
+    R6.9): the generating branch now also reads a Power_Report and digests its declared
+    source set, so the gate is handed a tree this test owns under ``tmp_path`` -- one stand-in
+    file per ``POWER_SOURCE_SET`` pattern and a report built over them -- and every one of
+    those reads stays under ``tmp_path``. The preserved claim is unchanged: verification
+    touches no socket, no paid client, and no real-data file.
+    """
+    from digital_twin.simulation.policy import detection_probability
     from scripts.audit import uplift_truth
-    from uplift.uplift_floor import UPLIFT_FLOOR
+    from uplift.contract import interval_verdict, load_contract
+    from uplift.harness import (
+        ARTIFACT_SCHEMA_VERSION,
+        ArtifactFidelity,
+        ArtifactInterval,
+        UpliftArtifact,
+        UpliftProvenance,
+        comparator_label,
+    )
+    from uplift.interval import INTERVAL_SEED, METHOD
+    from uplift.power import (
+        POWER_REPORT_PATH,
+        POWER_SOURCE_SET,
+        build_power_report,
+        write_power_report,
+    )
+    from uplift.tuned_static import TUNED_STATIC_ARM
+    from uplift.uplift_floor import MIN_POWERED_REPLICATES, UPLIFT_FLOOR
+
+    revision, run_id = "c0ffee", "run-4242"
+    monkeypatch.setenv("SYNAPSE_REVISION", revision)
+    monkeypatch.setenv("SYNAPSE_RUN_ID", run_id)
+
+    # Read, never restated: the margin is the committed one the contract resolves, and the
+    # headline sits a full unit above both it and the floor, so the fixture is a v2 win and
+    # a proven gain under every reading the gate could apply.
+    contract = load_contract()
+    margin = contract.materiality_margin
+    headline = max(float(UPLIFT_FLOOR), margin) + 1.0
+    interval = ArtifactInterval(
+        method=METHOD,
+        alpha=contract.alpha,
+        resamples=contract.resamples,
+        seed=INTERVAL_SEED,
+        low=headline - 0.5,
+        high=headline + 0.5,
+        point=headline,
+    )
+    verdict = interval_verdict(interval.low, interval.high, margin=margin)
+    assert verdict == "win", verdict
+
+    # The tree the gate's Power_Report rule reads (task 17.3). At a variance of 1.0 the derived
+    # requirement is far below INV-TW-002, so the replicate floor stays MIN_POWERED_REPLICATES
+    # and the artifact below meets it exactly.
+    tree = tmp_path / "power-tree"
+    for pattern in POWER_SOURCE_SET:
+        stand_in = tree / pattern.replace("*", "stand_in")
+        stand_in.parent.mkdir(parents=True, exist_ok=True)
+        stand_in.write_text(f"# stands in for {pattern}\n", encoding="utf-8")
+    write_power_report(
+        build_power_report(
+            root=tree,
+            source_set=POWER_SOURCE_SET,
+            source_run_id="run-power-fixture",
+            source_revision_sha="0" * 40,
+            replicates_per_arm=MIN_POWERED_REPLICATES,
+            observed_variance=1.0,
+            variance_source="a test fixture: no run measured this variance",
+            alpha=contract.alpha,
+            detection_probability=detection_probability(),
+            materiality_margin=margin,
+            comparator=TUNED_STATIC_ARM,
+        ),
+        tree / POWER_REPORT_PATH,
+    )
 
     artifact = tmp_path / "result.json"
-    artifact.write_text(
-        json.dumps(
-            {
-                "headline_uplift": float(UPLIFT_FLOOR),
-                "incomplete": False,
-                "fidelity": {"within_fidelity_bound": True},
-            }
+    UpliftArtifact(
+        schema_version=ARTIFACT_SCHEMA_VERSION,
+        headline_uplift=headline,
+        primary_kpi=contract.objective_kpi,
+        noise_tolerance_pp=1.0,
+        incomplete=False,
+        all_wins_warning=False,
+        replicates_per_arm=MIN_POWERED_REPLICATES,
+        fidelity=ArtifactFidelity(
+            kl_divergence=0.02,
+            threshold=0.1,
+            confidence="high",
+            within_fidelity_bound=True,
+            fidelity_bound_statement="bounded by twin fidelity",
         ),
-        encoding="utf-8",
-    )
-    monkeypatch.setattr(uplift_truth, "RESULT_ARTIFACT", artifact)
+        provenance=UpliftProvenance(
+            arms=("baseline-0", "consensus"),
+            arm_roles={"baseline-0": "baseline", "consensus": "consensus"},
+            replicates_per_arm=MIN_POWERED_REPLICATES,
+            revision=revision,
+            run_id=run_id,
+            seeds=(4001,),
+            written_at="2026-01-01T00:00:00Z",
+        ),
+        interval=interval,
+        headline_verdict=verdict,
+        materiality_margin=margin,
+        comparator=comparator_label(None, ["baseline-0"]),
+        run_incomplete=False,
+    ).write(artifact)
 
     with _ZeroCostGuard() as guard:
-        measured = uplift_truth.read_measured_uplift(artifact)
         with redirect_stdout(io.StringIO()):
-            exit_code = uplift_truth.run(check=True)
+            exit_code = uplift_truth.run(
+                check=True, require_fresh_run=True, artifact=artifact, tree_root=tree
+            )
 
-    assert measured == pytest.approx(float(UPLIFT_FLOOR))
     assert exit_code == uplift_truth.EXIT_PASS
-    # The gate reads the committed artifact and nothing else: no dial at all, no paid
-    # client, no real-data file.
+    # The gate reads its result artifact, the Power_Report and the stand-in source set -- all
+    # under tmp_path -- and nothing else: no dial at all, no paid client, no real-data file.
     assert guard.network_attempts == []
     assert guard.paid_client_attempts == []
     assert guard.data_file_reads == []

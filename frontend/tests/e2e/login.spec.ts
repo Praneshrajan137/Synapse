@@ -45,6 +45,9 @@ test("Login form is accessible (a11y) @a11y", async ({ page }) => {
     route.fulfill({ status: 401, json: { detail: "invalid credentials" } }),
   );
   await page.goto("/login");
+  // Login is route-split, so its fields exist only once its chunk has rendered:
+  // wait for the form before counting them (`count()` does not retry).
+  await expect(page.getByRole("form", { name: /Operator sign-in/i })).toBeVisible();
   const inputs = await page.getByRole("textbox").count();
   expect(inputs).toBeGreaterThanOrEqual(1);
   await expect(page.getByRole("button", { name: /Sign in/i })).toBeVisible();

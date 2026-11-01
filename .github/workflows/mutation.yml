@@ -6,9 +6,9 @@ on:
   workflow_dispatch:
   # Sprint 13 §Phase 4.2 (C30): PR-trigger on changes to the highest-leverage
   # mutation targets. The full-matrix Sunday cron still runs `mutation` job.
-  # The `mutation-fast` job below only mutates the files touched in the PR,
-  # keeping wall-clock under ~10 min while making regressions on rewards /
-  # guardrails / audit fail CI before merge to main.
+  # The `mutation-fast-*` jobs below mutate only the lines the PR touches, one
+  # matrix leg per changed target, making regressions on rewards / guardrails /
+  # audit fail CI before merge to main.
   pull_request:
     paths:
       - 'agents/*/training/rewards.py'
@@ -19,15 +19,54 @@ on:
       # re-exports and is covered by normal unit tests. The mutation gate
       # follows the implementation.
       - 'packages/synapse_common/audit_chain.py'
+      # purpose-achievement-audit task 12.2: the chain WALKER is the module that
+      # decides whether the audit chain is intact (design E4.1 / AD-8). It sits under
+      # the same <10% audit survival ceiling as the logger and the shared hash, and a
+      # mutant that survives there is a tamper class the verifier cannot see.
+      - 'orchestrator/audit/chain_walk.py'
+  # purpose-achievement-audit task 2.17 (R7.4, R11.5). The audit's finding: the
+  # full sweep is `if: github.event_name != 'pull_request'` and the fast gate was
+  # `if: github.event_name == 'pull_request'`, so NO mutation gate ran on a merge
+  # commit to `main` -- a regression could land through the seam between the two
+  # conditions. This push trigger closes it: `mutation-fast` now also runs on a
+  # push to `main` and mutates the lines that push changed, so R11.5's "a
+  # mutation-score regression introduced by a commit merged to main SHALL record a
+  # failed conclusion for that merge commit" has a mechanism.
+  #
+  # The `paths:` list mirrors the pull_request filter exactly, so the PR gate and
+  # the merge gate have identical scope. Known limitation, recorded rather than
+  # hidden: neither filter selects a commit that weakens a TEST file without
+  # touching its mutation target, and such a commit can lower survival. Only the
+  # Sunday whole-file sweep catches that.
+  push:
+    branches: [main]
+    paths:
+      - 'agents/*/training/rewards.py'
+      - 'orchestrator/guardrails/rules.py'
+      - 'orchestrator/audit/logger.py'
+      - 'packages/synapse_common/audit_chain.py'
+      - 'orchestrator/audit/chain_walk.py'
+
+# A superseded pull-request push stops spending runner time: a newer push to the same PR
+# cancels this workflow's in-progress run for the older head. Scheduled, dispatched and push
+# runs are each keyed by their own run id, so none shares a group and none is cancelled --
+# GitHub cancels a PENDING run when a newer one joins its group whatever
+# `cancel-in-progress` says, so a sha key would let the cron and a push of one commit collide.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 env:
   PYTHONPATH: "."
 
 jobs:
   mutation:
-    # Full-matrix run — scheduled + manual dispatch only. NOT on pull_request
-    # (see mutation-fast below for the PR-blocking subset).
-    if: github.event_name != 'pull_request'
+    # Full-matrix run -- scheduled + manual dispatch only. NOT on pull_request and
+    # NOT on push (see mutation-fast below for the PR- and merge-blocking subset).
+    # Stated as a positive allowlist rather than `!= 'pull_request'`: task 2.17 added
+    # a `push: branches: [main]` trigger, and the old negative form would have put a
+    # 90-minute whole-file sweep on every merge commit.
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     timeout-minutes: 90
 
@@ -50,6 +89,12 @@ jobs:
           pip install -e packages/
           pip install --index-url https://download.pytorch.org/whl/cpu "torch>=2.2,<2.4"
           pip install -r orchestrator/requirements.txt
+          # `orchestrator/audit/chain_walk.py` imports `yaml` at module level
+          # (load_chain_bounds reads infrastructure/quality/audit-chain-bounds.yaml).
+          # It is currently satisfied only transitively via schemathesis; declare it
+          # so a dev-requirements change cannot turn the walker sweep into a
+          # collection error.
+          pip install pyyaml
           if [ -f agents/requirements-sprint2.txt ]; then pip install -r agents/requirements-sprint2.txt; fi
           if [ -f agents/requirements-sprint3.txt ]; then pip install -r agents/requirements-sprint3.txt; fi
 
@@ -128,6 +173,59 @@ jobs:
             mv .mutmut-cache .mutmut-cache-audit
           fi
 
+      - name: Run mutation tests — Audit chain walker (< 10% survival, CLAUDE.md gate)
+        # purpose-achievement-audit task 12.2. `orchestrator/audit/chain_walk.py` is the
+        # pure decision procedure behind `python -m orchestrator.audit.cli verify`: it
+        # recomputes each row's payload hash, compares stored `prev_hash` against the
+        # WALKED predecessor's `current_hash` (AD-8, the removed
+        # `row.prev_hash or prev_hash` fallback), separates legacy pre-boundary nulls
+        # from verified rows, and decides HEAD_UNREACHABLE. Every one of those is a
+        # tamper class R6.2-R6.8 names, so it belongs under the same <10% audit
+        # survival ceiling as the logger and the shared hash rather than outside the
+        # mutation surface entirely.
+        #
+        # Killer suite, in run order (all in `packages/tests/`): the deterministic
+        # killers first, so `-x` ends a killed mutant's run in seconds instead of in
+        # Hypothesis shrinking (mutmut reads a kill slower than 2x baseline as
+        # `ok_suspicious`, and check_mutation_threshold.py counts that as SURVIVING);
+        # then Property 18, which quantifies single-row perturbation detection over
+        # generated chains; then the chain_verified scope test, which pins the
+        # walker/row-hash distinction the API gateway depends on. Both property files
+        # still run on every mutant the killers leave alive.
+        #
+        # E-S13-05: `mutmut` is validated on CI Linux runners, never the Windows dev
+        # box -- this job is `runs-on: ubuntu-latest` and I-0 forbids running it
+        # locally at any scale.
+        #
+        # `env HYPOTHESIS_PROFILE=heavy` bounds each mutant's test run at 100 examples
+        # (the minimum any spec obligation requires) instead of the root conftest's
+        # `default` 500. mutmut re-runs the suite once per mutant, so 500 would
+        # multiply out past this job's 90-minute budget. The profile is selected, not
+        # hardcoded -- `max_examples` appears nowhere.
+        #
+        # Label is `audit/chain-walk`, deliberately NOT `audit`:
+        # `infrastructure/quality/ratchets.json` extracts the `audit` ceiling with the
+        # regex `--threshold (?P<value>\d+) --label "audit"`, and reusing that label
+        # would give the extractor two matching sites.
+        run: |
+          if [ -f "orchestrator/audit/chain_walk.py" ]; then
+            rm -rf .mutmut-cache
+            set +e
+            mutmut run \
+              --paths-to-mutate="orchestrator/audit/chain_walk.py" \
+              --tests-dir="packages/tests/" \
+              --runner="env HYPOTHESIS_PROFILE=heavy python -m pytest packages/tests/test_chain_walk_mutation_killers.py packages/tests/test_chain_walk_perturbation_property.py packages/tests/test_chain_verified_scope.py -x -q"
+            mutmut_status=$?
+            set -e
+            if [ $((mutmut_status & 1)) -ne 0 ]; then
+              exit "${mutmut_status}"
+            fi
+            mutmut results
+            python scripts/check_mutation_threshold.py \
+              --threshold 10 --label "audit/chain-walk"
+            mv .mutmut-cache .mutmut-cache-audit-chain-walk
+          fi
+
       - name: Upload mutation results
         if: always()
         uses: actions/upload-artifact@v4
@@ -137,22 +235,215 @@ jobs:
           include-hidden-files: true
           retention-days: 30
 
-  mutation-fast:
-    # Sprint 13 §Phase 4.2 (C30): runs ONLY the changed-target mutmut sweep on
-    # pull_request. Parallel to frontend Stryker (C16, frontend.yml). The
-    # CLAUDE.md thresholds (<15% rewards, <10% guardrails/audit) are enforced
-    # by scripts/check_mutation_threshold.py — a regression on a PR fails CI
-    # before merge to main. The PR gate mutates only lines changed by the PR
-    # via mutmut's patch-file mode; the scheduled/manual `mutation` job above
-    # remains the whole-file sweep for full reward/audit/guardrail debt.
-    # Sprint-9 reward-default work can legitimately touch six reward targets,
-    # so the timeout covers the full changed-target sweep.
-    if: github.event_name == 'pull_request'
+  mutation-fast-plan:
+    # Sprint 13 §Phase 4.2 (C30): the PR gate mutates only the lines a change touches
+    # (mutmut's patch-file mode) on the gated targets, and enforces the CLAUDE.md ceilings
+    # (<15% rewards, <10% guardrails/audit) through scripts/check_mutation_threshold.py,
+    # so a regression fails CI before merge to main. Parallel to frontend Stryker (C16,
+    # frontend.yml). The scheduled/manual `mutation` job above remains the whole-file
+    # sweep for full reward/audit/guardrail debt. purpose-achievement-audit task 2.17
+    # (R11.5) also runs it on a push to `main`, so a merge commit that regresses survival
+    # on a gated target fails CI; task 12.2 added `orchestrator/audit/chain_walk.py`.
+    #
+    # PLAN -> ONE LEG PER TARGET -> AGGREGATOR. The serial loop this replaces mutated every
+    # changed target inside one 45-minute job, so one slow target starved the rest: a run
+    # was cancelled at that timeout with chain_walk.py at 132 of 148 mutants and
+    # guardrails/rules.py never started, leaving no verdict for either. Each target now
+    # has its own leg and budget, and `mutation-fast` judges the plan as a whole.
+    #
+    # This job is the ONE target resolution. The change-set base differs per event
+    # (`pull_request.base.sha` vs `event.before`) and is resolved here once; every leg
+    # diffs against that same base, so the detected set and the mutated set cannot
+    # diverge. E-S13-05 is why every mutation job is `runs-on: ubuntu-latest` and none is
+    # ever reproduced on the Windows dev box: `mutmut` is validated on CI Linux runners only.
+    if: github.event_name == 'pull_request' || github.event_name == 'push'
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 10
     permissions:
       contents: read
-      pull-requests: write
+    outputs:
+      base: ${{ steps.plan.outputs.base }}
+      count: ${{ steps.plan.outputs.count }}
+      matrix: ${{ steps.plan.outputs.matrix }}
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # need history to diff vs base ref
+
+      - name: Resolve the mutation partition
+        id: plan
+        # Context values arrive through `env:` and nothing is spliced into the script, so
+        # a changed file's NAME can never become shell code. Every gated path is also held
+        # to a strict shape before it may name a label or an artifact.
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          PUSH_BEFORE_SHA: ${{ github.event.before }}
+        run: |
+          set -euo pipefail
+          case "${EVENT_NAME}" in
+            pull_request) BASE_REF="${PR_BASE_SHA}" ;;
+            push)         BASE_REF="${PUSH_BEFORE_SHA}" ;;
+            *)            BASE_REF="" ;;
+          esac
+          # A base we cannot resolve (empty, the all-zero sha GitHub sends for a branch
+          # creation or a force push, or a commit missing from the fetched history) means
+          # the changed-target set is UNKNOWN. An unknown set must not read as "no gated
+          # target changed": a gate that cannot run does not pass (I-7).
+          if [ -z "${BASE_REF}" ] \
+             || [ "${BASE_REF}" = "0000000000000000000000000000000000000000" ] \
+             || ! git cat-file -e "${BASE_REF}^{commit}" 2>/dev/null; then
+            echo "Cannot resolve a base commit for this ${EVENT_NAME} event (base='${BASE_REF}')."
+            echo "The changed-target set is unknown, so the mutation gate cannot decide"
+            echo "anything. Failing rather than reporting an empty target set (I-7)."
+            exit 1
+          fi
+          # NUL-separated and without rename detection: a path is matched as its own bytes
+          # (never git's quoted form), and a target renamed or deleted away is still listed,
+          # so its leg refuses it instead of it silently leaving the plan.
+          git diff --name-only --no-renames -z "${BASE_REF}" HEAD > changed-files.z
+          echo "Changed files vs ${BASE_REF}:"
+          tr '\0' '\n' < changed-files.z
+          # The gated set, with GitHub's `*` (exactly one path segment). It MUST equal both
+          # `paths:` filters in `on:` above.
+          gated='^(agents/[^/]+/training/rewards\.py|orchestrator/guardrails/rules\.py|orchestrator/audit/logger\.py|packages/synapse_common/audit_chain\.py|orchestrator/audit/chain_walk\.py)$'
+          plan='[]'
+          selected=0
+          while IFS= read -r -d '' path; do
+            if [[ ! "${path}" =~ ${gated} ]]; then
+              continue
+            fi
+            selected=$((selected + 1))
+            # Minutes. A leg's job budget is its mutmut budget plus 10 for checkout, install
+            # and evidence (an allowance, not a measurement). A target with no measured run
+            # keeps the 45-minute job budget the serial loop had.
+            mutmut_minutes=35
+            job_minutes=45
+            case "${path}" in
+              agents/*/training/rewards.py)
+                agent="${path#agents/}"
+                agent="${agent%%/*}"
+                if [[ ! "${agent}" =~ ^[A-Za-z0-9_]+$ ]]; then
+                  echo "REFUSE: '${path}' is gated, but '${agent}' cannot name a label or an artifact."
+                  exit 1
+                fi
+                test_path="agents/${agent}/tests/test_reward.py"
+                runner="python -m pytest ${test_path}"
+                if [ -f "agents/${agent}/tests/test_reward_safety.py" ]; then
+                  runner="${runner} agents/${agent}/tests/test_reward_safety.py"
+                fi
+                runner="${runner} -x -q"
+                threshold=15
+                label="rewards/${agent}"
+                ;;
+              orchestrator/guardrails/rules.py)
+                test_path="orchestrator/tests/test_guardrails.py"
+                # Killers first so -x ends a killed mutant's run there; without them 116/149 survived (MEASURED, run 36959909057).
+                runner="python -m pytest orchestrator/tests/test_guardrail_rules_mutation_killers.py ${test_path} -x -q"
+                threshold=10
+                label="guardrails/rules"
+                ;;
+              orchestrator/audit/logger.py)
+                test_path="orchestrator/tests/test_audit_logger.py"
+                runner="python -m pytest ${test_path} -x -q"
+                threshold=10
+                label="audit/logger"
+                ;;
+              packages/synapse_common/audit_chain.py)
+                # ADR-044 D6: shared implementation - killed by BOTH the byte-pin suite in
+                # packages/tests and the orchestrator chain-walk suite (which imports
+                # through the re-export).
+                test_path="packages/tests/test_audit_chain.py"
+                runner="python -m pytest ${test_path} orchestrator/tests/test_hash_chain.py -x -q"
+                threshold=10
+                label="audit/chain-shared"
+                ;;
+              orchestrator/audit/chain_walk.py)
+                # Same target, runner and <10% ceiling as the whole-file sweep's walker
+                # step; see that step for why the profile is `heavy` and why the
+                # deterministic killers run first. The `env` prefix is scoped to THIS
+                # target, so every other leg keeps the budget it runs at today.
+                test_path="packages/tests/test_chain_walk_perturbation_property.py"
+                runner="env HYPOTHESIS_PROFILE=heavy python -m pytest packages/tests/test_chain_walk_mutation_killers.py ${test_path} packages/tests/test_chain_verified_scope.py -x -q"
+                threshold=10
+                label="audit/chain-walk"
+                # The only MEASURED target: 132 of 148 mutants classified inside a 2,725 s
+                # job before its 45-minute timeout (<= 20.6 s per mutant, install included),
+                # so all 148 fit in <= 51 min at that rate. 80 is 1.5x that, rounded up. The
+                # killers are predicted to cut it several-fold; a prediction is not a
+                # measurement, so the budget stays sized to the run that was observed.
+                mutmut_minutes=80
+                job_minutes=90
+                ;;
+              *)
+                echo "REFUSE: '${path}' is gated but this table has no runner for it."
+                exit 1
+                ;;
+            esac
+            plan="$(jq -c \
+              --arg target "${path}" \
+              --arg label "${label}" \
+              --arg cache_label "${label//\//-}" \
+              --arg test_path "${test_path}" \
+              --arg runner "${runner}" \
+              --argjson threshold "${threshold}" \
+              --argjson job_minutes "${job_minutes}" \
+              --argjson mutmut_minutes "${mutmut_minutes}" \
+              '. + [{target: $target, label: $label, cache_label: $cache_label, test_path: $test_path, runner: $runner, threshold: $threshold, job_minutes: $job_minutes, mutmut_minutes: $mutmut_minutes}]' \
+              <<< "${plan}")"
+          done < changed-files.z
+          count="$(jq 'length' <<< "${plan}")"
+          # The paths filter starts this job only when a gated file changed, so an empty
+          # plan means the gated set above and the `paths:` filters disagree. It is never
+          # read as "nothing to mutate".
+          if [ "${count}" -eq 0 ]; then
+            echo "REFUSE: the paths filter started this job, but no gated target differs from"
+            echo "${BASE_REF}; the gated set and the paths: filters disagree."
+            exit 1
+          fi
+          # Exhaustive: every gated file that changed has a leg.
+          if [ "${count}" -ne "${selected}" ]; then
+            echo "REFUSE: ${selected} gated file(s) changed but ${count} leg(s) were planned."
+            exit 1
+          fi
+          # Disjoint: no two legs share a target or an evidence label.
+          for key in target cache_label; do
+            distinct="$(jq --arg key "${key}" '[.[] | .[$key]] | unique | length' <<< "${plan}")"
+            if [ "${distinct}" -ne "${count}" ]; then
+              echo "REFUSE: two legs share a ${key}; the partition is not disjoint."
+              exit 1
+            fi
+          done
+          echo "Planned ${count} leg(s) against base ${BASE_REF}:"
+          jq -r '.[] | "  \(.target) -> \(.label) (ceiling \(.threshold)%, job \(.job_minutes) min)"' <<< "${plan}"
+          echo "base=${BASE_REF}" >> "${GITHUB_OUTPUT}"
+          echo "count=${count}" >> "${GITHUB_OUTPUT}"
+          echo "matrix=${plan}" >> "${GITHUB_OUTPUT}"
+
+  mutation-fast-target:
+    # One leg per planned target. The matrix comes only from the plan's single
+    # resolution, and every value reaches the shell through `env:`.
+    name: mutation-fast / ${{ matrix.label }}
+    needs: [mutation-fast-plan]
+    runs-on: ubuntu-latest
+    timeout-minutes: ${{ matrix.job_minutes }}
+    permissions:
+      contents: read
+    strategy:
+      # Every leg reports its own verdict even when another leg fails: a FAIL on one
+      # target must not leave the others unmeasured, which is the defect this split fixes.
+      fail-fast: false
+      matrix:
+        include: ${{ fromJSON(needs.mutation-fast-plan.outputs.matrix) }}
+    env:
+      TARGET: ${{ matrix.target }}
+      LABEL: ${{ matrix.label }}
+      CACHE_LABEL: ${{ matrix.cache_label }}
+      TEST_PATH: ${{ matrix.test_path }}
+      RUNNER: ${{ matrix.runner }}
+      THRESHOLD: ${{ matrix.threshold }}
+      BASE: ${{ needs.mutation-fast-plan.outputs.base }}
 
     steps:
       - uses: actions/checkout@v4
@@ -171,109 +462,167 @@ jobs:
           # exactly as ci.yml does so synapse_common imports survive collection.
           pip install -e packages/
           pip install -r orchestrator/requirements.txt
+          # See the whole-file sweep above: chain_walk.py imports `yaml` at module
+          # level and is otherwise satisfied only transitively.
+          pip install pyyaml
           for req in agents/*/requirements.txt; do pip install -r "$req"; done
 
-      - name: Detect changed mutation targets
-        id: targets
+      - name: Run mutmut on this target
+        id: mutmut
+        timeout-minutes: ${{ matrix.mutmut_minutes }}
         run: |
+          set -euo pipefail
+          if [ ! -f "${TARGET}" ]; then
+            echo "REFUSE: ${TARGET} does not exist at HEAD. A gated target that was deleted or"
+            echo "renamed away cannot be mutated, so this gate cannot pass it (I-7)."
+            exit 1
+          fi
+          if [ ! -f "${TEST_PATH}" ]; then
+            echo "REFUSE: no matching test file at ${TEST_PATH} -- failing mutation for safety."
+            exit 1
+          fi
+          patch_file=".mutmut-${CACHE_LABEL}.patch"
+          git diff --unified=0 "${BASE}" HEAD -- "${TARGET}" > "${patch_file}"
+          if [ ! -s "${patch_file}" ]; then
+            echo "REFUSE: no patch hunks for ${TARGET} -- failing mutation for safety."
+            exit 1
+          fi
+          rm -rf .mutmut-cache
+          set +e
+          mutmut run \
+            --paths-to-mutate="${TARGET}" \
+            --use-patch-file="${patch_file}" \
+            --tests-dir="$(dirname "${TEST_PATH}")" \
+            --runner="${RUNNER}"
+          mutmut_status=$?
           set -e
-          BASE_REF="${{ github.event.pull_request.base.sha }}"
-          changed=$(git diff --name-only "${BASE_REF}" HEAD || true)
-          echo "Changed files:"
-          echo "${changed}"
-          # Intersect changed files with the gated mutation target set
-          targets=""
-          for f in ${changed}; do
-            case "${f}" in
-              agents/*/training/rewards.py|orchestrator/guardrails/rules.py|orchestrator/audit/logger.py|packages/synapse_common/audit_chain.py)
-                targets="${targets} ${f}"
-                ;;
-            esac
-          done
-          targets=$(echo "${targets}" | xargs)
-          echo "targets=${targets}" >> "${GITHUB_OUTPUT}"
-          if [ -z "${targets}" ]; then
-            echo "No gated mutation targets changed -- nothing to do."
+          # mutmut's exit status is a bit field (1 = fatal; 2, 4, 8 = survived, timed-out,
+          # suspicious mutants). Only the fatal bit ends the leg here: the survival ratio is
+          # the next step's verdict, never this exit code's.
+          if [ $((mutmut_status & 1)) -ne 0 ]; then
+            exit "${mutmut_status}"
           fi
 
-      - name: Run mutmut on changed targets
-        if: steps.targets.outputs.targets != ''
+      - name: Enforce the survival ceiling
+        id: ceiling
         run: |
+          set -euo pipefail
+          threshold_text="mutation-threshold-${CACHE_LABEL}.txt"
+          set +e
+          python scripts/check_mutation_threshold.py \
+            --threshold "${THRESHOLD}" --label "${LABEL}" > "${threshold_text}" 2>&1
+          threshold_status=$?
           set -e
-          for target in ${{ steps.targets.outputs.targets }}; do
-            echo "=== Mutating ${target} ==="
-            # Pick the matching test file by convention.
-            case "${target}" in
-              agents/*/training/rewards.py)
-                agent_dir=$(dirname $(dirname "${target}"))
-                test_path="${agent_dir}/tests/test_reward.py"
-                safety_path="${agent_dir}/tests/test_reward_safety.py"
-                runner="python -m pytest ${test_path}"
-                if [ -f "${safety_path}" ]; then
-                  runner="${runner} ${safety_path}"
-                fi
-                runner="${runner} -x -q"
-                threshold=15
-                label="rewards/$(basename ${agent_dir})"
-                ;;
-              orchestrator/guardrails/rules.py)
-                test_path="orchestrator/tests/test_guardrails.py"
-                runner="python -m pytest ${test_path} -x -q"
-                threshold=10
-                label="guardrails/rules"
-                ;;
-              orchestrator/audit/logger.py)
-                test_path="orchestrator/tests/test_audit_logger.py"
-                runner="python -m pytest ${test_path} -x -q"
-                threshold=10
-                label="audit/logger"
-                ;;
-              packages/synapse_common/audit_chain.py)
-                # ADR-044 D6: shared implementation — killed by BOTH the
-                # byte-pin suite in packages/tests and the orchestrator
-                # chain-walk suite (which imports through the re-export).
-                test_path="packages/tests/test_audit_chain.py"
-                runner="python -m pytest ${test_path} orchestrator/tests/test_hash_chain.py -x -q"
-                threshold=10
-                label="audit/chain-shared"
-                ;;
-            esac
-            if [ ! -f "${test_path}" ]; then
-              echo "WARN: no matching test file at ${test_path} -- failing mutation for safety"
-              exit 1
-            fi
-            cache_label=$(echo "${label}" | tr '/' '-')
-            patch_file=".mutmut-${cache_label}.patch"
-            git diff --unified=0 "${{ github.event.pull_request.base.sha }}" HEAD -- "${target}" > "${patch_file}"
-            if [ ! -s "${patch_file}" ]; then
-              echo "WARN: no patch hunks for ${target} -- failing mutation for safety"
-              exit 1
-            fi
-            rm -rf .mutmut-cache
-            set +e
-            mutmut run \
-              --paths-to-mutate="${target}" \
-              --use-patch-file="${patch_file}" \
-              --tests-dir="$(dirname ${test_path})" \
-              --runner="${runner}"
-            mutmut_status=$?
-            set -e
-            if [ $((mutmut_status & 1)) -ne 0 ]; then
-              exit "${mutmut_status}"
-            fi
-            mutmut results
-            python scripts/check_mutation_threshold.py \
-              --threshold "${threshold}" --label "${label}"
-            mv .mutmut-cache ".mutmut-cache-${cache_label}"
-          done
+          cat "${threshold_text}"
+          exit "${threshold_status}"
 
-      - name: Upload mutation-fast results
-        if: always() && steps.targets.outputs.targets != ''
+      - name: Record the leg's verdict and mutmut results
+        if: always()
+        env:
+          MUTMUT_OUTCOME: ${{ steps.mutmut.outcome }}
+          CEILING_OUTCOME: ${{ steps.ceiling.outcome }}
+        run: |
+          set -euo pipefail
+          # PASS and FAIL come only from the ceiling step. A leg whose mutmut run was
+          # refused, failed or timed out has NO verdict: a partial cache leaves mutants
+          # `untested`, which check_mutation_threshold.py leaves out of its denominator, so
+          # judging it would grade only the mutants that happened to run. It is recorded as
+          # UNMEASURED, and the aggregator holds it against the plan (I-7).
+          case "${CEILING_OUTCOME}" in
+            success) verdict=PASS ;;
+            failure) verdict=FAIL ;;
+            *)       verdict=UNMEASURED ;;
+          esac
+          verdict_file="mutation-verdict-${CACHE_LABEL}.tsv"
+          printf '%s\t%s\t%s\n' "${TARGET}" "${verdict}" \
+            "mutmut=${MUTMUT_OUTCOME} ceiling=${CEILING_OUTCOME}" > "${verdict_file}"
+          cat "${verdict_file}"
+          results_file="mutmut-results-${CACHE_LABEL}.txt"
+          if [ -f .mutmut-cache ]; then
+            mutmut results > "${results_file}" 2>&1
+          else
+            echo "no .mutmut-cache: mutmut never started for ${TARGET}" > "${results_file}"
+          fi
+          cat "${results_file}"
+
+      - name: Upload per-target evidence
+        if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: mutation-fast-results
+          name: mutation-fast-${{ matrix.cache_label }}
           path: |
             .mutmut-cache
-            .mutmut-cache-*
+            .mutmut-*.patch
+            mutmut-results-*.txt
+            mutation-threshold-*.txt
+            mutation-verdict-*.tsv
           include-hidden-files: true
+          if-no-files-found: error
+          overwrite: true
           retention-days: 30
+
+  mutation-fast:
+    # The job id `required-checks.yaml` (ineligible: path-filtered), CLAUDE.md (C30) and
+    # the pending `mutation-fast-required-job` doc pin name. It turns the plan into ONE
+    # attributable verdict: every planned target must come back measured (PASS or FAIL),
+    # none may FAIL, and the legs' own conclusion must be success. `always()` so that a
+    # failed or cancelled plan or leg is reported by name here instead of leaving this job
+    # skipped - a skipped job would report its status as satisfied.
+    needs: [mutation-fast-plan, mutation-fast-target]
+    if: always() && (github.event_name == 'pull_request' || github.event_name == 'push')
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+
+    steps:
+      - name: Download per-target evidence
+        if: needs.mutation-fast-plan.result == 'success'
+        uses: actions/download-artifact@v4
+        with:
+          pattern: mutation-fast-*
+          path: evidence
+
+      - name: Assert every planned target was measured and none exceeded its ceiling
+        if: always()
+        env:
+          PLAN_RESULT: ${{ needs.mutation-fast-plan.result }}
+          LEGS_RESULT: ${{ needs.mutation-fast-target.result }}
+          PLAN: ${{ needs.mutation-fast-plan.outputs.matrix }}
+        run: |
+          set -euo pipefail
+          if [ "${PLAN_RESULT}" != "success" ]; then
+            echo "mutation-fast-plan concluded '${PLAN_RESULT}': the target set is unknown,"
+            echo "so nothing was measured and nothing can pass (I-7)."
+            exit 1
+          fi
+          mkdir -p evidence
+          jq -r '.[].target' <<< "${PLAN}" | LC_ALL=C sort > planned.txt
+          find evidence -type f -name 'mutation-verdict-*.tsv' -exec cat {} + > verdicts.tsv
+          echo "Verdicts (target, verdict, step outcomes):"
+          cat verdicts.tsv
+          awk -F '\t' '$2 ~ /^(PASS|FAIL)$/ { print $1 }' verdicts.tsv \
+            | LC_ALL=C sort > measured.txt
+          echo "Planned $(wc -l < planned.txt) leg(s); measured $(wc -l < measured.txt)."
+          status=0
+          duplicated="$(cut -f1 verdicts.tsv | LC_ALL=C sort | uniq -d)"
+          if [ -n "${duplicated}" ]; then
+            echo "REFUSE: more than one verdict for: ${duplicated}"
+            status=1
+          fi
+          if ! cmp -s planned.txt measured.txt; then
+            echo "The plan was NOT discharged (column 1: planned but unmeasured;"
+            echo "column 2: measured but never planned):"
+            LC_ALL=C comm -3 planned.txt measured.txt
+            status=1
+          fi
+          failed="$(awk -F '\t' '$2 == "FAIL" { print $1 }' verdicts.tsv)"
+          if [ -n "${failed}" ]; then
+            echo "Survival ceiling exceeded: ${failed}"
+            status=1
+          fi
+          if [ "${LEGS_RESULT}" != "success" ]; then
+            echo "mutation-fast-target concluded '${LEGS_RESULT}'."
+            status=1
+          fi
+          exit "${status}"

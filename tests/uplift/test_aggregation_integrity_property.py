@@ -10,16 +10,35 @@ Property 9: Aggregation integrity under failures.
     and standard deviation are computed over exactly the completed runs' KpiVectors
     (population std, ``ddof=0``), and the all-failed case yields ``completed == 0``.
 
+Carried to Metric_Contract v2 (decision-quality-proof task 29.4): ``KpiVector`` gained
+``avg_on_hand_units`` and the committed ``objective``, so the aggregate is asserted over all
+eight fields, named here as a literal rather than read off ``KPI_FIELDS``.
+
 Validates: Requirements 2.7, 2.9
 """
 from __future__ import annotations
 
 import numpy as np
-from hypothesis import given, settings
+from hypothesis import given
 from hypothesis import strategies as st
 
 from uplift.harness import KPI_FIELDS, aggregate_arm
 from uplift.interfaces import KpiVector, ScenarioRun
+
+#: The eight KpiVector fields, as a literal: an aggregate that silently dropped one (the
+#: objective included) cannot agree with it, and neither can a ``KPI_FIELDS`` that did.
+_EVERY_KPI = frozenset(
+    {
+        "fill_rate",
+        "spoilage_rate",
+        "stockout_rate",
+        "avg_delivery_time_min",
+        "margin",
+        "co2_estimate",
+        "avg_on_hand_units",
+        "objective",
+    }
+)
 
 # ---------------------------------------------------------------------------
 # Strategies
@@ -32,7 +51,9 @@ from uplift.interfaces import KpiVector, ScenarioRun
 # KPI values are bounded finite floats. Bounding avoids float overflow to inf in the
 # numpy mean/std reduction so the reference statistics and the implementation agree
 # exactly; KPI values in the real harness are likewise bounded (rates in [0,1],
-# non-negative times, finite margins/CO2).
+# non-negative times, finite margins/CO2). Bounding is necessary but not sufficient for
+# exact agreement: the two reductions must also run in the same order, which is why
+# `_reference_mean_std` canonicalises by `(seed, arm)` the way `aggregate_arm` does.
 # ---------------------------------------------------------------------------
 
 _arms = st.text(min_size=0, max_size=16)
@@ -43,7 +64,7 @@ _kpi_floats = st.floats(
 
 
 def _kpi_vectors() -> st.SearchStrategy[KpiVector]:
-    """A KpiVector with bounded finite floats in every one of its six fields."""
+    """A KpiVector with bounded finite floats in every one of its eight fields."""
     return st.builds(
         KpiVector,
         fill_rate=_kpi_floats,
@@ -52,6 +73,8 @@ def _kpi_vectors() -> st.SearchStrategy[KpiVector]:
         avg_delivery_time_min=_kpi_floats,
         margin=_kpi_floats,
         co2_estimate=_kpi_floats,
+        avg_on_hand_units=_kpi_floats,
+        objective=_kpi_floats,
     )
 
 
@@ -71,13 +94,30 @@ def _scenario_runs(draw: st.DrawFn) -> ScenarioRun:
 def _reference_mean_std(
     completed: list[ScenarioRun],
 ) -> tuple[dict[str, float], dict[str, float]]:
-    """Reference per-KPI mean and population std (ddof=0) over the completed runs."""
+    """Reference per-KPI mean and population std (ddof=0) over the completed runs.
+
+    **The reduction order is canonicalised, exactly as the subject documents it.**
+    ``aggregate_arm`` sorts the completed runs by ``(seed, arm)`` before reducing, because
+    numpy's pairwise summation is not order-invariant and R2.5 requires an arm aggregate
+    that does not depend on worker scheduling. A reference that reduced in ARRIVAL order was
+    therefore comparing two different reductions of the same multiset, and the exact
+    equality below failed in the last bits whenever the drawn order was not already
+    canonical - which the ARM component alone is enough to cause: three runs at seed ``0``
+    with arms ``''``, ``'0'``, ``''`` reorder.
+
+    Mirroring the documented sort is what keeps the comparison **exact**: no tolerance is
+    introduced and no assertion is weakened (R2.10). The reference stays independent - it
+    is still numpy over the drafted results, never a call to the aggregation under test -
+    and the order-invariance it now relies on is asserted separately below rather than
+    assumed, so this sort cannot mask a subject that stopped canonicalising.
+    """
+    ordered = sorted(completed, key=lambda run: (run.seed, run.arm))
     mean: dict[str, float] = {}
     std: dict[str, float] = {}
     for field in KPI_FIELDS:
-        if completed:
+        if ordered:
             values = np.array(
-                [float(getattr(run.kpis, field)) for run in completed], dtype=float
+                [float(getattr(run.kpis, field)) for run in ordered], dtype=float
             )
             mean[field] = float(np.mean(values))
             std[field] = float(np.std(values))
@@ -90,7 +130,6 @@ def _reference_mean_std(
 # ---------------------------------------------------------------------------
 # Property 9: aggregation integrity under an arbitrary failing subset (R2.7/R2.9)
 # ---------------------------------------------------------------------------
-@settings(max_examples=200)
 @given(arm=_arms, runs=st.lists(_scenario_runs(), max_size=40))
 def test_aggregation_integrity_under_failures(arm: str, runs: list[ScenarioRun]) -> None:
     """Failed runs are excluded; counts sum to attempts; stats over completed only."""
@@ -106,17 +145,35 @@ def test_aggregation_integrity_under_failures(arm: str, runs: list[ScenarioRun])
     # completed + failed always equals the number of attempts (Property 9).
     assert result.completed + result.failed == len(runs)
 
+    # Every KpiVector field is aggregated -- the two v2 fields, the objective included.
+    assert set(result.kpi_mean) == _EVERY_KPI
+    assert set(result.kpi_std) == _EVERY_KPI
+
     # KPI statistics are computed over exactly the completed runs (R2.7, R2.8):
     # failed runs (kpis=None) are excluded from aggregation.
     ref_mean, ref_std = _reference_mean_std(completed)
     assert result.kpi_mean == ref_mean
     assert result.kpi_std == ref_std
 
+    # R2.5, asserted rather than assumed, and scoped to the domain the contract covers.
+    # `aggregate_arm` canonicalises by `(seed, arm)` and `sorted` is STABLE, so runs that TIE
+    # on that key are still reduced in arrival order: the aggregate is invariant up to ties,
+    # not unconditionally. (The subject's docstring says sorting removes the dependence
+    # "entirely", which overclaims for a tied key; in the real harness one run per seed makes
+    # ties unreachable. Recorded, not edited - `uplift/harness.py` is another spec's.)
+    # This clause is why the reference above may mirror the sort: without it, a subject that
+    # stopped canonicalising would be masked and the test would agree by construction.
+    keys = [(run.seed, run.arm) for run in completed]
+    replayed = aggregate_arm(arm, list(reversed(runs)))
+    assert (replayed.completed, replayed.failed) == (result.completed, result.failed)
+    if len(set(keys)) == len(keys):
+        assert replayed.kpi_mean == result.kpi_mean
+        assert replayed.kpi_std == result.kpi_std
+
 
 # ---------------------------------------------------------------------------
 # Property 9 (all-failed variant): every attempt fails => completed == 0 (R2.7)
 # ---------------------------------------------------------------------------
-@settings(max_examples=100)
 @given(
     arm=_arms,
     seeds=st.lists(_seeds, min_size=1, max_size=40),
@@ -135,7 +192,9 @@ def test_aggregation_all_failed_yields_zero_completed(
     assert result.completed == 0
     assert result.failed == len(runs)
     assert result.completed + result.failed == len(runs)
-    # No completed runs contribute, so every KPI aggregate defaults to 0.0.
+    # No completed runs contribute, so all eight KPI aggregates default to 0.0. For the
+    # objective, a cost, 0.0 is the best value; only ``completed == 0`` marks it as absent.
+    assert set(result.kpi_mean) == _EVERY_KPI
     for field in KPI_FIELDS:
         assert result.kpi_mean[field] == 0.0
         assert result.kpi_std[field] == 0.0

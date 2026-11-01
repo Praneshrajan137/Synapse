@@ -138,8 +138,9 @@ Language: **Python** (matching the existing repo and its `tests/uplift/` Hypothe
     - **Property 15: The C60 gate exit is a total three-way mapping** (pass / regression / distinct unavailable, unavailable never maps to pass)
     - **Validates: Requirements 4.4, 4.5, 4.6**
 
-- [x] 9. Populate and verify the flagship checkpoint registry
-  - [x] 9.1 Replace the `__placeholder__` entry in `infrastructure/ml/published_checkpoints.json`
+- [ ] 9. Populate and verify the flagship checkpoint registry
+  - [ ] 9.1 Replace the `__placeholder__` entry in `infrastructure/ml/published_checkpoints.json`
+    - RETRACTED 2026-10-01: ticked with no entry landed; the registry still holds __placeholder__ (C46). Re-tick only when C46 reads a validated non-placeholder entry.
     - Write the real `demand_prophet_hgt_tft` registry entry (repo, sha, coverage, `final_crps`, `trained_at`, `rows`) produced by the existing `docs/runbooks/train-and-publish-checkpoint.md` $0 free-GPU runbook, and confirm the serving path loads it so the flagship serves non-degraded output
     - Note: the actual free-GPU training + HF Hub publication is an operator runbook step; this task lands the resulting registry entry and validates schema + serving-path loading in code
     - _Requirements: 5.1, 5.2, 5.7, 5.8_

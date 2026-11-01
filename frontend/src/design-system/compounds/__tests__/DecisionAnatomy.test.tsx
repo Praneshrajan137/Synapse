@@ -9,9 +9,15 @@ import "@i18n/index";
 // ─── ChainIntegrityChip (FE-INV-039) — the tri-state is exhaustive ─────────
 
 describe("ChainIntegrityChip", () => {
-  it("verified=true renders the success state", () => {
+  it("verified=true renders the success state with a row-level qualifier (R6.15)", () => {
     render(<ChainIntegrityChip verified={true} />);
-    expect(screen.getByText(/chain verified/i)).toBeInTheDocument();
+    // "Row hash verified", not "Chain verified": the field is a single-row hash
+    // recompute and the operator-visible label must not read chain-wide.
+    const badge = screen.getByText(/row hash verified/i);
+    expect(badge).toBeInTheDocument();
+    // Regression guard against the previous chain-wide wording.
+    expect(screen.queryByText(/^chain verified$/i)).not.toBeInTheDocument();
+    expect(badge.getAttribute("title")).toMatch(/row-level integrity only/i);
   });
 
   it("verified=false renders tamper evidence with the hash pair", () => {
@@ -30,7 +36,7 @@ describe("ChainIntegrityChip", () => {
   it("legacy (null) renders pre-chain — NEVER 'verified'", () => {
     render(<ChainIntegrityChip verified={null} />);
     expect(screen.getByText(/pre-chain/i)).toBeInTheDocument();
-    expect(screen.queryByText(/chain verified/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/verified/i)).not.toBeInTheDocument();
   });
 
   it("undefined behaves as legacy (older gateways omit the field)", () => {

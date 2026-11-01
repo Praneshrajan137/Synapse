@@ -20,6 +20,7 @@ from uuid import UUID  # noqa: E402  (placed after structlog imports for clarity
 import deal
 import structlog
 from sqlalchemy import desc, select
+from synapse_common.contracts import validate_audit_insertion
 from synapse_common.metrics import AUDIT_CHAIN_LENGTH
 
 from orchestrator.audit.hash_chain import (
@@ -163,14 +164,21 @@ class AuditLogger:
             self._insert_count += 1
             self._chain_head = current_hash
             AUDIT_CHAIN_LENGTH.set(float(self._insert_count))
+            # I-4 postcondition (ADR-015): the committed row must carry its id before it is
+            # logged or returned. Checked once the chain head has advanced, never between
+            # the commit and that line: the row is already committed, so a raise there would
+            # leave the cached head one row behind the database and fork the hash chain on
+            # the next insert. Everything downstream reads the VALIDATED row, so the value
+            # this method returns is the one the contract passed.
+            inserted: AuditConsensusRow = validate_audit_insertion(row)
 
             logger.info(
                 "audit_decision_logged",
                 decision_id=str(decision.decision_id),
-                audit_id=str(row.id),
+                audit_id=str(inserted.id),
                 tier=str(decision.tier.value),
                 chain_head=current_hash[:12],
             )
             # row.id is a SQLAlchemy Column → its runtime value is a UUID,
             # but the descriptor type is Any. Cast to satisfy --strict.
-            return UUID(str(row.id))
+            return UUID(str(inserted.id))

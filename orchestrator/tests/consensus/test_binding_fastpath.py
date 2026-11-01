@@ -15,7 +15,7 @@ These are example/edge unit tests; the universal properties live in
 
 from __future__ import annotations
 
-from unittest.mock import MagicMock
+from unittest.mock import AsyncMock, MagicMock
 from uuid import uuid4
 
 import pytest
@@ -34,8 +34,17 @@ def _build_protocol() -> ConsensusProtocol:
     return ConsensusProtocol(
         config=cfg,
         tier_router=MagicMock(),
-        guardrails=MagicMock(),
-        audit_logger=MagicMock(),
+        # ADR-054 D1: the fast path now ratifies through `_ratify_and_dispatch`, which
+        # reads a guardrail verdict and appends the audit row before dispatch. Neither
+        # is what these tests are about, so both are satisfied and left alone; the
+        # ratification behaviour itself is covered by test_dispatch_choke_point.py.
+        # Task 12.1a: the choke point also reads the boundary in force, so the double
+        # states one. `0.0` is the honest value for a double that already answers
+        # `(True, [])` - it imposes no floor of its own.
+        guardrails=MagicMock(
+            **{"validate_decision.return_value": (True, []), "confidence_threshold": 0.0},
+        ),
+        audit_logger=MagicMock(log_decision=AsyncMock(return_value=uuid4())),
         hitl_escalation=MagicMock(),
         context_builder=MagicMock(),
         ollama_client=MagicMock(),

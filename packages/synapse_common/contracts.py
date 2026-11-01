@@ -9,9 +9,19 @@ from typing import Any
 import deal
 
 
-@deal.post(lambda result: result is not None and hasattr(result, "id"))
+@deal.post(
+    lambda result: result is not None and getattr(result, "id", None) is not None,
+    message="I-4: an audit insertion must return the inserted row carrying a non-None id",
+)
 def validate_audit_insertion(result: Any) -> Any:
-    """Every audit insertion must return a non-None result with an id."""
+    """Every audit insertion must return a non-None result whose ``id`` is set (I-4).
+
+    ``hasattr(result, "id")`` alone was vacuous for an ORM row: every mapped instance has
+    an ``id`` attribute whether or not a key was ever assigned, so only ``result is not
+    None`` could fail. Requiring the value itself to be non-None is what lets this catch a
+    row that reached the caller without a primary key. Production caller since 2026-10-01:
+    ``orchestrator.audit.logger.AuditLogger.log_decision``, after the commit.
+    """
     return result
 
 

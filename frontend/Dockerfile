@@ -5,7 +5,7 @@
 # Holds I-1: no SaaS, no telemetry to third parties, base images are Apache-2.0/BSD.
 
 # ───────── Stage 1: builder ─────────
-FROM node:20.18-alpine AS builder
+FROM node:22.23-alpine AS builder
 WORKDIR /app
 
 ENV CI=1 \

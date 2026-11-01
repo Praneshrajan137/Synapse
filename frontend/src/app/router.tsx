@@ -1,34 +1,70 @@
-import { AgentCouncil } from "@surfaces/agent-council/AgentCouncil";
-import { AgentDetail } from "@surfaces/agent-council/AgentDetail";
-import { AuditVault } from "@surfaces/audit-vault/AuditVault";
-import { Login } from "@surfaces/auth/Login";
-import { DecisionDetail } from "@surfaces/decision-theater/DecisionDetail";
-import { DecisionTheater } from "@surfaces/decision-theater/DecisionTheater";
-import { DemoTheater } from "@surfaces/demo-theater/DemoTheater";
-import { Ingress } from "@surfaces/ingress/Ingress";
-import { LiveMarkets } from "@surfaces/live-markets/LiveMarkets";
 import { MissionControl } from "@surfaces/mission-control/MissionControl";
-import { Cockpit } from "@surfaces/override-cockpit/Cockpit";
-import { Steering } from "@surfaces/steering/Steering";
-import { TwinLab } from "@surfaces/twin-lab/TwinLab";
-import { Suspense, lazy } from "react";
+import { lazy } from "react";
 import { Navigate, createBrowserRouter } from "react-router-dom";
+import { LazySurface } from "./LazySurface";
 import { RouteGuard } from "./RouteGuard";
 import { Shell } from "./Shell";
 
-// Operations is route-split (FE-INV-014/025): its panels stay out of the entry
-// bundle so the flagship surfaces load fast.
-const Operations = lazy(() =>
-  import("@surfaces/operations/Operations").then((m) => ({ default: m.Operations })),
+// Every surface except Mission Control is route-split (FE-INV-014/025). "/" is where the
+// mobile Web_Vitals_Budget is measured (Req 15.4, tests/e2e/mobile-reality.spec.ts), so its
+// first render must not wait on any other surface's code; each other route loads its own
+// chunk on first visit, through the one shared boundary in `LazySurface`.
+//
+// Splitting a route removes only what that surface alone imports. A chunk the entry still
+// imports statically for another reason stays on "/"'s critical path, so the build lists the
+// entry's eager set and fails on the heavy viz chunks (scripts/check-entry-preloads.mjs).
+const Login = lazy(() => import("@surfaces/auth/Login").then((m) => ({ default: m.Login })));
+const Cockpit = lazy(() =>
+  import("@surfaces/override-cockpit/Cockpit").then((m) => ({ default: m.Cockpit })),
 );
-// Council Theater is route-split too (FE-INV-014/025): the choreography pulls
-// the proposal/Pareto viz + framer-motion, kept out of the entry bundle.
+const DecisionTheater = lazy(() =>
+  import("@surfaces/decision-theater/DecisionTheater").then((m) => ({
+    default: m.DecisionTheater,
+  })),
+);
+const DecisionDetail = lazy(() =>
+  import("@surfaces/decision-theater/DecisionDetail").then((m) => ({ default: m.DecisionDetail })),
+);
 const CouncilTheater = lazy(() =>
   import("@surfaces/council-theater/CouncilTheater").then((m) => ({ default: m.CouncilTheater })),
 );
+const AuditVault = lazy(() =>
+  import("@surfaces/audit-vault/AuditVault").then((m) => ({ default: m.AuditVault })),
+);
+const AgentCouncil = lazy(() =>
+  import("@surfaces/agent-council/AgentCouncil").then((m) => ({ default: m.AgentCouncil })),
+);
+const AgentDetail = lazy(() =>
+  import("@surfaces/agent-council/AgentDetail").then((m) => ({ default: m.AgentDetail })),
+);
+const TwinLab = lazy(() =>
+  import("@surfaces/twin-lab/TwinLab").then((m) => ({ default: m.TwinLab })),
+);
+const LiveMarkets = lazy(() =>
+  import("@surfaces/live-markets/LiveMarkets").then((m) => ({ default: m.LiveMarkets })),
+);
+const Ingress = lazy(() =>
+  import("@surfaces/ingress/Ingress").then((m) => ({ default: m.Ingress })),
+);
+const DemoTheater = lazy(() =>
+  import("@surfaces/demo-theater/DemoTheater").then((m) => ({ default: m.DemoTheater })),
+);
+const Steering = lazy(() =>
+  import("@surfaces/steering/Steering").then((m) => ({ default: m.Steering })),
+);
+const Operations = lazy(() =>
+  import("@surfaces/operations/Operations").then((m) => ({ default: m.Operations })),
+);
 
 export const router = createBrowserRouter([
-  { path: "/login", element: <Login /> },
+  {
+    path: "/login",
+    element: (
+      <LazySurface name="Sign-in">
+        <Login />
+      </LazySurface>
+    ),
+  },
   {
     path: "/",
     element: <Shell />,
@@ -45,7 +81,9 @@ export const router = createBrowserRouter([
         path: "cockpit",
         element: (
           <RouteGuard minRole="ops">
-            <Cockpit />
+            <LazySurface name="Override Cockpit">
+              <Cockpit />
+            </LazySurface>
           </RouteGuard>
         ),
       },
@@ -53,7 +91,9 @@ export const router = createBrowserRouter([
         path: "decisions",
         element: (
           <RouteGuard minRole="viewer">
-            <DecisionTheater />
+            <LazySurface name="Decision Theater">
+              <DecisionTheater />
+            </LazySurface>
           </RouteGuard>
         ),
       },
@@ -61,7 +101,9 @@ export const router = createBrowserRouter([
         path: "decisions/:id",
         element: (
           <RouteGuard minRole="viewer">
-            <DecisionDetail />
+            <LazySurface name="Decision Detail">
+              <DecisionDetail />
+            </LazySurface>
           </RouteGuard>
         ),
       },
@@ -69,11 +111,9 @@ export const router = createBrowserRouter([
         path: "council/:id",
         element: (
           <RouteGuard minRole="viewer">
-            <Suspense
-              fallback={<div className="p-6 text-sm text-ink-muted">Loading Council Theater…</div>}
-            >
+            <LazySurface name="Council Theater">
               <CouncilTheater />
-            </Suspense>
+            </LazySurface>
           </RouteGuard>
         ),
       },
@@ -81,7 +121,9 @@ export const router = createBrowserRouter([
         path: "audit",
         element: (
           <RouteGuard minRole="viewer">
-            <AuditVault />
+            <LazySurface name="Audit Vault">
+              <AuditVault />
+            </LazySurface>
           </RouteGuard>
         ),
       },
@@ -89,7 +131,9 @@ export const router = createBrowserRouter([
         path: "agents",
         element: (
           <RouteGuard minRole="engineer">
-            <AgentCouncil />
+            <LazySurface name="Agent Council">
+              <AgentCouncil />
+            </LazySurface>
           </RouteGuard>
         ),
       },
@@ -97,7 +141,9 @@ export const router = createBrowserRouter([
         path: "agents/:name",
         element: (
           <RouteGuard minRole="engineer">
-            <AgentDetail />
+            <LazySurface name="Agent Detail">
+              <AgentDetail />
+            </LazySurface>
           </RouteGuard>
         ),
       },
@@ -105,7 +151,9 @@ export const router = createBrowserRouter([
         path: "twin",
         element: (
           <RouteGuard minRole="engineer">
-            <TwinLab />
+            <LazySurface name="Twin Lab">
+              <TwinLab />
+            </LazySurface>
           </RouteGuard>
         ),
       },
@@ -113,7 +161,9 @@ export const router = createBrowserRouter([
         path: "markets",
         element: (
           <RouteGuard minRole="viewer">
-            <LiveMarkets />
+            <LazySurface name="Live Markets">
+              <LiveMarkets />
+            </LazySurface>
           </RouteGuard>
         ),
       },
@@ -121,7 +171,9 @@ export const router = createBrowserRouter([
         path: "ingress",
         element: (
           <RouteGuard minRole="ops">
-            <Ingress />
+            <LazySurface name="Ingress Console">
+              <Ingress />
+            </LazySurface>
           </RouteGuard>
         ),
       },
@@ -129,7 +181,9 @@ export const router = createBrowserRouter([
         path: "demo",
         element: (
           <RouteGuard minRole="viewer">
-            <DemoTheater />
+            <LazySurface name="Demo Theater">
+              <DemoTheater />
+            </LazySurface>
           </RouteGuard>
         ),
       },
@@ -137,7 +191,9 @@ export const router = createBrowserRouter([
         path: "steering",
         element: (
           <RouteGuard minRole="ops">
-            <Steering />
+            <LazySurface name="Steering">
+              <Steering />
+            </LazySurface>
           </RouteGuard>
         ),
       },
@@ -145,11 +201,9 @@ export const router = createBrowserRouter([
         path: "operations",
         element: (
           <RouteGuard minRole="viewer">
-            <Suspense
-              fallback={<div className="p-6 text-sm text-ink-muted">Loading Standing Watch…</div>}
-            >
+            <LazySurface name="Standing Watch">
               <Operations />
-            </Suspense>
+            </LazySurface>
           </RouteGuard>
         ),
       },

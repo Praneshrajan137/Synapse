@@ -9,6 +9,10 @@ Property 10: Per-arm aggregates match the reference statistics.
     deviation (numpy, ``ddof=0``) computed over exactly the completed set — never
     by calling the aggregation under test.
 
+Carried to Metric_Contract v2 (decision-quality-proof task 29.4): ``KpiVector`` gained
+``avg_on_hand_units`` and the committed ``objective``; both are in the reference comparison,
+and their presence in the aggregate is asserted by name.
+
 Validates: Requirements 2.8
 """
 from __future__ import annotations
@@ -16,11 +20,15 @@ from __future__ import annotations
 import math
 
 import numpy as np
-from hypothesis import given, settings
+from hypothesis import given
 from hypothesis import strategies as st
 
 from uplift.harness import KPI_FIELDS, aggregate_arm
 from uplift.interfaces import KpiVector, ScenarioRun
+
+#: The two fields Metric_Contract v2 added, named so their aggregation is asserted rather than
+#: inferred from a field list that would shrink with them.
+_V2_KPIS = frozenset({"avg_on_hand_units", "objective"})
 
 
 # ---------------------------------------------------------------------------
@@ -29,7 +37,7 @@ from uplift.interfaces import KpiVector, ScenarioRun
 # Bounded, finite floats keep the reference arithmetic numerically stable (no
 # overflow to inf, no catastrophic cancellation) so ``np.mean``/``np.std`` on the
 # harness path and the reference path agree to floating-point tolerance. Each
-# completed run carries a full six-field ``KpiVector``; the arm has at least one
+# completed run carries a full eight-field ``KpiVector``; the arm has at least one
 # completed run (``min_size=1``) so mean/std are defined.
 # ---------------------------------------------------------------------------
 _finite_values = st.floats(
@@ -60,7 +68,6 @@ def _completed_runs(draw: st.DrawFn) -> list[ScenarioRun]:
 # ---------------------------------------------------------------------------
 # Property 10: per-arm mean/std equal the reference over the completed set (R2.8)
 # ---------------------------------------------------------------------------
-@settings(max_examples=200)
 @given(runs=_completed_runs())
 def test_aggregate_matches_reference_statistics(runs: list[ScenarioRun]) -> None:
     """aggregate_arm mean/std equal an independent numpy (ddof=0) reference."""
@@ -69,6 +76,9 @@ def test_aggregate_matches_reference_statistics(runs: list[ScenarioRun]) -> None
     # The completed set is exactly the input here (all runs are completed).
     assert result.completed == len(runs)
     assert result.failed == 0
+    # The objective and the on-hand mean are aggregated like every other KPI.
+    assert set(result.kpi_mean) >= _V2_KPIS
+    assert set(result.kpi_std) >= _V2_KPIS
 
     for field in KPI_FIELDS:
         reference = np.array(
@@ -89,7 +99,6 @@ def test_aggregate_matches_reference_statistics(runs: list[ScenarioRun]) -> None
 # Failed runs are excluded: aggregates match the reference over ONLY the
 # completed subset, never the failed runs (R2.7/R2.8).
 # ---------------------------------------------------------------------------
-@settings(max_examples=200)
 @given(
     completed=_completed_runs(),
     n_failed=st.integers(min_value=0, max_value=8),
@@ -108,6 +117,7 @@ def test_aggregate_excludes_failed_runs(
 
     assert result.completed == len(completed)
     assert result.failed == n_failed
+    assert set(result.kpi_mean) >= _V2_KPIS
 
     for field in KPI_FIELDS:
         reference = np.array(
@@ -125,7 +135,6 @@ def test_aggregate_excludes_failed_runs(
 # Documented empty-case behavior: with no completed runs the impl returns 0.0
 # for every KPI mean/std (never raises, never fabricates a KPI).
 # ---------------------------------------------------------------------------
-@settings(max_examples=50)
 @given(n_failed=st.integers(min_value=0, max_value=16))
 def test_empty_completed_set_returns_zero(n_failed: int) -> None:
     """No completed runs => every per-KPI mean/std is 0.0."""
@@ -137,6 +146,7 @@ def test_empty_completed_set_returns_zero(n_failed: int) -> None:
 
     assert result.completed == 0
     assert result.failed == n_failed
+    assert set(result.kpi_mean) >= _V2_KPIS
     for field in KPI_FIELDS:
         assert result.kpi_mean[field] == 0.0
         assert result.kpi_std[field] == 0.0

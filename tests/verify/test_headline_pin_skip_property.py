@@ -15,12 +15,20 @@ skip, never a pass.
 Every unavailability is injected at a seam: the README through ``doc_truth._read``, the
 suite script through ``doc_truth.VERIFY_CLAIMS_PY``, and the suite execution through
 ``doc_truth.subprocess``. The real ``verify_claims`` suite (minutes of git/docker
-probes) is never executed — in the source-unavailability modes ``_suite_counts`` and
-``subprocess`` are both replaced with booby-trapped stand-ins, so an accidental
+probes) is never executed — in the source-unavailability modes ``nested_suite_counts``
+and ``subprocess`` are both replaced with booby-trapped stand-ins, so an accidental
 shell-out fails the test loudly instead of running the suite.
+
+The execution seam is ``nested_suite_counts`` (public since feature
+decision-quality-proof task 4.1, which promoted it out of ``_suite_counts`` so
+``scripts/audit/readme_gen.py`` can project the README from the same execution this claim
+compares against - AD-21). This test moved with the rename in the same change: a
+``monkeypatch`` naming a function that no longer exists raises rather than silently
+skipping the protection it provides.
 
 **Validates: Requirements 8.5, 8.6**
 """
+
 from __future__ import annotations
 
 import subprocess
@@ -71,7 +79,7 @@ _UNPARSEABLE = (
 
 
 def _exec_failures() -> tuple[BaseException, ...]:
-    """Failure modes ``_suite_counts`` must convert into a skip, not a pass."""
+    """Failure modes ``nested_suite_counts`` must convert into a skip, not a pass."""
     return (
         OSError(2, "No such file or directory"),
         PermissionError(13, "Permission denied"),
@@ -154,7 +162,7 @@ def test_unavailable_source_or_suite_yields_skip_never_a_pass(case: dict[str, An
             mp.setattr(dt, "VERIFY_CLAIMS_PY", absent)
         if not suite_reachable:
             # The claim must short-circuit before reaching for the suite at all.
-            mp.setattr(dt, "_suite_counts", _explode("reach the suite for an absent source"))
+            mp.setattr(dt, "nested_suite_counts", _explode("reach the suite for an absent source"))
         result = dt._claim_readme_headline_counts()
 
     # R8.5 / R8.6: skip, and never a pass — an unavailable pin is never credited.

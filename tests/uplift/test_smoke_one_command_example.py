@@ -34,6 +34,7 @@ from __future__ import annotations
 
 import io
 import json
+import math
 from contextlib import redirect_stdout
 from pathlib import Path
 from typing import Any
@@ -42,7 +43,13 @@ import pytest
 
 import uplift.cli as cli
 from uplift.consensus_arm import ConsensusArm, build_consensus_arm
-from uplift.harness import DEFAULT_CONSENSUS_ARM, EXIT_SUCCESS
+from uplift.harness import (
+    ARTIFACT_SCHEMA_VERSION,
+    DEFAULT_CONSENSUS_ARM,
+    EXIT_SUCCESS,
+    UpliftArtifact,
+)
+from uplift.interfaces import ArmSpec
 
 # Smallest honest smoke configuration: one replicate per arm over a single closed-loop
 # step. Still the real loop, the real arms, and every declared adversarial scenario.
@@ -117,8 +124,15 @@ def test_smoke_records_completed_consensus_run_for_an_adversarial_scenario(smoke
     assert smoke_run["exit_code"] == EXIT_SUCCESS
 
     # The arm under measurement is the real assembled consensus arm, not the CLI's
-    # honest-failure stand-in — otherwise "completed runs" would be vacuous.
-    consensus_arm = smoke_run["arms"][0]
+    # honest-failure stand-in — otherwise "completed runs" would be vacuous. Every arm is
+    # registered as an ``ArmSpec`` with its declared role (AD-16), so the subject is found
+    # by that role rather than by position, and exactly one arm may declare it.
+    arms = smoke_run["arms"]
+    assert arms, "the CLI must register its arm suite"
+    assert all(isinstance(spec, ArmSpec) for spec in arms)
+    subjects = [spec for spec in arms if spec.role == "consensus"]
+    assert len(subjects) == 1, [spec.name for spec in subjects]
+    consensus_arm = subjects[0].policy
     assert isinstance(consensus_arm, ConsensusArm)
     assert consensus_arm.name == DEFAULT_CONSENSUS_ARM
 
@@ -144,12 +158,14 @@ def test_smoke_records_completed_consensus_run_for_an_adversarial_scenario(smoke
         f"failures: {failures}"
     )
 
-    # A completed run carries a real KPI vector (never a fabricated one).
+    # A completed run carries a real KPI vector (never a fabricated one) -- under
+    # Metric_Contract v2 that includes a finite committed objective, the primary KPI.
     for runs in with_completed.values():
         for run in runs:
             assert not run.failed
             assert run.kpis is not None
             assert 0.0 <= run.kpis.fill_rate <= 1.0
+            assert math.isfinite(run.kpis.objective)
 
 
 @pytest.mark.slow
@@ -164,6 +180,13 @@ def test_smoke_writes_result_artifact(smoke_run):
     assert not isinstance(payload["headline_uplift"], bool)
     assert "incomplete" in payload
     assert "fidelity" in payload
+
+    # The gate reads the artifact through the model, not as raw JSON, so it must also parse
+    # as a valid v2 UpliftArtifact -- whose validators tie the headline to its interval and
+    # re-derive the verdict (decision-quality-proof tasks 15.1 and 29.4).
+    artifact = UpliftArtifact.read(output)
+    assert artifact.schema_version == ARTIFACT_SCHEMA_VERSION
+    assert artifact.headline_uplift == payload["headline_uplift"]
 
 
 def test_default_artifact_path_is_the_c60_read_path():

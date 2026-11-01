@@ -18,18 +18,19 @@ import { expect, test, type Page } from "@playwright/test";
  *   - Req 9.2 — scroll and interaction responsiveness stays within the
  *     Web_Vitals_Budget (INP ≤ 200 ms) while the 10k-row dataset is displayed.
  *
- * The harness MSW browser worker (task 2.1) seeds the 10k-row `AuditListResponse`
- * fixture the two surfaces read via `listRecentDecisions`. It exposes the same
- * documented global the other harness-dependent specs drive:
+ * The harness (`spec/effectiveness/harness.ts`, task 11.1) seeds the 10k-row
+ * `AuditListResponse` fixture the two surfaces read via `listRecentDecisions`,
+ * re-validated through the same `Domain_Schema` the Console applies. It exposes
+ * the same documented global the other harness-dependent specs drive:
  *
  *   interface AtlasHarness {
  *     driveResilience(scenarioId: string): Promise<void>; // seeds/activates the scenario
  *   }
  *   declare global { interface Window { __atlasHarness?: AtlasHarness } }
  *
- * Until that global is wired the test skips cleanly rather than failing (the
- * same graceful-skip convention as `firehose-stress.resilience.spec.ts`), so
- * this spec is committed and ready the moment the harness lands.
+ * The global exists only in the e2e-mode build (AD-12), so this suite runs as
+ * `pnpm build:e2e && pnpm test:e2e:harness`. A missing harness FAILS the test
+ * rather than skipping it (I-7).
  */
 
 const SCENARIO_ID = "resilience.scale-virtualization";
@@ -66,14 +67,20 @@ test.beforeEach(async ({ page }) => {
   });
 });
 
-/** Returns true once the harness global is present, or skips the test cleanly. */
+/**
+ * Fails the test when the harness global is absent (task 11.1). The harness is a
+ * REQUIREMENT of a seeded 10k-row measurement, so its absence is a failure, not
+ * a skip (I-7).
+ */
 async function requireHarness(page: Page): Promise<void> {
   const harnessReady = await page.evaluate(
     () => typeof (window as unknown as { __atlasHarness?: unknown }).__atlasHarness === "object",
   );
-  if (!harnessReady) {
-    test.skip(true, "scale virtualization harness not wired yet (tasks 2.1/2.2)");
-  }
+  expect(
+    harnessReady,
+    "window.__atlasHarness is absent: run the harness suite against the e2e-mode build " +
+      "(pnpm build:e2e && pnpm test:e2e:harness)",
+  ).toBe(true);
 }
 
 /** Drives the seeded scale scenario (seeds the 10k-row fixture). */

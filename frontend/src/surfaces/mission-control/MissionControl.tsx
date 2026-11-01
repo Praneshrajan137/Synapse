@@ -3,9 +3,9 @@ import { useFirehose } from "@hooks/use-firehose";
 import { Link } from "react-router-dom";
 import { AutonomyStrip } from "../autonomy/AutonomyStrip";
 import { CortexBanner } from "./CortexBanner";
-import { DecisionFirehoseTail } from "./DecisionFirehoseTail";
 import { DisruptionBanner } from "./DisruptionBanner";
 import { KPIBand } from "./KPIBand";
+import { LiveDecisionsRegion } from "./LiveDecisionsRegion";
 import { LivingMap } from "./LivingMap";
 import { useCityStores } from "./useCityStores";
 
@@ -59,7 +59,10 @@ export function MissionControl() {
 
       <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_380px]">
         <LivingMap stores={stores.data ?? []} />
-        <DecisionFirehoseTail />
+        {/* The live tail is the firehose's data-bearing region: it renders its
+            distinct Universal_State (offline / error / degraded / empty) in
+            place of stale rows, while the rest of the page stays mounted. */}
+        <LiveDecisionsRegion firehose={firehose} />
       </div>
     </section>
   );

@@ -8,6 +8,7 @@ Falls back to cached playbooks if Pinecone is unavailable (I-7).
 
 from __future__ import annotations
 
+import os
 import time
 from dataclasses import dataclass, field
 from typing import Any
@@ -92,7 +93,36 @@ class PlaybookRetriever:
         # Hub on every force-recreated boot, blocking the server lifespan
         # (and /health) for ~11 minutes. That blackout failed the C47
         # deploy gate twice. Load the embedder only when an index exists.
-        if _HAS_PINECONE:
+        # A PAID CLIENT IS NOT CONSTRUCTED WITHOUT A CONFIGURED KEY (I-1). Session 7,
+        # decision-quality-proof findings 50 and 52.
+        #
+        # This block read `if _HAS_PINECONE:` and then `pc = Pinecone()` with NO key argument,
+        # relying on the `except Exception` below to swallow the failure when none was
+        # configured. That is an honest degrade in its effect and an I-1 violation in its
+        # mechanism: the paid SDK client is still CONSTRUCTED on every path that reaches here,
+        # including a zero-cost reproduction path. `ci.yml`'s BLOCKING I-1 grep never saw it --
+        # it is a deny-list of four client names and `pinecone` is not among them, so the
+        # invariant gate is fail-open by construction. The only thing that ever objected is
+        # `tests/uplift/test_preserved_baseline_regression.py`'s zero-cost guard, a slow
+        # property that had never executed until session 6, which reports
+        # `paid client used: ['pinecone.Pinecone']` because `build_consensus_arm` stands up this
+        # agent's handler -> `DisruptionShieldPipeline()` -> `PlaybookRetriever(...)` -> here.
+        #
+        # THE SITE THE FINDING ORIGINALLY NAMED WAS THE WRONG ONE, and that is worth recording
+        # because the correction is the reusable part. Four documents cited
+        # `uplift/consensus_arm.py:655`'s `SemanticDecisionCache(api_key=None)`. That line
+        # constructs nothing: `orchestrator/llm/semantic_cache.py` reads `if api_key:` BEFORE
+        # its lazy `from pinecone import Pinecone`, which is exactly the shape this block was
+        # missing and is the precedent followed here. A citation is not a mechanism.
+        #
+        # MINIMAL ON PURPOSE. The construction call is unchanged -- `Pinecone()` still sources
+        # its own credentials exactly as before -- so the CONFIGURED path behaves identically
+        # and this is not a change to how the key is read. Only the unconfigured path moves,
+        # from "construct, fail, swallow" to "do not construct". The fallback below is
+        # untouched: `self._index` stays `None` and `retrieve()` returns cached playbooks, so
+        # INV-DS-006's graceful degradation is preserved rather than replaced.
+        configured = bool(os.environ.get("PINECONE_API_KEY"))
+        if _HAS_PINECONE and configured:
             try:
                 pc = Pinecone()
                 self._index = pc.Index(index_name)
@@ -100,6 +130,14 @@ class PlaybookRetriever:
             except Exception as exc:
                 logger.warning("pinecone_init_failed", error=str(exc))
                 self._index = None
+        elif _HAS_PINECONE:
+            # Honest degradation, named rather than silent (I-7): the SDK is importable but no
+            # credential is configured, so no client is built and no paid service is reachable.
+            logger.info(
+                "pinecone_unconfigured",
+                reason="no PINECONE_API_KEY; no client constructed (I-1)",
+                fallback="cached_playbooks_only",
+            )
 
         if self._index is not None and _HAS_SENTENCE_TRANSFORMERS:
             self._embedder = SentenceTransformer(embedding_model)
