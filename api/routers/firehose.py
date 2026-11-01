@@ -25,7 +25,7 @@ import structlog
 from fastapi import APIRouter, Query, WebSocket, WebSocketDisconnect, status
 from synapse_common.auth import Role, TokenError
 
-from api.middleware.jwt import manager
+from api.middleware.jwt import verify_access_token
 
 logger = structlog.get_logger(__name__)
 router = APIRouter()
@@ -91,13 +91,14 @@ def _authorize_ws(websocket: WebSocket) -> tuple[bool, str | None]:
     """Return ``(authorized, subprotocol_to_echo)``.
 
     Requires a valid VIEWER access token; a missing / invalid / under-privileged
-    token is unauthorized — the firehose never opens on doubt (the F1 fix).
+    token is unauthorized — the firehose never opens on doubt (the F1 fix). A preview
+    grant counts only under the access posture that issued it (ADR-057).
     """
     token, subprotocol = _ws_token(websocket)
     if not token:
         return False, None
     try:
-        ctx = manager().verify(token, expected_type="access")
+        ctx = verify_access_token(token)
     except TokenError:
         return False, None
     return ctx.role.satisfies(Role.VIEWER), subprotocol

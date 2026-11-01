@@ -14,8 +14,8 @@ interface SessionState {
   readonly accessToken: string | null;
   readonly tokenExpiresAt: number | null;
   /**
-   * Boot auto-login lifecycle (Sprint 16, not persisted): "pending" while
-   * the silent admin sign-in is in flight so RouteGuard can show the boot
+   * Boot access lifecycle (ADR-057, not persisted): "pending" while the boot hook reads the
+   * access posture and, in open mode, takes a preview grant, so RouteGuard shows the boot
    * splash instead of flashing /login; "settled" once resolved either way.
    */
   readonly bootAuth: "idle" | "pending" | "settled";

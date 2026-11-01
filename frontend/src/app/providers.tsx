@@ -24,8 +24,8 @@ export const queryClient = new QueryClient({
 
 function SessionSidecar() {
   // Mounts inside the QueryClient so useSynapseApi() can resolve. Returns
-  // null but keeps the silent refresh timer alive. Sprint 16: also fires
-  // the one-shot boot auto-login so the console opens without a login wall.
+  // null but keeps the silent refresh timer alive, and runs boot access
+  // (ADR-057): the console asks the gateway how to enter, never signs in itself.
   useAuthRefresh();
   useBootAutoLogin();
   return null;

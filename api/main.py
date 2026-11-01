@@ -27,7 +27,9 @@ from synapse_common.clients import close_clients, get_client
 from synapse_common.kafka_client import KafkaConfig, SynapseProducer
 from synapse_common.lifespan import graceful_shutdown
 
+from api.access import OpenAuthority, load_access_settings
 from api.middleware.ratelimit import RateLimitMiddleware
+from api.operators import validate_operator_config
 from api.routers import (
     agents,
     auth,
@@ -53,6 +55,23 @@ except Exception:  # noqa: BLE001 — OTel optional
 
 
 logger = structlog.get_logger(__name__)
+
+# ADR-057 (finding 89): resolve the access posture once, at import. An access setting this
+# gateway does not know, or a malformed operator store, raises here -- before uvicorn binds
+# its port -- so the gateway exits non-zero instead of serving a guessed posture. The routes
+# re-read the same environment per request (``api.access.current_access_settings``).
+ACCESS_SETTINGS = load_access_settings(os.environ)
+validate_operator_config(os.environ, ACCESS_SETTINGS.mode)
+logger.info(
+    "access_posture",
+    mode=ACCESS_SETTINGS.mode.value,
+    authority=ACCESS_SETTINGS.authority.value if ACCESS_SETTINGS.authority is not None else None,
+)
+if ACCESS_SETTINGS.authority is OpenAuthority.ACT:
+    logger.warning(
+        "open_access_can_act",
+        detail="every visitor receives an OPS preview grant; never run this on a public host",
+    )
 
 
 def _install_profiler(app: FastAPI) -> None:
