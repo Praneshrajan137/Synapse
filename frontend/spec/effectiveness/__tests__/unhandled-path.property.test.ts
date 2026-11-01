@@ -9,9 +9,10 @@
  * (design "B. Harness — MSW browser worker + stream driver"; Requirement 1.6).
  * The browser worker's `onUnhandledRequest` guard classifies every intercepted
  * path with {@link isBackendContractPath} and, for a Backend_Contract path with
- * no registered fixture, throws an {@link UnhandledFixtureError} that NAMES the
- * offending path — so the request rejects rather than the Console silently
- * receiving an empty or default body.
+ * no registered fixture, records the path in `unhandledPaths()` and throws an
+ * {@link UnhandledFixtureError} that NAMES the offending path. msw answers that
+ * throw with a 500 whose JSON body names the error, so the Console never
+ * silently receives an empty or default body.
  *
  * Rather than booting a service worker (unavailable under jsdom), this test
  * exercises the two pure pieces the guard is built from — the contract-path
