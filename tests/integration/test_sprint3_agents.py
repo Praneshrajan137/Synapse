@@ -168,11 +168,14 @@ class TestCrossAgentA2A:
         from agents.freshness_guardian.a2a.handler import FreshnessGuardianA2AHandler
 
         handler = FreshnessGuardianA2AHandler()
+        # Enveloped as ConsensusProtocol._request_proposal sends it; flat params are refused.
         response = handler.handle_request(
             {
                 "jsonrpc": "2.0",
                 "method": "proposal",
-                "params": {"store_id": "BLR-DS-001", "sku_ids": ["SKU-0001"]},
+                "params": {
+                    "decision_context": {"store_id": "BLR-DS-001", "sku_ids": ["SKU-0001"]},
+                },
                 "id": "test-1",
             }
         )

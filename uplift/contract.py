@@ -132,7 +132,8 @@ class MetricContractError(Exception):
 
 # ---------------------------------------------------------------------------
 # Effect-size helpers (R3.2). No longer the decision rule under version 2; retained because
-# they are importable, independently tested measures (Property 13) that reports may quote.
+# they are importable, independently tested measures (decision-integrity-uplift-proof
+# Property 11) that reports may quote.
 # ---------------------------------------------------------------------------
 def _as_finite_float_array(samples: Any) -> np.ndarray:
     """Coerce ``samples`` to a 1-D float ``ndarray``; empty on any coercion failure.

@@ -82,6 +82,8 @@ from uplift.interfaces import (
 
 if TYPE_CHECKING:  # imported lazily at runtime to avoid a heavy import at module load
     from synapse_common.models import ConsensusDecision
+
+    from agents.disruption_shield.models.reasoning import DeepSeekReasoner
     from orchestrator.consensus.protocol import ConsensusProtocol
 
 
@@ -922,6 +924,40 @@ class _OfflineLLMClient:
         return None
 
 
+def _offline_reasoner() -> DeepSeekReasoner:
+    """The Disruption Shield's own reasoner with its one HTTP call refused (finding 116, I-1).
+
+    ``DeepSeekReasoner.reason`` (``agents/disruption_shield/models/reasoning.py:44-71``) calls
+    ``_call_ollama`` (line 89), the class's only HTTP method, and on ``httpx.HTTPError``,
+    ``httpx.TimeoutException`` or ``json.JSONDecodeError`` (line 65) logs ``ollama_unavailable``
+    and returns ``_fallback_reasoning``, its rule-based chain. A refused port or a host name that
+    does not resolve fails that method's ``client.post`` (line 102) with ``httpx.ConnectError``,
+    an ``httpx.HTTPError``. The subclass overrides ``_call_ollama`` alone, raising that class
+    before any client is built, so the rest of ``reason`` runs unchanged: it returns what the E5
+    job's refused-port workaround returned, and only the warning's ``error`` text differs.
+
+    The class is defined in here because its base lives in ``agents``, which this module imports
+    only inside functions (``uplift/controls_run.py``'s thin-closure note). So it cannot be
+    pickled, which changes nothing: the assembled arm already holds the local factory
+    :func:`_in_process_session_factory` returns, and the harness runs an arm it cannot pickle
+    serially.
+    """
+    import httpx
+
+    from agents.disruption_shield.models import reasoning
+
+    class _OfflineReasoner(reasoning.DeepSeekReasoner):
+        """``DeepSeekReasoner`` with ``_call_ollama`` refused; every other line is the base's."""
+
+        #: Not called ``reason``: that name is the base's method, which must not be shadowed.
+        unavailable_reason = "no Ollama in the network-free in-process consensus arm ($0)"
+
+        def _call_ollama(self, prompt: str) -> dict[str, Any]:  # noqa: ARG002 - always refused
+            raise httpx.ConnectError(self.unavailable_reason)
+
+    return _OfflineReasoner()
+
+
 #: HITL wait budget for the *unattended* uplift run, in seconds. Confidence-gated
 #: escalation stays fully intact (I-5): a guardrail-violating decision still escalates,
 #: still records ``escalated_to_human`` and the honest timeout override, and is still
@@ -1000,8 +1036,18 @@ def build_agent_handlers() -> dict[str, A2AHandler]:
     Each agent's existing ``*A2AHandler`` class is constructed with its default
     pipeline (which degrades honestly to a fallback when no trained model is published,
     I-7), no Kafka producer, and — where the handler supports actuation — the
-    :class:`_OfflineActuator`, so nothing dials the network. The returned mapping's keys
-    are exactly the :data:`AGENT_ENDPOINTS` names.
+    :class:`_OfflineActuator`. The returned mapping's keys are exactly the
+    :data:`AGENT_ENDPOINTS` names.
+
+    **Neither Ollama path opens a socket (finding 116).** The debate's LLM client is
+    :class:`_OfflineLLMClient` (:func:`build_consensus_protocol`). The Disruption Shield is the
+    one agent whose default pipeline dials on every consult: its ``DeepSeekReasoner`` POSTs to
+    ``http://ollama:11434``. So that handler alone is given a pipeline built with
+    :func:`_offline_reasoner`, which takes the reasoner's own rule-based fallback with no socket;
+    every other part of that pipeline is its default. The claim that assembling these handlers
+    and consulting each for a proposal opens no socket is checked by
+    ``tests/uplift/test_consensus_network_free_property.py``, under a guard that fails every
+    non-loopback dial and every ``httpx`` send.
 
     Raises:
         ConsensusArmUnavailable: if any agent handler cannot be imported or constructed
@@ -1018,6 +1064,15 @@ def build_agent_handlers() -> dict[str, A2AHandler]:
             kwargs: dict[str, Any] = {"kafka_producer": None}
             if _supports_kwarg(handler_cls.__init__, "actuator"):
                 kwargs["actuator"] = _OfflineActuator()
+            if name == "disruption_shield":
+                # Read through importlib, as each handler class is, so mypy does not follow the
+                # agent's model imports into this module's type check.
+                pipeline_module = importlib.import_module(
+                    "agents.disruption_shield.inference.pipeline"
+                )
+                kwargs["pipeline"] = pipeline_module.DisruptionShieldPipeline(
+                    reasoner=_offline_reasoner()
+                )
             handler = handler_cls(**kwargs)
         except Exception as exc:  # noqa: BLE001 — assembly failure is loud, never a stub
             raise ConsensusArmUnavailable(
