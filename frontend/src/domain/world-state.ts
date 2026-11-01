@@ -18,7 +18,8 @@ export const WorldStateSchema = z
     city: z.string(),
     sim_time_min: z.number().min(0),
     // Per-SKU stock level.
-    inventory: z.record(z.number()).default({}),
+    // zod 4: z.record() takes an explicit key schema; an enum key would be exhaustive.
+    inventory: z.record(z.string(), z.number()).default({}),
     pending_orders: z.number().int().min(0).default(0),
     fill_rate: z.number().min(0).max(1).default(1),
     spoilage_rate: z.number().min(0).max(1).default(0),

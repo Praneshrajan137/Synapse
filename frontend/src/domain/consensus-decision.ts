@@ -30,7 +30,8 @@ const ZProposal = z
   })
   .passthrough();
 
-const ZParetoWeights = z.record(z.number()).default({});
+// zod 4: z.record() takes an explicit key schema; an enum key would be exhaustive.
+const ZParetoWeights = z.record(z.string(), z.number()).default({});
 
 export const ConsensusDecisionSchema = z
   .object({
@@ -38,16 +39,16 @@ export const ConsensusDecisionSchema = z
     timestamp: ZIsoTimestamp,
     tier: ZTier,
     proposals: z.array(ZProposal),
-    selected_action: z.record(z.unknown()),
+    selected_action: z.record(z.string(), z.unknown()),
     pareto_weights: ZParetoWeights,
     confidence: ZConfidence,
     escalated_to_human: z.boolean().optional(),
-    human_override: z.record(z.unknown()).nullable().optional(),
+    human_override: z.record(z.string(), z.unknown()).nullable().optional(),
     audit_trace: z.array(z.string()),
     phase_reached: z.number().int().min(1).max(5).default(1),
     debate_rounds: z.number().int().min(0).default(0),
-    pareto_front: z.array(z.record(z.unknown())).nullable().optional(),
-    context_messages: z.array(z.record(z.unknown())).default([]),
+    pareto_front: z.array(z.record(z.string(), z.unknown())).nullable().optional(),
+    context_messages: z.array(z.record(z.string(), z.unknown())).default([]),
     execution_confirmations: z.array(z.string()).default([]),
     audit_id: ZUuid.nullable().optional(),
   })

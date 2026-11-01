@@ -30,7 +30,8 @@ export const AutonomyResponseSchema = z
   .object({
     sensor: SensorStatusSchema.nullable(),
     // city -> WorldState | null (null = that world unreachable).
-    worlds: z.record(WorldStateSchema.nullable()).default({}),
+    // zod 4: z.record() takes an explicit key schema; an enum key would be exhaustive.
+    worlds: z.record(z.string(), WorldStateSchema.nullable()).default({}),
     degraded: z.boolean(),
     as_of: z.string(),
   })

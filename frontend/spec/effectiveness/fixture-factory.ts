@@ -26,7 +26,7 @@
  * `(schemaId, seed)` pair yields the same body on every run.
  */
 
-import type { ZodTypeAny } from "zod";
+import { z } from "zod";
 
 import { type SchemaId, getSchema, hasSchema } from "./schema-registry";
 
@@ -79,7 +79,8 @@ export class FixtureSchemaError extends Error {
 /**
  * Thrown when the generator encounters a Zod construct it cannot derive a value
  * for. This is a factory-coverage gap, surfaced loudly rather than emitting an
- * unsound fixture.
+ * unsound fixture. `typeName` carries the zod 4 kind (`schema._zod.def.type`), or the
+ * definition member the walk could not read as a schema.
  */
 export class UnsupportedSchemaError extends Error {
   constructor(
@@ -208,28 +209,91 @@ export function makeRng(seed: number): Rng {
 }
 
 // ─────────────────────────────────────────────────────────────────────────
-// Zod introspection helpers
+// Zod introspection helpers (zod 4: `schema._zod.def`, discriminated by `type`)
 // ─────────────────────────────────────────────────────────────────────────
 
-interface ZodDef {
-  readonly typeName: string;
-  readonly [key: string]: unknown;
+/**
+ * The members of a zod 4 definition (`schema._zod.def`) the factory reads. zod declares only the
+ * base `$ZodTypeDef`, so the kind-specific members are `unknown` here and every schema-valued
+ * one passes {@link schemaAt} before it is used.
+ */
+interface ZodDefView {
+  readonly type?: string;
+  readonly checks?: ReadonlyArray<z.core.$ZodCheck<never>> | undefined;
+  /** Set on a schema that is its own check: `z.uuid()` ("string_format"), `z.int()`. */
+  readonly check?: unknown;
+  readonly format?: unknown;
+  readonly innerType?: unknown;
+  readonly in?: unknown;
+  readonly out?: unknown;
+  readonly getter?: unknown;
+  readonly shape?: unknown;
+  readonly element?: unknown;
+  readonly keyType?: unknown;
+  readonly valueType?: unknown;
+  readonly items?: unknown;
+  readonly options?: unknown;
+  readonly left?: unknown;
+  readonly right?: unknown;
 }
 
-interface ZodCheck {
-  readonly kind: string;
+/**
+ * The members of a zod 4 check definition (`check._zod.def`) the factory reads. `check` names the
+ * kind ("string_format", "min_length", "max_length", "greater_than", "less_than",
+ * "multiple_of", "number_format", "custom", ...); the rest are that kind's parameters.
+ */
+interface ZodCheckView {
+  readonly check: string;
+  readonly format?: unknown;
   readonly value?: unknown;
-  readonly inclusive?: boolean;
+  readonly inclusive?: unknown;
+  readonly minimum?: unknown;
+  readonly maximum?: unknown;
+  readonly length?: unknown;
 }
 
-/** The internal `_def` of a Zod schema (typed loosely — Zod does not export it). */
-function defOf(schema: ZodTypeAny): ZodDef {
-  return (schema as unknown as { _def: ZodDef })._def;
+/** The internal definition of a Zod schema. */
+function defOf(schema: z.ZodType): ZodDefView {
+  return schema._zod.def;
 }
 
-/** The object shape of a `ZodObject` (via its `.shape` getter). */
-function shapeOf(schema: ZodTypeAny): Record<string, ZodTypeAny> {
-  return (schema as unknown as { shape: Record<string, ZodTypeAny> }).shape;
+/** The definitions of the checks attached to a schema, in the order they were chained. */
+function checksOf(def: ZodDefView): readonly ZodCheckView[] {
+  const checks: ReadonlyArray<z.core.$ZodCheck<never>> = def.checks ?? [];
+  return checks.map((check) => check._zod.def);
+}
+
+/** A schema-valued member of a definition, or an {@link UnsupportedSchemaError} naming it. */
+function schemaAt(value: unknown, where: string, schemaId?: SchemaId): z.ZodType {
+  if (value instanceof z.ZodType) return value;
+  throw new UnsupportedSchemaError(where, schemaId);
+}
+
+/** A schema-array member of a definition (tuple items, union options), each one checked. */
+function schemasAt(value: unknown, where: string, schemaId?: SchemaId): z.ZodType[] {
+  if (!Array.isArray(value)) throw new UnsupportedSchemaError(where, schemaId);
+  return value.map((item: unknown, i) => schemaAt(item, `${where}[${i}]`, schemaId));
+}
+
+/** The `[key, schema]` fields of an object definition, in declaration order. */
+function fieldsOf(def: ZodDefView, schemaId?: SchemaId): Array<[string, z.ZodType]> {
+  const shape = def.shape;
+  if (typeof shape !== "object" || shape === null) {
+    throw new UnsupportedSchemaError("object.shape", schemaId);
+  }
+  return Object.entries(shape).map(([key, field]): [string, z.ZodType] => [
+    key,
+    schemaAt(field, `object.shape.${key}`, schemaId),
+  ]);
+}
+
+/** The finite value set of a literal or enum: `_zod.values`, the set zod's own parse checks. */
+function valuesOf(schema: z.ZodType, kind: string, schemaId?: SchemaId): unknown[] {
+  const values = schema._zod.values;
+  if (values === undefined || values.size === 0) {
+    throw new UnsupportedSchemaError(`${kind}(no values)`, schemaId);
+  }
+  return [...values];
 }
 
 const MAX_DEPTH = 8;
@@ -242,116 +306,209 @@ const MAX_DEPTH = 8;
  * Derive a value that satisfies `schema`, drawing all entropy from `rng`
  * (Req 1.3, 2.2). Throws {@link UnsupportedSchemaError} for a Zod construct the
  * factory does not model, so an unsound fixture is never emitted silently.
+ *
+ * zod 4 has no `ZodEffects` wrapper: `.refine()`/`.superRefine()` add a "custom" check to the
+ * refined schema itself, and `.transform()`/`z.preprocess()` build a "pipe". Such a node is
+ * re-drawn deterministically until the whole node accepts the value, as the zod 3 `ZodEffects`
+ * branch did, so cross-field refinements (e.g. the pricing I-6 cap) are satisfied. The caller's
+ * safeParse still guards against an unsatisfiable refinement.
  */
 export function generateValue(
-  schema: ZodTypeAny,
+  schema: z.ZodType,
   rng: Rng,
   depth = 0,
   schemaId?: SchemaId,
 ): unknown {
   const def = defOf(schema);
-  switch (def.typeName) {
-    // ── wrappers: unwrap and generate the inner value ─────────────────────
-    case "ZodOptional":
-    case "ZodNullable":
-    case "ZodReadonly":
-    case "ZodBranded":
-    case "ZodDefault":
-    case "ZodCatch":
-      return generateValue(def.innerType as ZodTypeAny, rng, depth, schemaId);
-    case "ZodEffects": {
-      // refine/transform/preprocess — generate from the underlying schema, then
-      // re-draw deterministically until the *effects* node accepts the value so
-      // cross-field refinements (e.g. the pricing I-6 cap) are satisfied. The
-      // caller's safeParse still guards against an unsatisfiable refinement.
-      const inner = def.schema as ZodTypeAny;
-      let candidate = generateValue(inner, rng, depth, schemaId);
-      for (let attempt = 0; attempt < 32 && !schema.safeParse(candidate).success; attempt += 1) {
-        candidate = generateValue(inner, rng, depth, schemaId);
-      }
-      return candidate;
+  let candidate = generateKind(schema, def, rng, depth, schemaId);
+  if (needsRedraw(def)) {
+    for (let attempt = 0; attempt < 32 && !schema.safeParse(candidate).success; attempt += 1) {
+      candidate = generateKind(schema, def, rng, depth, schemaId);
     }
-    case "ZodPipeline":
-      return generateValue(def.in as ZodTypeAny, rng, depth, schemaId);
-    case "ZodLazy":
-      return generateValue((def.getter as () => ZodTypeAny)(), rng, depth, schemaId);
+  }
+  return candidate;
+}
+
+/** Whether a node can reject what its kind's generator drew: a refinement, or a pipe. */
+function needsRedraw(def: ZodDefView): boolean {
+  return def.type === "pipe" || checksOf(def).some((check) => check.check === "custom");
+}
+
+/** One draw for `schema`, dispatched on its zod 4 kind (`_zod.def.type`). */
+function generateKind(
+  schema: z.ZodType,
+  def: ZodDefView,
+  rng: Rng,
+  depth: number,
+  schemaId?: SchemaId,
+): unknown {
+  const kind = def.type;
+  switch (kind) {
+    // ── wrappers: unwrap and generate the inner value ─────────────────────
+    case "optional":
+    case "nullable":
+    case "readonly":
+    case "default":
+    case "prefault":
+    case "nonoptional":
+    case "catch": {
+      const inner = schemaAt(def.innerType, `${kind}.innerType`, schemaId);
+      return generateValue(inner, rng, depth, schemaId);
+    }
+    case "pipe": {
+      // `.transform()` builds pipe(schema -> transform): draw the input schema.
+      // `z.preprocess()` builds pipe(transform -> schema): draw the target schema, as the
+      // zod 3 preprocess branch did.
+      const input = schemaAt(def.in, "pipe.in", schemaId);
+      const drawn =
+        defOf(input).type === "transform" ? schemaAt(def.out, "pipe.out", schemaId) : input;
+      return generateValue(drawn, rng, depth, schemaId);
+    }
+    case "lazy": {
+      const getter = def.getter;
+      if (typeof getter !== "function") throw new UnsupportedSchemaError("lazy.getter", schemaId);
+      return generateValue(schemaAt(getter(), "lazy.getter()", schemaId), rng, depth, schemaId);
+    }
 
     // ── primitives ────────────────────────────────────────────────────────
-    case "ZodString":
-      return generateString(def.checks as ZodCheck[] | undefined, rng);
-    case "ZodNumber":
-      return generateNumber(def.checks as ZodCheck[] | undefined, rng);
-    case "ZodBoolean":
+    case "string":
+      return generateString(stringConstraints(def, schemaId), rng);
+    case "number":
+    case "int":
+      return generateNumber(numberConstraints(def), rng);
+    case "boolean":
       return rng() < 0.5;
-    case "ZodBigInt":
+    case "bigint":
       return BigInt(Math.floor(rng() * 1_000_000));
-    case "ZodDate":
+    case "date":
       return new Date(isoBaseMs + Math.floor(rng() * isoRangeMs));
-    case "ZodLiteral":
-      return def.value;
-    case "ZodEnum":
-      return pick(def.values as readonly unknown[], rng);
-    case "ZodNativeEnum":
-      return pick(Object.values(def.values as Record<string, unknown>), rng);
-    case "ZodNull":
+    case "literal":
+    case "enum":
+      return pick(valuesOf(schema, kind, schemaId), rng);
+    case "null":
       return null;
-    case "ZodUndefined":
-    case "ZodVoid":
+    case "undefined":
+    case "void":
       return undefined;
-    case "ZodNaN":
+    case "nan":
       return Number.NaN;
-    case "ZodAny":
-    case "ZodUnknown":
+    case "any":
+    case "unknown":
       return null;
 
     // ── composites ──────────────────────────────────────────────────────
-    case "ZodObject":
-      return generateObject(shapeOf(schema), rng, depth, schemaId);
-    case "ZodArray":
+    case "object":
+      return generateObject(fieldsOf(def, schemaId), rng, depth, schemaId);
+    case "array":
       return generateArray(def, rng, depth, schemaId);
-    case "ZodRecord":
+    case "record":
       return generateRecord(def, rng, depth, schemaId);
-    case "ZodMap":
+    case "map":
       return generateMap(def, rng, depth, schemaId);
-    case "ZodSet":
+    case "set":
       return new Set(
-        generateArrayOf(def.valueType as ZodTypeAny | undefined, rng, depth, schemaId),
+        generateArrayOf(schemaAt(def.valueType, "set.valueType", schemaId), rng, depth, schemaId),
       );
-    case "ZodTuple":
-      return (def.items as ZodTypeAny[]).map((item) =>
+    case "tuple":
+      return schemasAt(def.items, "tuple.items", schemaId).map((item) =>
         generateValue(item, rng, depth + 1, schemaId),
       );
-    case "ZodUnion":
-    case "ZodDiscriminatedUnion":
-      return generateUnion(def.options, rng, depth, schemaId);
-    case "ZodIntersection":
+    case "union":
+      return generateUnion(def, rng, depth, schemaId);
+    case "intersection":
       return mergeValues(
-        generateValue(def.left as ZodTypeAny, rng, depth, schemaId),
-        generateValue(def.right as ZodTypeAny, rng, depth, schemaId),
+        generateValue(schemaAt(def.left, "intersection.left", schemaId), rng, depth, schemaId),
+        generateValue(schemaAt(def.right, "intersection.right", schemaId), rng, depth, schemaId),
       );
 
     default:
-      throw new UnsupportedSchemaError(def.typeName, schemaId);
+      throw new UnsupportedSchemaError(kind ?? "undefined", schemaId);
   }
 }
 
-// ── string generation honoring uuid/datetime/length checks ────────────────
+// ── string generation honoring format and length checks ───────────────────
 
 const isoBaseMs = Date.UTC(2024, 0, 1, 0, 0, 0);
 const isoRangeMs = 365 * 24 * 60 * 60 * 1000;
 
-function generateString(checks: ZodCheck[] | undefined, rng: Rng): string {
-  const kinds = new Set((checks ?? []).map((c) => c.kind));
-  if (kinds.has("uuid")) return generateUuid(rng);
-  if (kinds.has("datetime"))
-    return new Date(isoBaseMs + Math.floor(rng() * isoRangeMs)).toISOString();
-  if (kinds.has("email")) return `op-${intToken(rng)}@example.invalid`;
-  if (kinds.has("url")) return `https://example.invalid/${intToken(rng)}`;
+/** The schema's own check, then its chained ones: `z.uuid()` and `z.int()` are their own check. */
+function constraintChecks(def: ZodDefView): readonly ZodCheckView[] {
+  const own: readonly ZodCheckView[] =
+    typeof def.check === "string" ? [{ check: def.check, format: def.format }] : [];
+  return [...own, ...checksOf(def)];
+}
 
-  // Respect an explicit min length; keep it short and deterministic otherwise.
+/** Length bounds read from "min_length", "max_length" and "length_equals" checks. */
+interface LengthBounds {
+  readonly min: number | undefined;
+  readonly max: number | undefined;
+}
+
+/** The tightest length bounds a check list places on a string or an array. */
+function lengthBoundsOf(checks: readonly ZodCheckView[]): LengthBounds {
+  let min: number | undefined;
+  let max: number | undefined;
+  for (const check of checks) {
+    if (check.check === "min_length" && typeof check.minimum === "number") {
+      min = Math.max(min ?? 0, check.minimum);
+    } else if (check.check === "max_length" && typeof check.maximum === "number") {
+      max = Math.min(max ?? check.maximum, check.maximum);
+    } else if (check.check === "length_equals" && typeof check.length === "number") {
+      min = check.length;
+      max = check.length;
+    }
+  }
+  return { min, max };
+}
+
+/** The string formats {@link generateString} can satisfy; any other format is refused. */
+const GENERATED_STRING_FORMATS: ReadonlySet<string> = new Set([
+  "uuid",
+  "guid",
+  "datetime",
+  "date",
+  "email",
+  "url",
+]);
+
+/** What a string schema requires of a drawn value. */
+interface StringConstraints extends LengthBounds {
+  readonly formats: ReadonlySet<string>;
+}
+
+/**
+ * The formats and length bounds of a string schema. zod 4 carries a format as a
+ * "string_format" check (`.uuid()`, `.datetime()`), so a format this factory does not model is
+ * refused here rather than drawn as an arbitrary string the schema would reject.
+ */
+function stringConstraints(def: ZodDefView, schemaId?: SchemaId): StringConstraints {
+  const checks = constraintChecks(def);
+  const formats = new Set<string>();
+  for (const check of checks) {
+    if (check.check !== "string_format" || typeof check.format !== "string") continue;
+    if (!GENERATED_STRING_FORMATS.has(check.format)) {
+      throw new UnsupportedSchemaError(`string_format(${check.format})`, schemaId);
+    }
+    formats.add(check.format);
+  }
+  return { formats, ...lengthBoundsOf(checks) };
+}
+
+/** A deterministic ISO-8601 UTC instant inside the fixture year. */
+function isoInstant(rng: Rng): string {
+  return new Date(isoBaseMs + Math.floor(rng() * isoRangeMs)).toISOString();
+}
+
+function generateString(constraints: StringConstraints, rng: Rng): string {
+  const { formats, min, max } = constraints;
+  if (formats.has("uuid") || formats.has("guid")) return generateUuid(rng);
+  if (formats.has("datetime")) return isoInstant(rng);
+  if (formats.has("date")) return isoInstant(rng).slice(0, 10);
+  if (formats.has("email")) return `op-${intToken(rng)}@example.invalid`;
+  if (formats.has("url")) return `https://example.invalid/${intToken(rng)}`;
+
+  // Respect explicit length bounds; keep it short and deterministic otherwise.
   let value = `str-${intToken(rng)}`;
-  const min = numericCheck(checks, "min");
-  const max = numericCheck(checks, "max");
   if (min !== undefined && value.length < min) value = value.padEnd(min, "x");
   if (max !== undefined && value.length > max) value = value.slice(0, Math.max(0, max));
   return value;
@@ -374,59 +531,100 @@ function intToken(rng: Rng): string {
   return Math.floor(rng() * 0x7fffffff).toString(36);
 }
 
-// ── number generation honoring int/min/max/positive/multipleOf ────────────
+// ── number generation honoring integer format, bounds and multipleOf ──────
 
-function generateNumber(checks: ZodCheck[] | undefined, rng: Rng): number {
-  const isInt = (checks ?? []).some((c) => c.kind === "int");
-  const minCheck = (checks ?? []).find((c) => c.kind === "min");
-  const maxCheck = (checks ?? []).find((c) => c.kind === "max");
-  const step = isInt ? 1 : 1e-6;
+/** A numeric bound read from a "greater_than" or "less_than" check. */
+interface NumericBound {
+  readonly value: number;
+  readonly inclusive: boolean;
+}
+
+/** What a number schema requires of a drawn value. */
+interface NumberConstraints {
+  readonly integer: boolean;
+  readonly lower: NumericBound | undefined;
+  readonly upper: NumericBound | undefined;
+  readonly multipleOf: number | undefined;
+}
+
+/** zod 4's integer number formats; `.int()` and `z.int()` carry "safeint". */
+const INTEGER_FORMATS: ReadonlySet<string> = new Set(["safeint", "int32", "uint32"]);
+
+function numericBound(check: ZodCheckView): NumericBound | undefined {
+  if (typeof check.value !== "number") return undefined;
+  return { value: check.value, inclusive: check.inclusive !== false };
+}
+
+/**
+ * The integer format, the tightest bounds and the multiple of a number schema. zod 4 records
+ * `.min()` and `.nonnegative()` as an inclusive "greater_than", `.positive()` as an exclusive
+ * one, `.max()` as "less_than", and `.int()` as a "number_format" check.
+ */
+function numberConstraints(def: ZodDefView): NumberConstraints {
+  let integer = false;
+  let lower: NumericBound | undefined;
+  let upper: NumericBound | undefined;
+  let multipleOf: number | undefined;
+  for (const check of constraintChecks(def)) {
+    if (check.check === "number_format" && typeof check.format === "string") {
+      if (INTEGER_FORMATS.has(check.format)) integer = true;
+    } else if (check.check === "greater_than") {
+      const bound = numericBound(check);
+      if (bound !== undefined && (lower === undefined || bound.value > lower.value)) {
+        lower = bound;
+      }
+    } else if (check.check === "less_than") {
+      const bound = numericBound(check);
+      if (bound !== undefined && (upper === undefined || bound.value < upper.value)) {
+        upper = bound;
+      }
+    } else if (check.check === "multiple_of" && typeof check.value === "number") {
+      multipleOf = check.value;
+    }
+  }
+  return { integer, lower, upper, multipleOf };
+}
+
+function generateNumber(constraints: NumberConstraints, rng: Rng): number {
+  const { integer, multipleOf } = constraints;
+  const step = integer ? 1 : 1e-6;
 
   let lower = 0;
-  if (minCheck && typeof minCheck.value === "number") {
-    lower = minCheck.inclusive === false ? minCheck.value + step : minCheck.value;
+  if (constraints.lower !== undefined) {
+    const bound = constraints.lower;
+    lower = bound.inclusive ? bound.value : bound.value + step;
   }
-  let upper: number;
-  if (maxCheck && typeof maxCheck.value === "number") {
-    upper = maxCheck.inclusive === false ? maxCheck.value - step : maxCheck.value;
-  } else {
-    upper = lower + 100;
+  let upper = lower + 100;
+  if (constraints.upper !== undefined) {
+    const bound = constraints.upper;
+    upper = bound.inclusive ? bound.value : bound.value - step;
   }
   if (upper < lower) upper = lower;
 
   let value = lower + rng() * (upper - lower);
-  if (isInt) {
+  if (integer) {
     value = Math.round(value);
     if (value < lower) value = Math.ceil(lower);
     if (value > upper) value = Math.floor(upper);
   }
 
-  const multiple = (checks ?? []).find((c) => c.kind === "multipleOf");
-  if (multiple && typeof multiple.value === "number" && multiple.value > 0) {
-    const m = multiple.value;
-    value = Math.round(value / m) * m;
-    if (value < lower) value += m;
+  if (multipleOf !== undefined && multipleOf > 0) {
+    value = Math.round(value / multipleOf) * multipleOf;
+    if (value < lower) value += multipleOf;
   }
   return value;
-}
-
-function numericCheck(checks: ZodCheck[] | undefined, kind: string): number | undefined {
-  const found = (checks ?? []).find((c) => c.kind === kind);
-  return found && typeof found.value === "number" ? found.value : undefined;
 }
 
 // ── composite generation ──────────────────────────────────────────────────
 
 function generateObject(
-  shape: Record<string, ZodTypeAny>,
+  fields: ReadonlyArray<readonly [string, z.ZodType]>,
   rng: Rng,
   depth: number,
   schemaId?: SchemaId,
 ): Record<string, unknown> {
   const out: Record<string, unknown> = {};
-  for (const key of Object.keys(shape)) {
-    const field = shape[key];
-    if (field === undefined) continue;
+  for (const [key, field] of fields) {
     // Beyond the depth guard, only populate required fields to keep fixtures
     // finite for (hypothetical) deeply-nested schemas.
     if (depth >= MAX_DEPTH && isOptional(field)) continue;
@@ -436,26 +634,21 @@ function generateObject(
   return out;
 }
 
-function generateArray(def: ZodDef, rng: Rng, depth: number, schemaId?: SchemaId): unknown[] {
-  return generateArrayOf(
-    def.type as ZodTypeAny | undefined,
-    rng,
-    depth,
-    schemaId,
-    readLength(def.minLength),
-    readLength(def.maxLength),
-  );
+/** zod 4 keeps an array's element at `def.element` and its length bounds as checks. */
+function generateArray(def: ZodDefView, rng: Rng, depth: number, schemaId?: SchemaId): unknown[] {
+  const element = schemaAt(def.element, "array.element", schemaId);
+  const { min, max } = lengthBoundsOf(checksOf(def));
+  return generateArrayOf(element, rng, depth, schemaId, min, max);
 }
 
 function generateArrayOf(
-  element: ZodTypeAny | undefined,
+  element: z.ZodType,
   rng: Rng,
   depth: number,
   schemaId?: SchemaId,
   min?: number,
   max?: number,
 ): unknown[] {
-  if (element === undefined) return [];
   let count = Math.max(min ?? 0, depth < 3 ? 2 : 1);
   if (max !== undefined) count = Math.min(count, max);
   const items: unknown[] = [];
@@ -463,44 +656,43 @@ function generateArrayOf(
   return items;
 }
 
-function readLength(raw: unknown): number | undefined {
-  if (raw && typeof raw === "object" && typeof (raw as { value?: unknown }).value === "number") {
-    return (raw as { value: number }).value;
-  }
-  return undefined;
-}
-
+/**
+ * zod 4 makes a record over an enumerable key schema (an enum or a literal) exhaustive, so every
+ * key in the key schema's `_zod.values` is drawn. Any other key schema is sampled, as before.
+ */
 function generateRecord(
-  def: ZodDef,
+  def: ZodDefView,
   rng: Rng,
   depth: number,
   schemaId?: SchemaId,
 ): Record<string, unknown> {
-  const valueType = def.valueType as ZodTypeAny | undefined;
-  const keyType = def.keyType as ZodTypeAny | undefined;
-  if (valueType === undefined) return {};
+  const keyType = schemaAt(def.keyType, "record.keyType", schemaId);
+  const valueType = schemaAt(def.valueType, "record.valueType", schemaId);
   const out: Record<string, unknown> = {};
+  const exhaustiveKeys = keyType._zod.values;
+  if (exhaustiveKeys !== undefined) {
+    for (const key of exhaustiveKeys) {
+      out[String(key)] = generateValue(valueType, rng, depth + 1, schemaId);
+    }
+    return out;
+  }
   const count = depth < 3 ? 2 : 1;
   for (let i = 0; i < count; i += 1) {
-    const key =
-      keyType !== undefined
-        ? String(generateValue(keyType, rng, depth + 1, schemaId))
-        : `key-${intToken(rng)}`;
+    const key = String(generateValue(keyType, rng, depth + 1, schemaId));
     out[key] = generateValue(valueType, rng, depth + 1, schemaId);
   }
   return out;
 }
 
 function generateMap(
-  def: ZodDef,
+  def: ZodDefView,
   rng: Rng,
   depth: number,
   schemaId?: SchemaId,
 ): Map<unknown, unknown> {
-  const keyType = def.keyType as ZodTypeAny | undefined;
-  const valueType = def.valueType as ZodTypeAny | undefined;
+  const keyType = schemaAt(def.keyType, "map.keyType", schemaId);
+  const valueType = schemaAt(def.valueType, "map.valueType", schemaId);
   const map = new Map<unknown, unknown>();
-  if (keyType === undefined || valueType === undefined) return map;
   const count = depth < 3 ? 2 : 1;
   for (let i = 0; i < count; i += 1) {
     map.set(
@@ -511,15 +703,11 @@ function generateMap(
   return map;
 }
 
-function generateUnion(options: unknown, rng: Rng, depth: number, schemaId?: SchemaId): unknown {
-  const list = Array.isArray(options)
-    ? (options as ZodTypeAny[])
-    : options instanceof Map
-      ? Array.from(options.values() as Iterable<ZodTypeAny>)
-      : [];
-  if (list.length === 0) throw new UnsupportedSchemaError("ZodUnion(empty)", schemaId);
-  const chosen = list[Math.floor(rng() * list.length)] ?? list[0];
-  return generateValue(chosen as ZodTypeAny, rng, depth, schemaId);
+/** One drawn option of a union. A zod 4 discriminated union is a "union" kind too. */
+function generateUnion(def: ZodDefView, rng: Rng, depth: number, schemaId?: SchemaId): unknown {
+  const options = schemasAt(def.options, "union.options", schemaId);
+  if (options.length === 0) throw new UnsupportedSchemaError("union(empty)", schemaId);
+  return generateValue(pick(options, rng), rng, depth, schemaId);
 }
 
 /** Deep-merge two generated values for a `ZodIntersection` (objects merge). */
@@ -538,20 +726,28 @@ function pick<T>(values: readonly T[], rng: Rng): T {
   return value ?? (values[0] as T);
 }
 
-function isOptional(field: ZodTypeAny): boolean {
-  const typeName = defOf(field).typeName;
-  return typeName === "ZodOptional" || typeName === "ZodDefault" || typeName === "ZodNever";
+/**
+ * Whether an object field may be absent, by zod 4's own predicate: the object parse treats a key
+ * as optional iff its schema's `_zod.optin` is set (`isOptionalField` in
+ * `spec/contract-fidelity/introspect.ts` reads the same member).
+ */
+function isOptional(field: z.ZodType): boolean {
+  return field._zod.optin !== undefined;
 }
 
 function isPlainObject(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === "object" && !Array.isArray(value);
 }
 
+/** A failed parse's issues as `path: message`. A zod 4 issue path is `PropertyKey[]`. */
 function formatIssues(parsed: {
-  error: { issues: ReadonlyArray<{ path: (string | number)[]; message: string }> };
+  readonly error: { readonly issues: readonly z.core.$ZodIssue[] };
 }): string {
   return parsed.error.issues
-    .map((issue) => `${issue.path.join(".") || "<root>"}: ${issue.message}`)
+    .map((issue) => {
+      const where = issue.path.map((segment) => String(segment)).join(".");
+      return `${where || "<root>"}: ${issue.message}`;
+    })
     .join("; ");
 }
 
@@ -565,7 +761,7 @@ function formatIssues(parsed: {
  * surgically-corrupted valid body (keeps the payload realistic for Req 8),
  * followed by generic wrong-type primitives as a robust fallback.
  */
-function violationCandidates(schema: ZodTypeAny, seed: number, schemaId: SchemaId): unknown[] {
+function violationCandidates(schema: z.ZodType, seed: number, schemaId: SchemaId): unknown[] {
   const candidates: unknown[] = [];
   try {
     const base = generateValue(schema, makeRng(seed), 0, schemaId);

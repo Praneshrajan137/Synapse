@@ -81,6 +81,7 @@ import contextlib
 import dataclasses
 import importlib.util
 import json
+import posixpath
 import re
 import sys
 import tempfile
@@ -181,16 +182,43 @@ REMOVAL: Final[str] = "generated: delete when a tagged assertion observes this i
 
 Runner = Literal["vitest", "playwright"]
 Route = Literal["file", "tag", "orphan"]
-Spelling = Literal["repo", "runner", "posix-absolute", "windows-absolute"]
+VitestSpelling = Literal["repo", "runner", "posix-absolute", "windows-absolute"]
+PlaywrightSpelling = Literal["root-relative", "absolute"]
 CaseStatus = Literal["passed", "failed", "skipped"]
 
 RUNNERS: Final[tuple[Runner, ...]] = ("vitest", "playwright")
 ROUTES: Final[tuple[Route, ...]] = ("file", "tag", "orphan")
-SPELLINGS: Final[tuple[Spelling, ...]] = (
+VITEST_SPELLINGS: Final[tuple[VitestSpelling, ...]] = (
     "repo",
     "runner",
     "posix-absolute",
     "windows-absolute",
+)
+#: ``root-relative`` is what Playwright writes for a spec: ``path.relative(rootDir, spec)``.
+#: ``absolute`` is what ``path.relative`` returns for a spec on another Windows drive, which
+#: the gate must keep exactly as written.
+PLAYWRIGHT_SPELLINGS: Final[tuple[PlaywrightSpelling, ...]] = ("root-relative", "absolute")
+
+#: Checkouts a Playwright record's ``config.rootDir`` can sit under: a GitHub-hosted runner's
+#: workspace for this repository, a bare POSIX root, and a Windows checkout as Playwright
+#: writes it (``toPosixPath``: a drive letter and forward slashes).
+CHECKOUTS: Final[tuple[str, ...]] = (
+    "/home/runner/work/Synapse/Synapse",
+    "/repo",
+    "C:/Users/dev/synapse",
+)
+
+#: Repo-relative directories a config's top-level ``testDir`` can resolve to. The first is
+#: what both committed configs set (``testDir: "./tests/e2e"``) and the shape finding 90
+#: measured: a top-level spec is reported as one segment. Its ancestors are what a wider
+#: ``testDir`` would write. The last is a directory the generated specs sit OUTSIDE of, so
+#: ``path.relative`` climbs with ``..`` and the gate has to normalise it away.
+PLAYWRIGHT_TEST_DIRS: Final[tuple[str, ...]] = (
+    "frontend/tests/e2e",
+    "frontend/tests",
+    "frontend",
+    "",
+    "frontend/tests/e2e/visual",
 )
 CASE_STATUSES: Final[tuple[CaseStatus, ...]] = ("passed", "failed", "skipped")
 
@@ -223,8 +251,14 @@ def suite_path_for(invariant_id: str) -> str:
     return f"frontend/tests/e2e/{slug_for(invariant_id)}.jtbd.spec.ts"
 
 
-def noise_path_for(index: int) -> str:
-    """A suite file no generated registry lists, for cases attributable by tag or not at all."""
+def noise_path_for(index: int, runner: Runner) -> str:
+    """A suite file no generated registry lists, for cases attributable by tag or not at all.
+
+    A Playwright one sits in a subdirectory of the e2e tree, so a generated record carries a
+    nested ``noise/case_N.spec.ts`` spelling beside the one-segment suite files.
+    """
+    if runner == "playwright":
+        return f"frontend/tests/e2e/noise/case_{index}.spec.ts"
     return f"frontend/src/lib/__tests__/case_{index}.test.ts"
 
 
@@ -233,12 +267,15 @@ def tags_in_title(title: str) -> tuple[str, ...]:
     return tuple(dict.fromkeys(TAG_RE.findall(title)))
 
 
-def spell(path: str, spelling: Spelling) -> str:
-    """One of the four ways a runner or a registry spells the same file.
+def spell(path: str, spelling: VitestSpelling) -> str:
+    """One of the four spellings a Vitest record is generated with.
 
-    Vitest reports an absolute path (POSIX on the runners, Windows on this dev box),
-    Playwright reports one relative to its ``rootDir`` (``frontend/``), and the registry
-    lists repo-relative paths. All four must attribute to the same invariant.
+    Vitest's JSON reporter writes ``testResults[].name`` as the file's absolute path
+    (``file.filepath``); the two absolute spellings here are that, in POSIX and in
+    backslashed Windows form. The repo-relative and ``frontend/``-relative spellings are not
+    what Vitest writes. They are generated because ``paths_match`` must absorb any spelling
+    that ends in the registry path, and a matcher only ever fed absolute paths would not
+    notice if it stopped. Playwright's spellings come from :class:`PlaywrightRoot`.
     """
     if spelling == "repo":
         return path
@@ -252,6 +289,37 @@ def spell(path: str, spelling: Spelling) -> str:
 def canonical(payload: Mapping[str, Any]) -> str:
     """Canonical JSON, per the repo-wide serialisation convention."""
     return json.dumps(payload, sort_keys=True, separators=(",", ":"))
+
+
+@dataclass(frozen=True)
+class PlaywrightRoot:
+    """Where one Playwright record roots its paths: its ``config.rootDir``.
+
+    Playwright sets ``rootDir`` to the config's top-level ``testDir`` resolved against the
+    config's directory, writes it with forward slashes on every OS, and writes every suite
+    and spec ``file`` as ``path.relative(rootDir, spec)``. One record has one root, so it is
+    drawn per scenario rather than per case.
+    """
+
+    checkout: str
+    test_dir: str
+
+    @property
+    def root_dir(self) -> str:
+        """``config.rootDir`` as the record carries it."""
+        return f"{self.checkout}/{self.test_dir}" if self.test_dir else self.checkout
+
+    def relative(self, logical: str) -> str:
+        """``path.relative(rootDir, file)`` for a repo-relative *logical* file, POSIX form.
+
+        Both sides are anchored at ``/`` so the answer cannot depend on the working
+        directory this test runs in.
+        """
+        return posixpath.relpath(f"/{logical}", f"/{self.test_dir}")
+
+    def absolute(self, logical: str) -> str:
+        """Where *logical* actually is in this checkout: the answer resolution must reach."""
+        return f"{self.checkout}/{logical}"
 
 
 # ---------------------------------------------------------------------------
@@ -317,7 +385,8 @@ class CaseDraft:
     owner: str | None
     status: CaseStatus
     skip_spelling: str = "skipped"
-    spelling: Spelling = "repo"
+    vitest_spelling: VitestSpelling = "repo"
+    playwright_spelling: PlaywrightSpelling = "root-relative"
     ancestor: str | None = None
     declared_tag: bool = False
 
@@ -337,11 +406,29 @@ class CaseDraft:
     def logical_file(self) -> str:
         if self.route == "file" and self.owner is not None:
             return suite_path_for(self.owner)
-        return noise_path_for(self.index)
+        return noise_path_for(self.index, self.runner)
 
     @property
-    def reported_file(self) -> str:
-        return spell(self.logical_file, self.spelling)
+    def vitest_name(self) -> str:
+        """``testResults[].name`` for this case, in its drawn Vitest spelling."""
+        return spell(self.logical_file, self.vitest_spelling)
+
+    def playwright_file(self, root: PlaywrightRoot) -> str:
+        """The ``file`` Playwright writes for this case into a record rooted at *root*."""
+        if self.playwright_spelling == "root-relative":
+            return root.relative(self.logical_file)
+        return root.absolute(self.logical_file)
+
+    def expected_suite_file(self, root: PlaywrightRoot) -> str:
+        """The ``suite_file`` the gate must report for this case, decided by construction.
+
+        Vitest's name is kept as written. Playwright's is resolved against the record's
+        ``config.rootDir``, so whichever spelling the record used, the answer is where the
+        file actually is in the checkout, not a second copy of the gate's join.
+        """
+        if self.runner == "vitest":
+            return self.vitest_name
+        return root.absolute(self.logical_file)
 
     @property
     def source_report(self) -> str:
@@ -398,15 +485,15 @@ class ScenarioDraft:
 
     invariants: tuple[InvariantDraft, ...]
     cases: tuple[CaseDraft, ...]
+    #: The one ``config.rootDir`` the scenario's Playwright record carries.
+    playwright_root: PlaywrightRoot
     reports_unavailable: tuple[str, ...] = ()
 
     # -- projections the gate consumes --------------------------------------
 
     @property
     def declared_ids(self) -> frozenset[str]:
-        return frozenset(
-            inv.invariant_id for inv in self.invariants if inv.declared_out_of_suite
-        )
+        return frozenset(inv.invariant_id for inv in self.invariants if inv.declared_out_of_suite)
 
     def registry_entries(self) -> tuple[dict[str, Any], ...]:
         return tuple(inv.as_registry_entry() for inv in self.invariants)
@@ -463,7 +550,7 @@ class ScenarioDraft:
         playwright = tuple(case for case in self.cases if case.runner == "playwright")
         return {
             VITEST_REPORT: canonical(vitest_payload(vitest)),
-            PLAYWRIGHT_REPORT: canonical(playwright_payload(playwright)),
+            PLAYWRIGHT_REPORT: canonical(playwright_payload(playwright, self.playwright_root)),
         }
 
     # -- ground truth -------------------------------------------------------
@@ -553,7 +640,7 @@ def vitest_payload(cases: Sequence[CaseDraft]) -> dict[str, Any]:
     """Vitest's (Jest-shaped) JSON reporter output, grouped by file as the runner emits it."""
     grouped: dict[str, list[CaseDraft]] = {}
     for case in cases:
-        grouped.setdefault(case.reported_file, []).append(case)
+        grouped.setdefault(case.vitest_name, []).append(case)
     return {
         "testResults": [
             {
@@ -565,15 +652,16 @@ def vitest_payload(cases: Sequence[CaseDraft]) -> dict[str, Any]:
     }
 
 
-def playwright_payload(cases: Sequence[CaseDraft]) -> dict[str, Any]:
+def playwright_payload(cases: Sequence[CaseDraft], root: PlaywrightRoot) -> dict[str, Any]:
     """Playwright's JSON reporter output: one outer suite per file, describe blocks nested.
 
-    The outer suite's title is the spec path, exactly as Playwright writes it, so the
-    walker must keep it out of the composed test title.
+    The record carries its own ``config.rootDir`` and every ``file`` is spelled relative to
+    it (or absolute), exactly as Playwright writes them. The outer suite's title is that
+    same spelling, so the walker must keep it out of the composed test title.
     """
     grouped: dict[str, list[CaseDraft]] = {}
     for case in cases:
-        grouped.setdefault(case.reported_file, []).append(case)
+        grouped.setdefault(case.playwright_file(root), []).append(case)
 
     suites: list[dict[str, Any]] = []
     for reported, group in grouped.items():
@@ -588,7 +676,7 @@ def playwright_payload(cases: Sequence[CaseDraft]) -> dict[str, Any]:
                 {"title": ancestor, "specs": specs} for ancestor, specs in nested.items()
             ]
         suites.append(node)
-    return {"suites": suites}
+    return {"config": {"rootDir": root.root_dir}, "suites": suites}
 
 
 def parsed_tests(scenario: ScenarioDraft) -> tuple[Any, ...]:
@@ -637,9 +725,7 @@ def scenarios(
     invariants: list[InvariantDraft] = []
     for invariant_id in ids:
         owns = draw(st.booleans()) if owns_suite_file is None else owns_suite_file
-        declared = (
-            draw(st.booleans()) if declared_out_of_suite is None else declared_out_of_suite
-        )
+        declared = draw(st.booleans()) if declared_out_of_suite is None else declared_out_of_suite
         invariants.append(
             InvariantDraft(
                 invariant_id=invariant_id,
@@ -652,6 +738,13 @@ def scenarios(
 
     suite_owners = tuple(inv.invariant_id for inv in invariants if inv.owns_suite_file)
     all_ids = tuple(inv.invariant_id for inv in invariants)
+
+    # One record, one root: Playwright writes a single `config.rootDir` per run, so the root
+    # is drawn once and every Playwright case in the scenario is spelled against it.
+    playwright_root = PlaywrightRoot(
+        checkout=draw(st.sampled_from(CHECKOUTS)),
+        test_dir=draw(st.sampled_from(PLAYWRIGHT_TEST_DIRS)),
+    )
 
     cases: list[CaseDraft] = []
     case_count = draw(st.integers(min_value=min_cases, max_value=max_cases))
@@ -666,6 +759,13 @@ def scenarios(
         elif route == "tag":
             owner = draw(st.sampled_from(all_ids))
         runner: Runner = draw(st.sampled_from(RUNNERS))
+        # Each runner has its own spellings, so only the case's own runner's is drawn.
+        vitest_spelling: VitestSpelling = "repo"
+        playwright_spelling: PlaywrightSpelling = "root-relative"
+        if runner == "vitest":
+            vitest_spelling = draw(st.sampled_from(VITEST_SPELLINGS))
+        else:
+            playwright_spelling = draw(st.sampled_from(PLAYWRIGHT_SPELLINGS))
         cases.append(
             CaseDraft(
                 index=index,
@@ -674,21 +774,21 @@ def scenarios(
                 owner=owner,
                 status=draw(st.sampled_from(tuple(case_statuses))),
                 skip_spelling=draw(st.sampled_from(SKIP_SPELLINGS)),
-                spelling=draw(st.sampled_from(SPELLINGS)),
+                vitest_spelling=vitest_spelling,
+                playwright_spelling=playwright_spelling,
                 ancestor=draw(st.none() | st.sampled_from(ANCESTORS)),
                 # The Playwright tag list is the second attribution route; Vitest has no
                 # equivalent, so a tagged Vitest case must carry its tag in the title.
-                declared_tag=(
-                    runner == "playwright" and route == "tag" and draw(st.booleans())
-                ),
+                declared_tag=(runner == "playwright" and route == "tag" and draw(st.booleans())),
             )
         )
 
-    unavailable = (
-        draw(st.sampled_from(((), (MISSING_REPORT,)))) if allow_missing_report else ()
-    )
+    unavailable = draw(st.sampled_from(((), (MISSING_REPORT,)))) if allow_missing_report else ()
     return ScenarioDraft(
-        invariants=tuple(invariants), cases=tuple(cases), reports_unavailable=unavailable
+        invariants=tuple(invariants),
+        cases=tuple(cases),
+        playwright_root=playwright_root,
+        reports_unavailable=unavailable,
     )
 
 
@@ -787,14 +887,15 @@ def test_credit_requires_an_executed_non_skipped_assertion(scenario: ScenarioDra
     """
     tests = parsed_tests(scenario)
 
-    # The gate rediscovered every reported case: its file (in four spellings), its composed
-    # title, its collapsed status, and its tags (title-borne and Playwright-declared).
+    # The gate rediscovered every reported case: its file (Vitest's as written, Playwright's
+    # resolved against the record's `config.rootDir`), its composed title, its collapsed
+    # status, and its tags (title-borne and Playwright-declared).
     assert sorted(
         (test.report, test.suite_file, test.title, test.status, test.tags) for test in tests
     ) == sorted(
         (
             case.source_report,
-            case.reported_file,
+            case.expected_suite_file(scenario.playwright_root),
             case.full_title,
             case.status,
             case.expected_tags,
@@ -813,8 +914,7 @@ def test_credit_requires_an_executed_non_skipped_assertion(scenario: ScenarioDra
         # `attested` is the credit predicate, and exactly one class carries it.
         assert attestation.attested is (attestation.classification == "attested")
         assert attestation.attested is bool(
-            inv.registry_status == ENFORCED
-            and any(case.status == "passed" for case in attributed)
+            inv.registry_status == ENFORCED and any(case.status == "passed" for case in attributed)
         )
         # A listed file, however many there are, buys nothing on its own.
         if inv.registry_status == ENFORCED and not attributed:

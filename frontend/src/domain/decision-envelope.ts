@@ -41,7 +41,8 @@ export const DecisionEnvelopeSchema = z
     confidence: ZConfidence,
     phase_reached: z.number().int().min(1).max(5).default(1),
     escalated: z.boolean().default(false),
-    selected_action: z.record(z.unknown()).default({}),
+    // zod 4: z.record() takes an explicit key schema; an enum key would be exhaustive.
+    selected_action: z.record(z.string(), z.unknown()).default({}),
     // Pre-ADR-044 envelopes have no timestamp; use-firehose falls back to
     // the server envelope `ts` before appending to the store.
     timestamp: z.string().optional(),

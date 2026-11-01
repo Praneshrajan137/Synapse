@@ -19,7 +19,9 @@ What this module now does instead:
 * **Reads executed assertions.** It consumes the Vitest and Playwright JSON
   reporter output and normalises both into one :class:`ExecutedTest` stream, each
   carrying the suite file it came from, its full title, and a collapsed
-  ``passed`` / ``failed`` / ``skipped`` status.
+  ``passed`` / ``failed`` / ``skipped`` status. Playwright writes each ``file``
+  relative to the record's own ``config.rootDir``, so it is resolved against that
+  directory before anything compares it (finding 90; see :func:`paths_match`).
 * **Requires one for every ``enforced`` invariant.** An invariant is ``attested``
   only when at least one executed, non-skipped assertion is attributable to it -
   by an ``FE-INV-###`` tag in the test's own title, or by the test's file being a
@@ -27,7 +29,9 @@ What this module now does instead:
   all-skipped run are both rejected (R8.7).
 * **Never turns absence into a pass (I-7).** A missing, unreadable, or
   unparseable reporter file is ``unavailable`` (exit ``2``), never a pass. A
-  reporter set in which nothing executed is ``unavailable`` too.
+  reporter set in which nothing executed is ``unavailable`` too, and so is a
+  Playwright record with no usable ``config.rootDir``: its paths cannot be placed,
+  and assuming a base for them is the defect finding 90 measured.
 * **Keeps registry hygiene.** The old closed-status / listed-implementation /
   listed-test / files-exist checks are retained, because a registry pointing at
   a deleted file is broken - but existence is now a *necessary* condition, never
@@ -75,10 +79,11 @@ from __future__ import annotations
 
 import argparse
 import json
+import posixpath
 import re
 import sys
 from datetime import date
-from pathlib import Path, PurePosixPath
+from pathlib import Path, PurePosixPath, PureWindowsPath
 from typing import Any, Final, Literal
 
 try:
@@ -197,7 +202,10 @@ class ExecutedTest(BaseModel):
     model_config = ConfigDict(frozen=True)
 
     report: str  # the reporter file this came from
-    suite_file: str  # the spec/test file, as the reporter spelled it
+    #: The spec/test file. Vitest's ``testResults[].name`` as written (it is already
+    #: absolute); Playwright's ``file`` resolved against the record's ``config.rootDir``,
+    #: because Playwright writes it relative to that directory (see :func:`paths_match`).
+    suite_file: str
     title: str  # full title: ancestor titles joined with the test title
     status: TestStatus
     tags: tuple[str, ...] = ()  # FE-INV-### tags found in the title (or PW tags)
@@ -467,13 +475,84 @@ def _collapse_playwright_spec(spec: dict[str, Any]) -> TestStatus:
     return "passed" if any_passed else "skipped"
 
 
+def _is_absolute(path: str) -> bool:
+    """True for a path that names its own location, by POSIX or by Windows rules.
+
+    Both rules apply because the OS that produced a record is not known here:
+    ``/home/runner/...`` is absolute only by POSIX rules, ``C:/...`` only by Windows rules.
+    """
+    return PurePosixPath(path).is_absolute() or PureWindowsPath(path).is_absolute()
+
+
+def _playwright_root_dir(payload: dict[str, Any]) -> str:
+    """The directory every ``file`` in a Playwright record is relative to. Refuses, never guesses.
+
+    Playwright's JSON reporter writes ``config.rootDir`` (the config's top-level ``testDir``
+    resolved against the config's directory, with forward slashes) and writes every suite
+    and spec ``file`` as ``path.relative(rootDir, file)``. Without ``rootDir`` those paths
+    cannot be placed: a top-level spec is the bare ``smoke.spec.ts``, which names no
+    directory. Assuming a base is the defect finding 90 measured (this module assumed
+    ``frontend/``; the real base was ``frontend/tests/e2e``), so a record without a usable
+    ``rootDir`` is not a reporter output this gate knows, and the raise routes it to
+    ``unavailable``. Messages use ``!a`` so a non-ASCII path cannot break a Windows
+    console (E-S13-07).
+    """
+    config = payload.get("config")
+    if not isinstance(config, dict):
+        raise ReportFormatError(
+            "Playwright reporter output has no 'config' object, so it has no "
+            "'config.rootDir' to resolve its rootDir-relative 'file' paths against"
+        )
+    if "rootDir" not in config:
+        raise ReportFormatError(
+            "Playwright reporter output has no 'config.rootDir', so its rootDir-relative "
+            "'file' paths cannot be resolved"
+        )
+    root_dir = config["rootDir"]
+    if not isinstance(root_dir, str):
+        raise ReportFormatError(
+            "Playwright reporter output's 'config.rootDir' is not a path string: got "
+            f"{type(root_dir).__name__} {root_dir!a}"
+        )
+    if not root_dir.strip():
+        raise ReportFormatError("Playwright reporter output's 'config.rootDir' is empty")
+    if not _is_absolute(root_dir):
+        raise ReportFormatError(
+            f"Playwright reporter output's 'config.rootDir' {root_dir!a} is not an absolute "
+            "path; Playwright writes the resolved testDir, so a relative one has no base"
+        )
+    return root_dir
+
+
+def resolve_playwright_file(root_dir: str, reported: str) -> str:
+    """Place one Playwright ``file`` spelling by joining it to ``config.rootDir``, POSIX-style.
+
+    ``reported`` is ``path.relative(rootDir, file)`` as the reporter wrote it, so joining it
+    back onto ``rootDir`` recovers where the file is. The join is normalised because
+    ``path.relative`` climbs with ``..`` for a spec outside ``rootDir`` (a project whose own
+    ``testDir`` lies elsewhere), and an unresolved ``..`` segment would block every
+    trailing-segment match. A backslash is a separator, as in :func:`_segments`. Two
+    spellings are returned exactly as written: an empty one (the node named no file), and an
+    absolute one, which ``path.relative`` returns when the spec is on another Windows drive.
+    """
+    if not reported or _is_absolute(reported):
+        return reported
+    base = root_dir.replace("\\", "/")
+    return posixpath.normpath(posixpath.join(base, reported.replace("\\", "/")))
+
+
 def _walk_playwright(
     node: dict[str, Any],
     inherited_file: str,
     source: str,
     inherited_titles: tuple[str, ...],
     out: list[ExecutedTest],
+    *,
+    root_dir: str,
 ) -> None:
+    # `suite_file` stays in the reporter's own spelling while the tree is walked, and only
+    # the ExecutedTest carries the resolved path: the title rule below compares a title
+    # with the spelling the reporter used, not with where the file is.
     suite_file = _text(node.get("file")) or inherited_file
     suite_title = _text(node.get("title"))
     # The outermost suite's title is the spec file path; keep it out of the
@@ -495,7 +574,7 @@ def _walk_playwright(
         out.append(
             ExecutedTest(
                 report=source,
-                suite_file=spec_file,
+                suite_file=resolve_playwright_file(root_dir, spec_file),
                 title=title,
                 status=_collapse_playwright_spec(spec),
                 tags=tuple(dict.fromkeys((*tags_in(title), *declared))),
@@ -503,13 +582,19 @@ def _walk_playwright(
         )
 
     for raw_child in _as_sequence(node.get("suites")):
-        _walk_playwright(_as_mapping(raw_child), suite_file, source, titles, out)
+        _walk_playwright(_as_mapping(raw_child), suite_file, source, titles, out, root_dir=root_dir)
 
 
 def parse_playwright(payload: dict[str, Any], source: str) -> tuple[ExecutedTest, ...]:
-    """Normalise Playwright's JSON reporter output (nested suites -> specs)."""
+    """Normalise Playwright's JSON reporter output (nested suites -> specs).
+
+    Every ``file`` is resolved against the record's own ``config.rootDir`` (see
+    :func:`resolve_playwright_file`). A record without a usable one raises
+    :class:`ReportFormatError` before any case is read.
+    """
+    root_dir = _playwright_root_dir(payload)
     out: list[ExecutedTest] = []
-    _walk_playwright(payload, "", source, (), out)
+    _walk_playwright(payload, "", source, (), out, root_dir=root_dir)
     return tuple(out)
 
 
@@ -518,7 +603,8 @@ def parse_report(payload: object, source: str) -> tuple[ExecutedTest, ...]:
 
     Returning an empty tuple for an unrecognised file would let a typo in a CI
     path read as "nothing to attest" - the exact absence-as-proof move this gate
-    exists to stop.
+    exists to stop. A Playwright shape without a usable ``config.rootDir`` raises
+    too (:func:`parse_playwright`).
     """
     mapping = _as_mapping(payload)
     if "testResults" in mapping:
@@ -530,17 +616,17 @@ def parse_report(payload: object, source: str) -> tuple[ExecutedTest, ...]:
     )
 
 
-def _walk_playwright_files(node: dict[str, Any], out: list[str]) -> None:
-    """Collect every ``file`` a Playwright suite tree names, at any depth."""
+def _walk_playwright_files(node: dict[str, Any], out: list[str], *, root_dir: str) -> None:
+    """Collect every ``file`` a Playwright suite tree names, at any depth, resolved."""
     listed = _text(node.get("file"))
     if listed:
-        out.append(listed)
+        out.append(resolve_playwright_file(root_dir, listed))
     for raw_spec in _as_sequence(node.get("specs")):
         spec_file = _text(_as_mapping(raw_spec).get("file"))
         if spec_file:
-            out.append(spec_file)
+            out.append(resolve_playwright_file(root_dir, spec_file))
     for raw_child in _as_sequence(node.get("suites")):
-        _walk_playwright_files(_as_mapping(raw_child), out)
+        _walk_playwright_files(_as_mapping(raw_child), out, root_dir=root_dir)
 
 
 def recorded_suite_files(payload: object) -> tuple[str, ...]:
@@ -553,9 +639,14 @@ def recorded_suite_files(payload: object) -> tuple[str, ...]:
     the record never mentioned. R2.8 is stated on exactly that distinction, and
     ``evaluate_declared_suites``' ``no_cases`` state is unreachable without this.
 
+    A Playwright listing is resolved against ``config.rootDir`` exactly as
+    :func:`parse_playwright` resolves its cases, so a listing and a case for one file are
+    spelled alike and a declared file cannot read ``absent`` because of the spelling.
+
     An unrecognised shape yields ``()`` rather than raising: ``parse_report`` already
-    raises on the same payload and routes it to ``unavailable``, so a second raise here
-    would only duplicate the message.
+    refuses the same payload and routes it to ``unavailable``. A Playwright record without
+    a usable ``config.rootDir`` raises here too, because ``()`` would claim the record
+    listed nothing, and its unresolved spellings are the defect finding 90 measured.
     """
     mapping = _as_mapping(payload)
     if "testResults" in mapping:
@@ -568,8 +659,9 @@ def recorded_suite_files(payload: object) -> tuple[str, ...]:
             if name
         )
     if "suites" in mapping:
+        root_dir = _playwright_root_dir(mapping)
         out: list[str] = []
-        _walk_playwright_files(mapping, out)
+        _walk_playwright_files(mapping, out, root_dir=root_dir)
         return tuple(dict.fromkeys(out))
     return ()
 
@@ -597,12 +689,17 @@ def load_reports(
         except (OSError, ValueError) as exc:
             unavailable.append(f"{rel}: unreadable reporter output ({exc})")
             continue
+        # Cases and listing together or neither: both refuse a Playwright record without
+        # a usable `config.rootDir`, and a record whose cases were kept while its listing
+        # raised would be half-read.
         try:
-            tests.extend(parse_report(payload, rel))
+            parsed = parse_report(payload, rel)
+            listed = recorded_suite_files(payload)
         except ReportFormatError as exc:
             unavailable.append(f"{rel}: {exc}")
             continue
-        recorded.extend(recorded_suite_files(payload))
+        tests.extend(parsed)
+        recorded.extend(listed)
         read.append(rel)
     return tuple(tests), tuple(dict.fromkeys(recorded)), tuple(read), tuple(unavailable)
 
@@ -619,11 +716,30 @@ def _segments(path: str) -> tuple[str, ...]:
 def paths_match(registry_path: str, report_path: str) -> bool:
     """True when two spellings of a path denote the same file.
 
-    Vitest reports an absolute path; Playwright reports one relative to its
-    ``rootDir`` (``frontend/``); the registry lists repo-relative paths. Rather
-    than guess a base for each runner, compare the shared trailing segments. At
-    least two segments must match, so a bare basename can never collide two
-    different suites onto one invariant.
+    What each producer writes, read from the producers rather than assumed:
+
+    * the registry lists repo-relative paths (``frontend/tests/e2e/smoke.spec.ts``);
+    * Vitest writes ``testResults[].name`` as the absolute path (``file.filepath``), and
+      :func:`parse_vitest` keeps it as written;
+    * Playwright writes every suite and spec ``file`` relative to ``config.rootDir``,
+      which is the config's top-level ``testDir`` resolved against the config's own
+      directory. Both committed configs (``playwright.config.ts`` and
+      ``playwright.harness.config.ts``) set ``testDir: "./tests/e2e"``, so ``rootDir`` is
+      ``<checkout>/frontend/tests/e2e``: a top-level spec is reported as the one-segment
+      ``smoke.spec.ts`` and a nested one as ``visual/x.spec.ts``. :func:`parse_playwright`
+      and :func:`recorded_suite_files` resolve that against ``rootDir`` before it gets
+      here, so from a real record both runners' spellings arrive absolute. The configs'
+      ``testDir`` is pinned by ``tests/verify/test_fe_invariant_attestation.py``.
+
+    This docstring used to say Playwright reports relative to ``frontend/``. It does not,
+    and comparing the unresolved spelling is why six enforced invariants whose only suite is
+    a top-level e2e spec read ``not_executed`` while the record carried their cases
+    (finding 90).
+
+    Rather than strip a per-runner base, compare the shared trailing segments. At least
+    two segments must match, so a bare basename can never collide two different suites onto
+    one invariant. That rule is also why the unresolved one-segment Playwright spelling can
+    never match, and why resolution has to happen first.
     """
     left, right = _segments(registry_path), _segments(report_path)
     shared = min(len(left), len(right))
@@ -896,10 +1012,11 @@ def evaluate_declared_suites(
 ) -> tuple[SuiteExecution, ...]:
     """Judge each declared console property file against the run record. Pure.
 
-    ``paths_match`` is reused rather than reimplemented, because the reporter spells
-    a suite file however the runner's working directory made it spell it -- absolute
-    on one runner, `frontend/`-relative on another -- and the registry clause already
-    solved that comparison.
+    ``paths_match`` is reused rather than reimplemented, because the registry clause
+    already solved this comparison: a declaration names a repo-relative path and the record
+    spells it absolutely (Vitest as written, Playwright once resolved against its
+    ``config.rootDir``). ``tests`` and ``recorded_files`` come from parsers that resolve
+    alike, so a case and a listing for one file are spelled the same way.
 
     ``recorded_files`` is the set of suite files the record LISTED, from
     :func:`recorded_suite_files`. It is a separate input because it cannot be derived

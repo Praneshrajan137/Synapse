@@ -20,8 +20,9 @@ export const DemandForecastSchema = z
     store_id: z.string(),
     forecast_timestamp: ZIsoTimestamp,
     horizons: ZHorizonMap,
-    lower_90: z.record(z.number()),
-    upper_90: z.record(z.number()),
+    // zod 4: z.record() takes an explicit key schema; an enum key would be exhaustive.
+    lower_90: z.record(z.string(), z.number()),
+    upper_90: z.record(z.string(), z.number()),
     confidence: ZConfidence,
     drift_detected: z.boolean(),
   })

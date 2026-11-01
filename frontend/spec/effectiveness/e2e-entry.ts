@@ -22,7 +22,15 @@
  * An install failure is reported loudly and does NOT block the app from
  * booting: the specs then fail against a Console with no harness, which is the
  * honest outcome. It is never converted into a silent pass (I-7).
+ *
+ * `@lib/zod-config` is imported first because this module runs BEFORE
+ * `/src/main.tsx` in the e2e build, and the harness it installs imports the
+ * domain schemas. zod reads `jitless` when each `z.object()` is constructed, so
+ * without this line every schema the harness builds first, the Console's own
+ * included, would take the JIT path that production never takes.
  */
+
+import "@lib/zod-config";
 
 const E2E_HARNESS_FLAG: unknown = import.meta.env.VITE_E2E_HARNESS;
 
@@ -39,5 +47,3 @@ if (E2E_HARNESS_FLAG === "1" || E2E_HARNESS_FLAG === true) {
     );
   }
 }
-
-export {};

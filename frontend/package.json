@@ -98,7 +98,7 @@
     "sonner": "^1.5.0",
     "tailwind-merge": "^2.5.4",
     "web-vitals": "^4.2.4",
-    "zod": "^3.23.8",
+    "zod": "^4.6.7",
     "zustand": "^4.5.5"
   },
   "devDependencies": {
@@ -148,13 +148,17 @@
   },
   "size-limit": [
     {
-      "name": "entry bundle (gzip)",
-      "path": "dist/assets/index-*.js",
+      "name": "entry chunk (gzip)",
+      "path": "dist/assets/entry-*.js",
+      "gzip": true,
+      "running": false,
       "limit": "180 KB"
     },
     {
       "name": "react-vendor (gzip)",
       "path": "dist/assets/react-vendor-*.js",
+      "gzip": true,
+      "running": false,
       "limit": "70 KB"
     }
   ],

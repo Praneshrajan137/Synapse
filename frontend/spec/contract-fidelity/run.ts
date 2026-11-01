@@ -59,6 +59,7 @@ import {
   diffContractFields,
 } from "@lib/contract-coverage";
 import { UPLIFT_BACKEND_GAP } from "@lib/uplift-slot";
+import { z } from "zod";
 
 import {
   ALL_ENTITLEMENTS,
@@ -68,6 +69,7 @@ import {
   introspectConsole,
   loadBackendContract,
   schemaFieldNames,
+  unwrapSchema,
   verifyClientMethodRegistry,
 } from "./introspect";
 import {
@@ -205,6 +207,65 @@ function oversightGaps(): string[] {
  */
 function upliftGaps(): string[] {
   return [UPLIFT_BACKEND_GAP.name];
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// Field-reader census — runs before any drift row is built
+// ─────────────────────────────────────────────────────────────────────────
+
+/** What the census read across the registry, and every schema it could not vouch for. */
+export interface SchemaFieldCensus {
+  /** Registry entries that unwrap to a zod object. */
+  readonly objectSchemas: number;
+  /** Field names `schemaFieldNames` read across those entries. */
+  readonly totalFields: number;
+  /** One line per disagreeing `schemaId`, plus one if the registry-wide total is zero. */
+  readonly failures: readonly string[];
+}
+
+/** Raised by {@link generateDriftReport} when the census fails; names every failing schemaId. */
+export class SchemaFieldCensusError extends Error {
+  constructor(readonly failures: readonly string[]) {
+    super(
+      `Contract fidelity REFUSED -- schemaFieldNames disagrees with ZodObject.shape, so the missing-field and over-strict rows cannot be trusted:\n  ${failures.join("\n  ")}`,
+    );
+    this.name = "SchemaFieldCensusError";
+  }
+}
+
+/**
+ * Checks the field reader before the drift rows depend on it. For every registry entry that
+ * unwraps to an object, `schemaFieldNames` must return exactly the object's `shape` keys, in
+ * order, and be non-empty; the registry-wide total must be above zero. The expected keys come
+ * from the public `ZodObject` class and `.shape`, not from the `_zod.def` walk the reader uses,
+ * so each instrument checks the other. A reader that returns `[]` for objects (what
+ * `_def.typeName` did once zod 4 removed it) empties every over-strict row without failing.
+ */
+export function schemaFieldCensus(
+  registry: Readonly<Record<string, z.core.$ZodType>> = DOMAIN_SCHEMA_REGISTRY,
+): SchemaFieldCensus {
+  const failures: string[] = [];
+  let objectSchemas = 0;
+  let totalFields = 0;
+  for (const [schemaId, schema] of Object.entries(registry)) {
+    const unwrapped = unwrapSchema(schema);
+    if (!(unwrapped instanceof z.ZodObject)) continue;
+    objectSchemas += 1;
+    const expected = Object.keys(unwrapped.shape);
+    const read = schemaFieldNames(schema);
+    totalFields += read.length;
+    const agrees = read.length === expected.length && read.every((key, i) => key === expected[i]);
+    if (read.length === 0 || !agrees) {
+      failures.push(`${schemaId}: read [${read.join(", ")}], shape is [${expected.join(", ")}]`);
+    }
+  }
+  if (totalFields === 0) {
+    failures.push(
+      `registry-wide: 0 field names read across ${objectSchemas} object schema(s) ` +
+        `of ${Object.keys(registry).length} registered`,
+    );
+  }
+  return { objectSchemas, totalFields, failures };
 }
 
 // ─────────────────────────────────────────────────────────────────────────
@@ -449,6 +510,11 @@ const JSON_REPORT_PATH = fileURLToPath(new URL("./drift-report.json", import.met
 const MD_REPORT_PATH = fileURLToPath(new URL("./drift-report.md", import.meta.url));
 
 export async function generateDriftReport(): Promise<{ report: DriftReport; source: string }> {
+  // Refuse before any drift row is built if the field reader cannot vouch for itself: every
+  // missing-field and over-strict row below is computed by `schemaFieldNames`.
+  const census = schemaFieldCensus();
+  if (census.failures.length > 0) throw new SchemaFieldCensusError(census.failures);
+
   // Turn the hand-maintained client-method registry into genuine introspection:
   // this throws if a declared synapse-api method no longer exists.
   verifyClientMethodRegistry();
@@ -547,7 +613,12 @@ const isDirectRun =
 
 if (isDirectRun) {
   main().catch((err: unknown) => {
-    process.stderr.write(`\nContract fidelity crashed: ${err instanceof Error ? err.stack ?? err.message : String(err)}\n`);
+    if (err instanceof SchemaFieldCensusError) {
+      // A refusal, not a crash: the message names every schemaId the census could not vouch for.
+      process.stderr.write(`\n${err.message}\n`);
+    } else {
+      process.stderr.write(`\nContract fidelity crashed: ${err instanceof Error ? err.stack ?? err.message : String(err)}\n`);
+    }
     process.exitCode = 1;
   });
 }

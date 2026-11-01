@@ -21,27 +21,28 @@
  *
  * ## Expected state on landing, stated plainly (I-7)
  *
- * The baseline committed today carries `steps: 20` and `latencyMs: 15000` on all five
- * rows and no per-row stamps, so this check FAILS it: five `missing-stamp` rejections
- * plus one `uniform-metrics`. That is R8.10's finding becoming mechanical. It clears when
- * the browser harness (task 11.1) and the complete-or-failed emitter (task 11.2) produce
- * a measured baseline through `buildBaseline`; nothing here should be softened to make
- * the current artifact pass, and no stamp may be typed in by hand to satisfy it.
+ * The baseline committed today is the one-run placeholder: `schemaVersion: 1`, `steps: 20`
+ * and `latencyMs: 15000` on all five rows, no per-row stamps. This check now refuses that
+ * format BY NAME, as one `one-run-format` rejection, before reading any of its numbers
+ * (ADR-059: one run's millisecond latency cannot carry a 10% comparison). It clears when the
+ * `effectiveness-ratchet` job writes a k-leg candidate through `buildBaseline` from five
+ * arrival-proven, agreeing harness legs and an operator commits that file unedited. Nothing
+ * here should be softened to make the current artifact pass, and no stamp may be typed in by
+ * hand to satisfy it.
  *
  * ## Deferred, and to whom
  *
  * Two things this check deliberately does NOT do:
  *
- *   1. **Run in CI.** `.github/workflows/frontend.yml` is owned by tasks 11.1/11.2 (they
- *      are removing `|| true` from `:163` and `:288` under R8.9). This check needs one
- *      blocking step in the `effectiveness-ratchet` job. Until that step exists the rule
- *      is authored and locally runnable but not enforced -- which is the honest status,
- *      not a pass.
- *   2. **Cross-check a row's stamps against the run that emitted the fresh scorecard.**
- *      A stamp proves a claim was made, not that a measurement happened; only a job
- *      holding both artifacts can compare the fresh run's `harnessVersion`/`seed` against
- *      the committed ones. That comparison belongs beside the ratchet invocation in the
- *      same workflow job (R8.3/R8.4 territory), and is noted rather than faked here.
+ *   1. **Decide the gate on its own.** It runs as the blocking R8.10 step of
+ *      `.github/workflows/frontend.yml::effectiveness-ratchet`, after the ratchet step, and
+ *      the ratchet re-runs the same check before it compares anything. This file only reports
+ *      the committed artifact's verdict.
+ *   2. **Cross-check the baseline's stamps against the run that emitted the fresh legs.**
+ *      A stamp proves a claim was made, not that a measurement happened. The baseline's
+ *      `commitSha` and per-sample instants name the run that produced it, and a reader can
+ *      hold them against that run's `effectiveness-baseline-candidate` artifact; no gate
+ *      does that comparison yet, and it is noted rather than faked here.
  */
 
 import { existsSync, readFileSync } from "node:fs";
@@ -178,9 +179,12 @@ export function checkCommittedBaselineFile(
 function report(path: string, verdict: BaselineVerdict): void {
   process.stdout.write(`# Effectiveness Baseline Check (R8.10)\n\nArtifact: ${path}\n\n`);
   if (verdict.outcome === "accepted") {
+    const baseline = verdict.baseline;
     process.stdout.write(
-      `Baseline: **ACCEPTED** -- ${verdict.baseline.rows.length} rows, each naming the ` +
-        "harness version, seed, and capture instant that produced it; the Scripted_Proxy " +
+      `Baseline: **ACCEPTED** -- ${baseline.rows.length} rows measured by ` +
+        `${baseline.legCount} legs at commit ${baseline.commitSha}. Every row names its ` +
+        "harness version and seed and carries one latency sample per leg with its capture " +
+        "instant, and its latencyMs is the median of those samples; the Scripted_Proxy " +
         "statement is retained verbatim; steps and latencyMs are not uniform across rows.\n",
     );
     process.stdout.write(
@@ -189,17 +193,16 @@ function report(path: string, verdict: BaselineVerdict): void {
     );
     return;
   }
-  process.stderr.write(
-    "Baseline: **REJECTED** -- this artifact is not a measurement (R8.10):\n",
-  );
+  process.stderr.write("Baseline: **REJECTED** -- this artifact is not a measurement (R8.10):\n");
   for (const rejection of verdict.rejections) {
     const subject = rejection.job === null ? "baseline" : rejection.job;
     process.stderr.write(`  * [${rejection.kind}] ${subject}: ${rejection.detail}\n`);
   }
   process.stderr.write(
     "\nA rejected baseline is a failed check, never a warning on a pass. Fix it by " +
-      "emitting a measured baseline from a harness run (buildBaseline), not by editing " +
-      "the numbers or the thresholds.\n",
+      "committing the k-leg candidate a CI run measured (buildBaseline, the " +
+      "effectiveness-baseline-candidate artifact), not by editing the numbers or the " +
+      "thresholds.\n",
   );
 }
 

@@ -1,10 +1,13 @@
 import { defineConfig, devices } from "@playwright/test";
 
 /**
- * The six harness-dependent specs (task 11.1). They drive
- * `window.__atlasHarness`, which exists ONLY in the `e2e`-mode build
- * (`pnpm build:e2e` -> `dist-e2e/`, AD-12), so they are excluded from the
- * default projects and selected by `playwright.harness.config.ts` instead.
+ * The specs `playwright.harness.config.ts` runs, so every default project ignores them.
+ *
+ * Six of them (task 11.1) drive `window.__atlasHarness`, which exists ONLY in the
+ * `e2e`-mode build (`pnpm build:e2e` -> `dist-e2e/`, AD-12). The seventh,
+ * `map-tile-egress` (FE-INV-020), calls no harness hook. It is here because the
+ * harness project pins the software-WebGL launch switches the map needs before it
+ * requests any tile, and serves the seeded backend the Console boots against.
  *
  * This is not a way of hiding them: they no longer skip when the harness is
  * missing (a missing harness is now a failure, I-7), so running them against a
@@ -14,7 +17,7 @@ import { defineConfig, devices } from "@playwright/test";
  * `frontend/spec/check_fe_invariants.py` reads for FE-INV-056.
  */
 export const HARNESS_SPEC_PATTERN =
-  /(task-completion\.jtbd|fault-transition\.resilience|firehose-stress\.resilience|scale-virtualization\.resilience|spatial-visualization|assistive-tech-flow)\.spec\.ts$/;
+  /(task-completion\.jtbd|fault-transition\.resilience|firehose-stress\.resilience|scale-virtualization\.resilience|spatial-visualization|map-tile-egress|assistive-tech-flow)\.spec\.ts$/;
 
 const isCi = !!process.env.CI;
 const baseUrlOverride = process.env.PLAYWRIGHT_BASE_URL;
@@ -40,11 +43,7 @@ export default defineConfig({
   // default path is outside `outputDir` (which Playwright wipes per run) and
   // under the gitignored `artifacts/` tree.
   reporter: isCi
-    ? [
-        ["html", { open: "never" }],
-        ["github"],
-        ["json", { outputFile: jsonReport }],
-      ]
+    ? [["html", { open: "never" }], ["github"], ["json", { outputFile: jsonReport }]]
     : [["list"], ["json", { outputFile: jsonReport }]],
   timeout: 30_000,
   expect: {

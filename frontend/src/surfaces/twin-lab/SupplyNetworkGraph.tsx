@@ -55,32 +55,32 @@ export function SupplyNetworkGraph({
     const { graph, communityCount } = buildSupplyGraph(nodes, edges);
     setSummary({ order: graph.order, size: graph.size, communities: communityCount });
 
-    let renderer: Sigma | null = null;
-    try {
-      renderer = new Sigma(graph, el, {
-        allowInvalidContainer: true,
-        renderEdgeLabels: false,
-        renderLabels: graph.order <= 60, // labels only on small graphs
-        defaultEdgeType: "line",
-        labelColor: { color: "rgb(148 163 184)" }, // chromatic-allow: WebGL label colour (INV-CLR-009)
-        labelDensity: 0.4,
-        // Highlight the selected node: larger, always-labelled, raised z-index.
-        nodeReducer: (node, data) => {
-          if (node === selectedRef.current) {
-            return { ...data, size: (data.size ?? 4) * 1.8, forceLabel: true, zIndex: 1 };
-          }
-          return data;
-        },
-      });
-      renderer.on("clickNode", ({ node }) => onSelectRef.current?.(node));
-      renderer.on("clickStage", () => onSelectRef.current?.(null));
-    } catch {
-      // WebGL unavailable (older GPU / headless) — the SR summary still informs.
-    }
+    // No try/catch around the renderer (Req 10.3, FE-INV-063). A WebGL init failure
+    // must reach SpatialErrorBoundary, which renders the error Universal_State with a
+    // retry affordance. The catch that stood here swallowed it and left a blank canvas;
+    // the screen-reader summary below is not the error state. The non-spatial
+    // equivalent (SupplyNetworkTable) sits outside the boundary, so it survives.
+    const renderer = new Sigma(graph, el, {
+      allowInvalidContainer: true,
+      renderEdgeLabels: false,
+      renderLabels: graph.order <= 60, // labels only on small graphs
+      defaultEdgeType: "line",
+      labelColor: { color: "rgb(148 163 184)" }, // chromatic-allow: WebGL label colour (INV-CLR-009)
+      labelDensity: 0.4,
+      // Highlight the selected node: larger, always-labelled, raised z-index.
+      nodeReducer: (node, data) => {
+        if (node === selectedRef.current) {
+          return { ...data, size: (data.size ?? 4) * 1.8, forceLabel: true, zIndex: 1 };
+        }
+        return data;
+      },
+    });
+    renderer.on("clickNode", ({ node }) => onSelectRef.current?.(node));
+    renderer.on("clickStage", () => onSelectRef.current?.(null));
     rendererRef.current = renderer;
 
     return () => {
-      renderer?.kill();
+      renderer.kill();
       rendererRef.current = null;
     };
   }, [nodes, edges]);
