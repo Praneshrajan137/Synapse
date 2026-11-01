@@ -150,6 +150,9 @@ scores zero and is indistinguishable from not authoring.**
 10. `.kiro/specs/decision-quality-proof/{requirements,design,tasks}.md`. **R5.45/R5.46** carry the
     re-cut; `tasks.md` is the ledger, **task 25's body states the claim once**, and parent 29's
     P1–P5 blocks record every run this prompt cites.
+11. `.kiro/steering/engineering-learnings.md` — session 12's lessons, each with its evidence
+    (loaded on demand, `inclusion: auto`). Read it before planning; the four steering files above
+    still govern any conflict.
 
 **Two invariant numberings disagree** (`references/14_invariants.md` vs `.cursorrules` on I-6, I-8,
 I-10); authority 5 outranks 6, and I-1, I-4, I-5, I-7 agree in both. **When two sources conflict,

@@ -195,6 +195,18 @@
 - E-CLR-07: After editing any token JSON, rerun `npm run build` and commit `dist/` — CI's determinism gate fails on a stale `dist/`
 - E-CLR-08: The frontend imports chromatic artifacts via the `@chromatic` Vite alias; `vite.config.js` `server.fs.allow` must include the repo root
 
+### decision-quality-proof Session 12 Error Patterns
+The lessons behind these entries, with their evidence, are in `.kiro/steering/engineering-learnings.md`; each finding's body is in `.kiro/specs/decision-quality-proof/tasks.md`.
+- E-DQP-01: The in-process consensus arm (`uplift/consensus_arm.py`) runs the real Disruption Shield, whose `DeepSeekReasoner` calls `http://ollama:11434` on every consult (`DS_OLLAMA_BASE_URL`). With no Ollama, each consult pays a failed lookup: 0.033 s, then 10.04 s once a runner's resolver slowed, which stalled E5 for 3.5 hours. Any harness or benchmark that drives the real agents must point the reasoner at a refused port or inject an offline one (finding 116)
+- E-DQP-02: The consensus protocol sends `params={"decision_context": request}`, but every `agents/*/a2a/handler.py` reads its keys at the top level, so no agent reads its request and the Inventory Sentinel always falls back to `SKU001`. Tests that send flat params cannot see this: test agents through the protocol's real envelope (finding 112)
+- E-DQP-03: Starlette's `TestClient.websocket_connect` writes its handshake headers into the dict it is given. A module-level headers dict shared across tests leaks `sec-websocket-*` into every later test; pass a copy or a `MappingProxyType`
+- E-DQP-04: Stryker's dry run re-runs the whole vitest suite under a fresh fast-check seed, so a seed-dependent property failure fails Stryker before any mutant runs. A generator of "arbitrary extra keys" can draw `__proto__`: exclude prototype keys or make the parser handle them (finding 120)
+- E-DQP-05: `vi.getTimerCount()` read straight after `act(...)` also counts React's zero-delay scheduler work; flush with `vi.advanceTimersByTimeAsync(0)` before asserting an exact timer count
+- E-DQP-06: A labelled uplift job's log can be hundreds of MB (E5's was 556 MB, 4.4 million lines). Stream `gh api .../actions/jobs/<id>/logs` to disk, never into memory, and expect HTTP 410 once retention expires. To find where a run's time went, charge each timestamp gap to the event that ends it
+- E-DQP-07: Re-running an older run of a workflow whose concurrency group is keyed by PR number joins the newer run's group and cancels its in-progress jobs (finding 115). Never re-run an older run while a newer one is in flight
+- E-DQP-08: Kiro's autonomous mode turns the OS command sandbox on with outbound network blocked. On Windows every shell command then fails if any `fs_write` path in `~/.kiro/settings/permissions.yaml` does not exist, and sandboxed commands cannot read `~/.gitconfig` or the GitHub CLI's config. `/sandbox` writes `.kiro/settings/sandbox.json`, a local setting: do not commit it
+- E-DQP-09: An unauthenticated 404 for this repository means it is private only if the same tool fetches a known public repository successfully. A private repository changes runner size and billing; `GET /repos/<owner>/<repo>/actions/runs/<id>/timing` shows whether a run was billed
+
 ## Sprint Status
 - **Sprint 1**: Infrastructure foundation (Docker, Neo4j, Kafka, Redis, PostgreSQL, shared packages, proto schemas, SDD framework, CI pipeline)
 - **Sprint 2**: Agent implementation (Demand Prophet, Inventory Sentinel, Routing Navigator)
