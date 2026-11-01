@@ -252,6 +252,9 @@ describe("useBootAutoLogin (boot access, ADR-057)", () => {
       act(() => {
         useSessionStore.getState().clearAuth();
       });
+      // Let React's scheduler drain its own zero-delay work, so the count below is the hook's
+      // timers alone (PR #85's first CI run read 2 here without this flush).
+      await flush();
       // Held by the floor: nothing asked yet, no splash, exactly one timer for the rest of it.
       expect(fetchAccessModeMock).toHaveBeenCalledTimes(1);
       expect(useSessionStore.getState().bootAuth).toBe("settled");
