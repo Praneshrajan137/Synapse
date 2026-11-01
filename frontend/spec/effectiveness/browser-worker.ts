@@ -82,8 +82,8 @@ export interface HarnessHandle {
   servedPaths(): readonly string[];
   /**
    * Backend_Contract paths that were requested with no registered fixture
-   * (Req 1.6). Non-empty ⇒ the harness detected a contract gap; a
-   * Task_Completion_Test asserts this stays empty.
+   * (Req 1.6), on this worker only. Non-empty ⇒ the harness detected a contract
+   * gap; `harness.ts` reports it through `diagnostics()`.
    */
   unhandledPaths(): readonly string[];
 }
@@ -130,9 +130,12 @@ export async function startHarness(opts: HarnessOptions): Promise<HarnessHandle>
         // driver — allow it through (Req 1.5: not a live/third-party endpoint).
         return;
       }
-      // A Backend_Contract path with no fixture: fail loudly naming the path
-      // (Req 1.6). Record it for `unhandledPaths()` and raise so the request
-      // rejects rather than silently resolving to a default body.
+      // A Backend_Contract path with no fixture (Req 1.6): record it for
+      // `unhandledPaths()`, print msw's unhandled-request error, and throw. In msw
+      // 2.14 `print.error()` only prints; msw answers the throw with a 500 "Request
+      // Handler Error" whose JSON body names the UnhandledFixtureError
+      // (`ServiceWorkerHttpNetworkFrame.errorWith`). The fetch resolves with that
+      // 500 rather than rejecting, and never with a default body.
       unhandled.add(path);
       print.error();
       throw new UnhandledFixtureError(path, request.method);

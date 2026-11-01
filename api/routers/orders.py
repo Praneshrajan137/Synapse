@@ -22,13 +22,15 @@ from datetime import datetime, timezone
 from typing import Annotated, Any
 
 import structlog
-from fastapi import APIRouter, Header, HTTPException, Request, status
+from fastapi import APIRouter, Depends, Header, HTTPException, Request, status
 from pydantic import BaseModel, Field
-
+from synapse_common.auth import OperatorContext, Role
 from synapse_common.outbox import enqueue
 from synapse_common.schema_registry import SchemaViolation
 from synapse_common.schema_registry import validate as validate_schema
 from synapse_common.tracing import inject_a2a_headers
+
+from api.middleware.jwt import RequireRole
 
 logger = structlog.get_logger(__name__)
 router = APIRouter()
@@ -58,6 +60,7 @@ class OrderResponse(BaseModel):
 async def create_order(
     req: OrderRequest,
     request: Request,
+    op: Annotated[OperatorContext, Depends(RequireRole(Role.OPS))],
     idempotency_key: Annotated[str | None, Header(alias="Idempotency-Key")] = None,
 ) -> OrderResponse:
     """Accept a demand order and enqueue it to the outbox.
@@ -65,6 +68,13 @@ async def create_order(
     Why 202 not 200: the gateway has only committed the order to the
     *outbox*, not yet to Kafka. The dispatcher will publish; FE consumers
     learn the order arrived via the firehose stream, not via this route.
+
+    ADR-057 (finding 89): injecting demand is an operator action, so it needs
+    OPS -- a signed-in operator, or an open-mode ``act`` preview grant. It was
+    anonymous before. Its callers are the console's Ingress surface
+    (``submitOrder`` in ``frontend/src/transport/synapse-api.ts``) and the
+    integration tests in ``tests/integration/test_orders_to_outbox.py``, which
+    send the ``SYNAPSE_OPS_BEARER`` token.
     """
     order_id = str(uuid.uuid4())
     payload: dict[str, Any] = {
@@ -130,6 +140,7 @@ async def create_order(
         "order_accepted",
         order_id=order_id,
         outbox_id=str(outbox_id),
+        operator_token_ref=op.token_ref,
         city=req.city,
         store_id=req.store_id,
         sku_id=req.sku_id,

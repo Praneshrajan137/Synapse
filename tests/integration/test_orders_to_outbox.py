@@ -10,6 +10,11 @@ Verifies, against a live Postgres + Kafka:
 
 These tests skip when the integration stack is not running. CI runs them in
 the ``integration`` workflow against the docker-compose stack.
+
+Every route exercised here needs an OPS operator (ADR-057: orders are no longer
+anonymous), so each test sends the ``SYNAPSE_OPS_BEARER`` token and skips when it
+is unset. Nothing in this repository mints that token; the job that runs these
+tests must export one.
 """
 
 from __future__ import annotations
@@ -22,6 +27,8 @@ import uuid
 import pytest
 
 REQUIRED_ENV = ("SYNAPSE_API_POSTGRES_DSN", "KAFKA_BOOTSTRAP")
+#: An OPS access token for the gateway under test (ADR-057).
+OPS_BEARER_ENV = "SYNAPSE_OPS_BEARER"
 
 
 def _env_ready() -> bool:
@@ -32,6 +39,18 @@ pytestmark = pytest.mark.skipif(
     not _env_ready(),
     reason=f"requires {', '.join(REQUIRED_ENV)} pointing at a live stack",
 )
+
+
+def _ops_headers() -> dict[str, str]:
+    """``Authorization`` for an OPS operator, from ``SYNAPSE_OPS_BEARER``; skip when unset.
+
+    Orders and the override route are both ``RequireRole(Role.OPS)``, so every test here
+    authenticates the same way, and none of them can pass anonymously.
+    """
+    op_token = os.environ.get(OPS_BEARER_ENV)
+    if not op_token:
+        pytest.skip(f"{OPS_BEARER_ENV} not set - cannot exercise an OPS route")
+    return {"Authorization": f"Bearer {op_token}"}
 
 
 @pytest.fixture
@@ -52,11 +71,12 @@ async def test_order_enqueues_outbox_row(order_payload: dict[str, object]) -> No
 
     api_url = os.environ.get("SYNAPSE_API_URL", "http://localhost:8000")
     idem = str(uuid.uuid4())
+    request_headers = {"Idempotency-Key": idem, **_ops_headers()}
     async with httpx.AsyncClient(timeout=10.0) as client:
         resp = await client.post(
             f"{api_url}/api/v1/orders/",
             json=order_payload,
-            headers={"Idempotency-Key": idem},
+            headers=request_headers,
         )
     assert resp.status_code == 202, resp.text
     body = resp.json()
@@ -93,8 +113,13 @@ async def test_dispatcher_publishes_to_kafka(order_payload: dict[str, object]) -
     import psycopg2
 
     api_url = os.environ.get("SYNAPSE_API_URL", "http://localhost:8000")
+    headers = _ops_headers()
     async with httpx.AsyncClient(timeout=10.0) as client:
-        resp = await client.post(f"{api_url}/api/v1/orders/", json=order_payload)
+        resp = await client.post(
+            f"{api_url}/api/v1/orders/",
+            json=order_payload,
+            headers=headers,
+        )
     assert resp.status_code == 202
     outbox_id = resp.json()["outbox_id"]
 
@@ -131,15 +156,9 @@ async def test_override_idempotency(order_payload: dict[str, object]) -> None:
         "reason": "WS-2 idempotency test",
         "idempotency_key": idem,
     }
-    # Caller must have a valid OPS token in the env for the override route
-    # to accept the request. The override path itself is guarded by
-    # RequireRole(Role.OPS); the test fixture creates one in
-    # tests/integration/conftest.py.
-    op_token = os.environ.get("SYNAPSE_OPS_BEARER")
-    if not op_token:
-        pytest.skip("SYNAPSE_OPS_BEARER not set — cannot exercise override route")
-
-    headers = {"Authorization": f"Bearer {op_token}"}
+    # The override route is guarded by RequireRole(Role.OPS): the caller sends an OPS
+    # token from SYNAPSE_OPS_BEARER, and the test skips when the job exports none.
+    headers = _ops_headers()
     async with httpx.AsyncClient(timeout=10.0) as client:
         r1 = await client.post(
             f"{api_url}/api/v1/decisions/{decision_id}/override",

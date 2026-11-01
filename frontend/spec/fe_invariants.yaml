@@ -499,7 +499,12 @@ invariants:
     description: >
       A single-flight refresh gate replays in-flight requests after a
       successful POST /api/v1/auth/refresh; a refresh failure (or a second
-      401) clears the session and routes the operator to /login.
+      401) clears the session. A 401 ends only the session whose access
+      token the failing call sent (clearIfUnchanged in use-synapse-api.ts),
+      so a newer token already in the store, such as a preview grant, is
+      kept. The cleared session is routed to /login only in authenticated
+      mode (ADR-057); in open mode, or with the access posture unavailable,
+      RouteGuard keeps the console open.
     implementations:
       - frontend/src/transport/auth-refresh.ts
       - frontend/src/hooks/use-synapse-api.ts

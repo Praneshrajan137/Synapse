@@ -1,4 +1,4 @@
-# ADR Index (24 decisions)
+# ADR Index (25 decisions)
 
 | ID | Title | One-line summary |
 |----|-------|------------------|
@@ -26,6 +26,7 @@
 | ADR-022 | Tool masking via logit constraints | Tier-prefixed tool names + Ollama prefill |
 | ADR-023 | Error retention in runtime context | Append-only; failed proposals kept with status |
 | ADR-024 | Structured recitation for long-horizon tasks | `recite_objective()` every 10 tool calls |
+| ADR-057 | Access modes: open preview, dormant login | Preview grant now (view-only on GCP); sign-in dormant until activation |
 
 ## How to use
 - Always cite the ADR ID when making a design claim.
