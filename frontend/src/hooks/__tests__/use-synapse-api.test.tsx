@@ -103,4 +103,46 @@ describe("useSynapseApi — Req 12.2 single-flight 401 recovery", () => {
     expect(mocks.refresh).not.toHaveBeenCalled();
     expect(useSessionStore.getState().role).toBe("ops");
   });
+
+  // ADR-057: a 401 ends the session its call was sent under, never a newer one. In open mode
+  // the console's first calls go out anonymous while the boot hook takes a preview grant; a
+  // failed refresh landing after the grant must not wipe it.
+
+  it("a failed refresh after an anonymous 401 keeps a grant that arrived meanwhile", async () => {
+    useSessionStore.getState().clearAuth();
+    mocks.listAgents.mockRejectedValue(new HttpError(401, "Unauthorized", "/api/v1/agents"));
+    mocks.refresh.mockImplementation(async () => {
+      useSessionStore.getState().setAuth("viewer", "jwt.preview", "ref-preview", 3600);
+      throw new HttpError(404, "Not Found", "/api/v1/auth/refresh");
+    });
+
+    const { result } = renderHook(() => useSynapseApi());
+    await expect(result.current.listAgents()).rejects.toThrow();
+
+    expect(mocks.refresh).toHaveBeenCalledTimes(1);
+    expect(useSessionStore.getState().accessToken).toBe("jwt.preview");
+    expect(useSessionStore.getState().role).toBe("viewer");
+  });
+
+  it("a second 401 keeps a session that replaced the one the replay sent", async () => {
+    mocks.listAgents
+      .mockRejectedValueOnce(new HttpError(401, "Unauthorized", "/api/v1/agents"))
+      .mockImplementationOnce(async () => {
+        useSessionStore.getState().setAuth("viewer", "jwt.newer", "ref-newer", 3600);
+        throw new HttpError(401, "Unauthorized", "/api/v1/agents");
+      });
+    mocks.refresh.mockResolvedValue({
+      access_token: "rotated-token",
+      token_type: "Bearer",
+      expires_in: 900,
+      role: "ops",
+    });
+
+    const { result } = renderHook(() => useSynapseApi());
+    await expect(result.current.listAgents()).rejects.toBeInstanceOf(HttpError);
+
+    expect(mocks.listAgents).toHaveBeenCalledTimes(2);
+    expect(useSessionStore.getState().accessToken).toBe("jwt.newer");
+    expect(useSessionStore.getState().role).toBe("viewer");
+  });
 });

@@ -37,10 +37,21 @@ export function useSynapseApi(): SynapseApi {
         if (typeof value !== "function") return value;
         // Refresh is itself the recovery operation — do not wrap it.
         if (prop === "refresh" || prop === "login" || prop === "logout") return value;
-        return (...args: unknown[]) =>
-          gate
+        return (...args: unknown[]) => {
+          // The token this call's latest attempt sent. A 401 ends that session only: when the
+          // store already holds a newer one, such as a preview grant that landed while an
+          // anonymous call was failing (ADR-057), clearing would wipe the newer session.
+          let sentWith: string | null = null;
+          const clearIfUnchanged = (): void => {
+            const session = useSessionStore.getState();
+            if (session.accessToken === sentWith) session.clearAuth();
+          };
+          return gate
             .withRefreshRetry(
-              () => (value as (...a: unknown[]) => Promise<unknown>).apply(target, args),
+              () => {
+                sentWith = useSessionStore.getState().accessToken;
+                return (value as (...a: unknown[]) => Promise<unknown>).apply(target, args);
+              },
               async () => {
                 try {
                   const r = await base.refresh();
@@ -48,7 +59,7 @@ export function useSynapseApi(): SynapseApi {
                 } catch {
                   // Refresh failed — the session is unrecoverable. Clear it so
                   // RouteGuard routes to /login without a full page reload.
-                  useSessionStore.getState().clearAuth();
+                  clearIfUnchanged();
                   throw new Error("session expired");
                 }
               },
@@ -58,10 +69,11 @@ export function useSynapseApi(): SynapseApi {
               // replay) is terminal: clear the session so RouteGuard routes to
               // /login without a reload (Req 12.2, FE-INV-023).
               if (err instanceof HttpError && err.status === 401) {
-                useSessionStore.getState().clearAuth();
+                clearIfUnchanged();
               }
               throw err;
             });
+        };
       },
     }) as SynapseApi;
     apiRef.current = wrapped;

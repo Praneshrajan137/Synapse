@@ -307,6 +307,19 @@ services:
       - SYNAPSE_ORCHESTRATOR_POSTGRESQL_URL=postgresql+asyncpg://synapse_app:synapse_app_2026@postgres:5432/synapse_audit
       - SYNAPSE_ORCHESTRATOR_PINECONE_API_KEY=${PINECONE_API_KEY:-}
       - SYNAPSE_ORCHESTRATOR_CONFIDENCE_THRESHOLD=0.7
+      # ADR-057: this stack has no API gateway, so nginx routes /api/ straight to the
+      # orchestrator. Beyond refusing startup on an unknown value, the orchestrator uses
+      # these two settings for one decision: whether a POST /api/v1/decisions forwarded
+      # by nginx is admitted. open + act admits it, so anyone who can reach port 80 can
+      # trigger consensus anonymously. That is all act does here. The console holds no
+      # grant in this stack (no gateway serves /api/v1/auth/*), so its OPS surfaces,
+      # Ingress included, stay closed. /a2a and HITL resolve refuse edge calls in every
+      # posture, but port 8085 below is published on every host interface and a direct
+      # call carries no edge header, so any host that can reach this machine on 8085 can
+      # call all three routes in any posture.
+      # A developer-machine posture: never copy it to a shared or public host.
+      - SYNAPSE_ACCESS_MODE=open
+      - SYNAPSE_OPEN_AUTHORITY=act
     ports:
       - "8085:8085"
     depends_on:

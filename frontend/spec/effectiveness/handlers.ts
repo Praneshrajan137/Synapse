@@ -17,14 +17,17 @@
  * handlers are reused unchanged).
  *
  * Every Backend_Contract HTTP path the Console issues (enumerated from
- * `transport/synapse-api.ts`, `transport/jwks.ts`, and the demo-theater raw
- * fetches) is intercepted here so no request reaches a live endpoint (Req 1.1,
- * 1.5). The scripted WebSocket/SSE streams for real-time channels are the
- * stream driver's responsibility (task 2.2) and are intentionally out of scope
- * for this HTTP handler set.
+ * `transport/synapse-api.ts`, `transport/jwks.ts`, the boot access calls in
+ * `surfaces/auth/access-api.ts`, and the demo-theater raw fetches) is
+ * intercepted here so no request reaches a live endpoint (Req 1.1, 1.5). The
+ * scripted WebSocket/SSE streams for real-time channels are the stream driver's
+ * responsibility (task 2.2) and are intentionally out of scope for this HTTP
+ * handler set.
  */
 
 import { http, HttpResponse, type RequestHandler } from "msw";
+
+import { AccessModeResponseSchema } from "@surfaces/auth/access-api";
 
 import { buildFixture } from "./fixture-factory";
 import type { SchemaId } from "./schema-registry";
@@ -91,6 +94,35 @@ export const ALL_SURFACES: readonly Surface[] = [
   "demo-theater",
 ];
 
+// ─────────────────────────────────────────────────────────────────────────
+// Access posture (ADR-057)
+// ─────────────────────────────────────────────────────────────────────────
+
+/**
+ * The posture the harness serves on `GET /api/v1/auth/mode`: `authenticated`,
+ * the posture every harness scenario was written under (each harness spec
+ * seeds a signed-in `admin` session). Unanswered, the boot hook records the
+ * access as `unavailable` and the Console opens without sign-in, so a 401 storm
+ * cannot route to `/login` (Frontend CI run 41311499853).
+ *
+ * A posture is fixed, not seeded, so the body is served verbatim. It is parsed
+ * through the Console's own `AccessModeResponseSchema` when this module loads,
+ * so a body the Console would refuse fails the harness install instead of
+ * reading as an unavailable gateway.
+ */
+const HARNESS_ACCESS_MODE = AccessModeResponseSchema.parse({
+  mode: "authenticated",
+  authority: null,
+});
+
+/**
+ * The detail of the 404 the gateway answers `POST /api/v1/auth/preview` with in
+ * authenticated mode (ADR-057 D3), copied from
+ * `api/routers/auth.py::PREVIEW_UNAVAILABLE`.
+ */
+const PREVIEW_UNAVAILABLE_DETAIL =
+  "preview access is not available: this gateway requires sign-in (ADR-057)";
+
 /**
  * The effectiveness capability descriptors, ordered most-specific-path-first so
  * MSW's first-match-wins resolution is deterministic (e.g. the `/override` and
@@ -102,6 +134,28 @@ export const ALL_SURFACES: readonly Surface[] = [
  */
 export const EFFECTIVENESS_HANDLER_SPECS: readonly HandlerSpec[] = [
   // ── Auth (drives the auth Surface + the app-wide token lifecycle) ────────
+  {
+    // The boot hook's first call (`surfaces/auth/access-api.ts`). Its schema is
+    // not in DOMAIN_SCHEMA_REGISTRY, so the fixture factory cannot bind it; the
+    // fixed body is checked against the Console's schema above instead.
+    capabilityId: "auth.GET./api/v1/auth/mode",
+    surfaces: ["auth"],
+    method: "get",
+    pattern: /\/api\/v1\/auth\/mode(?:\?|$)/,
+    schemaId: null,
+    staticBody: HARNESS_ACCESS_MODE,
+  },
+  {
+    // Closed under this posture. The Console asks for a grant only in open
+    // mode, so this answers a stray call the way the gateway would.
+    capabilityId: "auth.POST./api/v1/auth/preview",
+    surfaces: ["auth"],
+    method: "post",
+    pattern: /\/api\/v1\/auth\/preview(?:\?|$)/,
+    schemaId: null,
+    status: 404,
+    staticBody: { detail: PREVIEW_UNAVAILABLE_DETAIL },
+  },
   {
     capabilityId: "auth.POST./api/v1/auth/login",
     surfaces: ["auth"],
