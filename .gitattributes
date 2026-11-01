@@ -16,5 +16,5 @@
 docs/state/bprime/*.json -text
 
 # The committed Power_Report (uplift/power.py) is the controls' CI artifact, committed unedited
-# from uplift.yml run 41268743674; the same rule keeps its bytes exact on every checkout.
+# from uplift.yml run 41343879850; the same rule keeps its bytes exact on every checkout.
 docs/state/uplift-power-report.json -text
