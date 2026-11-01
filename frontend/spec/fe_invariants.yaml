@@ -291,7 +291,7 @@ invariants:
       - frontend/src/visualization/maplibre/basemap.ts
       - infrastructure/tiles/Makefile
     tests:
-      - .github/workflows/frontend.yml
+      - frontend/tests/e2e/map-tile-egress.spec.ts
     status: enforced
 
   - id: FE-INV-024

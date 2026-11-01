@@ -1,4 +1,4 @@
-import { SpatialErrorBoundary } from "@ds/compounds";
+import { SpatialErrorBoundary, UniversalStateView } from "@ds/compounds";
 import { useFirehoseStore } from "@state/firehose.store";
 import { Suspense, lazy } from "react";
 import { MapDataTable } from "./MapDataTable";
@@ -22,16 +22,21 @@ export function LivingMap({ stores }: LivingMapProps) {
   return (
     <div>
       {/* The spatial canvas: a boundary catches a failed chunk/render (error +
-          retry, never a blank canvas — Req 7.5); Suspense covers loading. */}
+          retry, never a blank canvas — Req 7.5); Suspense covers loading with the
+          loading Universal_State (Req 10.4), not a bare aria-busy skeleton. */}
       <SpatialErrorBoundary label="living map" height={460}>
         <Suspense
           fallback={
-            <div
-              className="syn-card syn-skeleton flex h-[460px] items-center justify-center text-sm text-ink-muted"
-              aria-busy="true"
+            <UniversalStateView
+              state="loading"
+              className="h-[460px]"
+              labels={{
+                loadingTitle: "Loading map…",
+                loadingDetail: "The map renderer is loading.",
+              }}
             >
-              Loading map…
-            </div>
+              {null}
+            </UniversalStateView>
           }
         >
           <LivingMapCanvas stores={stores} routes={routes} demand={demand} />

@@ -126,17 +126,22 @@ export function TwinLab() {
       <div className="grid gap-4 lg:grid-cols-[1fr_320px]">
         <div>
           {/* Spatial canvas: the boundary catches a failed chunk/render (error +
-              retry, never a blank canvas — Req 7.5); Suspense covers loading;
+              retry, never a blank canvas — Req 7.5); Suspense covers loading with
+              the loading Universal_State (Req 10.4), not a bare aria-busy skeleton;
               UniversalStateView covers the topology data states (13.2). */}
           <SpatialErrorBoundary label="supply network" height={420}>
             <Suspense
               fallback={
-                <div
-                  className="syn-card syn-skeleton flex h-[420px] items-center justify-center text-sm text-ink-muted"
-                  aria-busy="true"
+                <UniversalStateView
+                  state="loading"
+                  className="h-[420px]"
+                  labels={{
+                    loadingTitle: "Loading supply network…",
+                    loadingDetail: "The graph renderer is loading.",
+                  }}
                 >
-                  Loading supply network…
-                </div>
+                  {null}
+                </UniversalStateView>
               }
             >
               <UniversalStateView
