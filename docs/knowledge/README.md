@@ -32,7 +32,9 @@ inventory, not progress").
 
 **Standing verdict on the corpus:** the underlying sources are real; the files are second-hand.
 They are a good index of ideas and a poor source of facts. Of the factual claims checked so far,
-two were overstated by the file that carried them (see `sources/posts-context.md`).
+two posts overstated theirs (see `sources/posts-context.md`), and one report's self-declared
+"verified" table was wrong about its own speaker's employer (see
+`sources/claude-code-how-to.md`).
 
 ## Rules of this folder
 
@@ -90,7 +92,7 @@ Order is by leverage: how to work first, then how to build, then what to build f
 | # | Corpus folder | Files | State | Digest |
 |---|---|---|---|---|
 | 1 | Posts Context | 8 | **done 2026-11-13** | [`sources/posts-context.md`](sources/posts-context.md) |
-| 2 | Claude code - How to | 2 | pending | |
+| 2 | Claude code - How to | 2 | **done 2026-11-13** | [`sources/claude-code-how-to.md`](sources/claude-code-how-to.md) |
 | 3 | Claude Code - Classes | 20 | pending | |
 | 4 | Cursor | 2 | pending | |
 | 5 | Sequoia Capital- AI | 23 | pending | |

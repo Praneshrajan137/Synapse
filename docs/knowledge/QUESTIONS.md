@@ -12,7 +12,7 @@ recorded with how it was obtained.
 |---|---|---|---|
 | Q-01 | Who is the first named user of SYNAPSE, and what do they do with it on an ordinary day? | "Help millions of people" names no workflow. The README says there is no live order pipeline and the traces are synthetic. Session 3 cannot define finished without this. | INS-018 |
 | Q-02 | How much of the $300 GCP credit remains, and when does it expire? When do the 200 Colab units expire? | Trial credit and compute units both lapse on a clock. `CLAUDE.md` records GCP deploys since at least June 2026, so the balance and date need reading from the billing console. Session 3's budget depends on it. | INS-019 |
-| Q-03 | Is "finished" a product someone operates, a reference implementation others learn from, or the proof harness offered for other decision systems? | The three need different work and different deployments. | T-004 |
+| Q-03 | Is "finished" a product someone operates, a reference implementation others learn from, or the proof harness offered for other decision systems? And if a product: does it act, or does it first advise in shadow beside the operator's own rules? | The readings need different work and different deployments. A shadow advisor is the lowest-risk first form, and it leans hardest on the twin's fidelity. | T-004, INS-022 |
 | Q-04 | May the sprint history move out of `CLAUDE.md` into `docs/`, leaving rules and live error patterns? | 49% of the file is history and it loads every session (measured). `CLAUDE.md` is the governance source of truth, so this is the operator's call. The `doc_truth` pins would move in the same change. | INS-014, T-005 |
 | Q-05 | For the larger, less relevant corpus folders (product and market, about 3.1 MB), full reads in the main context, or a cheaper reader filling the same card format with spot checks? | Full reads of the remaining corpus are roughly 1.1M tokens (estimated from word count) on a fixed plan. The cheaper path costs fidelity. | INS-015 |
 
@@ -29,8 +29,13 @@ recorded with how it was obtained.
 | R-07 | Is there any path where model text drives an action with no deterministic validator between? | Each is a place to add one. | INS-008 |
 | R-08 | Where can the whole system run for verification inside the budget? Can `scripts/deploy/verify_live.py` target a local or thin-slice stack? | If the only place is the GCP VM, the implementation sessions are paced by its three-hour window and by credit. | INS-013 |
 | R-09 | Split the last 300 commits by path: product code against gates and documents. | Gives the real share of product work behind the prefix mix (75 of 300 `feat`). | INS-020 |
-| R-10 | What is the smallest set of files a session must read to start correctly, and what does it cost in tokens? | Sets the reading budget for all later sessions. | T-005 |
+| R-10 | What is the smallest set of files a session must read to start correctly, and what does it cost in tokens? Is `docs/state/MODULE_INVENTORY.md` (last committed 2026-06-08) current enough to be that starting map? | Sets the reading budget for all later sessions. | T-005, INS-025 |
 | R-11 | How separable is the uplift harness from this twin? | Decides whether T-004 is a real option. | T-004 |
+| R-16 | Does debate now change proposals, and does arbitration now bind? What would ablation arms (consensus without debate; without arbitration) cost to add to the harness? | If a stage changes nothing, it is cost. If the arms are cheap, they turn T-001 from an argument into a measurement. | INS-023 |
+| R-17 | Write the expected trace for one consensus decision after PR #87, then compare it with a real one, stage by stage. | Any stage that does not consume what it should is a defect of the finding-112 class, found in an hour and not in a CI run. | INS-024 |
+| R-18 | Can an agent issue a `WorldAction` outside its function, such as `inject_disruption`? What enforces the answer? | If nothing does, a per-agent allow-list is small work that removes a class of failure. | INS-027 |
+| R-19 | What does the Disruption Shield's reasoner return when offline, and which decisions would take the model path in a live system? | Decides how much of the system the E5 headline covers. | T-009 |
+| R-20 | Which recorded limits still hold with the current model and tools (no repo-wide or simulation runs on the laptop, mutation testing flaky on Windows)? Retest one. | A limit that no longer holds is free capacity for the implementation sessions. | SRC-HOWTO-01 |
 
 ## For sessions 2 and 3 (outside the repository)
 

@@ -14,24 +14,30 @@ audit item for session 2.
 | INS-001 | Many agents must beat a matched simple baseline to earn their cost | PROOF | USE | 1 + 1 paper |
 | INS-002 | Name the mechanism of uplift before measuring it | PROOF | CREATE | own |
 | INS-003 | Report by slice; the headline cell hides where a system wins and loses | PROOF | ADAPT | 2 |
-| INS-004 | A gain inside noise is not a gain; hold cases out; keep the original as reference | PROOF | USE, present | 2 |
+| INS-004 | A gain inside noise is not a gain; hold cases out; keep the original as reference | PROOF | USE, present | 3 |
 | INS-005 | Multi-agent failures sit at handoffs; test through the real envelope | SYSTEM | USE | 2 |
 | INS-006 | Every external call: hard timeout, breaker, durable progress, trace | SYSTEM | USE, mostly present | 1 |
 | INS-007 | One seam for every model call | SYSTEM | ADAPT | 2 |
-| INS-008 | Keep probabilistic judgment in a small box | SYSTEM | USE, present | 1 |
-| INS-009 | Grant autonomy by reversibility and blast radius, not confidence alone | SYSTEM | ADAPT | 4 |
+| INS-008 | Keep probabilistic judgment in a small box | SYSTEM | USE, present | 2 |
+| INS-009 | Grant autonomy by reversibility and blast radius, not confidence alone | SYSTEM | ADAPT | 5 |
 | INS-010 | A shared, current world model lifts a planner more than a bigger model | SYSTEM | USE | 1 + 1 paper |
 | INS-011 | Keep each run's full record; screen new decision logic by replay | PROOF | ADAPT | 1 |
-| INS-012 | Verification is the constraint; plan sessions around it | WORKFLOW | USE | 3 |
-| INS-013 | An agent needs a prod-like run it can drive and observe | WORKFLOW | ADAPT | 2 |
-| INS-014 | Enforce by gate; trim prose rules newer models no longer need | WORKFLOW | ADAPT | 2 |
-| INS-015 | Keep frontier models off bulk reading; write findings where the next run looks | WORKFLOW | ADAPT | 1 |
+| INS-012 | Verification is the constraint; plan sessions around it | WORKFLOW | USE | 5 |
+| INS-013 | An agent needs a prod-like run it can drive and observe | WORKFLOW | ADAPT | 4 |
+| INS-014 | Enforce by gate; trim prose rules newer models no longer need | WORKFLOW | ADAPT | 4 |
+| INS-015 | Keep frontier models off bulk reading; write findings where the next run looks | WORKFLOW | ADAPT | 2 |
 | INS-016 | Estimate from the work, not the spoken number; overruns are fat-tailed | WORKFLOW | USE | 1 + 2 studies |
-| INS-017 | A sharp problem definition is the highest-leverage artifact | WORKFLOW | USE | 2 |
+| INS-017 | A sharp problem definition is the highest-leverage artifact | WORKFLOW | USE | 3 |
 | INS-018 | Name the user, the workflow, and what happens after the demo | PURPOSE | USE | 2 |
 | INS-019 | Fit the architecture and its footprint to the stage | OPS | ADAPT | 2 |
 | INS-020 | Measure the share of work that changes the product | PROOF | ADAPT | 1 |
 | INS-021 | For a narrow job, a small trained model can beat prompting a large one | OPS | PARK | 2 |
+| INS-022 | Autonomy is earned on a trust curve: shadow first, promote on a measured record | SYSTEM | ADAPT | 2 |
+| INS-023 | Many agents pay as breadth plus adversarial checking, reduced by ordinary code | SYSTEM | USE | 1 |
+| INS-024 | Before trusting an aggregate, walk one decision against its expected trace | PROOF | USE | 1 |
+| INS-025 | Give agents a map from capability to code to proof | WORKFLOW | ADAPT | 3 |
+| INS-026 | Widen agent fan-out only as fast as verification allows | WORKFLOW | USE, present | 2 |
+| INS-027 | Least privilege per agent: an out-of-function action is impossible, not discouraged | SYSTEM | ADAPT | 2 |
 
 ## Entries
 
@@ -91,7 +97,7 @@ audit item for session 2.
   measured noise, test on cases kept out of tuning, change a few things at a time, and record
   failed ideas. Compare each version against the original as well as the previous one, or small
   steps add up to drift nobody chose.
-- **Sources:** SRC-POSTS-01, SRC-POSTS-07.
+- **Sources:** SRC-POSTS-01, SRC-POSTS-07, SRC-HOWTO-02.
 - **Grade:** E1. The posts relay research whose figures were not checked and are not used.
 - **Verdict:** USE, present. The Power_Report states a minimum detectable effect of 0.0235 at
   n = 1000, an A/A test ran, and the report is bound to a source digest (read, `HANDOFF.md`).
@@ -150,8 +156,9 @@ audit item for session 2.
 
 - **Lens / kind:** SYSTEM / principle
 - **Says:** Do not try to make a model deterministic. Let it interpret messy input, make the
-  extracted facts explicit and validated, and let ordinary code apply the policy.
-- **Sources:** SRC-POSTS-07.
+  extracted facts explicit and validated, and let ordinary code apply the policy. The same
+  holds for orchestration: a loop written as code will not skip an item.
+- **Sources:** SRC-POSTS-07, SRC-HOWTO-01.
 - **Grade:** E1.
 - **Verdict:** USE, present (schema-validated agent outputs under I-3; rule-based guardrails).
 - **Lands:** Session 2 lists any path where model text drives an action with no deterministic
@@ -166,14 +173,16 @@ audit item for session 2.
   and invest in making undo easy. The level of autonomy should be adjustable per kind of action
   as trust grows.
 - **Sources:** SRC-POSTS-03, SRC-POSTS-04, SRC-POSTS-06, SRC-POSTS-08 (five posts by different
-  authors).
+  authors); SRC-HOWTO-01 (start where the worst case is known and bounded).
 - **Grade:** E2 for the review pattern (reported by Anthropic, confirmed in secondary coverage).
 - **Verdict:** ADAPT.
 - **Lands:** Escalation is gated on confidence (I-5). No notion of reversibility is named in
   `orchestrator/` outside one test (measured by text search, which can miss a concept under
   another name). The change would be a reversibility class per `WorldAction` type that sets the
-  escalation tier alongside confidence. A price change can be reversed; a supplier order or a
-  markdown mostly cannot (inferred).
+  escalation tier alongside confidence. There are four kinds (`set_policy`, `reorder`,
+  `set_price_mult`, `inject_disruption`; read, `packages/synapse_common/world/models.py`), so
+  the class is a four-row table. A price multiplier can be set back; stock already ordered
+  mostly cannot (inferred). INS-022 covers how a kind moves up once it has a record.
 - **Wrong if:** in `audit_escalations`, override rates and loss per error do not differ between
   reversible and irreversible action types.
 
@@ -215,7 +224,8 @@ audit item for session 2.
 - **Lens / kind:** WORKFLOW / principle
 - **Says:** Speeding up one part of a pipeline is capped by the rest: 10x on 30% of the work is
   1.37x overall. Faster generation also lengthens the queue for review, tests and CI.
-- **Sources:** SRC-POSTS-03, SRC-POSTS-04, SRC-POSTS-08 (six or more posts).
+- **Sources:** SRC-POSTS-03, SRC-POSTS-04, SRC-POSTS-08 (six or more posts); SRC-HOWTO-01 and
+  SRC-HOWTO-02 (teams preparing CI and review for the volume agents produce).
 - **Grade:** The arithmetic is checked. The company figures behind it are E2.
 - **Verdict:** USE.
 - **Lands:** The project's own throughput record names CI as the critical path: about 20-25
@@ -231,8 +241,10 @@ audit item for session 2.
 - **Says:** An agent verifies its own work well only against something runnable that behaves
   like production, with evidence it can read back. Defects hide in the differences between
   local and production.
-- **Sources:** SRC-POSTS-03, SRC-POSTS-04.
-- **Grade:** E1. The repository's deploy history agrees (read, `CLAUDE.md`): E-S12-01, E-S12-02
+- **Sources:** SRC-POSTS-03, SRC-POSTS-04, SRC-HOWTO-01, SRC-HOWTO-02. Both folder 2 documents
+  call this the first investment, ahead of any autonomy; one speaker's first unassisted attempt
+  failed on local environment setup alone.
+- **Grade:** E2. The repository's deploy history agrees (read, `CLAUDE.md`): E-S12-01, E-S12-02
   and E-S14-06 were all invisible locally.
 - **Verdict:** ADAPT.
 - **Lands:** Session 2 answers where the whole system can run for verification inside the
@@ -248,7 +260,10 @@ audit item for session 2.
 - **Says:** A rule the system must execute works; a written request to be careful does not. The
   reverse also holds: each standing prose rule costs reasoning on every task, and rules written
   for weaker models now over-constrain stronger ones.
-- **Sources:** SRC-POSTS-01, SRC-POSTS-04.
+- **Sources:** SRC-POSTS-01, SRC-POSTS-04, SRC-HOWTO-01, SRC-HOWTO-02. Folder 2 adds an order of
+  enforcement, strongest first: code structure, compiler and CI failures, automated reviewers,
+  written rules, style guides. It also adds the practice of stating the outcome wanted and
+  leaving the method to the agent.
 - **Grade:** E2 (Anthropic's prompt reduction is confirmed in secondary coverage; the exact
   sizes differ between sources). A post's claim that a built-in command flags outdated
   `CLAUDE.md` rules is E1 and unchecked.
@@ -257,7 +272,10 @@ audit item for session 2.
   leaving 17% as rules (measured). It loads at the start of every session. A proposal for the
   operator (Q-04): keep rules and live error patterns there, move the history under `docs/`.
   The `doc_truth` gate pins numbers inside `CLAUDE.md`, so a move needs its pins updated in the
-  same change.
+  same change. The same question applies to session prompts: the last spec carried a
+  180,633-byte session protocol and a 35,730-byte next-session prompt (measured). Each rule in
+  them traces to a real failure, so what to keep is the operator's call; the corpus's
+  practitioners would turn the rules that can be checked into checks and drop the rest.
 - **Wrong if:** gate failures or repeated known mistakes rise after the trim. The removed text
   was then doing work.
 
@@ -267,7 +285,7 @@ audit item for session 2.
 - **Says:** Most agent spend goes on reading, much of it rediscovering what nobody recorded.
   Route bulk reads to a cheaper reader that returns only the answer, and enforce that with a
   hook. Record each finding where the next run will find it.
-- **Sources:** SRC-POSTS-04.
+- **Sources:** SRC-POSTS-04; SRC-HOWTO-01 (cheaper models for automations nobody is watching).
 - **Grade:** E3 for about 90% fewer tokens on bulk reads in Spotify's own tests. E0 for the
   post's wording that the whole bill fell 90%.
 - **Verdict:** ADAPT.
@@ -301,7 +319,7 @@ audit item for session 2.
 - **Says:** With agents doing the building, a well-scoped problem turns into a working change
   quickly and a vague one consumes many agent-hours for nothing. The human work is problem
   definition, architecture, review and judging whether a fix addressed the cause.
-- **Sources:** SRC-POSTS-08, SRC-POSTS-04.
+- **Sources:** SRC-POSTS-08, SRC-POSTS-04, SRC-HOWTO-01.
 - **Grade:** E1.
 - **Verdict:** USE.
 - **Lands:** Session 3's definition of finished, written so that a test can fail it, comes
@@ -368,3 +386,116 @@ audit item for session 2.
   eight shallow". It does not decide which models.
 - **Wrong if:** INS-002 shows the expected uplift comes from coordination or adaptation and not
   from better forecasts. Training would then not be the first spend.
+
+### INS-022 - Autonomy is earned on a trust curve: shadow first, promote on a measured record
+
+- **Lens / kind:** SYSTEM / principle
+- **Says:** Teams that now let agents merge code unattended got there in steps. They began where
+  the result could be checked empirically and the worst case was bounded, ran the new path in
+  shadow beside the existing one for weeks, and widened its authority only as the record held.
+  Going straight to many unattended agents spends money and trust for nothing.
+- **Sources:** SRC-HOWTO-01, SRC-HOWTO-02.
+- **Grade:** E2. The talk is confirmed by several secondary summaries. Its throughput figures
+  are self-reported, differ by 2.5x between sources, and are not used.
+- **Verdict:** ADAPT.
+- **Lands:** E5 already scores the consensus arm's recommendations as if they had been
+  executed, which is a shadow comparison run offline. The running system has no decision-level
+  shadow mode (measured by text search: outside tests, "shadow" appears only in an audit
+  walker, the metrics module and reward shadowing). The product form would be: the consensus
+  runs beside the tuned control in the standing world, its recommendations are scored and
+  shown, and each action kind is promoted to acting once its record beats the control by more
+  than noise. That is also a way for a first user to adopt it without risk (Q-01, Q-03).
+- **Wrong if:** the twin's fidelity cannot be established. A shadow score is a counterfactual
+  computed on the twin, and it tells an operator nothing if the twin does not describe their
+  store (R-13).
+
+### INS-023 - Many agents pay as breadth plus adversarial checking, reduced by ordinary code
+
+- **Lens / kind:** SYSTEM / technique
+- **Says:** Where practitioners get value from many agents, the shape repeats: fan out over
+  independent pieces, have other agents attack each result from several angles, then reduce to
+  the few findings worth attention. The orchestration is ordinary code, so every item is
+  processed and the control flow is certain. They treat it as extra compute spent at decision
+  time and keep it for problems whose steps are not known in advance.
+- **Sources:** SRC-HOWTO-01. Consistent with arXiv 2512.08296 (INS-001), where parallel tasks
+  gained and sequential ones lost.
+- **Grade:** E1; practitioners describing their own use.
+- **Verdict:** USE.
+- **Lands:** The consensus has this shape: collect is the fan-out, debate is the adversarial
+  check, arbitration is the reducer. ADR-052 recorded that debate never revised a proposal and
+  that arbitration was computed and then ignored (read, `CLAUDE.md`). Tests named for binding
+  arbitration and debate concession now exist on `main` (measured by file name; not read).
+  Session 2 reads whether both stages now act, and specifies ablation arms that remove each
+  (R-16).
+- **Wrong if:** removing debate or arbitration leaves the consensus arm's outcome unchanged.
+  Those stages would then be cost with no return.
+
+### INS-024 - Before trusting an aggregate, walk one decision against its expected trace
+
+- **Lens / kind:** PROOF / technique
+- **Says:** A team running agents across its engineering work studies single traces more than
+  benchmark totals. For a task that ought to work, they write what the agent should do at each
+  step, find the step where the real trace departs, and ask whether context or a tool was
+  missing.
+- **Sources:** SRC-HOWTO-01.
+- **Grade:** E1.
+- **Verdict:** USE.
+- **Lands:** Finding 112 is the case for it. The aggregate said the consensus arm lost; the
+  cause, that no agent read its request, would show in the first agent call of any one decision
+  (inferred from `CLAUDE.md` E-DQP-02). The handoff's own lesson says the same: read the log
+  before naming a cause. Session 2 writes the expected trace for one decision after PR #87,
+  from world state through each agent's request, proposal, debate, arbitration and action to
+  the change in the world, then compares it with a real one (R-17).
+- **Wrong if:** the walked decision shows every stage consuming what it should. No defect of
+  that class then remains on that path, and the walk cost an hour.
+
+### INS-025 - Give agents a map from capability to code to proof
+
+- **Lens / kind:** WORKFLOW / technique
+- **Says:** An agent with good tools still wastes effort if it cannot get from a behaviour a
+  user sees to the code behind it. A short structured file mapping each feature to its
+  components and entry points sends it straight there. The map needs upkeep, or it misleads.
+- **Sources:** SRC-HOWTO-02, SRC-POSTS-04, SRC-POSTS-06.
+- **Grade:** E2 for the talk, E1 for the posts.
+- **Verdict:** ADAPT.
+- **Lands:** `docs/state/MODULE_INVENTORY.md` exists at 9,106 bytes and was last committed on
+  2026-06-08 (measured), five months and several specs ago. For SYNAPSE the useful map has four
+  columns: the capability, its code, the gate or test that proves it, and the command that runs
+  it. Session 2 checks whether the inventory is current and whether a session can start from it
+  (R-10).
+- **Wrong if:** a session that starts from the map still needs broad searching to find where a
+  capability lives.
+
+### INS-026 - Widen agent fan-out only as fast as verification allows
+
+- **Lens / kind:** WORKFLOW / warning
+- **Says:** Running many agents before each one's output can be trusted multiplies cost, not
+  output. Trust is built on one or two supervised agents first.
+- **Sources:** SRC-HOWTO-02, SRC-POSTS-04.
+- **Grade:** E2. The repository's own record agrees (read, `HANDOFF.md`): dispatches wider than
+  five finished 4 of 18 agents, batches of at most five finished 10 of 14, and steering rule G8
+  came from those losses.
+- **Verdict:** USE, present (G8).
+- **Lands:** The implementation sessions keep G8. If cheaper readers are used on the rest of
+  this corpus (Q-05), they run in batches of at most five, with one folder also read in full as
+  a check.
+- **Wrong if:** under the current plan limits, wide batches finish at the same rate as narrow
+  ones.
+
+### INS-027 - Least privilege per agent: an out-of-function action is impossible, not discouraged
+
+- **Lens / kind:** SYSTEM / principle
+- **Says:** Give each agent what its job needs and nothing more, and enforce that with hard
+  controls, not instructions: read-only credentials, network policy, access rules on each
+  tool. Teams report that more layers of this kind are what let them grant more autonomy.
+- **Sources:** SRC-HOWTO-01, SRC-POSTS-06.
+- **Grade:** E1.
+- **Verdict:** ADAPT.
+- **Lands:** `WorldAction` carries an id, a kind, a place, parameters and a decision id. It has
+  no field naming the agent that issued it, and its four kinds put `inject_disruption` beside
+  `reorder`, `set_price_mult` and `set_policy` (read,
+  `packages/synapse_common/world/models.py`). A text search of the world packages finds no
+  allow-list. Enforcement may sit in the layer that calls the world, which was not read.
+  Session 2 reads it (R-18).
+- **Wrong if:** a per-agent allow-list exists at the calling layer, and a test proves that an
+  action outside an agent's function is refused.

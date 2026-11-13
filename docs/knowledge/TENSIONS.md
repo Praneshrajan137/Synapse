@@ -34,7 +34,10 @@ A tension is not a verdict. Each one names what would settle it.
   and every hour of cloud credit.
 - **Settled by:** session 3 listing which components the definition of finished needs, and the
   cost of running them against the remaining credit (INS-019, Q-02).
-- **Raised by:** Posts Context.
+- **Raised by:** Posts Context. Strengthened by Claude code - How to: a company with many
+  backing services found running the full stack locally a limit on agent work and moved its
+  agents to cloud sandboxes (SRC-HOWTO-01). On a $300 credit that route is mostly closed, which
+  points toward a thin slice (R-08).
 
 ### T-003 - "Agency is architectural", against harness times model
 
@@ -75,7 +78,31 @@ A tension is not a verdict. Each one names what would settle it.
   surface.
 - **Settled by:** measuring the smallest reading set that lets a session start correctly, in
   tokens (R-10), and the operator's answer on `CLAUDE.md` (Q-04).
-- **Raised by:** Posts Context.
+- **In fairness to the design:** the corpus questions the prose and endorses the gates. Hard
+  checks sit at the top of the enforcement order in SRC-HOWTO-02 and written rules near the
+  bottom, and the same talk holds that a codebase with guardrails is where agents work best.
+  SYNAPSE's gates are what make ten agent-driven implementation sessions plausible at all.
+- **Raised by:** Posts Context. Strengthened by Claude code - How to: practitioners there state
+  the outcome and leave the method to the agent, while the last spec here carried a
+  180,633-byte session protocol (measured).
+
+### T-009 - The uplift proof ran with no model behind the reasoner
+
+- **The corpus says:** measure the path you will deploy. A model behaves differently in each
+  harness (SRC-POSTS-05), and instructions are tested where they will run (SRC-HOWTO-02).
+- **SYNAPSE says:** it is a multi-agent system with LLM orchestration, with model reasoning in
+  its upper decision tiers (read, `CLAUDE.md`). E5 ran with no Ollama behind the Disruption
+  Shield's reasoner: a harness that drives the real agents must point the reasoner at a refused
+  port or inject an offline one (read, `CLAUDE.md` E-DQP-01), and the README lists the cache
+  metric as unmeasured because Ollama was offline.
+- **So (inferred):** the measured arm is the system without its model reasoning. The headline
+  says nothing, for or against, about what the LLM tier adds.
+- **In fairness to the design:** a CI runner has no model server, and running offline kept the
+  result honest about what it covered.
+- **Settled by:** session 2 reading what the reasoner returns when offline and which decisions
+  would take the model path (R-19); then session 3 deciding whether any labelled run can afford
+  a real reasoner.
+- **Raised by:** Claude code - How to.
 
 ## Inside the corpus
 
@@ -97,3 +124,15 @@ A tension is not a verdict. Each one names what would settle it.
   Finding 112 sat behind tests that sent a hand-written, wrong-shaped request (read,
   `CLAUDE.md` E-DQP-02). Both halves are needed: contract-derived stand-ins for speed,
   and one prod-like path kept alive (INS-005, INS-013).
+
+### T-008 - Spend tokens freely, or count them?
+
+- In SRC-HOWTO-01 two companies set no token limit per engineer and argue that where the
+  return is positive, cost should not be minimised. The speaker of SRC-HOWTO-02 has unlimited
+  model access. The same report's critique names a cost wall for individuals, and SRC-POSTS-04
+  relays work on cutting agent spend.
+- **Reading:** most practices in the corpus were proven by people with no limit. On a fixed
+  plan, the ones that remove waste survive: verification before autonomy, hard constraints,
+  narrow fan-out, cheap readers for bulk work (INS-013, INS-014, INS-015, INS-026). The ones
+  that buy quality with volume do not: workflows of forty or more agents, and tuning loops run
+  until a perfect score.
