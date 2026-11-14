@@ -46,14 +46,12 @@ suite_extensions:
 #
 # Deliberately NOT listed, and therefore reported by the checker as
 # `unattributable` FAILs, because no mechanical enforcer could be named without
-# fabricating one (I-7):
-#   FE-INV-013  tests: frontend/spec/check_fe_invariants.py -- the registry gate
-#               itself. Nothing asserts the English-only i18n catalog. This is
-#               the Requirement 12 "the registry gate validates the registry"
-#               finding, in the registry.
-#   FE-INV-024  `tests: .github/workflows/frontend.yml` names no job, and no job
-#               in that file asserts that MapLibre registers only the pmtiles://
-#               protocol.
+# fabricating one (I-7): none, since 2026-11-14.
+# Removed from this list on 2026-11-14 (decision-quality-proof session 13), each
+# for a Vitest suite whose test titles carry its tag: FE-INV-013
+# (frontend/src/i18n/__tests__/english-only.test.tsx) and FE-INV-024
+# (frontend/src/visualization/maplibre/__tests__/pmtiles-only.test.tsx). Each
+# registry description now says what its suite observes and what it does not.
 # Removed from this list on 2026-11-01 (decision-quality-proof session 13), each
 # for a named enforcer rather than a declaration: FE-INV-014 (the `build` job's
 # size step blocks now; its out_of_suite entry is below), FE-INV-020

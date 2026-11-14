@@ -192,19 +192,35 @@ invariants:
     status: enforced
 
   - id: FE-INV-013
-    title: User-visible strings thread through the i18n catalog (English-only)
+    title: English-only UI (a single `en` i18n catalog, no language detector or switcher)
     mirrors: ADR-012
     description: >
-      All user-visible copy threads through the i18next catalog. The UI ships in
-      English ONLY (Sprint 18): a single `en` catalog, supportedLngs ["en"], and
-      no language switcher or language detector — see the CLAUDE.md "English-only
-      UI" rule. The Demo Theater + every surface header consume the relevant
-      namespace.
+      The UI ships in English only (Sprint 18, the CLAUDE.md "English-only UI"
+      rule). frontend/src/i18n/__tests__/english-only.test.tsx asserts it against
+      the i18next instance src/i18n/index.ts initialises, which react-i18next's
+      getI18n() hands every component: `en` is the only language it holds a
+      catalog for, and no backend is registered to fetch another; supportedLngs is
+      the configured ["en"] plus the `cimode` i18next appends to any list; no
+      language detector is registered; every lookup resolves in `en`; src/i18n/
+      holds no catalog but en/*.json, one file per namespace the instance holds;
+      and no shipped module under src/ calls changeLanguage, the call a switcher
+      makes (a text scan). It also renders the Demo Theater: its page header
+      (title and subtitle), run control, segment labels and evidence heading show
+      the demo-theater catalog's copy in English, and their keys under i18next's
+      cimode, so each is looked up rather than written in. Not claimed, because it
+      is false: that all user-visible copy threads through the catalog. In
+      DemoTheater.tsx the segment summaries (SEGMENT_SUMMARY_KEY maps to English
+      sentences, not keys), the "running" badge, the "Live log" summary and the
+      "Demo segments" list label are literals. Nine surfaces hand PageHeader a
+      literal title and subtitle (Agent Council, Audit Vault, Council Theater,
+      Decision Theater, Ingress Console, Live Markets, Mission Control, Operations,
+      Twin Lab), and Override Cockpit writes its h1 as one. Steering reads its
+      header from the steering catalog (read, not asserted).
     implementations:
       - frontend/src/i18n/index.ts
       - frontend/src/surfaces/demo-theater/DemoTheater.tsx
     tests:
-      - frontend/spec/check_fe_invariants.py
+      - frontend/src/i18n/__tests__/english-only.test.tsx
     status: enforced
 
   - id: FE-INV-014
@@ -318,13 +334,27 @@ invariants:
     title: Map renders only self-hosted PMTiles
     mirrors: I-1, FE-INV-020
     description: >
-      MapLibre is configured exclusively against the pmtiles:// protocol
-      handler; no remote tile servers are registered. Verified in CI.
+      Every tile source in the style CityMap gives maplibre's Map is a pmtiles://
+      archive on the app's own origin; pmtiles is the only protocol CityMap
+      registers with maplibre, before it builds the map; no URL in that style
+      names Mapbox or Google; and, apart from the glyph endpoint below, every URL
+      in it resolves to the app's own origin. Asserted by
+      frontend/src/visualization/maplibre/__tests__/pmtiles-only.test.tsx on the
+      style CityMap.tsx actually passes, with maplibre-gl replaced by a recorder
+      because jsdom has no WebGL. Disclosed, not claimed: the style names one URL
+      off the app's origin, its glyph endpoint
+      (https://protomaps.github.io/basemaps-assets/fonts/{fontstack}/{range}.pbf).
+      maplibre fetches glyphs only to lay out a symbol layer's text, and the style
+      has no symbol layer, so nothing requests it today; the suite fails if one is
+      added while the endpoint is still off-origin, and production's CSP
+      (connect-src 'self' in frontend/nginx.conf) would refuse that request. What
+      a browser requests while the map loads is FE-INV-020's claim, observed by
+      frontend/tests/e2e/map-tile-egress.spec.ts.
     implementations:
       - frontend/src/visualization/maplibre/basemap.ts
       - frontend/src/visualization/maplibre/CityMap.tsx
     tests:
-      - .github/workflows/frontend.yml
+      - frontend/src/visualization/maplibre/__tests__/pmtiles-only.test.tsx
     status: enforced
 
   - id: FE-INV-025
