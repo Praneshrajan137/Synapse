@@ -101,7 +101,7 @@ Order is by leverage: how to work first, then how to build, then what to build f
 | 3 | Claude Code - Classes | 20 | **done 2026-11-14** | [`sources/claude-code-classes.md`](sources/claude-code-classes.md) |
 | 4 | Cursor | 2 | **done 2026-11-14** | [`sources/cursor.md`](sources/cursor.md) |
 | 5 | Sequoia Capital- AI | 23 | **done 2026-11-14** | [`sources/sequoia-capital-ai.md`](sources/sequoia-capital-ai.md) |
-| 6 | YC AI GUIDE, plus loose `yc-paper-club-data-deep-dive.md` | 14 | pending | |
+| 6 | YC AI GUIDE, plus loose `yc-paper-club-data-deep-dive.md` | 14 | **done 2026-11-14** | [`sources/yc-ai-guide.md`](sources/yc-ai-guide.md) |
 | 7 | Jane Street | 11 | pending | |
 | 8 | The Pragmatic Engineer | 12 | pending | |
 | 9 | ENGINEERING | 13 | pending | |
@@ -141,7 +141,9 @@ Known duplicates, to be read once and cross-referenced:
    folder holds against SYNAPSE.
 5. Review the digest against rule 1 and rule 4, and delete what changes no decision.
 6. Run the four checks below.
-7. Mark the folder done in the status table. Stop and report.
+7. Mark the folder done in the status table and commit it locally. Since 2026-11-14 the
+   operator has asked for three folders per stop: each folder is still checked and committed
+   by itself, and the report comes after the third.
 
 ## Checks before a folder is marked done
 
@@ -165,5 +167,7 @@ table at the top of the ledger is the short form.
 
 Two scripts are kept outside version control on the operator's machine, in `.tmp/knowledge/`:
 `kb_check.py` runs checks 1 to 3, and `kb_add_sources.py` adds corroborating sources to
-existing ledger entries. This folder adds no code to the repository. On 2026-11-13 it
+existing ledger entries. The loose file at the corpus root is checked by pointing `kb_check.py`
+at `C:\Documentation` itself with the prefix `SRC-LOOSE`. This folder adds no code to the
+repository. On 2026-11-13 it
 caught one near-copied sentence in the first digest, which was rewritten.

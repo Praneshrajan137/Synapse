@@ -96,6 +96,9 @@ A tension is not a verdict. Each one names what would settle it.
   that what its customers buy is the boundaries and controls around the agent (SRC-SEQAI-20),
   another's customers valued the transparent record for its own sake (SRC-SEQAI-16), and a
   third published its benchmark and became the reference for its field (SRC-SEQAI-10, INS-043).
+  YC AI GUIDE adds two more: a step-by-step record that auditors can inspect is part of what
+  one finance company sells (SRC-YCAI-05), and a testing company holds that the lasting asset
+  is the specification and the loop that verifies against it, not the code (SRC-YCAI-02).
 
 ### T-005 - "Prose is not free", against the volume of prose
 
@@ -115,7 +118,9 @@ A tension is not a verdict. Each one names what would settle it.
   180,633-byte session protocol (measured). Strengthened again by Claude Code - Classes:
   processes pile up because nobody deletes one unprompted (SRC-CLASSES-11), stored know-how has
   a half-life (SRC-CLASSES-17), and markdown past a couple of hundred lines is not read
-  (SRC-CLASSES-14). That last point applies to this folder's own ledger.
+  (SRC-CLASSES-14). That last point applies to this folder's own ledger. YC AI GUIDE adds that
+  a library nobody prunes becomes a dump (SRC-YCAI-06), and that a specification kept as the
+  source of truth is itself a thing to maintain, which nobody checks (SRC-YCAI-02).
 
 ### T-012 - The twin is declared; the corpus's comparable proofs are fitted to real history
 
@@ -138,7 +143,10 @@ A tension is not a verdict. Each one names what would settle it.
   has usually fitted the benchmark (SRC-SEQAI-10). The founders of a lab built on simulation
   say their approach holds only where the truth can be computed (SRC-SEQAI-21). The same folder
   offers a partial way out that needs no real data: planted issues with a written rubric
-  (INS-042), and a scorer checked against a person's judgment (INS-044).
+  (INS-042), and a scorer checked against a person's judgment (INS-044). Strengthened again by
+  YC AI GUIDE: in production the effort goes into data and not architecture, the reverse of
+  SYNAPSE's allocation so far (SRC-LOOSE-01), and the strongest result from a small trained
+  model came from a company holding data on hundreds of thousands of machines (SRC-YCAI-03).
 
 ### T-009 - The uplift proof ran with no model behind the reasoner
 
@@ -183,6 +191,11 @@ A tension is not a verdict. Each one names what would settle it.
   component to be 15% of the work (SRC-SEQAI-23); and one report warns that learning machinery
   built before the workflow is settled is debt (SRC-SEQAI-22). The same folder names the way
   through: commit to one workflow that has an incumbent and a measure (INS-045, Q-07).
+  Strengthened by YC AI GUIDE: one company's first customer was a novice who could not use
+  what the product produced, and it found its market only among practitioners (SRC-YCAI-07);
+  another found that engineering output multiplied while selling still needed people in the
+  customer's plant (SRC-YCAI-03). In fairness, SRC-YCAI-07 also shows founders with no
+  experience of a field succeeding, because they asked its practitioners before building.
 
 ### T-014 - Append-only context, against compacting and clearing it
 
@@ -197,7 +210,9 @@ A tension is not a verdict. Each one names what would settle it.
   the context never grows large, the two never meet.
 - **Settled by:** session 2 measuring how large the runtime context gets in one decision, and
   whether anything long-running accumulates it (R-36).
-- **Raised by:** Sequoia Capital- AI.
+- **Raised by:** Sequoia Capital- AI. Repeated in YC AI GUIDE, where a history of agent
+  scaffolding treats editing and clearing context as an advance over append-only growth
+  (SRC-YCAI-10).
 
 ## Inside the corpus
 
@@ -231,6 +246,11 @@ A tension is not a verdict. Each one names what would settle it.
   narrow fan-out, cheap readers for bulk work (INS-013, INS-014, INS-015, INS-026). The ones
   that buy quality with volume do not: workflows of forty or more agents, and tuning loops run
   until a perfect score.
+- **Added by YC AI GUIDE:** SRC-YCAI-11 argues for spending hundreds of dollars a day on
+  tokens, and its own report notes that an individual cannot. The same folder supplies the
+  route that fits a fixed plan: a strong model used offline to tune a cheap local stack that
+  then runs alone (SRC-YCAI-10), and local models for everyday queries (SRC-YCAI-13). See
+  INS-040.
 
 ### T-010 - A few general tools plus code, or one purpose-built tool?
 
@@ -251,3 +271,26 @@ A tension is not a verdict. Each one names what would settle it.
   and keeps doing the checking. For the ten implementation sessions this means one outcome per
   session with stated success criteria, and commits at each verified step inside it. The
   last spec's 155 leaf tasks were the opposite arrangement (read, `HANDOFF.md`).
+
+### T-015 - Launch before it is ready, or be finished before the first pilot?
+
+- SRC-YCAI-07 sold its product before it was hosted, and treats an early public commitment as
+  the way to get anything shipped. SRC-YCAI-03 and SRC-YCAI-09 hold that in their fields an
+  unfinished product in front of a customer spends trust that does not come back.
+- **Reading:** the first report states the boundary itself. Shipping early holds where a person
+  reviews the output and a failure can be repaired by hand. It fails where a miss is costly and
+  nobody stands between the system and the consequence. SYNAPSE can be either. As an adviser
+  whose recommendation a person accepts or changes, it is the first kind and should reach a
+  user early (INS-022, INS-035). As an actor placing orders by itself it is the second, and
+  the bar is the one in INS-047.
+
+### T-016 - Give the agent everything, or keep what it must read small?
+
+- SRC-YCAI-12 and SRC-YCAI-06 report better results from handing an agent the complete raw
+  record of a project. SRC-POSTS-04 and SRC-CLASSES-14 say standing prose costs reasoning on
+  every task and long files go unread.
+- **Reading:** they are about different stores. What loads into every session should be small
+  and should be rules. The full record belongs on disk, where an agent reads the part a task
+  needs, as in the tiers of SRC-YCAI-10. `CLAUDE.md` mixes the two: rules and live error
+  patterns, with 49% history (measured). That is the case for Q-04, and it is how this folder
+  is built: a short index, with the detail one file away.
