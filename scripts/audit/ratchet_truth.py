@@ -11,11 +11,12 @@ Audit findings this gate closes:
     naming the threshold, the recorded bound (**previous**) and the committed
     value (**proposed**).
   * **R7.8** -- a ratchet constant frozen below the configuration it claims to
-    guard converts a floor into a no-op. ``frontend/stryker.conf.json`` ships
-    ``thresholds.break = 50`` while ``verify_claims.py::STRYKER_BREAK_NOW`` is
-    still ``26``, so a regression 50 -> 26 currently PASSES C16. This gate FAILs
-    naming **both** files and **both** values. It does not repair either value --
-    remediation is task 12.1; the gate's job is to make the hole bite.
+    guard converts a floor into a no-op. The audit found one:
+    ``frontend/stryker.conf.json`` shipped ``thresholds.break = 50`` while
+    ``verify_claims.py::STRYKER_BREAK_NOW`` was ``26``, so a regression 50 -> 26
+    passed C16. Task 12.1 moved the constant to the shipped value. This gate FAILs
+    any such disagreement, naming **both** files and **both** values, and repairs
+    neither; its job is to make the hole bite.
   * **R2.10** -- ``UPLIFT_FLOOR`` is *data-gated*: a raise above ``0.0`` is
     admissible only through ``uplift.uplift_floor.ratchet_to_measured`` against a
     same-run :class:`~uplift.uplift_floor.PoweredProof`. A raise with no such
