@@ -29,6 +29,17 @@ A tension is not a verdict. Each one names what would settle it.
 - **A second point in fairness:** those were model-driven sub-agents sharing one objective.
   SYNAPSE's agents each carry their own reward (I-2), a reason those cases do not cover. It
   holds only if the objectives conflict in practice and arbitration binds (INS-028, INS-023).
+- **Added by Sequoia Capital- AI, with conditions on both sides:** a field that tried both found
+  that a pipeline of specialised modules joined by hand-written interfaces lost to one learned
+  whole (SRC-SEQAI-04), and one company prefers a single agent following a written procedure to
+  a graph of narrow steps (SRC-SEQAI-16). The first result needed abundant real data, which
+  SYNAPSE does not have, so it is not evidence against the design here. On the other side, a
+  learned policy did beat tuned expert practice in chip layout, given a faithful cost function
+  and a great many simulated trials (SRC-SEQAI-19), and an explicit staged architecture is
+  still held to be right where control and predictability are required (SRC-SEQAI-01).
+- **A third arm worth having:** a simple policy found by search against the harness (INS-040),
+  and a fallback design in which the consensus acts only when an arbiter prefers it to the rule
+  (INS-047). Either turns the question from which side wins into where each one wins.
 
 ### T-002 - A mature platform's infrastructure at a stage with no user
 
@@ -61,7 +72,12 @@ A tension is not a verdict. Each one names what would settle it.
   adaptation (INS-002). Which of those needs a trained model is not yet written down.
 - **Settled by:** the uplift decomposition in session 2 (R-03), then the Colab allocation in
   session 3 (INS-021).
-- **Raised by:** Posts Context.
+- **Raised by:** Posts Context. Sequoia Capital- AI supports the order of work: two companies
+  say to find the fit on general models first and train afterwards, so that each trained model
+  is one variable swapped into a working harness (SRC-SEQAI-10, SRC-SEQAI-18). It also gives a
+  test for whether training can help at all: if the starting policy never succeeds there is
+  nothing to reinforce, and if it succeeds sometimes, training can amplify that (SRC-SEQAI-14).
+  Session 2 can apply that test to the E5 replicates (R-33).
 
 ### T-004 - Which asset is the product: the agents or the proof?
 
@@ -76,7 +92,10 @@ A tension is not a verdict. Each one names what would settle it.
   supply-chain optimiser. It may equally be too bound to this twin to serve anything else.
 - **Settled by:** the operator, in session 3 (Q-03), after session 2 reads how separable the
   harness is from the twin.
-- **Raised by:** Posts Context.
+- **Raised by:** Posts Context. Strengthened by Sequoia Capital- AI: one company says outright
+  that what its customers buy is the boundaries and controls around the agent (SRC-SEQAI-20),
+  another's customers valued the transparent record for its own sake (SRC-SEQAI-16), and a
+  third published its benchmark and became the reference for its field (SRC-SEQAI-10, INS-043).
 
 ### T-005 - "Prose is not free", against the volume of prose
 
@@ -113,7 +132,13 @@ A tension is not a verdict. Each one names what would settle it.
   swapping in a real feed was built in advance (ADR-052).
 - **Settled by:** session 2 finding what real, permissively licensed history exists (R-13);
   session 3 deciding whether "finished" requires a calibrated world (INS-031, Q-03).
-- **Raised by:** Claude Code - Classes.
+- **Raised by:** Claude Code - Classes. Strengthened by Sequoia Capital- AI, the strongest folder
+  on this point. A learner trained in an environment learns the environment, errors included
+  (SRC-SEQAI-07, SRC-SEQAI-14, SRC-SEQAI-18). A model that passes a benchmark and fails in use
+  has usually fitted the benchmark (SRC-SEQAI-10). The founders of a lab built on simulation
+  say their approach holds only where the truth can be computed (SRC-SEQAI-21). The same folder
+  offers a partial way out that needs no real data: planted issues with a written rubric
+  (INS-042), and a scorer checked against a person's judgment (INS-044).
 
 ### T-009 - The uplift proof ran with no model behind the reasoner
 
@@ -131,7 +156,9 @@ A tension is not a verdict. Each one names what would settle it.
 - **Settled by:** session 2 reading what the reasoner returns when offline and which decisions
   would take the model path (R-19); then session 3 deciding whether any labelled run can afford
   a real reasoner.
-- **Raised by:** Claude code - How to.
+- **Raised by:** Claude code - How to. Sequoia Capital- AI adds that a mismatch between the
+  stack a model is trained on and the stack that serves it loses performance without raising
+  any error (SRC-SEQAI-18).
 
 ### T-013 - Much has been built, and nobody has yet asked for it
 
@@ -150,7 +177,27 @@ A tension is not a verdict. Each one names what would settle it.
   before that: reading what quick-commerce operators publish about their own decisions (R-12),
   and the operator running the twin store personally (INS-035).
 - **Raised by:** Posts Context in substance, where it was filed only as INS-018 and Q-01.
-  Recorded as a tension at Cursor, which states it most bluntly.
+  Recorded as a tension at Cursor, which states it most bluntly. Strengthened by Sequoia
+  Capital- AI: one company refunded all its revenue on seeing that customers paid without using
+  the product daily (SRC-SEQAI-08); the one logistics operator in the corpus found the deciding
+  component to be 15% of the work (SRC-SEQAI-23); and one report warns that learning machinery
+  built before the workflow is settled is debt (SRC-SEQAI-22). The same folder names the way
+  through: commit to one workflow that has an incumbent and a measure (INS-045, Q-07).
+
+### T-014 - Append-only context, against compacting and clearing it
+
+- **The corpus says:** long-running agents stay reliable by managing what enters the model's
+  context: condensing old history, moving bulk output to files, and clearing what is stale
+  (SRC-SEQAI-06). A platform team lists context hygiene among the few things a harness still
+  owes the model (SRC-SEQAI-02).
+- **SYNAPSE says:** runtime context is append-only with a status field, and nothing is removed
+  (I-14; read, `CLAUDE.md`).
+- **In fairness to the design:** the rule protects a stable cache prefix (I-13) and an honest
+  record, and a consensus decision lasts seconds where the corpus's examples run for hours. If
+  the context never grows large, the two never meet.
+- **Settled by:** session 2 measuring how large the runtime context gets in one decision, and
+  whether anything long-running accumulates it (R-36).
+- **Raised by:** Sequoia Capital- AI.
 
 ## Inside the corpus
 

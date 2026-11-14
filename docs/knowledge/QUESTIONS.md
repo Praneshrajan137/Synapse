@@ -16,6 +16,7 @@ recorded with how it was obtained.
 | Q-04 | May the sprint history move out of `CLAUDE.md` into `docs/`, leaving rules and live error patterns? | 49% of the file is history and it loads every session (measured). `CLAUDE.md` is the governance source of truth, so this is the operator's call. The `doc_truth` pins would move in the same change. | INS-014, T-005 |
 | Q-05 | For the larger, less relevant corpus folders (product and market, about 3.1 MB), full reads in the main context, or a cheaper reader filling the same card format with spot checks? | Full reads of the remaining corpus are roughly 1.1M tokens (estimated from word count) on a fixed plan. The cheaper path costs fidelity. | INS-015 |
 | Q-06 | May a gate, a document or a component be retired when removing it changes no measured outcome? | The corpus is firm that process piles up unless someone is given explicit permission to delete. Only the operator can give it here. | INS-030 |
+| Q-07 | Is replenishment the one workflow SYNAPSE must win first, with the other agents left as they are until it does? | Folder 5 is consistent that fit comes from committing to one workflow that has an incumbent and a measure, and ADR-052 already built that slice. The answer changes what "finished" means and what the ten sessions leave out. | INS-045 |
 
 ## For session 2 (the project itself)
 
@@ -45,6 +46,16 @@ recorded with how it was obtained.
 | R-27 | Can a world action be undone or compensated (cancel a reorder, restore a price), and can the world be snapshotted and rewound? | An action kind with a cheap undo can be granted autonomy early; one without needs a person or a longer record first. | INS-009 |
 | R-28 | Facing an escalation, can an operator change part of a recommendation (a quantity, a price multiplier), or only accept or reject? | If only accept or reject, the console makes an approver of its operator and loses the richer label an edit would give. | INS-038 |
 | R-20 | Which recorded limits still hold with the current model and tools (no repo-wide or simulation runs on the laptop, mutation testing flaky on Windows)? Retest one. | A limit that no longer holds is free capacity for the implementation sessions. | SRC-HOWTO-01 |
+| R-29 | How does the E5 objective weigh stockouts, waste and cost, and where did the weights come from? | If the weights have no source a practitioner would accept, the objective is checked against the operator's blind ranking before any re-run is tuned to it. | INS-044 |
+| R-30 | How many simulated store-days per second does the twin run, and what does one replicate cost? | Sets whether a lookahead fits inside a decision tier's budget, and how many candidates a policy search can score in a session. | INS-046, INS-040 |
+| R-31 | Does consensus check a proposal's consequence in the twin before executing it? The README says Tier 4 simulation is not yet invoked (C7), while tests named for twin verification exist. | If it does, INS-046 is present and the README line is stale. If not, a lookahead is a candidate mechanism of uplift. | INS-046 |
+| R-32 | What executes when confidence is below the gate and no operator answers? | If nothing does, or the low-confidence proposal does, the incumbent rule is a safer default and a small change. | INS-047 |
+| R-33 | In what share of E5 replicates did the consensus arm beat the tuned control, and by how much? | If never, there is nothing for training or an arbiter to amplify. If sometimes, those replicates show where the system has an edge. | INS-047, INS-021, T-003 |
+| R-34 | Do the `test_reward_safety.py` files look for reward earned without the outcome, or only check sign and bounds? | If only the second, a trained policy's loopholes would pass them. | INS-041 |
+| R-35 | Is there a path from a decision scored `diverged` to a new harness scenario? | If not, the outcome loop records failures and the proof never learns from them. | INS-032, INS-033 |
+| R-36 | How large does the runtime context get in one decision, and does anything long-running accumulate it? | If it stays small, the append-only rule costs nothing and T-014 closes. If it grows, the rule needs a compaction step that keeps the cache prefix. | T-014 |
+| R-37 | Which fields of the world state do the sensor and the replenishment slice actually read? | That list is what a retailer's existing feed would have to supply. A short list makes the thin form plausible. | INS-039 |
+| R-38 | Do the scenario cells in `uplift/scenarios.py` state what a correct response must detect and do? | If not, writing that rubric is cheap and gives a result per planted issue beside the aggregate. | INS-042 |
 
 ## For sessions 2 and 3 (outside the repository)
 

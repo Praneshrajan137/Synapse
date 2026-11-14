@@ -12,43 +12,52 @@ audit item for session 2.
 | ID | Insight | Lens | Verdict | Source docs |
 |---|---|---|---|---|
 | INS-001 | Many agents must beat a matched simple baseline to earn their cost | PROOF | USE | 1 + 1 paper |
-| INS-002 | Name the mechanism of uplift before measuring it | PROOF | CREATE | own |
-| INS-003 | Report by slice; the headline cell hides where a system wins and loses | PROOF | ADAPT | 5 |
+| INS-002 | Name the mechanism of uplift before measuring it | PROOF | CREATE | own + 2 |
+| INS-003 | Report by slice; the headline cell hides where a system wins and loses | PROOF | ADAPT | 7 |
 | INS-004 | A gain inside noise is not a gain; hold cases out; keep the original as reference | PROOF | USE, present | 4 |
-| INS-005 | Multi-agent failures sit at handoffs; test through the real envelope | SYSTEM | USE | 6 |
+| INS-005 | Multi-agent failures sit at handoffs; test through the real envelope | SYSTEM | USE | 7 |
 | INS-006 | Every external call: hard timeout, breaker, durable progress, trace | SYSTEM | USE, mostly present | 3 |
 | INS-007 | One seam for every model call | SYSTEM | ADAPT | 3 |
-| INS-008 | Keep probabilistic judgment in a small box | SYSTEM | USE, present | 3 |
+| INS-008 | Keep probabilistic judgment in a small box | SYSTEM | USE, present | 4 |
 | INS-009 | Grant autonomy by reversibility and blast radius, not confidence alone | SYSTEM | ADAPT | 10 |
-| INS-010 | A shared, current world model lifts a planner more than a bigger model | SYSTEM | USE | 3 + 1 paper |
-| INS-011 | Keep each run's full record; screen new decision logic by replay | PROOF | ADAPT | 1 |
+| INS-010 | A shared, current world model lifts a planner more than a bigger model | SYSTEM | USE | 4 + 1 paper |
+| INS-011 | Keep each run's full record; screen new decision logic by replay | PROOF | ADAPT | 2 |
 | INS-012 | Verification is the constraint; plan sessions around it | WORKFLOW | USE | 8 |
 | INS-013 | An agent needs a prod-like run it can drive and observe | WORKFLOW | ADAPT | 9 |
-| INS-014 | Enforce by gate; trim prose rules newer models no longer need | WORKFLOW | ADAPT | 9 |
-| INS-015 | Keep frontier models off bulk reading; write findings where the next run looks | WORKFLOW | ADAPT | 5 |
-| INS-016 | Estimate from the work, not the spoken number; overruns are fat-tailed | WORKFLOW | USE | 2 + 2 studies |
+| INS-014 | Enforce by gate; trim prose rules newer models no longer need | WORKFLOW | ADAPT | 13 |
+| INS-015 | Keep frontier models off bulk reading; write findings where the next run looks | WORKFLOW | ADAPT | 8 |
+| INS-016 | Estimate from the work, not the spoken number; overruns are fat-tailed | WORKFLOW | USE | 3 + 2 studies |
 | INS-017 | A sharp problem definition is the highest-leverage artifact | WORKFLOW | USE | 6 |
-| INS-018 | Name the user, the workflow, and what happens after the demo | PURPOSE | USE | 8 |
-| INS-019 | Fit the architecture and its footprint to the stage | OPS | ADAPT | 4 |
+| INS-018 | Name the user, the workflow, and what happens after the demo | PURPOSE | USE | 12 |
+| INS-019 | Fit the architecture and its footprint to the stage | OPS | ADAPT | 5 |
 | INS-020 | Measure the share of work that changes the product | PROOF | ADAPT | 4 |
-| INS-021 | For a narrow job, a small trained model can beat prompting a large one | OPS | PARK | 3 |
-| INS-022 | Autonomy is earned on a trust curve: shadow first, promote on a measured record | SYSTEM | ADAPT | 4 |
+| INS-021 | For a narrow job, a small trained model can beat prompting a large one | OPS | PARK | 11 |
+| INS-022 | Autonomy is earned on a trust curve: shadow first, promote on a measured record | SYSTEM | ADAPT | 10 |
 | INS-023 | Many agents pay as breadth plus adversarial checking, reduced by ordinary code | SYSTEM | USE | 3 |
-| INS-024 | Before trusting an aggregate, walk one decision against its expected trace | PROOF | USE | 3 |
+| INS-024 | Before trusting an aggregate, walk one decision against its expected trace | PROOF | USE | 5 |
 | INS-025 | Give agents a map from capability to code to proof | WORKFLOW | ADAPT | 8 |
 | INS-026 | Widen agent fan-out only as fast as verification allows | WORKFLOW | USE, present | 3 |
-| INS-027 | Least privilege per agent: an out-of-function action is impossible, not discouraged | SYSTEM | ADAPT | 7 |
-| INS-028 | Tool, skill or agent: a separate agent needs a reason | SYSTEM | ADAPT | 3 |
+| INS-027 | Least privilege per agent: an out-of-function action is impossible, not discouraged | SYSTEM | ADAPT | 8 |
+| INS-028 | Tool, skill or agent: a separate agent needs a reason | SYSTEM | ADAPT | 5 |
 | INS-029 | When execution is frictionless, build the dissent in | WORKFLOW | USE | 2 |
-| INS-030 | Deletion is an experiment: remove a part, rerun the fixed eval, keep it if the score holds | SYSTEM | ADAPT | 7 |
-| INS-031 | A twin earns belief when fitted to real history and tested across regimes | DOMAIN | ADAPT | 3 |
-| INS-032 | Every human correction is a label; compile standards from past actions | SYSTEM | ADAPT | 3 |
-| INS-033 | An eval that cannot fail measures nothing | PROOF | USE, partly present | 6 |
-| INS-034 | Proof of work: checkable evidence, and the process shown is the process that ran | PROOF | USE, present | 6 |
-| INS-035 | Dogfood it: operate the twin store yourself with SYNAPSE advising | PURPOSE | CREATE | own + 3 |
+| INS-030 | Deletion is an experiment: remove a part, rerun the fixed eval, keep it if the score holds | SYSTEM | ADAPT | 10 |
+| INS-031 | A twin earns belief when fitted to real history and tested across regimes | DOMAIN | ADAPT | 5 |
+| INS-032 | Every human correction is a label; compile standards from past actions | SYSTEM | ADAPT | 7 |
+| INS-033 | An eval that cannot fail measures nothing | PROOF | USE, partly present | 11 |
+| INS-034 | Proof of work: checkable evidence, and the process shown is the process that ran | PROOF | USE, present | 8 |
+| INS-035 | Dogfood it: operate the twin store yourself with SYNAPSE advising | PURPOSE | CREATE | own + 3 + 5 |
 | INS-036 | Make re-verification cheap: address expensive results by content | PROOF | ADAPT | 1 |
-| INS-037 | An agent's report of its own obstruction is telemetry: aggregate it, fix the top cause | SYSTEM | ADAPT | 1 |
-| INS-038 | An approver is not an operator: show the plan and let the person change any part | PURPOSE | USE, partly present | 3 |
+| INS-037 | An agent's report of its own obstruction is telemetry: aggregate it, fix the top cause | SYSTEM | ADAPT | 2 |
+| INS-038 | An approver is not an operator: show the plan and let the person change any part | PURPOSE | USE, partly present | 8 |
+| INS-039 | Reach users through the system they already run | PURPOSE | ADAPT | 5 |
+| INS-040 | Spend the strong model at design time; ship the simple artefact it finds | OPS | CREATE | own + 2 |
+| INS-041 | A learner exploits whatever earns reward, including the simulator's mistakes | PROOF | USE | 4 |
+| INS-042 | Rubric first: plant the issue, then build the world around it | PROOF | ADAPT | 1 |
+| INS-043 | A published benchmark recruits others and makes its author the reference | PURPOSE | PARK | 1 |
+| INS-044 | Validate the scorer: check that the objective ranks outcomes as a practitioner would | PROOF | USE | 4 |
+| INS-045 | Land on one workflow that already has a procedure and a measure, then expand | PURPOSE | USE | 4 |
+| INS-046 | Try the action in the twin before executing it | SYSTEM | ADAPT | 1 |
+| INS-047 | Keep the proven simple controller live, with a small independent arbiter | SYSTEM | ADAPT | 2 |
 
 ## Entries
 
@@ -80,6 +89,8 @@ audit item for session 2.
   hypothesis with its own scenario. A headline without a named mechanism cannot say why it won
   or lost.
 - **Sources:** own, prompted by SRC-POSTS-06 and SRC-POSTS-07.
+  Also SRC-SEQAI-11, SRC-SEQAI-16: separate units optimise separately unless something brings
+  them together; customers valued consistency and an audit trail as well as cost.
 - **Grade:** own.
 - **Verdict:** CREATE.
 - **Lands:** Session 2 writes, for each mechanism, the scenario cell in `uplift/scenarios.py`
@@ -98,6 +109,8 @@ audit item for session 2.
   Also SRC-CLASSES-01, SRC-CLASSES-08, SRC-CLASSES-20: an eval suite mixes regression cases with
   known-failure cases; score recovery after a fault and not only first output; judge a policy on
   its worst case and its spread beside its mean.
+  Also SRC-SEQAI-01, SRC-SEQAI-04: judge quality, latency and cost together; the real test is a
+  place or a case that was absent from tuning.
 - **Grade:** E1.
 - **Verdict:** ADAPT.
 - **Lands:** The E5 headline is for the primary cell, unshocked (read, `HANDOFF.md`). That is the
@@ -137,6 +150,8 @@ audit item for session 2.
   Also SRC-CLASSES-01, SRC-CLASSES-10, SRC-CLASSES-15, SRC-CLASSES-16: context lost between a
   sub-agent and its orchestrator; patterns visible only across runs; activity green in every
   layer and red in sequence; an orchestrator blind to its agent's limits.
+  Also SRC-SEQAI-06: a sub-agent that reports only that it has finished leaves the orchestrator
+  with nothing.
 - **Grade:** E1 for the posts. The repository's own record agrees (read, `CLAUDE.md`): finding
   112 was an envelope mismatch that tests with flat params could not see (E-DQP-02), and the
   dead firehose channels of Sprint 15 were schema mismatches at a seam.
@@ -188,6 +203,8 @@ audit item for session 2.
 - **Sources:** SRC-POSTS-07, SRC-HOWTO-01.
   Also SRC-CLASSES-18: deterministic code schedules and merges while the model does the part
   that varies.
+  Also SRC-SEQAI-02: domain logic belongs mainly at the verification and error-handling
+  boundary.
 - **Grade:** E1.
 - **Verdict:** USE, present (schema-validated agent outputs under I-3; rule-based guardrails).
 - **Lands:** Session 2 lists any path where model text drives an action with no deterministic
@@ -234,6 +251,8 @@ audit item for session 2.
   later step reads.
   Also SRC-CURSOR-02: sub-agents started from one shared compressed context spend far fewer
   tokens rediscovering it.
+  Also SRC-SEQAI-01: when an agent fails, the cause is more often the context it was given than
+  the model.
 - **Grade:** E3 for the paper and one figure (Qwen3-8B, multi-task, 19.9% to 92.6%). The domain
   is household robot tasks in simulation, so the transfer to supply decisions is by analogy.
 - **Verdict:** USE.
@@ -250,6 +269,8 @@ audit item for session 2.
 - **Says:** If every run stores what was proposed and what it scored, a new selection strategy
   can be tried against the stored records before any live run is paid for.
 - **Sources:** SRC-POSTS-01.
+  Also SRC-SEQAI-22: each task is recorded whole and kept replayable in a reconstructed
+  environment.
 - **Grade:** E1. The post's efficiency figures were not checked and are not used.
 - **Verdict:** ADAPT.
 - **Lands:** A live E5 run is expensive: 229 minutes to fail at its bound, then 3,646.5 s to
@@ -318,6 +339,9 @@ audit item for session 2.
   Also SRC-CLASSES-01, SRC-CLASSES-06, SRC-CLASSES-07, SRC-CLASSES-13, SRC-CLASSES-17:
   procedures move out of the standing prompt into skills loaded on demand; stored know-how has a
   half-life and is pruned by how often it helps; the model keeps absorbing the harness.
+  Also SRC-SEQAI-02, SRC-SEQAI-05, SRC-SEQAI-13, SRC-SEQAI-20: steering scaffolds can be
+  deleted; the model absorbs the harness within about a year; software is now built to last
+  months.
 - **Grade:** E2 (Anthropic's prompt reduction is confirmed in secondary coverage; the exact
   sizes differ between sources). A post's claim that a built-in command flags outdated
   `CLAUDE.md` rules is E1 and unchecked.
@@ -348,6 +372,8 @@ audit item for session 2.
   difficulty of the task; the top effort setting can double cost for a marginal gain.
   Also SRC-CURSOR-02: returns to more tokens fall off logarithmically, and structured prior
   information does more than extra compute.
+  Also SRC-SEQAI-01, SRC-SEQAI-02, SRC-SEQAI-08: scripts over raw traces instead of reading
+  them; route by difficulty; open-weight models carry the routine work.
 - **Grade:** E3 for about 90% fewer tokens on bulk reads in Spotify's own tests. E0 for the
   post's wording that the whole bill fell 90%.
 - **Verdict:** ADAPT.
@@ -369,6 +395,8 @@ audit item for session 2.
   Sjoberg on customer expectation.
   Also SRC-CURSOR-01: one company sets an aggressive time box on purpose, a month for work once
   planned at nine; it works because the scope is allowed to give.
+  Also SRC-SEQAI-23: one hardware operator's rule is to multiply first estimates of cost and
+  time by ten.
 - **Grade:** E3 for the tail (1,471 IT projects, mean cost overrun 27%, one in six about 200%).
   E3 for the anchoring setup; E0 for the post's figures (it gives 77 and 632 hours; the located
   source gives 99 and 555, and a smaller effect in a field study).
@@ -410,6 +438,9 @@ audit item for session 2.
   nowhere public is the moat.
   Also SRC-CURSOR-02: with code abundant the limits are commercial value, changing what users
   do, a first-principles view of what to build, and distribution.
+  Also SRC-SEQAI-05, SRC-SEQAI-08, SRC-SEQAI-13, SRC-SEQAI-17: what protects a product is data
+  or position nobody else holds; the measure is use, not purchase; domain depth outlasts
+  scaffolding; be clear what the product does today.
 - **Grade:** E1.
 - **Verdict:** USE.
 - **Lands:** The README states there is no live order pipeline, the traces are synthetic and the
@@ -426,6 +457,8 @@ audit item for session 2.
 - **Sources:** SRC-POSTS-08, SRC-POSTS-04.
   Also SRC-CLASSES-04, SRC-CLASSES-18: fewer technologies means faster work for people and for
   agents; a codebase can now be rewritten from itself cheaply.
+  Also SRC-SEQAI-11: a three-part test for what to keep: needed to stay up, to meet hard
+  obligations, or to deliver the promised result.
 - **Grade:** E1.
 - **Verdict:** ADAPT.
 - **Lands:** The deployed stack is 21 containers on one 8-vCPU VM (read, `CLAUDE.md`
@@ -463,6 +496,11 @@ audit item for session 2.
 - **Sources:** SRC-POSTS-05, SRC-POSTS-02.
   Also SRC-CLASSES-04: the strongest model for development and research, small tuned models in
   production.
+  Also SRC-SEQAI-03, SRC-SEQAI-04, SRC-SEQAI-07, SRC-SEQAI-10, SRC-SEQAI-14, SRC-SEQAI-18, SRC-
+  SEQAI-21, SRC-SEQAI-22: reinforcement learning needs a great many rollouts; if the starting
+  policy never succeeds there is nothing to reinforce; find the fit on general models first and
+  train afterwards; several learners at once make each other's world unstable; learning
+  machinery built before the workflow is settled is debt.
 - **Grade:** E1. One self-reported experiment and one vendor post.
 - **Verdict:** PARK until session 3 allocates the Colab units.
 - **Lands:** It supports spending the 200 Colab units on one or two narrow models trained inside
@@ -481,6 +519,9 @@ audit item for session 2.
 - **Sources:** SRC-HOWTO-01, SRC-HOWTO-02.
   Also SRC-CLASSES-04: agent-written changes exposed in stages behind hard barriers.
   Also SRC-CURSOR-01: small teams prove a new practice before it is released to everyone.
+  Also SRC-SEQAI-03, SRC-SEQAI-06, SRC-SEQAI-08, SRC-SEQAI-10, SRC-SEQAI-11, SRC-SEQAI-23: first
+  drafts for a person to review; gates before and after release; a proactive adviser as the
+  first form; one operator's span grew from one vehicle to a hundred as the record held.
 - **Grade:** E2. The talk is confirmed by several secondary summaries. Its throughput figures
   are self-reported, differ by 2.5x between sources, and are not used.
 - **Verdict:** ADAPT.
@@ -528,6 +569,8 @@ audit item for session 2.
 - **Sources:** SRC-HOWTO-01.
   Also SRC-CLASSES-15, SRC-CLASSES-16: hunt on the assumption that something is already wrong;
   session traces exposed a cause that automated scoring had missed.
+  Also SRC-SEQAI-01, SRC-SEQAI-06: the trace, not the code, is the source of truth for what an
+  agent system did.
 - **Grade:** E1.
 - **Verdict:** USE.
 - **Lands:** Finding 112 is the case for it. The aggregate said the consensus arm lost; the
@@ -588,6 +631,7 @@ audit item for session 2.
   restricted language for what an agent may express.
   Also SRC-CURSOR-02: small, sharp, composable primitives let capability grow without the risk
   growing.
+  Also SRC-SEQAI-20: the acting agent can run only tools an administrator has approved.
 - **Grade:** E1.
 - **Verdict:** ADAPT.
 - **Lands:** `WorldAction` carries an id, a kind, a place, parameters and a decision id. It has
@@ -610,6 +654,9 @@ audit item for session 2.
   improved, one of them on an inventory agent covering stock, forecasting, supplier choice and
   ordering.
 - **Sources:** SRC-CLASSES-01, SRC-CLASSES-05, SRC-CLASSES-16.
+  Also SRC-SEQAI-01, SRC-SEQAI-16: an explicit staged architecture is still right where control
+  and predictability are required, while another team prefers one agent following a written
+  procedure over a graph of narrow steps.
 - **Grade:** E1.
 - **Verdict:** ADAPT.
 - **Lands:** Session 2 classifies each of the eight (R-22): does it hold its own objective,
@@ -648,6 +695,8 @@ audit item for session 2.
 - **Sources:** SRC-CLASSES-01, SRC-CLASSES-06, SRC-CLASSES-07, SRC-CLASSES-11, SRC-CLASSES-20.
   Also SRC-CURSOR-01, SRC-CURSOR-02: a working prototype is required before a specification is
   debated; planning artifacts built to protect scarce engineering time are now overhead.
+  Also SRC-SEQAI-11, SRC-SEQAI-20, SRC-SEQAI-23: cut once, not in nibbles; effortless creation
+  breeds duplicates that need pruning; the most reliable part is the one removed.
 - **Grade:** E1.
 - **Verdict:** ADAPT.
 - **Lands:** The uplift harness is SYNAPSE's fixed eval. Session 3's cut list can be a list of
@@ -666,6 +715,8 @@ audit item for session 2.
   and a trading firm runs every strategy through fifteen or more years of real history, across
   different conditions and stresses, over one standard data pipeline so results are comparable.
 - **Sources:** SRC-CLASSES-04, SRC-CLASSES-20, SRC-CLASSES-09.
+  Also SRC-SEQAI-03, SRC-SEQAI-13: benchmarks resemble training tasks while the world keeps
+  changing; progress comes first where feedback is programmatic.
 - **Grade:** E1.
 - **Verdict:** ADAPT.
 - **Lands:** SYNAPSE's world is declared, not fitted, and the handoff records its fidelity as
@@ -686,6 +737,9 @@ audit item for session 2.
   its founder's past review comments. Standards are compiled from what people did, not written
   from scratch.
 - **Sources:** SRC-CLASSES-08, SRC-CLASSES-09, SRC-CLASSES-20.
+  Also SRC-SEQAI-01, SRC-SEQAI-07, SRC-SEQAI-09, SRC-SEQAI-22: traces curated into experiments;
+  live feedback polishes a model that is already good; corrections recorded where they happen,
+  including edits, undos and retries.
 - **Grade:** E1.
 - **Verdict:** ADAPT.
 - **Lands:** Two places. In the product, operator overrides are recorded in `audit_escalations`
@@ -706,6 +760,9 @@ audit item for session 2.
   is what counts. Evals have bugs of their own and need upkeep.
 - **Sources:** SRC-CLASSES-06, SRC-CLASSES-07, SRC-CLASSES-08, SRC-CLASSES-09, SRC-CLASSES-13,
   SRC-CLASSES-14.
+  Also SRC-SEQAI-01, SRC-SEQAI-04, SRC-SEQAI-10, SRC-SEQAI-20, SRC-SEQAI-23: a private eval
+  defines what good means; hard and varied cases over volume; the benchmark before any training;
+  a newer model is admitted only through the evals; parts tested until they break.
 - **Grade:** E1.
 - **Verdict:** USE, partly present. The uplift harness ran a negative control that passed and a
   positive control that was detected, and the house standard already says that a standard which
@@ -729,6 +786,8 @@ audit item for session 2.
 - **Sources:** SRC-CLASSES-07, SRC-CLASSES-12, SRC-CLASSES-14, SRC-CLASSES-16.
   Also SRC-CURSOR-01, SRC-CURSOR-02: review by intent and by demonstration; an interface that
   shows the plan and each step as it happens.
+  Also SRC-SEQAI-16, SRC-SEQAI-20: a transparent record in place of a black box was itself what
+  customers bought; the boundaries and controls are the product.
 - **Grade:** E1.
 - **Verdict:** USE, present. The decision anatomy, the audit hash chain and the single deploy
   oracle with three call sites are this (read, `CLAUDE.md`).
@@ -747,6 +806,10 @@ audit item for session 2.
   and a console. The operator can be the store manager of the twin for a fixed period, with the
   consensus advising in shadow, accepting or overriding its recommendations.
 - **Sources:** own, prompted by SRC-CLASSES-11, SRC-CLASSES-16, SRC-CLASSES-09.
+  Also SRC-SEQAI-11, SRC-SEQAI-14, SRC-SEQAI-16, SRC-SEQAI-20, SRC-SEQAI-23: a request the
+  system cannot meet shows what to build; almost no evaluation includes the people in the loop;
+  founders and engineers sat with every customer; the users, not the engineers, set the service
+  hours.
 - **Grade:** own.
 - **Verdict:** CREATE.
 - **Lands:** The pieces exist (read, `CLAUDE.md`): the standing world, an ingress console for
@@ -782,6 +845,8 @@ audit item for session 2.
   the reports revealed outages before monitoring did and fed a pipeline that drafts repairs for
   people to approve. The report is a signal about the system, not a complaint to be logged.
 - **Sources:** SRC-CLASSES-17.
+  Also SRC-SEQAI-01: an agent that scans traces for clusters of failure and files each with its
+  evidence.
 - **Grade:** E1.
 - **Verdict:** ADAPT.
 - **Lands:** SYNAPSE's agents already report honestly: each proposal carries a provenance
@@ -803,6 +868,10 @@ audit item for session 2.
   generates, and the person validates and adjusts in a proper interface, inside the run and not
   only at its end.
 - **Sources:** SRC-CURSOR-02, SRC-CLASSES-16, SRC-CLASSES-05.
+  Also SRC-SEQAI-02, SRC-SEQAI-06, SRC-SEQAI-12, SRC-SEQAI-13, SRC-SEQAI-19: keep the agent
+  separate from any one interface; a queue for unattended work and a live view for stepping in;
+  a job is its purpose; fixed layouts cost less attention; show the trade-off curve and let the
+  person choose the point.
 - **Grade:** E1.
 - **Verdict:** USE, partly present. The console shows a decision's full anatomy and has
   steering and override (read, `CLAUDE.md`).
@@ -813,3 +882,207 @@ audit item for session 2.
   (INS-022).
 - **Wrong if:** in use, operators only ever accept or reject, so that finer control goes
   unused. Dogfooding would show it (INS-035).
+
+### INS-039 - Reach users through the system they already run
+
+- **Lens / kind:** PURPOSE / principle
+- **Says:** The companies in this folder that found adoption did not ask the customer to move.
+  A driving company ships inside cars that manufacturers already build. A model platform runs
+  on the customer's own infrastructure. A coding-agent company found users only when it worked
+  inside the tools developers already had, and it keeps what it learns in the customer's own
+  repository. The one logistics operator in the corpus found that the deciding component was
+  15% of the work, and that fitting into customers' ordering and stock systems was much of the
+  rest.
+- **Sources:** SRC-SEQAI-02, SRC-SEQAI-04, SRC-SEQAI-08, SRC-SEQAI-11, SRC-SEQAI-23.
+- **Grade:** E1. The landing below is own.
+- **Verdict:** ADAPT.
+- **Lands:** SYNAPSE today is a platform to be adopted whole: 21 containers and its own data
+  stores (read, `CLAUDE.md`). A retailer already has a point-of-sale or stock system. The form
+  this entry points to is a small decision service that reads the retailer's existing feed and
+  writes a recommendation back to where they already work. The seam for it was built:
+  `WorldSource`, with an external feed named as the later source (read, `CLAUDE.md`, ADR-052).
+  Session 2 reads which fields the sensor and the replenishment slice actually need from the
+  world (R-37). Session 3 costs the thin form against the full stack (T-002, Q-03).
+- **Wrong if:** the first named user (Q-01) has no system to plug into, or wants to run the
+  whole platform themselves.
+
+### INS-040 - Spend the strong model at design time; ship the simple artefact it finds
+
+- **Lens / kind:** OPS / technique
+- **Says:** A capable model can be spent in a measured loop that searches for a better process,
+  and what ships is ordinary code that costs nothing per decision and behaves the same every
+  time. One company has a model write each automation once and then runs the static code.
+  Another speaker's point is that models now improve a process by repeated measured trial, so a
+  process is something an agent can be set to optimise.
+- **Sources:** SRC-SEQAI-05, SRC-SEQAI-20.
+- **Grade:** E1 for the practice; own for its use here.
+- **Verdict:** CREATE.
+- **Lands:** The $0 rule (I-1) bars paid models at run time. It does not bar them at design
+  time, and the operator holds a coding-agent subscription. The uplift harness is the
+  measurement such a loop needs. A candidate for one implementation session: have the coding
+  agent propose replenishment policies as plain code, score each against the harness, and keep
+  what beats the tuned control on seeds it never saw. The run-time product is then a readable,
+  auditable policy. It is also a missing arm for T-001: a searched simple policy, set against
+  the consensus. Two cautions. The search will fit the twin (INS-041, T-012). And a full E5 run
+  took about an hour when it completed (read, `HANDOFF.md`), so the loop needs a cheaper screen
+  first (INS-011, INS-036, R-30).
+- **Wrong if:** the harness gives the loop only a handful of evaluations per session, or the
+  policy it finds fails on scenario families held out of the search.
+
+### INS-041 - A learner exploits whatever earns reward, including the simulator's mistakes
+
+- **Lens / kind:** PROOF / warning
+- **Says:** Four sources say it independently. A coding model in training looked for ways to
+  score without doing the work. A model told to minimise compile errors learned to write
+  nothing. Learners satisfy a verifier by shortcut. And the founders of a lab built on
+  simulation name the limit themselves: a simulator is a person's model of the world, so the
+  learner inherits that person's assumptions. An environment that differs from reality teaches
+  the difference.
+- **Sources:** SRC-SEQAI-07, SRC-SEQAI-14, SRC-SEQAI-18, SRC-SEQAI-21.
+- **Grade:** E1.
+- **Verdict:** USE.
+- **Lands:** It binds any Colab spend on training policies in the declared twin (T-012), and the
+  search in INS-040 as much as gradient training. The guards the corpus names: hold out whole
+  scenario families, vary the twin's parameters between training and test, read sample
+  trajectories and not only the score, and treat a gain that looks too large as a defect report
+  on the environment. SYNAPSE has a `test_reward_safety.py` per agent (read, `CLAUDE.md`).
+  Session 2 reads whether those tests look for reward earned without the outcome, or only check
+  sign and bounds (R-34).
+- **Wrong if:** nothing is ever trained or searched against the twin. Then there is no learner
+  to exploit it.
+
+### INS-042 - Rubric first: plant the issue, then build the world around it
+
+- **Lens / kind:** PROOF / technique
+- **Says:** A company that could not use its clients' confidential material had its domain
+  experts write the grading rubric before anything else, plant known issues, and generate the
+  surrounding material to contain them. The answer key exists by construction, and no real data
+  is needed to know what a correct response must find.
+- **Sources:** SRC-SEQAI-10.
+- **Grade:** E1.
+- **Verdict:** ADAPT.
+- **Lands:** SYNAPSE is in the same position: no real data, and a declared world. Its scenario
+  cells live in `uplift/scenarios.py` (measured: the file exists; not yet read). For each
+  planted event, such as a supplier failure, a demand spike or a cold-chain fault, the operator
+  writes in advance what a competent response must detect and do, and how soon. The harness
+  then reports whether each planted issue was found and handled, beside the aggregate
+  objective. That gives a result a reader can check case by case, and it answers part of T-012:
+  a claim that the system handles these named situations does not rest on the twin matching a
+  real store's averages. Session 2 reads whether the cells already carry expected responses
+  (R-38).
+- **Wrong if:** the scenario cells already state expected responses, or the rubric items cannot
+  be checked mechanically from the decision record.
+
+### INS-043 - A published benchmark recruits others and makes its author the reference
+
+- **Lens / kind:** PURPOSE / principle
+- **Says:** The same company published its benchmark. Others then found its flaws, model
+  builders began testing against the domain, and the author became the point of reference for
+  it. A benchmark kept private improves only its owner.
+- **Sources:** SRC-SEQAI-10.
+- **Grade:** E1.
+- **Verdict:** PARK.
+- **Lands:** One reading of Q-03 is that the proof harness is the product (T-004). Its published
+  form would be a scenario set with planted issues (INS-042), a tuned control to beat, and the
+  scoring rule. Parked until session 2 reports how separable the harness is from this twin
+  (R-11) and the operator answers Q-03.
+- **Wrong if:** the harness cannot be separated from the twin, or nobody else has a decision
+  system of this kind to run against it. The second is a real risk (inferred): the audience for
+  a quick-commerce decision benchmark may be very small.
+
+### INS-044 - Validate the scorer: check that the objective ranks outcomes as a practitioner would
+
+- **Lens / kind:** PROOF / technique
+- **Says:** Before optimising against a score, check the score. One source runs a sample of
+  completed tasks through the scorer and checks its ranking against an expert's. Chip designers
+  rejected results on a convenient proxy until the cost function was rebuilt with them. A
+  training company treats the blend of criteria in a reward as the company's own judgment, to
+  be chosen deliberately. Another has an expert grade about a hundred cases to a rubric and
+  trains a grader on them for the rest. Knowing what good looks like and writing it down so a
+  system can optimise it are different skills, and the second is the bottleneck.
+- **Sources:** SRC-SEQAI-14, SRC-SEQAI-18, SRC-SEQAI-19, SRC-SEQAI-22.
+- **Grade:** E1.
+- **Verdict:** USE.
+- **Lands:** The E5 headline is a difference of 4.40 units in one objective (read,
+  `HANDOFF.md`). I have not read how that objective weighs stockouts, waste and cost, or where
+  the weights came from; session 2 does (R-29). A cheap check follows: the operator ranks about
+  ten replicate summaries from best to worst without seeing their scores, and the two rankings
+  are compared. If they disagree, the objective is repaired before anything is tuned against
+  it, including the re-run after PR #87. The limit: the operator is not a store operator, so
+  this checks the objective against one informed judgment. A practitioner's ranking is what a
+  named user (Q-01) would eventually supply.
+- **Wrong if:** the weights come from a documented source a practitioner would accept, or the
+  blind ranking agrees with the objective.
+
+### INS-045 - Land on one workflow that already has a procedure and a measure, then expand
+
+- **Lens / kind:** PURPOSE / principle
+- **Says:** The first workflow to hand to agents is one that already has a written procedure
+  and an agreed measure of quality, because both the baseline and the test exist. Prove it
+  there, then move along the chain of neighbouring workflows. One founder spent five years
+  without traction while reaching for the largest possible product, and found a market on
+  committing to one use. The logistics operator served a single hospital for nine months before
+  it could serve the others it had signed. The pull toward newer or larger work is often a way
+  of avoiding the hard thing in front of you.
+- **Sources:** SRC-SEQAI-16, SRC-SEQAI-17, SRC-SEQAI-13, SRC-SEQAI-23.
+- **Grade:** E1.
+- **Verdict:** USE.
+- **Lands:** ADR-052 already chose a slice: inventory reorder in one city. Replenishment has
+  what this entry asks for, an incumbent procedure in the tuned control and a measure in the E5
+  objective. So one candidate definition of finished is that this workflow beats its incumbent,
+  by a named mechanism, before any other agent is deepened. Converting the other six agents'
+  `execute()` is listed as remaining work (read, `CLAUDE.md`); the corpus's advice is to leave
+  it listed. One uncomfortable observation belongs here. The sprint record shows three
+  colour-system revisions (ADR-045, ADR-046, ADR-048) before the decision loop was closed
+  (ADR-052) (read, `CLAUDE.md`). The corpus's reading of that pattern is that tractable work
+  draws effort away from the work that decides the outcome. The operator decides (Q-07).
+- **Wrong if:** the first user needs several functions together before the product is usable at
+  all, or replenishment alone leaves no room to beat a tuned rule. The re-run after PR #87
+  would show the second.
+
+### INS-046 - Try the action in the twin before executing it
+
+- **Lens / kind:** SYSTEM / technique
+- **Says:** One lab's rule for granting authority: before an agent may act on something, its
+  candidate actions are run forward in simulation and judged by what they disturb. Authority is
+  extended action by action, as the forecasts hold.
+- **Sources:** SRC-SEQAI-21.
+- **Grade:** E1.
+- **Verdict:** ADAPT.
+- **Lands:** SYNAPSE has the parts: a standing world that accepts actions, and a consensus that
+  chooses among proposals. The README says the orchestrator does not yet invoke Tier 4
+  simulations against the twin (read, `README.md` line 14, tracked as C7), while tests named
+  `test_twin_verification.py` and `test_selection_and_twin_consequence_property.py` exist
+  (measured: file names only). Session 2 reads which is current (R-31). A lookahead is also a
+  mechanism of uplift that a static rule lacks (INS-002): the system can run its own proposal
+  and the incumbent's on the same forecast and act only when its own is better. One trap is
+  specific to this project. A lookahead in the same twin that scores the arm forecasts
+  perfectly, so a win earned that way overstates what happens when the world differs from the
+  model (T-012, INS-041). The harness would need the lookahead's model and the scoring world to
+  differ.
+- **Wrong if:** consensus already does this, or the twin is too slow to run a lookahead inside
+  a decision tier's time budget (R-30).
+
+### INS-047 - Keep the proven simple controller live, with a small independent arbiter
+
+- **Lens / kind:** SYSTEM / principle
+- **Says:** The logistics operator flies two computers at once, and a small independent arbiter
+  decides which one has control. A research lab proposes agents whose only job is to bound what
+  the exploring agents may do. The shared pattern: the complex decision-maker is never the only
+  one. A simpler, proven one runs beside it and takes over under stated conditions, and the
+  part that chooses between them is small enough to verify.
+- **Sources:** SRC-SEQAI-23, SRC-SEQAI-21.
+- **Grade:** E1. The landing is own.
+- **Verdict:** ADAPT.
+- **Lands:** Since E5, SYNAPSE has a proven simple controller: the tuned control that beat the
+  consensus arm. Today a low-confidence decision goes to a person (I-5). With no person present
+  the natural fallback is the incumbent rule, and session 2 reads what executes in that case
+  now (R-32). The design this points to: the consensus proposes, the rule proposes, and a small
+  deterministic arbiter executes the consensus proposal only when it passes the guardrails and
+  a lookahead (INS-046), and the rule's otherwise. Two consequences for the proof. Such a
+  system can lose to the control only where the arbiter chose wrongly, and any uplift is
+  attributable to the decisions where it chose consensus, which names the slice to report
+  (INS-003, R-33).
+- **Wrong if:** choosing between the two is as hard as the decision itself, so that the arbiter
+  nearly always picks the rule. That would be a clean negative result about the consensus, and
+  cheap to obtain.
