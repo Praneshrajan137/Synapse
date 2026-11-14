@@ -6,7 +6,12 @@ const meta: Meta<typeof Pulse> = {
   component: Pulse,
   parameters: {
     layout: "centered",
-    backgrounds: { default: "dark" },
+    // Mission Control draws the Pulse on the Cortex hero band, `section.syn-hero`
+    // (src/surfaces/mission-control/CortexBanner.tsx:126), a vertical gradient from
+    // `surface` down to `canvas` (src/styles/global.css:122-124). Axe cannot judge
+    // text over a gradient, so the story sits on the band's lighter end, `surface`,
+    // where the light text of the dark theme has its lowest contrast.
+    backgrounds: { default: "surface" },
     docs: {
       description: {
         component:
@@ -62,5 +67,7 @@ export const UnderLoad: Story = {
 /** Light theme variant of the diverging scale. */
 export const LightTheme: Story = {
   args: { theme: "light" },
-  parameters: { backgrounds: { default: "light" } },
+  // The light tokens as well as the light confidence scale. The hero band's darker
+  // end, `canvas`, is where the dark text of the light theme has its lowest contrast.
+  parameters: { backgrounds: { default: "canvas", theme: "light" } },
 };

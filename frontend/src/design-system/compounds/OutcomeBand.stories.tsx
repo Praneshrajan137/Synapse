@@ -10,7 +10,10 @@ const samples = Array.from({ length: 200 }, () => {
 const meta: Meta<typeof OutcomeBand> = {
   title: "Compounds/OutcomeBand",
   component: OutcomeBand,
-  parameters: { layout: "padded", backgrounds: { default: "dark" } },
+  // Operations renders the band inside the Confidence distribution card,
+  // `section.syn-card` (src/surfaces/operations/ConfidenceDistribution.tsx:52),
+  // so its text sits on `surface`.
+  parameters: { layout: "padded", backgrounds: { default: "surface" } },
   args: { samples, unit: "m", label: "Delivery time" },
 };
 export default meta;

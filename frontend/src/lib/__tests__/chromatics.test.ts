@@ -2,16 +2,23 @@ import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
+import { AGENT_COLOR_VAR, AGENT_NAMES } from "../agent-identity";
 import {
   AGENT_STATE_FACTOR,
   type AgentProcessState,
   CONFIDENCE_GATE,
   type ChromaticTheme,
+  GLYPH_INK_TOKENS,
+  agentFillRgb,
   confidenceColor,
   confidenceZone,
   degradedStateColor,
+  glyphContrast,
+  glyphInk,
   processStateColor,
+  processStateShare,
   rationedAgentColor,
+  rationedAgentShare,
   syntheticStateColor,
   vsupChromaFactor,
 } from "../chromatics";
@@ -339,5 +346,113 @@ describe("rationedAgentColor — quiet-by-default", () => {
     const s = rationedAgentColor("var(--syn-agent-demand-prophet)", 0.5);
     expect(s).not.toMatch(/#[0-9a-f]{3,8}/i);
     expect(s).not.toMatch(/\b(rgba?|hsla?)\s*\(/);
+  });
+});
+
+describe("glyphInk — an agent's monogram stays legible on its own fill (finding 131)", () => {
+  const PROCESS_STATES: readonly AgentProcessState[] = [
+    "interrupted",
+    "waiting",
+    "thinking",
+    "debating",
+    "acting",
+    "escalated",
+  ];
+
+  it("reads the identity share that the fill's color-mix() writes", () => {
+    const v = "var(--syn-agent-pricing-oracle)";
+    for (const state of PROCESS_STATES) {
+      expect(processStateColor(v, state)).toContain(` ${processStateShare(state)}%,`);
+    }
+    for (const activity of [0, 0.12, 0.5, 1]) {
+      expect(rationedAgentColor(v, activity)).toContain(` ${rationedAgentShare(activity)}%,`);
+    }
+  });
+
+  it("mirrors the agent, neutral-mix and ink tokens tokens.css declares in each theme", () => {
+    const css = readFileSync(join(REPO_ROOT, "frontend", "src", "styles", "tokens.css"), "utf8");
+    // The custom properties one top-level rule of tokens.css declares.
+    const declared = (selector: string): Map<string, string> => {
+      const open = css.indexOf(`${selector} {`);
+      expect(open, `tokens.css declares ${selector}`).toBeGreaterThanOrEqual(0);
+      const body = css.slice(open, css.indexOf("\n}", open));
+      const properties = new Map<string, string>();
+      for (const m of body.matchAll(/(--syn-[a-z0-9-]+):\s*([^;]+);/g)) {
+        properties.set(m[1] ?? "", (m[2] ?? "").trim());
+      }
+      return properties;
+    };
+    const blocks: Record<ChromaticTheme, Map<string, string>> = {
+      dark: declared('[data-theme="dark"]'),
+      light: declared('[data-theme="light"]'),
+      hc: declared('[data-theme="hc"]'),
+    };
+    // hc is layered over :root, so a property it does not declare keeps the dark value.
+    const resolved = (theme: ChromaticTheme, name: string): string =>
+      blocks[theme].get(name) ?? (theme === "hc" ? blocks.dark.get(name) : undefined) ?? "";
+    const channels = (value: string): number[] => value.split(" ").map(Number);
+
+    for (const theme of ["dark", "light", "hc"] as const) {
+      const mirror = GLYPH_INK_TOKENS[theme];
+      for (const agent of AGENT_NAMES) {
+        const property = `--syn-agent-${agent.replaceAll("_", "-")}`;
+        // The fill is painted from the same custom property the mirror copies.
+        expect(AGENT_COLOR_VAR[agent]).toBe(`var(${property})`);
+        expect(mirror.agents[agent], `${theme} ${property}`).toEqual(
+          parseOklch(resolved(theme, property)),
+        );
+      }
+      expect(mirror.neutralMix, `${theme} --syn-neutral-mix`).toEqual(
+        parseOklch(resolved(theme, "--syn-neutral-mix")),
+      );
+      expect([...mirror.ink], `${theme} --syn-ink`).toEqual(channels(resolved(theme, "--syn-ink")));
+      expect([...mirror.inkInverse], `${theme} --syn-ink-inverse`).toEqual(
+        channels(resolved(theme, "--syn-ink-inverse")),
+      );
+    }
+  });
+
+  it("reproduces the Pricing Oracle fills and ratios that Storybook's axe run measured", () => {
+    // Storybook a11y job 124962437723: dark ink-inverse on the Pricing Oracle's
+    // waiting (35 %), degraded (59 %) and unknown (28 %) fills. Axe truncates a
+    // ratio to two decimals, and the browser converts OKLab through XYZ, so a
+    // channel may land one step away from these matrices.
+    const measured = [
+      { share: 35, fill: [92, 107, 150], ratio: 3.9 },
+      { share: 59, fill: [79, 100, 171], ratio: 3.65 },
+      { share: 28, fill: [95, 109, 143], ratio: 3.97 },
+    ] as const;
+    for (const { share, fill, ratio } of measured) {
+      for (const [i, channel] of agentFillRgb("pricing_oracle", share, "dark").entries()) {
+        const step = Math.abs(channel - (fill[i] ?? Number.NaN));
+        expect(step, `${share} % fill, channel ${i}`).toBeLessThanOrEqual(1);
+      }
+      const onInverse = glyphContrast("pricing_oracle", share, "dark", "ink-inverse");
+      expect(Math.abs(onInverse - ratio), `${share} % ratio`).toBeLessThan(0.02);
+    }
+  });
+
+  it("keeps the chosen ink above 4.5:1 on every dark agent fill from 25 % identity, the palest a cell renders", () => {
+    for (const agent of AGENT_NAMES) {
+      for (let share = processStateShare("interrupted"); share <= 100; share += 1) {
+        const ink = glyphInk(agent, share, "dark");
+        expect(glyphContrast(agent, share, "dark", ink), `${agent} at ${share} %`).toBeGreaterThan(
+          4.5,
+        );
+      }
+    }
+  });
+
+  it("finds an ink above 4.5:1 for every agent at every share in the high-contrast theme", () => {
+    // White and near-black inks: the better of the two never drops below the
+    // ratio at which they tie, sqrt(1.05 / (Y(ink-inverse) + 0.05)), on any fill.
+    for (const agent of AGENT_NAMES) {
+      for (let share = 0; share <= 100; share += 1) {
+        const ink = glyphInk(agent, share, "hc");
+        expect(glyphContrast(agent, share, "hc", ink), `${agent} at ${share} %`).toBeGreaterThan(
+          4.5,
+        );
+      }
+    }
   });
 });

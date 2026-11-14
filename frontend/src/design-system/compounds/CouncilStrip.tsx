@@ -5,9 +5,18 @@ import {
   AGENT_NAMES,
   type AgentName,
 } from "@lib/agent-identity";
-import { type AgentProcessState, processStateColor, rationedAgentColor } from "@lib/chromatics";
+import {
+  type AgentProcessState,
+  type GlyphInk,
+  glyphInk,
+  processStateColor,
+  processStateShare,
+  rationedAgentColor,
+  rationedAgentShare,
+} from "@lib/chromatics";
 import { cn } from "@lib/cn";
 import { fmt } from "@lib/formatters";
+import { useThemeStore } from "@state/theme.store";
 
 /**
  * CouncilStrip — the eight specialist minds as an ambient presence row.
@@ -21,6 +30,11 @@ import { fmt } from "@lib/formatters";
  *     a fallback path, unreachable, or of unknown health is shown plainly —
  *     never painted a reassuring green. Every cell carries a STATUS WORD, so
  *     state survives colour-blindness and greyscale (INV-CLR-011).
+ *
+ * Each monogram is drawn in whichever ink token contrasts more with its own
+ * fill (`glyphInk`, finding 131), as the fill changes with the agent, its state
+ * and the theme. Where neither ink token reaches 4.5:1 on a fill (the light
+ * theme, near its neutral mix), the gap is in the tokens, not in this choice.
  *
  * Status strings map straight from `GET /api/v1/agents` (api/routers/agents.py):
  * "healthy" → healthy, "http_*" → degraded, "unreachable*" → unreachable,
@@ -98,18 +112,39 @@ export function processStateFor(state: CouncilAgentState): AgentProcessState | n
   return null;
 }
 
-/** Identity colour for a cell — token-governed factors for process states,
- * documented local tints for the health states outside the grammar. */
-function dotColorFor(
+/** A cell's fill and the identity share it is mixed at. */
+export interface CouncilDot {
+  readonly color: string;
+  /** Percent of the agent's identity colour in the fill; the glyph ink is read from it. */
+  readonly share: number;
+}
+
+/**
+ * A cell's fill: token-governed factors for process states, documented local
+ * tints for the health states outside the grammar.
+ */
+export function councilDotFor(
   state: CouncilAgentState,
   colorVar: string,
   override?: AgentProcessState | null,
-): string {
+): CouncilDot {
   const processState = override ?? processStateFor(state);
-  if (processState) return processStateColor(colorVar, processState);
+  if (processState) {
+    return {
+      color: processStateColor(colorVar, processState),
+      share: processStateShare(processState),
+    };
+  }
   // degraded: present but visibly not at full strength; unknown: near-mute.
-  return rationedAgentColor(colorVar, state.status === "degraded" ? 0.5 : 0.12);
+  const activity = state.status === "degraded" ? 0.5 : 0.12;
+  return { color: rationedAgentColor(colorVar, activity), share: rationedAgentShare(activity) };
 }
+
+// Literal class names, so Tailwind's content scan generates both utilities.
+const GLYPH_INK_CLASS: Record<GlyphInk, string> = {
+  ink: "text-ink",
+  "ink-inverse": "text-ink-inverse",
+};
 
 export function CouncilStrip({
   states,
@@ -118,6 +153,9 @@ export function CouncilStrip({
   onSelectAgent,
   className,
 }: CouncilStripProps) {
+  // The glyph ink rule needs the theme the tokens resolve to; src/app/providers.tsx
+  // applies this same store value to <html data-theme>.
+  const theme = useThemeStore((s) => s.theme);
   return (
     <ul
       className={cn("grid grid-cols-4 gap-2 sm:grid-cols-8", className)}
@@ -130,7 +168,7 @@ export function CouncilStrip({
         const processState = live ?? processStateFor(state);
         const liveWord = live ? PROCESS_WORD[live] : undefined;
         const active = state.active === true || live !== null;
-        const dotColor = dotColorFor(state, AGENT_COLOR_VAR[agent], live);
+        const dot = councilDotFor(state, AGENT_COLOR_VAR[agent], live);
         const interactive = Boolean(onSelectAgent);
         const selected = selectedAgent === agent;
         const degraded = health === "degraded" || health === "unreachable";
@@ -176,12 +214,19 @@ export function CouncilStrip({
                   active && "animate-pulse-confidence",
                 )}
                 style={{
-                  background: dotColor,
+                  background: dot.color,
                   borderColor: active ? AGENT_COLOR_VAR[agent] : "transparent",
                 }}
                 aria-hidden="true"
               >
-                <span className="font-mono text-[0.6rem] font-bold uppercase tracking-tight text-ink-inverse mix-blend-luminosity">
+                {/* No mix-blend-mode: axe measures the ink token, so the glyph paints
+                    exactly that token (finding 131). */}
+                <span
+                  className={cn(
+                    "font-mono text-[0.6rem] font-bold uppercase tracking-tight",
+                    GLYPH_INK_CLASS[glyphInk(agent, dot.share, theme)],
+                  )}
+                >
                   {AGENT_INITIALS[agent]}
                 </span>
               </span>
