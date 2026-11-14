@@ -40,6 +40,14 @@ A tension is not a verdict. Each one names what would settle it.
 - **A third arm worth having:** a simple policy found by search against the harness (INS-040),
   and a fallback design in which the consensus acts only when an arbiter prefers it to the rule
   (INS-047). Either turns the question from which side wins into where each one wins.
+- **Added by Jane Street:** a panelist with experience inside the labs says swarms of many
+  agents exist there and cannot be deployed, because their behaviour drifts and they take
+  destructive actions nobody asked for (SRC-JANE-04). A researcher reports a swarm on one
+  repository spending heavily on its own conflicts (SRC-JANE-06). The report on the firm's own
+  agent platform reads its history as growth from a simple working system (SRC-JANE-01). These
+  are coding agents sharing one body of work, not agents with separate functions, so they bear
+  on SYNAPSE's design by analogy only. Their direct lesson is for how many agents the
+  implementation sessions run at once (INS-026).
 
 ### T-002 - A mature platform's infrastructure at a stage with no user
 
@@ -99,6 +107,8 @@ A tension is not a verdict. Each one names what would settle it.
   YC AI GUIDE adds two more: a step-by-step record that auditors can inspect is part of what
   one finance company sells (SRC-YCAI-05), and a testing company holds that the lasting asset
   is the specification and the loop that verifies against it, not the code (SRC-YCAI-02).
+  Jane Street adds that testing was long treated as low-status work and so left undervalued,
+  and that a company was built on that gap (SRC-JANE-10).
 
 ### T-005 - "Prose is not free", against the volume of prose
 
@@ -212,7 +222,9 @@ A tension is not a verdict. Each one names what would settle it.
   whether anything long-running accumulates it (R-36).
 - **Raised by:** Sequoia Capital- AI. Repeated in YC AI GUIDE, where a history of agent
   scaffolding treats editing and clearing context as an advance over append-only growth
-  (SRC-YCAI-10).
+  (SRC-YCAI-10). Jane Street adds evidence from a study of prompting: adding to a failing
+  prompt made results worse, and the model began ignoring parts of what it had been given
+  (SRC-JANE-02).
 
 ## Inside the corpus
 
@@ -224,6 +236,11 @@ A tension is not a verdict. Each one names what would settle it.
 - **Reading:** they answer different questions. The harness wins when the base model is strong
   and general. Training wins on a narrow job with labelled data. SYNAPSE has both kinds of
   part: a general reasoner in the disruption path, and narrow forecasters and policies.
+- **Added later:** YC AI GUIDE has both halves again: a harness change on fixed weights
+  (SRC-YCAI-10), and a small trained model beating a general one where the company held the
+  data (SRC-YCAI-03). Jane Street adds a case where training a small model did not close the
+  gap to a general one (SRC-JANE-02), with the advice to run a baseline that involves no
+  training first (INS-021).
 
 ### T-007 - Mock your dependencies, or run it like production?
 
