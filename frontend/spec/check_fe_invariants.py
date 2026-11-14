@@ -22,11 +22,13 @@ What this module now does instead:
   ``passed`` / ``failed`` / ``skipped`` status. Playwright writes each ``file``
   relative to the record's own ``config.rootDir``, so it is resolved against that
   directory before anything compares it (finding 90; see :func:`paths_match`).
-* **Requires one for every ``enforced`` invariant.** An invariant is ``attested``
-  only when at least one executed, non-skipped assertion is attributable to it -
-  by an ``FE-INV-###`` tag in the test's own title, or by the test's file being a
-  suite file the registry lists for that invariant. File existence and an
-  all-skipped run are both rejected (R8.7).
+* **Requires one for every ``enforced`` invariant, and no failure.** An invariant is
+  ``attested`` only when at least one executed assertion attributable to it passed and
+  none failed. A case is attributable by an ``FE-INV-###`` tag in the test's own title,
+  or by the test's file being a suite file the registry lists for that invariant. One
+  attributable failure makes the invariant ``violated`` whatever else passed, and a
+  Playwright case that failed and then passed on its retry is a failure (finding 132).
+  File existence and an all-skipped run are both rejected (R8.7).
 * **Never turns absence into a pass (I-7).** A missing, unreadable, or
   unparseable reporter file is ``unavailable`` (exit ``2``), never a pass. A
   reporter set in which nothing executed is ``unavailable`` too, and so is a
@@ -38,7 +40,7 @@ What this module now does instead:
   a sufficient one.
 * **Decides one verdict per declared console property file** (R2.6-R2.9, R2.12-R2.14,
   R2.16). Independent of the FE-INV clause above: an attestation asks "did SOME
-  assertion prove this invariant", a suite verdict asks "did THIS FILE run at all".
+  assertion pass and none fail", a suite verdict asks "did THIS FILE run at all".
   The five files are named in ``fe-invariant-attestation.yaml``'s ``declared_suites``
   block. Six states, one of which is a pass - see :data:`SuiteClassification`. A file
   with no usable entry is reported **AUTHORED BUT NOT EXECUTED**, and a local editor
@@ -59,7 +61,7 @@ than discovered.
 
 Exit codes, matching ``scripts/audit/registry_gate.py``::
 
-    0  pass          every enforced invariant has an executed, non-skipped assertion
+    0  pass          every enforced invariant has a passing assertion and no failed one
     1  fail          an enforced invariant's assertions skipped, failed, or never ran
     2  unavailable   the reporter evidence could not be read (a SKIP is not a PASS)
 
@@ -129,8 +131,8 @@ TAG_PATTERN: Final = re.compile(r"FE-INV-\d{3}")
 TestStatus = Literal["passed", "failed", "skipped"]
 
 Classification = Literal[
-    "attested",  # >=1 executed, non-skipped, passing assertion (the only passing class)
-    "violated",  # attributable assertions ran and at least one failed
+    "attested",  # >=1 executed, passing assertion and no failed one (the only passing class)
+    "violated",  # attributable assertions ran and at least one failed, whatever else passed
     "skipped_only",  # attributable assertions exist in the report, every one skipped
     "not_executed",  # suite files are listed, but no assertion from them was reported
     "out_of_suite",  # no suite file is listed; declared enforced by a named CI job
@@ -232,7 +234,9 @@ class InvariantAttestation(BaseModel):
     registry_status: str
     classification: Classification
     suite_files: tuple[str, ...]  # registry-listed tests that a JS runner can execute
-    attesting: tuple[str, ...]  # titles of executed, non-skipped, passing assertions
+    #: Titles of executed, passing assertions. A ``violated`` invariant can have some too:
+    #: a pass beside a failure is counted here and never credited (finding 132).
+    attesting: tuple[str, ...]
     failed: tuple[str, ...]
     skipped: tuple[str, ...]
     detail: str
@@ -343,8 +347,8 @@ class FeInvariantVerdict(BaseModel):
     skipped_count: int
     attestations: tuple[InvariantAttestation, ...]
     #: One verdict per declared console property file (R2.6). Independent of
-    #: ``attestations``: an FE-INV attestation asks "did SOME assertion prove this
-    #: invariant", a suite verdict asks "did THIS FILE run at all".
+    #: ``attestations``: an FE-INV attestation asks "did SOME assertion pass and none
+    #: fail", a suite verdict asks "did THIS FILE run at all".
     declared_suites: tuple[SuiteExecution, ...]
     hygiene_errors: tuple[str, ...]
     verdict: Verdict
@@ -787,7 +791,12 @@ def classify(
     tests: tuple[ExecutedTest, ...],
     declaration: AttestationDeclaration,
 ) -> InvariantAttestation:
-    """Derive one invariant's attestation from the reporter output."""
+    """Derive one invariant's attestation from the reporter output.
+
+    First match wins: ``not_enforced``; ``violated`` (an attributable case failed);
+    ``attested`` (one passed and none failed); ``skipped_only``; ``not_executed``; then
+    ``out_of_suite`` or ``unattributable`` for an invariant that lists no suite file.
+    """
     suite_files = tuple(
         path for path in listed_tests if is_suite_file(path, declaration.suite_extensions)
     )
@@ -795,17 +804,35 @@ def classify(
     attesting = tuple(t.title for t in attributed if t.status == "passed")
     failed = tuple(t.title for t in attributed if t.status == "failed")
     skipped = tuple(t.title for t in attributed if t.status == "skipped")
+    # Stated beside a pass or a failure, because a skip proves nothing either way (I-7).
+    skip_note = f" ({len(skipped)} skipped)" if skipped else ""
 
     classification: Classification
     if registry_status != ENFORCED:
         classification = "not_enforced"
         detail = f"status {registry_status} owes no assertion yet"
+    elif failed:
+        # Tested before `attesting` (finding 132): one failed attributable assertion
+        # contradicts the invariant whatever else passed. With passes tested first, one
+        # passing case outweighed any number of failures, and the failures this gate sees
+        # are the ones that did not fail their own job, such as a Playwright case that
+        # passed only on its CI retry (`_collapse_playwright_spec` reads it as `failed`).
+        classification = "violated"
+        if attesting:
+            detail = (
+                f"{len(attesting)} attributable assertion(s) passed and {len(failed)} "
+                f"FAILED{skip_note}: {failed[0]}"
+            )
+        else:
+            detail = (
+                f"{len(failed)} attributable assertion(s) ran and FAILED{skip_note}: {failed[0]}"
+            )
     elif attesting:
         classification = "attested"
-        detail = f"{len(attesting)} executed, non-skipped assertion(s); first: {attesting[0]}"
-    elif failed:
-        classification = "violated"
-        detail = f"{len(failed)} attributable assertion(s) ran and FAILED: {failed[0]}"
+        detail = (
+            f"{len(attesting)} attributable assertion(s) passed and none failed{skip_note}; "
+            f"first: {attesting[0]}"
+        )
     elif skipped:
         classification = "skipped_only"
         detail = (
@@ -1210,7 +1237,8 @@ def evaluate_reports(
         verdict = "fail"
         named = ", ".join(f"{a.invariant_id}={a.classification}" for a in failing)
         reason = (
-            f"{len(failing)} enforced invariant(s) have no executed, non-skipped assertion: {named}"
+            f"{len(failing)} enforced invariant(s) have a failed attributable assertion "
+            f"or none that executed: {named}"
         )
     elif failing_suites:
         verdict = "fail"

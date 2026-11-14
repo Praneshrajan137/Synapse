@@ -616,10 +616,11 @@ steps:
   # FE-INV-031's Storybook axe check, declared in the SAME change as the job. The three steps
   # whose failure must redden it: the static build, the bounded wait for the file server
   # (which refuses a build without iframe.html), and the test run, whose exit status carries
-  # every story's verdict. The test run is the one that matters most: `fe-invariants` reads
-  # this job's run record and counts FE-INV-031 attested when ANY attributed case passed, so
-  # a swallowed exit status would let a run with failing stories through as attested. Only
-  # this job's exit status says "every story". The `uses:` steps are left to the R11.3 name
+  # every story's verdict. The test run is the one that matters most: its exit status is the
+  # job's verdict on every story. `fe-invariants`, which runs only after this job passes, reads
+  # the same run record; since finding 132's repair one failing story there makes FE-INV-031
+  # `violated` whatever else passed, where before one passing story attested it. The `uses:`
+  # steps are left to the R11.3 name
   # rule for the reason the `e4-published-artifact` entry gives. `match: exact`, quoted
   # byte-for-byte from `.github/workflows/frontend.yml`.
   - workflow: .github/workflows/frontend.yml

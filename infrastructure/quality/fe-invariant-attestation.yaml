@@ -4,8 +4,10 @@
 # EXISTS. Existence is not evidence: `FE-INV-056` was registered `enforced` with
 # its sole test being a suite that calls `test.skip(true, ...)` on its first
 # line. The checker now reads the Vitest / Playwright JSON reporter output and
-# requires at least one EXECUTED, NON-SKIPPED assertion attributable to every
-# `enforced` invariant. File existence and an all-skipped run are both rejected.
+# requires at least one EXECUTED, NON-SKIPPED, PASSING assertion attributable to
+# every `enforced` invariant, and none that FAILED: one failure is a violation
+# whatever else passed (finding 132). File existence and an all-skipped run are
+# both rejected.
 #
 # The two numbers/lists that derivation needs are pinned here rather than
 # hardcoded in the checker, so they are reviewable and diffable (design AD-13).

@@ -389,6 +389,10 @@ jobs:
     # (ADR-039: `pnpm preview` has no backend there), so this job does not execute
     # on that event; that gap is rendered by `scripts/audit/gate_surface.py` in
     # docs/state/GATE_SURFACE.md as NOT EXECUTED rather than reported as a pass.
+    # Because of `needs:`, this job runs only when every one of those jobs passed, so a
+    # failed case it reads is one that did not fail its own job, such as an `e2e` or
+    # `e2e-visual` case that failed and then passed on its CI retry. The checker reads
+    # that case as failed and its invariant as `violated` (finding 132).
     needs: [quality, e2e, e2e-visual, e2e-harness, storybook-a11y]
     steps:
       - uses: actions/checkout@v4
@@ -419,11 +423,11 @@ jobs:
       - name: Validate FE-INV registry against executed assertions
         working-directory: .
         # No `|| true` and no `continue-on-error` (R8.9): exit 1 = an `enforced`
-        # invariant has no executed, non-skipped assertion; exit 2 = the evidence
-        # could not be read. Both are non-passing, because absence of proof is
-        # never a pass (I-7). This job is EXPECTED to fail on `FE-INV-056` until
-        # the browser harness lands (design E6 / task 11.1) — that failure is the
-        # honest state and must not be silenced.
+        # invariant's attributable assertions include a failure or no pass; exit 2 =
+        # the evidence could not be read. Both are non-passing, because absence of
+        # proof is never a pass (I-7). This job is EXPECTED to fail on `FE-INV-056`
+        # until the browser harness lands (design E6 / task 11.1) — that failure is
+        # the honest state and must not be silenced.
         run: |
           python frontend/spec/check_fe_invariants.py \
             --report frontend/artifacts/test-reports/vitest.json \

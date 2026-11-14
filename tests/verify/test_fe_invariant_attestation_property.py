@@ -14,7 +14,8 @@ one missing reporter record, one attempt to declare ``FE-INV-056`` away. Those p
 shapes the audit finding was made of. What they cannot state is the rule the repair
 actually rests on, which is universal: *whatever* the registry says and *whatever* the
 runners reported, credit follows an executed, non-skipped, passing assertion and nothing
-else. The old gate was wrong not because it mishandled one entry but because its evidence
+else, and one attributable failure withholds it whatever else passed (finding 132). The old
+gate was wrong not because it mishandled one entry but because its evidence
 - ``Path.exists()`` - was categorically the wrong observation, and a categorical error is
 falsified by quantification, not by a longer list of cases.
 
@@ -27,7 +28,7 @@ to rediscover all of it from the JSON alone. Reporter output is *synthesised*, n
 produced: running Vitest or Playwright here is exactly the workload I-0 forbids, and it
 would prove less, because a real run cannot be asked for the counterexample shapes.
 
-Three clauses are kept deliberately apart, because collapsing them is how the original
+Four clauses are kept deliberately apart, because collapsing them is how the original
 defect survived review:
 
 * **Existence is not evidence.** ``test_a_listed_file_that_merely_exists_earns_nothing``
@@ -39,6 +40,11 @@ defect survived review:
   difference between rejection and credit is whether the same attributable assertion ran:
   flipping each skip to a pass moves that invariant from ``skipped_only`` to ``attested``
   and nothing else changes (I-7 - absence of proof is never a pass).
+* **A pass never outweighs a failure.** Adding one failing case to each invariant, and
+  changing nothing else, makes every one ``violated`` - whatever passed beside it, and
+  whether the failure was outright or a Playwright case that passed only on its retry.
+  This property's own oracle used to credit any pass, which is the order the gate had, so
+  neither could catch the gate attesting a contradicted invariant (finding 132).
 * **Out-of-suite is a disclosed label, not credit.** A declared enforcer resolves only
   when it names a workflow and a job that exist, and even then the invariant is never
   ``attested``. That clause reuses ``workflow_documents`` from ``tests.verify.strategies``
@@ -389,6 +395,11 @@ class CaseDraft:
     playwright_spelling: PlaywrightSpelling = "root-relative"
     ancestor: str | None = None
     declared_tag: bool = False
+    #: A failed Playwright case whose CI retry passed: test status ``flaky``, a ``failed``
+    #: result and then a ``passed`` one. By default Playwright does not fail the run for it,
+    #: so it is a failure that leaves its job green, and the gate must still read it as
+    #: ``failed`` (finding 132). Read only for a failed Playwright case.
+    retry_passed: bool = False
 
     @property
     def leaf_title(self) -> str:
@@ -464,6 +475,17 @@ class CaseDraft:
         if self.status == "passed":
             tests: list[dict[str, Any]] = [
                 {"status": "expected", "results": [{"status": "passed"}]}
+            ]
+        elif self.status == "failed" and self.retry_passed:
+            # What `retries: 1` writes for a case that failed and then passed on its retry.
+            tests = [
+                {
+                    "status": "flaky",
+                    "results": [
+                        {"status": "failed", "retry": 0},
+                        {"status": "passed", "retry": 1},
+                    ],
+                }
             ]
         elif self.status == "failed":
             tests = [{"status": "unexpected", "results": [{"status": "failed"}]}]
@@ -565,14 +587,22 @@ class ScenarioDraft:
         )
 
     def expected_classification(self, inv: InvariantDraft) -> str:
-        """R8.7 and R12.4 restated: credit follows an executed, non-skipped pass."""
+        """R8.7 and R12.4 restated: credit follows an executed pass, and only if none failed.
+
+        A failure is tested before a pass (finding 132). This oracle used to test the pass
+        first, the order the gate had, so the two agreed and neither could catch the gate
+        attesting an invariant whose other attributable case failed. The new order is a
+        STRICTER standard, not a weaker one (R2.10): every scenario it calls ``attested``
+        was ``attested`` under the old order too, and the only scenarios that move are the
+        ones with both a pass and a failure, from ``attested`` to ``violated``.
+        """
         if inv.registry_status != ENFORCED:
             return "not_enforced"
         attributed = self.attributed(inv)
-        if any(case.status == "passed" for case in attributed):
-            return "attested"
         if any(case.status == "failed" for case in attributed):
             return "violated"
+        if any(case.status == "passed" for case in attributed):
+            return "attested"
         if any(case.status == "skipped" for case in attributed):
             return "skipped_only"
         if inv.suite_files:
@@ -766,13 +796,16 @@ def scenarios(
             vitest_spelling = draw(st.sampled_from(VITEST_SPELLINGS))
         else:
             playwright_spelling = draw(st.sampled_from(PLAYWRIGHT_SPELLINGS))
+        status: CaseStatus = draw(st.sampled_from(tuple(case_statuses)))
+        # Only a failed Playwright case can be a retry-pass; the Vitest shape has no attempts.
+        retry_passed = runner == "playwright" and status == "failed" and draw(st.booleans())
         cases.append(
             CaseDraft(
                 index=index,
                 runner=runner,
                 route=route,
                 owner=owner,
-                status=draw(st.sampled_from(tuple(case_statuses))),
+                status=status,
                 skip_spelling=draw(st.sampled_from(SKIP_SPELLINGS)),
                 vitest_spelling=vitest_spelling,
                 playwright_spelling=playwright_spelling,
@@ -780,6 +813,7 @@ def scenarios(
                 # The Playwright tag list is the second attribution route; Vitest has no
                 # equivalent, so a tagged Vitest case must carry its tag in the title.
                 declared_tag=(runner == "playwright" and route == "tag" and draw(st.booleans())),
+                retry_passed=retry_passed,
             )
         )
 
@@ -913,8 +947,18 @@ def test_credit_requires_an_executed_non_skipped_assertion(scenario: ScenarioDra
         assert attestation.suite_files == inv.suite_files
         # `attested` is the credit predicate, and exactly one class carries it.
         assert attestation.attested is (attestation.classification == "attested")
+        # Credit needs a pass AND no failure. Until finding 132's repair this asked only for
+        # a pass, which is the rule the gate had, so it could not catch the gate crediting an
+        # invariant whose other case failed. That is a stricter standard, not a weaker one
+        # (R2.10): it withdraws credit from the mixed case and grants none it did not before.
+        any_passed = any(case.status == "passed" for case in attributed)
+        any_failed = any(case.status == "failed" for case in attributed)
         assert attestation.attested is bool(
-            inv.registry_status == ENFORCED and any(case.status == "passed" for case in attributed)
+            inv.registry_status == ENFORCED and any_passed and not any_failed
+        )
+        # The other half of the same rule: a failure is a violation whatever passed.
+        assert (attestation.classification == "violated") is bool(
+            inv.registry_status == ENFORCED and any_failed
         )
         # A listed file, however many there are, buys nothing on its own.
         if inv.registry_status == ENFORCED and not attributed:
@@ -1045,6 +1089,60 @@ def test_an_all_skipped_run_is_non_passing_not_a_shorter_pass(scenario: Scenario
         assert not before.attested
         assert after.classification == "attested"
         assert after.attested
+
+
+@given(
+    scenario=scenarios(registry_statuses=(ENFORCED,), allow_missing_report=False),
+    runner=st.sampled_from(RUNNERS),
+    retry_passed=st.booleans(),
+)
+def test_one_attributable_failure_makes_an_invariant_violated_whatever_else_passed(
+    scenario: ScenarioDraft, runner: Runner, retry_passed: bool
+) -> None:
+    """Finding 132, quantified: one failing case makes its invariant ``violated``.
+
+    The metamorphic dual of the all-skipped clause: there execution was the only variable,
+    here one failure is. Each invariant gets one extra case that failed, attributed to it
+    by the id in its title, so it counts whether or not the invariant owns a suite file. On
+    Playwright it failed outright or, drawn by ``retry_passed``, failed and then passed on
+    its retry. Every case already drawn, pass, skip or failure, stays as it was. Wrong if a
+    pass outweighed the added failure, the order the gate had before finding 132's repair:
+    every invariant that already had a passing case would then read ``attested``, and a draw
+    in which each one had one would pass the gate although it contradicts all of them.
+    """
+    added = tuple(
+        CaseDraft(
+            index=len(scenario.cases) + offset,
+            runner=runner,
+            route="tag",
+            owner=inv.invariant_id,
+            status="failed",
+            retry_passed=retry_passed,
+        )
+        for offset, inv in enumerate(scenario.invariants)
+    )
+    contradicted = dataclasses.replace(scenario, cases=(*scenario.cases, *added))
+    tests = parsed_tests(contradicted)
+    declaration = contradicted.declaration()
+
+    for inv, extra in zip(contradicted.invariants, added, strict=True):
+        attestation = fe.classify(
+            inv.invariant_id, inv.registry_status, inv.listed_tests, tests, declaration
+        )
+        assert attestation.classification == "violated", attestation.detail
+        assert not attestation.attested
+        assert extra.full_title in attestation.failed
+        # A pass beside the failure is counted and stated, never credited.
+        if attestation.attesting:
+            stated = f"{len(attestation.attesting)} attributable assertion(s) passed and "
+            assert stated in attestation.detail, attestation.detail
+
+    verdict = evaluate(contradicted)
+    assert verdict.verdict == "fail"
+    assert verdict.exit_code == fe.EXIT_FAIL
+    assert not verdict.passing
+    for inv in contradicted.invariants:
+        assert f"{inv.invariant_id}=violated" in verdict.reason
 
 
 @given(scenario=scenarios(max_invariants=5, max_cases=6))

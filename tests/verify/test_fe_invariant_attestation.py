@@ -18,6 +18,10 @@ with no usable ``rootDir``. The Playwright fixtures below are spelled the way Pl
 writes them. The ``tests/e2e/...`` spelling they used before is one Playwright never emits,
 which is why these tests passed while CI failed.
 
+And the shape finding 132 named: one passing attributable case used to attest an invariant
+whatever else failed. ``attested`` now needs a pass and no failure, and a Playwright case
+that failed and then passed on its CI retry is a failure.
+
 The gate lives at ``frontend/spec/check_fe_invariants.py``, outside any Python
 package (its path is referenced by ``fe_invariants.yaml`` and
 ``.github/workflows/frontend.yml``), so it is loaded by path rather than imported.
@@ -178,7 +182,8 @@ def test_all_skipped_run_is_rejected() -> None:
     assert attestation.skipped == ("resolve an escalation",)
 
 
-def test_one_executed_non_skipped_assertion_attests() -> None:
+def test_one_passing_assertion_attests_when_none_failed() -> None:
+    """A skip beside the pass withholds nothing: it proves nothing, and nothing failed."""
     attestation = fe.classify(
         "FE-INV-056",
         "enforced",
@@ -196,6 +201,134 @@ def test_a_failed_assertion_is_a_violation_not_an_attestation() -> None:
     )
     assert attestation.classification == "violated"
     assert not attestation.attested
+
+
+@pytest.mark.parametrize(
+    ("statuses", "classification", "detail"),
+    [
+        pytest.param(
+            ("passed", "failed"),
+            "violated",
+            "1 attributable assertion(s) passed and 1 FAILED: case 1",
+            id="one-passing-one-failing",
+        ),
+        pytest.param(
+            ("failed", "passed", "passed"),
+            "violated",
+            "2 attributable assertion(s) passed and 1 FAILED: case 0",
+            id="one-failing-two-passing",
+        ),
+        pytest.param(
+            ("passed",),
+            "attested",
+            "1 attributable assertion(s) passed and none failed; first: case 0",
+            id="passing-only",
+        ),
+        pytest.param(
+            ("failed",),
+            "violated",
+            "1 attributable assertion(s) ran and FAILED: case 0",
+            id="failing-only",
+        ),
+        pytest.param(
+            ("skipped", "failed"),
+            "violated",
+            "1 attributable assertion(s) ran and FAILED (1 skipped): case 1",
+            id="skipped-and-failing",
+        ),
+        pytest.param(
+            ("skipped", "passed"),
+            "attested",
+            "1 attributable assertion(s) passed and none failed (1 skipped); first: case 1",
+            id="skipped-and-passing",
+        ),
+    ],
+)
+def test_an_attributable_failure_is_a_violation_whatever_else_passed(
+    statuses: tuple[str, ...], classification: str, detail: str
+) -> None:
+    """``attested`` needs a passing assertion and no failed one; one failure is ``violated``.
+
+    Each row is one record of FE-INV-056's listed suite file in which case ``i`` has the
+    ``i``-th status, so attribution is by file and only the statuses vary. The first two
+    rows are finding 132's shape: while the gate tested a pass before a failure, it read
+    them ``attested``. The detail states every count, so a pass beside a failure is
+    reported and never hidden. Wrong if a pass outweighed a failure, if a failure alone or
+    beside a skip read as anything but ``violated``, or if a skip beside a pass withheld
+    credit (nothing failed, and a skip proves nothing either way).
+    """
+    cases = tuple(_test(status, title=f"case {index}") for index, status in enumerate(statuses))
+    attestation = fe.classify("FE-INV-056", "enforced", (SUITE_FILE,), cases, _declaration())
+
+    assert attestation.classification == classification
+    assert attestation.attested is (classification == "attested")
+    assert attestation.detail == detail
+    assert attestation.attesting == tuple(c.title for c in cases if c.status == "passed")
+    assert attestation.failed == tuple(c.title for c in cases if c.status == "failed")
+    assert attestation.skipped == tuple(c.title for c in cases if c.status == "skipped")
+
+
+def test_a_playwright_case_that_passed_only_on_its_retry_is_a_violation() -> None:
+    """A case that failed and then passed on its CI retry makes its invariant ``violated``.
+
+    Built through the reporter's own shape, not a hand-made status. With ``retries: 1`` on
+    CI (``playwright.config.ts``) Playwright writes such a case as test status ``flaky``,
+    with a ``failed`` result and then a ``passed`` one, and does not fail the run for it, so
+    the ``e2e`` job stays green and ``fe-invariants`` runs. ``_collapse_playwright_spec``
+    reads it as ``failed``. The record's other case passed on its first attempt: that is
+    finding 132's shape, which read FE-INV-011 ``attested`` and passed the gate while a
+    pass was tested before a failure. Wrong if the collapse took the retry's pass, if the
+    first case's pass outweighed the retried failure, or if the verdict passed.
+    """
+    payload = _playwright_record(
+        CI_ROOT_DIR, "smoke.spec.ts", title="route / renders and is a11y-clean @a11y"
+    )
+    # Field names as round 1's e2e record spells them. `flaky` is Playwright's outcome for a
+    # case that failed and then passed; no record read for this test carries one.
+    payload["suites"][0]["specs"].append(
+        {
+            "title": "route /cockpit renders and is a11y-clean @a11y",
+            "ok": True,
+            "tags": ["a11y"],
+            "file": "smoke.spec.ts",
+            "tests": [
+                {
+                    "expectedStatus": "passed",
+                    "projectId": "chromium",
+                    "projectName": "chromium",
+                    "results": [
+                        {"retry": 0, "status": "failed"},
+                        {"retry": 1, "status": "passed"},
+                    ],
+                    "status": "flaky",
+                }
+            ],
+        }
+    )
+
+    parsed = fe.parse_report(payload, PLAYWRIGHT_REPORT)
+    assert [(case.title, case.status) for case in parsed] == [
+        ("route / renders and is a11y-clean @a11y", "passed"),
+        ("route /cockpit renders and is a11y-clean @a11y", "failed"),
+    ]
+
+    attestation = fe.classify("FE-INV-011", "enforced", (SMOKE_SPEC,), parsed, _declaration())
+    assert attestation.classification == "violated", attestation.detail
+    assert not attestation.attested
+    assert attestation.attesting == ("route / renders and is a11y-clean @a11y",)
+    assert attestation.failed == ("route /cockpit renders and is a11y-clean @a11y",)
+
+    verdict = fe.evaluate_reports(
+        (_invariant("FE-INV-011", tests=(SMOKE_SPEC,)),),
+        _declaration(),
+        parsed,
+        (PLAYWRIGHT_REPORT,),
+        (),
+        (),
+    )
+    assert verdict.verdict == "fail"
+    assert verdict.exit_code == fe.EXIT_FAIL
+    assert "FE-INV-011=violated" in verdict.reason
 
 
 def test_a_title_tag_attributes_a_test_from_any_file() -> None:
