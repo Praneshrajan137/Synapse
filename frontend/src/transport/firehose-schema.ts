@@ -24,12 +24,14 @@ export const FirehoseEnvelopeSchema = z.discriminatedUnion("kind", [
     type: z.literal("pong"),
   }),
   // Standard fan-out envelope (synapse.* topic, seq, timestamp, payload).
+  // `payload` is `.optional()` because zod >= 4.4 makes a bare `z.unknown()` key required;
+  // zod 3 accepted an absent key here, and the envelope contract has not changed.
   z.object({
     kind: z.literal("envelope"),
     topic: z.string().min(1).max(128),
     seq: z.number().int().nonnegative(),
     ts: z.union([z.string(), z.number()]).optional(),
-    payload: z.unknown(),
+    payload: z.unknown().optional(),
   }),
   // Legacy escalation message (kept until /ws/escalation is sunset).
   z.object({

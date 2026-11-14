@@ -15,7 +15,10 @@ const meta: Meta<typeof ParetoParallel> = {
   component: ParetoParallel,
   parameters: {
     layout: "padded",
-    backgrounds: { default: "dark" },
+    // Decision Theater renders the front inside `div.syn-card-raised`
+    // (src/surfaces/decision-theater/DecisionDetail.tsx:378), so its text sits on
+    // `surface-raised`.
+    backgrounds: { default: "surface-raised" },
     docs: {
       description: {
         component:

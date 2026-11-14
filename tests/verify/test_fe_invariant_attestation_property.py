@@ -14,7 +14,8 @@ one missing reporter record, one attempt to declare ``FE-INV-056`` away. Those p
 shapes the audit finding was made of. What they cannot state is the rule the repair
 actually rests on, which is universal: *whatever* the registry says and *whatever* the
 runners reported, credit follows an executed, non-skipped, passing assertion and nothing
-else. The old gate was wrong not because it mishandled one entry but because its evidence
+else, and one attributable failure withholds it whatever else passed (finding 132). The old
+gate was wrong not because it mishandled one entry but because its evidence
 - ``Path.exists()`` - was categorically the wrong observation, and a categorical error is
 falsified by quantification, not by a longer list of cases.
 
@@ -27,7 +28,7 @@ to rediscover all of it from the JSON alone. Reporter output is *synthesised*, n
 produced: running Vitest or Playwright here is exactly the workload I-0 forbids, and it
 would prove less, because a real run cannot be asked for the counterexample shapes.
 
-Three clauses are kept deliberately apart, because collapsing them is how the original
+Four clauses are kept deliberately apart, because collapsing them is how the original
 defect survived review:
 
 * **Existence is not evidence.** ``test_a_listed_file_that_merely_exists_earns_nothing``
@@ -39,6 +40,11 @@ defect survived review:
   difference between rejection and credit is whether the same attributable assertion ran:
   flipping each skip to a pass moves that invariant from ``skipped_only`` to ``attested``
   and nothing else changes (I-7 - absence of proof is never a pass).
+* **A pass never outweighs a failure.** Adding one failing case to each invariant, and
+  changing nothing else, makes every one ``violated`` - whatever passed beside it, and
+  whether the failure was outright or a Playwright case that passed only on its retry.
+  This property's own oracle used to credit any pass, which is the order the gate had, so
+  neither could catch the gate attesting a contradicted invariant (finding 132).
 * **Out-of-suite is a disclosed label, not credit.** A declared enforcer resolves only
   when it names a workflow and a job that exist, and even then the invariant is never
   ``attested``. That clause reuses ``workflow_documents`` from ``tests.verify.strategies``
@@ -81,6 +87,7 @@ import contextlib
 import dataclasses
 import importlib.util
 import json
+import posixpath
 import re
 import sys
 import tempfile
@@ -181,16 +188,43 @@ REMOVAL: Final[str] = "generated: delete when a tagged assertion observes this i
 
 Runner = Literal["vitest", "playwright"]
 Route = Literal["file", "tag", "orphan"]
-Spelling = Literal["repo", "runner", "posix-absolute", "windows-absolute"]
+VitestSpelling = Literal["repo", "runner", "posix-absolute", "windows-absolute"]
+PlaywrightSpelling = Literal["root-relative", "absolute"]
 CaseStatus = Literal["passed", "failed", "skipped"]
 
 RUNNERS: Final[tuple[Runner, ...]] = ("vitest", "playwright")
 ROUTES: Final[tuple[Route, ...]] = ("file", "tag", "orphan")
-SPELLINGS: Final[tuple[Spelling, ...]] = (
+VITEST_SPELLINGS: Final[tuple[VitestSpelling, ...]] = (
     "repo",
     "runner",
     "posix-absolute",
     "windows-absolute",
+)
+#: ``root-relative`` is what Playwright writes for a spec: ``path.relative(rootDir, spec)``.
+#: ``absolute`` is what ``path.relative`` returns for a spec on another Windows drive, which
+#: the gate must keep exactly as written.
+PLAYWRIGHT_SPELLINGS: Final[tuple[PlaywrightSpelling, ...]] = ("root-relative", "absolute")
+
+#: Checkouts a Playwright record's ``config.rootDir`` can sit under: a GitHub-hosted runner's
+#: workspace for this repository, a bare POSIX root, and a Windows checkout as Playwright
+#: writes it (``toPosixPath``: a drive letter and forward slashes).
+CHECKOUTS: Final[tuple[str, ...]] = (
+    "/home/runner/work/Synapse/Synapse",
+    "/repo",
+    "C:/Users/dev/synapse",
+)
+
+#: Repo-relative directories a config's top-level ``testDir`` can resolve to. The first is
+#: what both committed configs set (``testDir: "./tests/e2e"``) and the shape finding 90
+#: measured: a top-level spec is reported as one segment. Its ancestors are what a wider
+#: ``testDir`` would write. The last is a directory the generated specs sit OUTSIDE of, so
+#: ``path.relative`` climbs with ``..`` and the gate has to normalise it away.
+PLAYWRIGHT_TEST_DIRS: Final[tuple[str, ...]] = (
+    "frontend/tests/e2e",
+    "frontend/tests",
+    "frontend",
+    "",
+    "frontend/tests/e2e/visual",
 )
 CASE_STATUSES: Final[tuple[CaseStatus, ...]] = ("passed", "failed", "skipped")
 
@@ -223,8 +257,14 @@ def suite_path_for(invariant_id: str) -> str:
     return f"frontend/tests/e2e/{slug_for(invariant_id)}.jtbd.spec.ts"
 
 
-def noise_path_for(index: int) -> str:
-    """A suite file no generated registry lists, for cases attributable by tag or not at all."""
+def noise_path_for(index: int, runner: Runner) -> str:
+    """A suite file no generated registry lists, for cases attributable by tag or not at all.
+
+    A Playwright one sits in a subdirectory of the e2e tree, so a generated record carries a
+    nested ``noise/case_N.spec.ts`` spelling beside the one-segment suite files.
+    """
+    if runner == "playwright":
+        return f"frontend/tests/e2e/noise/case_{index}.spec.ts"
     return f"frontend/src/lib/__tests__/case_{index}.test.ts"
 
 
@@ -233,12 +273,15 @@ def tags_in_title(title: str) -> tuple[str, ...]:
     return tuple(dict.fromkeys(TAG_RE.findall(title)))
 
 
-def spell(path: str, spelling: Spelling) -> str:
-    """One of the four ways a runner or a registry spells the same file.
+def spell(path: str, spelling: VitestSpelling) -> str:
+    """One of the four spellings a Vitest record is generated with.
 
-    Vitest reports an absolute path (POSIX on the runners, Windows on this dev box),
-    Playwright reports one relative to its ``rootDir`` (``frontend/``), and the registry
-    lists repo-relative paths. All four must attribute to the same invariant.
+    Vitest's JSON reporter writes ``testResults[].name`` as the file's absolute path
+    (``file.filepath``); the two absolute spellings here are that, in POSIX and in
+    backslashed Windows form. The repo-relative and ``frontend/``-relative spellings are not
+    what Vitest writes. They are generated because ``paths_match`` must absorb any spelling
+    that ends in the registry path, and a matcher only ever fed absolute paths would not
+    notice if it stopped. Playwright's spellings come from :class:`PlaywrightRoot`.
     """
     if spelling == "repo":
         return path
@@ -252,6 +295,37 @@ def spell(path: str, spelling: Spelling) -> str:
 def canonical(payload: Mapping[str, Any]) -> str:
     """Canonical JSON, per the repo-wide serialisation convention."""
     return json.dumps(payload, sort_keys=True, separators=(",", ":"))
+
+
+@dataclass(frozen=True)
+class PlaywrightRoot:
+    """Where one Playwright record roots its paths: its ``config.rootDir``.
+
+    Playwright sets ``rootDir`` to the config's top-level ``testDir`` resolved against the
+    config's directory, writes it with forward slashes on every OS, and writes every suite
+    and spec ``file`` as ``path.relative(rootDir, spec)``. One record has one root, so it is
+    drawn per scenario rather than per case.
+    """
+
+    checkout: str
+    test_dir: str
+
+    @property
+    def root_dir(self) -> str:
+        """``config.rootDir`` as the record carries it."""
+        return f"{self.checkout}/{self.test_dir}" if self.test_dir else self.checkout
+
+    def relative(self, logical: str) -> str:
+        """``path.relative(rootDir, file)`` for a repo-relative *logical* file, POSIX form.
+
+        Both sides are anchored at ``/`` so the answer cannot depend on the working
+        directory this test runs in.
+        """
+        return posixpath.relpath(f"/{logical}", f"/{self.test_dir}")
+
+    def absolute(self, logical: str) -> str:
+        """Where *logical* actually is in this checkout: the answer resolution must reach."""
+        return f"{self.checkout}/{logical}"
 
 
 # ---------------------------------------------------------------------------
@@ -317,9 +391,15 @@ class CaseDraft:
     owner: str | None
     status: CaseStatus
     skip_spelling: str = "skipped"
-    spelling: Spelling = "repo"
+    vitest_spelling: VitestSpelling = "repo"
+    playwright_spelling: PlaywrightSpelling = "root-relative"
     ancestor: str | None = None
     declared_tag: bool = False
+    #: A failed Playwright case whose CI retry passed: test status ``flaky``, a ``failed``
+    #: result and then a ``passed`` one. By default Playwright does not fail the run for it,
+    #: so it is a failure that leaves its job green, and the gate must still read it as
+    #: ``failed`` (finding 132). Read only for a failed Playwright case.
+    retry_passed: bool = False
 
     @property
     def leaf_title(self) -> str:
@@ -337,11 +417,29 @@ class CaseDraft:
     def logical_file(self) -> str:
         if self.route == "file" and self.owner is not None:
             return suite_path_for(self.owner)
-        return noise_path_for(self.index)
+        return noise_path_for(self.index, self.runner)
 
     @property
-    def reported_file(self) -> str:
-        return spell(self.logical_file, self.spelling)
+    def vitest_name(self) -> str:
+        """``testResults[].name`` for this case, in its drawn Vitest spelling."""
+        return spell(self.logical_file, self.vitest_spelling)
+
+    def playwright_file(self, root: PlaywrightRoot) -> str:
+        """The ``file`` Playwright writes for this case into a record rooted at *root*."""
+        if self.playwright_spelling == "root-relative":
+            return root.relative(self.logical_file)
+        return root.absolute(self.logical_file)
+
+    def expected_suite_file(self, root: PlaywrightRoot) -> str:
+        """The ``suite_file`` the gate must report for this case, decided by construction.
+
+        Vitest's name is kept as written. Playwright's is resolved against the record's
+        ``config.rootDir``, so whichever spelling the record used, the answer is where the
+        file actually is in the checkout, not a second copy of the gate's join.
+        """
+        if self.runner == "vitest":
+            return self.vitest_name
+        return root.absolute(self.logical_file)
 
     @property
     def source_report(self) -> str:
@@ -378,6 +476,17 @@ class CaseDraft:
             tests: list[dict[str, Any]] = [
                 {"status": "expected", "results": [{"status": "passed"}]}
             ]
+        elif self.status == "failed" and self.retry_passed:
+            # What `retries: 1` writes for a case that failed and then passed on its retry.
+            tests = [
+                {
+                    "status": "flaky",
+                    "results": [
+                        {"status": "failed", "retry": 0},
+                        {"status": "passed", "retry": 1},
+                    ],
+                }
+            ]
         elif self.status == "failed":
             tests = [{"status": "unexpected", "results": [{"status": "failed"}]}]
         elif self.skip_spelling == "skipped":
@@ -398,15 +507,15 @@ class ScenarioDraft:
 
     invariants: tuple[InvariantDraft, ...]
     cases: tuple[CaseDraft, ...]
+    #: The one ``config.rootDir`` the scenario's Playwright record carries.
+    playwright_root: PlaywrightRoot
     reports_unavailable: tuple[str, ...] = ()
 
     # -- projections the gate consumes --------------------------------------
 
     @property
     def declared_ids(self) -> frozenset[str]:
-        return frozenset(
-            inv.invariant_id for inv in self.invariants if inv.declared_out_of_suite
-        )
+        return frozenset(inv.invariant_id for inv in self.invariants if inv.declared_out_of_suite)
 
     def registry_entries(self) -> tuple[dict[str, Any], ...]:
         return tuple(inv.as_registry_entry() for inv in self.invariants)
@@ -463,7 +572,7 @@ class ScenarioDraft:
         playwright = tuple(case for case in self.cases if case.runner == "playwright")
         return {
             VITEST_REPORT: canonical(vitest_payload(vitest)),
-            PLAYWRIGHT_REPORT: canonical(playwright_payload(playwright)),
+            PLAYWRIGHT_REPORT: canonical(playwright_payload(playwright, self.playwright_root)),
         }
 
     # -- ground truth -------------------------------------------------------
@@ -478,14 +587,22 @@ class ScenarioDraft:
         )
 
     def expected_classification(self, inv: InvariantDraft) -> str:
-        """R8.7 and R12.4 restated: credit follows an executed, non-skipped pass."""
+        """R8.7 and R12.4 restated: credit follows an executed pass, and only if none failed.
+
+        A failure is tested before a pass (finding 132). This oracle used to test the pass
+        first, the order the gate had, so the two agreed and neither could catch the gate
+        attesting an invariant whose other attributable case failed. The new order is a
+        STRICTER standard, not a weaker one (R2.10): every scenario it calls ``attested``
+        was ``attested`` under the old order too, and the only scenarios that move are the
+        ones with both a pass and a failure, from ``attested`` to ``violated``.
+        """
         if inv.registry_status != ENFORCED:
             return "not_enforced"
         attributed = self.attributed(inv)
-        if any(case.status == "passed" for case in attributed):
-            return "attested"
         if any(case.status == "failed" for case in attributed):
             return "violated"
+        if any(case.status == "passed" for case in attributed):
+            return "attested"
         if any(case.status == "skipped" for case in attributed):
             return "skipped_only"
         if inv.suite_files:
@@ -553,7 +670,7 @@ def vitest_payload(cases: Sequence[CaseDraft]) -> dict[str, Any]:
     """Vitest's (Jest-shaped) JSON reporter output, grouped by file as the runner emits it."""
     grouped: dict[str, list[CaseDraft]] = {}
     for case in cases:
-        grouped.setdefault(case.reported_file, []).append(case)
+        grouped.setdefault(case.vitest_name, []).append(case)
     return {
         "testResults": [
             {
@@ -565,15 +682,16 @@ def vitest_payload(cases: Sequence[CaseDraft]) -> dict[str, Any]:
     }
 
 
-def playwright_payload(cases: Sequence[CaseDraft]) -> dict[str, Any]:
+def playwright_payload(cases: Sequence[CaseDraft], root: PlaywrightRoot) -> dict[str, Any]:
     """Playwright's JSON reporter output: one outer suite per file, describe blocks nested.
 
-    The outer suite's title is the spec path, exactly as Playwright writes it, so the
-    walker must keep it out of the composed test title.
+    The record carries its own ``config.rootDir`` and every ``file`` is spelled relative to
+    it (or absolute), exactly as Playwright writes them. The outer suite's title is that
+    same spelling, so the walker must keep it out of the composed test title.
     """
     grouped: dict[str, list[CaseDraft]] = {}
     for case in cases:
-        grouped.setdefault(case.reported_file, []).append(case)
+        grouped.setdefault(case.playwright_file(root), []).append(case)
 
     suites: list[dict[str, Any]] = []
     for reported, group in grouped.items():
@@ -588,7 +706,7 @@ def playwright_payload(cases: Sequence[CaseDraft]) -> dict[str, Any]:
                 {"title": ancestor, "specs": specs} for ancestor, specs in nested.items()
             ]
         suites.append(node)
-    return {"suites": suites}
+    return {"config": {"rootDir": root.root_dir}, "suites": suites}
 
 
 def parsed_tests(scenario: ScenarioDraft) -> tuple[Any, ...]:
@@ -637,9 +755,7 @@ def scenarios(
     invariants: list[InvariantDraft] = []
     for invariant_id in ids:
         owns = draw(st.booleans()) if owns_suite_file is None else owns_suite_file
-        declared = (
-            draw(st.booleans()) if declared_out_of_suite is None else declared_out_of_suite
-        )
+        declared = draw(st.booleans()) if declared_out_of_suite is None else declared_out_of_suite
         invariants.append(
             InvariantDraft(
                 invariant_id=invariant_id,
@@ -652,6 +768,13 @@ def scenarios(
 
     suite_owners = tuple(inv.invariant_id for inv in invariants if inv.owns_suite_file)
     all_ids = tuple(inv.invariant_id for inv in invariants)
+
+    # One record, one root: Playwright writes a single `config.rootDir` per run, so the root
+    # is drawn once and every Playwright case in the scenario is spelled against it.
+    playwright_root = PlaywrightRoot(
+        checkout=draw(st.sampled_from(CHECKOUTS)),
+        test_dir=draw(st.sampled_from(PLAYWRIGHT_TEST_DIRS)),
+    )
 
     cases: list[CaseDraft] = []
     case_count = draw(st.integers(min_value=min_cases, max_value=max_cases))
@@ -666,29 +789,40 @@ def scenarios(
         elif route == "tag":
             owner = draw(st.sampled_from(all_ids))
         runner: Runner = draw(st.sampled_from(RUNNERS))
+        # Each runner has its own spellings, so only the case's own runner's is drawn.
+        vitest_spelling: VitestSpelling = "repo"
+        playwright_spelling: PlaywrightSpelling = "root-relative"
+        if runner == "vitest":
+            vitest_spelling = draw(st.sampled_from(VITEST_SPELLINGS))
+        else:
+            playwright_spelling = draw(st.sampled_from(PLAYWRIGHT_SPELLINGS))
+        status: CaseStatus = draw(st.sampled_from(tuple(case_statuses)))
+        # Only a failed Playwright case can be a retry-pass; the Vitest shape has no attempts.
+        retry_passed = runner == "playwright" and status == "failed" and draw(st.booleans())
         cases.append(
             CaseDraft(
                 index=index,
                 runner=runner,
                 route=route,
                 owner=owner,
-                status=draw(st.sampled_from(tuple(case_statuses))),
+                status=status,
                 skip_spelling=draw(st.sampled_from(SKIP_SPELLINGS)),
-                spelling=draw(st.sampled_from(SPELLINGS)),
+                vitest_spelling=vitest_spelling,
+                playwright_spelling=playwright_spelling,
                 ancestor=draw(st.none() | st.sampled_from(ANCESTORS)),
                 # The Playwright tag list is the second attribution route; Vitest has no
                 # equivalent, so a tagged Vitest case must carry its tag in the title.
-                declared_tag=(
-                    runner == "playwright" and route == "tag" and draw(st.booleans())
-                ),
+                declared_tag=(runner == "playwright" and route == "tag" and draw(st.booleans())),
+                retry_passed=retry_passed,
             )
         )
 
-    unavailable = (
-        draw(st.sampled_from(((), (MISSING_REPORT,)))) if allow_missing_report else ()
-    )
+    unavailable = draw(st.sampled_from(((), (MISSING_REPORT,)))) if allow_missing_report else ()
     return ScenarioDraft(
-        invariants=tuple(invariants), cases=tuple(cases), reports_unavailable=unavailable
+        invariants=tuple(invariants),
+        cases=tuple(cases),
+        playwright_root=playwright_root,
+        reports_unavailable=unavailable,
     )
 
 
@@ -787,14 +921,15 @@ def test_credit_requires_an_executed_non_skipped_assertion(scenario: ScenarioDra
     """
     tests = parsed_tests(scenario)
 
-    # The gate rediscovered every reported case: its file (in four spellings), its composed
-    # title, its collapsed status, and its tags (title-borne and Playwright-declared).
+    # The gate rediscovered every reported case: its file (Vitest's as written, Playwright's
+    # resolved against the record's `config.rootDir`), its composed title, its collapsed
+    # status, and its tags (title-borne and Playwright-declared).
     assert sorted(
         (test.report, test.suite_file, test.title, test.status, test.tags) for test in tests
     ) == sorted(
         (
             case.source_report,
-            case.reported_file,
+            case.expected_suite_file(scenario.playwright_root),
             case.full_title,
             case.status,
             case.expected_tags,
@@ -812,9 +947,18 @@ def test_credit_requires_an_executed_non_skipped_assertion(scenario: ScenarioDra
         assert attestation.suite_files == inv.suite_files
         # `attested` is the credit predicate, and exactly one class carries it.
         assert attestation.attested is (attestation.classification == "attested")
+        # Credit needs a pass AND no failure. Until finding 132's repair this asked only for
+        # a pass, which is the rule the gate had, so it could not catch the gate crediting an
+        # invariant whose other case failed. That is a stricter standard, not a weaker one
+        # (R2.10): it withdraws credit from the mixed case and grants none it did not before.
+        any_passed = any(case.status == "passed" for case in attributed)
+        any_failed = any(case.status == "failed" for case in attributed)
         assert attestation.attested is bool(
-            inv.registry_status == ENFORCED
-            and any(case.status == "passed" for case in attributed)
+            inv.registry_status == ENFORCED and any_passed and not any_failed
+        )
+        # The other half of the same rule: a failure is a violation whatever passed.
+        assert (attestation.classification == "violated") is bool(
+            inv.registry_status == ENFORCED and any_failed
         )
         # A listed file, however many there are, buys nothing on its own.
         if inv.registry_status == ENFORCED and not attributed:
@@ -945,6 +1089,60 @@ def test_an_all_skipped_run_is_non_passing_not_a_shorter_pass(scenario: Scenario
         assert not before.attested
         assert after.classification == "attested"
         assert after.attested
+
+
+@given(
+    scenario=scenarios(registry_statuses=(ENFORCED,), allow_missing_report=False),
+    runner=st.sampled_from(RUNNERS),
+    retry_passed=st.booleans(),
+)
+def test_one_attributable_failure_makes_an_invariant_violated_whatever_else_passed(
+    scenario: ScenarioDraft, runner: Runner, retry_passed: bool
+) -> None:
+    """Finding 132, quantified: one failing case makes its invariant ``violated``.
+
+    The metamorphic dual of the all-skipped clause: there execution was the only variable,
+    here one failure is. Each invariant gets one extra case that failed, attributed to it
+    by the id in its title, so it counts whether or not the invariant owns a suite file. On
+    Playwright it failed outright or, drawn by ``retry_passed``, failed and then passed on
+    its retry. Every case already drawn, pass, skip or failure, stays as it was. Wrong if a
+    pass outweighed the added failure, the order the gate had before finding 132's repair:
+    every invariant that already had a passing case would then read ``attested``, and a draw
+    in which each one had one would pass the gate although it contradicts all of them.
+    """
+    added = tuple(
+        CaseDraft(
+            index=len(scenario.cases) + offset,
+            runner=runner,
+            route="tag",
+            owner=inv.invariant_id,
+            status="failed",
+            retry_passed=retry_passed,
+        )
+        for offset, inv in enumerate(scenario.invariants)
+    )
+    contradicted = dataclasses.replace(scenario, cases=(*scenario.cases, *added))
+    tests = parsed_tests(contradicted)
+    declaration = contradicted.declaration()
+
+    for inv, extra in zip(contradicted.invariants, added, strict=True):
+        attestation = fe.classify(
+            inv.invariant_id, inv.registry_status, inv.listed_tests, tests, declaration
+        )
+        assert attestation.classification == "violated", attestation.detail
+        assert not attestation.attested
+        assert extra.full_title in attestation.failed
+        # A pass beside the failure is counted and stated, never credited.
+        if attestation.attesting:
+            stated = f"{len(attestation.attesting)} attributable assertion(s) passed and "
+            assert stated in attestation.detail, attestation.detail
+
+    verdict = evaluate(contradicted)
+    assert verdict.verdict == "fail"
+    assert verdict.exit_code == fe.EXIT_FAIL
+    assert not verdict.passing
+    for inv in contradicted.invariants:
+        assert f"{inv.invariant_id}=violated" in verdict.reason
 
 
 @given(scenario=scenarios(max_invariants=5, max_cases=6))

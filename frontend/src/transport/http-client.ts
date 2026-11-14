@@ -1,7 +1,7 @@
 import { decideRetry, sleep } from "@lib/jitter-retry";
 import { canonicalJson } from "@lib/json-canonical";
 import { log } from "@lib/log";
-import type { ZodSchema, ZodTypeAny, ZodTypeDef } from "zod";
+import type { z } from "zod";
 import {
   HttpError,
   NetworkError,
@@ -33,7 +33,7 @@ export interface RequestOptions<T> {
   readonly signal?: AbortSignal;
   // Output type must be `T`; the input type is left open so schemas with
   // `.default()`/transforms (input ≠ output) still satisfy the constraint.
-  readonly schema?: ZodSchema<T, ZodTypeDef, unknown>;
+  readonly schema?: z.ZodType<T, unknown>;
   readonly idempotent?: boolean;
   readonly schemaId?: string;
   /**
@@ -225,10 +225,23 @@ function parseRetryAfterMs(value: string | null): number | null {
   return Number.isFinite(ts) ? Math.max(0, ts - Date.now()) : null;
 }
 
-function parseWithSchema<T>(schema: ZodTypeAny, raw: unknown, schemaId: string): T {
+/**
+ * A zod issue path is `PropertyKey[]`; the transport contract (`SchemaViolationError`, the
+ * telemetry `paths`) carries `string | number` segments. A symbol segment can only come from a
+ * symbol-keyed schema, never from JSON, and is rendered with `String()` rather than cast away
+ * (`Array.prototype.join` would throw on it).
+ */
+function toFieldPath(path: ReadonlyArray<PropertyKey>): ReadonlyArray<string | number> {
+  return path.map((segment) => (typeof segment === "symbol" ? String(segment) : segment));
+}
+
+function parseWithSchema<T>(schema: z.ZodType, raw: unknown, schemaId: string): T {
   const result = schema.safeParse(raw);
   if (!result.success) {
-    const issues = result.error.issues.map((i) => ({ path: i.path, message: i.message }));
+    const issues = result.error.issues.map((i) => ({
+      path: toFieldPath(i.path),
+      message: i.message,
+    }));
     // Fail-closed: emit a FIELD-WHITELISTED telemetry event and throw a typed
     // SchemaViolationError (FE-INV-002/030, Req 1.2 / 14.2). Consumers route
     // this to the `error` Universal_State; the unvalidated `raw` payload is

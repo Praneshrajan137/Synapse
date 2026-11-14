@@ -34,13 +34,13 @@ the same pair.
 
 ## Summary
 
-Parsed 20 workflow file(s), 68 job(s), 455 step(s).
+Parsed 20 workflow file(s), 69 job(s), 465 step(s).
 
 | Trigger | Jobs executing | Jobs conditional | Jobs NOT EXECUTED | Steps blocking | Steps advisory | Steps conditional |
 |---|---|---|---|---|---|---|
-| push:main | 4 | 30 | 34 | 31 | 0 | 183 |
-| pull_request | 17 | 32 | 19 | 107 | 4 | 202 |
-| tag:v* | 3 | 3 | 62 | 18 | 0 | 29 |
+| push:main | 4 | 30 | 35 | 31 | 0 | 183 |
+| pull_request | 17 | 33 | 19 | 107 | 4 | 212 |
+| tag:v* | 3 | 3 | 63 | 18 | 0 | 29 |
 
 ## Job selection
 
@@ -75,6 +75,7 @@ Why each job runs, does not run, or runs conditionally under each trigger. `need
 | push:main | .github/workflows/frontend.yml::spec-typecheck | CONDITIONAL | path-filtered (paths: frontend/**, proto/domain/**, .github/workflows/frontend.yml) |
 | push:main | .github/workflows/frontend.yml::build | CONDITIONAL | path-filtered (paths: frontend/**, proto/domain/**, .github/workflows/frontend.yml); needs 'quality', which is conditional |
 | push:main | .github/workflows/frontend.yml::contract-fidelity | CONDITIONAL | path-filtered (paths: frontend/**, proto/domain/**, .github/workflows/frontend.yml); needs 'quality', which is conditional |
+| push:main | .github/workflows/frontend.yml::storybook-a11y | NOT EXECUTED | if: false in push:main |
 | push:main | .github/workflows/frontend.yml::fe-invariants | NOT EXECUTED | needs 'e2e', which is NOT EXECUTED (if: false in push:main) |
 | push:main | .github/workflows/frontend.yml::e2e | NOT EXECUTED | if: false in push:main |
 | push:main | .github/workflows/frontend.yml::e2e-visual | NOT EXECUTED | if: false in push:main |
@@ -143,7 +144,8 @@ Why each job runs, does not run, or runs conditionally under each trigger. `need
 | pull_request | .github/workflows/frontend.yml::spec-typecheck | CONDITIONAL | path-filtered (paths: frontend/**, proto/domain/**, .github/workflows/frontend.yml) |
 | pull_request | .github/workflows/frontend.yml::build | CONDITIONAL | path-filtered (paths: frontend/**, proto/domain/**, .github/workflows/frontend.yml); needs 'quality', which is conditional |
 | pull_request | .github/workflows/frontend.yml::contract-fidelity | CONDITIONAL | path-filtered (paths: frontend/**, proto/domain/**, .github/workflows/frontend.yml); needs 'quality', which is conditional |
-| pull_request | .github/workflows/frontend.yml::fe-invariants | CONDITIONAL | path-filtered (paths: frontend/**, proto/domain/**, .github/workflows/frontend.yml); needs 'quality', which is conditional; needs 'e2e', which is conditional; needs 'e2e-visual', which is conditional; needs 'e2e-harness', which is conditional |
+| pull_request | .github/workflows/frontend.yml::storybook-a11y | CONDITIONAL | path-filtered (paths: frontend/**, proto/domain/**, .github/workflows/frontend.yml) |
+| pull_request | .github/workflows/frontend.yml::fe-invariants | CONDITIONAL | path-filtered (paths: frontend/**, proto/domain/**, .github/workflows/frontend.yml); needs 'quality', which is conditional; needs 'e2e', which is conditional; needs 'e2e-visual', which is conditional; needs 'e2e-harness', which is conditional; needs 'storybook-a11y', which is conditional |
 | pull_request | .github/workflows/frontend.yml::e2e | CONDITIONAL | path-filtered (paths: frontend/**, proto/domain/**, .github/workflows/frontend.yml); needs 'build', which is conditional |
 | pull_request | .github/workflows/frontend.yml::e2e-visual | CONDITIONAL | path-filtered (paths: frontend/**, proto/domain/**, .github/workflows/frontend.yml); needs 'build', which is conditional |
 | pull_request | .github/workflows/frontend.yml::e2e-harness | CONDITIONAL | path-filtered (paths: frontend/**, proto/domain/**, .github/workflows/frontend.yml); needs 'build', which is conditional |
@@ -211,6 +213,7 @@ Why each job runs, does not run, or runs conditionally under each trigger. `need
 | tag:v* | .github/workflows/frontend.yml::spec-typecheck | NOT EXECUTED | on: push is branch-scoped (no tags: filter), so a tag push is excluded |
 | tag:v* | .github/workflows/frontend.yml::build | NOT EXECUTED | on: push is branch-scoped (no tags: filter), so a tag push is excluded |
 | tag:v* | .github/workflows/frontend.yml::contract-fidelity | NOT EXECUTED | on: push is branch-scoped (no tags: filter), so a tag push is excluded |
+| tag:v* | .github/workflows/frontend.yml::storybook-a11y | NOT EXECUTED | on: push is branch-scoped (no tags: filter), so a tag push is excluded |
 | tag:v* | .github/workflows/frontend.yml::fe-invariants | NOT EXECUTED | on: push is branch-scoped (no tags: filter), so a tag push is excluded |
 | tag:v* | .github/workflows/frontend.yml::e2e | NOT EXECUTED | on: push is branch-scoped (no tags: filter), so a tag push is excluded |
 | tag:v* | .github/workflows/frontend.yml::e2e-visual | NOT EXECUTED | on: push is branch-scoped (no tags: filter), so a tag push is excluded |
@@ -397,13 +400,14 @@ Why each job runs, does not run, or runs conditionally under each trigger. `need
 | push:main | .github/workflows/frontend.yml::build | Install dependencies | CONDITIONAL | conditional - blocking |
 | push:main | .github/workflows/frontend.yml::build | Build | CONDITIONAL | conditional - blocking |
 | push:main | .github/workflows/frontend.yml::build | Entry preloads exclude the heavy viz chunks (FE-INV-025) | CONDITIONAL | conditional - blocking |
-| push:main | .github/workflows/frontend.yml::build | Size budget (informational in P0; gated in P2) | CONDITIONAL | conditional - advisory (named) |
+| push:main | .github/workflows/frontend.yml::build | Entry chunk <= 180 KB and react-vendor <= 70 KB, gzipped (FE-INV-014) | CONDITIONAL | conditional - blocking |
 | push:main | .github/workflows/frontend.yml::contract-fidelity | uses: actions/checkout@v4 | CONDITIONAL | conditional - blocking |
 | push:main | .github/workflows/frontend.yml::contract-fidelity | uses: pnpm/action-setup@v4 | CONDITIONAL | conditional - blocking |
 | push:main | .github/workflows/frontend.yml::contract-fidelity | uses: actions/setup-node@v4 | CONDITIONAL | conditional - blocking |
 | push:main | .github/workflows/frontend.yml::contract-fidelity | Install dependencies | CONDITIONAL | conditional - blocking |
 | push:main | .github/workflows/frontend.yml::contract-fidelity | Contract fidelity drift report | CONDITIONAL | conditional - blocking |
 | push:main | .github/workflows/frontend.yml::contract-fidelity | uses: actions/upload-artifact@v4 | CONDITIONAL | conditional - blocking |
+| push:main | .github/workflows/frontend.yml::storybook-a11y | - | NOT EXECUTED | if: false in push:main |
 | push:main | .github/workflows/frontend.yml::fe-invariants | - | NOT EXECUTED | needs 'e2e', which is NOT EXECUTED (if: false in push:main) |
 | push:main | .github/workflows/frontend.yml::e2e | - | NOT EXECUTED | if: false in push:main |
 | push:main | .github/workflows/frontend.yml::e2e-visual | - | NOT EXECUTED | if: false in push:main |
@@ -616,18 +620,28 @@ Why each job runs, does not run, or runs conditionally under each trigger. `need
 | pull_request | .github/workflows/frontend.yml::build | Install dependencies | CONDITIONAL | conditional - blocking |
 | pull_request | .github/workflows/frontend.yml::build | Build | CONDITIONAL | conditional - blocking |
 | pull_request | .github/workflows/frontend.yml::build | Entry preloads exclude the heavy viz chunks (FE-INV-025) | CONDITIONAL | conditional - blocking |
-| pull_request | .github/workflows/frontend.yml::build | Size budget (informational in P0; gated in P2) | CONDITIONAL | conditional - advisory (named) |
+| pull_request | .github/workflows/frontend.yml::build | Entry chunk <= 180 KB and react-vendor <= 70 KB, gzipped (FE-INV-014) | CONDITIONAL | conditional - blocking |
 | pull_request | .github/workflows/frontend.yml::contract-fidelity | uses: actions/checkout@v4 | CONDITIONAL | conditional - blocking |
 | pull_request | .github/workflows/frontend.yml::contract-fidelity | uses: pnpm/action-setup@v4 | CONDITIONAL | conditional - blocking |
 | pull_request | .github/workflows/frontend.yml::contract-fidelity | uses: actions/setup-node@v4 | CONDITIONAL | conditional - blocking |
 | pull_request | .github/workflows/frontend.yml::contract-fidelity | Install dependencies | CONDITIONAL | conditional - blocking |
 | pull_request | .github/workflows/frontend.yml::contract-fidelity | Contract fidelity drift report | CONDITIONAL | conditional - blocking |
 | pull_request | .github/workflows/frontend.yml::contract-fidelity | uses: actions/upload-artifact@v4 | CONDITIONAL | conditional - blocking |
+| pull_request | .github/workflows/frontend.yml::storybook-a11y | uses: actions/checkout@v4 | CONDITIONAL | conditional - blocking |
+| pull_request | .github/workflows/frontend.yml::storybook-a11y | uses: pnpm/action-setup@v4 | CONDITIONAL | conditional - blocking |
+| pull_request | .github/workflows/frontend.yml::storybook-a11y | uses: actions/setup-node@v4 | CONDITIONAL | conditional - blocking |
+| pull_request | .github/workflows/frontend.yml::storybook-a11y | Install dependencies | CONDITIONAL | conditional - blocking |
+| pull_request | .github/workflows/frontend.yml::storybook-a11y | Install Chromium for Playwright | CONDITIONAL | conditional - blocking |
+| pull_request | .github/workflows/frontend.yml::storybook-a11y | Build the static Storybook | CONDITIONAL | conditional - blocking |
+| pull_request | .github/workflows/frontend.yml::storybook-a11y | Serve the static Storybook on 127.0.0.1:6006 (bounded wait) | CONDITIONAL | conditional - blocking |
+| pull_request | .github/workflows/frontend.yml::storybook-a11y | Every story has zero axe violations (WCAG 2.0/2.1 A and AA, FE-INV-031) | CONDITIONAL | conditional - blocking |
+| pull_request | .github/workflows/frontend.yml::storybook-a11y | Upload Storybook a11y run record (FE-INV attestation evidence, R8.7) | CONDITIONAL | conditional - blocking |
 | pull_request | .github/workflows/frontend.yml::fe-invariants | uses: actions/checkout@v4 | CONDITIONAL | conditional - blocking |
 | pull_request | .github/workflows/frontend.yml::fe-invariants | Setup Python | CONDITIONAL | conditional - blocking |
 | pull_request | .github/workflows/frontend.yml::fe-invariants | Install gate dependencies | CONDITIONAL | conditional - blocking |
 | pull_request | .github/workflows/frontend.yml::fe-invariants | Download Vitest run record | CONDITIONAL | conditional - blocking |
 | pull_request | .github/workflows/frontend.yml::fe-invariants | Download Playwright run records | CONDITIONAL | conditional - blocking |
+| pull_request | .github/workflows/frontend.yml::fe-invariants | Download Storybook a11y run record | CONDITIONAL | conditional - blocking |
 | pull_request | .github/workflows/frontend.yml::fe-invariants | Validate FE-INV registry against executed assertions | CONDITIONAL | conditional - blocking |
 | pull_request | .github/workflows/frontend.yml::e2e | uses: actions/checkout@v4 | CONDITIONAL | conditional - blocking |
 | pull_request | .github/workflows/frontend.yml::e2e | uses: pnpm/action-setup@v4 | CONDITIONAL | conditional - blocking |
@@ -655,16 +669,16 @@ Why each job runs, does not run, or runs conditionally under each trigger. `need
 | pull_request | .github/workflows/frontend.yml::e2e-harness | run: pnpm exec playwright install --with-deps chromium | CONDITIONAL | conditional - blocking |
 | pull_request | .github/workflows/frontend.yml::e2e-harness | Build the e2e-mode bundle (the one that contains the harness) | CONDITIONAL | conditional - blocking |
 | pull_request | .github/workflows/frontend.yml::e2e-harness | Task_Completion_Tests + Resilience_Scenarios (seeded, no live network) | CONDITIONAL | conditional - blocking |
+| pull_request | .github/workflows/frontend.yml::e2e-harness | Seal the leg scorecard with its leg index, matrix size and commit (ADR-059) | CONDITIONAL | conditional - blocking |
 | pull_request | .github/workflows/frontend.yml::e2e-harness | Upload Playwright harness run record (FE-INV attestation evidence, R8.7) | CONDITIONAL | conditional - blocking |
-| pull_request | .github/workflows/frontend.yml::e2e-harness | Upload effectiveness scorecard | CONDITIONAL | conditional - blocking |
+| pull_request | .github/workflows/frontend.yml::e2e-harness | Upload the leg scorecard and harness run record (ADR-059) | CONDITIONAL | conditional - blocking |
 | pull_request | .github/workflows/frontend.yml::e2e-harness | uses: actions/upload-artifact@v4 | CONDITIONAL | conditional - blocking |
 | pull_request | .github/workflows/frontend.yml::effectiveness-ratchet | uses: actions/checkout@v4 | CONDITIONAL | conditional - blocking |
 | pull_request | .github/workflows/frontend.yml::effectiveness-ratchet | uses: pnpm/action-setup@v4 | CONDITIONAL | conditional - blocking |
 | pull_request | .github/workflows/frontend.yml::effectiveness-ratchet | uses: actions/setup-node@v4 | CONDITIONAL | conditional - blocking |
 | pull_request | .github/workflows/frontend.yml::effectiveness-ratchet | run: pnpm install --frozen-lockfile=false | CONDITIONAL | conditional - blocking |
-| pull_request | .github/workflows/frontend.yml::effectiveness-ratchet | Download fresh scorecard | CONDITIONAL | conditional - blocking |
-| pull_request | .github/workflows/frontend.yml::effectiveness-ratchet | Download harness run record (skip + zero-execution evidence, R8.6/R8.8) | CONDITIONAL | conditional - blocking |
-| pull_request | .github/workflows/frontend.yml::effectiveness-ratchet | Effectiveness ratchet (fresh scorecard vs committed baseline) | CONDITIONAL | conditional - blocking |
+| pull_request | .github/workflows/frontend.yml::effectiveness-ratchet | Download every leg scorecard and harness run record (ADR-059) | CONDITIONAL | conditional - blocking |
+| pull_request | .github/workflows/frontend.yml::effectiveness-ratchet | Effectiveness ratchet (median of five legs vs committed baseline) | CONDITIONAL | conditional - blocking |
 | pull_request | .github/workflows/frontend.yml::effectiveness-ratchet | Effectiveness baseline is a measurement, not a ceiling (R8.10) | CONDITIONAL | conditional - blocking |
 | pull_request | .github/workflows/frontend.yml::effectiveness-ratchet | Upload measured baseline candidate (commit this to clear R8.10) | CONDITIONAL | conditional - blocking |
 | pull_request | .github/workflows/frontend.yml::mobile-lighthouse | uses: actions/checkout@v4 | CONDITIONAL | conditional - blocking |
@@ -905,6 +919,7 @@ Why each job runs, does not run, or runs conditionally under each trigger. `need
 | tag:v* | .github/workflows/frontend.yml::spec-typecheck | - | NOT EXECUTED | on: push is branch-scoped (no tags: filter), so a tag push is excluded |
 | tag:v* | .github/workflows/frontend.yml::build | - | NOT EXECUTED | on: push is branch-scoped (no tags: filter), so a tag push is excluded |
 | tag:v* | .github/workflows/frontend.yml::contract-fidelity | - | NOT EXECUTED | on: push is branch-scoped (no tags: filter), so a tag push is excluded |
+| tag:v* | .github/workflows/frontend.yml::storybook-a11y | - | NOT EXECUTED | on: push is branch-scoped (no tags: filter), so a tag push is excluded |
 | tag:v* | .github/workflows/frontend.yml::fe-invariants | - | NOT EXECUTED | on: push is branch-scoped (no tags: filter), so a tag push is excluded |
 | tag:v* | .github/workflows/frontend.yml::e2e | - | NOT EXECUTED | on: push is branch-scoped (no tags: filter), so a tag push is excluded |
 | tag:v* | .github/workflows/frontend.yml::e2e-visual | - | NOT EXECUTED | on: push is branch-scoped (no tags: filter), so a tag push is excluded |
@@ -949,7 +964,7 @@ Why each job runs, does not run, or runs conditionally under each trigger. `need
 
 ## Declared-blocking anchors (R11.8)
 
-Every step `infrastructure/quality/blocking-steps.yaml` declares blocking, annotated with the command it runs so a governance claim can be pinned to a row. Source: 27 declared-blocking entries from infrastructure/quality/blocking-steps.yaml.
+Every step `infrastructure/quality/blocking-steps.yaml` declares blocking, annotated with the command it runs so a governance claim can be pinned to a row. Source: 28 declared-blocking entries from infrastructure/quality/blocking-steps.yaml.
 
 | Trigger | Job | Step | Propagates | Note |
 |---|---|---|---|---|
@@ -1007,7 +1022,11 @@ Every step `infrastructure/quality/blocking-steps.yaml` declares blocking, annot
 | push:main | .github/workflows/frontend-lockfile-regen.yml::regen-lockfile | pnpm-lock supply-chain check (HTTPS + registry.npmjs.org only) | NOT EXECUTED | declared blocking (R1.8) - workflow on: has no push trigger |
 | push:main | .github/workflows/frontend-lockfile-regen.yml::regen-lockfile | Upload package.json + pnpm-lock.yaml | NOT EXECUTED | declared blocking (R1.8) - workflow on: has no push trigger |
 | push:main | .github/workflows/frontend-lockfile-regen.yml::regen-lockfile | pnpm audit (high+ severity, production tree only) | NOT EXECUTED | declared blocking (R1.8) - workflow on: has no push trigger |
-| push:main | .github/workflows/frontend.yml::build | Entry preloads exclude the heavy viz chunks (FE-INV-025) | CONDITIONAL | declared blocking (FE-INV-025) - conditional (path-filtered (paths: frontend/**, proto/domain/**, .github/workflows/frontend.yml); needs 'quality', which is conditional) |
+| push:main | .github/workflows/frontend.yml::build | Entry preloads exclude the heavy viz chunks (FE-INV-025) | CONDITIONAL | declared blocking (FE-INV-014, FE-INV-025) - conditional (path-filtered (paths: frontend/**, proto/domain/**, .github/workflows/frontend.yml); needs 'quality', which is conditional) |
+| push:main | .github/workflows/frontend.yml::build | Entry chunk <= 180 KB and react-vendor <= 70 KB, gzipped (FE-INV-014) | CONDITIONAL | declared blocking (FE-INV-014, FE-INV-025) - conditional (path-filtered (paths: frontend/**, proto/domain/**, .github/workflows/frontend.yml); needs 'quality', which is conditional) |
+| push:main | .github/workflows/frontend.yml::storybook-a11y | Build the static Storybook | NOT EXECUTED | declared blocking (FE-INV-031) - if: false in push:main |
+| push:main | .github/workflows/frontend.yml::storybook-a11y | Serve the static Storybook on 127.0.0.1:6006 (bounded wait) [http.server] | NOT EXECUTED | declared blocking (FE-INV-031) - if: false in push:main |
+| push:main | .github/workflows/frontend.yml::storybook-a11y | Every story has zero axe violations (WCAG 2.0/2.1 A and AA, FE-INV-031) | NOT EXECUTED | declared blocking (FE-INV-031) - if: false in push:main |
 | push:main | .github/workflows/frontend.yml::e2e | uses: actions/checkout@v4 | NOT EXECUTED | declared blocking (R8.9) - if: false in push:main |
 | push:main | .github/workflows/frontend.yml::e2e | uses: pnpm/action-setup@v4 | NOT EXECUTED | declared blocking (R8.9) - if: false in push:main |
 | push:main | .github/workflows/frontend.yml::e2e | uses: actions/setup-node@v4 | NOT EXECUTED | declared blocking (R8.9) - if: false in push:main |
@@ -1017,14 +1036,14 @@ Every step `infrastructure/quality/blocking-steps.yaml` declares blocking, annot
 | push:main | .github/workflows/frontend.yml::e2e | Playwright E2E (blocking) | NOT EXECUTED | declared blocking (R8.9) - if: false in push:main |
 | push:main | .github/workflows/frontend.yml::e2e | uses: actions/upload-artifact@v4 | NOT EXECUTED | declared blocking (R8.9) - if: false in push:main |
 | push:main | .github/workflows/frontend.yml::e2e | Upload Playwright run record (FE-INV attestation evidence, R8.7) | NOT EXECUTED | declared blocking (R8.9) - if: false in push:main |
-| push:main | .github/workflows/frontend.yml::e2e-harness | Task_Completion_Tests + Resilience_Scenarios (seeded, no live network) | NOT EXECUTED | declared blocking (R8.9) - if: false in push:main |
+| push:main | .github/workflows/frontend.yml::e2e-harness | Task_Completion_Tests + Resilience_Scenarios (seeded, no live network) | NOT EXECUTED | declared blocking (R8.9, ADR-059) - if: false in push:main |
+| push:main | .github/workflows/frontend.yml::e2e-harness | Seal the leg scorecard with its leg index, matrix size and commit (ADR-059) | NOT EXECUTED | declared blocking (R8.9, ADR-059) - if: false in push:main |
 | push:main | .github/workflows/frontend.yml::effectiveness-ratchet | uses: actions/checkout@v4 | NOT EXECUTED | declared blocking (R8.9) - if: false in push:main |
 | push:main | .github/workflows/frontend.yml::effectiveness-ratchet | uses: pnpm/action-setup@v4 | NOT EXECUTED | declared blocking (R8.9) - if: false in push:main |
 | push:main | .github/workflows/frontend.yml::effectiveness-ratchet | uses: actions/setup-node@v4 | NOT EXECUTED | declared blocking (R8.9) - if: false in push:main |
 | push:main | .github/workflows/frontend.yml::effectiveness-ratchet | run: pnpm install --frozen-lockfile=false | NOT EXECUTED | declared blocking (R8.9) - if: false in push:main |
-| push:main | .github/workflows/frontend.yml::effectiveness-ratchet | Download fresh scorecard | NOT EXECUTED | declared blocking (R8.9) - if: false in push:main |
-| push:main | .github/workflows/frontend.yml::effectiveness-ratchet | Download harness run record (skip + zero-execution evidence, R8.6/R8.8) | NOT EXECUTED | declared blocking (R8.9) - if: false in push:main |
-| push:main | .github/workflows/frontend.yml::effectiveness-ratchet | Effectiveness ratchet (fresh scorecard vs committed baseline) | NOT EXECUTED | declared blocking (R8.9) - if: false in push:main |
+| push:main | .github/workflows/frontend.yml::effectiveness-ratchet | Download every leg scorecard and harness run record (ADR-059) | NOT EXECUTED | declared blocking (R8.9) - if: false in push:main |
+| push:main | .github/workflows/frontend.yml::effectiveness-ratchet | Effectiveness ratchet (median of five legs vs committed baseline) | NOT EXECUTED | declared blocking (R8.9) - if: false in push:main |
 | push:main | .github/workflows/frontend.yml::effectiveness-ratchet | Effectiveness baseline is a measurement, not a ceiling (R8.10) | NOT EXECUTED | declared blocking (R8.9) - if: false in push:main |
 | push:main | .github/workflows/frontend.yml::effectiveness-ratchet | Upload measured baseline candidate (commit this to clear R8.10) | NOT EXECUTED | declared blocking (R8.9) - if: false in push:main |
 | push:main | .github/workflows/mutation.yml::mutation-fast-plan | Resolve the mutation partition [pytest /training/rewards.py] | CONDITIONAL | declared blocking (R11.5) - conditional (path-filtered (paths: agents/*/training/rewards.py, orchestrator/guardrails/rules.py, orchestrator/audit/logger.py, packages/synapse_common/audit_chain.py, +1 more)) |
@@ -1138,7 +1157,11 @@ Every step `infrastructure/quality/blocking-steps.yaml` declares blocking, annot
 | pull_request | .github/workflows/frontend-lockfile-regen.yml::regen-lockfile | pnpm-lock supply-chain check (HTTPS + registry.npmjs.org only) | CONDITIONAL | declared blocking (R1.8) - conditional (if: undecidable from trigger (github.event.label.name)) |
 | pull_request | .github/workflows/frontend-lockfile-regen.yml::regen-lockfile | Upload package.json + pnpm-lock.yaml | CONDITIONAL | declared blocking (R1.8) - conditional (if: undecidable from trigger (github.event.label.name)) |
 | pull_request | .github/workflows/frontend-lockfile-regen.yml::regen-lockfile | pnpm audit (high+ severity, production tree only) | CONDITIONAL | declared blocking (R1.8) - conditional (if: undecidable from trigger (github.event.label.name)) |
-| pull_request | .github/workflows/frontend.yml::build | Entry preloads exclude the heavy viz chunks (FE-INV-025) | CONDITIONAL | declared blocking (FE-INV-025) - conditional (path-filtered (paths: frontend/**, proto/domain/**, .github/workflows/frontend.yml); needs 'quality', which is conditional) |
+| pull_request | .github/workflows/frontend.yml::build | Entry preloads exclude the heavy viz chunks (FE-INV-025) | CONDITIONAL | declared blocking (FE-INV-014, FE-INV-025) - conditional (path-filtered (paths: frontend/**, proto/domain/**, .github/workflows/frontend.yml); needs 'quality', which is conditional) |
+| pull_request | .github/workflows/frontend.yml::build | Entry chunk <= 180 KB and react-vendor <= 70 KB, gzipped (FE-INV-014) | CONDITIONAL | declared blocking (FE-INV-014, FE-INV-025) - conditional (path-filtered (paths: frontend/**, proto/domain/**, .github/workflows/frontend.yml); needs 'quality', which is conditional) |
+| pull_request | .github/workflows/frontend.yml::storybook-a11y | Build the static Storybook | CONDITIONAL | declared blocking (FE-INV-031) - conditional (path-filtered (paths: frontend/**, proto/domain/**, .github/workflows/frontend.yml)) |
+| pull_request | .github/workflows/frontend.yml::storybook-a11y | Serve the static Storybook on 127.0.0.1:6006 (bounded wait) [http.server] | CONDITIONAL | declared blocking (FE-INV-031) - conditional (path-filtered (paths: frontend/**, proto/domain/**, .github/workflows/frontend.yml)) |
+| pull_request | .github/workflows/frontend.yml::storybook-a11y | Every story has zero axe violations (WCAG 2.0/2.1 A and AA, FE-INV-031) | CONDITIONAL | declared blocking (FE-INV-031) - conditional (path-filtered (paths: frontend/**, proto/domain/**, .github/workflows/frontend.yml)) |
 | pull_request | .github/workflows/frontend.yml::e2e | uses: actions/checkout@v4 | CONDITIONAL | declared blocking (R8.9) - conditional (path-filtered (paths: frontend/**, proto/domain/**, .github/workflows/frontend.yml); needs 'build', which is conditional) |
 | pull_request | .github/workflows/frontend.yml::e2e | uses: pnpm/action-setup@v4 | CONDITIONAL | declared blocking (R8.9) - conditional (path-filtered (paths: frontend/**, proto/domain/**, .github/workflows/frontend.yml); needs 'build', which is conditional) |
 | pull_request | .github/workflows/frontend.yml::e2e | uses: actions/setup-node@v4 | CONDITIONAL | declared blocking (R8.9) - conditional (path-filtered (paths: frontend/**, proto/domain/**, .github/workflows/frontend.yml); needs 'build', which is conditional) |
@@ -1148,14 +1171,14 @@ Every step `infrastructure/quality/blocking-steps.yaml` declares blocking, annot
 | pull_request | .github/workflows/frontend.yml::e2e | Playwright E2E (blocking) | CONDITIONAL | declared blocking (R8.9) - conditional (path-filtered (paths: frontend/**, proto/domain/**, .github/workflows/frontend.yml); needs 'build', which is conditional) |
 | pull_request | .github/workflows/frontend.yml::e2e | uses: actions/upload-artifact@v4 | CONDITIONAL | declared blocking (R8.9) - conditional (path-filtered (paths: frontend/**, proto/domain/**, .github/workflows/frontend.yml); needs 'build', which is conditional) |
 | pull_request | .github/workflows/frontend.yml::e2e | Upload Playwright run record (FE-INV attestation evidence, R8.7) | CONDITIONAL | declared blocking (R8.9) - conditional (path-filtered (paths: frontend/**, proto/domain/**, .github/workflows/frontend.yml); needs 'build', which is conditional) |
-| pull_request | .github/workflows/frontend.yml::e2e-harness | Task_Completion_Tests + Resilience_Scenarios (seeded, no live network) | CONDITIONAL | declared blocking (R8.9) - conditional (path-filtered (paths: frontend/**, proto/domain/**, .github/workflows/frontend.yml); needs 'build', which is conditional) |
+| pull_request | .github/workflows/frontend.yml::e2e-harness | Task_Completion_Tests + Resilience_Scenarios (seeded, no live network) | CONDITIONAL | declared blocking (R8.9, ADR-059) - conditional (path-filtered (paths: frontend/**, proto/domain/**, .github/workflows/frontend.yml); needs 'build', which is conditional) |
+| pull_request | .github/workflows/frontend.yml::e2e-harness | Seal the leg scorecard with its leg index, matrix size and commit (ADR-059) | CONDITIONAL | declared blocking (R8.9, ADR-059) - conditional (path-filtered (paths: frontend/**, proto/domain/**, .github/workflows/frontend.yml); needs 'build', which is conditional) |
 | pull_request | .github/workflows/frontend.yml::effectiveness-ratchet | uses: actions/checkout@v4 | CONDITIONAL | declared blocking (R8.9) - conditional (path-filtered (paths: frontend/**, proto/domain/**, .github/workflows/frontend.yml); needs 'e2e-harness', which is conditional) |
 | pull_request | .github/workflows/frontend.yml::effectiveness-ratchet | uses: pnpm/action-setup@v4 | CONDITIONAL | declared blocking (R8.9) - conditional (path-filtered (paths: frontend/**, proto/domain/**, .github/workflows/frontend.yml); needs 'e2e-harness', which is conditional) |
 | pull_request | .github/workflows/frontend.yml::effectiveness-ratchet | uses: actions/setup-node@v4 | CONDITIONAL | declared blocking (R8.9) - conditional (path-filtered (paths: frontend/**, proto/domain/**, .github/workflows/frontend.yml); needs 'e2e-harness', which is conditional) |
 | pull_request | .github/workflows/frontend.yml::effectiveness-ratchet | run: pnpm install --frozen-lockfile=false | CONDITIONAL | declared blocking (R8.9) - conditional (path-filtered (paths: frontend/**, proto/domain/**, .github/workflows/frontend.yml); needs 'e2e-harness', which is conditional) |
-| pull_request | .github/workflows/frontend.yml::effectiveness-ratchet | Download fresh scorecard | CONDITIONAL | declared blocking (R8.9) - conditional (path-filtered (paths: frontend/**, proto/domain/**, .github/workflows/frontend.yml); needs 'e2e-harness', which is conditional) |
-| pull_request | .github/workflows/frontend.yml::effectiveness-ratchet | Download harness run record (skip + zero-execution evidence, R8.6/R8.8) | CONDITIONAL | declared blocking (R8.9) - conditional (path-filtered (paths: frontend/**, proto/domain/**, .github/workflows/frontend.yml); needs 'e2e-harness', which is conditional) |
-| pull_request | .github/workflows/frontend.yml::effectiveness-ratchet | Effectiveness ratchet (fresh scorecard vs committed baseline) | CONDITIONAL | declared blocking (R8.9) - conditional (path-filtered (paths: frontend/**, proto/domain/**, .github/workflows/frontend.yml); needs 'e2e-harness', which is conditional) |
+| pull_request | .github/workflows/frontend.yml::effectiveness-ratchet | Download every leg scorecard and harness run record (ADR-059) | CONDITIONAL | declared blocking (R8.9) - conditional (path-filtered (paths: frontend/**, proto/domain/**, .github/workflows/frontend.yml); needs 'e2e-harness', which is conditional) |
+| pull_request | .github/workflows/frontend.yml::effectiveness-ratchet | Effectiveness ratchet (median of five legs vs committed baseline) | CONDITIONAL | declared blocking (R8.9) - conditional (path-filtered (paths: frontend/**, proto/domain/**, .github/workflows/frontend.yml); needs 'e2e-harness', which is conditional) |
 | pull_request | .github/workflows/frontend.yml::effectiveness-ratchet | Effectiveness baseline is a measurement, not a ceiling (R8.10) | CONDITIONAL | declared blocking (R8.9) - conditional (path-filtered (paths: frontend/**, proto/domain/**, .github/workflows/frontend.yml); needs 'e2e-harness', which is conditional) |
 | pull_request | .github/workflows/frontend.yml::effectiveness-ratchet | Upload measured baseline candidate (commit this to clear R8.10) | CONDITIONAL | declared blocking (R8.9) - conditional (path-filtered (paths: frontend/**, proto/domain/**, .github/workflows/frontend.yml); needs 'e2e-harness', which is conditional) |
 | pull_request | .github/workflows/mutation.yml::mutation-fast-plan | Resolve the mutation partition [pytest /training/rewards.py] | CONDITIONAL | declared blocking (R11.5) - conditional (path-filtered (paths: agents/*/training/rewards.py, orchestrator/guardrails/rules.py, orchestrator/audit/logger.py, packages/synapse_common/audit_chain.py, +1 more)) |
@@ -1269,7 +1292,11 @@ Every step `infrastructure/quality/blocking-steps.yaml` declares blocking, annot
 | tag:v* | .github/workflows/frontend-lockfile-regen.yml::regen-lockfile | pnpm-lock supply-chain check (HTTPS + registry.npmjs.org only) | NOT EXECUTED | declared blocking (R1.8) - workflow on: has no push trigger |
 | tag:v* | .github/workflows/frontend-lockfile-regen.yml::regen-lockfile | Upload package.json + pnpm-lock.yaml | NOT EXECUTED | declared blocking (R1.8) - workflow on: has no push trigger |
 | tag:v* | .github/workflows/frontend-lockfile-regen.yml::regen-lockfile | pnpm audit (high+ severity, production tree only) | NOT EXECUTED | declared blocking (R1.8) - workflow on: has no push trigger |
-| tag:v* | .github/workflows/frontend.yml::build | Entry preloads exclude the heavy viz chunks (FE-INV-025) | NOT EXECUTED | declared blocking (FE-INV-025) - on: push is branch-scoped (no tags: filter), so a tag push is excluded |
+| tag:v* | .github/workflows/frontend.yml::build | Entry preloads exclude the heavy viz chunks (FE-INV-025) | NOT EXECUTED | declared blocking (FE-INV-014, FE-INV-025) - on: push is branch-scoped (no tags: filter), so a tag push is excluded |
+| tag:v* | .github/workflows/frontend.yml::build | Entry chunk <= 180 KB and react-vendor <= 70 KB, gzipped (FE-INV-014) | NOT EXECUTED | declared blocking (FE-INV-014, FE-INV-025) - on: push is branch-scoped (no tags: filter), so a tag push is excluded |
+| tag:v* | .github/workflows/frontend.yml::storybook-a11y | Build the static Storybook | NOT EXECUTED | declared blocking (FE-INV-031) - on: push is branch-scoped (no tags: filter), so a tag push is excluded |
+| tag:v* | .github/workflows/frontend.yml::storybook-a11y | Serve the static Storybook on 127.0.0.1:6006 (bounded wait) [http.server] | NOT EXECUTED | declared blocking (FE-INV-031) - on: push is branch-scoped (no tags: filter), so a tag push is excluded |
+| tag:v* | .github/workflows/frontend.yml::storybook-a11y | Every story has zero axe violations (WCAG 2.0/2.1 A and AA, FE-INV-031) | NOT EXECUTED | declared blocking (FE-INV-031) - on: push is branch-scoped (no tags: filter), so a tag push is excluded |
 | tag:v* | .github/workflows/frontend.yml::e2e | uses: actions/checkout@v4 | NOT EXECUTED | declared blocking (R8.9) - on: push is branch-scoped (no tags: filter), so a tag push is excluded |
 | tag:v* | .github/workflows/frontend.yml::e2e | uses: pnpm/action-setup@v4 | NOT EXECUTED | declared blocking (R8.9) - on: push is branch-scoped (no tags: filter), so a tag push is excluded |
 | tag:v* | .github/workflows/frontend.yml::e2e | uses: actions/setup-node@v4 | NOT EXECUTED | declared blocking (R8.9) - on: push is branch-scoped (no tags: filter), so a tag push is excluded |
@@ -1279,14 +1306,14 @@ Every step `infrastructure/quality/blocking-steps.yaml` declares blocking, annot
 | tag:v* | .github/workflows/frontend.yml::e2e | Playwright E2E (blocking) | NOT EXECUTED | declared blocking (R8.9) - on: push is branch-scoped (no tags: filter), so a tag push is excluded |
 | tag:v* | .github/workflows/frontend.yml::e2e | uses: actions/upload-artifact@v4 | NOT EXECUTED | declared blocking (R8.9) - on: push is branch-scoped (no tags: filter), so a tag push is excluded |
 | tag:v* | .github/workflows/frontend.yml::e2e | Upload Playwright run record (FE-INV attestation evidence, R8.7) | NOT EXECUTED | declared blocking (R8.9) - on: push is branch-scoped (no tags: filter), so a tag push is excluded |
-| tag:v* | .github/workflows/frontend.yml::e2e-harness | Task_Completion_Tests + Resilience_Scenarios (seeded, no live network) | NOT EXECUTED | declared blocking (R8.9) - on: push is branch-scoped (no tags: filter), so a tag push is excluded |
+| tag:v* | .github/workflows/frontend.yml::e2e-harness | Task_Completion_Tests + Resilience_Scenarios (seeded, no live network) | NOT EXECUTED | declared blocking (R8.9, ADR-059) - on: push is branch-scoped (no tags: filter), so a tag push is excluded |
+| tag:v* | .github/workflows/frontend.yml::e2e-harness | Seal the leg scorecard with its leg index, matrix size and commit (ADR-059) | NOT EXECUTED | declared blocking (R8.9, ADR-059) - on: push is branch-scoped (no tags: filter), so a tag push is excluded |
 | tag:v* | .github/workflows/frontend.yml::effectiveness-ratchet | uses: actions/checkout@v4 | NOT EXECUTED | declared blocking (R8.9) - on: push is branch-scoped (no tags: filter), so a tag push is excluded |
 | tag:v* | .github/workflows/frontend.yml::effectiveness-ratchet | uses: pnpm/action-setup@v4 | NOT EXECUTED | declared blocking (R8.9) - on: push is branch-scoped (no tags: filter), so a tag push is excluded |
 | tag:v* | .github/workflows/frontend.yml::effectiveness-ratchet | uses: actions/setup-node@v4 | NOT EXECUTED | declared blocking (R8.9) - on: push is branch-scoped (no tags: filter), so a tag push is excluded |
 | tag:v* | .github/workflows/frontend.yml::effectiveness-ratchet | run: pnpm install --frozen-lockfile=false | NOT EXECUTED | declared blocking (R8.9) - on: push is branch-scoped (no tags: filter), so a tag push is excluded |
-| tag:v* | .github/workflows/frontend.yml::effectiveness-ratchet | Download fresh scorecard | NOT EXECUTED | declared blocking (R8.9) - on: push is branch-scoped (no tags: filter), so a tag push is excluded |
-| tag:v* | .github/workflows/frontend.yml::effectiveness-ratchet | Download harness run record (skip + zero-execution evidence, R8.6/R8.8) | NOT EXECUTED | declared blocking (R8.9) - on: push is branch-scoped (no tags: filter), so a tag push is excluded |
-| tag:v* | .github/workflows/frontend.yml::effectiveness-ratchet | Effectiveness ratchet (fresh scorecard vs committed baseline) | NOT EXECUTED | declared blocking (R8.9) - on: push is branch-scoped (no tags: filter), so a tag push is excluded |
+| tag:v* | .github/workflows/frontend.yml::effectiveness-ratchet | Download every leg scorecard and harness run record (ADR-059) | NOT EXECUTED | declared blocking (R8.9) - on: push is branch-scoped (no tags: filter), so a tag push is excluded |
+| tag:v* | .github/workflows/frontend.yml::effectiveness-ratchet | Effectiveness ratchet (median of five legs vs committed baseline) | NOT EXECUTED | declared blocking (R8.9) - on: push is branch-scoped (no tags: filter), so a tag push is excluded |
 | tag:v* | .github/workflows/frontend.yml::effectiveness-ratchet | Effectiveness baseline is a measurement, not a ceiling (R8.10) | NOT EXECUTED | declared blocking (R8.9) - on: push is branch-scoped (no tags: filter), so a tag push is excluded |
 | tag:v* | .github/workflows/frontend.yml::effectiveness-ratchet | Upload measured baseline candidate (commit this to clear R8.10) | NOT EXECUTED | declared blocking (R8.9) - on: push is branch-scoped (no tags: filter), so a tag push is excluded |
 | tag:v* | .github/workflows/mutation.yml::mutation-fast-plan | Resolve the mutation partition [pytest /training/rewards.py] | NOT EXECUTED | declared blocking (R11.5) - on: push is branch-scoped (no tags: filter), so a tag push is excluded |

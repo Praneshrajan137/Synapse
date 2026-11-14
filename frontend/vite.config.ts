@@ -157,6 +157,14 @@ export default defineConfig(({ mode }) => {
       chunkSizeWarningLimit: 200,
       rollupOptions: {
         output: {
+          // FE-INV-014: the entry chunk carries a prefix of its own, so package.json's
+          // size-limit check can select it alone with `dist/assets/entry-*.js`. Under Vite's
+          // default `assets/[name]-[hash].js` the entry is `index-[hash].js`, and so is every
+          // lazy chunk whose module is an `index.ts`: the old `index-*.js` pattern summed the
+          // entry with one (PR #84's build job). Other chunks keep the default, so a lazily
+          // imported module named `entry` or `entry-...` would match too, which can only make
+          // the check stricter. Storybook's Vite builder keeps only `target` from this block.
+          entryFileNames: "assets/entry-[name]-[hash].js",
           // Nothing eager imports deck.gl, MapLibre or sigma: the living map's canvas is one
           // lazy module (surfaces/mission-control/LivingMapCanvas) and every surface except
           // Mission Control is route-split, so those chunks load behind lazy boundaries. The

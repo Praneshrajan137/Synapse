@@ -54,7 +54,9 @@ export type OverrideApiResponse = z.infer<typeof OverrideApiResponseSchema>;
 
 // ─── Decision detail (mirror api/routers/decisions.py get_decision) ───────
 // Loose on the JSONB-bag fields (proposals, audit_trace, etc.) — those are
-// validated by callers when they reshape into ConsensusDecision.
+// validated by callers when they reshape into ConsensusDecision. The four bare
+// `z.unknown()` bags carry `.optional()`: zod >= 4.4 requires a key typed
+// `z.unknown()`, and zod 3 (which this schema was written against) did not.
 // ADR-044 anatomy + honesty fields are `.optional()` so this client keeps
 // validating against pre-044 gateways (additive contract).
 export const DecisionDetailResponseSchema = z
@@ -66,19 +68,19 @@ export const DecisionDetailResponseSchema = z
     confidence: z.number(),
     escalated: z.boolean(),
     city: z.string().nullable().optional(),
-    proposals: z.unknown(),
-    selected_action: z.unknown(),
-    pareto_weights: z.unknown(),
+    proposals: z.unknown().optional(),
+    selected_action: z.unknown().optional(),
+    pareto_weights: z.unknown().optional(),
     human_override: z.unknown().nullable().optional(),
-    audit_trace: z.unknown(),
+    audit_trace: z.unknown().optional(),
     created_at: z.string().nullable().optional(),
     escalations: z.array(z.unknown()).optional(),
     // ADR-044 — previously-imprisoned audit_consensus columns.
     debate_rounds: z.number().int().min(0).optional(),
-    pareto_front: z.array(z.record(z.unknown())).nullable().optional(),
+    pareto_front: z.array(z.record(z.string(), z.unknown())).nullable().optional(),
     execution_confirmations: z.array(z.string()).nullable().optional(),
-    context_messages: z.array(z.record(z.unknown())).nullable().optional(),
-    outcome: z.record(z.unknown()).nullable().optional(),
+    context_messages: z.array(z.record(z.string(), z.unknown())).nullable().optional(),
+    outcome: z.record(z.string(), z.unknown()).nullable().optional(),
     prev_hash: z.string().nullable().optional(),
     current_hash: z.string().nullable().optional(),
     // Tri-state: true = single-row hash recompute matches; false = content
@@ -98,8 +100,8 @@ export type DecisionDetailResponse = z.infer<typeof DecisionDetailResponseSchema
 // breaker's state. Polled (~15s); a fetch failure renders "posture unknown".
 export const SystemPostureSchema = z
   .object({
-    brownout: z.record(z.string()).default({}),
-    breakers: z.record(z.string()).default({}),
+    brownout: z.record(z.string(), z.string()).default({}),
+    breakers: z.record(z.string(), z.string()).default({}),
     degraded: z.boolean(),
   })
   .passthrough();

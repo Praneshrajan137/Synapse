@@ -38,7 +38,8 @@ const SloTierSchema = z
 
 export const SloResponseSchema = z
   .object({
-    tiers: z.record(SloTierSchema),
+    // zod 4: z.record() takes an explicit key schema; an enum key would be exhaustive.
+    tiers: z.record(z.string(), SloTierSchema),
     ts: z.number(),
     source: z.enum(["prometheus", "unknown"]),
   })

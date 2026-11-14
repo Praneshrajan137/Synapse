@@ -103,15 +103,21 @@ interface Vitals {
   readonly cls: number;
   readonly lcp: number;
   readonly inp: number;
+  /**
+   * The element the last LCP candidate named, its size and its URL, so an LCP over budget
+   * says what the page was waiting to paint (finding 114). Diagnostic only: no assertion
+   * reads it.
+   */
+  readonly lcpElement: string;
 }
 
 /** Arm the LCP/CLS/INP observers before the app boots so nothing is missed. */
 async function armVitals(page: Page): Promise<void> {
   await page.addInitScript(() => {
     const w = window as unknown as {
-      __vitals?: { cls: number; lcp: number; inp: number };
+      __vitals?: { cls: number; lcp: number; inp: number; lcpElement: string };
     };
-    w.__vitals = { cls: 0, lcp: 0, inp: 0 };
+    w.__vitals = { cls: 0, lcp: 0, inp: 0, lcpElement: "" };
 
     // Cumulative Layout Shift — sum of shifts not triggered by recent input.
     new PerformanceObserver((list) => {
@@ -123,11 +129,20 @@ async function armVitals(page: Page): Promise<void> {
       }
     }).observe({ type: "layout-shift", buffered: true } as PerformanceObserverInit);
 
-    // Largest Contentful Paint — keep the latest (largest) candidate.
+    // Largest Contentful Paint — keep the latest (largest) candidate, and name its element.
     new PerformanceObserver((list) => {
       const entries = list.getEntries();
-      const last = entries[entries.length - 1] as PerformanceEntry | undefined;
-      if (last) w.__vitals!.lcp = last.startTime;
+      const last = entries[entries.length - 1] as
+        | (PerformanceEntry & { element?: Element | null; size?: number; url?: string })
+        | undefined;
+      const vitals = w.__vitals;
+      if (last && vitals) {
+        vitals.lcp = last.startTime;
+        const el = last.element;
+        const text = (el?.textContent ?? "").trim().slice(0, 60);
+        const name = el ? `${el.tagName.toLowerCase()} "${text}"` : "(element detached)";
+        vitals.lcpElement = `${name} size=${last.size ?? 0} url=${last.url ?? ""}`;
+      }
     }).observe({ type: "largest-contentful-paint", buffered: true } as PerformanceObserverInit);
 
     // INP proxy — the longest interaction (Event Timing duration) observed.
@@ -147,7 +162,12 @@ async function armVitals(page: Page): Promise<void> {
 async function readVitals(page: Page): Promise<Vitals> {
   return page.evaluate(
     () =>
-      (window as unknown as { __vitals: Vitals }).__vitals ?? { cls: 0, lcp: 0, inp: 0 },
+      (window as unknown as { __vitals: Vitals }).__vitals ?? {
+        cls: 0,
+        lcp: 0,
+        inp: 0,
+        lcpElement: "",
+      },
   );
 }
 
@@ -259,7 +279,8 @@ test.describe("Mobile_Reality_Profile — key Surfaces reachable + Web Vitals (R
       if (vitals.lcp > 0) {
         expect(
           vitals.lcp,
-          `${surface.id}: LCP ${vitals.lcp}ms exceeds the Web_Vitals_Budget (${LCP_BUDGET_MS}ms)`,
+          `${surface.id}: LCP ${vitals.lcp}ms exceeds the Web_Vitals_Budget (${LCP_BUDGET_MS}ms); ` +
+            `LCP element: ${vitals.lcpElement}`,
         ).toBeLessThanOrEqual(LCP_BUDGET_MS);
       }
     });

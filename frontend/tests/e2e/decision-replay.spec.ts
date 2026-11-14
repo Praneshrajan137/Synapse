@@ -37,7 +37,7 @@ test.beforeEach(async ({ page }) => {
 test.describe("@needs-backend Decision Detail — URL-synced Replay phase", () => {
   // A real fixture would seed a known decision and use its UUID here;
   // for now we accept any non-skip exit so this spec is portable.
-  const SAMPLE_DECISION_ID = "00000000-0000-0000-0000-000000000001";
+  const SAMPLE_DECISION_ID = "00000000-0000-4000-8000-000000000001";
 
   test("loads at the phase given by ?phase=N", async ({ page }) => {
     await page.goto(`/decisions/${SAMPLE_DECISION_ID}?phase=3`);

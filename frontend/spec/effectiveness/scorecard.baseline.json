@@ -1,37 +1,184 @@
 {
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "harnessVersion": "1.0.0",
   "seed": 30000,
+  "commitSha": "cd7f8760d02237a0075ed841ac707af939a30cc7",
+  "legCount": 5,
   "rows": [
     {
       "job": "resolve-escalation-correctly",
-      "steps": 20,
-      "latencyMs": 15000,
-      "errorRate": 0
+      "steps": 3,
+      "latencyMs": 75.79999999998836,
+      "errorRate": 0,
+      "harnessVersion": "1.0.0",
+      "seed": 30101,
+      "latencySamples": [
+        {
+          "leg": 1,
+          "latencyMs": 74.20000000001164,
+          "capturedAt": "2026-11-14T18:55:54.311Z"
+        },
+        {
+          "leg": 2,
+          "latencyMs": 74.10000000000582,
+          "capturedAt": "2026-11-14T18:56:11.251Z"
+        },
+        {
+          "leg": 3,
+          "latencyMs": 75.79999999998836,
+          "capturedAt": "2026-11-14T18:56:14.535Z"
+        },
+        {
+          "leg": 4,
+          "latencyMs": 79.70000000001164,
+          "capturedAt": "2026-11-14T18:56:07.873Z"
+        },
+        {
+          "leg": 5,
+          "latencyMs": 79,
+          "capturedAt": "2026-11-14T18:56:11.151Z"
+        }
+      ]
     },
     {
       "job": "identify-degraded-agent",
-      "steps": 20,
-      "latencyMs": 15000,
-      "errorRate": 0
+      "steps": 1,
+      "latencyMs": 68.5,
+      "errorRate": 0,
+      "harnessVersion": "1.0.0",
+      "seed": 30202,
+      "latencySamples": [
+        {
+          "leg": 1,
+          "latencyMs": 62.19999999998254,
+          "capturedAt": "2026-11-14T18:55:55.006Z"
+        },
+        {
+          "leg": 2,
+          "latencyMs": 79.5,
+          "capturedAt": "2026-11-14T18:56:12.041Z"
+        },
+        {
+          "leg": 3,
+          "latencyMs": 75.80000000001746,
+          "capturedAt": "2026-11-14T18:56:15.315Z"
+        },
+        {
+          "leg": 4,
+          "latencyMs": 68.5,
+          "capturedAt": "2026-11-14T18:56:08.647Z"
+        },
+        {
+          "leg": 5,
+          "latencyMs": 67.60000000000582,
+          "capturedAt": "2026-11-14T18:56:11.939Z"
+        }
+      ]
     },
     {
       "job": "reconstruct-decision-rationale",
-      "steps": 20,
-      "latencyMs": 15000,
-      "errorRate": 0
+      "steps": 1,
+      "latencyMs": 57.5,
+      "errorRate": 0,
+      "harnessVersion": "1.0.0",
+      "seed": 30303,
+      "latencySamples": [
+        {
+          "leg": 1,
+          "latencyMs": 57.09999999997672,
+          "capturedAt": "2026-11-14T18:55:55.646Z"
+        },
+        {
+          "leg": 2,
+          "latencyMs": 56.90000000002328,
+          "capturedAt": "2026-11-14T18:56:12.767Z"
+        },
+        {
+          "leg": 3,
+          "latencyMs": 58.69999999998254,
+          "capturedAt": "2026-11-14T18:56:16.055Z"
+        },
+        {
+          "leg": 4,
+          "latencyMs": 57.89999999999418,
+          "capturedAt": "2026-11-14T18:56:09.365Z"
+        },
+        {
+          "leg": 5,
+          "latencyMs": 57.5,
+          "capturedAt": "2026-11-14T18:56:12.658Z"
+        }
+      ]
     },
     {
       "job": "adjust-steering-safely",
-      "steps": 20,
-      "latencyMs": 15000,
-      "errorRate": 0
+      "steps": 1,
+      "latencyMs": 4,
+      "errorRate": 0,
+      "harnessVersion": "1.0.0",
+      "seed": 30404,
+      "latencySamples": [
+        {
+          "leg": 1,
+          "latencyMs": 3.5,
+          "capturedAt": "2026-11-14T18:55:56.259Z"
+        },
+        {
+          "leg": 2,
+          "latencyMs": 4,
+          "capturedAt": "2026-11-14T18:56:13.436Z"
+        },
+        {
+          "leg": 3,
+          "latencyMs": 4.100000000005821,
+          "capturedAt": "2026-11-14T18:56:16.712Z"
+        },
+        {
+          "leg": 4,
+          "latencyMs": 7,
+          "capturedAt": "2026-11-14T18:56:10.048Z"
+        },
+        {
+          "leg": 5,
+          "latencyMs": 3.900000000023283,
+          "capturedAt": "2026-11-14T18:56:13.333Z"
+        }
+      ]
     },
     {
       "job": "catch-disruption-before-cascade",
-      "steps": 20,
-      "latencyMs": 15000,
-      "errorRate": 0
+      "steps": 1,
+      "latencyMs": 2.5,
+      "errorRate": 0,
+      "harnessVersion": "1.0.0",
+      "seed": 30505,
+      "latencySamples": [
+        {
+          "leg": 1,
+          "latencyMs": 2.5,
+          "capturedAt": "2026-11-14T18:56:00.153Z"
+        },
+        {
+          "leg": 2,
+          "latencyMs": 2.599999999976717,
+          "capturedAt": "2026-11-14T18:56:17.511Z"
+        },
+        {
+          "leg": 3,
+          "latencyMs": 2.1000000000058208,
+          "capturedAt": "2026-11-14T18:56:20.762Z"
+        },
+        {
+          "leg": 4,
+          "latencyMs": 2.6000000000058208,
+          "capturedAt": "2026-11-14T18:56:14.077Z"
+        },
+        {
+          "leg": 5,
+          "latencyMs": 2.3000000000174623,
+          "capturedAt": "2026-11-14T18:56:17.448Z"
+        }
+      ]
     }
   ],
   "interruptionPrecision": 0.75,

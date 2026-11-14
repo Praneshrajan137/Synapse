@@ -76,25 +76,41 @@
 export const SCORECARD_INCOMPLETE_RELPATH = "test-results/effectiveness/scorecard.incomplete.json";
 
 /**
- * Where the ratchet writes the measured baseline CANDIDATE built from a complete run,
- * relative to the `frontend/` root.
+ * Where the ratchet writes the measured baseline CANDIDATE built from k clean legs, relative
+ * to the `frontend/` root.
  *
- * The committed `spec/effectiveness/scorecard.baseline.json` is rejected today as an
- * authored ceiling (5 `missing-stamp` + 1 `uniform-metrics`). The ONLY honest way it
- * clears is that a real run measures the numbers and `buildBaseline` writes them: not
- * by editing a number, not by typing a `capturedAt`, not by relaxing a threshold
- * (I-7). This is the file an operator commits over the current baseline.
+ * The committed `spec/effectiveness/scorecard.baseline.json` is rejected today as the
+ * superseded one-run format (`one-run-format`, ADR-059). The ONLY honest way it clears is that
+ * k real legs measure the numbers and `buildBaseline` writes them: not by editing a number, not
+ * by typing a `capturedAt`, not by relaxing a threshold (I-7). This is the file an operator
+ * commits over the current baseline, unedited.
  */
 export const SCORECARD_BASELINE_CANDIDATE_RELPATH =
   "test-results/effectiveness/scorecard.baseline.candidate.json";
 
 /**
+ * Where an `e2e-harness` leg writes its SEALED scorecard, relative to the `frontend/` root
+ * (ADR-059): the complete record from `SCORECARD_FRESH_RELPATH` plus the leg stamp
+ * `{ index, count, commitSha }`. `run-ratchet.ts seal` writes it only after the emission rule
+ * re-reads the record as complete, and the ratchet reads no other scorecard from a leg.
+ */
+export const SCORECARD_LEG_RELPATH = "test-results/effectiveness/scorecard.leg.json";
+
+/**
+ * Where the `effectiveness-ratchet` job downloads the leg artifacts, relative to the
+ * `frontend/` root. Each immediate subdirectory is one `effectiveness-leg-<n>` artifact and
+ * mirrors that leg's `frontend/` root, so it holds `SCORECARD_LEG_RELPATH` and
+ * `HARNESS_RUN_RECORD_RELPATH` at those same relative paths.
+ */
+export const SCORECARD_LEGS_RELPATH = "test-results/effectiveness/legs";
+
+/**
  * The Playwright JSON run record for the harness suite, relative to the `frontend/`
  * root -- the same path `playwright.harness.config.ts` writes and
  * `frontend/spec/check_fe_invariants.py` reads for the FE-INV-056 attestation. The
- * ratchet reads it to answer a question the scorecard structurally cannot: whether any
- * resilience scenario was SKIPPED (R8.6). Those scenarios live in sibling spec files,
- * so the emitter's own ledger never sees them.
+ * ratchet reads every leg's copy of it to answer a question the scorecard structurally
+ * cannot: whether any resilience scenario was SKIPPED (R8.6). Those scenarios live in
+ * sibling spec files, so the emitter's own ledger never sees them.
  */
 export const HARNESS_RUN_RECORD_RELPATH = "artifacts/test-reports/playwright-harness.json";
 
@@ -153,8 +169,8 @@ export interface CapturedRow<J extends string = string> {
 
 /**
  * A row the rule ACCEPTED: stamped, so it can name the run that captured it.
- * Structurally a `BaselineRow` from `@lib/effectiveness-baseline`, which is what lets
- * `buildBaseline` consume a complete run's rows without a cast.
+ * Structurally a `LegRow` from `@lib/effectiveness-ratchet`, which is what lets the
+ * ratchet pool a complete leg's rows into k-leg latency samples without a cast.
  */
 export interface MeasuredRow<J extends string = string> extends CapturedRow<J> {
   readonly harnessVersion: string;

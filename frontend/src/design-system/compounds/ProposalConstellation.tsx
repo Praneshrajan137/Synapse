@@ -5,6 +5,7 @@ import {
   AGENT_NAMES,
   type AgentName,
 } from "@lib/agent-identity";
+import { rationedAgentColor } from "@lib/chromatics";
 import { cn } from "@lib/cn";
 import { motion, useReducedMotion } from "framer-motion";
 import { useMemo } from "react";
@@ -21,16 +22,19 @@ export { AGENT_NAMES, type AgentName };
  * the same screen positions across every decision, every render. Node
  * size tracks utility score (0..1 → 38..64 px diameter); node ring colour
  * is the agent's chromatic identity from `--syn-agent-*` (INV-CLR-012,
- * mirroring `design-system/color/tokens/agents.tokens.json`).
+ * mirroring `design-system/color/tokens/agents.tokens.json`). Text is drawn
+ * in ink tokens, never in an agent's colour (`INITIALS_INK` below): the hue
+ * carries identity on the node ring, the edge and the selection ring, and the
+ * initials name the agent in letters.
  *
  * Revealed nodes spring in with a small per-agent stiffness variation —
  * the agent's "motion signature." Edges to the orchestrator core pulse
  * during the debate phase. `prefers-reduced-motion` collapses both to
  * instantaneous transitions (FE-P6).
  *
- * Used by Mission Control (live decision feed) and Decision Detail
- * (replay phase 1–2). Pairs with `AgentProposalChip` for the tabular
- * list view.
+ * Used by the Steering preview (`/steering`, inside a Card) and the Council
+ * Theater replay (`/council/:id`, phases 1–2 of `ConsensusChoreography`, on
+ * the page canvas). Pairs with `AgentProposalChip` for the tabular list view.
  *
  * @see frontend/spec/fe_invariants.yaml FE-INV-004 (every decision card
  *      carries tier+confidence+reasoning), FE-INV-007 (visual signal
@@ -39,6 +43,31 @@ export { AGENT_NAMES, type AgentName };
 
 /** Spring tuning — base; per-agent stiffness is offset to stagger reveals. */
 const SPRING_BASE = { type: "spring" as const, stiffness: 180, damping: 22 };
+
+/**
+ * The inks the constellation's text is drawn in. No agent token works as a text
+ * colour in every theme: as text, the dark and high-contrast Pricing Oracle token
+ * (ADR-048 D4) and the light Freshness Guardian and Supplier Trust tokens fall
+ * below 4.5:1 on the surfaces the constellation sits on. Each ink below clears
+ * 4.5:1 in dark, light and high contrast on what it is painted on: `NODE_FILL`
+ * for the initials, and the surface holding the constellation (canvas or
+ * surface) for the utility label, which sits below its node, partly over the
+ * selection ring. `__tests__/ProposalConstellation.contrast.test.tsx` computes
+ * every pairing from tokens.css.
+ */
+const INITIALS_INK = "text-ink";
+const UTILITY_INK = "text-ink";
+/**
+ * A placeholder (no proposal yet, or one not yet revealed) is dimmed by token
+ * colour, not by opacity: the tertiary ink, its ring drained to the resting
+ * share of `rationedAgentColor` (PR-CLR-002), and a smaller node. It is never a
+ * control, so it is also inactive.
+ */
+const PLACEHOLDER_INK = "text-ink-subtle";
+/** The node's own fill: what the initials are painted on. */
+const NODE_FILL = "bg-surface";
+/** The selection ring's identity share, in percent, mixed toward transparent. */
+const SELECTION_RING_PERCENT = 22;
 
 /**
  * The shape a `Proposal` from `@domain/consensus-decision` collapses into
@@ -55,17 +84,18 @@ export interface ProposalConstellationProps {
   /** Proposals to render. Order is irrelevant — agents have fixed positions. */
   readonly proposals: ReadonlyArray<ProposalLike>;
   /**
-   * Agents whose proposals have "arrived" and should be drawn at full
-   * size/opacity. Other agents render as dimmed placeholders. Omit to
-   * derive automatically from `proposals` (an agent is revealed iff it
-   * appears in `proposals`).
+   * Agents whose proposals have "arrived" and should be drawn at full size
+   * and in full colour. Other agents render as dimmed, inactive placeholders;
+   * one whose proposal is in `proposals` but not in this set says its proposal
+   * is not yet revealed. Omit to derive automatically from `proposals` (an
+   * agent is revealed iff it appears in `proposals`).
    */
   readonly revealed?: ReadonlySet<AgentName> | undefined;
   /** True during the debate phase — edges to the core pulse. */
   readonly debating?: boolean | undefined;
   /** Currently selected agent (rendered with a focus ring). */
   readonly selectedAgent?: AgentName | null | undefined;
-  /** Click handler. If omitted, the buttons render as `aria-disabled`. */
+  /** Click handler. If omitted, every node renders `disabled`; a placeholder always does. */
   readonly onSelectAgent?: ((agent: AgentName) => void) | undefined;
   readonly className?: string | undefined;
 }
@@ -82,6 +112,20 @@ function clamp01(value: number): number {
   if (value < 0) return 0;
   if (value > 1) return 1;
   return value;
+}
+
+/** What a node tells assistive technology. A placeholder states no values, as it draws none. */
+function nodeLabel(
+  agent: AgentName,
+  proposal: ProposalLike | undefined,
+  revealedNow: boolean,
+): string {
+  const name = AGENT_LABEL[agent];
+  if (!proposal) return `${name} — no proposal yet`;
+  if (!revealedNow) return `${name} — proposal not yet revealed`;
+  const utility = clamp01(proposal.utility_score ?? 0).toFixed(2);
+  const confidence = clamp01(proposal.confidence ?? 0).toFixed(2);
+  return `${name} — utility ${utility}, confidence ${confidence}`;
 }
 
 export function ProposalConstellation({
@@ -174,14 +218,11 @@ export function ProposalConstellation({
       {nodes.map((node, i) => {
         const revealedNow = isRevealed(node.agent, node.proposal);
         const utility = clamp01(node.proposal?.utility_score ?? 0);
-        const confidence = clamp01(node.proposal?.confidence ?? 0);
         const size = 38 + utility * 26;
         const color = AGENT_COLOR_VAR[node.agent];
         const selected = selectedAgent === node.agent;
-        const interactive = Boolean(node.proposal && onSelectAgent);
-        const label = node.proposal
-          ? `${AGENT_LABEL[node.agent]} — utility ${utility.toFixed(2)}, confidence ${confidence.toFixed(2)}`
-          : `${AGENT_LABEL[node.agent]} — no proposal yet`;
+        // Only a revealed proposal is a control; a placeholder is inactive.
+        const interactive = Boolean(node.proposal && revealedNow && onSelectAgent);
         return (
           <motion.button
             key={node.agent}
@@ -190,7 +231,8 @@ export function ProposalConstellation({
             onClick={interactive ? () => onSelectAgent?.(node.agent) : undefined}
             className={cn(
               "absolute flex -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full",
-              "border bg-surface transition-colors duration-fast ease-standard",
+              "border transition-colors duration-fast ease-standard",
+              NODE_FILL,
               "focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent",
               interactive ? "cursor-pointer" : "cursor-default",
             )}
@@ -199,36 +241,34 @@ export function ProposalConstellation({
               top: `${node.y}%`,
               width: size,
               height: size,
-              borderColor: color,
+              borderColor: revealedNow ? color : rationedAgentColor(color, 0),
               borderWidth: selected ? 2 : 1,
               boxShadow: selected
-                ? `0 0 0 4px color-mix(in oklab, ${color} 22%, transparent)`
+                ? `0 0 0 4px color-mix(in oklab, ${color} ${SELECTION_RING_PERCENT}%, transparent)`
                 : "none",
             }}
             initial={reduced ? false : { scale: 0.4, opacity: 0 }}
-            animate={{
-              scale: revealedNow ? 1 : 0.7,
-              opacity: revealedNow ? 1 : 0.28,
-            }}
+            animate={{ scale: revealedNow ? 1 : 0.7, opacity: 1 }}
             transition={
               reduced
                 ? { duration: 0 }
                 : { ...SPRING_BASE, stiffness: SPRING_BASE.stiffness + i * 12 }
             }
-            aria-label={label}
+            aria-label={nodeLabel(node.agent, node.proposal, revealedNow)}
             aria-pressed={selected}
           >
             <span
-              className="font-mono text-2xs font-semibold uppercase tracking-wide"
-              style={{ color }}
+              className={cn(
+                "font-mono text-2xs font-semibold uppercase tracking-wide",
+                revealedNow ? INITIALS_INK : PLACEHOLDER_INK,
+              )}
               aria-hidden="true"
             >
               {AGENT_INITIALS[node.agent]}
             </span>
             {node.proposal && revealedNow && (
               <span
-                className="absolute -bottom-4 font-mono text-2xs tabular-nums"
-                style={{ color }}
+                className={cn("absolute -bottom-4 font-mono text-2xs tabular-nums", UTILITY_INK)}
                 aria-hidden="true"
               >
                 {utility.toFixed(2)}

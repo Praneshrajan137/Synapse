@@ -147,24 +147,63 @@ invariants:
     title: Web Vitals budgets
     mirrors: ADR-012
     description: >
-      LCP <= 2.5s, INP <= 200ms, CLS <= 0.1 on /cockpit over 3G Slow.
-      P2 ships the budget; production tuning continues in P4.
+      LCP <= 2.5 s, INP <= 200 ms and CLS <= 0.1 on Mission Control (/) under
+      the Mobile_Reality_Profile (360px viewport, touch, throttled 3G, 4x CPU),
+      asserted for each load by frontend/tests/e2e/mobile-reality.spec.ts in the
+      `e2e` job. The other four key surfaces, /cockpit among them, run there as
+      test.fixme because their 360px layout is deferred (Sprint 18 P4), so no
+      budget is asserted on them. Disclosed: one load is one sample, and the
+      2500 ms LCP budget sits inside the runner's variation (finding 114). The
+      Mission Control LCP read 2100 to 3100 ms across e2e runs between October
+      and 2026-11-01, on builds that differ by at most a few KiB. Lighthouse's
+      mobile job asserts LCP at `warn` only (lighthouserc.mobile.json).
     implementations:
       - frontend/src/main.tsx
       - frontend/vite.config.ts
     tests:
-      - frontend/tests/e2e/smoke.spec.ts
+      - frontend/tests/e2e/mobile-reality.spec.ts
     status: enforced
 
   - id: FE-INV-011
-    title: WCAG 2.1 AA across every route
+    title: Zero axe WCAG 2.0 A/AA violations on every primary Surface
     mirrors: STRIDE
     description: >
-      axe-core asserts zero violations on every route in the Playwright
-      smoke matrix.
+      frontend/tests/e2e/smoke.spec.ts opens the eleven primary Surface paths
+      (PRIMARY_SURFACES in src/app/primary-surfaces.ts, which its ROUTES list
+      mirrors) in the `e2e` job's chromium project, at the Desktop Chrome
+      viewport in the default dark theme, with prefers-reduced-motion emulated, as
+      Storybook's runner and the visual gate emulate it, so axe judges settled
+      colours and never an animation frame. Before axe-core runs, each test asserts
+      that the route rendered its own surface: the surface's h1 is visible inside
+      <main>, the URL is still that path (not /login, not the "/" of the router's
+      catch-all), and the boot splash is gone. <main> alone proves nothing,
+      because it is the Shell's and is visible under the splash and the
+      insufficient-authority state too (finding 91). axe-core then runs its rules
+      tagged wcag2a and wcag2aa (its automated WCAG 2.0 A and AA checks) over the
+      whole document and must report zero violations, and the h1 must still be
+      visible after the scan. Access state: a reloaded admin session (role seeded
+      in sessionStorage, no token) whose gateway is unreachable. It is the only
+      boot state in which RouteGuard admits all eleven, since an anonymous visitor
+      reads at viewer rank and a preview grant is never above ops. The job serves
+      `pnpm preview` with no backend: its proxy answers every /api call 500 and
+      closes every /ws upgrade, so each data region is judged in whatever
+      Universal_State it holds at that moment (loading while the client retries,
+      then error; empty or offline for the streams), never with data from the
+      gateway. Not covered: populated data; the full-motion rendering; the open-mode access badge, the
+      insufficient-authority state and the splash; /login (login.spec.ts scans
+      it); the detail routes /decisions/:id, /council/:id and /agents/:name; the
+      light and high-contrast themes; other viewports and browsers; states reached
+      only by interaction (dialogs, menus, the command palette, focus); the WCAG
+      2.1 and 2.2 rules (tags wcag21a, wcag21aa, wcag22aa); and nodes axe returns
+      as incomplete because it could not decide them, such as text over a
+      gradient. "Every" rests on the `e2e` job's exit status, which
+      `fe-invariants` needs, and on the checker, which attests this entry only
+      when no attributed case failed: a case that fails and then passes on its
+      one CI retry leaves that job green, and the checker reads it as failed, so
+      this entry reads `violated` (finding 132).
     implementations:
-      - frontend/.storybook/preview.ts
-      - frontend/tests/e2e/smoke.spec.ts
+      - frontend/src/app/primary-surfaces.ts
+      - frontend/src/app/router.tsx
     tests:
       - frontend/tests/e2e/smoke.spec.ts
     status: enforced
@@ -184,27 +223,55 @@ invariants:
     status: enforced
 
   - id: FE-INV-013
-    title: User-visible strings thread through the i18n catalog (English-only)
+    title: English-only UI (a single `en` i18n catalog, no language detector or switcher)
     mirrors: ADR-012
     description: >
-      All user-visible copy threads through the i18next catalog. The UI ships in
-      English ONLY (Sprint 18): a single `en` catalog, supportedLngs ["en"], and
-      no language switcher or language detector — see the CLAUDE.md "English-only
-      UI" rule. The Demo Theater + every surface header consume the relevant
-      namespace.
+      The UI ships in English only (Sprint 18, the CLAUDE.md "English-only UI"
+      rule). frontend/src/i18n/__tests__/english-only.test.tsx asserts it against
+      the i18next instance src/i18n/index.ts initialises, which react-i18next's
+      getI18n() hands every component: `en` is the only language it holds a
+      catalog for, and no backend is registered to fetch another; supportedLngs is
+      the configured ["en"] plus the `cimode` i18next appends to any list; no
+      language detector is registered; every lookup resolves in `en`; src/i18n/
+      holds no catalog but en/*.json, one file per namespace the instance holds;
+      and no shipped module under src/ calls changeLanguage, the call a switcher
+      makes (a text scan). It also renders the Demo Theater: its page header
+      (title and subtitle), run control, segment labels and evidence heading show
+      the demo-theater catalog's copy in English, and their keys under i18next's
+      cimode, so each is looked up rather than written in. Not claimed, because it
+      is false: that all user-visible copy threads through the catalog. In
+      DemoTheater.tsx the segment summaries (SEGMENT_SUMMARY_KEY maps to English
+      sentences, not keys), the "running" badge, the "Live log" summary and the
+      "Demo segments" list label are literals. Nine surfaces hand PageHeader a
+      literal title and subtitle (Agent Council, Audit Vault, Council Theater,
+      Decision Theater, Ingress Console, Live Markets, Mission Control, Operations,
+      Twin Lab), and Override Cockpit writes its h1 as one. Steering reads its
+      header from the steering catalog (read, not asserted).
     implementations:
       - frontend/src/i18n/index.ts
       - frontend/src/surfaces/demo-theater/DemoTheater.tsx
     tests:
-      - frontend/spec/check_fe_invariants.py
+      - frontend/src/i18n/__tests__/english-only.test.tsx
     status: enforced
 
   - id: FE-INV-014
-    title: Entry bundle size budget
+    title: Entry chunk size budget
     mirrors: ADR-012
     description: >
-      Entry route ships <= 180 KB gzipped; visualization libs are async.
-      P2 enforced via manualChunks + LivingMap dynamic import.
+      The entry chunk ships <= 180 KB gzipped. The build job's size step
+      (`pnpm size`) gzips, at level 9, the files matching
+      `dist/assets/entry-*.js`, a name vite.config.ts's `entryFileNames` gives
+      the entry chunk alone, and fails above 180 KB, which size-limit reads as
+      180,000 bytes; react-vendor has its own 70 KB gzip limit in the same step.
+      manualChunks and the lazy LivingMap boundary are what keep the entry small.
+      Disclosed, not claimed: the eager JS set dist/index.html loads before the
+      app renders (the entry plus react-vendor, zod, query and runtime) is larger
+      than 180 KB, and no gate bounds it. The build job's FE-INV-025 table printed
+      it as 216587 B gzip (211.5 KiB) at sha 6ff4973 (Frontend CI run 41298456048,
+      job 124824795769), with zod 3's chunk at 12.4 KiB gzip, and as 231987 B gzip
+      (226.5 KiB) at sha 4efa397 after the zod 4 port (run 41334119693, job
+      124930603601), with zod 4's chunk at 26.2 KiB gzip. The current figure is
+      that table's "eager JS" line on the latest build.
     implementations:
       - frontend/vite.config.ts
       - frontend/package.json
@@ -291,20 +358,34 @@ invariants:
       - frontend/src/visualization/maplibre/basemap.ts
       - infrastructure/tiles/Makefile
     tests:
-      - .github/workflows/frontend.yml
+      - frontend/tests/e2e/map-tile-egress.spec.ts
     status: enforced
 
   - id: FE-INV-024
     title: Map renders only self-hosted PMTiles
     mirrors: I-1, FE-INV-020
     description: >
-      MapLibre is configured exclusively against the pmtiles:// protocol
-      handler; no remote tile servers are registered. Verified in CI.
+      Every tile source in the style CityMap gives maplibre's Map is a pmtiles://
+      archive on the app's own origin; pmtiles is the only protocol CityMap
+      registers with maplibre, before it builds the map; no URL in that style
+      names Mapbox or Google; and, apart from the glyph endpoint below, every URL
+      in it resolves to the app's own origin. Asserted by
+      frontend/src/visualization/maplibre/__tests__/pmtiles-only.test.tsx on the
+      style CityMap.tsx actually passes, with maplibre-gl replaced by a recorder
+      because jsdom has no WebGL. Disclosed, not claimed: the style names one URL
+      off the app's origin, its glyph endpoint
+      (https://protomaps.github.io/basemaps-assets/fonts/{fontstack}/{range}.pbf).
+      maplibre fetches glyphs only to lay out a symbol layer's text, and the style
+      has no symbol layer, so nothing requests it today; the suite fails if one is
+      added while the endpoint is still off-origin, and production's CSP
+      (connect-src 'self' in frontend/nginx.conf) would refuse that request. What
+      a browser requests while the map loads is FE-INV-020's claim, observed by
+      frontend/tests/e2e/map-tile-egress.spec.ts.
     implementations:
       - frontend/src/visualization/maplibre/basemap.ts
       - frontend/src/visualization/maplibre/CityMap.tsx
     tests:
-      - .github/workflows/frontend.yml
+      - frontend/src/visualization/maplibre/__tests__/pmtiles-only.test.tsx
     status: enforced
 
   - id: FE-INV-025
@@ -419,15 +500,38 @@ invariants:
     title: Storybook test-runner reports zero a11y violations
     mirrors: STRIDE
     description: >
-      Every Storybook story passes the axe-core check via
-      @storybook/test-runner. CI runs this as part of the a11y job.
+      Every Storybook story has zero axe-core violations of the WCAG 2.0 and 2.1
+      level A and AA rules on its root (#storybook-root), checked by
+      @storybook/test-runner's postVisit hook in .storybook/test-runner.ts with
+      prefers-reduced-motion emulated. CI runs it in .github/workflows/frontend.yml's
+      `storybook-a11y` job, on pull requests and v* tags, against the static
+      Storybook build. That job fails when any story fails, and uploads the Jest run
+      record the `fe-invariants` job attests from. Every stories file is listed
+      under tests so each one's record counts here; the registry gate attests from
+      any passing story, so "every" rests on that job's exit status, which
+      `fe-invariants` needs. Not claimed: that axe judged every node. A check axe
+      cannot decide (colour contrast over a background gradient or an SVG, for one)
+      is reported as incomplete, printed per story, and does not fail it; and
+      nothing outside #storybook-root, such as a portal into document.body, is
+      checked.
     implementations:
       - frontend/.storybook/main.ts
       - frontend/.storybook/preview.ts
-      - frontend/src/design-system/compounds/TierBadge.stories.tsx
-      - frontend/src/design-system/compounds/ConfidenceChip.stories.tsx
-    tests:
+      - frontend/.storybook/test-runner.ts
       - .github/workflows/frontend.yml
+    tests:
+      - frontend/src/design-system/compounds/ConfidenceChip.stories.tsx
+      - frontend/src/design-system/compounds/CouncilStrip.stories.tsx
+      - frontend/src/design-system/compounds/DivergenceTrace.stories.tsx
+      - frontend/src/design-system/compounds/OutcomeBand.stories.tsx
+      - frontend/src/design-system/compounds/PageHeader.stories.tsx
+      - frontend/src/design-system/compounds/ParetoParallel.stories.tsx
+      - frontend/src/design-system/compounds/ProposalConstellation.stories.tsx
+      - frontend/src/design-system/compounds/ProvenanceChip.stories.tsx
+      - frontend/src/design-system/compounds/Pulse.stories.tsx
+      - frontend/src/design-system/compounds/SyntheticBadge.stories.tsx
+      - frontend/src/design-system/compounds/ThresholdCountdown.stories.tsx
+      - frontend/src/design-system/compounds/TierBadge.stories.tsx
     status: enforced
 
   - id: FE-INV-032
