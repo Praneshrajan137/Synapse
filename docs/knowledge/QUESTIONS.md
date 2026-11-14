@@ -64,6 +64,10 @@ recorded with how it was obtained.
 | R-44 | Can any arm other than the oracle read world state or demand from later than its decision time? Are the forecasters fitted on data separate from the evaluation runs? | If either leaks, every comparison so far is in doubt, in either direction. | INS-052 |
 | R-45 | Does the sensor loop still act when the audit path, outcome scoring or monitoring is down? | If it does, a rule of no action without observation is a small change with a large effect on trust. | INS-047 |
 | R-46 | Does the falsification sweep (C72) bound a surprisingly large win, as well as checking that a loss can be detected? | If not, write the bound down before the re-run after PR #87, so that a large uplift triggers an audit and not a headline. | INS-050 |
+| R-47 | For each named finding so far (112, 115, 116, 120 and the others in the spec's task list), how was it caught: by a gate, by construction, by measurement, or by someone reading? | If gates caught few of them, the implementation sessions put effort into typed contracts and measurement, not into more gates. | T-017 |
+| R-48 | Do the scenario cells drive a store into stressed states: sustained depletion, coinciding shocks, perishables near expiry, a city-wide event in one tick? Does the world assert that stock is conserved on every tick? | If not, the proof measures the regime where a tuned rule is strongest, and a world that loses or invents stock goes unseen. | INS-053 |
+| R-49 | How does the Sprint 6 A/B framework assign variants: per prediction, per order, per store or per time window? | A split by order or prediction is sound for forecasts and unsound for decisions that act on shared stock. | INS-054 |
+| R-50 | When one event makes many stores breach their reorder point in the same tick, how many consensus rounds does the sensor loop convene at once, and do the tier budgets and breakers hold? | A synchronised burst is the likeliest way for the live loop to overload itself. | INS-006 |
 
 ## For sessions 2 and 3 (outside the repository)
 

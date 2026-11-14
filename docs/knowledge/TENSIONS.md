@@ -65,7 +65,13 @@ A tension is not a verdict. Each one names what would settle it.
   agents to cloud sandboxes (SRC-HOWTO-01). On a $300 credit that route is mostly closed, which
   points toward a thin slice (R-08). Strengthened again by Claude Code - Classes: the most
   scaled engineering organisation in the corpus holds as a fifteen-year rule that fewer
-  technologies is faster, for agents as for people (SRC-CLASSES-18).
+  technologies is faster, for agents as for people (SRC-CLASSES-18). Strengthened by The
+  Pragmatic Engineer: the author of the standard books on microservices calls them a last
+  resort whose one good reason is to let many teams work without waiting on each other, and
+  one company that made every feature a service later merged them back (SRC-PRAG-08). The
+  counterweight is Uber, whose agents succeed because of a decade of platform built for its
+  scale (SRC-PRAG-12). For one person, the part of such a platform worth having is the part
+  that verifies: replay, fast feedback and an identical environment, not the distribution.
 
 ### T-003 - "Agency is architectural", against harness times model
 
@@ -108,7 +114,10 @@ A tension is not a verdict. Each one names what would settle it.
   one finance company sells (SRC-YCAI-05), and a testing company holds that the lasting asset
   is the specification and the loop that verifies against it, not the code (SRC-YCAI-02).
   Jane Street adds that testing was long treated as low-status work and so left undervalued,
-  and that a company was built on that gap (SRC-JANE-10).
+  and that a company was built on that gap (SRC-JANE-10). The Pragmatic Engineer adds a case
+  in point: an engineer new to a domain used a model to replace a costly licensed component
+  in days, because an exhaustive test suite already existed. The suite was the asset
+  (SRC-PRAG-06).
 
 ### T-005 - "Prose is not free", against the volume of prose
 
@@ -206,6 +215,9 @@ A tension is not a verdict. Each one names what would settle it.
   another found that engineering output multiplied while selling still needed people in the
   customer's plant (SRC-YCAI-03). In fairness, SRC-YCAI-07 also shows founders with no
   experience of a field succeeding, because they asked its practitioners before building.
+  The Pragmatic Engineer adds that software written for nothing would still have to meet its
+  users' expectations and pay for itself (SRC-PRAG-11), and an engineer's two years on a
+  project that turned out to have a few hundred users (SRC-PRAG-02).
 
 ### T-014 - Append-only context, against compacting and clearing it
 
@@ -225,6 +237,28 @@ A tension is not a verdict. Each one names what would settle it.
   (SRC-YCAI-10). Jane Street adds evidence from a study of prompting: adding to a failing
   prompt made results worse, and the model began ignoring parts of what it had been given
   (SRC-JANE-02).
+
+### T-017 - "Quality is not a gate", against a project governed by gates
+
+- **The corpus says:** correctness is built in when software is constructed, by types and
+  specifications that make wrong states impossible. Gates at the exit catch late what should
+  have been impossible, and give a comforting picture (SRC-PRAG-10).
+- **SYNAPSE says:** it is governed by some 68 mechanical checks and a strict gate culture (read,
+  `README.md`, `CLAUDE.md`). Finding 112, the defect named as the cause of the E5 result,
+  passed every one of them: the tests sent a request in a shape the real protocol never sends
+  (read, `CLAUDE.md`, E-DQP-02).
+- **In fairness to the design:** SYNAPSE also builds correctness in, with strict typing, frozen
+  models and a schema on every agent output. The same corpus folder records a hard gate as
+  Google's turning point, when release engineers refused every untested change
+  (SRC-PRAG-06), and the report's own counter-argument is that layered checks form a sieve
+  that catches a great deal.
+- **So (inferred):** a gate checks what someone thought to write down. Finding 112 lived in what
+  nobody wrote down, where a gate cannot see and a constructed type could have: a request
+  envelope typed once, and shared by sender and receiver, would have made the wrong shape
+  impossible to write.
+- **Settled by:** R-24 (which checks can be made to fail) and R-47 (how each named finding was
+  caught: by a gate, by construction, by measurement, or by someone reading).
+- **Raised by:** The Pragmatic Engineer.
 
 ## Inside the corpus
 
@@ -300,6 +334,11 @@ A tension is not a verdict. Each one names what would settle it.
   whose recommendation a person accepts or changes, it is the first kind and should reach a
   user early (INS-022, INS-035). As an actor placing orders by itself it is the second, and
   the bar is the one in INS-047.
+- **Added by The Pragmatic Engineer:** a rewrite shipped despite a load test that had found
+  reads and writes blocking each other, and the company never recovered (SRC-PRAG-11); a
+  delivery team sent each release first to a population large enough to show problems and
+  small enough that a mistake cost little (SRC-PRAG-03). The second is this tension's
+  boundary applied to rollout.
 
 ### T-016 - Give the agent everything, or keep what it must read small?
 
