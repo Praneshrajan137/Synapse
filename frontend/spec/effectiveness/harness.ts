@@ -41,12 +41,12 @@
  * ledger) and dynamic faults (503, 401 storm, offline) are applied at the
  * `fetch` edge by {@link ScenarioEdge}, in front of MSW. This is deliberate and
  * is NOT a second mocking layer competing with the worker: `HarnessHandle`
- * (task 2.1) exposes no `use()`/`resetHandlers()`, and a fault must be
- * switchable per step *while the page stays mounted*, which a worker restart
- * cannot express. The edge intercepts exactly where MSW intercepts (the network
- * boundary) and never patches an app code path. Every body it serves is
- * re-validated through the same `Domain_Schema` the Console validates with, so
- * it cannot misrepresent the contract.
+ * (task 2.1) can only swap the worker's seed-derived fixtures (`reseed`), not
+ * register a scenario's own handlers, and a fault must be switchable per step
+ * *while the page stays mounted*. The edge intercepts exactly where MSW
+ * intercepts (the network boundary) and never patches an app code path. Every
+ * body it serves is re-validated through the same `Domain_Schema` the Console
+ * validates with, so it cannot misrepresent the contract.
  */
 
 import { queryClient } from "@app/providers";
@@ -180,8 +180,6 @@ const SETTLE_MS = 120;
  * a stuck refetch names its query keys instead of surfacing as a bare timeout.
  */
 const REFETCH_DEADLINE_MS = 30_000;
-/** Upper bound on restarting the MSW worker at a new seed (normally well under 2 s). */
-const WORKER_RESTART_DEADLINE_MS = 30_000;
 /**
  * A recovering firehose client counts as settled once no new socket has been
  * constructed for this long. ws-multiplex draws each reconnect delay uniformly
@@ -1195,7 +1193,8 @@ const PLANS: Readonly<Record<JobToBeDone, () => JtbdPlan>> = {
 /**
  * Install `window.__atlasHarness`. Called only by `./e2e-entry.ts`, which the
  * e2e build injects ahead of the app entry so the seeded HTTP and stream edges
- * are in place before the Console issues its first request (AD-12, Req 1.1).
+ * are in place before the Console issues its first request (AD-12, Req 1.1),
+ * and by `__tests__/worker-reseed.test.ts` against an MSW worker double.
  */
 export async function installAtlasHarness(): Promise<AtlasHarness> {
   const diagnostics: string[] = [];
@@ -1212,7 +1211,7 @@ export async function installAtlasHarness(): Promise<AtlasHarness> {
   // Captured before any worker start can wrap it (see reclaimWebSocketEdge).
   const webSocketEdge = captureWebSocketEdge(globalThis);
 
-  let handle: HarnessHandle = await startHarness({
+  const handle: HarnessHandle = await startHarness({
     seed: EFFECTIVENESS_HARNESS_SEED,
     scenarioId: "harness.boot",
   });
@@ -1234,14 +1233,14 @@ export async function installAtlasHarness(): Promise<AtlasHarness> {
    *
    * In-flight queries are cancelled first. A query still on its first fetch holds no
    * data, and react-query answers a refetch of such a query with the fetch already in
-   * flight rather than a new one (query-core 5.100.11, `Query.fetch`). An attempt the
-   * previous MSW worker took and, stopped by `reseedWorker`, will never answer would
-   * then hold this refetch until its deadline -- measured on Frontend CI run
-   * 38291036628, where `["system-autonomy","bengaluru"]` never settled. Cancelling
-   * rejects every in-flight fetch at once and reverts its query to idle (the orphaned
-   * request itself may stay pending; no query waits on it any more), so the
-   * invalidation fetches each active query afresh from the edge as now seeded, and
-   * nothing fetched against the previous seed or fault can land afterwards.
+   * flight rather than a new one (query-core 5.100.11, `Query.fetch`). That fetch was
+   * made against the previous seed or fault: msw resolves each request against the
+   * handler list current when the request reaches the page, so a request taken before
+   * `reseedWorker` is answered from the previous seed's fixtures. Cancelling rejects
+   * every in-flight fetch at once and reverts its query to idle (the orphaned request
+   * may still be answered; no query waits on it any more), so the invalidation fetches
+   * each active query afresh from the edge as now seeded, and nothing fetched against
+   * the previous seed or fault can land afterwards.
    */
   const refetchAll = async (): Promise<void> => {
     await queryClient.cancelQueries();
@@ -1260,21 +1259,16 @@ export async function installAtlasHarness(): Promise<AtlasHarness> {
     await sleep(SETTLE_MS);
   };
 
-  /** Restart the worker at a scenario's seed (fixtures are seed-derived). */
-  const reseedWorker = async (seed: number, scenarioId: string): Promise<void> => {
+  /**
+   * Swap the running worker's fixtures for a scenario's seed (fixtures are seed-derived).
+   * The worker is never stopped or restarted here (`HarnessHandle.reseed` says why). MSW
+   * wraps the WebSocket global only in `worker.start()`, which runs once, at boot, so the
+   * boot-time reclaim above still holds after a reseed.
+   */
+  const reseedWorker = (seed: number, scenarioId: string): void => {
     if (handle.seed === seed) return;
-    await handle.stop();
-    handle = await settleWithin(
-      startHarness({ seed, scenarioId }),
-      WORKER_RESTART_DEADLINE_MS,
-      () =>
-        `the MSW worker did not restart at seed ${seed} for ${scenarioId} within ` +
-        `${WORKER_RESTART_DEADLINE_MS}ms`,
-    );
+    handle.reseed(seed);
     note(`worker re-seeded to ${seed} for ${scenarioId}`);
-    if (reclaimWebSocketEdge(globalThis, webSocketEdge)) {
-      note(`WebSocket edge reclaimed from the re-seeded MSW worker for ${scenarioId}`);
-    }
   };
 
   /** True from a `ws-flap` until a `recover` has let the flap's reconnects land. */
@@ -1356,7 +1350,7 @@ export async function installAtlasHarness(): Promise<AtlasHarness> {
       edge.addOverlay(buildLedgerOverlay(scenario.seed, rowCount));
     }
 
-    await reseedWorker(scenario.seed, scenarioId);
+    reseedWorker(scenario.seed, scenarioId);
     await refetchAll();
     driveDeclaredChannels(scenario, scenarioId);
     await sleep(SETTLE_MS);

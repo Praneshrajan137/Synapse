@@ -30,6 +30,7 @@
  * HTTP surface only.
  */
 
+import type { RequestHandler } from "msw";
 import { setupWorker, type SetupWorker } from "msw/browser";
 
 import { handlers as baseHandlers } from "@test/msw-handlers";
@@ -74,16 +75,32 @@ export class UnhandledFixtureError extends Error {
 
 /** A running harness instance; returned by {@link startHarness}. */
 export interface HarnessHandle {
-  /** The seed this harness was started with (Req 1.3). */
+  /** The seed the worker's fixtures are currently built from (Req 1.3). */
   readonly seed: number;
-  /** Stop the worker and release the service-worker registration. */
+  /**
+   * Swap the running worker's fixtures for the ones built from `seed` (Req 1.3), in place:
+   * `worker.resetHandlers` replaces the handler list msw resolves each later request against.
+   * A reseed to the current seed changes nothing.
+   *
+   * Never reseed by stopping and restarting the worker. A stop tells the service worker that
+   * its only client closed, so it unregisters itself while still controlling the page
+   * (`public/mockServiceWorker.js`, `CLIENT_CLOSED`). The next start then calls `update()` on
+   * that registration without awaiting it (msw 2.14.6 `getWorkerInstance`), and the rejected
+   * update reaches the page as an uncaught error.
+   */
+  reseed(seed: number): void;
+  /** Stop the worker, for teardown only (`reseed` says why a reseed never stops it). */
   stop(): Promise<void>;
-  /** Names of every intercepted path served so far, for the coverage report (Req 1.4). */
+  /**
+   * Every intercepted path served since the worker started, across reseeds, for the coverage
+   * report (Req 1.4).
+   */
   servedPaths(): readonly string[];
   /**
-   * Backend_Contract paths that were requested with no registered fixture
-   * (Req 1.6), on this worker only. Non-empty ⇒ the harness detected a contract
-   * gap; `harness.ts` reports it through `diagnostics()`.
+   * Backend_Contract paths requested with no registered fixture (Req 1.6) since the worker
+   * started. A reseed swaps the fixtures and keeps this record, so a gap seen under one seed
+   * is still reported under the next. Non-empty ⇒ the harness detected a contract gap;
+   * `harness.ts` reports it through `diagnostics()`.
    */
   unhandledPaths(): readonly string[];
 }
@@ -94,8 +111,9 @@ export interface HarnessHandle {
 
 /**
  * Start the MSW browser worker for a seeded scenario. Resolves once the service
- * worker is active and intercepting. The returned {@link HarnessHandle} exposes
- * the served/unhandled paths for the coverage report and stops the worker on
+ * worker is active and intercepting. Start it once per page: the returned
+ * {@link HarnessHandle} reseeds the running worker in place, exposes the
+ * served/unhandled paths for the coverage report, and stops the worker on
  * teardown.
  *
  * A malformed surface map (a Surface with no seeded capability) fails fast here
@@ -107,10 +125,7 @@ export async function startHarness(opts: HarnessOptions): Promise<HarnessHandle>
   const served = new Set<string>();
   const unhandled = new Set<string>();
 
-  const worker: SetupWorker = setupWorker(
-    ...buildEffectivenessHandlers(opts.seed),
-    ...baseHandlers,
-  );
+  const worker: SetupWorker = setupWorker(...workerHandlers(opts.seed));
 
   // Record every matched request path for the Req 1.4 coverage report.
   worker.events.on("request:match", ({ request }) => {
@@ -142,8 +157,18 @@ export async function startHarness(opts: HarnessOptions): Promise<HarnessHandle>
     },
   });
 
+  // The seed the worker's fixtures are built from now; `reseed` moves it.
+  let currentSeed = opts.seed;
+
   return {
-    seed: opts.seed,
+    get seed(): number {
+      return currentSeed;
+    },
+    reseed: (seed: number): void => {
+      if (seed === currentSeed) return;
+      worker.resetHandlers(...workerHandlers(seed));
+      currentSeed = seed;
+    },
     servedPaths: () => Array.from(served).sort(),
     unhandledPaths: () => Array.from(unhandled).sort(),
     stop: async () => {
@@ -155,6 +180,14 @@ export async function startHarness(opts: HarnessOptions): Promise<HarnessHandle>
 // ─────────────────────────────────────────────────────────────────────────
 // Helpers
 // ─────────────────────────────────────────────────────────────────────────
+
+/**
+ * The worker's handler list for `seed`: the schema-bound effectiveness fixtures first, so they
+ * supersede the base empty/minimal ones (msw first-match-wins), then the reused base handlers.
+ */
+function workerHandlers(seed: number): RequestHandler[] {
+  return [...buildEffectivenessHandlers(seed), ...baseHandlers];
+}
 
 /** Extract the pathname from a request URL, tolerating a relative or absolute URL. */
 function pathnameOf(url: string): string {
