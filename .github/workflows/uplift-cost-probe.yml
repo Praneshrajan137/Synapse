@@ -108,7 +108,30 @@ jobs:
           python -m uplift.cost_probe e5 --replicates 3 \
             --output artifacts/uplift/cost-probe-e5.json
 
+      - name: Trace the pathway probe's decisions (ADR-058 falsification item 1)
+        # R7.21's probe report counts pairs and names no agent: in E5 run 41352100304, withholding
+        # supplier lead-time history changed the binding decision in 3 of 3 pairs, and withholding
+        # on-order stock or demand to date changed it in 0 of 3. ADR-058 reads an input that stays
+        # unresponsive while the Sentinel binds as falsifying its wiring, so this step records,
+        # through the probe's own code (the E5 sampler, the E5 arm, `binding_fingerprint`), which
+        # agent bound each probed decision and each SKU's q* against its stock. It then runs a fresh
+        # `run_pathway_probe` over the same states and refuses unless the per-input counts agree.
+        # It judges nothing and moves no E5 number. `always()` for the reason the step above
+        # gives; this step's own exit status still propagates. Exits: 0 traced / 2 nothing traced
+        # (the stand-in, or no state, named in the file; or an output path that already exists,
+        # which is left as it was) / 3 traced and refused (each refusal named in the file).
+        if: always()
+        run: |
+          mkdir -p artifacts/uplift
+          python -m scripts.diagnostics.pathway_trace --output artifacts/uplift/probe-trace.json
+
       - name: Upload the cost-probe report
+        # `if-no-files-found` judges the three paths together: it warns only when none of them
+        # matched, and a single missing file is skipped silently beside the others. So each file's
+        # absence is made loud by its producer instead: each step above writes its file on every
+        # path it handles, refusals and the stand-in included, and exits non-zero on every path
+        # that writes nothing (an uncaught exception exits 1), so a missing file always sits beside
+        # a red step.
         if: always()
         uses: actions/upload-artifact@v4
         with:
@@ -116,5 +139,6 @@ jobs:
           path: |
             artifacts/uplift/cost-probe.json
             artifacts/uplift/cost-probe-e5.json
+            artifacts/uplift/probe-trace.json
           if-no-files-found: warn
           retention-days: 90

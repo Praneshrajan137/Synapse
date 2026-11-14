@@ -34,12 +34,12 @@ the same pair.
 
 ## Summary
 
-Parsed 20 workflow file(s), 68 job(s), 456 step(s).
+Parsed 20 workflow file(s), 68 job(s), 457 step(s).
 
 | Trigger | Jobs executing | Jobs conditional | Jobs NOT EXECUTED | Steps blocking | Steps advisory | Steps conditional |
 |---|---|---|---|---|---|---|
 | push:main | 4 | 30 | 34 | 31 | 0 | 183 |
-| pull_request | 17 | 32 | 19 | 107 | 4 | 203 |
+| pull_request | 17 | 32 | 19 | 107 | 4 | 204 |
 | tag:v* | 3 | 3 | 62 | 18 | 0 | 29 |
 
 ## Job selection
@@ -803,6 +803,7 @@ Why each job runs, does not run, or runs conditionally under each trigger. `need
 | pull_request | .github/workflows/uplift-cost-probe.yml::cost-probe | Install dependencies | CONDITIONAL | conditional - blocking |
 | pull_request | .github/workflows/uplift-cost-probe.yml::cost-probe | Measure seconds per consensus decision by tier (E5 sizing, finding 70) | CONDITIONAL | conditional - blocking |
 | pull_request | .github/workflows/uplift-cost-probe.yml::cost-probe | Measure the E5 path itself - primary cell, unshocked, reorders only (finding 116) | CONDITIONAL | conditional - blocking |
+| pull_request | .github/workflows/uplift-cost-probe.yml::cost-probe | Trace the pathway probe's decisions (ADR-058 falsification item 1) | CONDITIONAL | conditional - blocking |
 | pull_request | .github/workflows/uplift-cost-probe.yml::cost-probe | Upload the cost-probe report | CONDITIONAL | conditional - blocking |
 | pull_request | .github/workflows/uplift.yml::uplift-proof | uses: actions/checkout@v4 | CONDITIONAL | conditional - blocking |
 | pull_request | .github/workflows/uplift.yml::uplift-proof | Disclose the revision under measurement (attribution, not a gate) | CONDITIONAL | conditional - blocking |
@@ -1060,6 +1061,7 @@ Every step `infrastructure/quality/blocking-steps.yaml` declares blocking, annot
 | push:main | .github/workflows/truth-gates.yml::falsification-sweep | Upload the sweep report | yes | declared blocking (R1.1, R1.2, R1.11, R1.12, R1.13, R1.14) |
 | push:main | .github/workflows/uplift-cost-probe.yml::cost-probe | Measure seconds per consensus decision by tier (E5 sizing, finding 70) [uplift.cost_probe] | NOT EXECUTED | declared blocking (R7.1, R7.2 (sizing), findings 70 and 116) - workflow on: has no push trigger |
 | push:main | .github/workflows/uplift-cost-probe.yml::cost-probe | Measure the E5 path itself - primary cell, unshocked, reorders only (finding 116) [uplift.cost_probe] | NOT EXECUTED | declared blocking (R7.1, R7.2 (sizing), findings 70 and 116) - workflow on: has no push trigger |
+| push:main | .github/workflows/uplift-cost-probe.yml::cost-probe | Trace the pathway probe's decisions (ADR-058 falsification item 1) [scripts.diagnostics.pathway_trace] | NOT EXECUTED | declared blocking (R7.1, R7.2 (sizing), findings 70 and 116) - workflow on: has no push trigger |
 | push:main | .github/workflows/uplift.yml::uplift-proof | uses: actions/checkout@v4 | NOT EXECUTED | declared blocking (R7.1, R7.2, R7.15) - workflow on: has no push trigger |
 | push:main | .github/workflows/uplift.yml::uplift-proof | Disclose the revision under measurement (attribution, not a gate) [github.sh] | NOT EXECUTED | declared blocking (R7.1, R7.2, R7.15) - workflow on: has no push trigger |
 | push:main | .github/workflows/uplift.yml::uplift-proof | Set up Python 3.11 | NOT EXECUTED | declared blocking (R7.1, R7.2, R7.15) - workflow on: has no push trigger |
@@ -1195,6 +1197,7 @@ Every step `infrastructure/quality/blocking-steps.yaml` declares blocking, annot
 | pull_request | .github/workflows/truth-gates.yml::falsification-sweep | Upload the sweep report | yes | declared blocking (R1.1, R1.2, R1.11, R1.12, R1.13, R1.14) |
 | pull_request | .github/workflows/uplift-cost-probe.yml::cost-probe | Measure seconds per consensus decision by tier (E5 sizing, finding 70) [uplift.cost_probe] | CONDITIONAL | declared blocking (R7.1, R7.2 (sizing), findings 70 and 116) - conditional (unparsable if: (unparsable at offset 81: "*.name, 'measure-upl")) |
 | pull_request | .github/workflows/uplift-cost-probe.yml::cost-probe | Measure the E5 path itself - primary cell, unshocked, reorders only (finding 116) [uplift.cost_probe] | CONDITIONAL | declared blocking (R7.1, R7.2 (sizing), findings 70 and 116) - conditional (unparsable if: (unparsable at offset 81: "*.name, 'measure-upl")) |
+| pull_request | .github/workflows/uplift-cost-probe.yml::cost-probe | Trace the pathway probe's decisions (ADR-058 falsification item 1) [scripts.diagnostics.pathway_trace] | CONDITIONAL | declared blocking (R7.1, R7.2 (sizing), findings 70 and 116) - conditional (unparsable if: (unparsable at offset 81: "*.name, 'measure-upl")) |
 | pull_request | .github/workflows/uplift.yml::uplift-proof | uses: actions/checkout@v4 | CONDITIONAL | declared blocking (R7.1, R7.2, R7.15) - conditional (if: undecidable from trigger (github.event.label.name)) |
 | pull_request | .github/workflows/uplift.yml::uplift-proof | Disclose the revision under measurement (attribution, not a gate) [github.sh] | CONDITIONAL | declared blocking (R7.1, R7.2, R7.15) - conditional (if: undecidable from trigger (github.event.label.name)) |
 | pull_request | .github/workflows/uplift.yml::uplift-proof | Set up Python 3.11 | CONDITIONAL | declared blocking (R7.1, R7.2, R7.15) - conditional (if: undecidable from trigger (github.event.label.name)) |
@@ -1330,6 +1333,7 @@ Every step `infrastructure/quality/blocking-steps.yaml` declares blocking, annot
 | tag:v* | .github/workflows/truth-gates.yml::falsification-sweep | Upload the sweep report | NOT EXECUTED | declared blocking (R1.1, R1.2, R1.11, R1.12, R1.13, R1.14) - on: push is branch-scoped (no tags: filter), so a tag push is excluded |
 | tag:v* | .github/workflows/uplift-cost-probe.yml::cost-probe | Measure seconds per consensus decision by tier (E5 sizing, finding 70) [uplift.cost_probe] | NOT EXECUTED | declared blocking (R7.1, R7.2 (sizing), findings 70 and 116) - workflow on: has no push trigger |
 | tag:v* | .github/workflows/uplift-cost-probe.yml::cost-probe | Measure the E5 path itself - primary cell, unshocked, reorders only (finding 116) [uplift.cost_probe] | NOT EXECUTED | declared blocking (R7.1, R7.2 (sizing), findings 70 and 116) - workflow on: has no push trigger |
+| tag:v* | .github/workflows/uplift-cost-probe.yml::cost-probe | Trace the pathway probe's decisions (ADR-058 falsification item 1) [scripts.diagnostics.pathway_trace] | NOT EXECUTED | declared blocking (R7.1, R7.2 (sizing), findings 70 and 116) - workflow on: has no push trigger |
 | tag:v* | .github/workflows/uplift.yml::uplift-proof | uses: actions/checkout@v4 | NOT EXECUTED | declared blocking (R7.1, R7.2, R7.15) - workflow on: has no push trigger |
 | tag:v* | .github/workflows/uplift.yml::uplift-proof | Disclose the revision under measurement (attribution, not a gate) [github.sh] | NOT EXECUTED | declared blocking (R7.1, R7.2, R7.15) - workflow on: has no push trigger |
 | tag:v* | .github/workflows/uplift.yml::uplift-proof | Set up Python 3.11 | NOT EXECUTED | declared blocking (R7.1, R7.2, R7.15) - workflow on: has no push trigger |
