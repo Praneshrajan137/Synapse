@@ -165,14 +165,45 @@ invariants:
     status: enforced
 
   - id: FE-INV-011
-    title: WCAG 2.1 AA across every route
+    title: Zero axe WCAG 2.0 A/AA violations on every primary Surface
     mirrors: STRIDE
     description: >
-      axe-core asserts zero violations on every route in the Playwright
-      smoke matrix.
+      frontend/tests/e2e/smoke.spec.ts opens the eleven primary Surface paths
+      (PRIMARY_SURFACES in src/app/primary-surfaces.ts, which its ROUTES list
+      mirrors) in the `e2e` job's chromium project, at the Desktop Chrome
+      viewport in the default dark theme, with prefers-reduced-motion emulated, as
+      Storybook's runner and the visual gate emulate it, so axe judges settled
+      colours and never an animation frame. Before axe-core runs, each test asserts
+      that the route rendered its own surface: the surface's h1 is visible inside
+      <main>, the URL is still that path (not /login, not the "/" of the router's
+      catch-all), and the boot splash is gone. <main> alone proves nothing,
+      because it is the Shell's and is visible under the splash and the
+      insufficient-authority state too (finding 91). axe-core then runs its rules
+      tagged wcag2a and wcag2aa (its automated WCAG 2.0 A and AA checks) over the
+      whole document and must report zero violations, and the h1 must still be
+      visible after the scan. Access state: a reloaded admin session (role seeded
+      in sessionStorage, no token) whose gateway is unreachable. It is the only
+      boot state in which RouteGuard admits all eleven, since an anonymous visitor
+      reads at viewer rank and a preview grant is never above ops. The job serves
+      `pnpm preview` with no backend: its proxy answers every /api call 500 and
+      closes every /ws upgrade, so each data region is judged in whatever
+      Universal_State it holds at that moment (loading while the client retries,
+      then error; empty or offline for the streams), never with data from the
+      gateway. Not covered: populated data; the full-motion rendering; the open-mode access badge, the
+      insufficient-authority state and the splash; /login (login.spec.ts scans
+      it); the detail routes /decisions/:id, /council/:id and /agents/:name; the
+      light and high-contrast themes; other viewports and browsers; states reached
+      only by interaction (dialogs, menus, the command palette, focus); the WCAG
+      2.1 and 2.2 rules (tags wcag21a, wcag21aa, wcag22aa); and nodes axe returns
+      as incomplete because it could not decide them, such as text over a
+      gradient. "Every" rests on the `e2e` job's exit status, which
+      `fe-invariants` needs, and on the checker, which attests this entry only
+      when no attributed case failed: a case that fails and then passes on its
+      one CI retry leaves that job green, and the checker reads it as failed, so
+      this entry reads `violated` (finding 132).
     implementations:
-      - frontend/.storybook/preview.ts
-      - frontend/tests/e2e/smoke.spec.ts
+      - frontend/src/app/primary-surfaces.ts
+      - frontend/src/app/router.tsx
     tests:
       - frontend/tests/e2e/smoke.spec.ts
     status: enforced
