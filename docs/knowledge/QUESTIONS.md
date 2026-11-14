@@ -10,11 +10,12 @@ recorded with how it was obtained.
 
 | ID | Question | Why it is owed | From |
 |---|---|---|---|
-| Q-01 | Who is the first named user of SYNAPSE, and what do they do with it on an ordinary day? | "Help millions of people" names no workflow. The README says there is no live order pipeline and the traces are synthetic. Session 3 cannot define finished without this. | INS-018 |
+| Q-01 | Who is the first named user of SYNAPSE, and what do they do with it on an ordinary day? | "Help millions of people" names no workflow. The README says there is no live order pipeline and the traces are synthetic. Session 3 cannot define finished without this. One candidate, inferred and not a recommendation: three documents in folder 3 show agents of this kind serving small and mid-sized retailers and merchants, who are many, and not the few large quick-commerce operators, who build their own. | INS-018 |
 | Q-02 | How much of the $300 GCP credit remains, and when does it expire? When do the 200 Colab units expire? | Trial credit and compute units both lapse on a clock. `CLAUDE.md` records GCP deploys since at least June 2026, so the balance and date need reading from the billing console. Session 3's budget depends on it. | INS-019 |
 | Q-03 | Is "finished" a product someone operates, a reference implementation others learn from, or the proof harness offered for other decision systems? And if a product: does it act, or does it first advise in shadow beside the operator's own rules? | The readings need different work and different deployments. A shadow advisor is the lowest-risk first form, and it leans hardest on the twin's fidelity. | T-004, INS-022 |
 | Q-04 | May the sprint history move out of `CLAUDE.md` into `docs/`, leaving rules and live error patterns? | 49% of the file is history and it loads every session (measured). `CLAUDE.md` is the governance source of truth, so this is the operator's call. The `doc_truth` pins would move in the same change. | INS-014, T-005 |
 | Q-05 | For the larger, less relevant corpus folders (product and market, about 3.1 MB), full reads in the main context, or a cheaper reader filling the same card format with spot checks? | Full reads of the remaining corpus are roughly 1.1M tokens (estimated from word count) on a fixed plan. The cheaper path costs fidelity. | INS-015 |
+| Q-06 | May a gate, a document or a component be retired when removing it changes no measured outcome? | The corpus is firm that process piles up unless someone is given explicit permission to delete. Only the operator can give it here. | INS-030 |
 
 ## For session 2 (the project itself)
 
@@ -35,6 +36,12 @@ recorded with how it was obtained.
 | R-17 | Write the expected trace for one consensus decision after PR #87, then compare it with a real one, stage by stage. | Any stage that does not consume what it should is a defect of the finding-112 class, found in an hour and not in a CI run. | INS-024 |
 | R-18 | Can an agent issue a `WorldAction` outside its function, such as `inject_disruption`? What enforces the answer? | If nothing does, a per-agent allow-list is small work that removes a class of failure. | INS-027 |
 | R-19 | What does the Disruption Shield's reasoner return when offline, and which decisions would take the model path in a live system? | Decides how much of the system the E5 headline covers. | T-009 |
+| R-21 | What share of consensus decisions run with at least one degraded agent, and what are the reasons, ranked? | The top reason is a candidate for the first implementation session. If the share is high, the E5 headline measured a mostly degraded system. | INS-037 |
+| R-22 | For each of the eight agents: does it hold its own objective, state and loop, or is it a function the orchestrator calls? How often does arbitration face a real trade-off between agents' objectives? | Agents that are functions can become tools without loss. If objectives rarely conflict, the case for separate agents rests on little. | INS-028 |
+| R-23 | Does anything learn from operator overrides in `audit_escalations`? | If not, the system discards its only human labels. | INS-032 |
+| R-24 | Which of the 68 checks can the falsification sweep (C72) make fail, and which not? What is the state of its open defect? | A check that cannot be made to fail is a candidate for repair or retirement (Q-06). | INS-033 |
+| R-25 | Does the uplift harness store replicate results by seed, arm and source digest? What invalidates them? | If not, content-addressed caching could cut the cost of every later verification round. | INS-036 |
+| R-26 | Do all agents in one decision read the same frozen world snapshot, and how are several agents' writes to the world ordered? | If each agent reads the world at a different moment, their proposals answer different questions. | INS-010 |
 | R-20 | Which recorded limits still hold with the current model and tools (no repo-wide or simulation runs on the laptop, mutation testing flaky on Windows)? Retest one. | A limit that no longer holds is free capacity for the implementation sessions. | SRC-HOWTO-01 |
 
 ## For sessions 2 and 3 (outside the repository)

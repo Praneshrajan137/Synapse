@@ -13,31 +13,41 @@ audit item for session 2.
 |---|---|---|---|---|
 | INS-001 | Many agents must beat a matched simple baseline to earn their cost | PROOF | USE | 1 + 1 paper |
 | INS-002 | Name the mechanism of uplift before measuring it | PROOF | CREATE | own |
-| INS-003 | Report by slice; the headline cell hides where a system wins and loses | PROOF | ADAPT | 2 |
-| INS-004 | A gain inside noise is not a gain; hold cases out; keep the original as reference | PROOF | USE, present | 3 |
-| INS-005 | Multi-agent failures sit at handoffs; test through the real envelope | SYSTEM | USE | 2 |
-| INS-006 | Every external call: hard timeout, breaker, durable progress, trace | SYSTEM | USE, mostly present | 1 |
-| INS-007 | One seam for every model call | SYSTEM | ADAPT | 2 |
-| INS-008 | Keep probabilistic judgment in a small box | SYSTEM | USE, present | 2 |
-| INS-009 | Grant autonomy by reversibility and blast radius, not confidence alone | SYSTEM | ADAPT | 5 |
-| INS-010 | A shared, current world model lifts a planner more than a bigger model | SYSTEM | USE | 1 + 1 paper |
+| INS-003 | Report by slice; the headline cell hides where a system wins and loses | PROOF | ADAPT | 5 |
+| INS-004 | A gain inside noise is not a gain; hold cases out; keep the original as reference | PROOF | USE, present | 4 |
+| INS-005 | Multi-agent failures sit at handoffs; test through the real envelope | SYSTEM | USE | 6 |
+| INS-006 | Every external call: hard timeout, breaker, durable progress, trace | SYSTEM | USE, mostly present | 3 |
+| INS-007 | One seam for every model call | SYSTEM | ADAPT | 3 |
+| INS-008 | Keep probabilistic judgment in a small box | SYSTEM | USE, present | 3 |
+| INS-009 | Grant autonomy by reversibility and blast radius, not confidence alone | SYSTEM | ADAPT | 9 |
+| INS-010 | A shared, current world model lifts a planner more than a bigger model | SYSTEM | USE | 2 + 1 paper |
 | INS-011 | Keep each run's full record; screen new decision logic by replay | PROOF | ADAPT | 1 |
-| INS-012 | Verification is the constraint; plan sessions around it | WORKFLOW | USE | 5 |
-| INS-013 | An agent needs a prod-like run it can drive and observe | WORKFLOW | ADAPT | 4 |
-| INS-014 | Enforce by gate; trim prose rules newer models no longer need | WORKFLOW | ADAPT | 4 |
-| INS-015 | Keep frontier models off bulk reading; write findings where the next run looks | WORKFLOW | ADAPT | 2 |
+| INS-012 | Verification is the constraint; plan sessions around it | WORKFLOW | USE | 7 |
+| INS-013 | An agent needs a prod-like run it can drive and observe | WORKFLOW | ADAPT | 8 |
+| INS-014 | Enforce by gate; trim prose rules newer models no longer need | WORKFLOW | ADAPT | 9 |
+| INS-015 | Keep frontier models off bulk reading; write findings where the next run looks | WORKFLOW | ADAPT | 4 |
 | INS-016 | Estimate from the work, not the spoken number; overruns are fat-tailed | WORKFLOW | USE | 1 + 2 studies |
-| INS-017 | A sharp problem definition is the highest-leverage artifact | WORKFLOW | USE | 3 |
-| INS-018 | Name the user, the workflow, and what happens after the demo | PURPOSE | USE | 2 |
-| INS-019 | Fit the architecture and its footprint to the stage | OPS | ADAPT | 2 |
-| INS-020 | Measure the share of work that changes the product | PROOF | ADAPT | 1 |
-| INS-021 | For a narrow job, a small trained model can beat prompting a large one | OPS | PARK | 2 |
-| INS-022 | Autonomy is earned on a trust curve: shadow first, promote on a measured record | SYSTEM | ADAPT | 2 |
-| INS-023 | Many agents pay as breadth plus adversarial checking, reduced by ordinary code | SYSTEM | USE | 1 |
-| INS-024 | Before trusting an aggregate, walk one decision against its expected trace | PROOF | USE | 1 |
-| INS-025 | Give agents a map from capability to code to proof | WORKFLOW | ADAPT | 3 |
-| INS-026 | Widen agent fan-out only as fast as verification allows | WORKFLOW | USE, present | 2 |
-| INS-027 | Least privilege per agent: an out-of-function action is impossible, not discouraged | SYSTEM | ADAPT | 2 |
+| INS-017 | A sharp problem definition is the highest-leverage artifact | WORKFLOW | USE | 6 |
+| INS-018 | Name the user, the workflow, and what happens after the demo | PURPOSE | USE | 7 |
+| INS-019 | Fit the architecture and its footprint to the stage | OPS | ADAPT | 4 |
+| INS-020 | Measure the share of work that changes the product | PROOF | ADAPT | 2 |
+| INS-021 | For a narrow job, a small trained model can beat prompting a large one | OPS | PARK | 3 |
+| INS-022 | Autonomy is earned on a trust curve: shadow first, promote on a measured record | SYSTEM | ADAPT | 3 |
+| INS-023 | Many agents pay as breadth plus adversarial checking, reduced by ordinary code | SYSTEM | USE | 3 |
+| INS-024 | Before trusting an aggregate, walk one decision against its expected trace | PROOF | USE | 3 |
+| INS-025 | Give agents a map from capability to code to proof | WORKFLOW | ADAPT | 8 |
+| INS-026 | Widen agent fan-out only as fast as verification allows | WORKFLOW | USE, present | 3 |
+| INS-027 | Least privilege per agent: an out-of-function action is impossible, not discouraged | SYSTEM | ADAPT | 6 |
+| INS-028 | Tool, skill or agent: a separate agent needs a reason | SYSTEM | ADAPT | 3 |
+| INS-029 | When execution is frictionless, build the dissent in | WORKFLOW | USE | 2 |
+| INS-030 | Deletion is an experiment: remove a part, rerun the fixed eval, keep it if the score holds | SYSTEM | ADAPT | 5 |
+| INS-031 | A twin earns belief when fitted to real history and tested across regimes | DOMAIN | ADAPT | 3 |
+| INS-032 | Every human correction is a label; compile standards from past actions | SYSTEM | ADAPT | 3 |
+| INS-033 | An eval that cannot fail measures nothing | PROOF | USE, partly present | 6 |
+| INS-034 | Proof of work: checkable evidence, and the process shown is the process that ran | PROOF | USE, present | 4 |
+| INS-035 | Dogfood it: operate the twin store yourself with SYNAPSE advising | PURPOSE | CREATE | own + 3 |
+| INS-036 | Make re-verification cheap: address expensive results by content | PROOF | ADAPT | 1 |
+| INS-037 | An agent's report of its own obstruction is telemetry: aggregate it, fix the top cause | SYSTEM | ADAPT | 1 |
 
 ## Entries
 
@@ -55,7 +65,8 @@ audit item for session 2.
 - **Lands:** The uplift harness already holds this standard: the comparison is against the tuned
   control E, and the first result was `baseline_wins` by 4.40 units with finding 112 as the named
   cause (read, `HANDOFF.md`). Session 2 checks whether any arm gives one policy the same
-  information and compute as the consensus arm (R-03).
+  information and compute as the consensus arm (R-03). INS-028 gives the test for whether each
+  agent should be separate at all.
 - **Wrong if:** after the repair in PR #87, the consensus arm beats control E by more than the
   harness's minimum detectable effect on pre-registered cells.
 
@@ -71,7 +82,8 @@ audit item for session 2.
 - **Grade:** own.
 - **Verdict:** CREATE.
 - **Lands:** Session 2 writes, for each mechanism, the scenario cell in `uplift/scenarios.py`
-  that should show it and the arm that isolates it (R-03).
+  that should show it and the arm that isolates it (R-03). Folder 3 adds a question to ask of
+  each cell: is the benefit expected in the mean or in the tail (INS-003)?
 - **Wrong if:** no cell can be designed on the declared twin in which any of the three
   mechanisms should help. That would mean the architecture has no expected uplift on this twin.
 
@@ -82,12 +94,19 @@ audit item for session 2.
   figure cannot hide a loss in one group or a win in another. Users trust consistency across
   conditions more than a peak.
 - **Sources:** SRC-POSTS-07, SRC-POSTS-08.
+  Also SRC-CLASSES-01, SRC-CLASSES-08, SRC-CLASSES-20: an eval suite mixes regression cases with
+  known-failure cases; score recovery after a fault and not only first output; judge a policy on
+  its worst case and its spread beside its mean.
 - **Grade:** E1.
 - **Verdict:** ADAPT.
 - **Lands:** The E5 headline is for the primary cell, unshocked (read, `HANDOFF.md`). That is the
   regime where a tuned static control should be strongest (inferred). Shock scenarios exist in
   the harness (measured: "shock" appears in 10 files under `uplift/`). Session 2 reads what the
-  shocked cells showed, and whether they ran (R-02).
+  shocked cells showed, and whether they ran (R-02). Folder 3 adds two cuts. One is recovery:
+  how fast, and at what cost, each arm returns to normal after an injected disruption. The
+  other is risk: each arm's worst replicate and its spread, beside its mean. A system built to
+  absorb shocks could lose on the mean and still win on the tail (inferred; nothing measured
+  says so yet).
 - **Wrong if:** every slice moves with the headline, so that slicing adds no information.
 
 ### INS-004 - A gain inside noise is not a gain; hold cases out; keep the original as reference
@@ -98,6 +117,7 @@ audit item for session 2.
   failed ideas. Compare each version against the original as well as the previous one, or small
   steps add up to drift nobody chose.
 - **Sources:** SRC-POSTS-01, SRC-POSTS-07, SRC-HOWTO-02.
+  Also SRC-CLASSES-03: a consolidation pass writes to a copy and a person approves the diff.
 - **Grade:** E1. The posts relay research whose figures were not checked and are not used.
 - **Verdict:** USE, present. The Power_Report states a minimum detectable effect of 0.0235 at
   n = 1000, an A/A test ran, and the report is bound to a source digest (read, `HANDOFF.md`).
@@ -113,6 +133,9 @@ audit item for session 2.
   Across services, behaviour is held by contracts between producer and consumer. A hand-written
   stand-in that differs from the real message hides exactly the defect that matters.
 - **Sources:** SRC-POSTS-01, SRC-POSTS-03.
+  Also SRC-CLASSES-01, SRC-CLASSES-10, SRC-CLASSES-15, SRC-CLASSES-16: context lost between a
+  sub-agent and its orchestrator; patterns visible only across runs; activity green in every
+  layer and red in sequence; an orchestrator blind to its agent's limits.
 - **Grade:** E1 for the posts. The repository's own record agrees (read, `CLAUDE.md`): finding
   112 was an envelope mismatch that tests with flat params could not see (E-DQP-02), and the
   dead firehose channels of Sprint 15 were schema mismatches at a seam.
@@ -128,6 +151,8 @@ audit item for session 2.
   backoff and a breaker. A long task needs progress written somewhere durable, and a trace that
   shows which step was slow.
 - **Sources:** SRC-POSTS-06.
+  Also SRC-CLASSES-12, SRC-CLASSES-16: an event log and session recovery; descriptive errors
+  with a bounded budget to recover.
 - **Grade:** E1; standard practice.
 - **Verdict:** USE, mostly present (jittered retry, breakers, trace propagation and the outbox
   are in `CLAUDE.md`).
@@ -142,6 +167,7 @@ audit item for session 2.
 - **Says:** Large engineering organisations route all model and tool access through one gateway.
   That gives one place for timeouts, fallbacks, cost counting, access rules and swapping models.
 - **Sources:** SRC-POSTS-04, SRC-POSTS-06.
+  Also SRC-CLASSES-12: a gateway that alone holds the model credentials.
 - **Grade:** E1.
 - **Verdict:** ADAPT. At this scale the seam is one shared client module, not a service.
 - **Lands:** Ollama is referenced from `orchestrator/llm/ollama_client.py` and separately from
@@ -159,6 +185,8 @@ audit item for session 2.
   extracted facts explicit and validated, and let ordinary code apply the policy. The same
   holds for orchestration: a loop written as code will not skip an item.
 - **Sources:** SRC-POSTS-07, SRC-HOWTO-01.
+  Also SRC-CLASSES-18: deterministic code schedules and merges while the model does the part
+  that varies.
 - **Grade:** E1.
 - **Verdict:** USE, present (schema-validated agent outputs under I-3; rule-based guardrails).
 - **Lands:** Session 2 lists any path where model text drives an action with no deterministic
@@ -174,6 +202,9 @@ audit item for session 2.
   as trust grows.
 - **Sources:** SRC-POSTS-03, SRC-POSTS-04, SRC-POSTS-06, SRC-POSTS-08 (five posts by different
   authors); SRC-HOWTO-01 (start where the worst case is known and bounded).
+  Also SRC-CLASSES-05, SRC-CLASSES-06, SRC-CLASSES-17, SRC-CLASSES-18: review placed inside the
+  run at named steps, with an inbox and a batch grid; each proposed action classed as safe to
+  run or needing a person; review tiered by risk as volume rises.
 - **Grade:** E2 for the review pattern (reported by Anthropic, confirmed in secondary coverage).
 - **Verdict:** ADAPT.
 - **Lands:** Escalation is gated on confidence (I-5). No notion of reversibility is named in
@@ -193,6 +224,8 @@ audit item for session 2.
   possible and tracks what is uncertain, raised a small model's task success far above a larger
   model working without one.
 - **Sources:** SRC-POSTS-05; arXiv 2609.19315 (GAVEL).
+  Also SRC-CLASSES-05: shared context compiled once per run into a fixed artifact that every
+  later step reads.
 - **Grade:** E3 for the paper and one figure (Qwen3-8B, multi-task, 19.9% to 92.6%). The domain
   is household robot tasks in simulation, so the transfer to supply decisions is by analogy.
 - **Verdict:** USE.
@@ -226,6 +259,8 @@ audit item for session 2.
   1.37x overall. Faster generation also lengthens the queue for review, tests and CI.
 - **Sources:** SRC-POSTS-03, SRC-POSTS-04, SRC-POSTS-08 (six or more posts); SRC-HOWTO-01 and
   SRC-HOWTO-02 (teams preparing CI and review for the volume agents produce).
+  Also SRC-CLASSES-11, SRC-CLASSES-18: the scarce things are now verification, review and
+  maintenance; when cycle time stalls the queue is in CI.
 - **Grade:** The arithmetic is checked. The company figures behind it are E2.
 - **Verdict:** USE.
 - **Lands:** The project's own throughput record names CI as the critical path: about 20-25
@@ -244,6 +279,10 @@ audit item for session 2.
 - **Sources:** SRC-POSTS-03, SRC-POSTS-04, SRC-HOWTO-01, SRC-HOWTO-02. Both folder 2 documents
   call this the first investment, ahead of any autonomy; one speaker's first unassisted attempt
   failed on local environment setup alone.
+  Also SRC-CLASSES-02, SRC-CLASSES-06, SRC-CLASSES-08, SRC-CLASSES-18: what an agent needs that
+  a person takes for granted is a way to start the system, observe it, prove success and get
+  past login and empty state; a tool to force a chosen state; a long unattended run is only as
+  good as the suite that tells it when it is wrong.
 - **Grade:** E2. The repository's deploy history agrees (read, `CLAUDE.md`): E-S12-01, E-S12-02
   and E-S14-06 were all invisible locally.
 - **Verdict:** ADAPT.
@@ -264,6 +303,9 @@ audit item for session 2.
   enforcement, strongest first: code structure, compiler and CI failures, automated reviewers,
   written rules, style guides. It also adds the practice of stating the outcome wanted and
   leaving the method to the agent.
+  Also SRC-CLASSES-01, SRC-CLASSES-06, SRC-CLASSES-07, SRC-CLASSES-13, SRC-CLASSES-17:
+  procedures move out of the standing prompt into skills loaded on demand; stored know-how has a
+  half-life and is pruned by how often it helps; the model keeps absorbing the harness.
 - **Grade:** E2 (Anthropic's prompt reduction is confirmed in secondary coverage; the exact
   sizes differ between sources). A post's claim that a built-in command flags outdated
   `CLAUDE.md` rules is E1 and unchecked.
@@ -276,6 +318,10 @@ audit item for session 2.
   180,633-byte session protocol and a 35,730-byte next-session prompt (measured). Each rule in
   them traces to a real failure, so what to keep is the operator's call; the corpus's
   practitioners would turn the rules that can be checked into checks and drop the rest.
+  Folder 3 supplies the mechanism for the error patterns: group them by topic (deploy, colour
+  system, multi-city, testing) into skills that load only when a task touches that topic, and
+  prune the ones that stop being used. The repository has one skill today
+  (`.claude/skills/synapse-engineer`).
 - **Wrong if:** gate failures or repeated known mistakes rise after the trim. The removed text
   was then doing work.
 
@@ -286,13 +332,16 @@ audit item for session 2.
   Route bulk reads to a cheaper reader that returns only the answer, and enforce that with a
   hook. Record each finding where the next run will find it.
 - **Sources:** SRC-POSTS-04; SRC-HOWTO-01 (cheaper models for automations nobody is watching).
+  Also SRC-CLASSES-07, SRC-CLASSES-19: match the model tier and the reasoning effort to the
+  difficulty of the task; the top effort setting can double cost for a marginal gain.
 - **Grade:** E3 for about 90% fewer tokens on bulk reads in Spotify's own tests. E0 for the
   post's wording that the whole bill fell 90%.
 - **Verdict:** ADAPT.
 - **Lands:** Session 2 faces documents of 100-500 KB (`tasks.md` is 498 KB, `GATE_SURFACE.md`
   214 KB; measured). It should use the derived commands the handoff already prescribes (the
   census) and targeted searches, not full reads in the main context. The same choice exists for
-  the rest of this corpus (Q-05).
+  the rest of this corpus (Q-05). The same holds for reasoning effort in these sessions: bulk
+  extraction does not need the top setting, and planning does.
 - **Wrong if:** on one sampled folder, a cheaper reader's cards miss decision-relevant content
   that a full read finds.
 
@@ -320,10 +369,15 @@ audit item for session 2.
   quickly and a vague one consumes many agent-hours for nothing. The human work is problem
   definition, architecture, review and judging whether a fix addressed the cause.
 - **Sources:** SRC-POSTS-08, SRC-POSTS-04, SRC-HOWTO-01.
+  Also SRC-CLASSES-04, SRC-CLASSES-07, SRC-CLASSES-14: long planning with the model before any
+  dispatch; large goals with stated success criteria; let the model interview the person to draw
+  requirements out.
 - **Grade:** E1.
 - **Verdict:** USE.
 - **Lands:** Session 3's definition of finished, written so that a test can fail it, comes
-  before any implementation plan.
+  before any implementation plan. Session 3 should open with the model interviewing the
+  operator, one concrete question at a time, starting from Q-01 to Q-03, and not with a long
+  written brief from either side.
 - **Wrong if:** session 3 ends with a plan and no failable definition of finished. The entry was
   then not applied.
 
@@ -334,6 +388,10 @@ audit item for session 2.
   it, which daily workflow it sits inside, and what happens once the demonstration is over.
   What defends it is how hard it is to remove from real operations, and data only it holds.
 - **Sources:** SRC-POSTS-08, SRC-POSTS-02.
+  Also SRC-CLASSES-05, SRC-CLASSES-07, SRC-CLASSES-11, SRC-CLASSES-15, SRC-CLASSES-20: keep to
+  one core user; when output is cheap the question is which outputs matter; product sense comes
+  from sitting with users; confirm people have the problem before building; context that exists
+  nowhere public is the moat.
 - **Grade:** E1.
 - **Verdict:** USE.
 - **Lands:** The README states there is no live order pipeline, the traces are synthetic and the
@@ -348,12 +406,15 @@ audit item for session 2.
   agent asked to design will propose the complete system; a small team should defer what can
   wait.
 - **Sources:** SRC-POSTS-08, SRC-POSTS-04.
+  Also SRC-CLASSES-04, SRC-CLASSES-18: fewer technologies means faster work for people and for
+  agents; a codebase can now be rewritten from itself cheaply.
 - **Grade:** E1.
 - **Verdict:** ADAPT.
 - **Lands:** The deployed stack is 21 containers on one 8-vCPU VM (read, `CLAUDE.md`
   E-S14-05), with Kafka, Neo4j, Redis, Feast and MLflow behind eight agents, for a system with no
   user yet. Session 3 decides the smallest footprint that demonstrates the claim, against the
-  remaining cloud credit (Q-02, T-002).
+  remaining cloud credit (Q-02, T-002). INS-030 turns each proposed cut into an experiment
+  instead of an opinion.
 - **Wrong if:** the full stack runs for the whole verification period inside the credit with
   margin, and every component is needed by the definition of finished.
 
@@ -363,6 +424,7 @@ audit item for session 2.
 - **Says:** When agents make pull requests cheap, counting them says nothing. Tag each change by
   type and watch what share is product work.
 - **Sources:** SRC-POSTS-04.
+  Also SRC-CLASSES-07: measure effective output per unit of compute, not volume.
 - **Grade:** E1.
 - **Verdict:** ADAPT.
 - **Lands:** Of the last 300 non-merge commits on `origin/main` (2026-05-22 to 2026-11-01), 75
@@ -379,6 +441,8 @@ audit item for session 2.
   points where adding prompt examples moved it by less than one. A model also behaves
   differently in each harness, so it should be trained and measured in the one it will run in.
 - **Sources:** SRC-POSTS-05, SRC-POSTS-02.
+  Also SRC-CLASSES-04: the strongest model for development and research, small tuned models in
+  production.
 - **Grade:** E1. One self-reported experiment and one vendor post.
 - **Verdict:** PARK until session 3 allocates the Colab units.
 - **Lands:** It supports spending the 200 Colab units on one or two narrow models trained inside
@@ -395,6 +459,7 @@ audit item for session 2.
   shadow beside the existing one for weeks, and widened its authority only as the record held.
   Going straight to many unattended agents spends money and trust for nothing.
 - **Sources:** SRC-HOWTO-01, SRC-HOWTO-02.
+  Also SRC-CLASSES-04: agent-written changes exposed in stages behind hard barriers.
 - **Grade:** E2. The talk is confirmed by several secondary summaries. Its throughput figures
   are self-reported, differ by 2.5x between sources, and are not used.
 - **Verdict:** ADAPT.
@@ -419,6 +484,8 @@ audit item for session 2.
   time and keep it for problems whose steps are not known in advance.
 - **Sources:** SRC-HOWTO-01. Consistent with arXiv 2512.08296 (INS-001), where parallel tasks
   gained and sequential ones lost.
+  Also SRC-CLASSES-13, SRC-CLASSES-18: a reviewing stage must assume a fault and hunt for it,
+  because one that confirms adds nothing; deterministic orchestration around the model.
 - **Grade:** E1; practitioners describing their own use.
 - **Verdict:** USE.
 - **Lands:** The consensus has this shape: collect is the fan-out, debate is the adversarial
@@ -438,6 +505,8 @@ audit item for session 2.
   step, find the step where the real trace departs, and ask whether context or a tool was
   missing.
 - **Sources:** SRC-HOWTO-01.
+  Also SRC-CLASSES-15, SRC-CLASSES-16: hunt on the assumption that something is already wrong;
+  session traces exposed a cause that automated scoring had missed.
 - **Grade:** E1.
 - **Verdict:** USE.
 - **Lands:** Finding 112 is the case for it. The aggregate said the consensus arm lost; the
@@ -456,6 +525,9 @@ audit item for session 2.
   user sees to the code behind it. A short structured file mapping each feature to its
   components and entry points sends it straight there. The map needs upkeep, or it misleads.
 - **Sources:** SRC-HOWTO-02, SRC-POSTS-04, SRC-POSTS-06.
+  Also SRC-CLASSES-03, SRC-CLASSES-08, SRC-CLASSES-10, SRC-CLASSES-11, SRC-CLASSES-18: an index
+  file first; a catalogue of systems and owners exposed as a tool; and a counterweight, that
+  written documentation decays and the repository should be asked directly.
 - **Grade:** E2 for the talk, E1 for the posts.
 - **Verdict:** ADAPT.
 - **Lands:** `docs/state/MODULE_INVENTORY.md` exists at 9,106 bytes and was last committed on
@@ -472,6 +544,7 @@ audit item for session 2.
 - **Says:** Running many agents before each one's output can be trusted multiplies cost, not
   output. Trust is built on one or two supervised agents first.
 - **Sources:** SRC-HOWTO-02, SRC-POSTS-04.
+  Also SRC-CLASSES-02: one person can attend to four or five agent sessions at most.
 - **Grade:** E2. The repository's own record agrees (read, `HANDOFF.md`): dispatches wider than
   five finished 4 of 18 agents, batches of at most five finished 10 of 14, and steering rule G8
   came from those losses.
@@ -489,6 +562,9 @@ audit item for session 2.
   controls, not instructions: read-only credentials, network policy, access rules on each
   tool. Teams report that more layers of this kind are what let them grant more autonomy.
 - **Sources:** SRC-HOWTO-01, SRC-POSTS-06.
+  Also SRC-CLASSES-03, SRC-CLASSES-09, SRC-CLASSES-10, SRC-CLASSES-12: reference material
+  mounted read-only; an agent acts under the identity and permissions of whoever asked; a
+  restricted language for what an agent may express.
 - **Grade:** E1.
 - **Verdict:** ADAPT.
 - **Lands:** `WorldAction` carries an id, a kind, a place, parameters and a decision id. It has
@@ -499,3 +575,192 @@ audit item for session 2.
   Session 2 reads it (R-18).
 - **Wrong if:** a per-agent allow-list exists at the calling layer, and a test proves that an
   action outside an agent's function is refused.
+
+### INS-028 - Tool, skill or agent: a separate agent needs a reason
+
+- **Lens / kind:** SYSTEM / principle
+- **Says:** A capability can be a tool the orchestrator calls, a procedure it loads when needed,
+  or a separate agent. Practitioners give two reasons for the third: parallel work on
+  independent pieces, and a fresh view kept apart from the main context, as a reviewer has. A
+  sub-agent that only wraps a tool should be folded back. Start with one loop and split only
+  when a specific failure calls for it. Three teams in the corpus removed a layer of agents and
+  improved, one of them on an inventory agent covering stock, forecasting, supplier choice and
+  ordering.
+- **Sources:** SRC-CLASSES-01, SRC-CLASSES-05, SRC-CLASSES-16.
+- **Grade:** E1.
+- **Verdict:** ADAPT.
+- **Lands:** Session 2 classifies each of the eight (R-22): does it hold its own objective,
+  state and loop, or is it a function the orchestrator calls and waits on? In fairness to the
+  design, SYNAPSE has a third reason the talks do not cover: each agent carries its own reward
+  (I-2), so the agents can stand for objectives that genuinely conflict. That reason holds only
+  if the objectives do conflict in practice and arbitration binds (INS-023).
+- **Wrong if:** each of the eight has a distinct objective that changes the arbitrated outcome,
+  and removing any one worsens the measured result.
+
+### INS-029 - When execution is frictionless, build the dissent in
+
+- **Lens / kind:** WORKFLOW / warning
+- **Says:** Models lean toward agreeing with whoever is asking, and an idea now becomes working
+  code without the argument that used to filter weak ideas out. The checks that peers once
+  supplied have to be placed deliberately.
+- **Sources:** SRC-CLASSES-04, SRC-POSTS-08.
+- **Grade:** E1.
+- **Verdict:** USE.
+- **Lands:** This folder's rule that every corpus folder is asked what it holds against SYNAPSE
+  is one such check. Session 3's cut list should give every component it keeps a criterion for
+  removing it. It applies to this collaboration too: the model's agreement with a plan is weak
+  evidence that the plan is good.
+- **Wrong if:** by the end of session 3, nothing in `TENSIONS.md` has changed a decision. The
+  dissent would then be decoration.
+
+### INS-030 - Deletion is an experiment: remove a part, rerun the fixed eval, keep it if the score holds
+
+- **Lens / kind:** SYSTEM / technique
+- **Says:** The teams that slimmed their systems did it under a fixed eval: take out an
+  instruction, a tool, a sub-agent or a skill, run the same cases with and without it, and keep
+  the removal if the score holds. In the corpus's inventory-agent example the score rose.
+  Processes and rules pile up because nobody removes one unprompted, so someone has to be
+  given explicit permission to delete, and ownership and retirement have to be decided when a
+  rule is created.
+- **Sources:** SRC-CLASSES-01, SRC-CLASSES-06, SRC-CLASSES-07, SRC-CLASSES-11, SRC-CLASSES-20.
+- **Grade:** E1.
+- **Verdict:** ADAPT.
+- **Lands:** The uplift harness is SYNAPSE's fixed eval. Session 3's cut list can be a list of
+  experiments: for each agent, consensus stage or backing service proposed for removal, the arm
+  that runs without it. For gates and documents the question is the operator's (Q-06): 68
+  registered checks and 57 decision records have no retirement path that I have read.
+- **Wrong if:** one harness run costs so much that ablation arms are unaffordable. INS-011 and
+  INS-036 would then come first.
+
+### INS-031 - A twin earns belief when fitted to real history and tested across regimes
+
+- **Lens / kind:** DOMAIN / principle
+- **Says:** Where the result of a decision arrives late, proof needs a model of the world. The
+  corpus's two working examples build theirs from reality: a commerce platform models each
+  merchant as a sequence of real actions and tests interventions on that model before acting,
+  and a trading firm runs every strategy through fifteen or more years of real history, across
+  different conditions and stresses, over one standard data pipeline so results are comparable.
+- **Sources:** SRC-CLASSES-04, SRC-CLASSES-20, SRC-CLASSES-09.
+- **Grade:** E1.
+- **Verdict:** ADAPT.
+- **Lands:** SYNAPSE's world is declared, not fitted, and the handoff records its fidelity as
+  unknown and an earlier dataset's terms as declined (read, `HANDOFF.md`). The seam for real
+  data exists: a `WorldSource` interface with a simulator behind it now and an external feed
+  planned (read, `CLAUDE.md`, ADR-052). Session 2 finds what real, permissively licensed
+  history could calibrate the world (R-13). See T-012.
+- **Wrong if:** no usable dataset resembles a dark store's demand. Every result then stays
+  conditional on the declared world, and the product should not lean on shadow scores
+  (INS-022).
+
+### INS-032 - Every human correction is a label; compile standards from past actions
+
+- **Lens / kind:** SYSTEM / technique
+- **Says:** The difference between what a system produced and what the expert finally accepted
+  is training data. One company turned thirty thousand past edits by its chief editor into a
+  skill, and records each new difference as a rule. Another built its automated reviewer from
+  its founder's past review comments. Standards are compiled from what people did, not written
+  from scratch.
+- **Sources:** SRC-CLASSES-08, SRC-CLASSES-09, SRC-CLASSES-20.
+- **Grade:** E1.
+- **Verdict:** ADAPT.
+- **Lands:** Two places. In the product, operator overrides are recorded in `audit_escalations`
+  (read, `CLAUDE.md`); session 2 reads whether anything learns from them (R-23). In the
+  workflow, the roughly 120 numbered findings of the last spec are this project's corrections.
+  Distilled into one page of defect classes, they would make a review skill that a session can
+  load, in place of a ledger of several hundred kilobytes.
+- **Wrong if:** overrides are too few or too inconsistent to learn from. With no operator yet,
+  there are none; INS-035 is one way to produce some.
+
+### INS-033 - An eval that cannot fail measures nothing
+
+- **Lens / kind:** PROOF / principle
+- **Says:** An eval the system always passes has stopped measuring. Build evals from real
+  failures, keep raising them, and keep a set of cases the current system fails so that a new
+  model or design has something to prove itself on. Plant a check that must fail, to show the
+  instrument reports failure. A benchmark score is an entrance exam; a trial on the real work
+  is what counts. Evals have bugs of their own and need upkeep.
+- **Sources:** SRC-CLASSES-06, SRC-CLASSES-07, SRC-CLASSES-08, SRC-CLASSES-09, SRC-CLASSES-13,
+  SRC-CLASSES-14.
+- **Grade:** E1.
+- **Verdict:** USE, partly present. The uplift harness ran a negative control that passed and a
+  positive control that was detected, and the house standard already says that a standard which
+  only ever passes is not being applied. A gate-falsification sweep exists (C72), was not run in
+  the README's counted job, and has an open defect in how it credits an abstention (read,
+  `README.md`, `HANDOFF.md` decision (b)).
+- **Lands:** Session 2 reads which of the 68 checks the sweep can make fail and which it cannot
+  (R-24). The cells where the consensus arm loses to control E are SYNAPSE's standing set of
+  failing cases: any new policy or design is admitted on those.
+- **Wrong if:** the sweep, repaired, shows every check failing on its planted fault. This would
+  then be fully present.
+
+### INS-034 - Proof of work: checkable evidence, and the process shown is the process that ran
+
+- **Lens / kind:** PROOF / principle
+- **Says:** Autonomy with no empirical validation is theatre. Work is proven by evidence a
+  reviewer can check, including evidence that what was not asked for did not change. Two
+  systems with the same output do not deserve the same trust: how the answer was produced has
+  to be legible, and it has to be the path that actually executed. One contract can be checked
+  from several places, by a person, by an agent and by CI.
+- **Sources:** SRC-CLASSES-07, SRC-CLASSES-12, SRC-CLASSES-14, SRC-CLASSES-16.
+- **Grade:** E1.
+- **Verdict:** USE, present. The decision anatomy, the audit hash chain and the single deploy
+  oracle with three call sites are this (read, `CLAUDE.md`).
+- **Lands:** It is the corpus's strongest support for treating the proof and audit layer as an
+  asset (T-004). It also names the kind of gap recorded as T-009, where the path measured was
+  not the whole path claimed. Implementation sessions end with an evidence block: commands,
+  outputs, and the scope of the diff.
+- **Wrong if:** an operator, shown a decision's anatomy, cannot tell from it why the decision
+  was made. The legibility would then be for engineers only.
+
+### INS-035 - Dogfood it: operate the twin store yourself with SYNAPSE advising
+
+- **Lens / kind:** PURPOSE / technique
+- **Says:** Product sense comes from using the product every day and from pressure by a
+  demanding first user, not from dashboards. SYNAPSE has no user, but it has a standing world
+  and a console. The operator can be the store manager of the twin for a fixed period, with the
+  consensus advising in shadow, accepting or overriding its recommendations.
+- **Sources:** own, prompted by SRC-CLASSES-11, SRC-CLASSES-16, SRC-CLASSES-09.
+- **Grade:** own.
+- **Verdict:** CREATE.
+- **Lands:** The pieces exist (read, `CLAUDE.md`): the standing world, an ingress console for
+  injecting orders, a cockpit for escalations, and steering. A dogfooding block in the
+  implementation plan would produce three things nothing else in the project can: override
+  labels (INS-032), a first trust record per action kind (INS-022), and a list of what is
+  confusing or missing in the console from someone who had to use it. It is also the cheapest
+  honest answer to "who has used this?".
+- **Wrong if:** operating the twin teaches nothing a real store manager would recognise, which
+  is the fidelity question again (INS-031, T-012).
+
+### INS-036 - Make re-verification cheap: address expensive results by content
+
+- **Lens / kind:** PROOF / technique
+- **Says:** One team re-runs its agent's whole plan from the top on every change, which removes
+  drift, and makes that affordable by storing each expensive step under a hash of its inputs.
+  Only steps whose inputs changed are recomputed; a thousand-line plan re-evaluates in seconds.
+- **Sources:** SRC-CLASSES-12.
+- **Grade:** E1.
+- **Verdict:** ADAPT.
+- **Lands:** A full E5 run took 229 minutes at its bound and about an hour when it completed
+  (read, `HANDOFF.md`). The Power_Report is already bound to a digest of its source set, which
+  is the same idea at the coarsest grain. Session 2 reads whether replicate results are stored
+  by seed, arm and source digest, and what invalidates them (R-25). If each replicate were
+  addressed that way, a change to one arm would recompute only that arm.
+- **Wrong if:** replicates are already cached at that grain, or the digest they depend on
+  changes with nearly every commit, so that nothing would ever be reused.
+
+### INS-037 - An agent's report of its own obstruction is telemetry: aggregate it, fix the top cause
+
+- **Lens / kind:** SYSTEM / technique
+- **Says:** One platform gave its agent a way to report what was obstructing it. Aggregated,
+  the reports revealed outages before monitoring did and fed a pipeline that drafts repairs for
+  people to approve. The report is a signal about the system, not a complaint to be logged.
+- **Sources:** SRC-CLASSES-17.
+- **Grade:** E1.
+- **Verdict:** ADAPT.
+- **Lands:** SYNAPSE's agents already report honestly: each proposal carries a provenance
+  record with a `degraded` flag, and decisions list their degraded agents (read, `CLAUDE.md`,
+  ADR-040 and ADR-044). Nothing I have read ranks the reasons. Session 2 measures what share of
+  consensus decisions run with at least one degraded agent, and why (R-21). The top reason is a
+  strong candidate for the first implementation session.
+- **Wrong if:** no decision runs degraded, or the reasons are spread evenly with no dominant
+  cause.

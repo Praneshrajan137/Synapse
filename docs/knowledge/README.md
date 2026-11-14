@@ -30,19 +30,24 @@ inventory, not progress").
   bracketed citation numbers in the reports resolve to nothing. The reports grade their own
   "signal" and "honesty"; those grades are the summarising model's opinion and are ignored here.
 
-**Standing verdict on the corpus:** the underlying sources are real; the files are second-hand.
-They are a good index of ideas and a poor source of facts. Of the factual claims checked so far,
-two posts overstated theirs (see `sources/posts-context.md`), and one report's self-declared
-"verified" table was wrong about its own speaker's employer (see
-`sources/claude-code-how-to.md`).
+**Standing of the corpus.** The operator has verified the speakers and sources (decision of
+2026-11-13). Their identity, standing and good faith are taken as given and are not re-checked,
+and a missing author or date is not a mark against a document.
+
+The files themselves are summaries, and a summary can misstate what its speaker got right. In
+the first two folders, three checked claims were misstated by the file that carried them, not by
+the original speaker (see `sources/posts-context.md` and `sources/claude-code-how-to.md`). So one
+narrow check remains: a specific figure is looked up when a SYNAPSE decision would rest on it.
 
 ## Rules of this folder
 
 1. **Paraphrase.** No transcript, post or report text is copied in. This repository is public.
 2. **Say how you know.** Measured (a command produced it), read (a file says it), or inferred
    (reasoning from the two). The three are not interchangeable.
-3. **Verify in proportion to use.** A fact that enters the ledger gets its own check against the
-   primary or an independent source. An idea is judged on fit, not on citation.
+3. **Trust the speakers; check only load-bearing figures.** Sources are operator-verified (see
+   above). An idea is judged on its fit to SYNAPSE. A specific number gets its own check only
+   when a decision would rest on it. Folders 1 and 2 were digested under a stricter rule, before
+   this decision.
 4. **Every ledger entry names what would make it wrong.**
 5. **Every folder is asked what it holds against SYNAPSE.** The answer goes in `TENSIONS.md`,
    including "nothing found".
@@ -71,7 +76,7 @@ two posts overstated theirs (see `sources/posts-context.md`), and one report's s
 |---|---|
 | E3 | Confirmed against the primary source or an independent one |
 | E2 | Primary source located; this claim not separately checked |
-| E1 | Only the corpus file says so |
+| E1 | Stated in the corpus file by an operator-verified source; not independently checked |
 | E0 | Checked and found overstated or contradicted |
 | own | This folder's inference, not a source's claim |
 
@@ -93,7 +98,7 @@ Order is by leverage: how to work first, then how to build, then what to build f
 |---|---|---|---|---|
 | 1 | Posts Context | 8 | **done 2026-11-13** | [`sources/posts-context.md`](sources/posts-context.md) |
 | 2 | Claude code - How to | 2 | **done 2026-11-13** | [`sources/claude-code-how-to.md`](sources/claude-code-how-to.md) |
-| 3 | Claude Code - Classes | 20 | pending | |
+| 3 | Claude Code - Classes | 20 | **done 2026-11-14** | [`sources/claude-code-classes.md`](sources/claude-code-classes.md) |
 | 4 | Cursor | 2 | pending | |
 | 5 | Sequoia Capital- AI | 23 | pending | |
 | 6 | YC AI GUIDE, plus loose `yc-paper-club-data-deep-dive.md` | 14 | pending | |
@@ -148,6 +153,17 @@ Known duplicates, to be read once and cross-referenced:
    corpus folder just digested.
 4. **Scope.** `git status` shows changes only under `docs/knowledge/`.
 
-A script that runs checks 1 to 3 is kept outside version control on the operator's machine
-(`.tmp/knowledge/kb_check.py`); this folder adds no code to the repository. On 2026-11-13 it
+## Planned last step of session 1
+
+The ledger is already longer than anyone reads in one sitting, and one of the corpus's own
+talks puts that limit at a couple of hundred lines. When the last folder is done, a one-page
+`SYNTHESIS.md` will rank the entries by how many independent sources agree and by how much
+they change, and name the ten that matter most for sessions 2 and 3. Until then the index
+table at the top of the ledger is the short form.
+
+## Local helpers
+
+Two scripts are kept outside version control on the operator's machine, in `.tmp/knowledge/`:
+`kb_check.py` runs checks 1 to 3, and `kb_add_sources.py` adds corroborating sources to
+existing ledger entries. This folder adds no code to the repository. On 2026-11-13 it
 caught one near-copied sentence in the first digest, which was rewritten.
