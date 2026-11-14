@@ -75,6 +75,7 @@ recorded with how it was obtained.
 |---|---|---|---|
 | R-12 | What do quick-commerce operators publish about how they decide stock, assortment and dispatch? | The posts read so far cover only those companies' internal engineering agents. Without this, SYNAPSE's problem statement rests on assumption. | Q-01 |
 | R-13 | Which real, permissively licensed dataset could anchor the twin? | The handoff records the twin's fidelity as unknown, so a result on it does not transfer. An earlier dataset's terms were declined. | INS-018 |
+| R-51 | What does the operations-research literature on inventory control say about how close a tuned base-stock or (s,S) rule comes to optimal under the demand, lead-time and spoilage processes the twin declares, and under which conditions coordinated or learned policies beat it? | Of 54 ledger entries after eight folders, one is about the domain; the corpus cannot answer this. If a tuned rule is near-optimal in most of the twin's cells, uplift can only come from the cells where its assumptions break, and the proof should be concentrated there. | INS-001, INS-002 |
 
 ## Found in passing
 
