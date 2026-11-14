@@ -42,6 +42,8 @@ recorded with how it was obtained.
 | R-24 | Which of the 68 checks can the falsification sweep (C72) make fail, and which not? What is the state of its open defect? | A check that cannot be made to fail is a candidate for repair or retirement (Q-06). | INS-033 |
 | R-25 | Does the uplift harness store replicate results by seed, arm and source digest? What invalidates them? | If not, content-addressed caching could cut the cost of every later verification round. | INS-036 |
 | R-26 | Do all agents in one decision read the same frozen world snapshot, and how are several agents' writes to the world ordered? | If each agent reads the world at a different moment, their proposals answer different questions. | INS-010 |
+| R-27 | Can a world action be undone or compensated (cancel a reorder, restore a price), and can the world be snapshotted and rewound? | An action kind with a cheap undo can be granted autonomy early; one without needs a person or a longer record first. | INS-009 |
+| R-28 | Facing an escalation, can an operator change part of a recommendation (a quantity, a price multiplier), or only accept or reject? | If only accept or reject, the console makes an approver of its operator and loses the richer label an edit would give. | INS-038 |
 | R-20 | Which recorded limits still hold with the current model and tools (no repo-wide or simulation runs on the laptop, mutation testing flaky on Windows)? Retest one. | A limit that no longer holds is free capacity for the implementation sessions. | SRC-HOWTO-01 |
 
 ## For sessions 2 and 3 (outside the repository)

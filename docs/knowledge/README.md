@@ -99,7 +99,7 @@ Order is by leverage: how to work first, then how to build, then what to build f
 | 1 | Posts Context | 8 | **done 2026-11-13** | [`sources/posts-context.md`](sources/posts-context.md) |
 | 2 | Claude code - How to | 2 | **done 2026-11-13** | [`sources/claude-code-how-to.md`](sources/claude-code-how-to.md) |
 | 3 | Claude Code - Classes | 20 | **done 2026-11-14** | [`sources/claude-code-classes.md`](sources/claude-code-classes.md) |
-| 4 | Cursor | 2 | pending | |
+| 4 | Cursor | 2 | **done 2026-11-14** | [`sources/cursor.md`](sources/cursor.md) |
 | 5 | Sequoia Capital- AI | 23 | pending | |
 | 6 | YC AI GUIDE, plus loose `yc-paper-club-data-deep-dive.md` | 14 | pending | |
 | 7 | Jane Street | 11 | pending | |

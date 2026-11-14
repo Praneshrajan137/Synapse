@@ -133,6 +133,25 @@ A tension is not a verdict. Each one names what would settle it.
   a real reasoner.
 - **Raised by:** Claude code - How to.
 
+### T-013 - Much has been built, and nobody has yet asked for it
+
+- **The corpus says:** building is no longer the scarce thing. The limits are commercial value,
+  changing what users actually do, and knowing what is worth building (SRC-CURSOR-02). An
+  organisation that can now ship three hundred things has to ask which of them matter
+  (SRC-CLASSES-07). Confirm that people have the problem before building (SRC-CLASSES-15), and
+  be able to say who depends on it and what workflow it sits in (SRC-POSTS-08).
+- **SYNAPSE says:** some twenty sprints, 57 decision records and 68 checks, with no named user,
+  no live order pipeline and synthetic traces (read, `README.md`, `CLAUDE.md`).
+- **In fairness to the design:** the operator's stated aim is a production system that helps
+  many people, and a system of this kind cannot be put in front of a user before it works.
+  Building the proof first was also vindicated: the first honest measurement was negative, and
+  it is better to learn that from a harness than from a customer.
+- **Settled by:** the operator's answers to Q-01 and Q-03 in session 3. Two cheap steps come
+  before that: reading what quick-commerce operators publish about their own decisions (R-12),
+  and the operator running the twin store personally (INS-035).
+- **Raised by:** Posts Context in substance, where it was filed only as INS-018 and Q-01.
+  Recorded as a tension at Cursor, which states it most bluntly.
+
 ## Inside the corpus
 
 ### T-006 - Harness over model, or training over prompting?

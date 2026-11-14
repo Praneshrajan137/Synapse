@@ -19,35 +19,36 @@ audit item for session 2.
 | INS-006 | Every external call: hard timeout, breaker, durable progress, trace | SYSTEM | USE, mostly present | 3 |
 | INS-007 | One seam for every model call | SYSTEM | ADAPT | 3 |
 | INS-008 | Keep probabilistic judgment in a small box | SYSTEM | USE, present | 3 |
-| INS-009 | Grant autonomy by reversibility and blast radius, not confidence alone | SYSTEM | ADAPT | 9 |
-| INS-010 | A shared, current world model lifts a planner more than a bigger model | SYSTEM | USE | 2 + 1 paper |
+| INS-009 | Grant autonomy by reversibility and blast radius, not confidence alone | SYSTEM | ADAPT | 10 |
+| INS-010 | A shared, current world model lifts a planner more than a bigger model | SYSTEM | USE | 3 + 1 paper |
 | INS-011 | Keep each run's full record; screen new decision logic by replay | PROOF | ADAPT | 1 |
-| INS-012 | Verification is the constraint; plan sessions around it | WORKFLOW | USE | 7 |
-| INS-013 | An agent needs a prod-like run it can drive and observe | WORKFLOW | ADAPT | 8 |
+| INS-012 | Verification is the constraint; plan sessions around it | WORKFLOW | USE | 8 |
+| INS-013 | An agent needs a prod-like run it can drive and observe | WORKFLOW | ADAPT | 9 |
 | INS-014 | Enforce by gate; trim prose rules newer models no longer need | WORKFLOW | ADAPT | 9 |
-| INS-015 | Keep frontier models off bulk reading; write findings where the next run looks | WORKFLOW | ADAPT | 4 |
-| INS-016 | Estimate from the work, not the spoken number; overruns are fat-tailed | WORKFLOW | USE | 1 + 2 studies |
+| INS-015 | Keep frontier models off bulk reading; write findings where the next run looks | WORKFLOW | ADAPT | 5 |
+| INS-016 | Estimate from the work, not the spoken number; overruns are fat-tailed | WORKFLOW | USE | 2 + 2 studies |
 | INS-017 | A sharp problem definition is the highest-leverage artifact | WORKFLOW | USE | 6 |
-| INS-018 | Name the user, the workflow, and what happens after the demo | PURPOSE | USE | 7 |
+| INS-018 | Name the user, the workflow, and what happens after the demo | PURPOSE | USE | 8 |
 | INS-019 | Fit the architecture and its footprint to the stage | OPS | ADAPT | 4 |
-| INS-020 | Measure the share of work that changes the product | PROOF | ADAPT | 2 |
+| INS-020 | Measure the share of work that changes the product | PROOF | ADAPT | 4 |
 | INS-021 | For a narrow job, a small trained model can beat prompting a large one | OPS | PARK | 3 |
-| INS-022 | Autonomy is earned on a trust curve: shadow first, promote on a measured record | SYSTEM | ADAPT | 3 |
+| INS-022 | Autonomy is earned on a trust curve: shadow first, promote on a measured record | SYSTEM | ADAPT | 4 |
 | INS-023 | Many agents pay as breadth plus adversarial checking, reduced by ordinary code | SYSTEM | USE | 3 |
 | INS-024 | Before trusting an aggregate, walk one decision against its expected trace | PROOF | USE | 3 |
 | INS-025 | Give agents a map from capability to code to proof | WORKFLOW | ADAPT | 8 |
 | INS-026 | Widen agent fan-out only as fast as verification allows | WORKFLOW | USE, present | 3 |
-| INS-027 | Least privilege per agent: an out-of-function action is impossible, not discouraged | SYSTEM | ADAPT | 6 |
+| INS-027 | Least privilege per agent: an out-of-function action is impossible, not discouraged | SYSTEM | ADAPT | 7 |
 | INS-028 | Tool, skill or agent: a separate agent needs a reason | SYSTEM | ADAPT | 3 |
 | INS-029 | When execution is frictionless, build the dissent in | WORKFLOW | USE | 2 |
-| INS-030 | Deletion is an experiment: remove a part, rerun the fixed eval, keep it if the score holds | SYSTEM | ADAPT | 5 |
+| INS-030 | Deletion is an experiment: remove a part, rerun the fixed eval, keep it if the score holds | SYSTEM | ADAPT | 7 |
 | INS-031 | A twin earns belief when fitted to real history and tested across regimes | DOMAIN | ADAPT | 3 |
 | INS-032 | Every human correction is a label; compile standards from past actions | SYSTEM | ADAPT | 3 |
 | INS-033 | An eval that cannot fail measures nothing | PROOF | USE, partly present | 6 |
-| INS-034 | Proof of work: checkable evidence, and the process shown is the process that ran | PROOF | USE, present | 4 |
+| INS-034 | Proof of work: checkable evidence, and the process shown is the process that ran | PROOF | USE, present | 6 |
 | INS-035 | Dogfood it: operate the twin store yourself with SYNAPSE advising | PURPOSE | CREATE | own + 3 |
 | INS-036 | Make re-verification cheap: address expensive results by content | PROOF | ADAPT | 1 |
 | INS-037 | An agent's report of its own obstruction is telemetry: aggregate it, fix the top cause | SYSTEM | ADAPT | 1 |
+| INS-038 | An approver is not an operator: show the plan and let the person change any part | PURPOSE | USE, partly present | 3 |
 
 ## Entries
 
@@ -205,6 +206,8 @@ audit item for session 2.
   Also SRC-CLASSES-05, SRC-CLASSES-06, SRC-CLASSES-17, SRC-CLASSES-18: review placed inside the
   run at named steps, with an inbox and a batch grid; each proposed action classed as safe to
   run or needing a person; review tiered by risk as volume rises.
+  Also SRC-CURSOR-02: infrastructure built for agents offers undo as a primitive, blocks
+  destructive changes whatever the agent asks, and throttles background agents under load.
 - **Grade:** E2 for the review pattern (reported by Anthropic, confirmed in secondary coverage).
 - **Verdict:** ADAPT.
 - **Lands:** Escalation is gated on confidence (I-5). No notion of reversibility is named in
@@ -214,6 +217,9 @@ audit item for session 2.
   `set_price_mult`, `inject_disruption`; read, `packages/synapse_common/world/models.py`), so
   the class is a four-row table. A price multiplier can be set back; stock already ordered
   mostly cannot (inferred). INS-022 covers how a kind moves up once it has a record.
+  Folder 4 adds that undo belongs to the infrastructure. An undo, or a compensating action, for
+  each action kind is what makes autonomy cheap to grant; session 2 reads whether the world
+  offers either (R-27).
 - **Wrong if:** in `audit_escalations`, override rates and loss per error do not differ between
   reversible and irreversible action types.
 
@@ -226,6 +232,8 @@ audit item for session 2.
 - **Sources:** SRC-POSTS-05; arXiv 2609.19315 (GAVEL).
   Also SRC-CLASSES-05: shared context compiled once per run into a fixed artifact that every
   later step reads.
+  Also SRC-CURSOR-02: sub-agents started from one shared compressed context spend far fewer
+  tokens rediscovering it.
 - **Grade:** E3 for the paper and one figure (Qwen3-8B, multi-task, 19.9% to 92.6%). The domain
   is household robot tasks in simulation, so the transfer to supply decisions is by analogy.
 - **Verdict:** USE.
@@ -261,6 +269,8 @@ audit item for session 2.
   SRC-HOWTO-02 (teams preparing CI and review for the volume agents produce).
   Also SRC-CLASSES-11, SRC-CLASSES-18: the scarce things are now verification, review and
   maintenance; when cycle time stalls the queue is in CI.
+  Also SRC-CURSOR-01: three large companies put coding at 5 to 30 percent of an engineer's time;
+  people reviewing machine-written code is the queue.
 - **Grade:** The arithmetic is checked. The company figures behind it are E2.
 - **Verdict:** USE.
 - **Lands:** The project's own throughput record names CI as the critical path: about 20-25
@@ -283,6 +293,8 @@ audit item for session 2.
   a person takes for granted is a way to start the system, observe it, prove success and get
   past login and empty state; a tool to force a chosen state; a long unattended run is only as
   good as the suite that tells it when it is wrong.
+  Also SRC-CURSOR-02: agents on a developer's machine are limited by that machine and collide in
+  one workspace.
 - **Grade:** E2. The repository's deploy history agrees (read, `CLAUDE.md`): E-S12-01, E-S12-02
   and E-S14-06 were all invisible locally.
 - **Verdict:** ADAPT.
@@ -334,6 +346,8 @@ audit item for session 2.
 - **Sources:** SRC-POSTS-04; SRC-HOWTO-01 (cheaper models for automations nobody is watching).
   Also SRC-CLASSES-07, SRC-CLASSES-19: match the model tier and the reasoning effort to the
   difficulty of the task; the top effort setting can double cost for a marginal gain.
+  Also SRC-CURSOR-02: returns to more tokens fall off logarithmically, and structured prior
+  information does more than extra compute.
 - **Grade:** E3 for about 90% fewer tokens on bulk reads in Spotify's own tests. E0 for the
   post's wording that the whole bill fell 90%.
 - **Verdict:** ADAPT.
@@ -353,6 +367,8 @@ audit item for session 2.
   flat buffer does not protect.
 - **Sources:** SRC-POSTS-04; Flyvbjerg and Budzier (HBR 2011, arXiv 1304.0265); Jorgensen and
   Sjoberg on customer expectation.
+  Also SRC-CURSOR-01: one company sets an aggressive time box on purpose, a month for work once
+  planned at nine; it works because the scope is allowed to give.
 - **Grade:** E3 for the tail (1,471 IT projects, mean cost overrun 27%, one in six about 200%).
   E3 for the anchoring setup; E0 for the post's figures (it gives 77 and 632 hours; the located
   source gives 99 and 555, and a smaller effect in a field study).
@@ -392,6 +408,8 @@ audit item for session 2.
   one core user; when output is cheap the question is which outputs matter; product sense comes
   from sitting with users; confirm people have the problem before building; context that exists
   nowhere public is the moat.
+  Also SRC-CURSOR-02: with code abundant the limits are commercial value, changing what users
+  do, a first-principles view of what to build, and distribution.
 - **Grade:** E1.
 - **Verdict:** USE.
 - **Lands:** The README states there is no live order pipeline, the traces are synthetic and the
@@ -425,6 +443,8 @@ audit item for session 2.
   type and watch what share is product work.
 - **Sources:** SRC-POSTS-04.
   Also SRC-CLASSES-07: measure effective output per unit of compute, not volume.
+  Also SRC-CURSOR-01, SRC-CURSOR-02: count completed backlog and idea-to-release time, not hours
+  saved; in one account shipped code rose eightfold while app usage stayed flat.
 - **Grade:** E1.
 - **Verdict:** ADAPT.
 - **Lands:** Of the last 300 non-merge commits on `origin/main` (2026-05-22 to 2026-11-01), 75
@@ -460,6 +480,7 @@ audit item for session 2.
   Going straight to many unattended agents spends money and trust for nothing.
 - **Sources:** SRC-HOWTO-01, SRC-HOWTO-02.
   Also SRC-CLASSES-04: agent-written changes exposed in stages behind hard barriers.
+  Also SRC-CURSOR-01: small teams prove a new practice before it is released to everyone.
 - **Grade:** E2. The talk is confirmed by several secondary summaries. Its throughput figures
   are self-reported, differ by 2.5x between sources, and are not used.
 - **Verdict:** ADAPT.
@@ -565,6 +586,8 @@ audit item for session 2.
   Also SRC-CLASSES-03, SRC-CLASSES-09, SRC-CLASSES-10, SRC-CLASSES-12: reference material
   mounted read-only; an agent acts under the identity and permissions of whoever asked; a
   restricted language for what an agent may express.
+  Also SRC-CURSOR-02: small, sharp, composable primitives let capability grow without the risk
+  growing.
 - **Grade:** E1.
 - **Verdict:** ADAPT.
 - **Lands:** `WorldAction` carries an id, a kind, a place, parameters and a decision id. It has
@@ -623,6 +646,8 @@ audit item for session 2.
   given explicit permission to delete, and ownership and retirement have to be decided when a
   rule is created.
 - **Sources:** SRC-CLASSES-01, SRC-CLASSES-06, SRC-CLASSES-07, SRC-CLASSES-11, SRC-CLASSES-20.
+  Also SRC-CURSOR-01, SRC-CURSOR-02: a working prototype is required before a specification is
+  debated; planning artifacts built to protect scarce engineering time are now overhead.
 - **Grade:** E1.
 - **Verdict:** ADAPT.
 - **Lands:** The uplift harness is SYNAPSE's fixed eval. Session 3's cut list can be a list of
@@ -702,6 +727,8 @@ audit item for session 2.
   to be legible, and it has to be the path that actually executed. One contract can be checked
   from several places, by a person, by an agent and by CI.
 - **Sources:** SRC-CLASSES-07, SRC-CLASSES-12, SRC-CLASSES-14, SRC-CLASSES-16.
+  Also SRC-CURSOR-01, SRC-CURSOR-02: review by intent and by demonstration; an interface that
+  shows the plan and each step as it happens.
 - **Grade:** E1.
 - **Verdict:** USE, present. The decision anatomy, the audit hash chain and the single deploy
   oracle with three call sites are this (read, `CLAUDE.md`).
@@ -764,3 +791,25 @@ audit item for session 2.
   strong candidate for the first implementation session.
 - **Wrong if:** no decision runs degraded, or the reasons are spread evenly with no dominant
   cause.
+
+### INS-038 - An approver is not an operator: show the plan and let the person change any part
+
+- **Lens / kind:** PURPOSE / principle
+- **Says:** An interface that offers a request, a wait and then accept or reject turns the
+  person into an approver and their judgment into a rubber stamp. One that shows the plan and
+  each step, and lets the person step in and change any part at any point, keeps them the
+  author. When producing the work is cheap, the person's craft moves to judgment before it and
+  responsibility after it. Other teams in the corpus say the same in practice: the system
+  generates, and the person validates and adjusts in a proper interface, inside the run and not
+  only at its end.
+- **Sources:** SRC-CURSOR-02, SRC-CLASSES-16, SRC-CLASSES-05.
+- **Grade:** E1.
+- **Verdict:** USE, partly present. The console shows a decision's full anatomy and has
+  steering and override (read, `CLAUDE.md`).
+- **Lands:** What I have not read is the grain of an override. Session 2 reads whether an
+  operator facing an escalation can change part of a recommendation, such as a quantity or a
+  price multiplier, or can only accept or reject it (R-28). A partial edit is also a richer
+  label than a yes or no (INS-032), and it is what a shadow advisor needs to be useful
+  (INS-022).
+- **Wrong if:** in use, operators only ever accept or reject, so that finer control goes
+  unused. Dogfooding would show it (INS-035).
