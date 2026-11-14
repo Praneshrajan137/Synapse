@@ -80,11 +80,19 @@ jobs:
   # consensus arm against the tuned control E (`tuned_static`) -- a claim about the Tier-2
   # pathway only.
   #
-  # ONE JOB WITH PARALLEL WORKERS, NOT A REPLICATE-BLOCK MATRIX (task 22.1's re-scope).
-  # Unshocked, the projected cost is about 2 core-hours (B-prime: 2.16 s per replicate-arm over
-  # 24 h; the cost probe: 0.047 s per Tier-2 decision) -- a projection, not a measurement of
-  # this job. A per-shard split would also be refused by the harness's INV-TW-002 guard
-  # (n >= 1000 per run), which is not bypassed.
+  # ONE JOB, NOT A REPLICATE-BLOCK MATRIX (task 22.1's re-scope). Its process pool falls back to
+  # sequential runs (`uplift_parallel_fallback`), because arms E and E' and the consensus arm do
+  # not pickle (finding 110).
+  # Unshocked, the projected cost is about 0.4 core-hours -- a projection: 24000 Tier-2
+  # decisions at the 0.047 s of cost-probe run 36860581054 (1128 s), plus 3400 single-arm 24 h
+  # replicates at B-prime's 0.116 s (394 s), three arms x 1000 here and arms E and E' x 200 in
+  # the reproduction. That unit is B-prime's `in_sample_recheck_seconds`, 395.39 s over
+  # 17 x 200 rechecks. Its `measure_seconds` (2587.58 s) is not a unit for the 6 x 200 measured
+  # runs alone: the same clock spans the tuning search (176 evaluations x 100 seeds) and the
+  # rechecks, 22200 replicates at 0.117 s each (F-Q1-1). MEASURED since: run 41289052859
+  # (sha 732ecd9) read `completed` after 3646.5 s, about 2.4 times the projection, so size
+  # against the measurement. A per-shard split would also be refused by the harness's
+  # INV-TW-002 guard (n >= 1000 per run), which is not bypassed.
   #
   # THE SUPERVISOR NAMES HOW THE RUN ENDED (R7.2): `failed_to_start`, `exited_nonzero`,
   # `exceeded_wall_clock` or `no_artifact`, each with its own message and exit status, or
