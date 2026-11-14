@@ -188,7 +188,7 @@ jobs:
 
   real-stack-run:
     name: Real_Stack_Run — Console fidelity (Req 5)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 45
     # SCHEDULE / manual ONLY — NEVER on pull_request. The Real_Stack_Run drives
     # the real docker stack (live gateway + orchestrator + datastores), whose
