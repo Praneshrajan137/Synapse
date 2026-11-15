@@ -70,6 +70,8 @@ A tension is not a verdict. Each one names what would settle it.
   taking any responsibility, so narrow agents with clear bounds are easier to delegate to
   (SRC-A16Z-22). That favours specialised agents only where each one's scope is one a person
   can judge.
+  Rainmatter adds that a product showing its makers' organisation chart has lost its coherence
+  (SRC-RAIN-02); eight agents for seven functions are open to that reading (own).
 
 ### T-002 - A mature platform's infrastructure at a stage with no user
 
@@ -165,6 +167,9 @@ A tension is not a verdict. Each one names what would settle it.
   ten rivals (SRC-A16Z-10), and the "yet" test: an advantage that rests on a general model not
   being able to do something is fragile (SRC-A16Z-13). Both point at the twin and the proof as
   the durable part.
+  Rainmatter adds the order for a stalled product: change the message, then the channel, then
+  the customer, and only then the product (SRC-RAIN-03); and a failed search start-up whose team
+  and code became its acquirer's AI base (SRC-RAIN-07).
 
 ### T-005 - "Prose is not free", against the volume of prose
 
@@ -419,6 +424,8 @@ A tension is not a verdict. Each one names what would settle it.
 - **Added by YC GUIDE:** the creator of Claude Code names over-specifying how as the common
   failure of experienced engineers; state the goal, the limits and the exit criteria, and give
   the model a way to verify as it goes (SRC-YCG-05). That is the reading above.
+  Rainmatter adds that building and measuring have sped up and learning has not, so work handed
+  to agents should come back in steps a person can follow (SRC-RAIN-05).
 
 ### T-015 - Launch before it is ready, or be finished before the first pilot?
 
