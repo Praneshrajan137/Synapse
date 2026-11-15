@@ -110,7 +110,7 @@ Order is by leverage: how to work first, then how to build, then what to build f
 | 12 | YC GUIDE | 26 | **done 2026-11-15** | [`sources/yc-guide.md`](sources/yc-guide.md) |
 | 13 | Sequoia Capital - GUIDE | 8 | **done 2026-11-15** | [`sources/sequoia-capital-guide.md`](sources/sequoia-capital-guide.md) |
 | 14 | Lenny's Podcast | 26 | **done 2026-11-15** | [`sources/lennys-podcast.md`](sources/lennys-podcast.md) |
-| 15 | a16z | 24 | pending | |
+| 15 | a16z | 24 | **done 2026-11-15** | [`sources/a16z.md`](sources/a16z.md) |
 | 16 | Rainmatter | 10 | pending | |
 | 17 | The Neon Show | 20 | pending | |
 | 18 | Master's Union | 7 | pending | |

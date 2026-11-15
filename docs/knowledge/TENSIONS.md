@@ -66,6 +66,10 @@ A tension is not a verdict. Each one names what would settle it.
   analogy, a round that waits for every participant runs at the pace of the slowest
   (SRC-LENNY-20); and most industries are bound by execution rather than intelligence, which
   caps what a better decision layer can add (SRC-LENNY-02).
+  a16z adds the other side: general agents take away the person's understanding without
+  taking any responsibility, so narrow agents with clear bounds are easier to delegate to
+  (SRC-A16Z-22). That favours specialised agents only where each one's scope is one a person
+  can judge.
 
 ### T-002 - A mature platform's infrastructure at a stage with no user
 
@@ -122,6 +126,9 @@ A tension is not a verdict. Each one names what would settle it.
   Session 2 can apply that test to the E5 replicates (R-33).
   Lenny's Podcast adds a product leader's estimate from motor racing: the driver accounts for a
   small share of the result and the car, crew and data for the rest (SRC-LENNY-21).
+  a16z adds a test for any claim that a system improves itself: who does the optimising? If an
+  engineer reads the results and changes the settings, the engineer is still the optimiser, and
+  closing the loop guarantees no convergence (SRC-A16Z-19).
 
 ### T-004 - Which asset is the product: the agents or the proof?
 
@@ -154,6 +161,10 @@ A tension is not a verdict. Each one names what would settle it.
   more than a dozen young companies sell them (SRC-YCG-20); that the hard part of a lasting
   company is no longer the code (SRC-YCG-06); and that interfaces are disposable while the
   data and the know-how are the asset (SRC-YCG-18).
+  a16z adds that an assistant with no hold on the customer's data had no pricing power against
+  ten rivals (SRC-A16Z-10), and the "yet" test: an advantage that rests on a general model not
+  being able to do something is fragile (SRC-A16Z-13). Both point at the twin and the proof as
+  the durable part.
 
 ### T-005 - "Prose is not free", against the volume of prose
 
@@ -281,6 +292,9 @@ A tension is not a verdict. Each one names what would settle it.
   ideas (SRC-LENNY-05); the advice to ask why people do not use a product before asking why to
   build it (SRC-LENNY-17, SRC-LENNY-22); a project that hired thirty engineers before anyone
   wanted it (SRC-LENNY-15); and the pull test of INS-059 (SRC-LENNY-23).
+  a16z adds the order one company followed, users first and its own models later from their
+  data (SRC-A16Z-08), and an agentic browser feature that shipped and went largely unused
+  (SRC-A16Z-16).
 
 ### T-014 - Append-only context, against compacting and clearing it
 
@@ -345,6 +359,10 @@ A tension is not a verdict. Each one names what would settle it.
   (SRC-SPC-07).
   YC GUIDE adds a legal AI company that bet on general models improving and built orchestration
   and an evaluation suite instead of training its own model (SRC-YCG-10).
+  a16z adds two sides. A health researcher who built specialised models says a forked model
+  falls behind the frontier within months (SRC-A16Z-12); a coding company won by betting on
+  the interface rather than its own model (SRC-A16Z-08). Against them, a large model can
+  train a small one to take over a narrow task (SRC-A16Z-22).
 
 ### T-007 - Mock your dependencies, or run it like production?
 
@@ -375,6 +393,9 @@ A tension is not a verdict. Each one names what would settle it.
   accounting for every token (SRC-ENG-01).
   YC GUIDE argues three times for spending freely, since prices fall roughly tenfold a year
   (SRC-YCG-01, SRC-YCG-06, SRC-YCG-14). For a fixed $300 credit the reading above stands.
+  a16z adds that agents stopped for wasting tokens on dead ends far outnumber those stopped
+  for unsafe behaviour (SRC-A16Z-09), and that a model cheaper per token can cost more per task
+  (SRC-A16Z-15). Count cost per decision.
 
 ### T-010 - A few general tools plus code, or one purpose-built tool?
 
@@ -439,6 +460,8 @@ A tension is not a verdict. Each one names what would settle it.
   for the files it needs (SRC-SPC-04). That supports the reading above.
   Lenny's Podcast adds that a million-token context holds less than half a per cent of one
   company's call transcripts, so the full record cannot be loaded anyway (SRC-LENNY-21).
+  a16z adds a personal agent whose notes file kept losing what tools it had until it was told
+  to read its memory before answering (SRC-A16Z-23).
 
 ### T-018 - Do types help agents, or only cost tokens?
 
