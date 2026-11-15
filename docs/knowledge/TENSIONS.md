@@ -57,6 +57,9 @@ A tension is not a verdict. Each one names what would settle it.
   different town unless an arbiter binds (SRC-ENG-02); INS-023 and R-16 are where that is
   measured. INS-055 adds a structural point: without a way to move stock between stores, the
   twin gives coordination little to do.
+  YC GUIDE adds the chief executive of a chip company whose founding approach was wrong: he
+  said so to the customer paying for it and changed course, and the honesty kept the company
+  alive (SRC-YCG-09). E5 is SYNAPSE's version of that moment.
 
 ### T-002 - A mature platform's infrastructure at a stage with no user
 
@@ -87,6 +90,8 @@ A tension is not a verdict. Each one names what would settle it.
   that now models find flaws fast, every dependency and service is a stream of patches
   (SRC-SPC-01), and that ordinary software decays unless someone keeps working on it
   (SRC-SPC-09).
+  YC GUIDE adds that code generators now make building easy and leave operating as the hard,
+  lasting problem (SRC-YCG-21).
 
 ### T-003 - "Agency is architectural", against harness times model
 
@@ -135,6 +140,10 @@ A tension is not a verdict. Each one names what would settle it.
   (SRC-PRAG-06). South Park Commons adds a company whose product a model can copy on the
   surface in minutes, and whose customers still pay for its depth on the hard cases
   (SRC-SPC-12).
+  YC GUIDE adds that model builders spend heavily on environments and scorers for training and
+  more than a dozen young companies sell them (SRC-YCG-20); that the hard part of a lasting
+  company is no longer the code (SRC-YCG-06); and that interfaces are disposable while the
+  data and the know-how are the asset (SRC-YCG-18).
 
 ### T-005 - "Prose is not free", against the volume of prose
 
@@ -251,6 +260,9 @@ A tension is not a verdict. Each one names what would settle it.
   never released, with no effect (SRC-SPC-09); the warning that a general tool can be pleasant
   and matter to nobody (SRC-SPC-06); and the test that ambition has become delusion when
   customers stop using the product (SRC-SPC-05).
+  YC GUIDE adds a team that dropped its product a month before launch because nobody would
+  miss it (SRC-YCG-02), and the view that a product that truly works needs no metric to show
+  it (SRC-YCG-22).
 
 ### T-014 - Append-only context, against compacting and clearing it
 
@@ -310,6 +322,8 @@ A tension is not a verdict. Each one names what would settle it.
   training first (INS-021). South Park Commons adds a video company that trains a missing
   capability into its next model in a few weeks rather than wrapping the current one
   (SRC-SPC-07).
+  YC GUIDE adds a legal AI company that bet on general models improving and built orchestration
+  and an evaluation suite instead of training its own model (SRC-YCG-10).
 
 ### T-007 - Mock your dependencies, or run it like production?
 
@@ -338,6 +352,8 @@ A tension is not a verdict. Each one names what would settle it.
   then runs alone (SRC-YCAI-10), and local models for everyday queries (SRC-YCAI-13). See
   INS-040. ENGINEERING adds that companies moved within months from using models freely to
   accounting for every token (SRC-ENG-01).
+  YC GUIDE argues three times for spending freely, since prices fall roughly tenfold a year
+  (SRC-YCG-01, SRC-YCG-06, SRC-YCG-14). For a fixed $300 credit the reading above stands.
 
 ### T-010 - A few general tools plus code, or one purpose-built tool?
 
@@ -358,6 +374,9 @@ A tension is not a verdict. Each one names what would settle it.
   and keeps doing the checking. For the ten implementation sessions this means one outcome per
   session with stated success criteria, and commits at each verified step inside it. The
   last spec's 155 leaf tasks were the opposite arrangement (read, `HANDOFF.md`).
+- **Added by YC GUIDE:** the creator of Claude Code names over-specifying how as the common
+  failure of experienced engineers; state the goal, the limits and the exit criteria, and give
+  the model a way to verify as it goes (SRC-YCG-05). That is the reading above.
 
 ### T-015 - Launch before it is ready, or be finished before the first pilot?
 
@@ -375,6 +394,14 @@ A tension is not a verdict. Each one names what would settle it.
   delivery team sent each release first to a population large enough to show problems and
   small enough that a mistake cost little (SRC-PRAG-03). The second is this tension's
   boundary applied to rollout.
+- **Added by YC GUIDE:** Stripe held its public launch for almost two years but had a live
+  production user within two months (SRC-YCG-13), which reconciles the two sides: delay the
+  launch, not the first real user. A legal AI company froze all sales for six months because
+  in its field one failure loses a customer for good (SRC-YCG-10). Waymo's demonstration came
+  after eighteen months and commercial service fifteen years later; each further nine of
+  reliability cost about ten times the last (SRC-YCG-25). Against waiting: shipping pace is
+  the best predictor Paul Graham knows, and action produces information (SRC-YCG-14,
+  SRC-YCG-11, SRC-YCG-06).
 
 ### T-016 - Give the agent everything, or keep what it must read small?
 
@@ -413,3 +440,19 @@ A tension is not a verdict. Each one names what would settle it.
   written before any user exists. SYNAPSE makes both claims. The proof harness is the right tool
   for the second, and nothing in it answers the first (Q-01, T-013). The risk for the ten
   sessions is to keep improving the harness because it is the part that can be measured.
+
+### T-020 - Let the agent wrap the tools, or wrap the model in deterministic checks?
+
+- SRC-YCG-05, SRC-YCG-23 and SRC-YCG-26 hold that a tight harness cripples a capable model: give
+  it tools and a goal, and let the agent wrap deterministic software rather than sit in a small
+  box inside it. SRC-YCG-02 and SRC-YCG-25, with the many sources of INS-008, put a
+  deterministic harness around the model: compliance rules for banking agents, an onboard check
+  on every driving output.
+- **Reading:** both sides put the check in the same place, at the boundary where an action
+  leaves the system, and differ on how much freedom the reasoning gets inside it. Brex's proxy
+  (SRC-YCG-23) is the clearest case of both at once: the agent acts freely, and every outbound
+  request passes rules learned from recorded traffic or a model judge. Freedom fits work whose
+  output is checked before it matters, such as code under tests. Where an action moves money
+  or stock, the outer check is not optional. SYNAPSE already has this shape, agents reasoning
+  inside and guardrails on each world action; what it lacks is a guardrail grounded in the
+  store's own history (R-42).
