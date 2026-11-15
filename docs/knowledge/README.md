@@ -16,6 +16,16 @@ inventory, not progress").
 | [`QUESTIONS.md`](QUESTIONS.md) | Decisions owed by the operator, and the research queue for the next sessions |
 | `sources/<folder>.md` | One digest per corpus folder: a card per document, then what the folder says as a whole |
 
+## Operator notes
+
+- **2026-11-15, scope.** SYNAPSE is much wider and deeper than the `decision-quality-proof`
+  (Kiro) documents that most "Lands" lines here draw on. Analysing the whole project is the work
+  of session 2 onward, not of this session. Every reading of SYNAPSE in this folder is
+  provisional until session 2 has tested it against the code.
+- **2026-11-15, credit and release.** The $300 GCP trial credit is untouched, with 70 days left.
+  It is to be used only for five days after release, for ten high-profile people. Q-02 and R-61
+  record what follows from that.
+
 ## The corpus (measured 2026-11-13)
 
 - Location: `C:\Documentation` on the operator's machine. It is the single source of truth and is
