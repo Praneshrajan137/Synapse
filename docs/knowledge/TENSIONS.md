@@ -76,6 +76,8 @@ A tension is not a verdict. Each one names what would settle it.
   many parties, and multi-party workflows are where general models do worst (SRC-NEON-16). It
   holds only where the agents represent those parties' decisions; SYNAPSE's represent functions
   (own reading).
+  Master's Union adds a product leader who seated leads with opposed goals at one table to widen
+  the options (SRC-MU-06). Opposition helps only when someone decides between them.
 
 ### T-002 - A mature platform's infrastructure at a stage with no user
 
@@ -177,6 +179,10 @@ A tension is not a verdict. Each one names what would settle it.
   The Neon Show adds a lab supplier's account of a business built on simulated environments with
   checkers (SRC-NEON-18), and two views that value sits between the models and the work
   (SRC-NEON-05, SRC-NEON-13).
+  Master's Union adds two precedents: a payments fix built for one travel company that became a
+  payments company (SRC-MU-05), and a simulation-tooling company that outlived the vertical
+  self-driving bets it served (SRC-MU-07). With SRC-NEON-18 they are the corpus's strongest case
+  that the harness is the durable asset.
 
 ### T-005 - "Prose is not free", against the volume of prose
 

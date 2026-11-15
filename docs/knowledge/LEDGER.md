@@ -12,8 +12,8 @@ audit item for session 2.
 | ID | Insight | Lens | Verdict | Source docs |
 |---|---|---|---|---|
 | INS-001 | Many agents must beat a matched simple baseline to earn their cost | PROOF | USE | 9 + 1 paper |
-| INS-002 | Name the mechanism of uplift before measuring it | PROOF | CREATE | own + 2 + 1 + 1 + 1 + 4 + 2 |
-| INS-003 | Report by slice; the headline cell hides where a system wins and loses | PROOF | ADAPT | 20 |
+| INS-002 | Name the mechanism of uplift before measuring it | PROOF | CREATE | own + 2 + 1 + 1 + 1 + 4 + 2 + 2 |
+| INS-003 | Report by slice; the headline cell hides where a system wins and loses | PROOF | ADAPT | 21 |
 | INS-004 | A gain inside noise is not a gain; hold cases out; keep the original as reference | PROOF | USE, present | 11 |
 | INS-005 | Multi-agent failures sit at handoffs; test through the real envelope | SYSTEM | USE | 12 |
 | INS-006 | Every external call: hard timeout, breaker, durable progress, trace | SYSTEM | USE, mostly present | 12 |
@@ -24,16 +24,16 @@ audit item for session 2.
 | INS-011 | Keep each run's full record; screen new decision logic by replay | PROOF | ADAPT | 12 |
 | INS-012 | Verification is the constraint; plan sessions around it | WORKFLOW | USE | 37 |
 | INS-013 | An agent needs a prod-like run it can drive and observe | WORKFLOW | ADAPT | 30 |
-| INS-014 | Enforce by gate; trim prose rules newer models no longer need | WORKFLOW | ADAPT | 31 |
+| INS-014 | Enforce by gate; trim prose rules newer models no longer need | WORKFLOW | ADAPT | 32 |
 | INS-015 | Keep frontier models off bulk reading; write findings where the next run looks | WORKFLOW | ADAPT | 19 |
 | INS-016 | Estimate from the work, not the spoken number; overruns are fat-tailed | WORKFLOW | USE | 6 + 2 studies |
 | INS-017 | A sharp problem definition is the highest-leverage artifact | WORKFLOW | USE | 27 |
-| INS-018 | Name the user, the workflow, and what happens after the demo | PURPOSE | USE | 61 |
+| INS-018 | Name the user, the workflow, and what happens after the demo | PURPOSE | USE | 65 |
 | INS-019 | Fit the architecture and its footprint to the stage | OPS | ADAPT | 20 |
-| INS-020 | Measure the share of work that changes the product | PROOF | ADAPT | 27 |
+| INS-020 | Measure the share of work that changes the product | PROOF | ADAPT | 29 |
 | INS-021 | For a narrow job, a small trained model can beat prompting a large one | OPS | PARK | 28 |
-| INS-022 | Autonomy is earned on a trust curve: shadow first, promote on a measured record | SYSTEM | ADAPT | 30 |
-| INS-023 | Many agents pay as breadth plus adversarial checking, reduced by ordinary code | SYSTEM | USE | 11 |
+| INS-022 | Autonomy is earned on a trust curve: shadow first, promote on a measured record | SYSTEM | ADAPT | 31 |
+| INS-023 | Many agents pay as breadth plus adversarial checking, reduced by ordinary code | SYSTEM | USE | 12 |
 | INS-024 | Before trusting an aggregate, walk one decision against its expected trace | PROOF | USE | 17 |
 | INS-025 | Give agents a map from capability to code to proof | WORKFLOW | ADAPT | 20 |
 | INS-026 | Widen agent fan-out only as fast as verification allows | WORKFLOW | USE, present | 7 |
@@ -41,36 +41,36 @@ audit item for session 2.
 | INS-028 | Tool, skill or agent: a separate agent needs a reason | SYSTEM | ADAPT | 10 |
 | INS-029 | When execution is frictionless, build the dissent in | WORKFLOW | USE | 18 |
 | INS-030 | Deletion is an experiment: remove a part, rerun the fixed eval, keep it if the score holds | SYSTEM | ADAPT | 34 |
-| INS-031 | A twin earns belief when fitted to real history and tested across regimes | DOMAIN | ADAPT | 17 |
+| INS-031 | A twin earns belief when fitted to real history and tested across regimes | DOMAIN | ADAPT | 18 |
 | INS-032 | Every human correction is a label; compile standards from past actions | SYSTEM | ADAPT | 22 |
-| INS-033 | An eval that cannot fail measures nothing | PROOF | USE, partly present | 42 |
-| INS-034 | Proof of work: checkable evidence, and the process shown is the process that ran | PROOF | USE, present | 24 |
-| INS-035 | Dogfood it: operate the twin store yourself with SYNAPSE advising | PURPOSE | CREATE | own + 3 + 5 + 4 + 2 + 2 + 6 + 4 + 2 + 4 + 1 + 3 + 3 |
+| INS-033 | An eval that cannot fail measures nothing | PROOF | USE, partly present | 43 |
+| INS-034 | Proof of work: checkable evidence, and the process shown is the process that ran | PROOF | USE, present | 25 |
+| INS-035 | Dogfood it: operate the twin store yourself with SYNAPSE advising | PURPOSE | CREATE | own + 3 + 5 + 4 + 2 + 2 + 6 + 4 + 2 + 4 + 1 + 3 + 3 + 1 |
 | INS-036 | Make re-verification cheap: address expensive results by content | PROOF | ADAPT | 6 |
 | INS-037 | An agent's report of its own obstruction is telemetry: aggregate it, fix the top cause | SYSTEM | ADAPT | 11 |
 | INS-038 | An approver is not an operator: show the plan and let the person change any part | PURPOSE | USE, partly present | 40 |
-| INS-039 | Reach users through the system they already run | PURPOSE | ADAPT | 33 |
+| INS-039 | Reach users through the system they already run | PURPOSE | ADAPT | 34 |
 | INS-040 | Spend the strong model at design time; ship the simple artefact it finds | OPS | CREATE | own + 2 + 2 + 1 + 3 + 1 + 1 + 3 |
 | INS-041 | A learner exploits whatever earns reward, including the simulator's mistakes | PROOF | USE | 21 |
 | INS-042 | Rubric first: plant the issue, then build the world around it | PROOF | ADAPT | 8 |
 | INS-043 | A published benchmark recruits others and makes its author the reference | PURPOSE | PARK | 6 |
-| INS-044 | Validate the scorer: check that the objective ranks outcomes as a practitioner would | PROOF | USE | 24 |
-| INS-045 | Land on one workflow that already has a procedure and a measure, then expand | PURPOSE | USE | 35 |
+| INS-044 | Validate the scorer: check that the objective ranks outcomes as a practitioner would | PROOF | USE | 25 |
+| INS-045 | Land on one workflow that already has a procedure and a measure, then expand | PURPOSE | USE | 36 |
 | INS-046 | Try the action in the twin before executing it | SYSTEM | ADAPT | 8 |
 | INS-047 | Keep the proven simple controller live, with a small independent arbiter | SYSTEM | ADAPT | 19 |
-| INS-048 | Passable is now free; quality is what a person removes and refuses to ship | WORKFLOW | ADAPT | 24 |
+| INS-048 | Passable is now free; quality is what a person removes and refuses to ship | WORKFLOW | ADAPT | 25 |
 | INS-049 | Simulation throughput is the budget for proof and for training | OPS | ADAPT | own + 3 + 1 + 1 + 1 + 1 + 5 + 1 + 1 + 2 + 1 |
-| INS-050 | Check the outcome, not only the parts; a result that is too good is a fault until shown otherwise | PROOF | USE | 10 |
+| INS-050 | Check the outcome, not only the parts; a result that is too good is a fault until shown otherwise | PROOF | USE | 11 |
 | INS-051 | Make a run a pure function of its seed | PROOF | USE, partly present | 4 |
 | INS-052 | No time machine: judge a decision on what had arrived by then | PROOF | USE | 2 |
 | INS-053 | Design the workload: random operations never reach the states where systems break | PROOF | ADAPT | 9 |
 | INS-054 | Where units share a resource, compare policies by switching over time or place | PROOF | ADAPT | 1 |
 | INS-055 | At a stockout the moves are reallocate, substitute or expedite; the twin offers one | DOMAIN | ADAPT | 6 |
-| INS-056 | Judge the system by what reaches the customer, not by its own activity | PURPOSE | ADAPT | 20 |
+| INS-056 | Judge the system by what reaches the customer, not by its own activity | PURPOSE | ADAPT | 25 |
 | INS-057 | Start a learned policy from the incumbent: imitate the tuned rule, then improve it | SYSTEM | CREATE | own + 1 |
-| INS-058 | Automating a loop removes the person who was quietly correcting it | DOMAIN | ADAPT | 7 |
-| INS-059 | Pull exists only where every existing option fails: find where the tuned rule breaks | PURPOSE | ADAPT | 11 |
-| INS-060 | Demand is concentrated in a few items; a twin with even demand hides where a policy wins | DOMAIN | ADAPT | own + 3 |
+| INS-058 | Automating a loop removes the person who was quietly correcting it | DOMAIN | ADAPT | 8 |
+| INS-059 | Pull exists only where every existing option fails: find where the tuned rule breaks | PURPOSE | ADAPT | 12 |
+| INS-060 | Demand is concentrated in a few items; a twin with even demand hides where a policy wins | DOMAIN | ADAPT | own + 3 + 1 |
 
 ## Entries
 
@@ -124,6 +124,8 @@ audit item for session 2.
   confirm or refute before building; predictions written down though most will be wrong.
   Also SRC-RAIN-02, SRC-RAIN-10: an MVP tests a stated hypothesis; no trusted measure hid fit
   for six months.
+  Also SRC-MU-02, SRC-MU-07: say in advance what result by when would show the plan failing;
+  decisions written with their reasoning.
 - **Grade:** own.
 - **Verdict:** CREATE.
 - **Lands:** Session 2 writes, for each mechanism, the scenario cell in `uplift/scenarios.py`
@@ -158,6 +160,7 @@ audit item for session 2.
   Also SRC-RAIN-03, SRC-RAIN-08: a narrow segment's love is not fit across a market.
   Also SRC-NEON-04, SRC-NEON-17: aggregate churn hid that larger customers stayed; ideal
   customer from conversion per stage.
+  Also SRC-MU-03: true statements arranged to mislead.
 - **Grade:** E1.
 - **Verdict:** ADAPT.
 - **Lands:** The E5 headline is for the primary cell, unshocked (read, `HANDOFF.md`). That is the
@@ -549,6 +552,7 @@ audit item for session 2.
   documentation is not; process used in place of thinking.
   Also SRC-RAIN-05: a promise must rest on structure that outlives one person's intentions.
   Also SRC-NEON-15: written procedures become the company's operating system.
+  Also SRC-MU-02: ask when a best practice would be a terrible idea.
 - **Grade:** E2 (Anthropic's prompt reduction is confirmed in secondary coverage; the exact
   sizes differ between sources). A post's claim that a built-in command flags outdated
   `CLAUDE.md` rules is E1 and unchecked.
@@ -711,6 +715,8 @@ audit item for session 2.
   requests; knowledge lives in operators' heads.
   Also SRC-NEON-01, SRC-NEON-02, SRC-NEON-03, SRC-NEON-04, SRC-NEON-05, SRC-NEON-12, SRC-
   NEON-14: strangers not friends; time on the floor; the buyer and the user; urgency.
+  Also SRC-MU-01, SRC-MU-02, SRC-MU-03, SRC-MU-04: conversation yields hypotheses, behaviour
+  tests them; mine complaints.
 - **Grade:** E1.
 - **Verdict:** USE.
 - **Lands:** The README states there is no live order pipeline, the traces are synthetic and the
@@ -778,6 +784,8 @@ audit item for session 2.
   real use.
   Also SRC-NEON-03, SRC-NEON-12, SRC-NEON-19: problems resolved, not logins; signed is not
   running; realised, not paper.
+  Also SRC-MU-02, SRC-MU-05: spend only what shortens the loop to learning; design follows
+  conversion.
 - **Grade:** E1.
 - **Verdict:** ADAPT.
 - **Lands:** Of the last 300 non-merge commits on `origin/main` (2026-05-22 to 2026-11-01), 75
@@ -853,6 +861,7 @@ audit item for session 2.
   crossed line loses trust.
   Also SRC-NEON-09, SRC-NEON-15, SRC-NEON-17: recommendations before actions; a small stake to
   watch before committing.
+  Also SRC-MU-02: behaviour, such as following shadow recommendations, tests the hypothesis.
 - **Grade:** E2. The talk is confirmed by several secondary summaries. Its throughput figures
   are self-reported, differ by 2.5x between sources, and are not used.
 - **Verdict:** ADAPT.
@@ -888,6 +897,7 @@ audit item for session 2.
   Also SRC-ENG-02: independent objectives need a binding arbiter or they pull a decision apart
   (own analogy).
   Also SRC-YCG-08: several attempts in parallel, with an evaluator pruning the bad ones.
+  Also SRC-MU-06: leads with opposed goals at one table.
 - **Grade:** E1; practitioners describing their own use.
 - **Verdict:** USE.
 - **Lands:** The consensus has this shape: collect is the fan-out, debate is the adversarial
@@ -1159,6 +1169,7 @@ audit item for session 2.
   Also SRC-A16Z-21: capture a real place into simulation, then vary conditions around it.
   Also SRC-NEON-18, SRC-NEON-20: synthetic data without a checker plateaus; the slow loop rests
   on fidelity.
+  Also SRC-MU-01: a belief fitted to the pandemic failed after it.
 - **Grade:** E1.
 - **Verdict:** ADAPT.
 - **Lands:** SYNAPSE's world is declared, not fitted, and the handoff records its fidelity as
@@ -1242,6 +1253,7 @@ audit item for session 2.
   Also SRC-A16Z-04, SRC-A16Z-07, SRC-A16Z-13, SRC-A16Z-15: a solved benchmark is retired; old
   regression suites judge new models.
   Also SRC-RAIN-02: count a user only on a day of real use; ignore praise.
+  Also SRC-MU-02: a forecast of months without revenue could not fail during them.
 - **Grade:** E1.
 - **Verdict:** USE, partly present. The uplift harness ran a negative control that passed and a
   positive control that was detected, and the house standard already says that a standard which
@@ -1282,6 +1294,7 @@ audit item for session 2.
   slides.
   Also SRC-NEON-08, SRC-NEON-13: a model claimed to run a query it did not; every action as an
   audit event.
+  Also SRC-MU-07: decisions written down so a faulty premise can be found.
 - **Grade:** E1.
 - **Verdict:** USE, present. The decision anatomy, the audit hash chain and the single deploy
   oracle with three call sites are this (read, `CLAUDE.md`).
@@ -1326,6 +1339,7 @@ audit item for session 2.
   in customers' channels; sit beside operators.
   Also SRC-NEON-02, SRC-NEON-05, SRC-NEON-12: bought a dealership; mock fuel pumps; six months
   on call-centre floors.
+  Also SRC-MU-06: work on site beside the customer.
 - **Grade:** own.
 - **Verdict:** CREATE.
 - **Lands:** The pieces exist (read, `CLAUDE.md`): the standing world, an ingress console for
@@ -1469,6 +1483,7 @@ audit item for session 2.
   Also SRC-RAIN-10: a layer above the core system rather than replacing it.
   Also SRC-NEON-03, SRC-NEON-08, SRC-NEON-14, SRC-NEON-15, SRC-NEON-17: work delivered inside
   existing tools; integration is the newcomer's job.
+  Also SRC-MU-04: equip neighbourhood grocers rather than replace them.
 - **Grade:** E1. The landing below is own.
 - **Verdict:** ADAPT.
 - **Lands:** SYNAPSE today is a platform to be adopted whole: 21 containers and its own data
@@ -1635,6 +1650,7 @@ audit item for session 2.
   Also SRC-A16Z-03, SRC-A16Z-07, SRC-A16Z-09, SRC-A16Z-11, SRC-A16Z-12, SRC-A16Z-15: a panel of
   hundreds sets ground truth; enterprises cannot yet build evaluations.
   Also SRC-RAIN-09: baseline and success criteria agreed on day one.
+  Also SRC-MU-06: pilots with agreed baselines.
 - **Grade:** E1.
 - **Verdict:** USE.
 - **Lands:** The E5 headline is a difference of 4.40 units in one objective (read,
@@ -1682,6 +1698,7 @@ audit item for session 2.
   Also SRC-RAIN-01, SRC-RAIN-03, SRC-RAIN-06: depth in one workflow; but a niche too small is a
   local peak.
   Also SRC-NEON-08: enterprise from day one and multi-product early, right for one architecture.
+  Also SRC-MU-05: five hundred clients can be the whole business.
 - **Grade:** E1.
 - **Verdict:** USE.
 - **Lands:** ADR-052 already chose a slice: inventory reorder in one city. Replenishment has
@@ -1790,6 +1807,7 @@ audit item for session 2.
   are thrown away.
   Also SRC-RAIN-02: explore, cut half, then polish.
   Also SRC-NEON-02: a few researched changes over a thousand generated articles.
+  Also SRC-MU-06: a design cut to essentials lasted two decades.
 - **Grade:** E1.
 - **Verdict:** ADAPT.
 - **Lands:** The sprint record shows the console growing a surface at a time: Mission Control,
@@ -1858,6 +1876,7 @@ audit item for session 2.
   Also SRC-RAIN-04, SRC-RAIN-06: results counted before they happened; an unusual metric to
   excuse poor retention.
   Also SRC-NEON-08: invented rows presented as query results.
+  Also SRC-MU-03: deception by literal truth.
 - **Grade:** E1.
 - **Verdict:** USE.
 - **Lands:** Two places. First, the proof. Before the re-run after PR #87, write down what
@@ -2028,6 +2047,8 @@ audit item for session 2.
   Also SRC-RAIN-01, SRC-RAIN-03: hours of drudgery removed and better results for the user.
   Also SRC-NEON-03, SRC-NEON-12, SRC-NEON-19, SRC-NEON-20: judged by real-world use and realised
   results.
+  Also SRC-MU-02, SRC-MU-04, SRC-MU-05, SRC-MU-06, SRC-MU-07: profit per store, delivered
+  orders, peace of mind, production use.
 - **Grade:** E1. The repository facts below are measured.
 - **Verdict:** ADAPT.
 - **Lands:** SYNAPSE's first screen leads with the system's own state. In
@@ -2083,6 +2104,7 @@ audit item for session 2.
   Also SRC-A16Z-10, SRC-A16Z-11, SRC-A16Z-14, SRC-A16Z-16: call records contradict the sales
   system; count the storeroom, not the record.
   Also SRC-RAIN-01: the sales system held under one per cent of what passed between people.
+  Also SRC-MU-04: the grocers being automated already forecast for their customers.
 - **Grade:** E1 for the example. The landing is own; the repository fact is measured.
 - **Verdict:** ADAPT.
 - **Lands:** Replenishment is such a loop. In a store the recorded count drifts from what is on
@@ -2115,6 +2137,7 @@ audit item for session 2.
   features; not ten times better lost to defaults.
   Also SRC-NEON-02, SRC-NEON-03, SRC-NEON-05, SRC-NEON-15, SRC-NEON-18: inertia is the
   competitor; what breaks if it waits a year; impossible four years ago.
+  Also SRC-MU-07: build where demand is already urgent.
 - **Grade:** E1. The landing is own.
 - **Verdict:** ADAPT.
 - **Lands:** For replenishment the existing option is a rule (min-max or base stock in the
@@ -2145,6 +2168,7 @@ audit item for session 2.
 - **Sources:** SRC-SEQG-07: most revenue comes from a small segment, and results are read by it.
   SRC-A16Z-14: automation's gain was capacity for the cases a firm used to refuse.
   SRC-RAIN-10: later quick-commerce entrants launched with about three thousand items.
+  Also SRC-MU-04: demand differs by locality as well as by item.
 - **Grade:** own for the measurement; E1 for the sources.
 - **Verdict:** ADAPT.
 - **Lands:** The twin's seeded store carries ten items at 100 units each

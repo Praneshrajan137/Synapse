@@ -113,7 +113,7 @@ Order is by leverage: how to work first, then how to build, then what to build f
 | 15 | a16z | 24 | **done 2026-11-15** | [`sources/a16z.md`](sources/a16z.md) |
 | 16 | Rainmatter | 10 | **done 2026-11-15** | [`sources/rainmatter.md`](sources/rainmatter.md) |
 | 17 | The Neon Show | 20 | **done 2026-11-15** | [`sources/the-neon-show.md`](sources/the-neon-show.md) |
-| 18 | Master's Union | 7 | pending | |
+| 18 | Master's Union | 7 | **done 2026-11-15** | [`sources/masters-union.md`](sources/masters-union.md) |
 
 Known duplicates, to be read once and cross-referenced:
 
