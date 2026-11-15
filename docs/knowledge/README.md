@@ -106,7 +106,7 @@ Order is by leverage: how to work first, then how to build, then what to build f
 | 8 | The Pragmatic Engineer | 12 | **done 2026-11-14** | [`sources/pragmatic-engineer.md`](sources/pragmatic-engineer.md) |
 | 9 | ENGINEERING | 13 | **done 2026-11-15** | [`sources/engineering.md`](sources/engineering.md) |
 | 10 | GOOGLE GUIDE | 3 | **done 2026-11-15** | [`sources/google-guide.md`](sources/google-guide.md) |
-| 11 | South Park Commons | 13 | pending | |
+| 11 | South Park Commons | 13 | **done 2026-11-15** | [`sources/south-park-commons.md`](sources/south-park-commons.md) |
 | 12 | YC GUIDE | 26 | pending | |
 | 13 | Sequoia Capital - GUIDE | 8 | pending | |
 | 14 | Lenny's Podcast | 26 | pending | |

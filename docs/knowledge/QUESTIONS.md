@@ -70,6 +70,8 @@ recorded with how it was obtained.
 | R-50 | When one event makes many stores breach their reorder point in the same tick, how many consensus rounds does the sensor loop convene at once, and do the tier budgets and breakers hold? | A synchronised burst is the likeliest way for the live loop to overload itself. | INS-006 |
 | R-52 | What share of the sensor loop's triggers end with no change of action, and what share of stockouts in the twin had no trigger before them? | A system that acts on events lives or dies on false alarms and misses. Neither has been measured, so the sensor's thresholds are unvalidated. | INS-022, INS-050 |
 | R-53 | How many stores per city does the twin model, do they share a warehouse, and what happens to demand that meets a stockout: lost, backlogged or switched to another item? | Decides whether transfers and substitution can be added, and whether coordination between stores is something the twin can show at all. | INS-055 |
+| R-54 | The twin's pick-and-pack time has a mean of 8 minutes (`digital_twin/config.py`), and the routing model takes an order's ready time as 0 when the order carries none (`agents/routing_navigator/inference/pipeline.py`). Where did the 8 minutes come from, how often does a simulated order meet a 10-minute promise, and does any live order carry a ready time? | If picking alone takes most of the promise, the twin's delivery numbers say little about a dark store. A router that assumes every order is ready sends riders to wait, which is the error a delivery company's founders learned by delivering. | INS-031 |
+| R-55 | Does anything in the twin let an item's recorded stock differ from what is on the shelf, and does anything in the loop reconcile the two? | If not, the proof has never met phantom stock, the case where a loop that trusts the record never reorders. | INS-058 |
 
 ## For sessions 2 and 3 (outside the repository)
 
@@ -78,6 +80,7 @@ recorded with how it was obtained.
 | R-12 | What do quick-commerce operators publish about how they decide stock, assortment and dispatch? | The posts read so far cover only those companies' internal engineering agents. Without this, SYNAPSE's problem statement rests on assumption. | Q-01 |
 | R-13 | Which real, permissively licensed dataset could anchor the twin? | The handoff records the twin's fidelity as unknown, so a result on it does not transfer. An earlier dataset's terms were declined. | INS-018 |
 | R-51 | What does the operations-research literature on inventory control say about how close a tuned base-stock or (s,S) rule comes to optimal under the demand, lead-time and spoilage processes the twin declares, and under which conditions coordinated or learned policies beat it? | Of 54 ledger entries after eight folders, one is about the domain; the corpus cannot answer this. If a tuned rule is near-optimal in most of the twin's cells, uplift can only come from the cells where its assumptions break, and the proof should be concentrated there. | INS-001, INS-002 |
+| R-56 | What does the operations literature report on how often a retailer's recorded stock differs from its shelf, and how replenishment that trusts the record fails? | Decides whether R-55 is a fidelity gap to close before the proof is re-run, or a refinement for later. | INS-058 |
 
 ## Found in passing
 

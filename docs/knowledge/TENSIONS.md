@@ -83,7 +83,10 @@ A tension is not a verdict. Each one names what would settle it.
   that verifies: replay, fast feedback and an identical environment, not the distribution.
   ENGINEERING adds Zerodha: 35 to 40 engineers have run India's largest retail broker for a
   decade on open software they host themselves, by refusing most requests and keeping each
-  system with the same two or three owners for years (SRC-ENG-13).
+  system with the same two or three owners for years (SRC-ENG-13). South Park Commons adds
+  that now models find flaws fast, every dependency and service is a stream of patches
+  (SRC-SPC-01), and that ordinary software decays unless someone keeps working on it
+  (SRC-SPC-09).
 
 ### T-003 - "Agency is architectural", against harness times model
 
@@ -129,7 +132,9 @@ A tension is not a verdict. Each one names what would settle it.
   and that a company was built on that gap (SRC-JANE-10). The Pragmatic Engineer adds a case
   in point: an engineer new to a domain used a model to replace a costly licensed component
   in days, because an exhaustive test suite already existed. The suite was the asset
-  (SRC-PRAG-06).
+  (SRC-PRAG-06). South Park Commons adds a company whose product a model can copy on the
+  surface in minutes, and whose customers still pay for its depth on the hard cases
+  (SRC-SPC-12).
 
 ### T-005 - "Prose is not free", against the volume of prose
 
@@ -151,7 +156,10 @@ A tension is not a verdict. Each one names what would settle it.
   a half-life (SRC-CLASSES-17), and markdown past a couple of hundred lines is not read
   (SRC-CLASSES-14). That last point applies to this folder's own ledger. YC AI GUIDE adds that
   a library nobody prunes becomes a dump (SRC-YCAI-06), and that a specification kept as the
-  source of truth is itself a thing to maintain, which nobody checks (SRC-YCAI-02).
+  source of truth is itself a thing to maintain, which nobody checks (SRC-YCAI-02). South Park
+  Commons adds a design team that kept going back to the code because every document above it
+  decayed (SRC-SPC-03), and a company that settles arguments by shipping something or calling a
+  customer, not by the best memo (SRC-SPC-05).
 
 ### T-012 - The twin is declared; the corpus's comparable proofs are fitted to real history
 
@@ -237,7 +245,12 @@ A tension is not a verdict. Each one names what would settle it.
   consultancy that found a hundred small business clients exhausting and spent two years on a
   product for a problem nobody had (SRC-ENG-13); a deep-tech company whose customers kept
   turning prototypes down as premature (SRC-ENG-10); and a panel's view that no large
-  non-technology company has yet shown a clear gain from AI (SRC-ENG-01).
+  non-technology company has yet shown a clear gain from AI (SRC-ENG-01). South Park Commons
+  adds a founder whose company began from a complaint with no picture of how the product would
+  change anything, which he now calls arrogance (SRC-SPC-10); thousands of hours on projects
+  never released, with no effect (SRC-SPC-09); the warning that a general tool can be pleasant
+  and matter to nobody (SRC-SPC-06); and the test that ambition has become delusion when
+  customers stop using the product (SRC-SPC-05).
 
 ### T-014 - Append-only context, against compacting and clearing it
 
@@ -294,7 +307,9 @@ A tension is not a verdict. Each one names what would settle it.
   (SRC-YCAI-10), and a small trained model beating a general one where the company held the
   data (SRC-YCAI-03). Jane Street adds a case where training a small model did not close the
   gap to a general one (SRC-JANE-02), with the advice to run a baseline that involves no
-  training first (INS-021).
+  training first (INS-021). South Park Commons adds a video company that trains a missing
+  capability into its next model in a few weeks rather than wrapping the current one
+  (SRC-SPC-07).
 
 ### T-007 - Mock your dependencies, or run it like production?
 
@@ -371,6 +386,9 @@ A tension is not a verdict. Each one names what would settle it.
   needs, as in the tiers of SRC-YCAI-10. `CLAUDE.md` mixes the two: rules and live error
   patterns, with 49% history (measured). That is the case for Q-04, and it is how this folder
   is built: a short index, with the detail one file away.
+- **Added later:** South Park Commons adds the coding agent's own team: the expected route to
+  whole codebases was ever larger context windows, and what worked was a model that searches
+  for the files it needs (SRC-SPC-04). That supports the reading above.
 
 ### T-018 - Do types help agents, or only cost tokens?
 
@@ -382,3 +400,16 @@ A tension is not a verdict. Each one names what would settle it.
   prevent, in defects that reach run time. For SYNAPSE the costliest defect so far was a
   request in the wrong shape, which a type shared by sender and receiver would have stopped
   (T-017). Here the benefit outweighs the cost, and the strict typing and frozen models stay.
+
+### T-019 - Evaluations first, or intuition until the product exists?
+
+- SRC-SPC-04 holds that evaluations do little for a product's first version, where fast
+  iteration and intuition lead. They matter at scale, and some failures are seen only in use.
+  SRC-SPC-08 and INS-033 hold that the evaluation is the bottleneck: once one exists,
+  improvement follows fast.
+- **Reading:** they judge different claims. Whether anyone wants a product is settled by users,
+  not by an evaluation, and an early evaluation of it measures the builder's guesses. Whether a
+  decision system beats a tuned rule is a claim only an evaluation can settle, and it can be
+  written before any user exists. SYNAPSE makes both claims. The proof harness is the right tool
+  for the second, and nothing in it answers the first (Q-01, T-013). The risk for the ten
+  sessions is to keep improving the harness because it is the part that can be measured.
