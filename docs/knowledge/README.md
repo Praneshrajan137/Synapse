@@ -11,6 +11,7 @@ inventory, not progress").
 
 | File | Job |
 |---|---|
+| [`SYNTHESIS.md`](SYNTHESIS.md) | One page: the ten entries that matter most for sessions 2 and 3, ranked by convergence and by how much they change, with the release constraint |
 | [`LEDGER.md`](LEDGER.md) | One entry per insight: what it says, where it came from, how far it was checked, the verdict, where it lands in SYNAPSE, and what would make it wrong |
 | [`TENSIONS.md`](TENSIONS.md) | Where the corpus argues against SYNAPSE as built, or against itself |
 | [`QUESTIONS.md`](QUESTIONS.md) | Decisions owed by the operator, and the research queue for the next sessions |
@@ -165,13 +166,12 @@ Known duplicates, to be read once and cross-referenced:
    corpus folder just digested.
 4. **Scope.** `git status` shows changes only under `docs/knowledge/`.
 
-## Planned last step of session 1
+## Result of session 1
 
-The ledger is already longer than anyone reads in one sitting, and one of the corpus's own
-talks puts that limit at a couple of hundred lines. When the last folder is done, a one-page
-`SYNTHESIS.md` will rank the entries by how many independent sources agree and by how much
-they change, and name the ten that matter most for sessions 2 and 3. Until then the index
-table at the top of the ledger is the short form.
+All 18 folders were read and digested by 2026-11-15. [`SYNTHESIS.md`](SYNTHESIS.md) ranks the
+ten entries that matter most for sessions 2 and 3, by how many independent folders agree and by
+how much each changes; read it first. The index table at the top of the ledger remains the long
+form.
 
 ## Local helpers
 
