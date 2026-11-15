@@ -104,7 +104,7 @@ Order is by leverage: how to work first, then how to build, then what to build f
 | 6 | YC AI GUIDE, plus loose `yc-paper-club-data-deep-dive.md` | 14 | **done 2026-11-14** | [`sources/yc-ai-guide.md`](sources/yc-ai-guide.md) |
 | 7 | Jane Street | 11 | **done 2026-11-14** | [`sources/jane-street.md`](sources/jane-street.md) |
 | 8 | The Pragmatic Engineer | 12 | **done 2026-11-14** | [`sources/pragmatic-engineer.md`](sources/pragmatic-engineer.md) |
-| 9 | ENGINEERING | 13 | pending | |
+| 9 | ENGINEERING | 13 | **done 2026-11-15** | [`sources/engineering.md`](sources/engineering.md) |
 | 10 | GOOGLE GUIDE | 3 | pending | |
 | 11 | South Park Commons | 13 | pending | |
 | 12 | YC GUIDE | 26 | pending | |

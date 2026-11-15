@@ -48,6 +48,15 @@ A tension is not a verdict. Each one names what would settle it.
   are coding agents sharing one body of work, not agents with separate functions, so they bear
   on SYNAPSE's design by analogy only. Their direct lesson is for how many agents the
   implementation sessions run at once (INS-026).
+- **Added by ENGINEERING:** the corpus's one demonstration on a supply-chain decision uses
+  several agents, each owning a stage of an order, working over one shared model of the
+  organisation, with a person deciding what they cannot (SRC-ENG-11). That is close to
+  SYNAPSE's shape, and counts in its favour. It also shows where the value came from: the
+  options, and the simulation of each, not debate between the agents. And by analogy (own),
+  agents that each optimise an independent objective are passengers each steering for a
+  different town unless an arbiter binds (SRC-ENG-02); INS-023 and R-16 are where that is
+  measured. INS-055 adds a structural point: without a way to move stock between stores, the
+  twin gives coordination little to do.
 
 ### T-002 - A mature platform's infrastructure at a stage with no user
 
@@ -72,6 +81,9 @@ A tension is not a verdict. Each one names what would settle it.
   counterweight is Uber, whose agents succeed because of a decade of platform built for its
   scale (SRC-PRAG-12). For one person, the part of such a platform worth having is the part
   that verifies: replay, fast feedback and an identical environment, not the distribution.
+  ENGINEERING adds Zerodha: 35 to 40 engineers have run India's largest retail broker for a
+  decade on open software they host themselves, by refusing most requests and keeping each
+  system with the same two or three owners for years (SRC-ENG-13).
 
 ### T-003 - "Agency is architectural", against harness times model
 
@@ -166,6 +178,10 @@ A tension is not a verdict. Each one names what would settle it.
   YC AI GUIDE: in production the effort goes into data and not architecture, the reverse of
   SYNAPSE's allocation so far (SRC-LOOSE-01), and the strongest result from a small trained
   model came from a company holding data on hundreds of thousands of machines (SRC-YCAI-03).
+  ENGINEERING adds two points: a model of an organisation that is incomplete or stale brings
+  down whatever is built on it (SRC-ENG-08), and a gate deferred until a system is large
+  becomes harder to pass, not easier (SRC-ENG-03). Fitting the twin to real history costs more
+  the more is built on it first.
 
 ### T-009 - The uplift proof ran with no model behind the reasoner
 
@@ -217,7 +233,11 @@ A tension is not a verdict. Each one names what would settle it.
   experience of a field succeeding, because they asked its practitioners before building.
   The Pragmatic Engineer adds that software written for nothing would still have to meet its
   users' expectations and pay for itself (SRC-PRAG-11), and an engineer's two years on a
-  project that turned out to have a few hundred users (SRC-PRAG-02).
+  project that turned out to have a few hundred users (SRC-PRAG-02). ENGINEERING adds a
+  consultancy that found a hundred small business clients exhausting and spent two years on a
+  product for a problem nobody had (SRC-ENG-13); a deep-tech company whose customers kept
+  turning prototypes down as premature (SRC-ENG-10); and a panel's view that no large
+  non-technology company has yet shown a clear gain from AI (SRC-ENG-01).
 
 ### T-014 - Append-only context, against compacting and clearing it
 
@@ -301,7 +321,8 @@ A tension is not a verdict. Each one names what would settle it.
   tokens, and its own report notes that an individual cannot. The same folder supplies the
   route that fits a fixed plan: a strong model used offline to tune a cheap local stack that
   then runs alone (SRC-YCAI-10), and local models for everyday queries (SRC-YCAI-13). See
-  INS-040.
+  INS-040. ENGINEERING adds that companies moved within months from using models freely to
+  accounting for every token (SRC-ENG-01).
 
 ### T-010 - A few general tools plus code, or one purpose-built tool?
 
@@ -350,3 +371,14 @@ A tension is not a verdict. Each one names what would settle it.
   needs, as in the tiers of SRC-YCAI-10. `CLAUDE.md` mixes the two: rules and live error
   patterns, with 49% history (measured). That is the case for Q-04, and it is how this folder
   is built: a short index, with the detail one file away.
+
+### T-018 - Do types help agents, or only cost tokens?
+
+- SRC-JANE-01 and SRC-PRAG-10 treat a strong type system as feedback that tells agents and
+  people what must hold, and makes wrong states impossible to write. SRC-ENG-09 reports a
+  comparison across thirteen languages in which static types gave agents no gain in token cost
+  or speed.
+- **Reading:** the comparison measured what types cost, in tokens and time, not what they
+  prevent, in defects that reach run time. For SYNAPSE the costliest defect so far was a
+  request in the wrong shape, which a type shared by sender and receiver would have stopped
+  (T-017). Here the benefit outweighs the cost, and the strict typing and frozen models stay.
