@@ -60,6 +60,12 @@ A tension is not a verdict. Each one names what would settle it.
   YC GUIDE adds the chief executive of a chip company whose founding approach was wrong: he
   said so to the customer paying for it and changed course, and the honesty kept the company
   alive (SRC-YCG-09). E5 is SYNAPSE's version of that moment.
+  Lenny's Podcast adds three sources that teams of agents grow while models are weak and shrink
+  to one directing agent when a stronger model arrives, and that people who run many agents add
+  a chief-of-staff agent to manage the rest (SRC-LENNY-07, SRC-LENNY-19, SRC-LENNY-24); by
+  analogy, a round that waits for every participant runs at the pace of the slowest
+  (SRC-LENNY-20); and most industries are bound by execution rather than intelligence, which
+  caps what a better decision layer can add (SRC-LENNY-02).
 
 ### T-002 - A mature platform's infrastructure at a stage with no user
 
@@ -92,6 +98,8 @@ A tension is not a verdict. Each one names what would settle it.
   (SRC-SPC-09).
   YC GUIDE adds that code generators now make building easy and leave operating as the hard,
   lasting problem (SRC-YCG-21).
+  Lenny's Podcast adds a project that hired thirty engineers before it had any sign of demand,
+  and failed (SRC-LENNY-15).
 
 ### T-003 - "Agency is architectural", against harness times model
 
@@ -112,6 +120,8 @@ A tension is not a verdict. Each one names what would settle it.
   test for whether training can help at all: if the starting policy never succeeds there is
   nothing to reinforce, and if it succeeds sometimes, training can amplify that (SRC-SEQAI-14).
   Session 2 can apply that test to the E5 replicates (R-33).
+  Lenny's Podcast adds a product leader's estimate from motor racing: the driver accounts for a
+  small share of the result and the car, crew and data for the rest (SRC-LENNY-21).
 
 ### T-004 - Which asset is the product: the agents or the proof?
 
@@ -169,6 +179,10 @@ A tension is not a verdict. Each one names what would settle it.
   Commons adds a design team that kept going back to the code because every document above it
   decayed (SRC-SPC-03), and a company that settles arguments by shipping something or calling a
   customer, not by the best memo (SRC-SPC-05).
+  Lenny's Podcast adds that a long document no longer shows anyone thought, because a model can
+  write one (SRC-LENNY-01); that requirements written before the evidence waste effort and are
+  useful only after it (SRC-LENNY-17); and that where trying is cheaper than debating, the
+  debate is the expensive part (SRC-LENNY-08).
 
 ### T-012 - The twin is declared; the corpus's comparable proofs are fitted to real history
 
@@ -263,6 +277,10 @@ A tension is not a verdict. Each one names what would settle it.
   YC GUIDE adds a team that dropped its product a month before launch because nobody would
   miss it (SRC-YCG-02), and the view that a product that truly works needs no metric to show
   it (SRC-YCG-22).
+  Lenny's Podcast adds a product leader with forty agents at hand who says she is out of good
+  ideas (SRC-LENNY-05); the advice to ask why people do not use a product before asking why to
+  build it (SRC-LENNY-17, SRC-LENNY-22); a project that hired thirty engineers before anyone
+  wanted it (SRC-LENNY-15); and the pull test of INS-059 (SRC-LENNY-23).
 
 ### T-014 - Append-only context, against compacting and clearing it
 
@@ -304,6 +322,9 @@ A tension is not a verdict. Each one names what would settle it.
 - **Settled by:** R-24 (which checks can be made to fail) and R-47 (how each named finding was
   caught: by a gate, by construction, by measurement, or by someone reading).
 - **Raised by:** The Pragmatic Engineer.
+  Lenny's Podcast adds two warnings: a design leader citing Christopher Alexander, that a system
+  can obey all its rules and still be lifeless (SRC-LENNY-14), and a product author who did not
+  foresee how often process would be used in place of thinking (SRC-LENNY-17).
 
 ## Inside the corpus
 
@@ -416,6 +437,8 @@ A tension is not a verdict. Each one names what would settle it.
 - **Added later:** South Park Commons adds the coding agent's own team: the expected route to
   whole codebases was ever larger context windows, and what worked was a model that searches
   for the files it needs (SRC-SPC-04). That supports the reading above.
+  Lenny's Podcast adds that a million-token context holds less than half a per cent of one
+  company's call transcripts, so the full record cannot be loaded anyway (SRC-LENNY-21).
 
 ### T-018 - Do types help agents, or only cost tokens?
 
@@ -440,6 +463,10 @@ A tension is not a verdict. Each one names what would settle it.
   written before any user exists. SYNAPSE makes both claims. The proof harness is the right tool
   for the second, and nothing in it answers the first (Q-01, T-013). The risk for the ten
   sessions is to keep improving the harness because it is the part that can be measured.
+- **Added by Lenny's Podcast:** for a first version the signal is how people react when shown
+  the prototype, not usage metrics (SRC-LENNY-16), and users never care about benchmark scores
+  (SRC-LENNY-15). On the other side, evaluations should start with a handful of hand-judged
+  cases and grow from there (SRC-LENNY-25). Both fit the reading above.
 
 ### T-020 - Let the agent wrap the tools, or wrap the model in deterministic checks?
 
