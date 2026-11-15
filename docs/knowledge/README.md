@@ -12,6 +12,7 @@ inventory, not progress").
 | File | Job |
 |---|---|
 | [`SYNTHESIS.md`](SYNTHESIS.md) | One page: the ten entries that matter most for sessions 2 and 3, ranked by convergence and by how much they change, with the release constraint |
+| [`SESSION-2-PROMPT.md`](SESSION-2-PROMPT.md) | The prompt that opens session 2: the whole project as it truly is, the frontier it is judged against, and one gate before any change |
 | [`LEDGER.md`](LEDGER.md) | One entry per insight: what it says, where it came from, how far it was checked, the verdict, where it lands in SYNAPSE, and what would make it wrong |
 | [`TENSIONS.md`](TENSIONS.md) | Where the corpus argues against SYNAPSE as built, or against itself |
 | [`QUESTIONS.md`](QUESTIONS.md) | Decisions owed by the operator, and the research queue for the next sessions |
