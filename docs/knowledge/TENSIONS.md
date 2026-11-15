@@ -72,6 +72,10 @@ A tension is not a verdict. Each one names what would settle it.
   can judge.
   Rainmatter adds that a product showing its makers' organisation chart has lost its coherence
   (SRC-RAIN-02); eight agents for seven functions are open to that reading (own).
+  The Neon Show adds the strongest case for several agents met so far: replenishment involves
+  many parties, and multi-party workflows are where general models do worst (SRC-NEON-16). It
+  holds only where the agents represent those parties' decisions; SYNAPSE's represent functions
+  (own reading).
 
 ### T-002 - A mature platform's infrastructure at a stage with no user
 
@@ -170,6 +174,9 @@ A tension is not a verdict. Each one names what would settle it.
   Rainmatter adds the order for a stalled product: change the message, then the channel, then
   the customer, and only then the product (SRC-RAIN-03); and a failed search start-up whose team
   and code became its acquirer's AI base (SRC-RAIN-07).
+  The Neon Show adds a lab supplier's account of a business built on simulated environments with
+  checkers (SRC-NEON-18), and two views that value sits between the models and the work
+  (SRC-NEON-05, SRC-NEON-13).
 
 ### T-005 - "Prose is not free", against the volume of prose
 
@@ -229,6 +236,8 @@ A tension is not a verdict. Each one names what would settle it.
   down whatever is built on it (SRC-ENG-08), and a gate deferred until a system is large
   becomes harder to pass, not easier (SRC-ENG-03). Fitting the twin to real history costs more
   the more is built on it first.
+  The Neon Show adds that synthetic data made without a checker plateaus (SRC-NEON-18), and that
+  where outcomes arrive over days the simulator's fidelity sets the pace (SRC-NEON-20).
 
 ### T-009 - The uplift proof ran with no model behind the reasoner
 
@@ -300,6 +309,8 @@ A tension is not a verdict. Each one names what would settle it.
   a16z adds the order one company followed, users first and its own models later from their
   data (SRC-A16Z-08), and an agentic browser feature that shipped and went largely unused
   (SRC-A16Z-16).
+  The Neon Show adds that investors' approval can arrive while customers still do not buy
+  (SRC-NEON-14), and that revenue signed is not work running (SRC-NEON-12).
 
 ### T-014 - Append-only context, against compacting and clearing it
 
@@ -368,6 +379,9 @@ A tension is not a verdict. Each one names what would settle it.
   falls behind the frontier within months (SRC-A16Z-12); a coding company won by betting on
   the interface rather than its own model (SRC-A16Z-08). Against them, a large model can
   train a small one to take over a narrow task (SRC-A16Z-22).
+  The Neon Show adds two engineers who replaced language models with deterministic causal
+  models to control infrastructure (SRC-NEON-09), and a view that general models absorb
+  scaffolding with each release (SRC-NEON-20).
 
 ### T-007 - Mock your dependencies, or run it like production?
 

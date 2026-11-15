@@ -112,7 +112,7 @@ Order is by leverage: how to work first, then how to build, then what to build f
 | 14 | Lenny's Podcast | 26 | **done 2026-11-15** | [`sources/lennys-podcast.md`](sources/lennys-podcast.md) |
 | 15 | a16z | 24 | **done 2026-11-15** | [`sources/a16z.md`](sources/a16z.md) |
 | 16 | Rainmatter | 10 | **done 2026-11-15** | [`sources/rainmatter.md`](sources/rainmatter.md) |
-| 17 | The Neon Show | 20 | pending | |
+| 17 | The Neon Show | 20 | **done 2026-11-15** | [`sources/the-neon-show.md`](sources/the-neon-show.md) |
 | 18 | Master's Union | 7 | pending | |
 
 Known duplicates, to be read once and cross-referenced:
