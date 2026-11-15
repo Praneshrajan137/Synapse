@@ -13,57 +13,57 @@ audit item for session 2.
 |---|---|---|---|---|
 | INS-001 | Many agents must beat a matched simple baseline to earn their cost | PROOF | USE | 3 + 1 paper |
 | INS-002 | Name the mechanism of uplift before measuring it | PROOF | CREATE | own + 2 + 1 + 1 + 1 |
-| INS-003 | Report by slice; the headline cell hides where a system wins and loses | PROOF | ADAPT | 12 |
+| INS-003 | Report by slice; the headline cell hides where a system wins and loses | PROOF | ADAPT | 13 |
 | INS-004 | A gain inside noise is not a gain; hold cases out; keep the original as reference | PROOF | USE, present | 6 |
 | INS-005 | Multi-agent failures sit at handoffs; test through the real envelope | SYSTEM | USE | 10 |
 | INS-006 | Every external call: hard timeout, breaker, durable progress, trace | SYSTEM | USE, mostly present | 10 |
 | INS-007 | One seam for every model call | SYSTEM | ADAPT | 12 |
-| INS-008 | Keep probabilistic judgment in a small box | SYSTEM | USE, present | 16 |
-| INS-009 | Grant autonomy by reversibility and blast radius, not confidence alone | SYSTEM | ADAPT | 26 |
-| INS-010 | A shared, current world model lifts a planner more than a bigger model | SYSTEM | USE | 7 + 1 paper |
+| INS-008 | Keep probabilistic judgment in a small box | SYSTEM | USE, present | 17 |
+| INS-009 | Grant autonomy by reversibility and blast radius, not confidence alone | SYSTEM | ADAPT | 28 |
+| INS-010 | A shared, current world model lifts a planner more than a bigger model | SYSTEM | USE | 8 + 1 paper |
 | INS-011 | Keep each run's full record; screen new decision logic by replay | PROOF | ADAPT | 8 |
-| INS-012 | Verification is the constraint; plan sessions around it | WORKFLOW | USE | 29 |
-| INS-013 | An agent needs a prod-like run it can drive and observe | WORKFLOW | ADAPT | 22 |
-| INS-014 | Enforce by gate; trim prose rules newer models no longer need | WORKFLOW | ADAPT | 25 |
+| INS-012 | Verification is the constraint; plan sessions around it | WORKFLOW | USE | 32 |
+| INS-013 | An agent needs a prod-like run it can drive and observe | WORKFLOW | ADAPT | 24 |
+| INS-014 | Enforce by gate; trim prose rules newer models no longer need | WORKFLOW | ADAPT | 26 |
 | INS-015 | Keep frontier models off bulk reading; write findings where the next run looks | WORKFLOW | ADAPT | 19 |
 | INS-016 | Estimate from the work, not the spoken number; overruns are fat-tailed | WORKFLOW | USE | 5 + 2 studies |
-| INS-017 | A sharp problem definition is the highest-leverage artifact | WORKFLOW | USE | 22 |
-| INS-018 | Name the user, the workflow, and what happens after the demo | PURPOSE | USE | 35 |
+| INS-017 | A sharp problem definition is the highest-leverage artifact | WORKFLOW | USE | 23 |
+| INS-018 | Name the user, the workflow, and what happens after the demo | PURPOSE | USE | 36 |
 | INS-019 | Fit the architecture and its footprint to the stage | OPS | ADAPT | 20 |
-| INS-020 | Measure the share of work that changes the product | PROOF | ADAPT | 13 |
+| INS-020 | Measure the share of work that changes the product | PROOF | ADAPT | 14 |
 | INS-021 | For a narrow job, a small trained model can beat prompting a large one | OPS | PARK | 20 |
-| INS-022 | Autonomy is earned on a trust curve: shadow first, promote on a measured record | SYSTEM | ADAPT | 19 |
+| INS-022 | Autonomy is earned on a trust curve: shadow first, promote on a measured record | SYSTEM | ADAPT | 20 |
 | INS-023 | Many agents pay as breadth plus adversarial checking, reduced by ordinary code | SYSTEM | USE | 11 |
 | INS-024 | Before trusting an aggregate, walk one decision against its expected trace | PROOF | USE | 13 |
-| INS-025 | Give agents a map from capability to code to proof | WORKFLOW | ADAPT | 16 |
+| INS-025 | Give agents a map from capability to code to proof | WORKFLOW | ADAPT | 17 |
 | INS-026 | Widen agent fan-out only as fast as verification allows | WORKFLOW | USE, present | 6 |
 | INS-027 | Least privilege per agent: an out-of-function action is impossible, not discouraged | SYSTEM | ADAPT | 22 |
 | INS-028 | Tool, skill or agent: a separate agent needs a reason | SYSTEM | ADAPT | 7 |
-| INS-029 | When execution is frictionless, build the dissent in | WORKFLOW | USE | 10 |
-| INS-030 | Deletion is an experiment: remove a part, rerun the fixed eval, keep it if the score holds | SYSTEM | ADAPT | 26 |
-| INS-031 | A twin earns belief when fitted to real history and tested across regimes | DOMAIN | ADAPT | 13 |
+| INS-029 | When execution is frictionless, build the dissent in | WORKFLOW | USE | 11 |
+| INS-030 | Deletion is an experiment: remove a part, rerun the fixed eval, keep it if the score holds | SYSTEM | ADAPT | 27 |
+| INS-031 | A twin earns belief when fitted to real history and tested across regimes | DOMAIN | ADAPT | 14 |
 | INS-032 | Every human correction is a label; compile standards from past actions | SYSTEM | ADAPT | 15 |
-| INS-033 | An eval that cannot fail measures nothing | PROOF | USE, partly present | 33 |
-| INS-034 | Proof of work: checkable evidence, and the process shown is the process that ran | PROOF | USE, present | 17 |
-| INS-035 | Dogfood it: operate the twin store yourself with SYNAPSE advising | PURPOSE | CREATE | own + 3 + 5 + 4 + 2 + 2 + 6 + 4 |
+| INS-033 | An eval that cannot fail measures nothing | PROOF | USE, partly present | 34 |
+| INS-034 | Proof of work: checkable evidence, and the process shown is the process that ran | PROOF | USE, present | 18 |
+| INS-035 | Dogfood it: operate the twin store yourself with SYNAPSE advising | PURPOSE | CREATE | own + 3 + 5 + 4 + 2 + 2 + 6 + 4 + 2 |
 | INS-036 | Make re-verification cheap: address expensive results by content | PROOF | ADAPT | 3 |
 | INS-037 | An agent's report of its own obstruction is telemetry: aggregate it, fix the top cause | SYSTEM | ADAPT | 6 |
-| INS-038 | An approver is not an operator: show the plan and let the person change any part | PURPOSE | USE, partly present | 24 |
-| INS-039 | Reach users through the system they already run | PURPOSE | ADAPT | 19 |
+| INS-038 | An approver is not an operator: show the plan and let the person change any part | PURPOSE | USE, partly present | 25 |
+| INS-039 | Reach users through the system they already run | PURPOSE | ADAPT | 20 |
 | INS-040 | Spend the strong model at design time; ship the simple artefact it finds | OPS | CREATE | own + 2 + 2 + 1 + 3 + 1 + 1 |
 | INS-041 | A learner exploits whatever earns reward, including the simulator's mistakes | PROOF | USE | 15 |
 | INS-042 | Rubric first: plant the issue, then build the world around it | PROOF | ADAPT | 4 |
-| INS-043 | A published benchmark recruits others and makes its author the reference | PURPOSE | PARK | 4 |
+| INS-043 | A published benchmark recruits others and makes its author the reference | PURPOSE | PARK | 5 |
 | INS-044 | Validate the scorer: check that the objective ranks outcomes as a practitioner would | PROOF | USE | 14 |
-| INS-045 | Land on one workflow that already has a procedure and a measure, then expand | PURPOSE | USE | 22 |
-| INS-046 | Try the action in the twin before executing it | SYSTEM | ADAPT | 5 |
+| INS-045 | Land on one workflow that already has a procedure and a measure, then expand | PURPOSE | USE | 25 |
+| INS-046 | Try the action in the twin before executing it | SYSTEM | ADAPT | 6 |
 | INS-047 | Keep the proven simple controller live, with a small independent arbiter | SYSTEM | ADAPT | 10 |
-| INS-048 | Passable is now free; quality is what a person removes and refuses to ship | WORKFLOW | ADAPT | 12 |
-| INS-049 | Simulation throughput is the budget for proof and for training | OPS | ADAPT | own + 3 + 1 + 1 + 1 + 1 + 5 |
+| INS-048 | Passable is now free; quality is what a person removes and refuses to ship | WORKFLOW | ADAPT | 14 |
+| INS-049 | Simulation throughput is the budget for proof and for training | OPS | ADAPT | own + 3 + 1 + 1 + 1 + 1 + 5 + 1 |
 | INS-050 | Check the outcome, not only the parts; a result that is too good is a fault until shown otherwise | PROOF | USE | 5 |
 | INS-051 | Make a run a pure function of its seed | PROOF | USE, partly present | 4 |
 | INS-052 | No time machine: judge a decision on what had arrived by then | PROOF | USE | 1 |
-| INS-053 | Design the workload: random operations never reach the states where systems break | PROOF | ADAPT | 6 |
+| INS-053 | Design the workload: random operations never reach the states where systems break | PROOF | ADAPT | 7 |
 | INS-054 | Where units share a resource, compare policies by switching over time or place | PROOF | ADAPT | 1 |
 | INS-055 | At a stockout the moves are reallocate, substitute or expedite; the twin offers one | DOMAIN | ADAPT | 2 |
 | INS-056 | Judge the system by what reaches the customer, not by its own activity | PURPOSE | ADAPT | 4 |
@@ -138,6 +138,7 @@ audit item for session 2.
   Also SRC-SPC-05: new sign-ups, the most active couriers and the edge of the service area show
   where quality drops.
   Also SRC-YCG-02: the gain sat in transactions too small for any person to review.
+  Also SRC-SEQG-07: most revenue comes from a small segment; read results by that segment.
 - **Grade:** E1.
 - **Verdict:** ADAPT.
 - **Lands:** The E5 headline is for the primary cell, unshocked (read, `HANDOFF.md`). That is the
@@ -267,6 +268,8 @@ audit item for session 2.
   Also SRC-YCG-02, SRC-YCG-08, SRC-YCG-14, SRC-YCG-24, SRC-YCG-25: a deterministic harness
   around banking agents; exact answers need a check; intermediate representations let an onboard
   check verify each output.
+  Also SRC-SEQG-06: capability is jagged where no automatic checker exists, as in everyday
+  logistics.
 - **Grade:** E1.
 - **Verdict:** USE, present (schema-validated agent outputs under I-3; rule-based guardrails).
 - **Lands:** Session 2 lists any path where model text drives an action with no deterministic
@@ -302,6 +305,8 @@ audit item for session 2.
   tasks tolerate few errors.
   Also SRC-YCG-02, SRC-YCG-15, SRC-YCG-17: wider permissions raise the cost of a mistake;
   generated code reviewed by risk; delegation limited by trust.
+  Also SRC-SEQG-03, SRC-SEQG-05: a precise tool before autonomy; approve the routine
+  automatically and bring the risky to a person.
 - **Grade:** E2 for the review pattern (reported by Anthropic, confirmed in secondary coverage).
 - **Verdict:** ADAPT.
 - **Lands:** Escalation is gated on confidence (I-5). No notion of reversibility is named in
@@ -333,6 +338,7 @@ audit item for session 2.
   Also SRC-YCAI-12: the raw record of a project, given to the agent in one file.
   Also SRC-JANE-02, SRC-JANE-08: success depended on whether every needed fact was present, not
   on wording; stale input that is not flagged is the worst input.
+  Also SRC-SEQG-05: a model kept out of the context where the problem lives cannot solve it.
 - **Grade:** E3 for the paper and one figure (Qwen3-8B, multi-task, 19.9% to 92.6%). The domain
   is household robot tasks in simulation, so the transfer to supply decisions is by analogy.
 - **Verdict:** USE.
@@ -396,6 +402,8 @@ audit item for session 2.
   large rewrite was carried by its test suite.
   Also SRC-YCG-05, SRC-YCG-08, SRC-YCG-15: a hard goal plus a way to verify along the way; old
   code and tests as the exact specification.
+  Also SRC-SEQG-01, SRC-SEQG-05, SRC-SEQG-06: late testing was the drag; a person accountable
+  for every merge; design judgment stays with the person.
 - **Grade:** The arithmetic is checked. The company figures behind it are E2.
 - **Verdict:** USE.
 - **Lands:** The project's own throughput record names CI as the critical path: about 20-25
@@ -433,6 +441,8 @@ audit item for session 2.
   Also SRC-YCG-03, SRC-YCG-05, SRC-YCG-11, SRC-YCG-21: an in-house shop and test stand; rewrites
   checked against tests and screenshots; iteration rate set by infrastructure; seconds to a
   first result.
+  Also SRC-SEQG-01, SRC-SEQG-06: environment setup slowed every connector; infrastructure for
+  agents exposes state and actions.
 - **Grade:** E2. The repository's deploy history agrees (read, `CLAUDE.md`): E-S12-01, E-S12-02
   and E-S14-06 were all invisible locally.
 - **Verdict:** ADAPT.
@@ -470,6 +480,7 @@ audit item for session 2.
   model is deleted once a newer one does without it.
   Also SRC-YCG-05, SRC-YCG-07: over 80 per cent of a system prompt cut for a new model; problems
   the next model would fix were skipped.
+  Also SRC-SEQG-04: culture is the behaviour enforced, not the values stated.
 - **Grade:** E2 (Anthropic's prompt reduction is confirmed in secondary coverage; the exact
   sizes differ between sources). A post's claim that a built-in command flags outdated
   `CLAUDE.md` rules is E1 and unchecked.
@@ -573,6 +584,7 @@ audit item for session 2.
   problems that matter now are written down.
   Also SRC-YCG-08, SRC-YCG-10: with agents writing the code, specifying matters more; one
   written product manifesto replaced feature voting.
+  Also SRC-SEQG-01: find the single largest bottleneck and give it most of the attention.
 - **Grade:** E1.
 - **Verdict:** USE.
 - **Lands:** Session 3's definition of finished, written so that a test can fail it, comes
@@ -616,6 +628,7 @@ audit item for session 2.
   Also SRC-YCG-02, SRC-YCG-06, SRC-YCG-10, SRC-YCG-15, SRC-YCG-21, SRC-YCG-23: buyers judge an
   agent against the labour it replaces; never delegate talking to customers; which kind of user;
   describe it by what it replaces.
+  Also SRC-SEQG-07: open conversation gives consistent answers where repeated surveys do not.
 - **Grade:** E1.
 - **Verdict:** USE.
 - **Lands:** The README states there is no live order pipeline, the traces are synthetic and the
@@ -674,6 +687,7 @@ audit item for session 2.
   Also SRC-ENG-01, SRC-ENG-03, SRC-ENG-13: no clear gains yet outside technology; engineering
   reported 30% faster; models led to more work, not more leisure.
   Also SRC-SPC-04: more code shipped is not more business.
+  Also SRC-SEQG-01: the code was fast; documents, setup and late tests took the time.
 - **Grade:** E1.
 - **Verdict:** ADAPT.
 - **Lands:** Of the last 300 non-merge commits on `origin/main` (2026-05-22 to 2026-11-01), 75
@@ -736,6 +750,7 @@ audit item for session 2.
   Also SRC-ENG-02, SRC-ENG-09, SRC-ENG-11: stay in the detail until the standard is a habit,
   then audit periodically; autonomy granted as competence is shown; workflows move from
   assisting to acting, with failures escalated.
+  Also SRC-SEQG-03: build a precise, reliable tool first, then cross into autonomy.
 - **Grade:** E2. The talk is confirmed by several secondary summaries. Its throughput figures
   are self-reported, differ by 2.5x between sources, and are not used.
 - **Verdict:** ADAPT.
@@ -831,6 +846,7 @@ audit item for session 2.
   made machine-readable for agents; agent tools generated from service schemas.
   Also SRC-GOOG-02: a repeated agent job written down as a versioned script.
   Also SRC-YCG-08: skills and constraints keep agents on well-lit paths.
+  Also SRC-SEQG-06: agents need sensors and actuators, not instructions written for people.
 - **Grade:** E2 for the talk, E1 for the posts.
 - **Verdict:** ADAPT.
 - **Lands:** `docs/state/MODULE_INVENTORY.md` exists at 9,106 bytes and was last committed on
@@ -943,6 +959,8 @@ audit item for session 2.
   Also SRC-SPC-03: form your own answer before reading the model's.
   Also SRC-YCG-06, SRC-YCG-13: leaders write their own documents so as not to hand their
   thinking to a model.
+  Also SRC-SEQG-06: thinking can be handed off, understanding cannot; agents attack the deployed
+  result.
 - **Grade:** E1.
 - **Verdict:** USE.
 - **Lands:** This folder's rule that every corpus folder is asked what it holds against SYNAPSE
@@ -979,6 +997,7 @@ audit item for session 2.
   the model catches up.
   Also SRC-YCG-05, SRC-YCG-15, SRC-YCG-16, SRC-YCG-25: delete prompts and skills every six
   months and add back only what failures need; an ablation kept one loop and dropped the rest.
+  Also SRC-SEQG-01: removing human selling for two quarters showed it was load-bearing.
 - **Grade:** E1.
 - **Verdict:** ADAPT.
 - **Lands:** The uplift harness is SYNAPSE's fixed eval. Session 3's cut list can be a list of
@@ -1008,6 +1027,7 @@ audit item for session 2.
   by whether it gets cause and effect right.
   Also SRC-YCG-09, SRC-YCG-25: capture the real world into the simulation; real miles keep the
   simulator honest.
+  Also SRC-SEQG-03: learned simulators that beat traditional ones.
 - **Grade:** E1.
 - **Verdict:** ADAPT.
 - **Lands:** SYNAPSE's world is declared, not fitted, and the handoff records its fidelity as
@@ -1080,6 +1100,7 @@ audit item for session 2.
   failures are seen in use before a test can be written.
   Also SRC-YCG-01, SRC-YCG-11, SRC-YCG-25: an agent loop needs the right measure; uncapped
   scored tasks; good enough defined in numbers before building.
+  Also SRC-SEQG-07: an evaluation passed at 85 per cent was replaced by a harder one at 20.
 - **Grade:** E1.
 - **Verdict:** USE, partly present. The uplift harness ran a negative control that passed and a
   positive control that was detected, and the house standard already says that a standard which
@@ -1113,6 +1134,7 @@ audit item for session 2.
   can be inspected step by step; a tool that has become invisible hides its errors.
   Also SRC-SPC-12: the working material of development published as it is made.
   Also SRC-YCG-25: audited safety data published.
+  Also SRC-SEQG-07: every finding links to the clip it came from.
 - **Grade:** E1.
 - **Verdict:** USE, present. The decision anatomy, the audit hash chain and the single deploy
   oracle with three call sites are this (read, `CLAUDE.md`).
@@ -1148,6 +1170,8 @@ audit item for session 2.
   Also SRC-YCG-02, SRC-YCG-07, SRC-YCG-10, SRC-YCG-15: a team moved into a servicer's back
   office; quick-commerce founders delivered orders at night; a builder who stopped using his own
   tool.
+  Also SRC-SEQG-02, SRC-SEQG-04: build first for yourself as the demanding user; do the job
+  before hiring for it.
 - **Grade:** own.
 - **Verdict:** CREATE.
 - **Lands:** The pieces exist (read, `CLAUDE.md`): the standing world, an ingress console for
@@ -1232,6 +1256,8 @@ audit item for session 2.
   natural point beats real-time interruption.
   Also SRC-YCG-07, SRC-YCG-09: a unit watched every order as it ran; a person must be able to
   change one part of the output.
+  Also SRC-SEQG-05: a person's attention to whether it was what they wanted is the scarce
+  resource.
 - **Grade:** E1.
 - **Verdict:** USE, partly present. The console shows a decision's full anatomy and has
   steering and override (read, `CLAUDE.md`).
@@ -1268,6 +1294,7 @@ audit item for session 2.
   Also SRC-YCG-01, SRC-YCG-02, SRC-YCG-06, SRC-YCG-20: diffusion into the work is the
   constraint; agents as a layer above systems of record; a system of record becomes the place
   work is done.
+  Also SRC-SEQG-01: AI spreads only as organisations redesign their processes.
 - **Grade:** E1. The landing below is own.
 - **Verdict:** ADAPT.
 - **Lands:** SYNAPSE today is a platform to be adopted whole: 21 containers and its own data
@@ -1383,6 +1410,7 @@ audit item for session 2.
   Also SRC-SPC-08: application companies publish benchmarks of their domain and the model
   builders climb them.
   Also SRC-YCG-10, SRC-YCG-25: an evaluation suite published; audited safety data published.
+  Also SRC-SEQG-06: training environments with checkers for domains the labs ignore.
 - **Grade:** E1.
 - **Verdict:** PARK.
 - **Lands:** One reading of Q-03 is that the proof harness is the product (T-004). Its published
@@ -1453,6 +1481,8 @@ audit item for session 2.
   Also SRC-YCG-02, SRC-YCG-03, SRC-YCG-06, SRC-YCG-07, SRC-YCG-24: a quick-commerce company that
   worked in dark stores and lost focus across ten lines; a narrow problem with large ambition
   inside it.
+  Also SRC-SEQG-01, SRC-SEQG-02, SRC-SEQG-08: one bottleneck for years; saying no to good ideas;
+  startups die of overeating.
 - **Grade:** E1.
 - **Verdict:** USE.
 - **Lands:** ADR-052 already chose a slice: inventory reorder in one city. Replenishment has
@@ -1481,6 +1511,7 @@ audit item for session 2.
   is committed; a simulation is only as faithful as its model.
   Also SRC-YCG-25: only closed-loop simulation, in which actions change the world, validates an
   agent.
+  Also SRC-SEQG-03: explore in simulation, keep the laboratory for validation.
 - **Grade:** E1.
 - **Verdict:** ADAPT.
 - **Lands:** SYNAPSE has the parts: a standing world that accepts actions, and a consensus that
@@ -1546,6 +1577,8 @@ audit item for session 2.
   Also SRC-SPC-03, SRC-SPC-09, SRC-SPC-11: app submissions rose and ratings did not; most use
   the new tools for volume; most prototypes thrown away.
   Also SRC-YCG-23: generated code tempts a large surface; good founders keep it tiny.
+  Also SRC-SEQG-06, SRC-SEQG-07: generated code is bloated and models fail to simplify;
+  customers want simple.
 - **Grade:** E1.
 - **Verdict:** ADAPT.
 - **Lands:** The sprint record shows the console growing a surface at a time: Mission Control,
@@ -1576,6 +1609,7 @@ audit item for session 2.
   Also SRC-YCG-03, SRC-YCG-08, SRC-YCG-09, SRC-YCG-11, SRC-YCG-23: a parametric model explores
   in minutes; a learned stand-in ran 300,000 times faster; the cost of each experiment made
   visible.
+  Also SRC-SEQG-03: discovery moved almost entirely into simulation.
 - **Grade:** E1 for the report; own for the application.
 - **Verdict:** ADAPT.
 - **Lands:** SYNAPSE's world is an event-driven simulation run in a thread under a lock (read,
@@ -1684,6 +1718,7 @@ audit item for session 2.
   the hard cases is what customers pay for.
   Also SRC-YCG-02, SRC-YCG-25: environments grow harder as models do; the long tail starved by
   the demo; rare events generated in simulation.
+  Also SRC-SEQG-06: many agents attacking the deployed system.
 - **Grade:** E1.
 - **Verdict:** ADAPT.
 - **Lands:** Two things for the uplift harness. First, the scenarios. A tuned rule is strongest

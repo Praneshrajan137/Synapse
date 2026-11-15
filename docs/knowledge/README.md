@@ -108,7 +108,7 @@ Order is by leverage: how to work first, then how to build, then what to build f
 | 10 | GOOGLE GUIDE | 3 | **done 2026-11-15** | [`sources/google-guide.md`](sources/google-guide.md) |
 | 11 | South Park Commons | 13 | **done 2026-11-15** | [`sources/south-park-commons.md`](sources/south-park-commons.md) |
 | 12 | YC GUIDE | 26 | **done 2026-11-15** | [`sources/yc-guide.md`](sources/yc-guide.md) |
-| 13 | Sequoia Capital - GUIDE | 8 | pending | |
+| 13 | Sequoia Capital - GUIDE | 8 | **done 2026-11-15** | [`sources/sequoia-capital-guide.md`](sources/sequoia-capital-guide.md) |
 | 14 | Lenny's Podcast | 26 | pending | |
 | 15 | a16z | 24 | pending | |
 | 16 | Rainmatter | 10 | pending | |
