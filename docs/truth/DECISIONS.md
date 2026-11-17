@@ -1,5 +1,26 @@
 # DECISIONS - what the operator owes, one memo each
 
+**Answered.** The operator answered all thirteen on 2026-11-17, through a set of
+multiple-choice questions in the session. Ten follow the recommendation. Three differ: D-1 (no
+external user), D-3 (disruption response as a second workflow) and D-11 (stay on the trial, no
+fallback). `DIRECTION.md` is adjusted to all thirteen.
+
+| Decision | Answer |
+|---|---|
+| D-1 | (c), no external user: the ten reviewers are the audience, and the first screen leads with the proof |
+| D-2 | (c), incumbent first |
+| D-3 | no: replenishment and, alongside it, disruption response |
+| D-4 | (c), both limits |
+| D-5 | yes, retire by experiment |
+| D-6 | yes, the history moves to `docs/history/` |
+| D-7 | approved, in the order given; each merge still asked for at the time |
+| D-8 | (b), the thin slice |
+| D-9 | (c), waste that takes stock by age, plus skewed demand over more items fitted to FreshRetailNet-50K |
+| D-10 | (b), the map by cell |
+| D-11 | stay on the trial; no upgrade and no fallback host |
+| D-12 | (c), view free, sign in to act |
+| D-13 | approved |
+
 **Status: 2026-11-17.** Each memo states the question, why it is owed now, the options, a
 recommendation and what each answer changes. Each can be answered in a line. The evidence is in
 [`TRUTH-MAP.md`](TRUTH-MAP.md) (F-nn) and [`LOG.md`](LOG.md) (M-nn, OA-n); the plan they feed is
@@ -30,7 +51,7 @@ conversation about what breaks in their replenishment today is worth more than a
 stockouts against the incumbent) and the reason for each order. (c): the first screen leads
 with the proof.
 
-**Answer in a line:** "persona (b)", "(a)", or "(c)".
+**Answered by the operator, 2026-11-17:** (c), no external user: the ten reviewers are the audience, and the first screen leads with the proof.
 
 ---
 
@@ -53,7 +74,7 @@ by the margin on the measured cell (F-29); a shape-aware challenger is untested.
 shows little. (c) is sessions 4, 5 and 7, and does not depend on the twin's lookahead
 (`DIRECTION.md`, section 9a).
 
-**Answer in a line:** "(c)", or another letter.
+**Answered by the operator, 2026-11-17:** (c), incumbent first.
 
 ---
 
@@ -67,7 +88,7 @@ a reorder bound by one component (F-01).
 **Recommendation: yes.** Pricing, routing and the rest stay in the repository, labelled with
 what they measurably do in this workflow (DIRECTION section 4).
 
-**Answer in a line:** "yes" or "no, also <workflow>".
+**Answered by the operator, 2026-11-17:** no: replenishment and, alongside it, disruption response.
 
 ---
 
@@ -87,7 +108,7 @@ base's sources agree a check belongs (T-020).
 **What changes.** The guardrail of (b) is a few lines and a test (session 5); (a) is the
 pass mark of the proof map (session 7).
 
-**Answer in a line:** "(c)", or the numbers you prefer.
+**Answered by the operator, 2026-11-17:** (c), both limits.
 
 ---
 
@@ -102,7 +123,7 @@ a pre-registered ablation shows no change in any cell. A gate is retired when it
 to fail or tests only what a document says. Nothing is deleted from history: retired code
 stays reachable through the archive tags the project already keeps.
 
-**Answer in a line:** "yes" or "no".
+**Answered by the operator, 2026-11-17:** yes, retire by experiment.
 
 ---
 
@@ -114,7 +135,7 @@ history (knowledge base INS-014). Several of its statements are out of date (TRU
 **Recommendation: yes,** to `docs/history/`, keeping the rules and the live error patterns, with
 the `doc_truth` pins moved in the same change (session 10).
 
-**Answer in a line:** "yes" or "no".
+**Answered by the operator, 2026-11-17:** yes, the history moves to `docs/history/`.
 
 ---
 
@@ -130,7 +151,7 @@ four files committed on their branch with their placeholders filled or marked; t
 `docs/knowledge-base` and `docs/truth-session-2` pushed and merged as documents. Merging changes
 `main`, so each merge is yours to approve.
 
-**Answer in a line:** "approved", or the order you prefer.
+**Answered by the operator, 2026-11-17:** approved, in the order given; each merge still asked for at the time.
 
 ---
 
@@ -144,7 +165,7 @@ proxy.
 nearly fills the largest machine the trial allows (F-22); the agents already run in-process in
 the harness. The rest stays in the repository, labelled as not deployed.
 
-**Answer in a line:** "(b)" or "(a)".
+**Answered by the operator, 2026-11-17:** (b), the thin slice.
 
 ---
 
@@ -159,7 +180,7 @@ skew gives the item-class slice the proof lacks (F-29). Each change moves the ba
 tuned rule is re-tuned and the controls re-run, which now costs minutes locally (F-14). (d)
 waits.
 
-**Answer in a line:** a letter.
+**Answered by the operator, 2026-11-17:** (c), waste that takes stock by age, plus skewed demand over more items fitted to FreshRetailNet-50K.
 
 ---
 
@@ -176,7 +197,7 @@ seeds and judged on another, with task 25's and task 31.12's negative claims kep
 margin (F-29), so (a) will most likely report a loss or a gain below the margin (inferred);
 (b) reports where each part helps.
 
-**Answer in a line:** "(b)" or "(a)".
+**Answered by the operator, 2026-11-17:** (b), the map by cell.
 
 ---
 
@@ -192,7 +213,7 @@ same date, the eight-core limit lifts, and machines keep running if the trial wo
 end; anything beyond the credit is then billed to the card, so a budget alert matters more.
 Keep a fallback host: the repository already carries an Oracle Always Free target.
 
-**Answer in a line:** "upgrade before release" or "stay on trial", and whether a fallback host is
+**Answered by the operator, 2026-11-17:** stay on the trial; no upgrade and no fallback host.
 wanted.
 
 ---
@@ -205,7 +226,7 @@ ten reviewers. (c) Public view-only, with sign-in for steering and approvals.
 **Recommendation: (c).** Reviewers can look without friction and act only when signed in; the
 published default credentials are rotated or removed first (FRONTIER row 16).
 
-**Answer in a line:** a letter.
+**Answered by the operator, 2026-11-17:** (c), view free, sign in to act.
 
 ---
 
@@ -226,4 +247,4 @@ re-derived. This session was not authorised to edit `CLAUDE.md` or add gates. Ca
 **Recommendation.** Items 1, 2 and 6 as error patterns in `CLAUDE.md`; items 3 and 4 fixed in
 code rather than documented (sessions 5 and 6); item 5 wired as a fast check (session 4).
 
-**Answer in a line:** "approved" or the items to drop.
+**Answered by the operator, 2026-11-17:** approved.

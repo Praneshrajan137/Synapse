@@ -62,6 +62,14 @@ Baseline for every measurement unless another is named: the working tree on bran
   (reported, from a third-party price table), no GPU appears in the plan read so far, and a
   trial account cannot attach one (reported). To be re-priced from a primary source and the
   Terraform read for any GPU before this is stated as a finding.
+- **OA-6 The thirteen decisions (2026-11-17, answered through multiple-choice questions in the
+  session).** D-1 no external user: the reviewers are the audience and the first screen leads
+  with the proof. D-2 incumbent first. D-3 replenishment and disruption response. D-4 both
+  limits. D-5 retire by experiment. D-6 move the history out of `CLAUDE.md`. D-7 the merge
+  order approved. D-8 the thin slice. D-9 waste by age plus skewed demand fitted to
+  FreshRetailNet-50K. D-10 the map by cell. D-11 stay on the trial, with no upgrade and no
+  fallback host. D-12 view free, sign in to act. D-13 the facts made mechanical as proposed.
+  The full record is at the top of `DECISIONS.md`.
 - **The gate.** The reply answered every question of section 12, left the remaining choices to
   this session's judgment and objected to nothing. It is taken as approval of the seven
   defaults in section 11 of `OPENING.md`. Everything done under them is local and reversible:

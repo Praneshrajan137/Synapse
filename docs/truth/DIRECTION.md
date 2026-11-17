@@ -1,8 +1,11 @@
 # DIRECTION - the next eleven sessions
 
-**Status: 2026-11-17, session 2.** A recommendation for session 3 to decide on, derived from
-[`TRUTH-MAP.md`](TRUTH-MAP.md) and [`FRONTIER.md`](FRONTIER.md). The decisions it needs from the
-operator are in [`DECISIONS.md`](DECISIONS.md).
+**Status: 2026-11-17, session 2.** A recommendation for session 3, derived from
+[`TRUTH-MAP.md`](TRUTH-MAP.md) and [`FRONTIER.md`](FRONTIER.md). The operator answered the
+thirteen decisions in [`DECISIONS.md`](DECISIONS.md) the same day; this text is adjusted to
+them. Three answers differ from the first recommendation and change the plan: the reviewers are
+the only audience (D-1), disruption response is a second workflow beside replenishment (D-3),
+and the release stays on the free trial with no fallback host (D-11).
 
 ## 1. What the evidence says
 
@@ -75,26 +78,40 @@ ranks tenth (INS-034, INS-056).
 
 1. **Incumbent first, challengers admitted by evidence.** The tuned rule decides every reorder
    unless a challenger is trusted for the regime the store is in, by the pre-registered map of
-   item 4, and its action passes a deterministic guard against the incumbent's (DECISIONS D-4);
+   item 5, and its action passes a deterministic guard against the incumbent's (DECISIONS D-4);
    then the challenger's action is taken. Each decision records both actions and, later, what
    happened. The first challenger is concrete: the Sentinel with a demand rate that knows the
    day's shape, supplied by the forecaster, which is the information arm O shows to be worth
    10% of the tuned rule's cost on the measured cell (F-13a, F-29). The twin's lookahead (the
    tier-4 check) is not assumed: it joins only if it proves itself (section 9a).
-2. **Agents earn their place by ablation.** Before the ablation runs, a rule is written down: a
+2. **Disruption response is the second workflow (D-3).** The Disruption Shield becomes the
+   component that recognises the regime the store is in, from what the world shows: demand
+   arriving faster than forecast, lead times lengthening, deliveries failing. Today it scores
+   whatever features it is handed and is given none, so it returns a constant (F-02), and no
+   detector feeds the sensor (V-05). The regime it detects selects, through the map, which
+   challenger is trusted; challengers for the shock cells (for example, ordering earlier when a
+   supplier's lead times double) are measured like any other. Detection is judged on its own
+   terms: how soon after a shock begins it fires, and how often it fires with no shock. This
+   keeps disruption handling on the fast path, so it needs neither the debate tier nor the
+   language model, which the thin slice leaves out.
+3. **Agents earn their place by ablation.** Before the ablation runs, a rule is written down: a
    component that changes no measured outcome in any pre-registered cell is shown as "not used
    in this workflow". The forecaster's output goes into the Sentinel's request, which is the
    information mechanism the primary cell can reward (F-29).
-3. **Fix the four category errors before adding anything.** Waste takes stock and depends on
+4. **Fix the four category errors before adding anything.** Waste takes stock and depends on
    what is held (F-30). Forecasts inform; they do not scale demand (F-09). Outcomes are recorded
    after execution (F-10). Approval enacts, and an operator can amend a quantity (F-08).
-4. **The proof becomes a map.** Pre-registered by cell: the primary cell, the four adversarial
+5. **The proof becomes a map.** Pre-registered by cell: the primary cell, the four adversarial
    scenarios, and the new structures, with the negative results and their causes kept. Fitted on
    one set of seeds, judged on another. Screened on the laptop, shocked cells at reduced
    replicates (about 1.5 s a decision, LOG M-21), and confirmed at full size in CI (F-14).
-5. **The release is a thin slice.** The twin, the orchestrator with its agents in-process, the
-   API, the console and Postgres, on one machine, rehearsed twice. The rest of the stack stays in
-   the repository, labelled as not deployed (F-19, F-22).
+6. **The release is a thin slice (D-8).** The twin, the orchestrator with its agents
+   in-process, the API, the console and Postgres, with a TLS proxy, on one machine, rehearsed
+   twice. The rest of the stack stays in the repository, labelled as not deployed (F-19, F-22).
+   Anyone with the link can look; steering and approvals need a sign-in (D-12).
+7. **The reviewers are the audience (D-1).** No external user is designed for. The console's
+   first screen leads with the proof: what the system did today, against the incumbent, how we
+   know, and the map of where each part helps, one step from its evidence.
 
 ## 5. The gaps, ranked by gain against cost and risk
 
@@ -105,6 +122,7 @@ ranks tenth (INS-034, INS-056).
 | 3 | The Sentinel's demand rate ignores the day's shape | From losing by 1.4 to within 0.16 on fitted seeds; it becomes the first challenger | Part of a session | Low | F-13a |
 | 4 | Four category errors | An expert cannot discount the rest on sight | 1 to 2 sessions | High with expert reviewers | F-08, F-09, F-10, F-30 |
 | 5 | A claim that can be true | "Where and by how much each part helps" | 2 sessions | The reviewers' first question goes unanswered | F-01, F-29 |
+| 5a | Disruptions are neither detected nor answered | The second workflow (D-3), where a static rule is weakest | 1 session within sessions 5 and 7 | The shock cells show only the incumbent | F-02, V-05 |
 | 6 | The reviewer's first five minutes | "Why should I care" answered on screen | 1 session | The story does not land | LOG M-28 |
 | 7 | A truer twin: skew, more items, calibrated demand | "Is this world real?" answered in part | 1 session | Medium | F-30, LOG EX-03 |
 | 8 | Published default credentials | A public link that is safe | Part of a session | Medium | FRONTIER row 16 |
@@ -126,7 +144,7 @@ by January.
 | Scope swallows the calendar and work strands on branches | Yes: four open pull requests; the slow regime (LOG M-22, M-27) | Land first; verify locally; must, should and could ranked below |
 | An expert finds a category error and discounts the rest | Yes: waste as a clock, a forecast that moves demand (F-30, F-09) | Fixed before anything is added |
 | A credential or an open control is exploited | Partly: defaults published; the admin defect fixed but never deployed | Hardening session; view-only public access |
-| The trial is ended, refused or runs out during the release | Possible: the terms allow it; the credit lapses near the last day (EX-01) | Upgrade before the release (operator); a fallback host |
+| The trial is ended, refused or runs out during the release | Possible: the terms allow it; the credit lapses near the last day (EX-01). The operator chose to stay on the trial with no fallback host (D-11), so this risk is accepted, not mitigated | Read the trial's start date in the billing console before session 9 and end the release a day before the credit lapses; rehearse twice so that any platform fault appears before the reviewers do |
 | An interactive action takes tens of seconds | Possible: the full path took 1.3 to 5 s here and stalled once (LOG M-21) | Incumbent decides in milliseconds; the twin check bounded and measured on Linux in rehearsal |
 | The operator's usage limit stops a session mid-change | Seen this session (LOG M-15) | Small steps, committed as they are verified |
 
@@ -139,15 +157,15 @@ before the trial can lapse. "Local" means verified on the laptop before any CI r
 |---|---|---|---|---|
 | 3 | Definition of finished; the decisions in `DECISIONS.md`; the cut list | The operator's answers | - | Must |
 | 4 | Pull requests #87, #91 and #90 landed on `main`, #89 if green; the ledger worktree committed; the harness's request given the `store_id` the live request carries; the first challenger, a shape-aware demand rate for the Sentinel, fitted on held-out seeds and measured against the tuned rule; a twelve-replicate local proof wired as a fast check | Local miniature of E5; CI green on `main` | - | Must |
-| 5 | Outcomes recorded after execution; approval enacts and can amend; forecasts inform instead of moving demand; the guard that bounds a challenger's quantity by the incumbent's | Tests that fail before the change; local traces | - | Must |
+| 5 | Outcomes recorded after execution; approval enacts and can amend; forecasts inform instead of moving demand; the guard that bounds a challenger's quantity by the incumbent's; the Disruption Shield given the world's signals and wired to the sensor as a regime detector, its detection delay and false alarms measured in the four shock cells | Tests that fail before the change; local traces | - | Must |
 | 6 | Waste takes stock by age; skewed demand over more items, its shape fitted to FreshRetailNet-50K; the tuned rule re-tuned | The harness's controls, run locally | - | Should (waste: must) |
-| 7 | The map pre-registered and run, primary and adversarial cells; ablation arms; the arbiter that applies the map; the twin's lookahead tested as a challenger and kept only if it passes section 9a | Local screens on held-out seeds; full runs in CI | - | Must |
-| 8 | One command starts the thin slice on the laptop, timed from a fresh clone to a first decision on screen; the first five minutes redesigned | A cold walk with a clock | - | Must |
+| 7 | The map pre-registered and run, primary and shock cells; challengers for the shock cells; ablation arms; the arbiter that applies the map; the twin's lookahead tested as a challenger and kept only if it passes section 9a | Local screens on held-out seeds; full runs in CI | - | Must |
+| 8 | One command starts the thin slice on the laptop, timed from a fresh clone to a first decision on screen; the first five minutes redesigned to lead with the proof (D-1) | A cold walk with a clock | - | Must |
 | 9 | First cloud rehearsal on the new account: Terraform repaired, deploy, 24-hour soak, snapshot and restore drill, then everything stopped | `verify_live.py`; the restore timed | About $10 | Must |
 | 10 | The proof run on the final design; the proof page in the console; `README.md` and `CLAUDE.md` brought to the truth | CI confirms the local numbers | - | Should |
-| 11 | Hardening: credentials, access mode, an uptime check that reaches a phone, a runbook, a ten-user load test | Each failure injected once | - | Must (credentials, uptime) |
+| 11 | Hardening: published defaults rotated or removed; view free and sign in to act, with ten reviewer accounts (D-12); an uptime check that reaches a phone; a runbook; a ten-user load test | Each failure injected once | - | Must (credentials, uptime) |
 | 12 | Dress rehearsal: 48 hours, a cold reader, a fix list; then stopped | The bar of FRONTIER row 12 | About $16 | Must |
-| 13 | Go or no-go; deploy; the five days begin by 2027-01-18; stopped at the end | Daily checks against row 12 | About $46 | Must |
+| 13 | Go or no-go; deploy; the five days begin by 2027-01-18, or earlier if the trial began earlier than assumed, and end a day before the credit lapses; stopped at the end | Daily checks against row 12 | About $46 | Must |
 
 **The pace is a precondition, not a risk to absorb.** From 2026-11-17 to 2027-01-18 is 62
 days. At the slow regime of two weeks or more a session (LOG M-27), not even five sessions fit.
@@ -155,12 +173,14 @@ The plan therefore depends on keeping verification on the laptop, which F-14 mak
 The tripwire: if session 4 takes more than ten days, the plan drops to a minimal release in
 four more sessions: the category errors and the guard (5); the thin slice and the first five
 minutes (8); one cloud rehearsal (9 and 12 together); the release (13). The minimal release
-keeps the incumbent, the one challenger and its map on the primary cell, so it is still this
-direction in its smallest form; the adversarial cells, the ablations, the lookahead and the
-truer twin are then cut, and the release says so.
+keeps the incumbent, the one challenger and its map on the primary cell, and disruption
+detection shown on one shock cell with the incumbent answering it, so it is still this
+direction and both workflows in their smallest form; the other shock cells, the ablations, the
+lookahead and the truer twin are then cut, and the release says so.
 
-**Cloud.** About eight machine-days, roughly $70 of machine time. Disks and a reserved address
-keep billing between uses unless deleted: about $20 to $45 more if they are kept from
+**Cloud.** On the free trial (D-11): one machine of at most eight cores at a time, no
+fallback host. About eight machine-days, roughly $70 of machine time. Disks and a reserved
+address keep billing between uses unless deleted: about $20 to $45 more if they are kept from
 mid-December. A budget alert at $120. Every machine is stopped after each use, as the operator
 asked, and anything not needed before the next use is deleted. The prices are from a
 third-party table until read in the console (FRONTIER 1.5).
@@ -174,7 +194,7 @@ third-party table until read in the console (FRONTIER 1.5).
 - **At ten times the scale**, the thin slice multiplies by store; transfers between stores are
   where coordination could finally pay, and they are named as the next frontier, not hidden.
 - **Under adversarial pressure**, every action passes the guardrails at the boundary and falls
-  back to the incumbent; public access is view-only.
+  back to the incumbent; anyone may look, and only signed-in reviewers may act.
 - **Reversibility**: each step lands on `main` behind tests, and turning a challenger off is a
   setting, not a deployment.
 
@@ -220,7 +240,7 @@ challenger fed by the forecaster, and a map of where the challenger helps and wh
 | User | Cannot judge yet | The console has been seen only without a backend |
 | Performance Engineer | Passes with a gap | The decision path is measured (0.02 s); the twin check's cost on Linux is not |
 | Craftsman | Passes | The direction removes more than it adds: most of the 23 services, five agents' constant proposals and the always-on language model leave the release path |
-| Store Manager | Not satisfied, and cannot be in this session | No store manager was asked anything; Q-01 is the first decision |
+| Store Manager | Not satisfied, and set aside by decision | No store manager was asked anything, and D-1 designs the release for the reviewers alone; the lens returns when a user is named |
 | Release Reviewer | Not satisfied with the system | What it did, how we know and why it matters are answered in these documents, not yet on the screen |
 
 Three members are not satisfied, each for a reason this session cannot remove: the system does
