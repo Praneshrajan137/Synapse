@@ -266,6 +266,112 @@ a proper home). Run them with any Python 3.11 or later, from the repository root
   defines 68 check functions. `README.md:33` states that `make verify-claims` reports
   "56 PASS / 0 FAIL / 0 PARTIAL / 12 SKIP / 68 TOTAL". This session has not run the suite.
 
+### Window 1 (2026-11-17): decisions traced on the repaired tree
+
+How these were run (D-07). The tree of PR #91 (`1c484fb`, which is PR #87 plus the trace) was
+exported with `git archive 1c484fb | tar -x -C <folder>`. From that folder, with
+`PYTHONPATH=<folder>;<folder>/packages` and the project's `.venv` Python 3.11:
+`python -m scripts.diagnostics.pathway_trace --output <file>` for M-18, and the three scripts
+in `docs/truth/instruments/` (`scan_binding.py`, `scan_shocked.py`, `scan_paired.py`) for M-19
+to M-21. All use the E5 consensus arm exactly as E5 builds it (`uplift.e5_suite.
+e5_consensus_policy`, reorders only) and the primary-cell twin (`e5_world`).
+
+- **M-18 The pathway trace reproduces on this laptop, byte for byte (measured).** The local
+  `probe-trace.json` has sha256 prefix `767a5f47ed39c31c`, equal to the CI artifact of M-16;
+  `cmp` reports no difference. So the repaired decision path runs here in under a minute, and
+  the trace is deterministic across a Linux runner and this Windows machine. A recorded working
+  rule that no simulation runs locally (read, `HANDOFF.md`) does not hold for runs of this size.
+- **M-19 Unshocked: one agent binds every decision (measured, 360 decisions).** Five seeds (296,
+  1, 2, 3, 4), 24 hourly decisions each, under three ways of driving the world: the probe's own
+  ordering schedule, no ordering at all so that stock falls to zero, and a closed loop in which
+  the arm's own orders are placed.
+  - Binding agent: `inventory_sentinel` in 360 of 360. Tier: `tier_2` in 360 of 360. All
+    dispatched. Mean time per decision 0.02 s.
+  - Six agents propose in every decision. Five of them returned one constant value across all
+    360 decisions, whatever the state of the world: `demand_prophet`, `routing_navigator` and
+    `sustainability_agent` utility 0.5; `disruption_shield` and `supplier_trust` utility 0.3.
+    Only the Sentinel's score moved (0.850 to 0.973; 65 distinct values at seed 296, 221 over
+    the other four seeds).
+  - `pricing_oracle` and `freshness_guardian` proposed in none.
+  - In the closed loop stock still reached zero for some item at every seed.
+- **M-20 Shocked: the full path chooses the same agent, 1,200 times slower (measured, 12
+  decisions).** Setting an observation's `active_shock`, with all multipliers at 1.0 so that
+  only the flag differs, routes it to `tier_4`. Seed 296, twelve hourly decisions in a closed
+  loop: `inventory_sentinel` bound 12 of 12; one debate round each; a recorded front of six
+  members; none escalated. Mean 24.2 s per decision, maximum 45.0 s, against 0.02 s on the fast
+  path, with the LLM and the twin observer replaced by offline stand-ins as E5 replaces them.
+  Debate lowered the Sentinel's score (first decision 0.85 to 0.671) and left the five constant
+  scores untouched. At 24 s a decision, E5's 24,000 decisions on a shocked cell would take about
+  160 hours of consensus time, which bears on whether any shocked cell was ever run (R-02).
+- **M-21 Paired states through both paths (measured).** See the entry added when the run ends.
+- **M-22 What exists only off `main` (measured, `git diff --numstat origin/main...<branch>`).**
+
+  | Branch | Commits ahead | What it carries |
+  |---|---|---|
+  | `fix/consensus-reads-request` (PR #87) | 5 | The repair of finding 112: `agents` +858 in 12 files, `packages` +205 (the one envelope reader), `uplift` +406, ADR-058, a re-measured Power_Report |
+  | `feat/pathway-probe-trace` (PR #91) | 6 | PR #87 plus `scripts/diagnostics` +1,376 and its tests |
+  | `fix/owed-gate-defects` (PR #90) | 6 | Repairs to gates: `scripts/audit` +146, `tests/verify` +559, `tests/uplift` +414 |
+  | `fix/frontend-gates` (PR #89) | 16, plus 15 files uncommitted | Console: `frontend/src` 38 files +2,520, `frontend/spec` +3,763, ADR-059 |
+  | `docs/knowledge-base` | 22, unpushed | Session 1's knowledge base |
+  | `ledger` worktree | 0, four files uncommitted | The only record of the proof spec's session 13 (M-07) |
+  | `ci/differentiated-schedules` | 11, dated July | A second CI system's configuration |
+
+  `main` therefore still runs the consensus that reads none of its request, the state task 25
+  measured at -4.40. Every statement in this window about the repaired path is about a tree
+  that is not merged.
+
+### Window 1: read in the source by the main session
+
+Each was first reported by a mapping subagent and then read at the cited lines by the main
+session, on the exported tree of `1c484fb`. Paths are relative to the repository root.
+
+- **V-01 How a tier is chosen.** `orchestrator/consensus/tier_router.py:69-92`. A request is
+  tier 4 only if it carries `disruption_active` or `requires_twin_simulation`; tier 3 if more
+  than three agents are named or `avg_confidence` is under 0.4; otherwise tier 2 unless one
+  agent is named and `avg_confidence` is at least 0.9. `avg_confidence` defaults to 0.5, so a
+  request that carries none of these keys is tier 2.
+- **V-02 The fast path is an argmax.** `orchestrator/consensus/protocol.py:654`:
+  `fast_best = max(proposals, key=lambda p: p.utility_score) if proposals else None`. Tiers 1
+  and 2 run no debate, no arbitration and no twin check (`_fast_path`, lines 647 to 666).
+- **V-03 Every proposer executes its own proposal.** `protocol.py:1568-1588` loops over
+  `decision.proposals` and sends each agent an `execute` carrying that agent's own
+  `ratified_proposal`; the comment reads "an agent enacts ITS OWN ratified proposal on the
+  world". So on the live path the selection does not decide what is executed: all proposals
+  are. In the E5 harness only the selected action reaches the twin (reported, V-09), so E5
+  measures a different execution rule from the one the live path runs.
+- **V-04 Below the gate nothing ever executes, even after a person approves.**
+  `protocol.py:889-941`. A failed guardrail, the confidence floor among them, calls
+  `self._hitl.escalate` and then records a withheld dispatch. The docstring states: "Nothing is
+  executed after a human approves either." This answers R-32, and R-28 in part: an operator can
+  neither release nor amend a withheld action.
+- **V-05 What the sensor sends.** `orchestrator/sensor/loop.py:196-211, 296-312`. One trigger:
+  any item below the reorder point. The request carries the low items, a fixed quantity of four
+  times the reorder point for each, and the inventory. `disruption_active` is true only for a
+  `disruption` trigger, which no detector produces (reported). By V-01 every decision the
+  sensor convenes is therefore tier 2, so debate, arbitration, the LLM and the twin check are
+  unreachable from autonomous operation.
+- **V-06 The forecaster's `execute` changes demand.**
+  `agents/demand_prophet/a2a/handler.py:127-186`. For each ratified forecast it applies a
+  `SET_POLICY` action on the world's `demand_mult` lever, "the world scales its arrival rate
+  through it", with a multiplier derived from the forecast's point value over its lower bound.
+  A forecast is thereby given the power to change the quantity it forecasts. The project's
+  agency audit counts this as an agent that "reaches an actuator" (M-11).
+- **V-07 The one-command local start cannot produce a decision.** `docker/docker-compose.yml`
+  defines seventeen services, among them the orchestrator and the console, and no API gateway,
+  no digital twin and none of the eight agents. `Makefile:384-387` (`demo-up`, labelled "ONE
+  COMMAND (fresh clone)") waits up to 180 s for a service named `api` that this file does not
+  define, then runs the demo regardless. Read, not yet run. The only compose file with all 23
+  services pulls its images from a registry that no longer exists (OA-1).
+- **V-08 The Terraform is not what was deployed, and its default would fail again.**
+  `infrastructure/gcp/terraform/wif.tf:17,24` names the pool `synapse-github-pool` and the
+  provider `github`; the failing workflow asks for pool `github`, provider `github-aegis15`
+  (M-08), so the June identity provider was not made by this code. `variables.tf:120-124`
+  defaults `github_repo` to the repository's name in lower case, while the repository's
+  canonical name has a capital letter (`git remote get-url origin`); the attribute condition at
+  `wif.tf:36` is an exact string comparison (inferred: a fresh apply with the default would
+  reject the workflow's token). `infrastructure/nginx/nginx.gcp.conf:92-95` hard-codes the old
+  machine's address in the server name and the certificate paths.
+
 ## Read, not reproduced
 
 Source for RD-01, RD-02 and RD-06: `.claude/worktrees/ledger/.kiro/specs/decision-quality-proof/
