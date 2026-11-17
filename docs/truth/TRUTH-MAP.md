@@ -52,6 +52,13 @@ is what was measured or read.
   of the request E5 builds and of the agents' fallbacks. On the live path the sensor's request
   carries even fewer fields (V-05), so the same fallbacks are expected there (inferred, not
   run). *False if* any of the five scores varies with the world on the E5 path.
+- **F-02a Every decision is bound by a self-declared degraded proposal, and the gate does not
+  look (measured, LOG M-31).** In 24 of 24 E5 decisions the binding proposal's provenance says
+  `degraded=True`, basis `fallback_floor`, while its confidence reads 0.85 to 0.97, so the 0.7
+  confidence floor passes it. The honesty flag the project built (ADR-040, ADR-044) is
+  recorded and never consulted where it matters. One agent's flag errs the other way: Supplier
+  Trust reports `degraded=False` for a score that uses no data. *False if* the gate or the
+  selection is shown to read `degraded`.
 - **F-03 Two agents never propose in E5, both because of the request E5 builds (measured, M-19,
   M-30).** The Pricing Oracle refuses a request with no categories and no base prices, by its
   own precondition. The Freshness Guardian refuses a request with no `store_id`, and the

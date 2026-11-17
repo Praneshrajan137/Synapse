@@ -1,5 +1,9 @@
 # SYNAPSE session 2 - the opening
 
+**Where the session ended up:** [`TRUTH-MAP.md`](TRUTH-MAP.md) (the findings),
+[`FRONTIER.md`](FRONTIER.md) (the scorecard), [`DIRECTION.md`](DIRECTION.md) (the recommendation)
+and [`DECISIONS.md`](DECISIONS.md) (what the operator owes). This file is the opening as presented.
+
 **Status: written 2026-11-16 before the gate; the operator replied on 2026-11-17 and the reply
 is taken as approval of the defaults in section 11** (see "The operator's answers" in
 [`LOG.md`](LOG.md)). The text below is as it was presented. Hypothesis H-01 has since been

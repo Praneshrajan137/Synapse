@@ -494,6 +494,16 @@ e5_consensus_policy`, reorders only) and the primary-cell twin (`e5_world`).
   `store_id` (V-05), so on the live path it would propose. The scans of M-19 filtered the
   handlers' error lines out of their output, which is why this was not seen there.
 
+- **M-31 Every decision is bound by a proposal that declares itself degraded (measured).** 24
+  hourly E5 decisions at seed 296 on the repaired tree, reading each proposal's `provenance`:
+  `inventory_sentinel`, `demand_prophet`, `routing_navigator`, `disruption_shield` and
+  `sustainability_agent` reported `degraded=True` in 24 of 24, each with confidence basis
+  `fallback_floor`; `supplier_trust` reported `degraded=False` in 24 of 24, although its score is
+  a configured prior that uses no data (MAP F-02). The Sentinel, which bound every decision,
+  thus declared itself degraded every time while reporting a confidence of 0.85 to 0.97, and the
+  confidence floor of 0.7 let each one through. This answers R-21: the share of decisions with a
+  degraded agent is all of them, and the top reason is no calibrated model or feature source.
+
 ### Window 1: read in the source by the main session
 
 Each was first reported by a mapping subagent and then read at the cited lines by the main

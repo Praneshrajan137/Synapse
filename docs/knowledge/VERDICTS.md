@@ -69,7 +69,7 @@ tree of pull requests #87 and #91 (`1c484fb`), which is not merged into `main`.
 | INS-034 | No reading | - | - |
 | INS-035 | Corrected | The console surfaces exist, but no stack runs, and the cockpit's approval enacts nothing | MAP F-08, F-19 |
 | INS-036 | Corrected | Replicates are exact functions of their seed, so content addressing is sound; how results are stored was not read | LOG M-23 |
-| INS-037 | Corrected | On E5's path five of six proposers return their documented fallback in every decision, so by inference every decision carries degraded agents. Not tallied from provenance | MAP F-02 |
+| INS-037 | Answered | Every decision carries degraded agents, the binding one included; the top reason is no calibrated model or feature source; nothing ranks or acts on the reasons, and the confidence gate does not read the flag | LOG M-31; MAP F-02a |
 | INS-038 | Answered | An operator can neither release nor amend a withheld decision | LOG V-04 |
 | INS-039 | Answered | The Sentinel reads position (on hand plus on order), demand to date, elapsed time, landed lead times by supplier and the item-supplier map; the sensor reads stock levels only | R-37 row below |
 | INS-040 | Strengthened | A searched policy can be scored locally at 0.6 s a replicate; seeds must be held out (LOG M-24 shows how fast a fitted setting closes the gap) | LOG M-23, M-24 |
@@ -144,7 +144,7 @@ tree of pull requests #87 and #91 (`1c484fb`), which is not merged into `main`.
 | R-18 | Answered | No allow-list; no agent field on `WorldAction` | read in source |
 | R-19 | Open | PR #87 gives the reasoner an offline mode for E5 (read). Owner: implementation | - |
 | R-20 | Answered | "No simulation runs on the laptop" does not hold for the decision path or the proof | LOG M-18, M-23 |
-| R-21 | Answered in part | By inference every E5 decision carries degraded agents; not tallied | MAP F-02 |
+| R-21 | Answered | All of them: in 24 of 24 decisions five proposers, the binding Sentinel among them, report `degraded=True` with basis `fallback_floor`; the gate does not read the flag | LOG M-31 |
 | R-22 | Answered | Eight components | MAP F-12 |
 | R-23 | Answered | Nothing learns from overrides | LOG V-04 |
 | R-24 | Open | The sweep was not read; the decision core's own tests were faulted instead | LOG M-26 |
