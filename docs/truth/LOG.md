@@ -432,6 +432,29 @@ e5_consensus_policy`, reorders only) and the primary-cell twin (`e5_world`).
   on labelled CI runs. 63 days remain before the release must start. At the slow regime they
   hold four or five sessions; at the fast one, all eleven (inferred).
 
+- **M-28 The console, opened cold with no backend (measured, the built-in browser on the
+  existing ignored launch configuration `synapse-frontend`, `vite` dev server on port 3001,
+  2026-11-17).** No backend runs anywhere (MAP F-19), so this shows the face a reviewer meets
+  when the services are down, and the layout of the first screen, not the system at work.
+  - Every API call returned 500 and the live feed's socket failed. The first screen, Mission
+    Control, said so plainly: "SYSTEM TRUST Degraded", "Autonomy unknown", "0 DEC / MIN no
+    signal", a banner "POSTURE UNKNOWN", and on each panel a note that the read is degraded or
+    of unknown provenance. The header's attention control read "3 items need attention. Live
+    feed offline". In one screenshot taken during the first seconds of loading it read
+    "All clear" in green while the page said "Connecting to the console".
+  - The first screen leads with the system's own state (trust, autonomy, the eight agents'
+    activity, decisions a minute), then a KPI band and the map. The store's fill rate and
+    waste are not on it.
+  - The navigation offers Mission Control, Live Markets, Operations and more (fourteen routes,
+    M-13). The Demo Theater runs a five-part story: Living Map, IPL Surge, Disruption, Debate,
+    Evidence.
+  - The map failed with a dev-server error: `basemap.ts:6` imports a worker file that exists
+    only in maplibre-gl 6. This checkout's `frontend/node_modules` was installed on 2026-06-06
+    and holds 4.7.1, against `^6.4.1` in `package.json` and 6.14.0 in the lockfile. A fresh
+    install would differ; nothing was installed in this session. The local console has
+    evidently not been run since June.
+  - The server was stopped after the walk.
+
 ### Window 1: read in the source by the main session
 
 Each was first reported by a mapping subagent and then read at the cited lines by the main
