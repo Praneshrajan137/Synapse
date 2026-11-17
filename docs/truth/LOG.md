@@ -70,6 +70,16 @@ Baseline for every measurement unless another is named: the working tree on bran
   FreshRetailNet-50K. D-10 the map by cell. D-11 stay on the trial, with no upgrade and no
   fallback host. D-12 view free, sign in to act. D-13 the facts made mechanical as proposed.
   The full record is at the top of `DECISIONS.md`.
+- **OA-7 The reframe (2026-11-17, later the same day).** The operator replaced the release's
+  audience and resources: the release is for **the whole world for five days**, and the
+  ten-reviewer framing is to be erased. Resources stated: two Google Cloud accounts with $300 of
+  credit each; a Claude Code Max subscription of $150; three Docker accounts with $250 each of
+  "Cloud Sandboxes" credit; about $120 of Claude Code use across the ten execution sessions; the
+  200 Colab units stated earlier. The operator asked for the highest-frontier plan, with
+  calculated risks, judged from the project's whole history (from the eight-agent idea onward)
+  and aimed at a real problem solved in the real world. Consequences: D-1 (reviewers as the only
+  audience), D-11 (one trial, no fallback) and D-12 (access for ten) are superseded; the rest of
+  OA-6 stands unless the plan says otherwise.
 - **The gate.** The reply answered every question of section 12, left the remaining choices to
   this session's judgment and objected to nothing. It is taken as approval of the seven
   defaults in section 11 of `OPENING.md`. Everything done under them is local and reversible:
@@ -105,6 +115,13 @@ Baseline for every measurement unless another is named: the working tree on bran
   account is not connected; connecting it needs the operator's own sign-in. The first cloud use
   belongs to the implementation session that rebuilds the deploy path, and `DIRECTION.md` will
   propose the schedule of uses and their cost.
+- **D-09 (2026-11-17). How the reframe is answered.** Research in three capped threads plus the
+  main session's own (memory rule: at most three at a time, calls capped, this log written
+  first): the stated resources and what they can do; a world-scale architecture at near-zero
+  marginal cost; the frontier gaps a public release could fill; and the project's assets not yet
+  examined. The riskiest technical bets are tested locally where that needs no new download.
+  Output: `docs/truth/PLAN.md`, with DECISIONS, FRONTIER and DIRECTION brought to the new frame
+  and a fresh-context attack before the close.
 - **D-08 (2026-11-17). The instruments stay in `docs/truth/instruments/` and were not moved to
   `scripts/truth/`, departing from approval 3's default.** Reason: they run against exported
   trees of an unmerged branch and import its modules; placed under `scripts/` they would enter
