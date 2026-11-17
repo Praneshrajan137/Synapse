@@ -204,7 +204,7 @@ a proper home). Run them with any Python 3.11 or later, from the repository root
   - `cd-gcp.yml`: the last run whose deploy job succeeded is 27505645209, 2026-06-14T16:51Z at
     `3f84c32`. From 2026-06-15 a push builds and signs only: the eight successful runs of
     2026-06-16 to 2026-06-19 all show the job "Deploy to GCE VM (IAP)" as skipped. All 22
-    scheduled runs on record failed. The 28 newest runs all failed, including the scheduled run
+    scheduled runs on record failed, the first on 2026-06-22. The 28 newest runs all failed, including the scheduled run
     of 2026-11-16. (`gh run view <id> --json jobs` per run; `gh run list --event schedule`.)
     An earlier draft of this entry gave 2026-06-19 as the last deploy, reading a green
     build-only run as a deploy; the fresh reviewer caught it.

@@ -222,7 +222,7 @@ is what was measured or read.
 | `CLAUDE.md`: arbitration binds through the knee of a Pareto front | True of tiers 3 and 4 only, which autonomous operation does not reach | V-01, V-02 |
 | ADR-047 as summarised in `CLAUDE.md`: the outcome loop is closed | Every outcome is `unknown` by construction | F-10 |
 | `Makefile:384`: one command from a fresh clone | The stack it starts has no agents, twin or API | V-07 |
-| Finding 123: deploys fail since at least 2026-08-17 | Since 2026-06-15 for scheduled runs | M-08 |
+| Finding 123: deploys fail since at least 2026-08-17 | Every scheduled deploy has failed, from the first on 2026-06-22; no run has deployed since 2026-06-14 | M-08 |
 | `README.md:66`: 38 decision records | 58 files in `docs/adr` on `main`, two more on branches | M-04, M-22 |
 
 ## 5. Components
