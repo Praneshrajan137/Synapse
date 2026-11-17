@@ -435,3 +435,24 @@ advance what it would prove, and let anyone recompute every step and play the st
 | Holidays, distribution, privacy, accessibility and the operator's sleep were missing | Added: dates allow for 25 December and 1 January; session 10; the notice and consent; WCAG; no night restore needed |
 | 2027-01-18 is a US holiday | Launch moved to Tuesday 2027-01-19 |
 | Docker's sandboxes were untested as a verification box | Session 3's acceptance test |
+
+## 17. The panel on version 2
+
+Each judges through one lens. Three are not yet satisfied, each for a reason this session cannot
+remove; each reason is the first item of a session in section 9.
+
+| Reviewer | Verdict | Evidence or condition |
+|---|---|---|
+| Domain expert | Passes, with conditions | A strong incumbent per item and part of the day, weights and margins sealed first, the data's domain gap stated, shelf lives called modelled (5.2, 5.3) |
+| Architect | Passes | One kernel for three runtimes; no server in the floor; the legacy kept green beside it (2, 5.1) |
+| Adversary | Passes | No write path and no secret in the floor; a contest seeded by randomness nobody controls; the target's trace endpoint needs consent and limits (4.6, 11) |
+| Verifier | Passes | Parity native against browser, sealed confirmatory seeds, recomputation by anyone; three fresh reviews applied this session (5.1, 5.2, 16) |
+| Operator at 3 a.m. | Passes | Nothing in the floor needs restoring at night (10) |
+| Release engineer | Passes | Rung 0 is reachable early; tripwires cut in a fixed order (3, 9.3) |
+| Maintainer | Passes, with a note | Two code lines, legacy and kernel, until retirements by experiment (D-5) |
+| User | Not yet | Play does not exist; the first-minute test is in sessions 9 and 12 |
+| Performance engineer | Not yet | Browser speed is estimated from native timing (M-34), not measured |
+| Craftsman | Passes | The live server, standby, domain, own-file backtest, benchmark, hub and model entrants left the floor (16) |
+| Store manager | Partly | The release teaches and shows evidence; it does not yet run anyone's store (the dream's own-file backtest) |
+| A stranger from anywhere in the world | Passes if the first minute works | Unmeasured until session 9 |
+

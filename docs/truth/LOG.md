@@ -584,6 +584,19 @@ e5_consensus_policy`, reorders only) and the primary-cell twin (`e5_world`).
   own package, not of rewriting policies (inferred from the imports; to be proven in session 4
   by a browser-side import test).
 
+- **M-38 The ref digest moved, and why (measured, 2026-11-17 at the close of the reframe).**
+  The digest of all refs except this session's branch read `6f61dd7bfb2ff08f`, not M-14's
+  `57d932cbfc359db2`, which it had still matched at 17:43 IST. The only ref file written since
+  then, other than this session's branch, is
+  `refs/codex/turn-diffs/checkpoints/.../ff9f7cf7-...` (object `b8be5c5`), a turn-diff checkpoint
+  ref; the timestamp in its name decodes to about 21:29 IST, before this turn's first command.
+  This session ran no command that writes such a ref; it is a tool's checkpoint, not a branch,
+  tag or remote ref. Evidence that nothing else moved: no branch or remote-tracking ref has a
+  reflog entry dated 2026-11-17 except this session's branch; `.git/packed-refs` was last written
+  on 2026-07-09 and `.git/refs/stash` on 2026-09-12; `git ls-remote origin` still hashes to
+  `33be221323372c56`. Excluding `refs/codex/` and this branch, 124 refs remain; that digest is
+  `94c6a974bb7bb1ea`, the baseline for any later check.
+
 ### Window 1: read in the source by the main session
 
 Each was first reported by a mapping subagent and then read at the cited lines by the main
