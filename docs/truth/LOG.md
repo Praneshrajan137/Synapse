@@ -546,6 +546,35 @@ e5_consensus_policy`, reorders only) and the primary-cell twin (`e5_world`).
   item. The Freshness Guardian was called 72 times and refused all 72 for the missing
   `store_id`, as in M-30.
 
+### After the reframe (2026-11-17): what a world release can build on
+
+- **M-33 What the browser would need (measured, `import_closure.py` on the export of
+  `1c484fb`).** The twin engine alone (`digital_twin.simulation.engine`) imports six third-party
+  packages: numpy, pydantic, pydantic_settings, simpy, structlog and yaml. The in-process decision
+  path (the harness, E5's suite and the consensus arm) reaches 72 repository modules and twenty
+  third-party packages, among them confluent_kafka, sqlalchemy, fastapi, uvicorn, pymoo,
+  codecarbon, lifelines, pinecone and opentelemetry. The Sentinel's newsvendor model imports numpy
+  only. The tuned rule and the structure-aware arm reach the whole of `uplift` through its imports,
+  so a browser build needs them extracted, not rewritten.
+- **M-34 Speed of the twin and the tuned rule (measured, native CPython 3.11 on the laptop).**
+  The bare twin simulates 24 hours (3,272 demand events) in 0.44 s; one 24-hour replicate under
+  the tuned rule takes 0.243 s. At the 3 to 5 times slowdown reported for pure Python in a
+  browser (below), a simulated day would take roughly 1.3 to 2.2 s there (inferred).
+- **M-35 No trained model exists (read).** `infrastructure/ml/training_runs.json` lists `runs: []`;
+  `infrastructure/ml/published_checkpoints.json` holds only a placeholder marked "unpublished";
+  no `.pt`, `.ckpt`, `.onnx` or `.safetensors` file is tracked. Every learning agent therefore runs
+  on its fallback, which is what M-31 measured.
+- **M-36 The parts of the project not examined before (reported by a mapping subagent; the
+  training record re-read in M-35).** The design-system's colour tokens are self-contained and
+  reusable as they are. The console's decision anatomy, council, twin lab and demo surfaces and
+  about forty compounds could run on published JSON through `frontend/src/surfaces/data-paths.ts`.
+  The operations, steering, override, ingress and sign-in surfaces need a live backend. The 200
+  golden traces under `tests/eval/` are deterministic replay fixtures. `ml_pipelines/ab_test/`
+  holds a small experiment framework. The Helm chart, the Kafka, Neo4j, Redis, Feast, MLflow,
+  Prometheus and Grafana services, the Oracle compose path and the Mumbai overlay run nowhere today
+  or only on manual dispatch. 55 decision records exist on `main` (ADR-001 to ADR-057, with
+  ADR-025 used twice and no ADR-056).
+
 ### Window 1: read in the source by the main session
 
 Each was first reported by a mapping subagent and then read at the cited lines by the main
@@ -708,6 +737,26 @@ Checked by the main session on 2026-11-16:
   region selector). The VM price stays third-party until read in the console or the billing
   catalog.
 
+- **EX-06 Docker Sandboxes promotion page (read 2026-11-17).** The $250 is a one-time compute
+  credit for Docker Sandboxes, given to new Docker Agentic Platform signups in place of the
+  standard $25: "Limit one per user and account". Offer valid through 2027-01-31; a card is
+  required; credits expire six months after redemption. Sandbox compute only, billed from start
+  to stop. Sizes and prices: Micro 1 vCPU and 2 GB at $0.070 an hour; Small 2 and 4 at $0.140;
+  Medium 4 and 8 at $0.280; Large 8 and 16 at $0.560; XL 16 and 32 at $1.118; so $250 buys about
+  445 hours of Large or 225 of XL. The page does not say whether Docker or Compose runs inside a
+  sandbox, how long a session may last, or whether a port can be made public; documentation seen
+  only in search snippets mentions a public URL for a port and time-to-live and idle settings.
+- **EX-07 InventoryBench (Baek, Fu, Ma, Peng; arXiv 2602.12631, 2026-02-13; listed for NeurIPS
+  2026; project page read 2026-11-17).** 1,320 single-product inventory instances, 720 synthetic
+  and 600 from weekly sales of 200 retail products; immediate, fixed-delay and stochastic lead
+  times; OR, language-model and OR-then-language-model policies; submission by pull request or
+  e-mail. A search summary of the paper's table gives mean normalised reward 0.445 for OR alone,
+  0.494 for a language model alone and 0.538 for the hybrid, and reports that human-AI teams in a
+  classroom experiment earned more than humans or AI alone (snippet). Perishability, a hub and
+  intraday time are not stated on the page.
+- **EX-08 AIM-RM (arXiv 2602.05524, 2026-02-05; abstract read).** A language-model multi-agent
+  system for ordering with memory retrieval, said to beat unnamed benchmark methods.
+
 Reported by subagents, not re-checked (their own grading in brackets):
 
 - e2-standard-8 in asia-south1 at $0.3219 an hour, from a third-party price table [fetched, not
@@ -741,6 +790,26 @@ Reported by subagents, not re-checked (their own grading in brackets):
   shelf (DeHoratius and Raman, 2008) [fetched, abstract page].
 - All five threads marked large parts of their briefs as not researched. The gaps are listed in
   each return and become the first research task after the gate.
+
+### Reported by the reframe's research subagents (2026-11-17), not re-checked unless noted
+
+- Pyodide 314 ships numpy 2.4.6 and pydantic 2.12.5; simpy and structlog are pure-Python wheels
+  for `micropip` (the package list fetched; that they work is not tested). Pure-Python code runs
+  about 3 to 5 times slower than CPython (snippet).
+- Cloudflare's free plan: Workers 100,000 requests a day and 10 ms of CPU a request; KV 1,000
+  writes a day; static-asset requests reportedly free and unlimited (snippet). So nothing a
+  visitor polls should pass through a Worker.
+- Google Cloud's free trial requires that "You haven't previously signed up for the Free Trial"
+  (fetched); multiple accounts are not addressed. Cloud Run's free tier: 2 million requests,
+  180,000 vCPU-seconds and 360,000 GiB-seconds a month (fetched).
+- FreshRetailNet-50K holds 898 stores, 863 perishable products and 18 cities, with hourly sales
+  and an hourly stock-status flag per day, discounts, holidays, activities and weather; its tasks
+  are recovering demand hidden by stockouts, then forecasting; it has no waste field (fetched).
+- No benchmark found combines a tuned (s, S) rule, a hindsight oracle, perishability and a hub
+  of stores; free tools such as Odoo use static min-max rules and show no evidence of beating a
+  simple rule (snippet-level searches).
+- Reported launch traffic for a widely shared technical post ranges from a few requests a second
+  to a few hundred concurrent visitors (old, second-hand write-ups).
 
 ## Hypotheses, each with what would prove it false
 
