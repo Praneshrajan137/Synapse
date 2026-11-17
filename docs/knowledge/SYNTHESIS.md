@@ -1,5 +1,8 @@
 # SYNTHESIS - the ten insights that matter most for sessions 2 and 3
 
+> **Reframed 2026-11-17:** the release is for the whole world, not ten people; see
+> `docs/truth/PLAN.md`.
+>
 > **After session 2 (2026-11-17).** Session 2 tested each reading below against the code. Five
 > hold, four were corrected and one stays open; the verdicts, with their evidence, are in
 > [`VERDICTS.md`](VERDICTS.md). The largest corrections: the consensus lost by 1.45 after the

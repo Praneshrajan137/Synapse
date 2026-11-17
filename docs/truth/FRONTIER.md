@@ -128,6 +128,24 @@ system did, how they know, and why it matters, each claim one step from its evid
   the first version of this note said "probably not", which overstated it.
 - Nothing was dropped or merged. Three rows are added at the end, as the prompt requires.
 
+## 2a. Recalibration after the reframe (2026-11-17)
+
+The release is now for the whole world (LOG OA-7). Four rows change their standard, and one row is
+added; the targets are in `PLAN.md` section 12.
+
+- **Row 8** no longer asks for a named practitioner only: anyone with sales data, a student or a
+  researcher is a user of the release.
+- **Row 12** is judged at world scale: the static doors on a CDN, the live view through cached
+  snapshots, and the server shielded from visitors.
+- **Row 14** becomes a visitor's first minute, not a reviewer's first five.
+- **Row 16** adds abuse by strangers: no public write path, no secret in the client.
+- **New row: public verifiability.** Every live decision hash-chained and its anchors published,
+  so anyone can check the record. The reference is the audit chain this project already built
+  (ADR-033); the public form is new.
+- **The nearest benchmark is now named:** InventoryBench (2026), single-product and weekly, with
+  OR, model and hybrid policies and a classroom study of human-AI teams (LOG EX-07). It sets the
+  bar a public benchmark here must pass, and leaves out perishability, intraday time and a hub.
+
 ## 3. The scorecard
 
 "Sessions to close" counts implementation sessions in the path proposed in `DIRECTION.md`, and

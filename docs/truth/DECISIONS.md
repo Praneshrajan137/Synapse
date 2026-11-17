@@ -1,5 +1,11 @@
 # DECISIONS - what the operator owes, one memo each
 
+**Reframed later on 2026-11-17 (LOG OA-7).** The release is now for the whole world for five
+days, with two Google Cloud accounts, three Docker sandbox credits and the Claude budget stated
+in the log. The ten-reviewer audience is withdrawn. D-1, D-11 and D-12 below are superseded;
+the other ten answers stand. New decisions D-14 to D-20 follow at the end, each with the default
+`PLAN.md` assumes.
+
 **Answered.** The operator answered all thirteen on 2026-11-17, through a set of
 multiple-choice questions in the session. Ten follow the recommendation. Three differ: D-1 (no
 external user), D-3 (disruption response as a second workflow) and D-11 (stay on the trial, no
@@ -7,7 +13,7 @@ fallback). `DIRECTION.md` is adjusted to all thirteen.
 
 | Decision | Answer |
 |---|---|
-| D-1 | (c), no external user: the ten reviewers are the audience, and the first screen leads with the proof |
+| D-1 | Superseded by OA-7: the audience is the whole world; the first screen leads with the live contest and the proof |
 | D-2 | (c), incumbent first |
 | D-3 | no: replenishment and, alongside it, disruption response |
 | D-4 | (c), both limits |
@@ -17,8 +23,8 @@ fallback). `DIRECTION.md` is adjusted to all thirteen.
 | D-8 | (b), the thin slice |
 | D-9 | (c), waste that takes stock by age, plus skewed demand over more items fitted to FreshRetailNet-50K |
 | D-10 | (b), the map by cell |
-| D-11 | stay on the trial; no upgrade and no fallback host |
-| D-12 | (c), view free, sign in to act |
+| D-11 | Superseded by OA-7: two trial accounts, active and standby; whichever trial ends later hosts the release |
+| D-12 | Superseded by OA-7: anyone may look and play in their own browser; nobody can write to the live contest |
 | D-13 | approved |
 
 **Status: 2026-11-17.** Each memo states the question, why it is owed now, the options, a
@@ -51,7 +57,7 @@ conversation about what breaks in their replenishment today is worth more than a
 stockouts against the incumbent) and the reason for each order. (c): the first screen leads
 with the proof.
 
-**Answered by the operator, 2026-11-17:** (c), no external user: the ten reviewers are the audience, and the first screen leads with the proof.
+~~**Answered by the operator, 2026-11-17:** (c), no external user: the ten reviewers are the audience, and the first screen leads with the proof.~~ **Superseded by OA-7: the audience is the whole world (PLAN.md section 4).**
 
 ---
 
@@ -213,7 +219,7 @@ same date, the eight-core limit lifts, and machines keep running if the trial wo
 end; anything beyond the credit is then billed to the card, so a budget alert matters more.
 Keep a fallback host: the repository already carries an Oracle Always Free target.
 
-**Answered by the operator, 2026-11-17:** stay on the trial; no upgrade and no fallback host.
+~~**Answered by the operator, 2026-11-17:** stay on the trial; no upgrade and no fallback host.~~ **Superseded by OA-7: two Google Cloud accounts, active and standby (PLAN.md section 7).**
 wanted.
 
 ---
@@ -226,7 +232,7 @@ ten reviewers. (c) Public view-only, with sign-in for steering and approvals.
 **Recommendation: (c).** Reviewers can look without friction and act only when signed in; the
 published default credentials are rotated or removed first (FRONTIER row 16).
 
-**Answered by the operator, 2026-11-17:** (c), view free, sign in to act.
+~~**Answered by the operator, 2026-11-17:** (c), view free, sign in to act.~~ **Superseded by OA-7: no public write path; play runs in each visitor's browser (PLAN.md section 4.3).**
 
 ---
 
@@ -248,3 +254,19 @@ re-derived. This session was not authorised to edit `CLAUDE.md` or add gates. Ca
 code rather than documented (sessions 5 and 6); item 5 wired as a fast check (session 4).
 
 **Answered by the operator, 2026-11-17:** approved.
+
+---
+
+## D-14 to D-20: the decisions the world release adds (2026-11-17)
+
+Each has the default `PLAN.md` assumes; answer only where you want something else.
+
+| # | Question | Options | Default assumed, and why |
+|---|---|---|---|
+| D-14 | How fast does the live contest's clock run? | (a) real time, five simulated days; (b) one simulated day per real hour, 120 simulated days | (b): 120 days give the pre-registered test real power, and a visitor sees a day pass in an hour |
+| D-15 | May anonymous play traces be collected? | (a) no; (b) only with opt-in, no personal data, released under CC BY 4.0 after the event | (b): they are the human-AI evidence the release can add to the field (PLAN C6) |
+| D-16 | Are both Google Cloud trials and the three Docker credits eligible under their providers' terms, and when did each trial start? | Your confirmation | The later-ending trial hosts the release; the plan survives the loss of any one account |
+| D-17 | Buy a domain so live snapshots can be cached at the edge? | (a) yes, about $10 a year; (b) no, hourly static snapshots instead | (a): the one cash cost, and it keeps the live view live at any audience |
+| D-18 | Launch timing and channels | Your choice | 2027-01-18, a write-up and a two-minute video, posted where operations and machine-learning people read |
+| D-19 | Licences for what is published | Your choice | Code Apache-2.0 as now; derived data and traces CC BY 4.0 with FreshRetailNet-50K attributed |
+| D-20 | Language models in the release | (a) explanations from the computed numbers only; (b) an opt-in in-browser model; (c) a model in the decision path | (a): faithful, free and fast; models enter only as benchmark entrants (PLAN B8) |

@@ -21,6 +21,11 @@ inventory, not progress").
 
 ## Operator notes
 
+- **2026-11-17, reframe.** The release is for the whole world for five days, not for ten people;
+  the resources are two Google Cloud accounts, three Docker sandbox credits and the Claude budget
+  recorded in `docs/truth/LOG.md` (OA-7). The plan is `docs/truth/PLAN.md`. Older lines in this
+  folder that speak of ten reviewers describe the frame of 2026-11-15 and are kept as history.
+
 - **2026-11-17, session 2.** Every reading of SYNAPSE in this folder now has a verdict in
   [`VERDICTS.md`](VERDICTS.md). The ledger, tensions and questions are left as written, so their
   history stays visible; read a reading together with its verdict. The operator answered the

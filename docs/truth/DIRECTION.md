@@ -1,5 +1,11 @@
 # DIRECTION - the next eleven sessions
 
+> **Superseded in part on 2026-11-17 by [`PLAN.md`](PLAN.md).** After the operator's reframe
+> (LOG OA-7) the release is for the whole world, not ten reviewers, and the resources are larger.
+> PLAN.md replaces this file's audience, release architecture, resources and session path.
+> Sections 1 to 3 (the evidence, the premise tested, the four directions) and 9a (the lookahead
+> objection) still stand and are PLAN.md's foundation.
+
 **Status: 2026-11-17, session 2.** A recommendation for session 3, derived from
 [`TRUTH-MAP.md`](TRUTH-MAP.md) and [`FRONTIER.md`](FRONTIER.md). The operator answered the
 thirteen decisions in [`DECISIONS.md`](DECISIONS.md) the same day; this text is adjusted to
