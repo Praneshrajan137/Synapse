@@ -24,6 +24,11 @@ Baseline for every measurement unless another is named: the working tree on bran
 
 ## State of the session
 
+- **2026-11-17, at the close of the session's work.** The deliverables are committed on
+  `docs/truth-session-2`: `OPENING.md`, this log, `TRUTH-MAP.md`, `FRONTIER.md`, `DIRECTION.md`,
+  `DECISIONS.md`, the instruments in `docs/truth/instruments/`, and `docs/knowledge/VERDICTS.md`
+  with pointers from the knowledge base. Nothing pushed. Decision D-08 below explains why the
+  instruments were not moved to `scripts/truth/`.
 - **2026-11-17, after the gate.** The operator answered the gate's four questions (see "The
   operator's answers"). Branch `docs/truth-session-2` was cut from `docs/knowledge-base` at
   `c1277f5` and the opening and this log were committed first. Window 1 of five is under way:
@@ -92,6 +97,12 @@ Baseline for every measurement unless another is named: the working tree on bran
   account is not connected; connecting it needs the operator's own sign-in. The first cloud use
   belongs to the implementation session that rebuilds the deploy path, and `DIRECTION.md` will
   propose the schedule of uses and their cost.
+- **D-08 (2026-11-17). The instruments stay in `docs/truth/instruments/` and were not moved to
+  `scripts/truth/`, departing from approval 3's default.** Reason: they run against exported
+  trees of an unmerged branch and import its modules; placed under `scripts/` they would enter
+  the repository's lint, type and gate runs on the next merge and fail there for reasons that
+  have nothing to do with the product. Their useful form is a fast local proof check, proposed
+  for session 4 (`DECISIONS.md`, D-13). Reversible: a move is one commit.
 - **D-07 (2026-11-17). Code from an unmerged branch is run from an exported copy, never in its
   worktree.** `git archive <commit> | tar -x -C <temporary folder>` writes nothing to the
   repository, and the project's `.venv` runs it with `PYTHONPATH` pointing at the copy.
@@ -454,6 +465,24 @@ e5_consensus_policy`, reorders only) and the primary-cell twin (`e5_world`).
     install would differ; nothing was installed in this session. The local console has
     evidently not been run since June.
   - The server was stopped after the walk.
+
+- **M-29 What was to stay unchanged, measured at the close (2026-11-17).**
+  - `git for-each-ref --format='%(objectname) %(refname)'`, with this session's own branch
+    `docs/truth-session-2` removed from the list, hashes to `57d932cbfc359db2`: the same digest as
+    at the gate (M-14). No other branch, tag or remote-tracking ref moved.
+  - `git ls-remote origin | sha256sum` begins `33be221323372c56`, as at the gate. Nothing was
+    pushed.
+  - `git diff --name-only docs/knowledge-base..HEAD`, excluding `docs/truth` and
+    `docs/knowledge`: no file.
+  - `git ls-files .kiro/settings`: nothing tracked. One stash, as before.
+  - The five `.claude/worktrees`: the same heads and the same counts of uncommitted changes
+    (consensus 0, frontend-gates 20, gate-defects 0, ledger 4, open-access 0); the `ledger`
+    files keep the hashes of M-07.
+  - Outside the repository: no GCP, Colab or GitHub write. GitHub was read through `gh` list,
+    view and run download. The console's dev server was started and stopped; it wrote no file
+    in the repository.
+  - One slip, recorded: the last check above was run with a `cd` into the `ledger` worktree to
+    hash two files. Nothing was written there.
 
 ### Window 1: read in the source by the main session
 
