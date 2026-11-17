@@ -464,7 +464,8 @@ e5_consensus_policy`, reorders only) and the primary-cell twin (`e5_world`).
     and holds 4.7.1, against `^6.4.1` in `package.json` and 6.14.0 in the lockfile. A fresh
     install would differ; nothing was installed in this session. The local console has
     evidently not been run since June.
-  - The server was stopped after the walk.
+  - The server was stopped after the walk. It had rebuilt its dependency cache under
+    `frontend/node_modules/.vite/deps`, an ignored folder; nothing else was written.
 
 - **M-29 What was to stay unchanged, measured at the close (2026-11-17).**
   - `git for-each-ref --format='%(objectname) %(refname)'`, with this session's own branch
@@ -479,8 +480,8 @@ e5_consensus_policy`, reorders only) and the primary-cell twin (`e5_world`).
     (consensus 0, frontend-gates 20, gate-defects 0, ledger 4, open-access 0); the `ledger`
     files keep the hashes of M-07.
   - Outside the repository: no GCP, Colab or GitHub write. GitHub was read through `gh` list,
-    view and run download. The console's dev server was started and stopped; it wrote no file
-    in the repository.
+    view and run download. The console's dev server was started and stopped; it wrote only its
+    dependency cache under the ignored `frontend/node_modules/.vite`.
   - One slip, recorded: the last check above was run with a `cd` into the `ledger` worktree to
     hash two files. Nothing was written there.
 
@@ -501,7 +502,9 @@ e5_consensus_policy`, reorders only) and the primary-cell twin (`e5_world`).
   `fallback_floor`; `supplier_trust` reported `degraded=False` in 24 of 24, although its score is
   a configured prior that uses no data (MAP F-02). The Sentinel, which bound every decision,
   thus declared itself degraded every time while reporting a confidence of 0.85 to 0.97, and the
-  confidence floor of 0.7 let each one through. This answers R-21: the share of decisions with a
+  confidence floor of 0.7 let each one through. In source, `orchestrator/guardrails/rules.py`
+  never mentions `degraded`, and `protocol.py:1528-1546` only appends the names of degraded
+  agents to the decision's context for the audit record. This answers R-21: the share of decisions with a
   degraded agent is all of them, and the top reason is no calibrated model or feature source.
 
 ### Window 1: read in the source by the main session

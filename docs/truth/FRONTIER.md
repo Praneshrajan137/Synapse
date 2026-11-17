@@ -152,7 +152,7 @@ same way as an outside reference.
 | 16 | No exposure in a public repository | No published default credential; no open control | Defaults in compose files (reported); the open-admin defect fixed on `main` and never deployed | reported; LOG RD-05 | Reported | Behind | 1. Unlocks a public link |
 | KB | Readings of SYNAPSE in `docs/knowledge/` | Each confirmed, corrected or refuted with evidence | Of 60 ledger entries: 16 confirmed, 16 corrected, 10 answered, 2 strengthened, 8 open, 8 make no reading; none refuted outright. Of the ten in the synthesis: 5 confirmed, 4 corrected, 1 open. Of 61 research items: 47 answered or confirmed, 14 open with owners | `docs/knowledge/VERDICTS.md` | Verified | - | - |
 | U | What was to stay unchanged | Section 7 of the opening | Ref digest unchanged apart from this session's branch; remote unchanged; no file changed outside `docs/truth/` and `docs/knowledge/`; worktrees, stash and `.kiro/settings/` as found | LOG M-14 against M-29 | Verified | - | - |
-| W | What this session made worse or less certain | - | One figure this session published was wrong and was retracted within the hour (LOG M-20). Running the console created no file. The log has grown long | LOG M-20 | Verified | - | - |
+| W | What this session made worse or less certain | - | One figure this session published was wrong and was retracted within the hour (LOG M-20). Running the console rebuilt its dependency cache under `frontend/node_modules/.vite`, an ignored folder. The log has grown long | LOG M-20 | Verified | - | - |
 
 ## 4. Sources
 
