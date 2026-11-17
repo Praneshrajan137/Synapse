@@ -1,0 +1,28 @@
+baseline exit=0 seconds=22 extra_files=4 :: 664 passed, 26 skipped, 12 deselected, 3 warnings in 18.12s
+F1-confidence-floor-never-fails exit=1 seconds=47 extra_files=4 :: 15 failed, 649 passed, 26 skipped, 12 deselected, 2 warnings in 44.48s
+    FAILED orchestrator/tests/test_confidence_threshold_provider.py::TestEngineReadsPerValidation::test_escalation_boundary_follows_a_reload_with_no_reconstruction
+    FAILED orchestrator/tests/test_guardrail_rules_mutation_killers.py::test_the_default_engine_escalates_below_seven_tenths_and_passes_at_it
+    FAILED orchestrator/tests/test_guardrail_rules_mutation_killers.py::test_the_boundary_is_read_from_its_provider_on_every_validation
+    FAILED orchestrator/tests/test_guardrail_totality_property.py::test_a_declared_blocking_rule_never_degrades_to_a_clip_or_a_no_op
+    FAILED orchestrator/tests/test_guardrail_totality_property.py::test_a_clip_class_violation_cannot_rescue_a_blocking_violation
+    FAILED orchestrator/tests/test_guardrail_totality_property.py::test_dropping_a_declaration_never_weakens_enforcement
+    FAILED orchestrator/tests/test_guardrails.py::TestConfidenceFloor::test_rejects_low_confidence
+    FAILED orchestrator/tests/test_guardrails.py::TestConfidenceBoundary::test_just_under_threshold_fails
+    FAILED orchestrator/tests/test_guardrails.py::TestConfidenceBoundary::test_custom_threshold_higher
+    FAILED orchestrator/tests/test_guardrails.py::TestEarlyExitContract::test_confidence_fail_short_circuits
+    FAILED orchestrator/tests/test_threshold_reload_property.py::test_the_boundary_is_the_currently_configured_value_on_every_tier
+    FAILED orchestrator/tests/test_threshold_reload_property.py::test_a_reload_is_observable_on_the_very_next_validation
+F2-fast-path-binds-the-lowest-score exit=1 seconds=18 extra_files=4 :: 1 failed, 663 passed, 26 skipped, 12 deselected, 2 warnings in 15.44s
+    FAILED orchestrator/tests/consensus/test_binding_fastpath.py::TestFastPathArgmaxRetention::test_fast_path_selects_raw_utility_argmax
+F3-sentinel-review-period-tripled exit=1 seconds=28 extra_files=4 :: 1 failed, 663 passed, 26 skipped, 12 deselected, 3 warnings in 23.63s
+    FAILED agents/inventory_sentinel/tests/test_request_state.py::test_adr_058_records_every_constant_the_mapping_reads_with_its_value_and_provenance
+F4-nothing-is-executed exit=1 seconds=20 extra_files=4 :: 3 failed, 661 passed, 26 skipped, 12 deselected, 3 warnings in 16.17s
+    FAILED orchestrator/tests/consensus/test_dispatch_choke_point.py::TestTier1Dispatches::test_passing_decision_dispatches_once_and_appends_one_row
+    FAILED orchestrator/tests/consensus/test_dispatch_choke_point.py::TestTwinVerdictIsConsequential::test_unavailable_twin_does_not_veto
+    FAILED orchestrator/tests/consensus/test_dispatch_choke_point.py::TestTwinVerdictIsConsequential::test_agreement_within_bound_dispatches
+F5-guardrail-failure-dispatches-anyway exit=1 seconds=17 extra_files=4 :: 4 failed, 660 passed, 26 skipped, 12 deselected, 2 warnings in 14.13s
+    FAILED orchestrator/tests/consensus/test_dispatch_choke_point.py::TestTier1WithholdsDispatch::test_sub_threshold_confidence_withholds_dispatch
+    FAILED orchestrator/tests/consensus/test_dispatch_choke_point.py::TestTier1WithholdsDispatch::test_block_violation_withholds_dispatch_on_tier_1
+    FAILED orchestrator/tests/consensus/test_dispatch_choke_point.py::TestTwinVerdictIsConsequential::test_disagreement_beyond_bound_escalates_and_withholds
+    FAILED orchestrator/tests/consensus/test_dispatch_choke_point.py::TestTwinVerdictIsConsequential::test_withhold_action_queues_no_human
+done

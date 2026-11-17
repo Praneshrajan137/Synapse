@@ -107,7 +107,7 @@ tree of pull requests #87 and #91 (`1c484fb`), which is not merged into `main`.
 | T-012 | Confirmed; a candidate dataset is named (LOG EX-03) |
 | T-013 | Unchanged |
 | T-014 | Open (R-36) |
-| T-017 | See LOG M-26 for what the decision core's own tests caught when faults were introduced |
+| T-017 | Corrected in part: five faults introduced into the decision core were all caught by its own tests (LOG M-26). The gates guard what someone wrote down, as T-017 says, and here what was written down includes the safety behaviour. They do not judge whether a decision is good: a change that removes most of E5's loss fails the same test a harmful one would |
 
 ## 4. Questions
 

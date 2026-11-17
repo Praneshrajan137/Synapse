@@ -402,6 +402,36 @@ e5_consensus_policy`, reorders only) and the primary-cell twin (`e5_world`).
     stock away (`:831`). So waste in the twin is a clock: it consumes no stock and does not
     depend on how much is held or ordered.
 
+- **M-26 Faults introduced into the decision core, and what the tests caught (measured,
+  `fault_injection.sh`).** Each case is a fresh `git archive` of `1c484fb` in a scratch folder,
+  one line changed by `sed`, then the CI fast selection for the decision core:
+  `orchestrator/tests`, `agents/inventory_sentinel/tests` and the four test files under
+  `tests/uplift` that name the faulted symbols, `-m "not slow"`.
+  `orchestrator/tests/test_internal_only_routes.py` was left out because it imports `jose`,
+  which this laptop's `.venv` lacks. Baseline: 664 passed, 26 skipped, in 18 s.
+
+  | Fault | Line changed | Tests failed |
+  |---|---|---|
+  | F1 the confidence floor never fails | `orchestrator/guardrails/rules.py:460` | 15 |
+  | F2 the fast path binds the lowest score | `orchestrator/consensus/protocol.py:654` | 1, which pins "raw utility argmax" |
+  | F3 the Sentinel's review period tripled | `agents/inventory_sentinel/inference/request_state.py:53` | 1, which pins the constant's value and provenance as ADR-058 records them |
+  | F4 nothing is executed | `protocol.py:1568` | 3 |
+  | F5 a failed guardrail dispatches anyway | `protocol.py:889` | 4 |
+
+  Every fault was caught. The safety behaviour (the confidence floor, the dispatch choke point,
+  execution) is guarded by tests that fail when it breaks. F2 and F3 are caught by tests that
+  pin the present design rather than judge it: F3 is close to the change that removes most of
+  E5's loss (M-24), and it fails exactly as a harmful change of the same constant would. No
+  test at this level judges whether a decision is good; that is left to E5, which runs in CI
+  only when a person applies a label.
+- **M-27 Pace, from the proof spec's own session log (read).** Its progress table
+  (`SESSION_PROTOCOL.md` in the `ledger` worktree) dates sessions 1 to 10 between 2026-09-01
+  and 2026-09-16, and sessions 11, 12 and 13 at 2026-09-29 to 10-12, 10-15 to 11-01 and 11-01
+  onward. The spec was committed on 2026-08-20. So the record has two regimes: about a day and
+  a half a session while work was local, and two weeks or more a session once each step waited
+  on labelled CI runs. 63 days remain before the release must start. At the slow regime they
+  hold four or five sessions; at the fast one, all eleven (inferred).
+
 ### Window 1: read in the source by the main session
 
 Each was first reported by a mapping subagent and then read at the cited lines by the main

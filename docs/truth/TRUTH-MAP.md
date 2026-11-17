@@ -187,6 +187,17 @@ is what was measured or read.
 - **F-28 The gate surface (read, M-17).** 68 checks; the README reports 56 passing and 12
   skipped. Which can be made to fail is window 4's work (R-24).
 
+- **F-31 The decision core's safety behaviour is well guarded; its quality is not unit-tested
+  (measured, LOG M-26).** Five faults were introduced one at a time; every one failed at least
+  one test, the confidence floor fifteen. Two were caught only by tests that pin the present
+  design: the change to the Sentinel that removes most of E5's loss fails the same way a harmful
+  change would. Judging a decision's quality is left to E5, which runs when a person labels a
+  pull request.
+- **F-32 The proof can now run where the work is done, and the pace depends on it (measured,
+  LOG M-23; read, LOG M-27).** The last spec moved from about a day and a half a session to two
+  weeks once each step waited on labelled CI runs. A replicate takes 0.6 s here. Keeping
+  verification local is the difference between four sessions before the release and eleven.
+
 ### Where the documents and the code part
 
 | Document says | Found | How known |
