@@ -307,6 +307,10 @@ e5_consensus_policy`, reorders only) and the primary-cell twin (`e5_world`).
   re-importing the main module, so each worker re-ran the whole scan before doing its work.
   The paired run showed it by printing its results three times. The scripts are corrected and
   the valid timing is in M-21.
+  A re-run of the twelve-decision scan with the guarded script did not finish within ten
+  minutes and was stopped; no process was left behind. Its counts above come from the first
+  run and do not depend on timing. Why the twin check stalls under repeated use on this
+  machine is not known.
 - **M-21 The same states through both paths (measured, guarded script `scan_paired.py`).** Six
   states at seed 296, with nothing ordered so that stock only falls. The orders were identical
   in 6 of 6, and so was the binding agent. Time per decision: 0.013 s on the fast path; 1.3 to
@@ -330,6 +334,43 @@ e5_consensus_policy`, reorders only) and the primary-cell twin (`e5_world`).
   `main` therefore still runs the consensus that reads none of its request, the state task 25
   measured at -4.40. Every statement in this window about the repaired path is about a tree
   that is not merged.
+
+- **M-23 A miniature of E5 runs on this laptop in half a minute, repeats exactly, and
+  reproduces the loss (measured, `mini_e5.py 12`).** Twelve of E5's own replicate seeds, each
+  priced by E5's own function (`uplift.e5_suite.production_arm_cost`: one 24-hour replicate),
+  for the consensus arm and for the tuned control E, and then again with freshly built arms.
+  - Every repeat was identical to the last digit, 24 of 24. This answers R-43 for one machine;
+    M-18 shows identity across two machines for the trace.
+  - Mean cost: consensus 3.9073, tuned 2.5119, difference -1.3954. E5's 1,000 replicates gave
+    3.9266, 2.4804 and -1.4463 (RD-01). The consensus arm was worse in 12 of 12 (R-33, in
+    miniature).
+  - 28.1 s for 48 replicate runs, 0.6 s each. At that rate E5's 2,000 runs are about twenty
+    minutes here, against 53 minutes as a labelled CI job.
+- **M-24 What the loss is made of: a sensitivity probe (measured, `sensitivity_level.py`).**
+  Nothing in any tree was edited. In the probe's own process the Sentinel's reading of its
+  request was wrapped so that the lead-time demand it plans against is multiplied by k, over
+  the same twelve seeds. It is a what-if fitted to the seeds it is judged on. It can show what
+  accounts for the loss; it cannot show an uplift.
+
+  | k | Every reading scaled | Only readings from landed orders scaled |
+  |---|---|---|
+  | 1 (as it is) | 3.9073 | 3.9073 |
+  | 2 | 3.4559 | 2.9284 |
+  | 3 | 4.5173 | 2.6697 |
+  | 4 | 5.7321 | 2.7525 |
+  | 5 | 6.9448 | 2.8847 |
+  | 6 | 8.1553 | 3.0284 |
+  | 8 | 10.5717 | 3.3254 |
+
+  The tuned control's mean is 2.5119. Two things follow. First, the Sentinel has two regimes:
+  until a supplier's first order lands it plans against a 24-hour lead-time prior, which
+  already orders far above the tuned rule's levels, so scaling everything makes cost grow
+  without limit; afterwards it plans against about two hours of demand. Second, tripling only
+  the second regime's level takes the difference from -1.3954 to -0.1578, about 89% of the
+  gap, and no single factor does better. So most of the loss is one quantity in one heuristic,
+  set at about a third of what this objective rewards, and the rest is plausibly the prior's
+  glut at the start of the run (inferred). The first reading this session made of the cause,
+  "a mis-set level", was too simple: the first column refuted it and the second refined it.
 
 ### Window 1: read in the source by the main session
 
@@ -392,6 +433,18 @@ session, on the exported tree of `1c484fb`. Paths are relative to the repository
   joinable". Inferred: on the live path every scored outcome is `unknown`.
 - **V-10 The meta-learner's system state is three values, two of them constants.**
   `protocol.py:1837-1842`: the hour of the day, `active_disruptions: 0`, `avg_fill_rate: 0.95`.
+- **V-11 Where the objective's weights came from (R-29).**
+  `digital_twin/simulation/policy.yaml`, section `regret_objective`. The cost is 8.0 times the
+  unfilled share of demand, plus stock on hand over 1,000, plus the spoilage rate, plus the
+  mean delivery time over 27.5 minutes; the stockout rate carries weight zero as a duplicate.
+  The file's own `weight_provenance` gives the source of 8.0 and the two 1.0s as
+  `agents/inventory_sentinel/models/newsvendor.py`, the default shortage and holding costs of
+  the agent that E5 measures, and marks the delivery weight "chosen: ... no committed
+  antecedent". No weight has a source outside the project. By arithmetic on RD-01's figures
+  the tuned control's 2.4804 is about 0.49 for unfilled demand, 0.85 for stock, 0.06 for
+  spoilage and 1.09 for delivery time (the last by subtraction), and nearly all of the
+  consensus arm's extra 1.45 is the unfilled-demand term. Stock is cheap in this objective: a
+  hundred more units held on every item costs what 12.5 points of fill rate cost.
 
 Reported by the three mapping subagents and not yet re-read by the main session: the single
 LLM call site inside debate (`protocol.py:1149`); the arbitration's weighted-sum selection and

@@ -92,14 +92,27 @@ is what was measured or read.
 
 ## 2. The proof
 
-- **F-13 The repaired arm loses to the tuned rule, and the reason is visible (read, RD-01;
-  measured, M-16, M-18, M-19).** Headline -1.4463, interval [-1.4650, -1.4286]; fill rate
-  0.762 against 0.939 at about the same stock. In the trace the Sentinel's order-up-to level is
-  about 27 units for an item holding 143, where the tuned rule's levels are 118 to 183. It
-  orders nothing until stock has run down, and in a closed loop some item reached zero at every
-  seed tried. The loss is a mis-set level in one heuristic, not a verdict on eight agents.
-- **F-14 The trace is exactly reproducible across machines (measured, M-18).** A point in the
-  harness's favour, and a tool: decision behaviour can be examined on the laptop in seconds.
+- **F-13 The repaired arm loses to the tuned rule, and the loss reproduces here (read, RD-01;
+  measured, M-23).** E5: -1.4463, interval [-1.4650, -1.4286]; fill rate 0.762 against 0.939
+  at about the same stock. A twelve-replicate miniature on this laptop, at E5's own seeds and
+  price, gives -1.3954, with the consensus arm worse in 12 of 12.
+- **F-13a Most of the loss is one quantity in one heuristic (measured, M-24; part inferred).**
+  The Sentinel plans against a 24-hour lead-time prior until a first order lands, and against
+  about two hours of demand afterwards. Tripling only the second level, in a what-if fitted to
+  the same twelve seeds, takes the difference from -1.3954 to -0.1578. Scaling both makes cost
+  grow without limit. So the result is a verdict on one reorder rule's two settings, not on
+  eight agents, and at its best that rule about ties the tuned control. *False if* the repaired
+  settings, chosen on held-out seeds, leave a gap of the original size.
+- **F-14 The proof runs on the laptop and repeats exactly (measured, M-18, M-23).** The trace
+  is byte-identical to the CI artifact. Every one of 24 replicate repeats was identical to the
+  last digit. A replicate takes 0.6 s, so E5's 2,000 runs are about twenty minutes here against
+  53 minutes as a labelled CI job, and a twelve-replicate check takes half a minute. This
+  answers R-43 and changes what the implementation sessions can verify without CI.
+- **F-14a The objective's weights have no source outside the project (read in source, V-11).**
+  Unfilled demand is priced at 8, stock and spoilage at 1, from the default costs of the very
+  agent E5 measures; the delivery weight is marked "chosen". Under these weights stock is
+  cheap, so the tuned rule's high levels win. Whether a practitioner would rank outcomes this
+  way is unasked (R-29).
 - **F-15 E5 covers less of the system than its name suggests (read in source; measured).** It
   runs the unshocked cell, so tier 2 only (M-19, V-01); with the LLM replaced by an offline
   stand-in (reported); with execution replaced by the harness's own translation of the selected
@@ -190,8 +203,8 @@ and the import graph.
 
 ## 6. Not yet examined
 
-Headroom by cell and where the objective's weights came from (question C). Whether a replicate
-repeats from its seed, and leakage (F). The console, seen running (E). Which components
+Headroom by cell, and what a practitioner would make of the objective's weights (question C).
+Leakage between arms, and the open agreement flag (F). The console, seen running (E). Which components
 anything runs (G). Which gates can fail and how each named finding was caught (H). The
 invariants, by fault injection. The data fabric, the ML pipelines and the training code beyond
 what F-12 reports. Security beyond the list of published defaults. The live path with real
