@@ -484,6 +484,16 @@ e5_consensus_policy`, reorders only) and the primary-cell twin (`e5_world`).
   - One slip, recorded: the last check above was run with a `cd` into the `ledger` worktree to
     hash two files. Nothing was written there.
 
+- **M-30 Why the Freshness Guardian never proposes in E5 (measured).** The request the harness
+  builds from an observation (`uplift/consensus_arm.py::observation_to_decision_request`) has no
+  `store_id` key. Called with that request through its own entry point
+  (`FreshnessGuardianA2AHandler.handle_request`, method `proposal`), the Freshness Guardian
+  answers with error -32000: "1 validation error for FreshnessRequest / store_id / String should
+  have at least 1 character". So its silence in E5 is a gap in the harness's request, of the
+  same class as finding 112, not a property of the agent. The sensor's live request does carry
+  `store_id` (V-05), so on the live path it would propose. The scans of M-19 filtered the
+  handlers' error lines out of their output, which is why this was not seen there.
+
 ### Window 1: read in the source by the main session
 
 Each was first reported by a mapping subagent and then read at the cited lines by the main

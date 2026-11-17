@@ -195,3 +195,27 @@ third-party table until read in the console (FRONTIER 1.5).
 Three members are not satisfied, each for a reason this session cannot remove: the system does
 not run, no user has been asked, and the console has not been seen with data. Each is the first
 item of a session in section 7.
+
+## 11. What the session-2 prompt did not ask, answered
+
+- **What works, and must be protected while the rest changes?** The harness's determinism and
+  its habit of publishing negatives (F-14); the decision core's safety tests, which caught five
+  of five faults (F-31); the provenance contract and the console's honest labelling of degraded
+  and unknown reads (LOG M-28). Every session in section 7 keeps these green.
+- **Does the project's own rule for recording facts drive the growth of its apparatus?** Very
+  likely. `CLAUDE.md` asks that a fact worth discovering twice become a gate. Gates check what
+  someone wrote down (T-017), and a quarter of all added lines went to the harness and another
+  eighth to gates (LOG M-05). Proposed default for the next sessions: change the code so the
+  wrong state cannot occur, and add a gate only where that is impossible.
+- **What did the word "agent" cost?** It shaped the console around the agents' activity rather
+  than the store's outcomes (LOG M-28), the topology around one service per agent (F-22), and
+  the decision path around a debate that autonomous operation never reaches (F-05). The
+  direction keeps the agents and drops the framing: each is a challenger with a measured
+  contribution.
+- **Who maintains SYNAPSE after the release?** The operator alone, with sessions like these.
+  That argues for the thin slice and the local proof, which one person can run, over the full
+  topology, which one person cannot keep alive (F-25).
+- **What is the operator's own time worth in this plan?** The decisions owed are thirteen lines
+  (`DECISIONS.md`). Everything else in section 7 is work a session can do and verify without
+  the operator, except approving merges and the cloud's sign-in.
+

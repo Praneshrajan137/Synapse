@@ -48,11 +48,16 @@ is what was measured or read.
   or feature source is present (`agents/demand_prophet/inference/pipeline.py:38`,
   `agents/sustainability_agent/inference/pipeline.py:28`,
   `agents/disruption_shield/config.py:47`, `agents/supplier_trust/config.py:28`,
-  `agents/routing_navigator/inference/pipeline.py:172`). *False if* any of the five scores
-  varies with the world on the E5 path.
-- **F-03 Two agents never propose (measured, M-19).** The Pricing Oracle refuses a request with
-  no categories and no base prices, by its own precondition (seen in the run's log). Why the
-  Freshness Guardian returns nothing is not yet known.
+  `agents/routing_navigator/inference/pipeline.py:172`). The constants are thus a joint product
+  of the request E5 builds and of the agents' fallbacks. On the live path the sensor's request
+  carries even fewer fields (V-05), so the same fallbacks are expected there (inferred, not
+  run). *False if* any of the five scores varies with the world on the E5 path.
+- **F-03 Two agents never propose in E5, both because of the request E5 builds (measured, M-19,
+  M-30).** The Pricing Oracle refuses a request with no categories and no base prices, by its
+  own precondition. The Freshness Guardian refuses a request with no `store_id`, and the
+  harness's request has none: a gap of finding 112's class, in the harness rather than the
+  agent. The sensor's live request carries `store_id`, so on the live path the Freshness
+  Guardian would propose.
 - **F-04 Selection is the largest self-reported confidence (read in source, V-02; reported).**
   The fast path takes `max(proposals, key=utility_score)`. Six of eight handlers set
   `utility_score` to their own confidence (reported). The confidence floor is then applied to
