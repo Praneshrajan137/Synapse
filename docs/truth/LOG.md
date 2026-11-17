@@ -372,6 +372,36 @@ e5_consensus_policy`, reorders only) and the primary-cell twin (`e5_world`).
   glut at the start of the run (inferred). The first reading this session made of the cause,
   "a mis-set level", was too simple: the first column refuted it and the second refined it.
 
+- **M-25 Where any policy could win on the measured cell, and why waste cannot be one of the
+  places (measured from the committed record; read in source).** The record is
+  `docs/state/bprime/twin-regret-primary.json`, the artifact of run 36860454801 committed on
+  2026-10-24: 200 replicates per arm on the primary cell, priced by the same objective as E5.
+
+  | Arm | Mean cost | Unfilled demand | Stock held | Delivery | Spoilage |
+  |---|---|---|---|---|---|
+  | Never order | 6.870 | 5.156 | 0.373 | 1.282 | 0.0589 |
+  | Untuned par level (50, 100) | 4.416 | 2.624 | 0.449 | 1.284 | 0.0589 |
+  | Foresight heuristic | 5.193 | 3.464 | 0.384 | 1.285 | 0.0589 |
+  | Tuned rule E | 2.459 | 0.254 | 0.858 | 1.287 | 0.0589 |
+  | Structure-aware base stock O | 2.212 | 0.345 | 0.521 | 1.287 | 0.0589 |
+  | Hindsight oracle | 1.829 | 0.014 | 0.468 | 1.287 | 0.0589 |
+
+  - The delivery and spoilage terms are the same for every arm, the arm that never orders
+    included. They are 1.346 of the tuned rule's 2.459, so 55% of its cost responds to no
+    decision.
+  - The tuned rule's gap to hindsight is 0.630: 0.390 from holding more stock, 0.240 from
+    unfilled demand. The structure-aware arm, which knows the world's declared demand shape
+    and lead times, beats the tuned rule by 0.246, interval [0.214, 0.276]. The margin a win
+    must clear is 0.4 (five service points at weight 8).
+  - The record's own verdict is `room_to_win`, by a rule that tests the hindsight ceiling's
+    interval against the margin. The best arm without hindsight on record does not clear it.
+  - Read in source, `digital_twin/simulation/engine.py`: a per-item freshness clock loses 0.1
+    every ten simulated minutes and, below 0.3, counts one spoiled order and resets (`:859-875`,
+    identical on `main`);
+    `spoilage_rate` is that count over orders created (`:143`); only a fulfilled demand takes
+    stock away (`:831`). So waste in the twin is a clock: it consumes no stock and does not
+    depend on how much is held or ordered.
+
 ### Window 1: read in the source by the main session
 
 Each was first reported by a mapping subagent and then read at the cited lines by the main
@@ -519,6 +549,20 @@ Checked by the main session on 2026-11-16:
 - **EX-03 FreshRetailNet-50K (Hugging Face dataset page).** Licence tag `cc-by-4.0`. Hourly
   sales and hourly stock status per store and product, tagged for censored demand; 4.85 million
   rows; dates from 2024-03-28. Store, product and city counts are not on the page.
+
+- **EX-04 DeHoratius and Raman, "Inventory Record Inaccuracy: An Empirical Analysis",
+  Management Science 54(4):627-641, 2008 (abstract page, read 2026-11-17).** Of nearly 370,000
+  inventory records from 37 stores of one retailer, 65% were inaccurate; auditing practice
+  reduces inaccuracy and a complex store environment increases it.
+- **EX-05 arXiv 2512.08296, "Towards a Science of Scaling Agent Systems" (v1 2025-12-09, v3
+  2026-04-08; abstract read 2026-11-17).** Relative change against one agent ranges from +80.8%
+  on decomposable financial reasoning to -70.0% on sequential planning; architectures without
+  central verification propagate errors more; coordination gives diminishing returns once the
+  single agent is strong. The abstract gives no amplification figures, no threshold number and
+  no token overhead: those came from a subagent's reading of the body and remain reported.
+- **The official Compute Engine price page could not be read by fetch** (its content loads by
+  region selector). The VM price stays third-party until read in the console or the billing
+  catalog.
 
 Reported by subagents, not re-checked (their own grading in brackets):
 

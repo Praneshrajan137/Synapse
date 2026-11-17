@@ -125,6 +125,25 @@ is what was measured or read.
 - **F-17 One of the harness's own checks is open (read, RD-06).** The controls' agreement check
   reads `harness_mis_measuring` (finding 117), awaiting the operator.
 
+- **F-29 On the cell E5 measures, no policy without hindsight on record clears the margin
+  (measured from the committed record, LOG M-25; the conclusion inferred).** The tuned rule is
+  0.630 above the hindsight oracle. A base-stock rule that knows the world's declared demand
+  shape and lead times beats the tuned rule by 0.246, interval [0.214, 0.276], against a
+  margin of 0.4. A material win would have to take about two thirds of the clairvoyant's
+  advantage without its foresight. The record's verdict `room_to_win` tests the clairvoyant
+  ceiling, not an attainable policy. In the literature (LOG EX-02) learned policies gain 0.8% to
+  5.7% over base stock; the margin here is 16% of the tuned rule's cost and 36% of the part of
+  it any decision can move. *False if* a policy without hindsight beats the tuned rule on this
+  cell with the low end of its interval above 0.4.
+- **F-30 In the twin, waste is a clock (read in source; measured from the record, LOG M-25).**
+  Each item "spoils" one order about every 80 simulated minutes, whatever is held or ordered,
+  and the spoiled order takes no stock away. Spoilage cost is 0.0589 in every arm, including
+  one that never orders. Delivery time is likewise the same in every arm. So 55% of the tuned
+  rule's cost answers to no decision, holding stock costs only its on-hand term, and the
+  perishability that drives real dark-store waste is absent as a consequence of any decision.
+  The Freshness Guardian has nothing in the twin to act on. *False if* a cell or world source
+  makes spoilage depend on stock held or its age.
+
 ## 3. The release path
 
 - **F-18 Nothing is deployed and nothing remains of the last deployment (measured, M-08;
@@ -203,7 +222,8 @@ and the import graph.
 
 ## 6. Not yet examined
 
-Headroom by cell, and what a practitioner would make of the objective's weights (question C).
+Headroom in the shocked and adversarial cells, and what a practitioner would make of the
+objective's weights (question C).
 Leakage between arms, and the open agreement flag (F). The console, seen running (E). Which components
 anything runs (G). Which gates can fail and how each named finding was caught (H). The
 invariants, by fault injection. The data fabric, the ML pipelines and the training code beyond
