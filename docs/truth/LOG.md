@@ -294,16 +294,27 @@ e5_consensus_policy`, reorders only) and the primary-cell twin (`e5_world`).
     the other four seeds).
   - `pricing_oracle` and `freshness_guardian` proposed in none.
   - In the closed loop stock still reached zero for some item at every seed.
-- **M-20 Shocked: the full path chooses the same agent, 1,200 times slower (measured, 12
-  decisions).** Setting an observation's `active_shock`, with all multipliers at 1.0 so that
+- **M-20 Shocked: the full path chooses the same agent (measured, 12 decisions), and a
+  retraction.** Setting an observation's `active_shock`, with all multipliers at 1.0 so that
   only the flag differs, routes it to `tier_4`. Seed 296, twelve hourly decisions in a closed
   loop: `inventory_sentinel` bound 12 of 12; one debate round each; a recorded front of six
-  members; none escalated. Mean 24.2 s per decision, maximum 45.0 s, against 0.02 s on the fast
-  path, with the LLM and the twin observer replaced by offline stand-ins as E5 replaces them.
-  Debate lowered the Sentinel's score (first decision 0.85 to 0.671) and left the five constant
-  scores untouched. At 24 s a decision, E5's 24,000 decisions on a shocked cell would take about
-  160 hours of consensus time, which bears on whether any shocked cell was ever run (R-02).
-- **M-21 Paired states through both paths (measured).** See the entry added when the run ends.
+  members; none escalated. Debate lowered the Sentinel's score (first decision 0.85 to 0.671)
+  and left the five constant scores untouched.
+  **Retracted:** the first version of this entry, committed in `0741ba8`, gave a mean of 24.2 s
+  per decision and concluded that the full path was about 1,200 times slower and that a shocked
+  cell would take about 160 hours. That timing was an artifact of this session's instrument.
+  The script had no `__main__` guard, and on Windows the twin's worker processes start by
+  re-importing the main module, so each worker re-ran the whole scan before doing its work.
+  The paired run showed it by printing its results three times. The scripts are corrected and
+  the valid timing is in M-21.
+- **M-21 The same states through both paths (measured, guarded script `scan_paired.py`).** Six
+  states at seed 296, with nothing ordered so that stock only falls. The orders were identical
+  in 6 of 6, and so was the binding agent. Time per decision: 0.013 s on the fast path; 1.3 to
+  1.9 s on the full path, and 5.1 s for the one decision run under the profiler. In that
+  decision the twin check took 4.5 s and returned `twin_unavailable`, and the arbitration step
+  took 0.5 s. So on this machine the full path costs on the order of a hundred times the fast
+  path and changes nothing in the order. The twin check produced no verdict here; whether it
+  does on a Linux runner, and what it then costs against its 8 s cap, is not measured.
 - **M-22 What exists only off `main` (measured, `git diff --numstat origin/main...<branch>`).**
 
   | Branch | Commits ahead | What it carries |
@@ -337,8 +348,9 @@ session, on the exported tree of `1c484fb`. Paths are relative to the repository
   `decision.proposals` and sends each agent an `execute` carrying that agent's own
   `ratified_proposal`; the comment reads "an agent enacts ITS OWN ratified proposal on the
   world". So on the live path the selection does not decide what is executed: all proposals
-  are. In the E5 harness only the selected action reaches the twin (reported, V-09), so E5
-  measures a different execution rule from the one the live path runs.
+  are. In the E5 harness only the selected action reaches the twin (reported by the mapping
+  subagent at `uplift/consensus_arm.py:413-432, 812-820`; not yet re-read), so E5 measures a
+  different execution rule from the one the live path runs.
 - **V-04 Below the gate nothing ever executes, even after a person approves.**
   `protocol.py:889-941`. A failed guardrail, the confidence floor among them, calls
   `self._hitl.escalate` and then records a withheld dispatch. The docstring states: "Nothing is
@@ -371,6 +383,24 @@ session, on the exported tree of `1c484fb`. Paths are relative to the repository
   `wif.tf:36` is an exact string comparison (inferred: a fresh apply with the default would
   reject the workflow's token). `infrastructure/nginx/nginx.gcp.conf:92-95` hard-codes the old
   machine's address in the server name and the certificate paths.
+- **V-09 Confirmations never reach storage, and the scorer reads storage.** `protocol.py:921`
+  writes the audit row before `_phase_execute` runs. `protocol.py:1593-1615` reuses that row's
+  id and returns the confirmations only on the in-memory decision. A text search of
+  `orchestrator`, `packages`, `data_fabric` and `api` finds no other writer.
+  `data_fabric/jobs/outcome_score.py:75-96` selects `execution_confirmations` from
+  `audit_consensus` and passes `twin_divergence=None`, noting that the twin signal "is not yet
+  joinable". Inferred: on the live path every scored outcome is `unknown`.
+- **V-10 The meta-learner's system state is three values, two of them constants.**
+  `protocol.py:1837-1842`: the hour of the day, `active_disruptions: 0`, `avg_fill_rate: 0.95`.
+
+Reported by the three mapping subagents and not yet re-read by the main session: the single
+LLM call site inside debate (`protocol.py:1149`); the arbitration's weighted-sum selection and
+what the NSGA-II step optimises (`orchestrator/consensus/pareto.py:91, 289-294`); the 0.7
+confidence floor and the 300 s wait (`orchestrator/config.py:75-82`); the list of guardrails
+(`orchestrator/guardrails/rules.py:368-460`); the per-agent sources of each constant score and
+each agent's training code; the eleven steps from an empty cloud project; the sum of declared
+memory limits; the list of published default credentials. Each is cited in `TRUTH-MAP.md` as
+"reported" until re-read.
 
 ## Read, not reproduced
 
