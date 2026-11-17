@@ -1,414 +1,437 @@
 # PLAN - SYNAPSE to the world: from session 2 to a five-day public release
 
-**Status: 2026-11-17, end of session 2.** Written after the operator's reframe (LOG OA-7): the
-release is for the whole world for five days, and the resources are larger than first stated.
-This file is the plan for sessions 3 to 13. It supersedes the audience, release architecture and
-session path in [`DIRECTION.md`](DIRECTION.md), whose analysis of the evidence still stands.
+**Status: 2026-11-17, end of session 2; version 2.** Written after the operator's reframe (LOG
+OA-7): the release is for the whole world for five days. Version 1 of this file was attacked by a
+reviewer with fresh context the same day; its main criticisms were checked and accepted, and this
+version is rebuilt around them (section 16 lists what changed). This file supersedes the
+audience, release architecture and session path in [`DIRECTION.md`](DIRECTION.md), whose analysis
+of the evidence still stands.
+
 Evidence identifiers resolve in [`LOG.md`](LOG.md) (M, V, RD, EX, OA) and
 [`TRUTH-MAP.md`](TRUTH-MAP.md) (F). Labels: **measured**, **read**, **checked** (an outside page
-opened by the main session), **reported** (a subagent's return), **inferred**, **judgment** (this
-session's estimate, with its basis), **dream** (a goal stated without evidence that it is
-reachable).
+opened by the main session), **reported** (a subagent's return), **inferred**, **judgment** (an
+estimate with its basis), **dream** (a goal with no evidence yet that it is reachable).
 
 ## 0. The plan on one page
 
-- **The real problem.** In fast grocery every item must be on the shelf at the minute it is
-  ordered, fresh items spoil within days, demand peaks within the day and is hidden by
-  stockouts, and stock comes from a hub several times a day. Each order trades lost sales
-  against waste. Large operators build their own systems. Everyone else runs static min-max
-  rules and has no way to know whether anything smarter would do better on their own store
-  (section 1).
-- **What SYNAPSE is uniquely placed to do.** Not to claim that AI wins, but to show, honestly
-  and on real demand, where a smarter policy beats a tuned rule, by how much, and to act only
-  where it has earned it. Its proof harness already does what the world's tools and benchmarks
-  do not (section 1.3).
-- **The release: "SYNAPSE Open Dark Store", five days, for anyone.** Four doors and a proof:
-  **Watch** a live, pre-registered experiment in which SYNAPSE and a tuned rule run identical
-  dark stores side by side; **Play** the store yourself against both, with or without SYNAPSE's
-  advice, in your own browser; **Prove** what a smarter policy would do on your own sales data,
-  which never leaves your browser; **Compete** with your own policy on an open benchmark; and
-  read the **Proof**: every claim pre-registered, every decision hash-chained and verifiable
-  (section 4).
-- **What changes underneath.** A light decision kernel extracted from the existing code; a world
-  calibrated to real hourly demand with real perishability; the agents given jobs where the
-  evidence says they can matter (demand shape, shelf life, lead times, disruptions, a shared
-  hub); incumbent-first governance; the proof as a map by scenario (section 5).
-- **Architecture.** Static-first on a free CDN; the twin and policies running in each visitor's
-  browser, so a million visitors cost nothing more than ten; one small live server per Google
-  Cloud account, active and standby; Docker cloud sandboxes for heavy verification and for
-  running submitted policies in isolation (sections 6 and 7).
-- **Sessions.** Eleven, from 2026-11-18 to a launch on 2027-01-18, each with one outcome, an
-  acceptance test and a tripwire (section 9).
-- **Odds (judgment).** The floor, about 80%; the target, about 50%; the dream, about 20%.
-  Section 15 says what each consists of and how we will know.
+- **The real problem.** In fast grocery each order trades a lost sale against waste, demand peaks
+  within the day and is hidden by stockouts, and fresh stock spoils in days. Large operators
+  build their own systems; everyone else runs static min-max rules and has no way to know whether
+  anything smarter would do better (section 1).
+- **What SYNAPSE can uniquely offer.** Not a claim that AI wins, but an honest, verifiable answer
+  to "where does a smarter policy beat a strong rule, by how much, and at what risk?" Its proof
+  harness already does what the tools and benchmarks found do not (section 1.3).
+- **The release: "SYNAPSE Open Dark Store".** Three things, in this order of importance:
+  1. **Play.** Run a simulated dark store in your browser against a strong rule and against
+     SYNAPSE, on the same demand; some players get SYNAPSE's advice, assigned at random.
+  2. **The public contest.** SYNAPSE and the strong rule run identical simulated stores for five
+     days, with demand drawn from a public randomness beacon as the days pass, so nobody,
+     including us, can know or choose the outcome in advance, and anyone can recompute every step
+     in their own browser.
+  3. **The proof.** Every claim pre-registered before launch, the map of where each part helps and
+     where it does not, the project's own negative results, and how to check all of it.
+- **Architecture.** No server is needed for any of it: a static site on a free CDN, the twin and
+  policies running in each visitor's browser, randomness from a public beacon. A visitor costs
+  nothing, so a million cost nothing more than ten. The cloud accounts are reserved for a live
+  mirror that shows the full governed system computing exactly what the browsers compute (the
+  target tier), and for heavy verification (section 6).
+- **What changes underneath.** A strong incumbent (tuned per item and per part of the day); a
+  world with modelled shelf lives, many skewed items and an intraday demand shape fitted to real
+  data; challengers that must detect trouble from what they observe; the economic weights and
+  the margins fixed and sealed before any result on the new world exists (section 5).
+- **Sessions.** Eleven (session 3 and ten execution sessions), 2026-11-18 to a launch on
+  **Tuesday 2027-01-19**, each with one outcome, a test and a tripwire (section 9).
+- **Odds (judgment, section 15).** An honest static release of what already exists: about 90%.
+  The floor: about 55%. The target: about 30%. The dream: about 10%.
 
 ## 1. The real problem
 
 ### 1.1 What a dark store must get right
 
-- A quick-commerce store carries thousands of items (secondary sources give 2,000 to over
-  40,000, LOG reported block) and serves 1,000 to 2,000 orders a day (reported). Demand peaks in
-  the evening, spikes with weather and festivals, and is censored: a stockout hides the demand
-  it turned away (FreshRetailNet-50K exists to recover exactly this, LOG reported block).
-- Fresh items spoil in days, so every unit ordered too many is waste and every unit too few is
-  a lost order and an unhappy customer. Store ordering and replenishment have long been
-  reported as the largest single cause of out-of-stocks (about 47% in a 2002 industry study,
-  snippet), and inventory distortion is put at about $1.7 trillion a year worldwide (IHL, 2025,
-  snippet).
+- A quick-commerce store carries thousands of items and serves 1,000 to 2,000 orders a day
+  (secondary sources, reported). Demand peaks in the evening, jumps with weather and festivals,
+  and is censored: a stockout hides the demand it turned away.
+- Fresh items spoil in days, so every unit too many is waste and every unit too few is a lost
+  order. Store ordering and replenishment were reported as the largest single cause of
+  out-of-stocks in a 2002 industry study, about 47% (snippet); inventory distortion is put at
+  about $1.7 trillion a year worldwide (IHL, 2025, snippet).
 - Stock records drift from the shelf: 65% of records were wrong in the standard study of one
-  retailer (EX-04). A loop that trusts the record never reorders an item that is gone.
+  retailer (EX-04).
 
 ### 1.2 Who decides today, and what they lack
 
-- Large operators build planning in-house (reported).
-- Everyone else, from small dark-store chains to grocers and pharmacies, uses static min-max
-  rules. Free tools such as Odoo's reordering rules are of this kind, and none of the tools
-  found shows its user evidence that it beats a simple rule (reported, snippet-level).
-- The missing thing is not another forecast. It is **evidence**: on my store, with my demand,
-  would a smarter policy really beat the rule I have, by how much, and where would it fail?
-  Vendors claim uplift without falsifiable proof; operators cannot test the claim.
+- Large operators build planning in-house (reported). Everyone else runs static min-max rules;
+  free tools such as Odoo's reordering rules are of this kind, and none found shows its user
+  evidence that it beats a simple rule (reported, snippet-level).
+- What is missing is **evidence**: on demand like mine, would a smarter policy really beat a
+  well-tuned rule, by how much, and where would it fail? Vendors claim uplift without a test
+  anyone can run.
 
-### 1.3 Why SYNAPSE, and the frontier it can pass
+### 1.3 Why SYNAPSE, and the gap it can fill
 
-- **Its harness already answers the question honestly.** Paired seeds, controls, a power
-  analysis, a hindsight oracle, pre-registered claims, and negative results published twice
-  (F-14, RD-01, RD-06). It runs on a laptop in seconds and repeats exactly (M-18, M-23).
-- **The nearest frontier benchmark leaves the hard parts out.** InventoryBench (2026, NeurIPS
-  listing) tests single products on weekly demand and finds that OR heuristics combined with a
-  language model beat either alone, and that human-AI teams beat humans or AI alone (EX-07).
-  Nothing found combines a tuned (s, S) rule, a hindsight oracle, perishability, intraday time,
-  censored real demand and a hub of stores (reported). That combination is where fast grocery
-  lives, and where SYNAPSE can lead.
-- **No live public AI experiment has had a tuned baseline.** Project Vend and similar public
-  experiments drew their audience through failures, with no classical rule to compare against
-  (reported). A live, pre-registered contest with a tuned rule in the next store, and every
-  decision verifiable, would be new.
+- **Its harness answers that question honestly.** Paired seeds, controls, power analysis, a
+  hindsight oracle, pre-registered claims, and negative results published twice (F-14, RD-01,
+  RD-06). It runs on a laptop in seconds and repeats exactly, even across machines (M-18, M-23).
+- **The nearest benchmark leaves the hard parts out.** InventoryBench (2026) tests single
+  products on weekly demand; it finds OR heuristics plus a language model beat either alone, and
+  human-AI teams beat either alone in a classroom (EX-07). None found combines a strong tuned
+  rule, a hindsight oracle, perishability, intraday time and censored real demand (reported).
+- **No public AI experiment found was verifiable by its audience.** Project Vend and its kind
+  were watched, not checked, and had no classical rule beside them (reported).
 
 ## 2. What seven months built, read as a whole
 
 | Phase | Months | What it built | What it left |
 |---|---|---|---|
-| Foundation | April | Infrastructure, eight agents, orchestrator, twin, API, console | Breadth: every layer of a platform exists in some form |
-| Hardening and reach | May to June | Resilience, multi-city, supply-chain security, audit chain, GCP deploy, design system, the console's honesty UX | Strong engineering habits; a topology no one person can run (F-22) |
+| Foundation | April | Infrastructure, eight agents, orchestrator, twin, API, console | Every layer of a platform exists in some form |
+| Hardening and reach | May to June | Resilience, multi-city, supply-chain security, audit chain, GCP deploy, design system, an honest console | Strong habits; a topology one person cannot run (F-22) |
 | Verification | June | Gates, coverage truth, deploy truth, substance mandate | 68 checks; a watchdog that never saw the system (F-25) |
-| Agency | June to July | The closed loop: a sensor, a standing world, actuation | Autonomy in form; one heuristic in fact (F-01) |
+| Agency | June to July | The closed loop: sensor, standing world, actuation | Autonomy in form, one heuristic in fact (F-01) |
 | Proof | July to November | The uplift harness and E5 | An honest negative result and its cause (F-13, F-13a) |
 | Truth | November | This session | The map of what is real |
 
-**The lesson, in one line.** The project built breadth before evidence, then built the evidence
-and found the breadth hollow at the core. The next phase is the reverse of the first: **depth at
-the core, reach at the edge.** Make the few decisions that matter genuinely better where the
-evidence says they can be, prove it on real demand, and reach the world through something that
-costs nothing per visitor.
+**The lesson.** The project built breadth before evidence, then built the evidence and found the
+breadth hollow at the core. The next phase reverses the first: **depth at the core, reach at the
+edge.** Make the few decisions that matter better where the evidence says they can be, prove it
+in a way anyone can check, and reach the world through something that costs nothing per visitor.
 
-**What the history earned and keeps.** The harness (the project's best asset); the colour
-system and the console's honesty vocabulary (reported reusable as they are, M-36); the audit
-chain and its public anchoring; the typed contracts and the safety tests that caught five of
-five faults (F-31); the twin's seams for outside demand (ADR-052). **What it froze.** The
-streaming and graph topology, the Helm chart, the training code without trained models (M-35),
-the multi-city overlay. Frozen is not deleted: it is the documented production topology for an
-operator who wants it later.
+**Kept and reused:** the harness; its exact reproducibility, which becomes the release's trust
+mechanism; the colour system and the console's honesty vocabulary (M-36); the audit chain; the
+safety tests that caught five of five faults (F-31). **Frozen, not deleted:** the streaming,
+graph and orchestration topology, the Helm chart, the deep-model code with no trained model
+(M-35), the multi-city overlay.
 
-## 3. The vision, the target and the floor
+**Keeping the legacy green.** The new world and the kernel are built in their own package. The
+existing engine, the harness, E5's lineage and the 110 tests, audit scripts and workflows that
+reference them (measured by `git grep`) stay as they are and keep passing. The new code gets its
+own fast checks. Nothing old is retired except by the experiment rule of D-5.
 
-- **The dream (2027 and after).** The open reference for honest, governed replenishment in fast
-  retail: a twin calibrated to real demand that anyone can run; an open benchmark where rules,
-  learned policies, language-model agents and people compete on the hard cases; a decision engine
-  a small retailer can run on its own data, acting only where it has earned it; and published
-  evidence, including where it fails.
-- **The target for the release.** All four doors open and working; the world calibrated to real
-  hourly demand with real perishability; SYNAPSE measurably better than the tuned rule in the
-  stressed scenarios where theory says rules break, reported honestly where it is not; five days
-  live; the static parts left running afterwards at no cost.
-- **The floor, if the sessions run slow.** Watch, Play and the Proof; the calibrated world; an
-  honest result whatever its sign; five days live.
+## 3. The ladder: what we can be sure of, what we intend, what we dream
 
-Section 15 gives the odds and the evidence each will produce.
+| Rung | What the world gets | Odds (judgment) |
+|---|---|---|
+| 0 | An honest static release of what exists: the proof page with E5's history and today's map; the contest and Play on the current world, labelled with its limits; recompute-in-your-browser | About 90% |
+| 1 Floor | Rung 0 rebuilt on the truer world: strong incumbent, modelled shelf lives, skewed items, demand shape fitted to real data; the pre-registered map; Play with randomised advice; the beacon-seeded contest | About 55% |
+| 2 Target | The floor plus: a live mirror on Google Cloud running the full governed system on the same beacon and matching the browsers decision for decision; trace-driven runs on real store histories from FreshRetailNet-50K; challengers that detect shocks from data; a phone mode; opt-in anonymous play traces | About 30% |
+| 3 Dream | The target plus: an open benchmark with outside submissions; a backtest on a visitor's own file; a hub of stores where coordination is tested; language-model entrants; a released human-AI dataset; a preprint | About 10% |
+
+Section 15 gives the basis and the signals that will move these odds.
 
 ## 4. The product the world meets
 
 ### 4.1 The first minute
 
-A visitor lands on one page that says, in plain words: two identical dark stores are running
-right now, one run by a tuned rule and one by SYNAPSE; here is what each has sold, wasted and
-missed so far; here is what we predicted before the start; and here is how you can check every
-decision. Then four doors.
+One page says, in plain words: two simulated dark stores are running, one by a strong rule and
+one by SYNAPSE; here is what each has sold, wasted and missed so far; here is what we said we
+would prove before it started; the demand comes from a public randomness source nobody controls;
+and you can recompute every step yourself. Then: **play the store yourself.**
 
-| Door | What the visitor does | Where it runs | What makes it frontier |
-|---|---|---|---|
-| **Watch** | Follows the live contest: day, orders, stockouts, waste, money, the decision being made now and why | One live server; snapshots through the CDN | Pre-registered claims, an always-valid running interval, and a public hash-chained decision log anchored daily; no live public contest with a tuned baseline was found (reported) |
-| **Play** | Runs a store for a simulated day or week, ordering at each delivery slot, against the rule and SYNAPSE on the same demand; can switch on SYNAPSE's advice and amend it | The visitor's browser (Pyodide) | A human-in-the-loop replenishment experiment open to anyone, far beyond a classroom's size, in a perishable intraday store; anonymous traces shared only by opt-in |
-| **Prove** | Drops in a sales file (or picks a real store from FreshRetailNet-50K) and sees, on a held-out stretch of their own history, how the rule and SYNAPSE's policies would have done, with intervals, and a suggested order plan | The visitor's browser; the file never leaves it | Honest backtesting with censored-demand recovery, privacy by construction |
-| **Compete** | Downloads the benchmark, writes a policy, submits it; sees the leaderboard of rules, SYNAPSE, learned and language-model entrants, the people from Play, and the hindsight bound | Static leaderboard; evaluation in isolated sandboxes | An open benchmark for perishable, intraday, hub-coupled replenishment with a tuned rule and an oracle; none combining these was found (reported) |
-| **Proof** | Reads what was claimed before the start, the map of where each part helps, the negative results and their causes, and how to verify | Static | The project's honesty, made the product |
+### 4.2 Play (first door)
 
-### 4.2 What stays after the five days
+- The visitor runs a store for one simulated day or week, ordering at each delivery slot, on the
+  same demand the rule and SYNAPSE face, and sees fill, waste and money side by side.
+- **Randomised advice.** Half of the sessions, chosen at random before play, show SYNAPSE's
+  recommended order, which the player may take or amend. That makes the human-with-AI comparison
+  a fair one (the reviewer's point: letting players choose would confound it).
+- Runs entirely in the browser through Pyodide. Nothing is sent anywhere in the floor.
 
-The live contest stops; its full record, final analysis and decision log stay. Play, Prove,
-Compete and the Proof are static and keep running on the free CDN indefinitely (inferred from
-the CDN's free terms, LOG reported block). A five-day event becomes a lasting public good.
+### 4.3 The public contest (second door)
 
-### 4.3 What the visitor can never do
+- Two identical simulated stores, strong rule and SYNAPSE, on an accelerated clock (default one
+  simulated day per real hour, D-14), for 120 hours.
+- **Floor form: committed and revealed.** Before launch the code, the claims and the analysis are
+  published with their hashes. At launch a round of the public drand beacon (reported: League of
+  Entropy relays, HTTP API, signed rounds) seeds the run. The run is revealed hour by hour. Anyone
+  can recompute it in the browser and compare digests.
+- **Target form: live from the beacon.** Each simulated day's randomness comes from that hour's
+  beacon round, so even the future is unknown to us, and each browser computes the current state
+  itself. The design is a bet (B3), proven or dropped in session 4.
+- **Why the two stores differ.** The contest compares the strong rule with SYNAPSE's governed
+  composition, which uses a challenger wherever the pre-registered map trusts one. If the map
+  trusts none in a regime, the stores behave the same there, and the page says so: that is the
+  honest result, not a failure to show.
 
-Change the live contest. Fairness and safety both require it: the public watches the live stores
-and plays in its own. The floor has no public write path at all (section 8, bet B6).
+### 4.4 The proof (third door)
+
+What was claimed and sealed before launch; the map of where each part helps, with intervals;
+the negative results and their causes (E5 at -4.40, then -1.45 after the repair, F-13); the
+limits of the world; and the instructions and code to check all of it.
+
+### 4.5 What stays after the five days
+
+Everything: the site is static. The contest's full record and analysis stay; Play and the proof
+keep running on the free CDN (inferred from the CDN's free terms, reported).
+
+### 4.6 What the visitor cannot do
+
+Change the contest, or send anything anywhere, in the floor. Opt-in trace sharing (target) is the
+only write path, and it comes with a privacy notice, consent and rate limits (section 11).
 
 ## 5. The science underneath
 
 ### 5.1 The decision kernel
 
-- **What.** A small package, `synapse_kernel`, extracted from code that exists: the twin engine,
-  the tuned (s, S) rule, the structure-aware base-stock arm, the Sentinel's newsvendor logic, the
-  objective and its metrics. Pure Python and NumPy only (M-33: the engine already needs only six
-  light packages).
-- **Why.** One kernel runs in three places: the proof harness, the live server and the browser.
-  What visitors play against is what the proof measured.
-- **Acceptance.** Exact parity with the harness on fixed seeds (the incumbent's cost equal to the
-  last digit), as M-18 and M-23 already show is possible.
+- A small package extracted from code that exists: the twin, the tuned rule, the structure-aware
+  base-stock arm, the Sentinel's newsvendor, the objective. Pure Python and NumPy. The engine
+  already needs only six light packages (M-33), and the light policies drag in the heavy stack
+  only through an eager package import (M-37).
+- One kernel runs in the harness, the browser and the live mirror. **Parity is tested, not
+  assumed:** the same seed must give byte-identical results natively and in the browser (session
+  8), as it already does across two native machines (M-18).
 
-### 5.2 A truer world
+### 5.2 The scientific choices, sealed first (session 4)
 
-| Change | Why | Evidence it is needed |
+The reviewer's strongest objection was that the public verdict depends on three choices not yet
+made, and that loose choices would make any "win" cheap. They are therefore fixed and sealed, with
+their hashes published, before any result on the new world exists:
+
+| Choice | Sealed as | Why |
 |---|---|---|
-| Waste takes stock, batch by batch, by age (first in, first out) | Without it, over-ordering costs nothing and freshness has nothing to decide | F-30 |
-| Many items with skewed demand and an intraday profile | Ten equal items hide fast and slow movers and the evening peak that caused the measured loss | F-13a, M-09 |
-| Demand calibrated to FreshRetailNet-50K, with stockout-hidden demand recovered | Hourly sales and stock status for 863 perishable products in 898 stores (licence CC BY 4.0) | EX-03, LOG reported block |
-| Trace-driven runs on real store histories | External validity: policies compared on demand that really happened | FRONTIER row 4 |
-| A hub with limited stock and trucks serving several stores (target tier) | The one structure where coordination between agents can pay | F-29, T-001 |
-| Shocks as pre-registered cells: demand spike, supplier default, monsoon, cold start | Where a static rule is weakest | `uplift/scenarios.py` |
+| The incumbent | A rule tuned per item and per part of the day, on normal conditions only, as a good planner would | Today's tuned rule shares one (s, S) across all items (`uplift/tuned_static.py:1-13`); against skewed items that is a strawman |
+| The economic weights | Lost-sale cost from gross margin, waste cost from unit cost, holding cost per unit-day, each from a stated, cited retail economics assumption, with a sensitivity band reported | Today's 8:1:1 is the measured agent's own default (F-14a), and once waste takes stock the weights decide the sign |
+| The material margin | In cost units, tied to effects a practitioner would act on (for example one point of fill at equal waste, or a tenth less waste at equal fill) | Statistical power is not practical importance |
+| The seeds | Exploratory seeds for development; confirmatory seeds sealed by hash and opened only for the final run | So nothing is tuned to the seeds it is judged on (M-24 shows how fast that happens) |
+| Shocks | Onsets at random times, unannounced; challengers must detect them from what they observe | Today's shocks are constant multipliers with no onset, and a challenger that reads the declared shock is seeing the answer |
+| The analysis | Paired comparisons with a block bootstrap or another method valid under autocorrelation; for the contest, a pre-specified final test, with interim numbers labelled descriptive | Daily differences in one run are not independent |
 
-Each change moves the baseline, so the tuned rule is re-tuned and the controls re-run, which now
-takes minutes (F-14).
+### 5.3 A truer world (narrowed)
 
-### 5.3 The agents, with jobs where they can matter
+| Change | Why | Evidence |
+|---|---|---|
+| Stock held in batches that age and are discarded at their modelled shelf life, first in first out | Without it over-ordering costs nothing | F-30 |
+| Many items with skewed demand and an intraday profile | Equal items hide fast and slow movers and the evening peak behind the measured loss | F-13a, M-09 |
+| The intraday shape and item mix fitted to FreshRetailNet-50K, with stockout-hidden demand recovered by one named method, checked by masking hours that were in stock | Real hourly sales with stock status for 863 perishable products (CC BY 4.0); it has no waste, cost or lead-time fields, so those stay modelled and declared | EX-03, LOG reported block |
+| Shocks with random onsets | Where a rule tuned on normal conditions should struggle | 5.2 |
 
-| Agent | Its job in the release | Mechanism | Status at the end of session 2 |
+A hub of stores is moved to the dream: it is the fair test of coordination, but it is not needed
+for the release's claims.
+
+### 5.4 The agents, given jobs where they can matter
+
+| Agent | Job in the release | Mechanism | Today |
 |---|---|---|---|
-| Demand Prophet | The day's demand shape per item, fitted on real data with censoring recovered | Information | Fallback constant (F-02) |
+| Demand Prophet | The day's demand shape per item, fitted on real data | Information | A fallback constant (F-02) |
 | Inventory Sentinel | Order quantities from forecast, lead time and shelf life | Information | Binds every decision; mis-estimates the rate (F-13a) |
-| Freshness Guardian | Batch ages and expected waste; markdown proposals (target tier) | Information | Refused by the harness request (F-03) |
-| Supplier Trust | Lead-time distribution per supplier | Information | Configured prior (F-02) |
-| Disruption Shield | Recognises the regime the store is in | Adaptation | Given no features (F-02) |
-| Orchestrator | Incumbent-first arbiter, quantity guard, audit chain, outcomes | Governance | Argmax of self-reported confidence (F-04) |
-| Hub allocator (target tier) | Splits scarce hub stock across stores | Coordination | Does not exist |
-| Pricing Oracle | Markdowns of near-expiry stock (target tier) | Information | Refused by the harness request (F-03) |
-| Routing Navigator | Deferred: the twin has no spatial model of delivery | - | Frozen |
-| Sustainability | Reports waste and emissions as outcomes | Reporting | Fallback (F-02) |
+| Freshness Guardian | Batch ages and expected waste | Information | Refused by the harness request (F-03) |
+| Supplier Trust | Lead-time distribution per supplier | Information | A configured prior (F-02) |
+| Disruption Shield | Detects a shock from demand and lead-time signals, without being told | Adaptation | Given no features (F-02) |
+| Orchestrator | Incumbent-first arbiter, quantity guard, record of outcomes | Governance | Argmax of self-reported confidence (F-04) |
+| Pricing Oracle, Routing Navigator, Sustainability | Not used in this release's decisions: markdowns, riders and emissions are deferred or reported only | - | Shown as such |
 
-Each agent earns its place by ablation, against a rule written before the run: a part that
-changes no measured outcome in any pre-registered cell is shown as "not used in this workflow"
-(DECISIONS D-5).
+Each part earns its place by ablation under the rule written before the run (D-5). The honest
+expectation, from F-29 and the literature (EX-02): in calm conditions a strong rule leaves little
+room, and the map may show none; the room, if any, is in shocks and short shelf lives.
 
-### 5.4 Governance that lets SYNAPSE act safely
+### 5.5 Governance
 
-- **Incumbent first.** The tuned rule decides unless the pre-registered map trusts a challenger
-  for the regime the store is in and a deterministic guard passes its quantity (half to twice the
-  rule's; DECISIONS D-2, D-4).
-- **No dead ends.** Below the confidence floor the incumbent acts, so a decision never stops
-  waiting for nobody (fixes F-08).
-- **Every decision recorded with what then happened**, hash-chained, anchored daily in public
-  (fixes F-10; reuses ADR-033).
-- **The degraded flag is read**, not only recorded (fixes F-02a).
+- **Incumbent first.** The strong rule decides unless the map trusts a challenger for the regime
+  the store is detected to be in, and a deterministic guard passes the quantity (D-2, D-4).
+- **No dead ends.** Below the confidence floor the incumbent acts (fixes F-08).
+- **Outcomes recorded** for every decision, hash-chained (fixes F-10; reuses ADR-033).
+- **The degraded flag read**, not only stored (fixes F-02a).
+- A loss is not ruled out: the map can be wrong in a regime it did not see, which is why the
+  claims below state it in cost units.
 
-### 5.5 The claims, pre-registered before launch
+### 5.6 The claims, sealed before launch
 
-| Claim | Cell | Test | What would prove it false |
+The numbers in this table are written in session 4 (section 5.2) and published with their hash.
+
+| Claim | Cell | Stated as | False if |
 |---|---|---|---|
-| C1 SYNAPSE is never worse than the tuned rule by more than the guard allows | Every cell | Paired cost difference, upper bound of a 95% interval | An interval above the guard's bound |
-| C2 SYNAPSE beats the tuned rule where demand shape matters | Primary cell, calibrated | Paired cost, held-out seeds | A 95% interval that includes zero |
-| C3 SYNAPSE beats the rule in shocks | Demand spike, supplier default, monsoon | Same | Same |
-| C4 Coordination pays in a constrained hub (target tier) | Hub cell | Coordinated allocator against proportional allocation | Same |
-| C5 Live: the gap measured in public stays inside the pre-registered range | The live contest | An always-valid confidence sequence, monitored daily | The sequence leaving the range |
-| C6 People with SYNAPSE's advice beat people alone and the rule (exploratory) | Play | Descriptive, by opt-in traces | Reported as found, either way |
+| C1 SYNAPSE is never materially worse than the strong rule | Every cell | Upper bound of the paired cost difference below the material margin, in cost units | The bound exceeds the margin in any cell |
+| C2 SYNAPSE is materially better where shocks arrive unannounced | Shock cells | Lower bound of the paired cost advantage above the margin | The lower bound at or below the margin |
+| C3 SYNAPSE wastes less at equal fill where shelf lives are short | Short-shelf-life cell | Waste and fill differences with their intervals | Waste not lower, or fill lower by more than the margin |
+| C4 The contest's result is reproducible by anyone | The public contest | Digests from any browser equal the published ones | Any honest recomputation differs |
+| C5 The live mirror computes what the browsers compute (target) | The contest | Every decision of the mirror equals the kernel's for the same beacon rounds | Any mismatch |
+| C6 Players with SYNAPSE's advice do better than players without it (exploratory, target) | Play | Difference in cost between randomly assigned groups | Reported either way, as exploratory |
 
-The numbers that define "beats" are written in session 7 from the power analysis, before any
-result on the new world is seen. A negative result is published as prominently as a positive
-one, as the project has already done twice.
+A negative result is published as prominently as a positive one, as the project has done twice.
 
-## 6. Architecture for the whole world
+## 6. Architecture
 
 | Layer | What | Where | Scales to | Cost |
 |---|---|---|---|---|
-| Front door | Static site: Watch, Play, Prove, Compete, Proof | Cloudflare Pages, free plan | Any audience; static requests reportedly unlimited (snippet) | $0 |
-| In-browser engine | Pyodide plus `synapse_kernel` in a Web Worker | The visitor's machine | One visitor at a time, each on their own machine | $0 |
-| Live contest | The kernel's worlds on an accelerated clock, the real governed decision path in-process, the audit chain | One small VM on Google Cloud account A | Bounded: it serves one snapshot | About $12 to $25 for six days at e2-standard-2 rates (reported prices, inferred hours) |
-| Snapshot delivery | A JSON snapshot every few seconds, cached at the edge with a short TTL | Cloudflare proxy in front of the VM, needs a domain (D-17) | Viewers hit the cache, not the server | About $10 a year for a domain |
-| Fallback delivery | Hourly snapshots published as static files | Pages deploys (500 a month allowed, reported) | Any audience | $0 |
-| Standby | A tested image and restore on account B; warm during the release | Google Cloud account B | Takes over in under 30 minutes (target) | About $10 |
-| Heavy verification | Full suites, full-size proof runs, load tests, browser matrix | Docker cloud sandboxes, Large or XL | 8 to 16 vCPU, 16 to 32 GB | From the $250 credits (EX-06) |
-| Benchmark evaluation | Submitted policies and language-model entrants, each in its own microVM | Docker cloud sandboxes | Isolation by construction | From the credits |
-| Training | Demand-shape and censoring models on FreshRetailNet-50K | Colab (200 units) or a sandbox CPU | One-off | From the units |
+| Site | Play, the contest, the proof | Cloudflare Pages, free plan | Any audience; static requests reportedly unlimited (snippet) | $0 |
+| Engine | Pyodide and the kernel in a Web Worker | The visitor's machine | Each visitor computes for themselves | $0 |
+| Randomness | drand public beacon rounds, verified in the browser (a WebAssembly verifier exists, reported) | Public relays | Built for public use (reported) | $0 |
+| Live mirror (target) | The full governed system, in-process, on the same beacon rounds, publishing hourly snapshots and its hash-chained log | One small VM on the Google Cloud account whose trial ends later | One process | About $12 for six days at third-party e2-standard-2 rates (reported prices) |
+| Verification | Full suites, sealed confirmatory runs, browser matrix | The laptop first; Docker sandboxes for what does not fit | 8 to 16 vCPU, 16 to 32 GB | From the Docker credits |
+| Calibration fits | Demand shape and censoring on FreshRetailNet-50K | Colab or a sandbox | One-off | From the units |
 
-**Speed budget (judgment from M-34 and the reported slowdown).** A simulated day takes about 0.44
-s natively and an estimated 1.3 to 2.2 s in a browser. A visitor's day of play therefore runs as
-fast as they can decide. Loading Pyodide with NumPy costs a few seconds once, cached afterwards.
+**Speed (judgment from M-34 and the reported slowdown).** A simulated day takes 0.44 s natively
+for ten items, an estimated 1.3 to 2.2 s in a browser, and more with more items. Session 8 sets
+the item count to fit a budget of 3 s per simulated day on a mid laptop, and a phone mode with
+fewer items.
 
-**What does not ship.** Kafka, Neo4j, Redis, Feast, MLflow, Prometheus, Grafana, the Helm chart,
-the language-model server in the hot path. The live server runs the governed decision path
-in-process, as the harness already does (F-14), with Postgres or SQLite for the audit chain.
+**What does not ship:** Kafka, Neo4j, Redis, Feast, MLflow, Prometheus, Grafana, the Helm chart,
+any language model in the decision path.
 
 ## 7. Resources, mapped
 
 | Resource | Stated | Use | Planned spend | Caution |
 |---|---|---|---|---|
-| Google Cloud account A | $300 trial | Rehearsals, then production | Under $40 | Trial terms: "You haven't previously signed up for the Free Trial" (reported, quoted from Google's page); eight cores at a time; ends three months after start (EX-01) |
-| Google Cloud account B | $300 trial | Standby, and production if its trial ends later | Under $30 | Same; whichever trial ends later hosts the release |
-| Docker cloud sandboxes, three accounts | $250 each | Verification boxes for the sessions; benchmark and language-model evaluation | $150 to $400 | "Limit one per user and account"; claim by 2027-01-31; expires six months after claiming (EX-06) |
-| Claude Code | Max plan; about $120 across ten sessions | The implementation sessions | All of it | The binding resource: see 9.2 |
-| Colab | 200 units | Training the demand-shape and censoring models; optional policy learning | Under 100 units | Expiry not stated |
-| Cloudflare | Free plan | Static site, CDN, DNS | $0 | Nothing polled may pass through a Worker (100,000 requests a day, reported) |
-| A domain | Not yet held | Edge caching of live snapshots | About $10 a year | The only cash cost; D-17 |
+| Google Cloud, two accounts | $300 trial each | Target only: the live mirror on the later-ending trial; rehearsal on the other | Under $40 in all | Trials are for customers who never had one (reported, quoted from Google's page); eight cores at a time; three months from start (EX-01). The floor needs neither account |
+| Docker Sandboxes, three accounts | $250 each | Sealed confirmatory runs, browser matrix, load and parity tests | $50 to $200 | "Limit one per user and account"; claim by 2027-01-31; expires six months after claiming; a card is required (EX-06) |
+| Claude Code | Max plan ($150, held); about $120 of use for the ten execution sessions | The sessions | All of it | The binding resource (section 9.2) |
+| Colab | 200 units | Calibration fits | Under 50 units | Expiry not stated |
+| Cloudflare | Free plan | Site and CDN | $0 | Nothing visitors poll may pass through a Worker (100,000 requests a day, reported) |
 
-**On the terms (stated plainly).** Google's trial is for customers who have not had one before,
-and Docker's credit is one per user and account. If several accounts belong to one person, a
-provider may end the trial or void the credit. The plan is built so that no single account is
-essential: the front door, Play, Prove, Compete and the Proof live on the free CDN, and the live
-contest can fall back to hourly static updates. Whether each account is eligible is the
-operator's to confirm (D-16).
+**On the terms, plainly.** If several of these accounts belong to one person, a provider may end
+a trial or void a credit. The floor depends on none of them: it is a static site.
 
 ## 8. The calculated risks
 
-| Bet | Upside | Downside | Odds (judgment) | Cost | Tripwire and fallback |
-|---|---|---|---|---|---|
-| B1 The twin runs in the browser | Zero marginal cost at any audience; private Prove | Slow or heavy on phones | 75% | Part of one session | If a day takes over 5 s on a mid laptop, Play runs on a server with rate limits, or on precomputed days labelled as such |
-| B2 Calibrate to FreshRetailNet-50K | External validity; real perishable demand | Chinese fresh retail is not Indian quick commerce; censoring recovery is hard | 70% | One session | Declare the domain gap on the Proof page; keep the declared world as a second cell |
-| B3 A live, pre-registered public contest | None like it found; attention earned by honesty | SYNAPSE may lose in public | 85% that it runs; the sign is unknown | One session plus hosting | A pre-registered loss is reported as one; incumbent-first bounds the size of any loss |
-| B4 The world plays the store | A human-AI study at a scale no classroom reaches | Few players; noisy data | 60% for useful data | Part of two sessions | Results reported as exploratory |
-| B5 An open benchmark | Others build on SYNAPSE; it becomes a reference | Few submissions in five days | 50% for any outside submission | One session | Seeded with every baseline and the people from Play |
-| B6 No public write path | Fairness and safety by construction | Less interaction | 95% | None | The crowd-controlled store stays a dream |
-| B7 Coordination in a hub | The fair test of the multi-agent premise | It may not pay | 40% for a clear win | Part of one session | Reported either way; cut first if the pace slips |
-| B8 Language-model entrants on the benchmark | Tests the 2026 OR-plus-model finding in a harder setting | CPU inference is slow | 60% to run; result unknown | Docker credits | Fewer scenarios; reported as a pilot |
+| Bet | Upside | Downside | Odds (judgment) | Fallback |
+|---|---|---|---|---|
+| B1 The kernel runs in the browser at 3 s a simulated day | Zero marginal cost; recompute-it-yourself | Slow or heavy, worst on phones | 70% | Fewer items; a phone mode; precomputed days labelled as such |
+| B2 Demand shape fitted to FreshRetailNet-50K | Real demand, honestly labelled | Chinese fresh retail is not Indian quick commerce; censoring is hard | 70% | Declare the gap; keep the declared world as a cell |
+| B3 Live randomness from a public beacon, verified in the browser | A contest no one can rig or predict, checkable by anyone | Beacon availability, verification in WebAssembly, rate limits | 60% for the live form; 90% for the commit-and-reveal floor form | Commit and reveal from one launch round |
+| B4 A strong incumbent leaves SYNAPSE no material win | None; it is the honest risk | The headline is "a strong rule is hard to beat" | 50% that no cell shows a material win | Published as found; the map and the verifiability are the contribution either way |
+| B5 Randomised advice in Play | A fair human-with-AI comparison at a scale classrooms cannot reach | Few players or noisy data | 50% for a usable sample | Reported as exploratory |
+| B6 No write path in the floor | Safety and privacy by construction | Less data | 95% | - |
+| B7 The live mirror matches the browsers decision for decision | Shows the full governed system is what was tested | Floating-point or ordering differences | 60% | Report the first mismatch and its cause |
 
 ## 9. The sessions
 
 ### 9.1 The path
 
-Eleven sessions, 2026-11-18 to 2027-01-18. Dates are targets; the tripwires decide cuts.
-"Verified" means on the laptop or in a Docker sandbox before any labelled CI run, the fast regime
-that the pace depends on (F-32).
+Session 3 and ten execution sessions, 2026-11-18 to 2027-01-19. Dates allow for 25 December and
+1 January. "Verified" means on the laptop or in a Docker sandbox first.
 
-| # | Dates | Outcome | Acceptance test | Tier |
+| # | Dates | Outcome | Acceptance test | Rung |
 |---|---|---|---|---|
-| 3 | Nov 18 to 20 | Decide and land: definition of finished from this plan; D-14 to D-20; PRs #87, #91, #90, #89 merged in order with your yes; the ledger worktree committed; one Docker sandbox set up as the verification box | `main` green; the decision-core suite and the twelve-replicate proof run in the sandbox, timed | Floor |
-| 4 | Nov 21 to 26 | The decision kernel extracted; the shape-aware challenger fitted on held-out seeds | Exact parity with the harness on twelve seeds; the challenger measured against the rule, pre-registered | Floor |
-| 5 | Nov 27 to Dec 2 | The truer world: batches that spoil by age, skewed items with an intraday profile, demand calibrated to FreshRetailNet-50K with censoring recovered; the hub (target) | Spoilage rises with stock held (a test that fails today); calibration report against the data; rule re-tuned; controls pass | Floor (hub: target) |
-| 6 | Dec 3 to 8 | Governance and challengers: incumbent-first arbiter and guard; outcomes recorded; the degraded flag read; perishable-aware and disruption-aware challengers; the Shield as regime detector | Tests written to fail before each change; ablation arms runnable | Floor |
-| 7 | Dec 9 to 13 | The proof as a map: claims C1 to C6 pre-registered with their numbers; every cell run; trace-driven backtests on real store histories | Controls pass; the map with intervals reproduced by one command | Floor |
-| 8 | Dec 14 to 19 | The browser lab: the kernel in Pyodide; Play with the advice condition; Prove on a file or a FreshRetailNet store | A simulated day under 3 s on a mid laptop; no network request carries the visitor's file (checked in the browser) | Floor (Prove: target) |
-| 9 | Dec 20 to 25 | The public site: Home, Watch, Play, Prove, Compete, Proof, built static-first from the design system | Works with the live server down; three cold readers can say what it did, how they know and why it matters within five minutes | Floor |
-| 10 | Dec 26 to 31 | The live contest service; first cloud rehearsal on account A; restore drill on account B | 48 hours unattended; snapshots fresh within 10 s at the edge; restore on B under 30 minutes; machines stopped after | Floor |
-| 11 | Jan 1 to 6 | Compete: the benchmark packaged with every baseline; language-model entrants run in sandboxes | A test submission from an outside fork scores; the leaderboard renders | Target |
-| 12 | Jan 7 to 12 | Hardening for the world: defaults removed, headers and limits, uptime checks that reach a phone, a runbook, a load test at ten times the expected peak, attribution and privacy notes | Each failure injected once and recovered; the load test passes with under 1% errors at the edge | Floor |
-| 13 | Jan 13 to 18 | Dress rehearsal (72 hours), claims frozen and published with their hash, go or no-go, launch on 2027-01-18 | The release bar of section 12 met in rehearsal | Floor |
-
-**The five days: 2027-01-18 to 2027-01-23**, on whichever Google Cloud account's trial ends
-later. A daily public note reports the running interval, labelled as interim. The final analysis
-is published within 24 hours of the end.
+| 3 | Nov 18 to 21 | Decide and land: D-14 to D-20; #87, #91 and #90 merged in order with your yes; #89 decided separately; the ledger worktree committed; one Docker sandbox proven as a verification box | `main` green; the decision-core suite and the twelve-replicate proof run in the sandbox, timed; whether Docker runs inside it known | 0 |
+| 4 | Nov 22 to 27 | The kernel extracted with native parity; the scientific choices of 5.2 sealed with their hashes; the beacon bet tested | Byte-identical results to the harness on twelve seeds; the sealed file's hash published in the repository; a beacon round fetched and verified in a test | 0 and 1 |
+| 5 | Nov 28 to Dec 4 | The narrowed truer world in the kernel: batches and shelf lives, skewed items, intraday shape fitted with the named censoring method | Spoilage rises with stock held (fails today); the masking check of the censoring method reported; the strong incumbent tuned | 1 |
+| 6 | Dec 5 to 10 | Challengers and governance in the kernel: shape-aware, shelf-life-aware, shock-detecting; incumbent-first arbiter and guard | Each change preceded by a test that fails; ablation arms run on exploratory seeds | 1 |
+| 7 | Dec 11 to 16 | The confirmatory run on the sealed seeds; the map; the proof page's content | Controls pass; one command reproduces the map | 1 |
+| 8 | Dec 17 to 22 | The browser: kernel in Pyodide, browser-native parity, Play with randomised advice, the contest's commit-and-reveal | Byte-identical digests in browser and native; a simulated day under 3 s on a mid laptop; no network request in Play | 0 and 1 |
+| 9 | Dec 23 to 30 | The public site, Play first, from the design system; the phone mode | Works offline after first load; three cold readers say what happened and how to check it within one minute | 0 and 1 |
+| 10 | Dec 31 to Jan 6 | Distribution and duties: a short write-up, a two-minute video, the launch text; accessibility of Play; privacy notice; licence attribution | WCAG AA checks pass; the write-up read cold by two people | 0 and 1 |
+| 11 | Jan 7 to 11 | Target: the live mirror on Google Cloud and the live-beacon form; or a buffer | 24 hours of the mirror matching the browsers; else the session goes to whatever slipped | 2 |
+| 12 | Jan 12 to 15 | Dress rehearsal on the production site; claims, code and analysis frozen with their hashes | The release bar of section 12 met | 0 to 2 |
+| 13 | Jan 16 to 19 | Launch on Tuesday 2027-01-19; the five days; the final analysis | Published within 24 hours of the end | 0 to 2 |
 
 ### 9.2 Making ten sessions fit the Claude budget
 
-- **One outcome a session**, with its acceptance test written first.
-- **A small reading set**: this plan's row, the log's "How to resume", and the files the outcome
-  touches. No session rereads the whole project.
-- **Verification where it is cheap**: the laptop or a sandbox, never a wait on a labelled CI run
-  for a result that can be had locally.
-- **At most two subagents at a time**, each with a cap on calls (LOG D-03).
-- **Commit at each verified step**, so a usage limit costs minutes, not a session.
+- One outcome a session, its acceptance test written first.
+- A small reading set: this plan's row, the log's "How to resume", and the files the outcome
+  touches.
+- Verification where it is cheap: the laptop or a sandbox, not a wait on a labelled CI run.
+- At most two subagents at a time, three only when a session's outcome needs it (LOG D-03), each
+  with a cap on calls.
+- Commit at each verified step.
+- **Measure the cost.** Session 3 records its own usage, so the budget of the rest is set from a
+  number and not a guess; no session has been measured yet.
 
-### 9.3 Tripwires
+### 9.3 Tripwires, in order
 
 | When | Check | If it fails |
 |---|---|---|
-| End of session 5 | Sessions 3 to 5 done by 2026-12-04 | Cut the hub and the language-model entrants; session 11 becomes a buffer |
-| End of session 8 | B1's speed and size budget met | Play on a server or on precomputed days (B1's fallback) |
-| End of session 10 | The rehearsal ran 48 hours | Production moves to account B; if both fail, the live contest publishes hourly static snapshots |
-| Session 13 | The release bar met | Launch the static doors and publish the contest as a recorded run, labelled as such |
+| End of session 5 | Sessions 3 to 5 done by 2026-12-06 | Drop the target rung; session 11 becomes a buffer |
+| End of session 7 | The confirmatory map exists | Release rung 0 with the narrowed world as it stands, labelled |
+| End of session 8 | B1's budget and parity met | Phone mode and precomputed days; parity mismatches published |
+| Session 12 | The release bar met | Release rung 0, labelled; the rest follows after the five days |
 
 ## 10. The launch week
 
-- **Day 0 (Jan 17).** Claims frozen; their hash and the launch commit published. Uptime checks
-  armed. Standby warm on account B.
-- **Days 1 to 5 (Jan 18 to 22).** One check a morning and one an evening against section 12; a
-  short public note each day; nothing changed in the contest's decision code during the five
-  days, by pre-registration.
-- **Day 6 (Jan 23).** The live server stopped; the final analysis, the full decision log and its
-  anchors published; the static doors left running.
-- **Day 7 onward.** Both trial accounts emptied of running resources before their credits lapse.
+- **Before launch (Jan 16 to 18).** Code, claims and analysis frozen and their hashes published;
+  the launch beacon round announced in advance.
+- **Days 1 to 5 (Jan 19 to 23).** The contest reveals; a short note each day labels interim
+  numbers as descriptive; nothing in the contest changes, by pre-registration. With no server in
+  the floor there is nothing to restore at night.
+- **After (Jan 24).** The final, pre-specified analysis published; the site stays up. Any cloud
+  machine from the target tier stopped before its trial ends.
 
-## 11. Pre-mortem: it is 2027-01-25 and the release failed
+## 11. Pre-mortem: it is 2027-01-26 and the release failed
 
 | Cause, most likely first | How the plan answers it |
 |---|---|
-| Nobody came | The static doors keep working after the five days; a short write-up and a two-minute video in session 13; launch timed for a weekday morning in the US and evening in India (D-18) |
-| A spike of visitors took the live server down | Visitors never reach the server: they read cached snapshots; play runs on their own machines |
-| SYNAPSE lost in public | Pre-registered; incumbent-first bounds the loss; the result is reported as the honest test the release promised |
-| An expert dismissed the world as a toy | Calibrated to real demand; the domain gap stated; the declared world kept as one cell, not the only one |
-| The browser lab was too slow on phones | Phones get a lighter mode; the server fallback (B1) |
-| A trial account was ended | No account is essential (section 7) |
-| Sessions ran slow and the scope did not fit | Tripwires cut in a fixed order: the hub, the language-model entrants, Prove, Compete |
-| A secret or a write path was abused | No secrets in the client; no public write path in the floor |
-| A licence or privacy complaint | FreshRetailNet-50K attributed under CC BY 4.0; visitors' files never leave their browsers; play traces shared only by opt-in and without personal data |
+| Nobody came | Session 10 is given to distribution; the site keeps working after the five days |
+| The sessions ran slow | Rung 0 is reachable from sessions 3, 4, 8 and 9 alone; the tripwires cut in a fixed order |
+| An operations researcher dismissed the comparison | A strong incumbent, sealed weights, margins in cost units and random shock onsets, all published before launch |
+| SYNAPSE showed no material win | Bet B4: published as found; the contribution is the honest map and a contest anyone can verify |
+| The browser lab was too slow on phones | Fewer items, a phone mode, precomputed days labelled as such |
+| A trace or a file leaked | No write path in the floor; traces only with opt-in, consent and a notice, as India's DPDP Act and the GDPR would expect |
+| A provider ended an account | The floor uses none |
+| The launch day fell on a holiday | Tuesday 2027-01-19, after the US holiday on Monday 18 January |
 
-## 12. The release bar, and the scorecard targets
+## 12. The release bar and the scorecard targets
 
-| Frontier row (FRONTIER.md) | Today | At release (target) | How it is measured |
+| Frontier row | Today | At release (floor unless marked) | Measured by |
 |---|---|---|---|
-| 1 Cost against a tuned rule | 56% worse (M-23) | Never worse beyond the guard; better in stressed cells, pre-registered | Claims C1 to C3 |
-| 2 Knowing where the rule loses | One cell, untuned bound | A map over all cells, with intervals | Session 7's map |
-| 3 Internal validity | Level in design | Level, and pre-registered in public | Hash of the claims published before launch |
-| 4 External validity | Declared world | Calibrated to real hourly demand; trace-driven backtests | Calibration report; backtests |
-| 5 Reproduction by a stranger | Minutes, from an export | One command; anyone in a browser | Prove and Compete |
-| 6 Assortment and demand | Ten uniform items | Skewed items with an intraday profile from data | The world's calibration report |
-| 7 Operational structure | One store, waste a clock | Waste by age; shocks; a hub (target) | Tests that fail today |
-| 8 A named user | None | Anyone with sales data, a student, a researcher | Use of the doors in the five days |
-| 9 Architecture earns its complexity | One heuristic | Each part's contribution measured by ablation | The map |
-| 10 Agents that act | Category errors | Each action appropriate and recorded with its outcome | Session 6's tests |
-| 11 Path to production | None since June | Rehearsed twice, failover drilled | Sessions 10 and 13 |
-| 12 Reliability | Nothing | Static doors 99.9%; live snapshots 99.5% over 120 h (36 minutes down); outage known within 2 minutes; restore under 30 minutes | Uptime checks during the release |
-| 13 Cost | About $70 estimated | Under $120 of credit; $10 cash for a domain | Billing pages |
-| 14 First minute | Not seen with data | A visitor can say what happened and how they know within one minute | Cold readers in sessions 9 and 13 |
-| 15 Checks able to fail | Safety yes, quality no | A thirty-second quality check on every change | The fast check from session 4 |
-| 16 No exposure | Defaults published | None in the client; no public write path | Session 12's review |
-| New: public verifiability | Audit chain exists, unused publicly | Every live decision hash-chained, anchors published daily | Anyone can verify the chain |
+| 1 Cost against a tuned rule | 56% worse (M-23) | Against a strong rule: C1 holds in every cell | The sealed confirmatory run |
+| 2 Where the rule loses | One cell, untuned bound | A map over every cell, with intervals | Session 7 |
+| 3 Internal validity | Level in design | Sealed choices and seeds, published before launch | The hashes |
+| 4 External validity | Declared world | Demand shape fitted to real data; trace-driven runs (target) | The calibration report |
+| 5 Reproduction by a stranger | Minutes, from an export | Anyone, in a browser, byte for byte | C4 |
+| 6 Assortment and demand | Ten equal items | Skewed items with an intraday shape from data | Session 5 |
+| 7 Operational structure | Waste a clock | Batches with shelf lives; shocks with random onsets | Tests that fail today |
+| 8 A user | None | Anyone who plays; students; researchers | Visits, plays, recomputations |
+| 9 Architecture earns its complexity | One heuristic | Each part's contribution by ablation | The map |
+| 10 Agents that act | Category errors | Actions appropriate and recorded with outcomes | Session 6 |
+| 11 Path to production | None since June | Static release; the live mirror rehearsed (target) | Sessions 11 and 12 |
+| 12 Reliability | Nothing | The site up 99.9% over the five days | An uptime check |
+| 13 Cost | About $70 estimated before | $0 for the floor; under $60 of credit for the target | Billing pages |
+| 14 First minute | Not seen with data | A cold reader can say what happened and how to check it | Sessions 9 and 12 |
+| 15 Checks able to fail | Safety yes, quality no | A thirty-second quality check on every change | Session 4 |
+| 16 No exposure | Defaults published | No secret in the client; no write path in the floor | Session 12 |
+| Public verifiability (new) | Audit chain unused publicly | Every contest step recomputable; the beacon verified | C4, C5 |
 
-## 13. Frozen, cut or deferred, deliberately
+## 13. Frozen, cut or deferred
 
-- **Frozen in the repository, documented as the production topology:** Kafka, Neo4j, Redis,
-  Feast, MLflow, Prometheus, Grafana, the Helm chart, Linkerd, KEDA and Flagger files, the k3s
-  files, the Oracle compose path, the Mumbai overlay, the operator surfaces of the console
-  (operations, steering, override, ingress, sign-in).
-- **Deferred:** routing and riders (the twin has no spatial model); multi-city; training the
-  deep models (no trained model exists, M-35, and none is needed for the release's claims);
-  record inaccuracy beyond one stress cell; a language model in the hot path.
-- **Cut if the pace slips, in this order:** the hub, the language-model entrants, Prove, Compete.
+- **Frozen, documented as the production topology:** Kafka, Neo4j, Redis, Feast, MLflow,
+  Prometheus, Grafana, Helm, Linkerd, KEDA, Flagger, k3s, the Oracle path, the Mumbai overlay, the
+  console's operator surfaces.
+- **Moved to the dream:** the open benchmark with submissions; the backtest on a visitor's own
+  file (sales exports rarely carry stock status, records are often wrong, and costs and shelf
+  lives are unknown, so its advice would be unvalidated); the hub; language-model entrants.
+- **Deferred:** routing and riders; multi-city; the deep models (none trained, M-35).
 
 ## 14. Decisions owed now
 
-Details and options are in `DECISIONS.md` (D-14 to D-20). Each has a default this plan assumes.
-
 | # | Decision | Default assumed |
 |---|---|---|
-| D-14 | The live contest's clock | Accelerated: one simulated day per real hour, 120 simulated days over the five |
-| D-15 | Play traces | Collected only with opt-in, anonymous, released under CC BY 4.0 after the event |
-| D-16 | Account eligibility, and which trial ends later | You confirm both trials and the Docker credits are eligible; the later-ending trial hosts the release |
-| D-17 | A domain for edge caching | Yes, about $10 a year |
-| D-18 | Launch timing and channels | 2027-01-18; a write-up, a short video, and posts where operations and machine-learning people read |
-| D-19 | Licences for what is published | Code Apache-2.0 as now; derived data and traces CC BY 4.0 with attribution |
-| D-20 | Language models in the release | Explanations generated from the computed numbers, no model in the hot path; models only as benchmark entrants |
+| D-14 | The contest's clock and form | One simulated day per real hour; commit-and-reveal from one beacon round in the floor, live beacon rounds in the target |
+| D-15 | Play traces | None in the floor; opt-in, anonymous, with consent and a notice in the target |
+| D-16 | Account eligibility, and each trial's start date | You confirm; nothing in the floor depends on it |
+| D-17 | A domain | Not needed; the free `pages.dev` address serves the floor |
+| D-18 | Launch timing and channels | Tuesday 2027-01-19; the write-up and video of session 10 |
+| D-19 | Licences | Code Apache-2.0 as now; derived data CC BY 4.0 with FreshRetailNet-50K attributed |
+| D-20 | Language models | None in the decisions; explanations generated from the computed numbers |
 
-## 15. Measured, intended and dreamed: the odds and how we will know
+## 15. The odds, their basis, and what will move them
 
-| Tier | Contents | Odds (judgment) | Basis | We will know by |
-|---|---|---|---|---|
-| Floor | Watch, Play, Proof; the calibrated world with waste by age; governance; five days live | About 80% | Every part reuses measured code paths (M-18, M-23, M-33, M-34); the riskiest piece (B1) has a fallback | The end of session 10 |
-| Target | The floor plus Prove, Compete, the hub, disruption challengers, language-model entrants | About 50% | Depends on keeping the fast regime for eleven sessions (F-32); the record shows both regimes (M-27) | The tripwire at session 5 |
-| Dream | The target plus outside submissions, a released human-AI dataset, a real retailer's data run through Prove with permission, a preprint | About 20% | Depends on audience and on people outside the project | A week after the release |
+| Rung | Odds (judgment) | Basis |
+|---|---|---|
+| 0 | About 90% | Needs sessions 3, 4, 8 and 9 only, on code whose behaviour is measured (M-18, M-23, M-33, M-34); no server |
+| 1 Floor | About 55% | Adds sessions 5 to 7, each with real technical risk (a new data model, a fitted demand shape, a sealed run), and B1 at 70%; the fresh reviewer put the earlier, larger floor at 25% to 35% |
+| 2 Target | About 30% | Adds the live mirror, B3's live form and B7, on a calendar with no slack after the tripwire at session 5 |
+| 3 Dream | About 10% | Depends on an audience and on people outside the project |
 
-**What would change these odds.** Up: session 4 finishing inside five days; B1 passing its
-budget in session 8 on the first try. Down: any session taking more than ten days; a provider
-ending an account; FreshRetailNet-50K proving unusable for calibration.
+**Up:** session 3 recording a cost per session that fits the budget; session 4 finishing inside
+five days; parity in the browser on the first attempt. **Down:** any session over ten days; the
+beacon unusable from a browser; the censoring method failing its masking check.
 
-**The single sentence the release should earn.** "SYNAPSE ran a dark store in public for five
-days next to a tuned rule, on demand drawn from real stores, said in advance what it would
-prove, and let anyone check every decision, play the store themselves, and test it on their own
-data."
+**The single sentence the release should earn.** "SYNAPSE ran two simulated dark stores in public
+for five days, a strong rule against its own system, on randomness nobody controlled, said in
+advance what it would prove, and let anyone recompute every step and play the store themselves."
+
+## 16. What the fresh review of version 1 changed
+
+| Criticism | Disposition |
+|---|---|
+| The floor's odds of 80% were not credible: ten of eleven sessions and two bets in series | Accepted; restated as a ladder with rung 0 at about 90% and the floor at about 55% |
+| The incumbent was a strawman: one (s, S) for all items | Verified (`uplift/tuned_static.py:1-13`); the incumbent is now tuned per item and part of the day |
+| The weights, the margin and the seeds were open, so any win could be cheap | Accepted; sealed in session 4 before the world changes (5.2) |
+| Shocks had no onset; a challenger reading the declared shock sees the answer | Accepted; random onsets, detection from observations |
+| A live server, a standby, a domain and failover served a simulation the harness computes in a minute | Accepted; replaced by commit-and-reveal from a public beacon, the live server kept only as a target-tier mirror |
+| Under incumbent-first, the two live stores may be identical | Accepted and stated on the page as an honest outcome (4.3) |
+| "Prove" on a visitor's file gives unvalidated advice | Accepted; moved to the dream |
+| Five offerings in five days were too many; lead with Play | Accepted |
+| C1 compared a cost with a quantity; C5 checked the simulator against itself; C6 was confounded | Accepted; claims rewritten (5.6), advice randomised |
+| The twin's data model change would break about 110 legacy references | Verified by `git grep`; the new world lives in its own package and the legacy stays green |
+| "Running right now", "real perishability", "bounds any loss" | Corrected to "simulated", "modelled shelf lives", and "a loss is not ruled out" |
+| Holidays, distribution, privacy, accessibility and the operator's sleep were missing | Added: dates allow for 25 December and 1 January; session 10; the notice and consent; WCAG; no night restore needed |
+| 2027-01-18 is a US holiday | Launch moved to Tuesday 2027-01-19 |
+| Docker's sandboxes were untested as a verification box | Session 3's acceptance test |

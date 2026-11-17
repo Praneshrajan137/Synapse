@@ -575,6 +575,15 @@ e5_consensus_policy`, reorders only) and the primary-cell twin (`e5_world`).
   or only on manual dispatch. 55 decision records exist on `main` (ADR-001 to ADR-057, with
   ADR-025 used twice and no ADR-056).
 
+- **M-37 Why the light policies drag in the heavy stack (read in source, `1c484fb`).**
+  `uplift/tuned_static.py` imports only `dataclasses`, `uplift.interfaces` and `uplift.tuning`;
+  `uplift/oracle_arm.py` only `math`, `random` and `uplift.interfaces`. But `uplift/__init__.py`
+  imports `uplift.consensus_arm` eagerly (line 28), and that module reaches the orchestrator,
+  the Kafka client and the rest of M-33's twenty packages. So the decision kernel for a browser
+  is mostly a matter of making that package import lazy or moving the light modules into their
+  own package, not of rewriting policies (inferred from the imports; to be proven in session 4
+  by a browser-side import test).
+
 ### Window 1: read in the source by the main session
 
 Each was first reported by a mapping subagent and then read at the cited lines by the main
@@ -894,6 +903,21 @@ the record's arithmetic was re-done by hand.
 | F-32: CI as the cause of the slowdown is inferred | Accepted; labelled |
 | DECISIONS D-2 and D-10 state inferences as facts | Accepted; reworded |
 | The strongest objection: the twin's lookahead is the least proven part and its test would be circular | Accepted as standing; DIRECTION section 9a now makes the lookahead earn its place by a test written in advance, and the first challenger no longer depends on it |
+
+## The review of the plan (2026-11-17)
+
+A third reviewer with fresh context (a strong model, 18 tool calls) attacked version 1 of
+`PLAN.md`. Its central points were checked before use: the incumbent's structure
+(`uplift/tuned_static.py:1-13`: one (s, S) per supplier group, one group for all items when
+suppliers are not modelled), the blast radius of changing the engine (110 files under `tests/`,
+`scripts/audit/` and the workflows name the twin or `uplift`, by `git grep`; twelve workflows run
+on pull requests), the US holiday on 2027-01-18 (the third Monday of January), and the existence
+of the drand public randomness beacon with HTTP relays and a WebAssembly verifier (search
+results, reported). Version 2 of the plan is rebuilt around them; `PLAN.md` section 16 lists every
+criticism and its disposition. The most consequential: the floor's odds fell from about 80% to
+about 55%, a rung 0 at about 90% was added, the live server became a target-tier mirror behind a
+commit-and-reveal contest seeded from a public beacon, and the incumbent, weights, margins, seeds
+and shock onsets are sealed before the world changes.
 
 ## Rejected so far
 

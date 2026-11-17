@@ -263,10 +263,10 @@ Each has the default `PLAN.md` assumes; answer only where you want something els
 
 | # | Question | Options | Default assumed, and why |
 |---|---|---|---|
-| D-14 | How fast does the live contest's clock run? | (a) real time, five simulated days; (b) one simulated day per real hour, 120 simulated days | (b): 120 days give the pre-registered test real power, and a visitor sees a day pass in an hour |
-| D-15 | May anonymous play traces be collected? | (a) no; (b) only with opt-in, no personal data, released under CC BY 4.0 after the event | (b): they are the human-AI evidence the release can add to the field (PLAN C6) |
-| D-16 | Are both Google Cloud trials and the three Docker credits eligible under their providers' terms, and when did each trial start? | Your confirmation | The later-ending trial hosts the release; the plan survives the loss of any one account |
-| D-17 | Buy a domain so live snapshots can be cached at the edge? | (a) yes, about $10 a year; (b) no, hourly static snapshots instead | (a): the one cash cost, and it keeps the live view live at any audience |
-| D-18 | Launch timing and channels | Your choice | 2027-01-18, a write-up and a two-minute video, posted where operations and machine-learning people read |
+| D-14 | The public contest's clock and form | Clock: (a) real time; (b) one simulated day per real hour. Form: (c) committed and revealed from one beacon round at launch; (d) live from each hour's beacon round | (b) with (c) in the floor and (d) in the target: 120 simulated days give the test power, and no server is needed (PLAN 4.3) |
+| D-15 | May anonymous play traces be collected? | (a) no; (b) only with opt-in, consent, a privacy notice and no personal data, released under CC BY 4.0 after the event | (a) in the floor, (b) in the target: a write path needs a notice and consent under India's DPDP Act and the GDPR (PLAN 11) |
+| D-16 | Are both Google Cloud trials and the three Docker credits eligible under their providers' terms, and when did each trial start? | Your confirmation | The floor depends on no account; the later-ending trial hosts the target's live mirror |
+| D-17 | Buy a domain? | (a) yes, about $10 a year; (b) no, use the free `pages.dev` address | (b): with no server in the floor, nothing needs edge caching of a live origin |
+| D-18 | Launch timing and channels | Your choice | Tuesday 2027-01-19 (Monday 18 is a US holiday); the write-up and two-minute video of session 10 |
 | D-19 | Licences for what is published | Your choice | Code Apache-2.0 as now; derived data and traces CC BY 4.0 with FreshRetailNet-50K attributed |
 | D-20 | Language models in the release | (a) explanations from the computed numbers only; (b) an opt-in in-browser model; (c) a model in the decision path | (a): faithful, free and fast; models enter only as benchmark entrants (PLAN B8) |
