@@ -44,11 +44,14 @@ incumbent rule acts. (c) Incumbent first: the tuned rule acts unless a challenge
 shown in the twin, at that state, to beat it and passes the guardrails.
 
 **Recommendation: (c).** The tuned rule beat the consensus (F-13); a withheld decision is a
-dead end today (F-08); the twin check already exists (F-06). (c) can never do much worse than
-the incumbent, and every action it takes carries its own evidence.
+dead end today (F-08). Under (c) a challenger acts only where the pre-registered map trusts it
+and a deterministic guard passes its quantity, so it can lose to the incumbent only by what the
+map failed to see, and every action carries its own evidence.
 
-**What changes.** (a) needs the agents to beat the rule first, which the evidence says will not
-happen on the measured cell (F-29). (b) is safe but shows little. (c) is sessions 5 and 7.
+**What changes.** (a) needs the agents to beat the rule first, which no policy on record has done
+by the margin on the measured cell (F-29); a shape-aware challenger is untested. (b) is safe but
+shows little. (c) is sessions 4, 5 and 7, and does not depend on the twin's lookahead
+(`DIRECTION.md`, section 9a).
 
 **Answer in a line:** "(c)", or another letter.
 
@@ -170,7 +173,8 @@ claim under a new pre-registration is not that, but it is a change of the spec's
 seeds and judged on another, with task 25's and task 31.12's negative claims kept as they stand.
 
 **Recommendation: (b).** On the primary cell no policy without hindsight on record clears the
-margin (F-29), so (a) can only report a loss or a tie.
+margin (F-29), so (a) will most likely report a loss or a gain below the margin (inferred);
+(b) reports where each part helps.
 
 **Answer in a line:** "(b)" or "(a)".
 

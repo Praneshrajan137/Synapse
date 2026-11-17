@@ -108,13 +108,19 @@ is what was measured or read.
   measured, M-23).** E5: -1.4463, interval [-1.4650, -1.4286]; fill rate 0.762 against 0.939
   at about the same stock. A twelve-replicate miniature on this laptop, at E5's own seeds and
   price, gives -1.3954, with the consensus arm worse in 12 of 12.
-- **F-13a Most of the loss is one quantity in one heuristic (measured, M-24; part inferred).**
-  The Sentinel plans against a 24-hour lead-time prior until a first order lands, and against
-  about two hours of demand afterwards. Tripling only the second level, in a what-if fitted to
-  the same twelve seeds, takes the difference from -1.3954 to -0.1578. Scaling both makes cost
-  grow without limit. So the result is a verdict on one reorder rule's two settings, not on
-  eight agents, and at its best that rule about ties the tuned control. *False if* the repaired
-  settings, chosen on held-out seeds, leave a gap of the original size.
+- **F-13a Most of the loss is one estimate in one heuristic: a demand rate that ignores the
+  day's shape (measured, M-24, M-32; part inferred).** Until a supplier's first order lands
+  the Sentinel plans against a 24-hour lead-time prior, which over-orders. Afterwards it plans
+  over about 6.4 hours of lead time plus review (median of 503 readings, 3.3 to 11.5), at a
+  demand rate averaged since the run began: about 8.5 units an hour per item, where the true
+  average is 11.8, and with no account of the evening peak. Tripling only that later plan, in
+  a what-if fitted to the same twelve seeds, takes the difference from -1.3954 to -0.1578,
+  still behind. The factor that works is close to the ratio of the evening peak to the
+  run-average so far (inferred by the second reviewer from the demand profile). So the result
+  is a verdict on one rule's demand estimate, not on eight agents. The structure-aware arm O,
+  which knows the day's shape, beats the tuned rule (F-29): the missing information is exactly
+  what a forecaster could supply. *False if* a shape-aware rate, fitted on held-out seeds,
+  leaves a gap of the original size.
 - **F-14 The proof runs on the laptop and repeats exactly (measured, M-18, M-23).** The trace
   is byte-identical to the CI artifact. Every one of 24 replicate repeats was identical to the
   last digit. A replicate takes 0.6 s, so E5's 2,000 runs are about twenty minutes here against
@@ -141,16 +147,22 @@ is what was measured or read.
   (measured from the committed record, LOG M-25; the conclusion inferred).** The tuned rule is
   0.630 above the hindsight oracle. A base-stock rule that knows the world's declared demand
   shape and lead times beats the tuned rule by 0.246, interval [0.214, 0.276], against a
-  margin of 0.4. A material win would have to take about two thirds of the clairvoyant's
+  margin of 0.4. A material win would have to take nearly two thirds of the clairvoyant's
   advantage without its foresight. The record's verdict `room_to_win` tests the clairvoyant
-  ceiling, not an attainable policy. In the literature (LOG EX-02) learned policies gain 0.8% to
-  5.7% over base stock; the margin here is 16% of the tuned rule's cost and 36% of the part of
-  it any decision can move. *False if* a policy without hindsight beats the tuned rule on this
-  cell with the low end of its interval above 0.4.
+  ceiling, not an attainable policy. Arm O is the only attainable arm on record, and it is
+  analytic and untuned; its own module says it is not optimal here (`uplift/oracle_arm.py:10-27`,
+  reported by the second reviewer), so the attainable bound is unmeasured. Compared as the
+  literature compares (LOG EX-02: learned policies 0.8% to 5.7% better than base stock), a win
+  by the margin needs a policy 7.0% better than the base-stock arm O: above the best published
+  figure, not out of reach in principle. *False if* a policy without hindsight beats the tuned
+  rule on this cell with the low end of its interval above 0.4.
 - **F-30 In the twin, waste is a clock (read in source; measured from the record, LOG M-25).**
-  Each item "spoils" one order about every 80 simulated minutes, whatever is held or ordered,
-  and the spoiled order takes no stock away. Spoilage cost is 0.0589 in every arm, including
-  one that never orders. Delivery time is likewise the same in every arm. So 55% of the tuned
+  In the primary cell each item "spoils" one order about every 80 simulated minutes, whatever
+  is held or ordered, and the spoiled order takes no stock away; the monsoon scenario doubles
+  the clock's rate, and the cold-start scenario resets it so that cell records no spoilage
+  (the last two reported by the second reviewer). Spoilage cost is 0.0589 in every arm,
+  including one that never orders. Delivery cost is nearly the same in every arm (1.282 to
+  1.287). So 55% of the tuned
   rule's cost answers to no decision, holding stock costs only its on-hand term, and the
   perishability that drives real dark-store waste is absent as a consequence of any decision.
   The Freshness Guardian has nothing in the twin to act on. *False if* a cell or world source
@@ -202,12 +214,13 @@ is what was measured or read.
 - **F-31 The decision core's safety behaviour is well guarded; its quality is not unit-tested
   (measured, LOG M-26).** Five faults were introduced one at a time; every one failed at least
   one test, the confidence floor fifteen. Two were caught only by tests that pin the present
-  design: the change to the Sentinel that removes most of E5's loss fails the same way a harmful
-  change would. Judging a decision's quality is left to E5, which runs when a person labels a
-  pull request.
-- **F-32 The proof can now run where the work is done, and the pace depends on it (measured,
-  LOG M-23; read, LOG M-27).** The last spec moved from about a day and a half a session to two
-  weeks once each step waited on labelled CI runs. A replicate takes 0.6 s here. Keeping
+  design: tripling the Sentinel's review period, which scales its plan by about 1.3, fails the
+  same test whatever its effect on cost. Judging a decision's quality is left to E5, which
+  runs when a person labels a pull request.
+- **F-32 The proof can now run where the work is done, and the pace may depend on it (measured,
+  LOG M-23; read, LOG M-27; the cause inferred).** The last spec moved from about a day and a
+  half a session to two weeks; its session rows describe waiting on labelled CI runs, so CI is
+  the likely cause, inferred from the dates and the rows, not measured. A replicate takes 0.6 s here. Keeping
   verification local is the difference between four sessions before the release and eleven.
 
 ### Where the documents and the code part
@@ -222,6 +235,7 @@ is what was measured or read.
 | `CLAUDE.md`: arbitration binds through the knee of a Pareto front | True of tiers 3 and 4 only, which autonomous operation does not reach | V-01, V-02 |
 | ADR-047 as summarised in `CLAUDE.md`: the outcome loop is closed | Every outcome is `unknown` by construction | F-10 |
 | `Makefile:384`: one command from a fresh clone | The stack it starts has no agents, twin or API | V-07 |
+| `engine.py:838-839`: a shock brings "more holding/spoilage" | Spoilage never depends on holding | F-30 |
 | Finding 123: deploys fail since at least 2026-08-17 | Every scheduled deploy has failed, from the first on 2026-06-22; no run has deployed since 2026-06-14 | M-08 |
 | `README.md:66`: 38 decision records | 58 files in `docs/adr` on `main`, two more on branches | M-04, M-22 |
 

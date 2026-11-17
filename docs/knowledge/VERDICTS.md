@@ -89,7 +89,7 @@ tree of pull requests #87 and #91 (`1c484fb`), which is not merged into `main`.
 | INS-054 | Open | Sprint 6 A/B assignment not read (R-49) | - |
 | INS-055 | Confirmed | Four action kinds; in the harness only price and reorders move the twin, routing and disruption actions are recorded and not applied (`uplift/harness.py::_apply_action`) | read in source |
 | INS-056 | Open | Mission Control's order not re-read; the console not walked | - |
-| INS-057 | Strengthened | Tuning one level already removes most of the gap (LOG M-24); imitation of the tuned rule is the safer start for any learning | LOG M-24 |
+| INS-057 | Strengthened | Most of the gap is a demand rate that ignores the day's shape (LOG M-24, M-32); imitation of the tuned rule is the safer start for any learning | LOG M-24, M-32 |
 | INS-058 | Confirmed | One stock number per item (`WorldState.inventory`) | read in source |
 | INS-059 | Confirmed, sharpened | On the primary cell even the structure-aware rule gains 0.25 against a 0.4 margin: pull, if it exists, is where the rule's assumptions break | MAP F-29 |
 | INS-060 | Confirmed | Ten items in E5's traced world, drawn uniformly | LOG M-09, M-16 |
@@ -163,7 +163,7 @@ tree of pull requests #87 and #91 (`1c484fb`), which is not merged into `main`.
 | R-37 | Answered | See INS-039 | `agents/inventory_sentinel/inference/request_state.py` |
 | R-38 | Answered in part | Four scenarios; no rubric seen | `uplift/scenarios.py` |
 | R-39 | Answered in part | Fourteen routes; walk pending | LOG M-13 |
-| R-40 | Answered | One cause dominates: the Sentinel's level after deliveries land | LOG M-24 |
+| R-40 | Answered | One cause dominates: after deliveries land, the Sentinel plans at a demand rate averaged since the run began, about 8.5 an hour per item against a true 11.8, blind to the day's shape | LOG M-24, M-32 |
 | R-41 | Answered | E5 uses a fixed seed list, and a setting fitted to it closes most of the gap within minutes, so any search must hold seeds out | LOG M-24 |
 | R-42 | Answered in part | The five guardrails (privacy, price cap, rider shift, confidence floor, service level) compare nothing with store history or the incumbent; `WorldAction.params` carries bare floats | reported; read in source |
 | R-43 | Answered | Identical | LOG M-23 |

@@ -122,8 +122,10 @@ system did, how they know, and why it matters, each claim one step from its evid
   eight-core machine at a time, a trial that can be ended without notice, and a credit that
   lapses three months from the account's start, near the release's last day.
 - **Row 2** had no numbers at the gate. It has them now, from the committed record (LOG M-25),
-  and they change the reading of row 1: on the cell measured, even a perfect version of the
-  current design would probably not clear the margin.
+  and they change the reading of row 1. On the cell measured, a win by the margin needs a
+  policy 7.0% better than a base-stock rule that knows the day's shape, where the best
+  published gain of a learned policy over base stock is 5.7%. Possible, but not to be expected;
+  the first version of this note said "probably not", which overstated it.
 - Nothing was dropped or merged. Three rows are added at the end, as the prompt requires.
 
 ## 3. The scorecard
@@ -134,8 +136,8 @@ same way as an outside reference.
 
 | # | Frontier property | Frontier reference and its value | SYNAPSE now | Evidence and how to reproduce it | Status | Verdict | Sessions to close, and what it unlocks |
 |---|---|---|---|---|---|---|---|
-| 1 | Cost against a tuned classical rule | Learned policies 0.79% to 5.68% better than base stock in simulated lost sales (EX-02, checked) | Repaired consensus 3.927 against the tuned rule's 2.480 in E5; 3.907 against 2.512 in a local miniature, worse in 12 of 12 | LOG M-23: `mini_e5.py 12` on an export of `1c484fb`; RD-01 | Verified (miniature measured; E5 read) | Behind | 1 (fit the Sentinel's levels on held-out seeds; M-24 suggests near-parity). Unlocks the claim "matches the incumbent" |
-| 2 | Knowing where the tuned rule loses | Long lead times, shifting or censored demand, perishability, shared limits, substitution, transfers (fetched and snippet) | Primary cell: tuned rule 0.630 above hindsight (0.390 stock held, 0.240 unfilled); a better-informed rule gains 0.246 against a 0.4 margin; no item or store slice exists | LOG M-25: the committed record `docs/state/bprime/twin-regret-primary.json` | Verified from the record | Behind | 2 (a truer twin; pre-registration by cell). Unlocks a claim that can be true |
+| 1 | Cost against a tuned classical rule | Learned policies 0.79% to 5.68% better than base stock in simulated lost sales (EX-02, checked) | Repaired consensus 3.927 against the tuned rule's 2.480 in E5; 3.907 against 2.512 in a local miniature, worse in 12 of 12 | LOG M-23: `mini_e5.py 12` on an export of `1c484fb`; RD-01 | Verified (miniature measured; E5 read) | Behind | 1 (a shape-aware demand rate for the Sentinel, fitted on held-out seeds; on the seeds it was judged on, a crude version came within 0.16 and stayed behind, M-24). Unlocks an honest "how close, and where" |
+| 2 | Knowing where the tuned rule loses | Long lead times, shifting or censored demand, perishability, shared limits, substitution, transfers (fetched and snippet) | Primary cell: tuned rule 0.630 above hindsight (0.390 stock held, 0.240 unfilled); the one attainable arm on record, untuned, gains 0.246 against a 0.4 margin, so a win needs 7.0% over it; the attainable bound is unmeasured; no item or store slice exists | LOG M-25: the committed record `docs/state/bprime/twin-regret-primary.json` | Verified from the record | Behind | 2 (a truer twin; pre-registration by cell). Unlocks a claim that can be true |
 | 3 | Internal validity of the comparison | Pre-registration, paired seeds, interval, power, controls, negatives published | All present; 24 of 24 repeats identical; trace identical across machines. Open: `harness_mis_measuring` (finding 117), and `room_to_win` tested against a clairvoyant ceiling | LOG M-18, M-23, M-25, RD-06 | Verified in part | Level, estimated | 1 (settle finding 117; restate room to win against an attainable arm). Unlocks a proof a stranger can cite |
 | 4 | External validity | A field or switchback test, or a simulator validated on history | Declared twin, fidelity unknown; waste is a clock; a CC BY 4.0 dataset with hourly stock status is unused | MAP F-30; LOG EX-03 | Verified | Behind | 1 for calibrating demand shape; full validation needs real store data, after the release. Unlocks answering "is the world real?" in part |
 | 5 | Reproduction by a stranger | Results reproduced by another team (snippet) | The proof reproduces locally in minutes from an exported tree; no command starts a system that decides | LOG M-18, M-23, V-07 | Verified | Behind | 1 (one command, timed). Unlocks reviewers re-running the proof |

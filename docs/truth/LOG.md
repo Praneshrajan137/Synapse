@@ -376,7 +376,8 @@ e5_consensus_policy`, reorders only) and the primary-cell twin (`e5_world`).
   The tuned control's mean is 2.5119. Two things follow. First, the Sentinel has two regimes:
   until a supplier's first order lands it plans against a 24-hour lead-time prior, which
   already orders far above the tuned rule's levels, so scaling everything makes cost grow
-  without limit; afterwards it plans against about two hours of demand. Second, tripling only
+  without limit; afterwards it plans over lead time plus review (about 6.4 hours, M-32; the
+  first version of this entry said "about two hours", wrongly). Second, tripling only
   the second regime's level takes the difference from -1.3954 to -0.1578, about 89% of the
   gap, and no single factor does better. So most of the loss is one quantity in one heuristic,
   set at about a third of what this objective rewards, and the rest is plausibly the prior's
@@ -392,13 +393,13 @@ e5_consensus_policy`, reorders only) and the primary-cell twin (`e5_world`).
   |---|---|---|---|---|---|
   | Never order | 6.870 | 5.156 | 0.373 | 1.282 | 0.0589 |
   | Untuned par level (50, 100) | 4.416 | 2.624 | 0.449 | 1.284 | 0.0589 |
-  | Foresight heuristic | 5.193 | 3.464 | 0.384 | 1.285 | 0.0589 |
+  | Foresight arm (decides from a recorded trace of the run's demand, `uplift/foresight.py:13`) | 5.193 | 3.464 | 0.384 | 1.285 | 0.0589 |
   | Tuned rule E | 2.459 | 0.254 | 0.858 | 1.287 | 0.0589 |
   | Structure-aware base stock O | 2.212 | 0.345 | 0.521 | 1.287 | 0.0589 |
   | Hindsight oracle | 1.829 | 0.014 | 0.468 | 1.287 | 0.0589 |
 
-  - The delivery and spoilage terms are the same for every arm, the arm that never orders
-    included. They are 1.346 of the tuned rule's 2.459, so 55% of its cost responds to no
+  - The spoilage term is the same for every arm, the arm that never orders included, and the
+    delivery term nearly so (1.282 to 1.287). They are 1.346 of the tuned rule's 2.459, so 55% of its cost responds to no
     decision.
   - The tuned rule's gap to hindsight is 0.630: 0.390 from holding more stock, 0.240 from
     unfilled demand. The structure-aware arm, which knows the world's declared demand shape
@@ -431,8 +432,10 @@ e5_consensus_policy`, reorders only) and the primary-cell twin (`e5_world`).
 
   Every fault was caught. The safety behaviour (the confidence floor, the dispatch choke point,
   execution) is guarded by tests that fail when it breaks. F2 and F3 are caught by tests that
-  pin the present design rather than judge it: F3 is close to the change that removes most of
-  E5's loss (M-24), and it fails exactly as a harmful change of the same constant would. No
+  pin the present design rather than judge it: F3 scales the Sentinel's plan by about 1.3 (two
+  more hours on about 6.4, M-32), and its test fails whatever the change does to cost. The first
+  version of this entry called F3 "close to the change that removes most of E5's loss"; the
+  second review showed it is not. No
   test at this level judges whether a decision is good; that is left to E5, which runs in CI
   only when a person applies a label.
 - **M-27 Pace, from the proof spec's own session log (read).** Its progress table
@@ -506,6 +509,17 @@ e5_consensus_policy`, reorders only) and the primary-cell twin (`e5_world`).
   never mentions `degraded`, and `protocol.py:1528-1546` only appends the names of degraded
   agents to the decision's context for the audit record. This answers R-21: the share of decisions with a
   degraded agent is all of them, and the top reason is no calibrated model or feature source.
+
+- **M-32 What the Sentinel plans against after its first deliveries (measured, the second
+  reviewer's probe, re-run by the main session).** The probe wraps the Sentinel's reading of its
+  request and prices three of E5's seeds with E5's own function; it was re-run unchanged on the
+  export of `1c484fb`. Costs 4.0109, 3.8735 and 3.6964, identical to M-23's first three seeds.
+  Readings planned from landed lead times: 503, with lead time plus review of 3.29 to 11.52
+  hours, median 6.36. Their planned demand rate: median 8.58 units an hour per item. Readings
+  still on the 24-hour prior: 187. The true average rate, from the committed record's counters
+  (568,547 demand events over 200 replicates of 24 hours and ten items), is 11.84 an hour per
+  item. The Freshness Guardian was called 72 times and refused all 72 for the missing
+  `store_id`, as in M-30.
 
 ### Window 1: read in the source by the main session
 
@@ -762,6 +776,30 @@ a coverage figure that measured nothing. That is what a reviewer can verify, and
 need a live machine. What would decide between this and the reading in `OPENING.md`: what the
 reviewers were promised (question A), and whether the falsification sweep shows gates that
 actually fail (R-24).
+
+## The second review (2026-11-17)
+
+A second reviewer with fresh context (a subagent on a strong model, 20 tool calls, one probe
+script of its own in a scratch folder) was asked to refute the direction and its most
+consequential findings. Its claims were checked before use: the probe was re-run (M-32), and
+the record's arithmetic was re-done by hand.
+
+| What it found | Disposition |
+|---|---|
+| F-13a: "about two hours of demand" is wrong; the Sentinel plans over about 6.4 hours, at a run-average rate that ignores the day's shape | Verified (M-32) and corrected in F-13a, M-24 and DIRECTION |
+| M-26 and F-31: F3 is not "close to the change that removes most of E5's loss"; it scales the plan by about 1.3 | Accepted and corrected |
+| F-29: arm O is the only attainable arm on record and untuned; like for like, a win needs 7.0% over O, not 16% | Verified by arithmetic and corrected in F-29, FRONTIER and DIRECTION |
+| DIRECTION section 2: "near what any policy without hindsight can reach" overstates | Accepted; replaced |
+| DIRECTION section 2: "structural, not defects" is wrong for two of the four reasons | Accepted; rewritten |
+| F-03: the Freshness Guardian's silence is a harness defect | Already found (M-30) and confirmed by its probe (72 of 72) |
+| F-30: "every 80 minutes" holds for the primary cell only; delivery is nearly, not exactly, equal; an engine docstring contradicts the code | Accepted; the docstring added to the table of divergences |
+| M-25: the "foresight heuristic" label is wrong | Accepted; relabelled from `uplift/foresight.py:13` |
+| DIRECTION section 7: the slow-regime fallback does not fit 62 days and cuts the arbiter that defines the direction | Accepted; the pace is now a stated precondition with a tripwire, and the minimal release keeps the incumbent, one challenger and its map |
+| DIRECTION section 7: session 5's "the sensor flags disruptions" would route decisions into debate and the language model, which the thin slice leaves out | Accepted; removed |
+| DIRECTION section 4: shocked cells cannot run in full on the laptop | Accepted; screened at reduced replicates, full runs in CI |
+| F-32: CI as the cause of the slowdown is inferred | Accepted; labelled |
+| DECISIONS D-2 and D-10 state inferences as facts | Accepted; reworded |
+| The strongest objection: the twin's lookahead is the least proven part and its test would be circular | Accepted as standing; DIRECTION section 9a now makes the lookahead earn its place by a test written in advance, and the first challenger no longer depends on it |
 
 ## Rejected so far
 
