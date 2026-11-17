@@ -8,11 +8,12 @@ operator are in [`DECISIONS.md`](DECISIONS.md).
 
 1. Where decisions were traced (372 of them), one component made every one: the Inventory
    Sentinel's reorder rule. Five other agents returned the same score in every state of the
-   world, and two never proposed. Debate, arbitration, the language model and the twin check
+   world, and two never proposed, because the request E5 builds lacks their inputs. Debate, arbitration, the language model and the twin check
    run only on a path that autonomous operation never takes, and where forced they changed no
    order (MAP F-01 to F-06).
-2. The repaired system loses to the tuned rule because one of that rule's levels is set about
-   three times too low. Corrected on the same seeds, it about ties the rule (F-13, F-13a).
+2. The repaired system loses to the tuned rule mostly because one of the Sentinel's levels is
+   set about three times too low. Corrected on the same seeds, it comes within about 6% of the
+   rule's cost, from 56% behind (F-13, F-13a).
 3. On the cell the proof measures, no policy without hindsight on record clears the margin a
    win must clear. Any room to win lies in structures the twin does not yet have (F-29, F-30).
 4. The proof harness is real: deterministic, fast enough to run on the laptop, and able to say
@@ -31,8 +32,9 @@ decisions than a tuned rule.
 
 **It is not supported, and the reasons are structural, not defects.** One store with no transfer
 between stores gives coordination nothing to coordinate. A twin in which waste does not depend
-on stock removes the trade-off that makes perishable replenishment hard. On the measured cell a
-tuned rule is already near what any policy without hindsight can reach. And the code binds the
+on stock removes the trade-off that makes perishable replenishment hard. On the measured cell
+the best-informed policy on record improves on the tuned rule by 10% of its cost, short of the
+16% a win must clear. And the code binds the
 most self-confident proposer, so more proposers add cost and no information. Repairs to
 individual agents would not change any of these four.
 
@@ -129,7 +131,7 @@ before the trial can lapse. "Local" means verified on the laptop before any CI r
 | Session | Outcome | Verified by | Cloud | Rank |
 |---|---|---|---|---|
 | 3 | Definition of finished; the decisions in `DECISIONS.md`; the cut list | The operator's answers | - | Must |
-| 4 | Pull requests #87, #91 and #90 landed on `main`, #89 if green; the ledger worktree committed; the Sentinel's levels fitted on held-out seeds; a twelve-replicate local proof wired as a fast check | Local miniature of E5; CI green on `main` | - | Must |
+| 4 | Pull requests #87, #91 and #90 landed on `main`, #89 if green; the ledger worktree committed; the harness's request given the `store_id` the live request carries; the Sentinel's levels fitted on held-out seeds; a twelve-replicate local proof wired as a fast check | Local miniature of E5; CI green on `main` | - | Must |
 | 5 | Outcomes recorded after execution; approval enacts and can amend; forecasts inform instead of moving demand; the sensor flags disruptions | Tests that fail before the change; local traces | - | Must |
 | 6 | Waste takes stock by age; skewed demand over more items, its shape fitted to FreshRetailNet-50K; the tuned rule re-tuned | The harness's controls, run locally | - | Should (waste: must) |
 | 7 | The incumbent-first arbiter; ablation arms; the map pre-registered | Local runs on held-out seeds | - | Should |

@@ -42,7 +42,7 @@ tree of pull requests #87 and #91 (`1c484fb`), which is not merged into `main`.
 | INS-007 | Confirmed | Two separate clients: the orchestrator's and the Disruption Shield's reasoner | reported by a mapping subagent |
 | INS-008 | Confirmed in part | The orchestrator's LLM writes analysis text and never changes a proposal or the selection (reported). The Disruption Shield's reasoner was not examined | MAP F-24 |
 | INS-009 | Confirmed | No reversibility concept in `orchestrator/` | LOG M-10 |
-| INS-010 | Corrected | After the repair, decisions do change with the world, but only through the Sentinel. Five of six proposers return the same score in all 360 states; two never propose | LOG M-19 |
+| INS-010 | Corrected | After the repair, decisions do change with the world, but only through the Sentinel. Five of six proposers return the same score in all 360 states; two never propose, because the request E5 builds lacks their inputs (one of them a `store_id`) | LOG M-19, M-30 |
 | INS-011 | Corrected | A replicate costs 0.6 s locally; E5's 2,000 runs are about twenty minutes here. Decisions are deterministic, so one-step replay is sound | LOG M-23 |
 | INS-012 | Corrected | CI is the critical path for the gates, not for decisions or the proof | LOG M-18, M-23 |
 | INS-013 | Corrected | The whole system runs nowhere today. The decision path and the proof run in-process on the laptop | MAP F-19 |
