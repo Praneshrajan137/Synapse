@@ -16,7 +16,11 @@ A tension is not a verdict. Each one names what would settle it.
   measured comparison against a tuned control was `baseline_wins`, with a named defect (finding
   112) as the cause (read, `HANDOFF.md`).
 - **In fairness to the design:** the same paper finds that central coordination contains error
-  growth (4.4x against 17.2x for independent agents) and that parallel subtasks gain. SYNAPSE's
+  growth (4.4x against 17.2x for independent agents) and that parallel subtasks gain.
+  *Caveat added in session 2:* a session-2 subagent reports that the paper finds this contrast
+  not significant once other factors are controlled; the main session confirmed only the
+  abstract's direction. And on SYNAPSE's measured path the agents do not coordinate at all: one
+  component made every traced decision (`VERDICTS.md`, T-001). SYNAPSE's
   orchestrator is central and its agents cover separate functions. The result so far measures a
   defect, not the design.
 - **Settled by:** the re-run after PR #87 against control E, on shocked and unshocked cells,

@@ -6,6 +6,11 @@ the coming sessions; each says what answer would change a plan.
 Nothing here is resolved by being written down. An item leaves this file when its answer is
 recorded with how it was obtained.
 
+**Session 2 (2026-11-17)** recorded an answer, a partial answer or an owner for every item
+below in [`VERDICTS.md`](VERDICTS.md), section 4: 47 of 61 research items answered or confirmed,
+14 open with an owner named; Q-02 answered, Q-03 answered in part, Q-05 retired. The operator's
+remaining questions are restated as decision memos in `docs/truth/DECISIONS.md`.
+
 ## For the operator
 
 | ID | Question | Why it is owed | From |
