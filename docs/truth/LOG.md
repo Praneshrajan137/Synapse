@@ -80,6 +80,13 @@ Baseline for every measurement unless another is named: the working tree on bran
   and aimed at a real problem solved in the real world. Consequences: D-1 (reviewers as the only
   audience), D-11 (one trial, no fallback) and D-12 (access for ten) are superseded; the rest of
   OA-6 stands unless the plan says otherwise.
+- **OA-8 D-14 to D-20 (2026-11-17).** The operator accepted every default in `PLAN.md` section
+  14: the contest on one simulated day per real hour, committed and revealed from one beacon round
+  in the floor and live from beacon rounds in the target; no play traces in the floor and only
+  opt-in, consented, anonymous ones in the target; eligibility and trial start dates to be
+  confirmed by the operator, with nothing in the floor depending on them; no domain; launch on
+  Tuesday 2027-01-19 with a write-up and a short video; code under Apache-2.0 and derived data
+  under CC BY 4.0 with FreshRetailNet-50K attributed; no language model in the decisions.
 - **The gate.** The reply answered every question of section 12, left the remaining choices to
   this session's judgment and objected to nothing. It is taken as approval of the seven
   defaults in section 11 of `OPENING.md`. Everything done under them is local and reversible:

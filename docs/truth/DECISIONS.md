@@ -25,6 +25,7 @@ fallback). `DIRECTION.md` is adjusted to all thirteen.
 | D-10 | (b), the map by cell |
 | D-11 | Superseded by OA-7: two trial accounts, active and standby; whichever trial ends later hosts the release |
 | D-12 | Superseded by OA-7: anyone may look and play in their own browser; nobody can write to the live contest |
+| D-14 to D-20 | Defaults accepted (OA-8): see the table at the end |
 | D-13 | approved |
 
 **Status: 2026-11-17.** Each memo states the question, why it is owed now, the options, a
@@ -259,7 +260,8 @@ code rather than documented (sessions 5 and 6); item 5 wired as a fast check (se
 
 ## D-14 to D-20: the decisions the world release adds (2026-11-17)
 
-Each has the default `PLAN.md` assumes; answer only where you want something else.
+**Answered by the operator, 2026-11-17: the defaults are accepted for all seven** (LOG OA-8).
+The right-hand column below is therefore the decision, not only the assumption.
 
 | # | Question | Options | Default assumed, and why |
 |---|---|---|---|

@@ -388,7 +388,7 @@ Session 3 and ten execution sessions, 2026-11-18 to 2027-01-19. Dates allow for 
   lives are unknown, so its advice would be unvalidated); the hub; language-model entrants.
 - **Deferred:** routing and riders; multi-city; the deep models (none trained, M-35).
 
-## 14. Decisions owed now
+## 14. Decisions D-14 to D-20 (defaults accepted by the operator, 2026-11-17)
 
 | # | Decision | Default assumed |
 |---|---|---|
