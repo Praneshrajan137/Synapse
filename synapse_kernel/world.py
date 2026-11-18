@@ -53,33 +53,6 @@ HOURS_PER_WEEK: Final[int] = HOURS_PER_DAY * DAYS_PER_WEEK
 #: line of physics changing.
 START_WEEKDAY_RULE: Final[str] = "seed_mod_7"
 
-#: ``world.cells`` reserves this key for the block's own provenance, so no cell may be named it.
-_CELLS_PROVENANCE_KEY: Final[str] = "provenance"
-
-_WORLD_KEYS: Final[frozenset[str]] = frozenset(
-    {"structure_1", "structure_3", "cells", "primary_cell"}
-)
-_STRUCTURE_1_KEYS: Final[frozenset[str]] = frozenset(
-    {"provenance", "hourly", "weekday", "promotions", "start_weekday_rule"}
-)
-_PROMOTION_KEYS: Final[frozenset[str]] = frozenset({"weekday", "start_hour", "hours", "multiplier"})
-_STRUCTURE_3_KEYS: Final[frozenset[str]] = frozenset(
-    {
-        "provenance",
-        "suppliers",
-        "sku_supplier",
-        "daily_autocorrelation",
-        "demand_coupling",
-        "coupling_floor",
-        "min_lead_time_min",
-    }
-)
-_SUPPLIER_KEYS: Final[frozenset[str]] = frozenset({"mean_lead_time_min", "log_sd"})
-_CELL_KEYS: Final[frozenset[str]] = frozenset(
-    {"structure_1", "structure_3", "amplitude_scale", "lead_time_scale"}
-)
-_PROVENANCE_BLOCKS: Final[tuple[str, ...]] = ("structure_1", "structure_3", "cells")
-
 #: Hours :meth:`DemandShape.next_arrival` walks before refusing (about 114 simulated years). Every
 #: intensity is > 0 by rule, so every walk ends; a mass needing more hours than this is refused,
 #: naming the state, rather than walked on without bound.
