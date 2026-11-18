@@ -34,13 +34,13 @@ the same pair.
 
 ## Summary
 
-Parsed 20 workflow file(s), 68 job(s), 457 step(s).
+Parsed 21 workflow file(s), 69 job(s), 463 step(s).
 
 | Trigger | Jobs executing | Jobs conditional | Jobs NOT EXECUTED | Steps blocking | Steps advisory | Steps conditional |
 |---|---|---|---|---|---|---|
-| push:main | 4 | 30 | 34 | 31 | 0 | 183 |
-| pull_request | 17 | 32 | 19 | 107 | 4 | 204 |
-| tag:v* | 3 | 3 | 62 | 18 | 0 | 29 |
+| push:main | 4 | 31 | 34 | 31 | 0 | 189 |
+| pull_request | 17 | 33 | 19 | 107 | 4 | 210 |
+| tag:v* | 3 | 3 | 63 | 18 | 0 | 29 |
 
 ## Job selection
 
@@ -116,6 +116,7 @@ Why each job runs, does not run, or runs conditionally under each trigger. `need
 | push:main | .github/workflows/uplift.yml::uplift-controls-negative | NOT EXECUTED | workflow on: has no push trigger |
 | push:main | .github/workflows/uplift.yml::uplift-controls-positive | NOT EXECUTED | workflow on: has no push trigger |
 | push:main | .github/workflows/uplift.yml::uplift-controls | NOT EXECUTED | workflow on: has no push trigger |
+| push:main | .github/workflows/verdict.yml::verdict | CONDITIONAL | path-filtered (paths: agents/**, orchestrator/**, uplift/**, digital_twin/**, +6 more) |
 | pull_request | .github/workflows/cd-gcp.yml::build-push-sign | NOT EXECUTED | workflow on: has no pull_request trigger |
 | pull_request | .github/workflows/cd-gcp.yml::deploy-to-vm | NOT EXECUTED | workflow on: has no pull_request trigger |
 | pull_request | .github/workflows/cd-gcp.yml::alert-on-failure | NOT EXECUTED | workflow on: has no pull_request trigger |
@@ -184,6 +185,7 @@ Why each job runs, does not run, or runs conditionally under each trigger. `need
 | pull_request | .github/workflows/uplift.yml::uplift-controls-negative | CONDITIONAL | if: undecidable from trigger (github.event.label.name) |
 | pull_request | .github/workflows/uplift.yml::uplift-controls-positive | CONDITIONAL | if: undecidable from trigger (github.event.label.name) |
 | pull_request | .github/workflows/uplift.yml::uplift-controls | CONDITIONAL | if: undecidable from trigger (github.event.label.name); needs 'uplift-controls-negative', which is conditional; needs 'uplift-controls-positive', which is conditional |
+| pull_request | .github/workflows/verdict.yml::verdict | CONDITIONAL | path-filtered (paths: agents/**, orchestrator/**, uplift/**, digital_twin/**, +6 more) |
 | tag:v* | .github/workflows/cd-gcp.yml::build-push-sign | CONDITIONAL | path-filtered (paths-ignore: **.md, docs/**, plans/**, notebooks/**) |
 | tag:v* | .github/workflows/cd-gcp.yml::deploy-to-vm | CONDITIONAL | path-filtered (paths-ignore: **.md, docs/**, plans/**, notebooks/**); needs 'build-push-sign', which is conditional |
 | tag:v* | .github/workflows/cd-gcp.yml::alert-on-failure | CONDITIONAL | path-filtered (paths-ignore: **.md, docs/**, plans/**, notebooks/**); if: outcome-dependent (failure()); needs 'build-push-sign', which is conditional; needs 'deploy-to-vm', which is conditional |
@@ -252,6 +254,7 @@ Why each job runs, does not run, or runs conditionally under each trigger. `need
 | tag:v* | .github/workflows/uplift.yml::uplift-controls-negative | NOT EXECUTED | workflow on: has no push trigger |
 | tag:v* | .github/workflows/uplift.yml::uplift-controls-positive | NOT EXECUTED | workflow on: has no push trigger |
 | tag:v* | .github/workflows/uplift.yml::uplift-controls | NOT EXECUTED | workflow on: has no push trigger |
+| tag:v* | .github/workflows/verdict.yml::verdict | NOT EXECUTED | on: push is branch-scoped (no tags: filter), so a tag push is excluded |
 
 ## Surface
 
@@ -505,6 +508,12 @@ Why each job runs, does not run, or runs conditionally under each trigger. `need
 | push:main | .github/workflows/uplift.yml::uplift-controls-negative | - | NOT EXECUTED | workflow on: has no push trigger |
 | push:main | .github/workflows/uplift.yml::uplift-controls-positive | - | NOT EXECUTED | workflow on: has no push trigger |
 | push:main | .github/workflows/uplift.yml::uplift-controls | - | NOT EXECUTED | workflow on: has no push trigger |
+| push:main | .github/workflows/verdict.yml::verdict | uses: actions/checkout@v4 | CONDITIONAL | conditional - blocking |
+| push:main | .github/workflows/verdict.yml::verdict | Set up Python 3.11 | CONDITIONAL | conditional - blocking |
+| push:main | .github/workflows/verdict.yml::verdict | Install dependencies | CONDITIONAL | conditional - blocking |
+| push:main | .github/workflows/verdict.yml::verdict | The verdict's own judgment rules | CONDITIONAL | conditional - blocking |
+| push:main | .github/workflows/verdict.yml::verdict | Verdict on the decision core | CONDITIONAL | conditional - blocking |
+| push:main | .github/workflows/verdict.yml::verdict | Upload the verdict | CONDITIONAL | conditional - blocking |
 | pull_request | .github/workflows/cd-gcp.yml::build-push-sign | - | NOT EXECUTED | workflow on: has no pull_request trigger |
 | pull_request | .github/workflows/cd-gcp.yml::deploy-to-vm | - | NOT EXECUTED | workflow on: has no pull_request trigger |
 | pull_request | .github/workflows/cd-gcp.yml::alert-on-failure | - | NOT EXECUTED | workflow on: has no pull_request trigger |
@@ -839,6 +848,12 @@ Why each job runs, does not run, or runs conditionally under each trigger. `need
 | pull_request | .github/workflows/uplift.yml::uplift-controls | Every declared negative repetition and the positive record arrived (G5 - BLOCKING) | CONDITIONAL | conditional - blocking |
 | pull_request | .github/workflows/uplift.yml::uplift-controls | Write the controls verdict, agreement record and Power_Report (R6.1-R6.5, R6.15) | CONDITIONAL | conditional - blocking |
 | pull_request | .github/workflows/uplift.yml::uplift-controls | Upload the controls verdict | CONDITIONAL | conditional - blocking |
+| pull_request | .github/workflows/verdict.yml::verdict | uses: actions/checkout@v4 | CONDITIONAL | conditional - blocking |
+| pull_request | .github/workflows/verdict.yml::verdict | Set up Python 3.11 | CONDITIONAL | conditional - blocking |
+| pull_request | .github/workflows/verdict.yml::verdict | Install dependencies | CONDITIONAL | conditional - blocking |
+| pull_request | .github/workflows/verdict.yml::verdict | The verdict's own judgment rules | CONDITIONAL | conditional - blocking |
+| pull_request | .github/workflows/verdict.yml::verdict | Verdict on the decision core | CONDITIONAL | conditional - blocking |
+| pull_request | .github/workflows/verdict.yml::verdict | Upload the verdict | CONDITIONAL | conditional - blocking |
 | tag:v* | .github/workflows/cd-gcp.yml::build-push-sign | uses: actions/checkout@v4 | CONDITIONAL | conditional - blocking |
 | tag:v* | .github/workflows/cd-gcp.yml::build-push-sign | Set up Docker Buildx | CONDITIONAL | conditional - blocking |
 | tag:v* | .github/workflows/cd-gcp.yml::build-push-sign | Authenticate to GCP via Workload Identity Federation | CONDITIONAL | conditional - blocking |
@@ -948,6 +963,7 @@ Why each job runs, does not run, or runs conditionally under each trigger. `need
 | tag:v* | .github/workflows/uplift.yml::uplift-controls-negative | - | NOT EXECUTED | workflow on: has no push trigger |
 | tag:v* | .github/workflows/uplift.yml::uplift-controls-positive | - | NOT EXECUTED | workflow on: has no push trigger |
 | tag:v* | .github/workflows/uplift.yml::uplift-controls | - | NOT EXECUTED | workflow on: has no push trigger |
+| tag:v* | .github/workflows/verdict.yml::verdict | - | NOT EXECUTED | on: push is branch-scoped (no tags: filter), so a tag push is excluded |
 
 ## Declared-blocking anchors (R11.8)
 
