@@ -214,9 +214,99 @@ Approval says yes to everything below except the lines marked **ask**, confirmed
 - **S3-D-03 (2026-11-18). Weights are chosen before they are used.** No arm, on the legacy world or
   any other, is priced under a candidate weight before the sealed file is committed. Pricing under
   candidate weights first would let the sign of a result choose the weights.
+- **S3-D-04 (2026-11-18). The operator's standing approval for this session's merges.** Answer to
+  G3: "Yes, and future green PRs too". The ledger, documents and stage PRs of this session are
+  merged without a further question once each is green and its checks pass; anything else that
+  changes an outside service still needs its own yes.
 
 ## Stages
 
 ### A. Land the truth
 
-(entries follow)
+- **S3-M-12 Preservation snapshot (measured, 2026-11-18, before any change).** Copies of the four
+  `ledger` files with their sha256 (equal to M-07's), the porcelain status digest and head of all
+  eight worktrees, the sha256 of the 20 changed paths in `frontend-gates`, the stash list and the
+  ref digest `94c6a974bb7bb1ea` are kept in the session's scratch folder (not in the repository).
+- **S3-M-13 The ledger's census (measured).** `python -m scripts.audit.spec_ledger_census --files
+  --next 40` on an export of `d4f985c` with the four `ledger` files laid over it: 28 parents, 200
+  leaves, 162 done, 0 pending, 38 open (0 authorable, 12 CI-gated, 26 deferred), 0 unharvested,
+  `complete: no`, exit 0. Its 34 `absent-artifact` lines name files of the unmerged PRs (#87's
+  `request_state.py`, ADR-058 and others) or paths tasks name in order to reject them. HANDOFF
+  records 130 done at session 12's close, so session 13 discharged 32 leaves by this count.
+- **S3-M-14 The six closing checks of the spec's prompt, on the same export (measured).**
+  `workflow_shape_truth` 0, `pin_extractor_truth --check` 0 (18 pins), `sweep_budget_truth
+  --check` 0, `dataset_licence_truth --check` 2 (a skip by decision, as the prompt says),
+  `task_claim_truth --check` 0, `gate_surface --check` 0, and the census `--check` 0.
+- **The ledger committed (`d48903d` on `docs/dqp-session-13`).** All 48 placeholders were filled
+  by a fact read today (the census; #90's number, head and CI runs; the push runs at `d4f985c`;
+  #89's round-3 run 43575491177 and the runs after it; run C 43631919800; task 31.12's stated
+  claim; round 1's `e2e` red as a miss, from the local file `.tmp/s13/pred_89_r2.md`) or marked
+  "not recorded" (the closing date, core-seconds, CI critical path, agent batches, G7, G8, the
+  levers, the other S13 options, the T0 to T5 reading, the F-F-1/F-F-2 coverage). **Proof nothing
+  else moved:** a line-level comparison with the pre-fill copies finds no changed line outside the
+  lines that held a placeholder (HANDOFF 17 of 17, NEXT_SESSION_PROMPT 12 of 12, SESSION_PROTOCOL
+  1 of 1, tasks 9 of 9). The script is `fill_ledger.py` in the scratch folder; its fills are
+  listed in the commit message.
+- **S3-M-15 The knowledge base copies nothing verbatim (measured, and the check shown able to
+  fail).** Every file the documents branches add under `docs/knowledge/` was tokenised into
+  lowercase words and its word 10-grams looked up among the 820,091 10-grams of the 242 corpus
+  files: 0.0% found in every file; the longest shared run is 0 words. Positive control: five
+  60-word excerpts drawn at random from the corpus, padded with other words, were each found as a
+  60-word run. The privacy scan of the added lines (e-mail addresses, IPv4 addresses, the
+  operator's name, home-folder paths) found none; `C:\Documentation` is named as a location only.
+- **S3-M-16 Scheduled workflows failing on `main` (measured, `gh run list --commit d4f985c`).**
+  Besides CD-GCP and the watchdog: SYNAPSE Integration (daily), Publish daily audit anchor to
+  Rekor (daily), Required checks reconcile and the scheduled Mutation sweep fail on schedule; the
+  nightly LLM judge passes and fails. None of these opens an issue. They are recorded for the
+  retirement-by-experiment work of D-5, not acted on here.
+- **G5 done (2026-11-18).** Workflows "CD — GCP" (id 283570252) and "Live Truth (watchdog)"
+  (292670274) disabled (`gh workflow disable`; reversed by `gh workflow enable`). Issues #75, #78,
+  #81, #82, #83, #86 and #88 (deploy failures) and #76 (watchdog) closed, each with a comment
+  giving the cause (F-18, F-25) and the way back. Open sev1 issues: 0.
+- **G1, G2 done.** `docs/dqp-session-13` pushed; its pull request is #92. #91 marked ready for
+  review.
+- **S3-M-17 The merge rehearsal (measured; instrument `rehearse.sh` in the scratch folder).** A
+  detached scratch worktree at `d4f985c`; `git merge --no-ff` of `4b659e6` (#87), `1c484fb`
+  (#91) and `860c62e` (#90), in order: no conflict (the only file both #90 and #87/#91 change is
+  `.github/workflows/uplift.yml`, merged cleanly). Trees: after #87 `2dc60fae`, after #91
+  `08f53870`, after #90 `f7c75547`. On an export of the result:
+  - the decision-core fast selection: 664 passed, 26 skipped (19.9 s on mains-equivalent load);
+  - #90's five changed test files: 74 passed (see S3-M-18 for the first, failed attempt);
+  - `mini_e5.py 12`: every seed's two costs equal the `1c484fb` baseline to the printed digit;
+    mean difference -1.3954; worse in 12 of 12; all repeats identical;
+  - lineage: `describes_revision` True; `BPRIME_PHYSICS_SET` digest `dbedae9d11ae1623`, the same
+    as on `d4f985c` (measured there too) and the value the B-prime record carries since finding
+    122's repair; `POWER_SOURCE_SET` digest `0dd399e2` on `d4f985c` and `c0cc006c` after the
+    merges, each described by its own tree's Power_Report (True on both), as #87 intends;
+  - the truth gates' first job: `registry_gate` 0, `doc_truth --check` 0 (20 of 20 claims),
+    `gate_surface --check` 0 (691 rows), `workflow_shape_truth` 0, `required_checks_truth` 0,
+    `sweep_budget_truth` 0; `ledger_gen --check` 1, on C71 only: the committed row says "200
+    golden trace(s) from tests/eval/golden_traces", the local run "0 ... (unresolved)" (whether
+    this also fails on `main` locally, which would make it environmental, is measured next).
+- **S3-M-18 A local trap: `packages/` on `PYTHONPATH` shadows the repository's `tests` (measured).**
+  `tests/` has no `__init__.py`; `packages/tests/` has one. With `PYTHONPATH=<tree>;<tree>/packages`
+  (session 2's convention, D-07), `import tests` resolves to the regular package
+  `packages/tests`, which wins over the namespace portion at the root, so
+  `from tests.verify.strategies import ...` fails: "No module named 'tests.verify'". With
+  `synapse_common` alone on the path (copied to a folder of its own), the same five files pass, 74
+  of 74. Not a defect of #90; a trap for every local run of `tests/verify`. Candidate error
+  pattern for `CLAUDE.md`.
+- **S3-M-19 The C71 difference was the same trap (measured).** `ledger_gen --check` on the
+  rehearsed tree with `synapse_common` alone on the path: exit 0, "57 PASS, 0 FAIL, 0 PARTIAL, 11
+  SKIP", the 200 golden traces found. C71 loads them through `tests.eval`, which the shadowing
+  hid. On `d4f985c` the same check also passes. So every truth gate passes on the rehearsed tree.
+- **G3 asked and answered (2026-11-18).** The first question was dismissed when the app closed;
+  asked again, the operator chose **"Yes, and future green PRs too"**: merge #87, #91 and #90
+  now, and merge the ledger, documents and stage PRs of this session once each is green and its
+  checks pass, without asking each time (recorded as S3-D-04).
+- **G3 done: the three merges (measured, `gh pr merge --merge`, then `git fetch` and tree
+  hashes).** #87 as `f31696d` (tree `2dc60fae`), #91 as `fb84caf` (tree `08f53870`), #90 as
+  `8c48635` (tree `f7c75547`): each merge commit's tree is byte-identical to the rehearsal's at
+  the same step, so everything S3-M-17 and S3-M-19 measured holds for `main` as merged.
+- **The ledger merged.** Locally on top of `8c48635`, the census `--check`, `task_claim_truth
+  --check` and `ledger_gen --check` pass; #92 (green in CI: 17 pass, 3 skip) merged as `eb446ed`,
+  tree `eb53df58`, equal to the local merge. The `ledger` worktree's four files are now on `main`.
+- **S3-M-20 CI's lint scope (read, `ci.yml:81-92`).** `ruff` and `mypy --strict` run on
+  `packages/synapse_common/`, `agents/` and `orchestrator/` only, so the session-2 instruments
+  under `docs/truth/instruments/` meet no lint gate when the documents land (D-08's concern was
+  about `scripts/`).
