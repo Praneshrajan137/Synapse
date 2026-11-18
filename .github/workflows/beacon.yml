@@ -1,0 +1,38 @@
+name: SYNAPSE Beacon
+
+# The public randomness the release's contest and confirmatory seeds use (truth program session 3,
+# docs/truth/sealed/CONTEST-PROTOCOL.md): RFC 9380's vectors, a real drand quicknet round and
+# three tamperings, checked with the pure-Python verifier and nothing else installed.
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "synapse_beacon/**"
+      - "tests/beacon/**"
+      - ".github/workflows/beacon.yml"
+  push:
+    branches: [main]
+    paths:
+      - "synapse_beacon/**"
+      - "tests/beacon/**"
+      - ".github/workflows/beacon.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    name: Beacon verifier - RFC vectors, a real round, tamperings
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install the verifier's one dependency and the test runner
+        run: pip install -r synapse_beacon/requirements.txt "pytest>=8.2,<9.0"
+      - name: Beacon tests
+        run: python -m pytest tests/beacon -q -o addopts="--strict-markers" -p no:cacheprovider

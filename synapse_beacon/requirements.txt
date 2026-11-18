@@ -1,0 +1,4 @@
+# The beacon verifier's one dependency (truth program session 3). MIT; pure Python, so it also
+# runs in Pyodide. Its own dependencies are MIT (eth-utils, eth-typing, eth-hash) and BSD-3-Clause
+# (cytoolz, toolz).
+py_ecc>=8.0.0,<9.0.0
