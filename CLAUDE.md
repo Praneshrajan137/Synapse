@@ -208,6 +208,17 @@ The lessons behind these entries, with their evidence, are in `.kiro/steering/en
 - E-DQP-08: Kiro's autonomous mode turns the OS command sandbox on with outbound network blocked. On Windows every shell command then fails if any `fs_write` path in `~/.kiro/settings/permissions.yaml` does not exist, and sandboxed commands cannot read `~/.gitconfig` or the GitHub CLI's config. `/sandbox` writes `.kiro/settings/sandbox.json`, a local setting: do not commit it
 - E-DQP-09: An unauthenticated 404 for this repository means it is private only if the same tool fetches a known public repository successfully. A private repository changes runner size and billing; `GET /repos/<owner>/<repo>/actions/runs/<id>/timing` shows whether a run was billed
 
+### Truth Program Error Patterns (2026-11)
+Evidence for each is in `docs/truth/` (LOG, TRUTH-MAP and `log/session-03.md`). `python -m scripts.verdict` (`make verdict`) is the one-minute check of the decision core; its exit code names the outcome.
+- E-TP-01: On Windows, any script whose run reaches the twin's Monte Carlo check or a process pool needs an `if __name__ == "__main__":` guard: spawned workers re-import the main module, and an unguarded script re-runs itself in every worker (truth LOG M-20). A script fed on stdin (`python -`) cannot be a spawn main at all
+- E-TP-02: The tier router sends a request that lacks its four tier keys to tier 2, so every request the sensor loop or E5 builds is tier 2, and debate, the LLM and the twin check are unreachable from autonomous operation (truth LOG V-01, TRUTH-MAP F-05)
+- E-TP-03: `orchestrator/tests/test_internal_only_routes.py` imports `jose`; a fresh local `.venv` may lack `python-jose`. The verdict leaves that file out when `jose` is absent and says so
+- E-TP-04: `TwinConfig` is a pydantic `BaseSettings` with prefix `TW_`, so a `TW_ORDER_ARRIVAL_RATE` or `TW_PICK_PACK_*` environment variable changes every legacy twin run, E5 and B-prime included, without changing any sealed digest (TRUTH-MAP F-33). The verdict refuses to run while any `TW_` variable is set
+- E-TP-05: Never put `packages/` on `PYTHONPATH` to run tests: `packages/tests/__init__.py` makes `tests` resolve to that package and hides the repository's `tests` namespace (`No module named 'tests.verify'`; C71 then finds 0 golden traces). Put `synapse_common` alone on the path, from a folder inside the tree (E-TP-06)
+- E-TP-06: `synapse_common`'s schema registry finds `proto/domain/` by walking up from its own file, so a copy of `synapse_common` outside the repository tree cannot start it, and the consensus arm then refuses to assemble (`UnavailableConsensusArm`)
+- E-TP-07: Rehearse a merge sequence with the CI's inline shell gates too, not only the Python gates: #87 and #90 were each green, and together they turned `main` red on the I-1 grep, whose `import replicate` matched `import replicate_seed` (anchored with `\>` in #95)
+- E-TP-08: `.pre-commit-config.yaml` has not been valid YAML since it was created, no workflow runs pre-commit and the hooks are not installed, so no hook in it (`no-raw-hex`, `no-paid-apis`, `spec-validate`, ...) enforces anything today (TRUTH-MAP F-34). Do not cite a hook as enforcement until the file parses and a job runs it
+
 ## Sprint Status
 - **Sprint 1**: Infrastructure foundation (Docker, Neo4j, Kafka, Redis, PostgreSQL, shared packages, proto schemas, SDD framework, CI pipeline)
 - **Sprint 2**: Agent implementation (Demand Prophet, Inventory Sentinel, Routing Navigator)

@@ -1,0 +1,85 @@
+name: SYNAPSE Verdict
+
+# The one-minute verdict on the decision core (`scripts/verdict`, truth program session 3).
+# It runs the decision core's fast test selection in two process shards and, at the same time,
+# a miniature of the E5 proof: E5's own cost function on its first twelve replicate seeds for
+# the consensus arm and the tuned control, judged EXACTLY against
+# `infrastructure/quality/verdict-pins.json`. The exit code names the outcome (PASS 0, SAFETY 1,
+# WORSE 2, CHANGED 3, NONDETERMINISTIC 4, CONTROL_MOVED 5, REFUSED_ENV 6, INCOMPLETE 7), so a
+# change that moves any decision of the consensus arm fails here until its pins are re-written
+# with `python -m scripts.verdict --repin` in the same pull request, where the diff shows the
+# per-seed movement. The pins were written on Windows; this job also shows whether Linux
+# reproduces them to the bit (truth LOG M-18 found the pathway trace identical across the two).
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "agents/**"
+      - "orchestrator/**"
+      - "uplift/**"
+      - "digital_twin/**"
+      - "packages/synapse_common/**"
+      - "scripts/verdict/**"
+      - "tests/uplift/**"
+      - "tests/verdict/**"
+      - "infrastructure/quality/verdict-pins.json"
+      - ".github/workflows/verdict.yml"
+  push:
+    branches: [main]
+    paths:
+      - "agents/**"
+      - "orchestrator/**"
+      - "uplift/**"
+      - "digital_twin/**"
+      - "packages/synapse_common/**"
+      - "scripts/verdict/**"
+      - "tests/uplift/**"
+      - "tests/verdict/**"
+      - "infrastructure/quality/verdict-pins.json"
+      - ".github/workflows/verdict.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  verdict:
+    name: Verdict - decision core, E5 miniature, determinism
+    runs-on: ubuntu-latest
+    # The verdict itself measured ~45 s on an 8-core laptop; a 4-vCPU runner and the install
+    # (the same closure as ci.yml's uplift-verify-slow job, ~4 min) fit well inside 25.
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+      - name: Install dependencies
+        # The consensus arm assembles all eight real agent handlers, so this is the
+        # uplift-verify-slow job's closure (ci.yml), unchanged.
+        run: |
+          pip install -r packages/requirements.txt -r packages/requirements-dev.txt
+          pip install -e packages/
+          pip install -r orchestrator/requirements.txt
+          pip install jsonschema pyyaml
+          for req in agents/*/requirements.txt; do pip install -r "$req"; done
+          pip install simpy sse-starlette
+          pip install -r agents/requirements-sprint3.txt
+          pip install "starlette>=0.37.2,<0.38.0"
+      - name: The verdict's own judgment rules
+        run: python -m pytest tests/verdict -q -o addopts="--strict-markers"
+      - name: Verdict on the decision core
+        run: python -m scripts.verdict --json-out "$RUNNER_TEMP/verdict.json"
+      - name: Upload the verdict
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: verdict
+          path: ${{ runner.temp }}/verdict.json
+          if-no-files-found: warn

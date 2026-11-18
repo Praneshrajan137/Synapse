@@ -1,7 +1,7 @@
 # ============================================================================
 # SYNAPSE Makefile — Development Automation
 # ============================================================================
-.PHONY: help up down test lint typecheck verify-infra seed generate-spec-tests fuzz mutate clean chaos-test load-test security-test dragonfly-eval sprint5-verify verify-services doctor verify-claims verify-claims-json verify-intelligence verify-agency feast-build feast-up prove-uplift prove-uplift-full
+.PHONY: help up down test lint typecheck verify-infra seed generate-spec-tests fuzz mutate clean chaos-test load-test security-test dragonfly-eval sprint5-verify verify-services doctor verify-claims verify-claims-json verdict verify-intelligence verify-agency feast-build feast-up prove-uplift prove-uplift-full
 
 SHELL := /bin/bash
 COMPOSE := docker compose -f docker/docker-compose.yml --env-file docker/.env
@@ -20,6 +20,9 @@ verify-claims-json: ## Same as verify-claims but emit machine-readable JSON
 
 verify-topology: ## Verify topics.json consumers map to real Consumer.subscribe call sites (ADR-038)
 	@python -m scripts.audit.topic_consumer_truth
+
+verdict: ## One-minute verdict on the decision core: safety shards + E5 miniature vs pins (exit code = outcome)
+	@python -m scripts.verdict
 
 verify-agency: ## Verify the agentic loop is real — perceive→decide→act→learn (ADR-052)
 	@python -m scripts.audit.agency_truth --check
