@@ -41,7 +41,8 @@ Baseline for every measurement unless another is named: the working tree on bran
   subagents on the public web; four pages fetched by the main session. All read-only.
 - One reviewer with fresh context was given only `OPENING.md` and this file and asked to
   reproduce a sample and attack the reasoning. Its findings are under "Review before the gate".
-- **Next step:** whatever is first open under "Open questions, in order".
+- **Next step:** session 3, opened with `docs/truth/SESSION-3-PROMPT.md` (written 2026-11-18 from
+  the operator's two guidance files and this session's record).
 
 ## The operator's answers (2026-11-17)
 
