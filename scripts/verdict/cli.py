@@ -265,6 +265,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     if twin_env:
         notes.append(f"ran with {', '.join(twin_env)} set (--allow-twin-env)")
     failures: list[str] = []
+    physics_moved: list[str] = []
     with concurrent.futures.ThreadPoolExecutor(max_workers=len(shard_args)) as threads:
         running = [threads.submit(_run_shard, root, n, a) for n, a in shard_args.items()]
         try:
@@ -272,7 +273,11 @@ def main(argv: Sequence[str] | None = None) -> int:
             costs, repeats, failures = measure(root, seeds, args.processes)
         except Exception as exc:  # noqa: BLE001 -- the verdict reports, it does not crash
             seeds, costs, repeats = (), {arm: {} for arm in j.ARMS}, {arm: {} for arm in j.ARMS}
-            failures = [f"the miniature could not start: {type(exc).__name__}: {exc}"]
+            text = f"{type(exc).__name__}: {exc}"
+            if type(exc).__name__ == "BprimeRecordError" and "physics digest" in str(exc):
+                physics_moved.append(text)
+            else:
+                failures = [f"the miniature could not start: {text}"]
         shards = [future.result() for future in running]
 
     pins = _read_pins(root)
@@ -286,6 +291,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         repeats=repeats,
         shard_exit_codes={s.name: s.exit_code for s in shards},
         failures=tuple(failures),
+        physics_moved=tuple(physics_moved),
     )
     verdict = j.judge(pins, measurement)
 

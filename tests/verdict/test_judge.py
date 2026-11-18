@@ -184,3 +184,16 @@ def test_the_committed_pins_are_canonical_and_complete() -> None:
     assert len(pins.seeds) == len(set(pins.seeds)) == 12
     for arm in ARMS:
         assert all(math.isfinite(cost) and cost > 0 for cost in pins.costs[arm].values())
+
+
+def test_a_record_that_refuses_the_physics_is_a_moved_control_not_a_gap() -> None:
+    nothing = Measurement(
+        costs={"consensus": {}, "tuned": {}},
+        repeats={},
+        shard_exit_codes=SAFE,
+        physics_moved=("BprimeRecordError: the physics digest of this tree is 1, not 2",),
+    )
+    verdict = judge(PINS, nothing)
+    assert verdict.outcome is Outcome.CONTROL_MOVED
+    assert verdict.deltas == {}
+    assert not any("not measured" in text for text in verdict.findings)

@@ -184,9 +184,11 @@ def run_case(case: Case, commit: str, scratch: Path) -> dict[str, object]:
     for edit in case.edits:
         if not apply(tree, edit):
             return {"case": case.name, "result": "EDIT-FAILED", "edit": edit.path}
-    side = scratch / "side"
-    if side.exists():
-        shutil.rmtree(side)
+    # synapse_common goes on the path from a folder INSIDE the tree: its schema registry finds
+    # proto/domain/ by walking up from its own file, so a copy outside the tree cannot start
+    # (the consensus arm then refuses to assemble). Not `packages/` itself: its `tests` package
+    # would shadow the repository's `tests` namespace (truth session 3, S3-M-18).
+    side = tree / ".verdict-pkg"
     shutil.copytree(tree / "packages" / "synapse_common", side / "synapse_common")
     report = scratch / "verdict.json"
     report.unlink(missing_ok=True)

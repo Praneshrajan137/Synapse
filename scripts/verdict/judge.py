@@ -77,6 +77,9 @@ class Measurement:
     """Per safety shard: the pytest exit code."""
     failures: Sequence[str] = ()
     """Measurements that could not be taken, each described."""
+    physics_moved: Sequence[str] = ()
+    """Refusals by the proof's own records because the physics they describe changed (the
+    B-prime record's physics digest): the control and the physics moved, so nothing was priced."""
 
 
 @dataclasses.dataclass(frozen=True)
@@ -131,7 +134,9 @@ def judge(pins: Pins, measurement: Measurement) -> Verdict:
 
     for failure in measurement.failures:
         note(Outcome.INCOMPLETE, failure)
-    for arm in ARMS:
+    for reason in measurement.physics_moved:
+        note(Outcome.CONTROL_MOVED, f"the proof's record refuses this tree: {reason}")
+    for arm in ARMS if not measurement.physics_moved else ():
         missing = [seed for seed in pins.seeds if seed not in measurement.costs.get(arm, {})]
         if missing:
             note(
@@ -152,7 +157,7 @@ def judge(pins: Pins, measurement: Measurement) -> Verdict:
                     f"{arm} at seed {seed}: {first.hex()} then {again.hex()}",
                 )
     deltas: dict[str, Delta] = {}
-    if Outcome.INCOMPLETE not in found:
+    if Outcome.INCOMPLETE not in found and not measurement.physics_moved:
         for arm in ARMS:
             pinned = {seed: pins.costs[arm][seed] for seed in pins.seeds}
             deltas[arm] = arm_delta(arm, pinned, measurement.costs[arm])
