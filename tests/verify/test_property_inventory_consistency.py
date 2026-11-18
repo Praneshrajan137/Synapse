@@ -75,16 +75,14 @@ How the ``max_examples`` clause is scoped, and why
 --------------------------------------------------
 
 **It applies to this feature's declared Python files only.** Hardcoded budgets exist
-elsewhere in the tree and are not this feature's debt:
-``tests/uplift/test_headline_artifact_roundtrip_property.py`` (200, twice),
-``tests/uplift/test_arm_aggregate_property.py`` (200 and 50),
-``tests/verify/test_published_checkpoint_gate_property.py`` (250),
-``tests/verify/test_headline_count_pin_property.py``,
-``tests/verify/test_headline_pin_skip_property.py`` and
-``tests/verify/test_verify_claims_status_partition_property.py`` (200 each) - and roughly
-fifty more values across ``tests/uplift``. A check born red for another feature's debt
-gets disabled, and a disabled check is worse than no check, so the scope is the declared
-inventory and nothing else. The scope is stated here rather than hidden in a glob: a
+elsewhere in the tree and are not this feature's debt. Which files set one, and how many,
+is what ``test_the_hardcoded_budget_census_is_reproducible_and_reported`` prints (read it
+with ``-s`` or ``-rP``). This docstring names none, because a list here drifts: the one it
+used to carry opened with ``tests/uplift/test_headline_artifact_roundtrip_property.py``,
+which has set no budget since d8aafe6 (F-A2a-8).
+A check born red for another feature's debt gets disabled, and a disabled check is worse
+than no check, so the scope is the declared inventory and nothing else. The scope is
+stated here rather than hidden in a glob: a
 reader can see what is covered without reverse-engineering a pattern. Widening it is a
 deliberate decision with a repair cost attached, not an accident of matching.
 
