@@ -354,10 +354,16 @@ gates:
           was missing, so this operator and that entry are each other's proof.
 
           Probe status (2026-10-02, R1.5a). C70's baseline is SKIP, not red: the
-          R7.8 hole this note used to cite is closed (`STRYKER_BREAK_NOW = 50` in
-          verify_claims.py, equal to the shipped `thresholds.break: 50`, and
+          R7.8 hole this note used to cite is closed (`STRYKER_BREAK_NOW` in
+          verify_claims.py equals the shipped `thresholds.break`, and
           ratchets.json's `stryker-break` row records both), and the row reads
-          SKIP because 22 of its 26 ratchets carry no measurement. The sweep at
+          SKIP because some of its ratchets carry no measurement. A row is
+          measured only when its `status` is `measured` AND `measured_at` is set
+          (`RatchetRecord.measured` in ratchet_truth.py). How many rows are
+          measured, of how many, is the gate's to state and not this note's:
+          C70's row in docs/state/CURRENT.md states both from one registry
+          execution (ledger_gen.py), and `python -m scripts.audit.ratchet_truth
+          --json` reports them row by row. The sweep at
           5eef6ee read this probe INDETERMINATE because the runner then exited 1
           for SKIP and FAIL alike. `judge_ratchet` FAILs a breach before it SKIPs
           an unmeasured row, and this row is unmeasured (`measured_at: null`), so
@@ -459,12 +465,15 @@ reporting_tools:
 # ---------------------------------------------------------------------------
 # Coverage obligation.
 #
-# 14 of the 64 registered checks declare an operator, plus one reporting tool.
-# AD-4 requires EVERY registered check to carry one, so the remaining 49 are
-# UNDECLARED: `gate_fault_injection` names them and excludes them from
-# PASS-eligibility, which is the honest label and never a pass (I-7). That
+# `declared_gates` below counts the registered checks that declare an operator, and
+# C72 holds it to the keys under `gates:`; C67 is a reviewed reporting tool beside
+# them. AD-4 requires EVERY registered check to carry one, so the rest are
+# UNDECLARED: `gate_fault_injection` names each and excludes it from
+# PASS-eligibility, which is the honest label and never a pass (I-7). How many
+# there are is that tool's to state: this comment used to transcribe the registry's
+# size and went stale as checks were added (decision-quality-proof task 33.3). That
 # shortfall is pre-existing debt from C1..C61 -- turning it into a hard FAIL would
-# make C72 permanently red over fifty rows nobody in this feature touched, and a
+# make C72 permanently red over rows nobody in this feature touched, and a
 # gate born red for someone else's debt asserts nothing new.
 #
 # What task 12.1 discharged is its own half: every check it registered (C66..C72)

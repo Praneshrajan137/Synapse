@@ -799,12 +799,11 @@ def test_the_committed_stryker_break_row_now_agrees_with_the_config_it_guards() 
     and asserting the old FAIL is asserting a defect that no longer exists.
 
     **The repair was a coordinated change across four sites and only two of them moved,
-    which is why this surfaced as a red rather than as a review comment.**
-    ``scripts/audit/verify_claims.py``'s own C16 docstring still describes the hole as live
-    ("**Expected FAIL on landing**") and names this module as one of the sites its repair
-    must touch. That prose is another spec's and is read by ``doc_truth``, so it is
-    recorded rather than edited here: an unmeasurable prose edit does not belong in the
-    same diff as a mechanical one.
+    which is why this surfaced as a red rather than as a review comment.** C70's own
+    docstring in ``scripts/audit/verify_claims.py`` went on describing the hole as live
+    ("Expected FAIL on landing") until session 13 of ``decision-quality-proof`` corrected
+    it (task 33.2). Two things this paragraph used to say were wrong: that prose is C70's,
+    not C16's, and ``doc_truth`` does not read it, it only checks that the module exists.
 
     **Agreement is re-derived from the two committed files, never from the record.** A row
     that only agreed with itself would be the defect one layer up: the record could then

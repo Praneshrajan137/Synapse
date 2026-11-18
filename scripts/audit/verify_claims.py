@@ -9,8 +9,17 @@ Run with ``make verify-claims`` or ``python -m scripts.audit.verify_claims``.
 (exit ``0`` pass / ``1`` fail / ``2`` unavailable), so a CI step and this script
 never disagree about what the registry decided.
 
-The check IDs (C1..C25) match the rows in ``docs/state/CURRENT.md``.
+68 checks are registered, with identifiers from C2 to C76; C10, C17, C18, C24, C25,
+C53 and C54 are not registered. The identifiers are the rows of the generated
+verification matrix in ``docs/state/CURRENT.md``, which ``scripts/audit/ledger_gen.py``
+projects from one registry execution, one row per registered check.
 """
+
+# The registry sentence above is held to the registry by
+# `tests/verify/test_verify_claims_docstring_states_the_registry.py`. It derives the count,
+# the lowest and highest identifiers and the skipped ones from `_CHECKS` (the list `register`
+# appends to; nothing else appends to it) and fails naming each that differs. So a
+# registration that does not move the sentence fails that test until the sentence moves.
 
 from __future__ import annotations
 
@@ -395,7 +404,8 @@ def check_coverage_floor() -> CheckResult:
 # ---------------------------------------------------------------------------
 # C16: Stryker break threshold enforced
 # ---------------------------------------------------------------------------
-# Stryker ratchet: same pattern as coverage. Verified current floor 26.
+# Stryker ratchet, in the MIN / NOW / TARGET shape of C15's coverage constants. The ratchet
+# C16 enforces is STRYKER_BREAK_NOW, which must equal the shipped `thresholds.break`.
 STRYKER_BREAK_MIN = 20  # never let it drop below this
 # Mirrors `frontend/stryker.conf.json`'s shipped `thresholds.break`. Sprint 13 Phase 4.1
 # bumped the config 26 -> 50 (json-canonical.ts reached a 96.30% kill rate) and this
@@ -2496,14 +2506,11 @@ def check_ratchet_truth() -> CheckResult:
     ratchet constant that sits below the configuration it claims to guard cannot catch a
     regression to itself, so the disagreement is itself a failure.
 
-    **Expected FAIL on landing.** The live example is the one the audit found: the
-    frontend ships `thresholds.break: 50` while `STRYKER_BREAK_NOW` here is frozen at 26,
-    so a regression 50 -> 26 passes C16 today. `ratchets.json` records that as
-    `agrees_with_shipped: false`, and recording it does not excuse it. Repairing the
-    constant needs a coordinated change across `CLAUDE.md`, `doc-number-pins.yaml` and
-    `tests/verify/test_ratchet_monotonicity_property.py` (whose docstring names 12.1 as
-    the repair point and whose assertions pin the hole), so it is reported rather than
-    half-done -- an honest red gate, not an exemption.
+    **The example the audit found is closed.** The frontend shipped `thresholds.break: 50`
+    while `STRYKER_BREAK_NOW` here was frozen at 26, so a regression 50 -> 26 passed C16
+    and this row was expected to FAIL on landing. Task 12.1 moved the constant to the
+    shipped value, and `ratchets.json`'s `stryker-break` row now records
+    `agrees_with_shipped: true`; a future disagreement between the two FAILs this row.
 
     A row with no measurement behind it reports `skip`, and the aggregate orders
     FAIL > UNAVAILABLE > SKIP > PASS so an absent measurement can never mask a

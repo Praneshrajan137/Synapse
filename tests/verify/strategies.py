@@ -89,7 +89,7 @@ __all__ = [
 # Check results and identifier sets (Properties 1, 9, 10)
 # ---------------------------------------------------------------------------
 
-# Identifiers are shaped like the real registry's (C1..C61) so a generated id is
+# Identifiers are shaped like the real registry's (``C<n>``) so a generated id is
 # indistinguishable from a registered one to the code under test, and a "foreign"
 # id is foreign because it is absent, not because it is malformed.
 _ID_PREFIXES: Final[tuple[str, ...]] = ("C", "S", "X")

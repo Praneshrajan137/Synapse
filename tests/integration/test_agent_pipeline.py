@@ -56,7 +56,11 @@ class TestDemandProphetToRouting:
 
 
 class TestA2AProposalRoundTrip:
-    """Test A2A proposal generation for all 3 agents."""
+    """Test A2A proposal generation for all 3 agents, in the envelope the protocol sends.
+
+    ``ConsensusProtocol._request_proposal`` sends ``params={"decision_context": request}``, and a
+    proposal with flat params is refused (finding 112).
+    """
 
     def test_demand_prophet_a2a(self) -> None:
         from agents.demand_prophet.a2a.handler import DemandProphetA2AHandler
@@ -66,7 +70,7 @@ class TestA2AProposalRoundTrip:
             {
                 "jsonrpc": "2.0",
                 "method": "proposal",
-                "params": {"sku_ids": ["SKU001"], "store_id": "S1"},
+                "params": {"decision_context": {"sku_ids": ["SKU001"], "store_id": "S1"}},
                 "id": "test-1",
             }
         )
@@ -82,9 +86,11 @@ class TestA2AProposalRoundTrip:
                 "jsonrpc": "2.0",
                 "method": "proposal",
                 "params": {
-                    "orders": [{"order_id": "O-1", "lat": 12.97, "lon": 77.59}],
-                    "riders": [{"rider_id": "R-1"}],
-                    "store_id": "S1",
+                    "decision_context": {
+                        "orders": [{"order_id": "O-1", "lat": 12.97, "lon": 77.59}],
+                        "riders": [{"rider_id": "R-1"}],
+                        "store_id": "S1",
+                    },
                 },
                 "id": "test-2",
             }
@@ -99,7 +105,7 @@ class TestA2AProposalRoundTrip:
             {
                 "jsonrpc": "2.0",
                 "method": "proposal",
-                "params": {"sku_ids": ["SKU001"], "store_id": "S1"},
+                "params": {"decision_context": {"sku_ids": ["SKU001"], "store_id": "S1"}},
                 "id": "test-3",
             }
         )

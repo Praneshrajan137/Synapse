@@ -53,8 +53,10 @@ of the three is imported here, so none can be silently substituted.
 **Imports.** This module's own imports are the stdlib, pydantic and two leaf constants from
 ``uplift`` -- no twin module and not the harness. That bounds what it depends on, not what
 loading it costs: ``uplift/__init__.py`` imports ``uplift.consensus_arm``, which imports
-``uplift.harness`` at module scope, so importing any ``uplift`` module loads the harness, the
-twin and ``scipy`` today -- the chain ``ci.yml``'s ``uplift-verify`` closure note records.
+``uplift.harness`` at module scope, so importing any ``uplift`` module loads the harness and
+the twin today -- the chain ``ci.yml``'s ``uplift-verify`` closure note records. That chain no
+longer reaches ``scipy``: Metric_Contract v2 (task 29.4) dropped ``contract.py``'s import of it
+(F-A3-1, read, not measured).
 """
 
 from __future__ import annotations
