@@ -1,0 +1,82 @@
+name: SYNAPSE Decision Kernel
+
+# The decision kernel (`synapse_kernel/`, truth program session 3) is the twin, the incumbent,
+# the challengers and the objective, ported from the legacy code so that the same Python runs
+# natively and in a browser. Two jobs, two claims:
+#   light  - the kernel needs nothing but numpy and simpy: its tests run in an environment that
+#            holds only those (and the test runner), and its import closure is measured;
+#   parity - the kernel equals the legacy E5 harness to the last bit on E5's twelve seeds. The
+#            legacy side needs the full agent closure, as the uplift jobs install it.
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "synapse_kernel/**"
+      - "tests/kernel/**"
+      - "scripts/kernel/**"
+      - "digital_twin/**"
+      - "uplift/**"
+      - ".github/workflows/kernel.yml"
+  push:
+    branches: [main]
+    paths:
+      - "synapse_kernel/**"
+      - "tests/kernel/**"
+      - "scripts/kernel/**"
+      - "digital_twin/**"
+      - "uplift/**"
+      - ".github/workflows/kernel.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  light:
+    name: Kernel alone - numpy and simpy only
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install the kernel's dependencies and the test runner, nothing else
+        run: pip install "numpy>=2.0,<3.0" "simpy>=4.1,<5.0" "pytest>=8.2,<9.0" "hypothesis>=6.100,<7.0"
+      - name: Kernel tests without the repository's dependencies
+        run: |
+          python -m pytest tests/kernel/test_closure.py tests/kernel/test_kernel_alone.py \
+            -q -o addopts="--strict-markers" -p no:cacheprovider
+
+  parity:
+    name: Kernel equals the legacy harness to the bit
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+      - name: Install dependencies
+        # The legacy side assembles the consensus arm when `uplift` is imported, so this is the
+        # uplift-verify-slow job's closure (ci.yml), unchanged.
+        run: |
+          pip install -r packages/requirements.txt -r packages/requirements-dev.txt
+          pip install -e packages/
+          pip install -r orchestrator/requirements.txt
+          pip install jsonschema pyyaml
+          for req in agents/*/requirements.txt; do pip install -r "$req"; done
+          pip install simpy sse-starlette
+          pip install -r agents/requirements-sprint3.txt
+          pip install "starlette>=0.37.2,<0.38.0"
+      - name: The exported legacy world is current
+        run: python -m scripts.kernel.export_legacy_world --check
+      - name: Kernel tests against the legacy harness
+        run: python -m pytest tests/kernel -q -o addopts="--strict-markers" -p no:cacheprovider

@@ -34,13 +34,13 @@ the same pair.
 
 ## Summary
 
-Parsed 20 workflow file(s), 68 job(s), 457 step(s).
+Parsed 21 workflow file(s), 70 job(s), 466 step(s).
 
 | Trigger | Jobs executing | Jobs conditional | Jobs NOT EXECUTED | Steps blocking | Steps advisory | Steps conditional |
 |---|---|---|---|---|---|---|
-| push:main | 4 | 30 | 34 | 31 | 0 | 183 |
-| pull_request | 17 | 32 | 19 | 107 | 4 | 204 |
-| tag:v* | 3 | 3 | 62 | 18 | 0 | 29 |
+| push:main | 4 | 32 | 34 | 31 | 0 | 192 |
+| pull_request | 17 | 34 | 19 | 107 | 4 | 213 |
+| tag:v* | 3 | 3 | 64 | 18 | 0 | 29 |
 
 ## Job selection
 
@@ -91,6 +91,8 @@ Why each job runs, does not run, or runs conditionally under each trigger. `need
 | push:main | .github/workflows/integration.yml::integration-e2e | NOT EXECUTED | workflow on: has no push trigger |
 | push:main | .github/workflows/integration.yml::audit-chain-tamper | NOT EXECUTED | workflow on: has no push trigger |
 | push:main | .github/workflows/integration.yml::real-stack-run | NOT EXECUTED | workflow on: has no push trigger |
+| push:main | .github/workflows/kernel.yml::light | CONDITIONAL | path-filtered (paths: synapse_kernel/**, tests/kernel/**, scripts/kernel/**, digital_twin/**, +2 more) |
+| push:main | .github/workflows/kernel.yml::parity | CONDITIONAL | path-filtered (paths: synapse_kernel/**, tests/kernel/**, scripts/kernel/**, digital_twin/**, +2 more) |
 | push:main | .github/workflows/live-truth.yml::watchdog | NOT EXECUTED | workflow on: has no push trigger |
 | push:main | .github/workflows/mutation.yml::mutation | NOT EXECUTED | if: false in push:main |
 | push:main | .github/workflows/mutation.yml::mutation-fast-plan | CONDITIONAL | path-filtered (paths: agents/*/training/rewards.py, orchestrator/guardrails/rules.py, orchestrator/audit/logger.py, packages/synapse_common/audit_chain.py, +1 more) |
@@ -159,6 +161,8 @@ Why each job runs, does not run, or runs conditionally under each trigger. `need
 | pull_request | .github/workflows/integration.yml::integration-e2e | EXECUTES | - |
 | pull_request | .github/workflows/integration.yml::audit-chain-tamper | EXECUTES | - |
 | pull_request | .github/workflows/integration.yml::real-stack-run | NOT EXECUTED | if: false in pull_request |
+| pull_request | .github/workflows/kernel.yml::light | CONDITIONAL | path-filtered (paths: synapse_kernel/**, tests/kernel/**, scripts/kernel/**, digital_twin/**, +2 more) |
+| pull_request | .github/workflows/kernel.yml::parity | CONDITIONAL | path-filtered (paths: synapse_kernel/**, tests/kernel/**, scripts/kernel/**, digital_twin/**, +2 more) |
 | pull_request | .github/workflows/live-truth.yml::watchdog | NOT EXECUTED | workflow on: has no pull_request trigger |
 | pull_request | .github/workflows/mutation.yml::mutation | NOT EXECUTED | if: false in pull_request |
 | pull_request | .github/workflows/mutation.yml::mutation-fast-plan | CONDITIONAL | path-filtered (paths: agents/*/training/rewards.py, orchestrator/guardrails/rules.py, orchestrator/audit/logger.py, packages/synapse_common/audit_chain.py, +1 more) |
@@ -227,6 +231,8 @@ Why each job runs, does not run, or runs conditionally under each trigger. `need
 | tag:v* | .github/workflows/integration.yml::integration-e2e | NOT EXECUTED | workflow on: has no push trigger |
 | tag:v* | .github/workflows/integration.yml::audit-chain-tamper | NOT EXECUTED | workflow on: has no push trigger |
 | tag:v* | .github/workflows/integration.yml::real-stack-run | NOT EXECUTED | workflow on: has no push trigger |
+| tag:v* | .github/workflows/kernel.yml::light | NOT EXECUTED | on: push is branch-scoped (no tags: filter), so a tag push is excluded |
+| tag:v* | .github/workflows/kernel.yml::parity | NOT EXECUTED | on: push is branch-scoped (no tags: filter), so a tag push is excluded |
 | tag:v* | .github/workflows/live-truth.yml::watchdog | NOT EXECUTED | workflow on: has no push trigger |
 | tag:v* | .github/workflows/mutation.yml::mutation | NOT EXECUTED | on: push is branch-scoped (no tags: filter), so a tag push is excluded |
 | tag:v* | .github/workflows/mutation.yml::mutation-fast-plan | NOT EXECUTED | on: push is branch-scoped (no tags: filter), so a tag push is excluded |
@@ -434,6 +440,15 @@ Why each job runs, does not run, or runs conditionally under each trigger. `need
 | push:main | .github/workflows/integration.yml::integration-e2e | - | NOT EXECUTED | workflow on: has no push trigger |
 | push:main | .github/workflows/integration.yml::audit-chain-tamper | - | NOT EXECUTED | workflow on: has no push trigger |
 | push:main | .github/workflows/integration.yml::real-stack-run | - | NOT EXECUTED | workflow on: has no push trigger |
+| push:main | .github/workflows/kernel.yml::light | uses: actions/checkout@v4 | CONDITIONAL | conditional - blocking |
+| push:main | .github/workflows/kernel.yml::light | Set up Python 3.11 | CONDITIONAL | conditional - blocking |
+| push:main | .github/workflows/kernel.yml::light | Install the kernel's dependencies and the test runner, nothing else | CONDITIONAL | conditional - blocking |
+| push:main | .github/workflows/kernel.yml::light | Kernel tests without the repository's dependencies | CONDITIONAL | conditional - blocking |
+| push:main | .github/workflows/kernel.yml::parity | uses: actions/checkout@v4 | CONDITIONAL | conditional - blocking |
+| push:main | .github/workflows/kernel.yml::parity | Set up Python 3.11 | CONDITIONAL | conditional - blocking |
+| push:main | .github/workflows/kernel.yml::parity | Install dependencies | CONDITIONAL | conditional - blocking |
+| push:main | .github/workflows/kernel.yml::parity | The exported legacy world is current | CONDITIONAL | conditional - blocking |
+| push:main | .github/workflows/kernel.yml::parity | Kernel tests against the legacy harness | CONDITIONAL | conditional - blocking |
 | push:main | .github/workflows/live-truth.yml::watchdog | - | NOT EXECUTED | workflow on: has no push trigger |
 | push:main | .github/workflows/mutation.yml::mutation | - | NOT EXECUTED | if: false in push:main |
 | push:main | .github/workflows/mutation.yml::mutation-fast-plan | uses: actions/checkout@v4 | CONDITIONAL | conditional - blocking |
@@ -721,6 +736,15 @@ Why each job runs, does not run, or runs conditionally under each trigger. `need
 | pull_request | .github/workflows/integration.yml::audit-chain-tamper | Install dependencies | yes | blocking |
 | pull_request | .github/workflows/integration.yml::audit-chain-tamper | Audit-chain tamper detection against Postgres (R6.2, R6.10) | yes | blocking |
 | pull_request | .github/workflows/integration.yml::real-stack-run | - | NOT EXECUTED | if: false in pull_request |
+| pull_request | .github/workflows/kernel.yml::light | uses: actions/checkout@v4 | CONDITIONAL | conditional - blocking |
+| pull_request | .github/workflows/kernel.yml::light | Set up Python 3.11 | CONDITIONAL | conditional - blocking |
+| pull_request | .github/workflows/kernel.yml::light | Install the kernel's dependencies and the test runner, nothing else | CONDITIONAL | conditional - blocking |
+| pull_request | .github/workflows/kernel.yml::light | Kernel tests without the repository's dependencies | CONDITIONAL | conditional - blocking |
+| pull_request | .github/workflows/kernel.yml::parity | uses: actions/checkout@v4 | CONDITIONAL | conditional - blocking |
+| pull_request | .github/workflows/kernel.yml::parity | Set up Python 3.11 | CONDITIONAL | conditional - blocking |
+| pull_request | .github/workflows/kernel.yml::parity | Install dependencies | CONDITIONAL | conditional - blocking |
+| pull_request | .github/workflows/kernel.yml::parity | The exported legacy world is current | CONDITIONAL | conditional - blocking |
+| pull_request | .github/workflows/kernel.yml::parity | Kernel tests against the legacy harness | CONDITIONAL | conditional - blocking |
 | pull_request | .github/workflows/live-truth.yml::watchdog | - | NOT EXECUTED | workflow on: has no pull_request trigger |
 | pull_request | .github/workflows/mutation.yml::mutation | - | NOT EXECUTED | if: false in pull_request |
 | pull_request | .github/workflows/mutation.yml::mutation-fast-plan | uses: actions/checkout@v4 | CONDITIONAL | conditional - blocking |
@@ -923,6 +947,8 @@ Why each job runs, does not run, or runs conditionally under each trigger. `need
 | tag:v* | .github/workflows/integration.yml::integration-e2e | - | NOT EXECUTED | workflow on: has no push trigger |
 | tag:v* | .github/workflows/integration.yml::audit-chain-tamper | - | NOT EXECUTED | workflow on: has no push trigger |
 | tag:v* | .github/workflows/integration.yml::real-stack-run | - | NOT EXECUTED | workflow on: has no push trigger |
+| tag:v* | .github/workflows/kernel.yml::light | - | NOT EXECUTED | on: push is branch-scoped (no tags: filter), so a tag push is excluded |
+| tag:v* | .github/workflows/kernel.yml::parity | - | NOT EXECUTED | on: push is branch-scoped (no tags: filter), so a tag push is excluded |
 | tag:v* | .github/workflows/live-truth.yml::watchdog | - | NOT EXECUTED | workflow on: has no push trigger |
 | tag:v* | .github/workflows/mutation.yml::mutation | - | NOT EXECUTED | on: push is branch-scoped (no tags: filter), so a tag push is excluded |
 | tag:v* | .github/workflows/mutation.yml::mutation-fast-plan | - | NOT EXECUTED | on: push is branch-scoped (no tags: filter), so a tag push is excluded |
