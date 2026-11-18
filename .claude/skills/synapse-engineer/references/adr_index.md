@@ -1,4 +1,4 @@
-# ADR Index (25 decisions)
+# ADR Index (26 decisions)
 
 | ID | Title | One-line summary |
 |----|-------|------------------|
@@ -27,6 +27,7 @@
 | ADR-023 | Error retention in runtime context | Append-only; failed proposals kept with status |
 | ADR-024 | Structured recitation for long-horizon tasks | `recite_objective()` every 10 tool calls |
 | ADR-057 | Access modes: open preview, dormant login | Preview grant now (view-only on GCP); sign-in dormant until activation |
+| ADR-058 | The Inventory Sentinel reads the request | Plans against the state its decision request carries (position, demand rate, lead time); refuses malformed state |
 
 ## How to use
 - Always cite the ADR ID when making a design claim.

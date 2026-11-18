@@ -179,6 +179,19 @@ class PricingOraclePipeline:
     ) -> None:
         if not (1 <= len(sku_ids) <= 200):
             raise ValueError(f"PRE-PO-004: SKU count {len(sku_ids)} outside bounds [1, 200]")
+        # PRE-PO-001 and PRE-PO-003 hold per SKU, so a SKU with no category or no base price
+        # fails them. Refused here by name: `_build_updates` would raise a bare IndexError.
+        unmet: list[str] = []
+        if len(categories) < len(sku_ids):
+            unmet.append(f"PRE-PO-001: {len(categories)} 'categories' for {len(sku_ids)} SKUs")
+        if len(base_prices) < len(sku_ids):
+            unmet.append(f"PRE-PO-003: {len(base_prices)} 'base_prices' for {len(sku_ids)} SKUs")
+        if unmet:
+            reasons = "; ".join(unmet)
+            raise ValueError(
+                f"{reasons}. Every SKU needs a recognized category and a positive base price, "
+                "in sku_ids order"
+            )
         for cat in categories:
             if cat not in VALID_CATEGORIES:
                 raise ValueError(f"PRE-PO-001: Invalid category '{cat}'. Valid: {VALID_CATEGORIES}")

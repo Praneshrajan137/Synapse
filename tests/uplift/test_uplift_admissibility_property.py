@@ -113,6 +113,19 @@ naming no report, an absent, malformed, tampered, foreign-comparator, superseded
 under-replicating one is unavailable, with exactly one reason naming which, ordered after every
 reason the artifact already earned.
 
+Carried to F-Q1-3 (finding 119)
+-------------------------------
+
+An absent artifact's reason now states the proof supervisor's record beside it
+(``uplift_truth._absent_artifact_reason``). Section 7 asserts that a timeout record replaces the
+advice to run the harness with the recorded state, seconds, bound, kill scope and artifact
+presence; that with no record the reason is byte for byte the one given before; that an
+unreadable or malformed record is named so; that no recorded state rescues a missing artifact;
+that ``uplift.yml`` writes the record where the gate reads it; and, as a property over generated
+records beside every artifact class above, that a record changes no outcome, proof, exit code
+or registry status. Every valid record is built through
+:class:`~uplift.proof_supervisor.SupervisorStatus`, so each is one the supervisor could write.
+
 Cost, and why this is not slow-marked
 -------------------------------------
 
@@ -128,6 +141,8 @@ from __future__ import annotations
 
 import json
 import re
+import sys
+import types
 import uuid
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -144,6 +159,7 @@ from scripts.audit.uplift_truth import (
     EXIT_REGRESSION,
     EXIT_UNAVAILABLE,
     RESULT_ARTIFACT,
+    SUPERVISOR_STATUS_NAME,
     Admission,
     RunContext,
     admit,
@@ -174,6 +190,7 @@ from uplift.power import (
     read_power_report,
     write_power_report,
 )
+from uplift.proof_supervisor import RUN_STATES, STATE_MESSAGES, SupervisorStatus
 from uplift.tuned_static import TUNED_STATIC_ARM
 from uplift.uplift_floor import (
     MIN_POWERED_REPLICATES,
@@ -187,6 +204,7 @@ from uplift.uplift_floor import (
 
 if TYPE_CHECKING:
     from uplift.interfaces import ArmRole
+    from uplift.proof_supervisor import KillScope, RunState
 
 ROOT = Path(gate.__file__).resolve().parents[2]
 
@@ -1247,3 +1265,399 @@ def test_a_report_refusal_follows_every_reason_the_artifact_already_earned(
     assert len(refused) == len(earned) + 1, (case.kind, state, refused)
     assert clause in refused[-1], (state, refused[-1])
     assert phrase in refused[-1].lower(), (state, refused[-1])
+
+
+# ---------------------------------------------------------------------------
+# 7. The proof supervisor's record changes one reason's text, never a verdict (F-Q1-3)
+# ---------------------------------------------------------------------------
+#: The head of the E5 job's supervised command, and its declared artifact, from `uplift.yml`.
+#: The gate reads neither from a record; they make each record here one ``supervise`` could write.
+_E5_COMMAND: Final[tuple[str, ...]] = ("python", "-m", "uplift.cli", "--full")
+_E5_ARTIFACT: Final[str] = "artifacts/uplift/result.json"
+
+_KILL_SCOPES: Final[tuple[KillScope, ...]] = ("process_group", "process_only")
+#: Exit statuses as the OS reports them (negative for a signal), ``None`` for a command never
+#: reaped, and a separately weighted 0 so the clean-exit states are drawn rather than hoped for.
+_RETURN_CODES = st.one_of(
+    st.just(0), st.none(), st.integers(min_value=-(2**31), max_value=2**31 - 1)
+)
+_ELAPSED = st.floats(min_value=0.0, max_value=1e6, allow_nan=False, allow_infinity=False)
+_BOUNDS = st.floats(min_value=1e-3, max_value=1e6, allow_nan=False, allow_infinity=False)
+
+
+@st.composite
+def _supervisor_records(draw: st.DrawFn) -> SupervisorStatus:
+    """A record ``supervise`` could write, in whichever of the five states its facts classify."""
+    timed_out = draw(st.booleans())
+    scope: KillScope = draw(st.sampled_from(_KILL_SCOPES)) if timed_out else "none"
+    return SupervisorStatus.from_facts(
+        command=_E5_COMMAND,
+        artifact_path=_E5_ARTIFACT,
+        wall_clock_seconds=draw(_BOUNDS),
+        elapsed_seconds=draw(_ELAPSED),
+        spawn_error=draw(st.one_of(st.none(), st.text(max_size=40))),
+        returncode=draw(_RETURN_CODES),
+        timed_out=timed_out,
+        artifact_present=draw(st.booleans()),
+        kill_scope=scope,
+    )
+
+
+@st.composite
+def _timeout_records(draw: st.DrawFn) -> SupervisorStatus:
+    """A record of a command started and still running at its bound: ``exceeded_wall_clock``."""
+    return SupervisorStatus.from_facts(
+        command=_E5_COMMAND,
+        artifact_path=_E5_ARTIFACT,
+        wall_clock_seconds=draw(_BOUNDS),
+        elapsed_seconds=draw(_ELAPSED),
+        spawn_error=None,
+        returncode=draw(_RETURN_CODES),
+        timed_out=True,
+        artifact_present=draw(st.booleans()),
+        kill_scope=draw(st.sampled_from(_KILL_SCOPES)),
+    )
+
+
+def _record_in(state: RunState) -> SupervisorStatus:
+    """A record whose facts classify as ``state``, at E5's 13500 s bound (values illustrative)."""
+    killed = state == "exceeded_wall_clock"
+    returncodes: dict[str, int | None] = {
+        "completed": 0,
+        "no_artifact": 0,
+        "exited_nonzero": 1,
+        "exceeded_wall_clock": -9,
+        "failed_to_start": None,
+    }
+    return SupervisorStatus.from_facts(
+        command=_E5_COMMAND,
+        artifact_path=_E5_ARTIFACT,
+        wall_clock_seconds=13500.0,
+        elapsed_seconds=13500.611 if killed else 3646.455,
+        spawn_error="FileNotFoundError: no such program" if state == "failed_to_start" else None,
+        returncode=returncodes[state],
+        timed_out=killed,
+        artifact_present=state == "completed",
+        kill_scope="process_group" if killed else "none",
+    )
+
+
+@dataclass(frozen=True)
+class _RecordOnDisk:
+    """What lies at the supervisor record's path beside an artifact, and what the gate calls it."""
+
+    kind: str
+    #: The bytes at the record's path; ``None`` puts a directory there, which no reader opens.
+    payload: bytes | None
+    #: The word the reason must use for this record; ``None`` for a valid one, which is stated.
+    named: str | None = None
+
+    def place(self, artifact: Path) -> Path:
+        """Put this record beside ``artifact`` and return the record's path."""
+        status = artifact.parent / SUPERVISOR_STATUS_NAME
+        if self.payload is None:
+            status.mkdir()
+        else:
+            status.write_bytes(self.payload)
+        return status
+
+
+def _as_written(record: SupervisorStatus) -> _RecordOnDisk:
+    """``record`` as ``supervise`` writes it: its canonical JSON and one newline."""
+    return _RecordOnDisk(
+        kind=f"valid:{record.state}",
+        payload=(record.canonical_json() + "\n").encode("utf-8"),
+    )
+
+
+def _canonical(payload: dict[str, Any]) -> bytes:
+    """``payload`` in the canonical JSON form the supervisor writes, as bytes."""
+    return json.dumps(payload, sort_keys=True, separators=(",", ":")).encode("utf-8")
+
+
+_KILLED_AT_THE_BOUND: Final[SupervisorStatus] = _record_in("exceeded_wall_clock")
+_KILLED_FIELDS: Final[dict[str, Any]] = _KILLED_AT_THE_BOUND.model_dump(mode="json")
+
+#: Records that tell the gate nothing, each with the word its reason must use for it.
+_UNUSABLE_RECORDS: Final[tuple[_RecordOnDisk, ...]] = (
+    _RecordOnDisk("empty", b"", "malformed"),
+    _RecordOnDisk("not JSON", b"{not json", "malformed"),
+    _RecordOnDisk(
+        "cut off mid-write",
+        _KILLED_AT_THE_BOUND.canonical_json()[:40].encode("utf-8"),
+        "malformed",
+    ),
+    _RecordOnDisk("JSON but not an object", b"[1, 2, 3]", "malformed"),
+    _RecordOnDisk("an object with none of the fields", b"{}", "malformed"),
+    _RecordOnDisk(
+        "an undeclared field claiming a pass",
+        _canonical({**_KILLED_FIELDS, "verdict": "pass"}),
+        "malformed",
+    ),
+    _RecordOnDisk(
+        "a state its own facts refuse",
+        _canonical(
+            {**_KILLED_FIELDS, "state": "completed", "message": STATE_MESSAGES["completed"]}
+        ),
+        "malformed",
+    ),
+    _RecordOnDisk("undecodable bytes", b"\xff\xfe\x00not utf-8", "unreadable"),
+    _RecordOnDisk("a directory in the way", None, "unreadable"),
+)
+
+#: Every record the property puts beside an artifact: valid in any state, or one of the above.
+_records_on_disk = st.one_of(
+    _supervisor_records().map(_as_written), st.sampled_from(_UNUSABLE_RECORDS)
+)
+
+
+def _absent_artifact(tmp_path: Path) -> tuple[Path, RunContext]:
+    """An absent artifact in a directory of its own, and a generating job's context for it."""
+    case = _Case(kind="absent")
+    return case.materialise(tmp_path), case.context(
+        generating_job=True, tree_root=_power_tree(tmp_path / "power-tree")
+    )
+
+
+def _shown(path: Path) -> str:
+    """How the gate shows ``path``: outside the repository, as its own POSIX form."""
+    assert not path.resolve().is_relative_to(ROOT)
+    return path.as_posix()
+
+
+def _todays_reason(path: Path) -> str:
+    """The absent-artifact reason the gate gave before F-Q1-3, for a ``path`` outside the repo."""
+    return (
+        f"no artifact at {_shown(path)}: no uplift run wrote one in this job "
+        f"(run `python -m uplift.cli --full --n {MIN_POWERED_REPLICATES}` first)"
+    )
+
+
+# Feature: purpose-achievement-audit, Property 13: The uplift gate rejects inadmissible evidence
+@given(record=_timeout_records())
+def test_a_timeout_record_replaces_the_rerun_advice_with_the_recorded_seconds_and_bound(
+    record: SupervisorStatus, tmp_path: Path
+) -> None:
+    """F-Q1-3: after a kill at the bound, the reason states what the supervisor recorded.
+
+    Wrong if the reason still advised running the harness, or stated an elapsed time, a bound,
+    a kill scope or an artifact presence other than the record's: the reader would be told to
+    repeat a run whose duration and kill were already on record.
+    """
+    path, context = _absent_artifact(tmp_path)
+    status = path.parent / SUPERVISOR_STATUS_NAME
+    # Exactly as `supervise` writes it (uplift/proof_supervisor.py).
+    status.write_text(record.canonical_json() + "\n", encoding="utf-8")
+    admission = admit(path, context)
+
+    assert record.state == "exceeded_wall_clock"
+    assert admission.outcome == "unavailable"
+    assert admission.proof is None
+    assert len(admission.reasons) == 1, admission.reasons
+    reason = admission.reasons[0]
+    assert reason.isascii()
+    assert "python -m uplift.cli" not in reason
+    assert reason.startswith(f"no artifact at {_shown(path)}: ")
+    assert f"record at {_shown(status)} says" in reason
+    assert reason.endswith(f" - {record.message}")
+    # The facts, read back by the record's own field names and compared with the record.
+    stated = dict(re.findall(r"\b([a-z_]+)=([^\s,]+)", reason))
+    assert set(stated) == {
+        "state",
+        "timed_out",
+        "elapsed_seconds",
+        "wall_clock_seconds",
+        "kill_scope",
+        "returncode",
+        "artifact_present",
+    }
+    assert stated["state"] == "exceeded_wall_clock"
+    assert stated["timed_out"] == "True"
+    assert float(stated["elapsed_seconds"]) == record.elapsed_seconds
+    assert float(stated["wall_clock_seconds"]) == record.wall_clock_seconds
+    assert stated["kill_scope"] == record.kill_scope
+    assert stated["returncode"] == str(record.returncode)
+    assert stated["artifact_present"] == str(record.artifact_present)
+
+
+def test_without_a_supervisor_record_the_absent_artifact_reason_is_unchanged_byte_for_byte(
+    tmp_path: Path,
+) -> None:
+    """Where no supervisor ran, the reason is the one the gate gave before F-Q1-3.
+
+    Two absences: an empty directory, and a directory never created. Wrong if either reworded
+    the advice or reported the missing record, so that every evaluation without a supervisor
+    read differently from before.
+    """
+    beside, context = _absent_artifact(tmp_path)
+    nowhere = tmp_path / "never-created" / "result.json"
+
+    for path in (beside, nowhere):
+        assert not (path.parent / SUPERVISOR_STATUS_NAME).exists()
+        assert admit(path, context).reasons == (_todays_reason(path),)
+
+
+@pytest.mark.parametrize("record", _UNUSABLE_RECORDS, ids=lambda record: record.kind)
+def test_a_record_that_says_nothing_is_named_unreadable_or_malformed_after_the_advice(
+    record: _RecordOnDisk, tmp_path: Path
+) -> None:
+    """A record that cannot be read or validated is named so, and the advice stands.
+
+    Wrong if such a record were ignored (the reader would not learn the supervisor's evidence is
+    damaged), if it replaced the advice with facts it does not carry, or if it changed the
+    outcome or the number of reasons.
+    """
+    path, context = _absent_artifact(tmp_path)
+    status = record.place(path)
+    admission = admit(path, context)
+
+    assert record.named in ("malformed", "unreadable")
+    assert admission.outcome == "unavailable"
+    assert admission.proof is None
+    assert len(admission.reasons) == 1, admission.reasons
+    reason = admission.reasons[0]
+    assert reason.isascii()
+    assert reason.startswith(f"{_todays_reason(path)}; ")
+    assert f"record at {_shown(status)} is {record.named}" in reason
+
+
+@pytest.mark.parametrize("state", RUN_STATES)
+def test_no_recorded_state_rescues_a_missing_artifact_and_each_is_stated(
+    state: RunState,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """A missing artifact stays unavailable whatever state its record names, ``completed`` too.
+
+    Driven through ``run()``, which `uplift.yml`'s C60 step calls. Wrong if any state moved the
+    exit code off EXIT_UNAVAILABLE or the registry status off FAIL, or if the gate kept the
+    advice to run the harness instead of stating the recorded state.
+    """
+    monkeypatch.setenv("SYNAPSE_REVISION", _REVISION)
+    monkeypatch.setenv("SYNAPSE_RUN_ID", _RUN_ID)
+    record = _record_in(state)
+    path, _ = _absent_artifact(tmp_path)
+    _as_written(record).place(path)
+    tree = _power_tree(tmp_path / "power-tree")
+
+    exit_code = gate.run(check=True, require_fresh_run=True, artifact=path, tree_root=tree)
+    printed = capsys.readouterr().out
+    admission = admit(
+        path, gate.resolve_run_context(generating_job=True, artifact=path, tree_root=tree)
+    )
+
+    assert record.state == state
+    assert exit_code == EXIT_UNAVAILABLE
+    assert admission.outcome == "unavailable"
+    assert admission.proof is None
+    assert registry_status(admission, exit_code)[0] == "FAIL"
+    assert len(admission.reasons) == 1, admission.reasons
+    reason = admission.reasons[0]
+    assert f"state={state}," in reason
+    assert reason.endswith(f" - {record.message}")
+    assert "python -m uplift.cli" not in reason
+    assert reason in printed
+
+
+def test_the_record_model_is_imported_only_for_a_record_and_its_failure_is_named(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """With ``SupervisorStatus`` unimportable, no record still changes nothing.
+
+    The stand-in module defines no ``SupervisorStatus``, so importing it fails. Wrong if a
+    missing record reached the import (the reason would change where no supervisor ran), or if
+    the failure were raised instead of named (the gate would crash, moving its exit code).
+    """
+    bare, context = _absent_artifact(tmp_path)
+    beside, _ = _absent_artifact(tmp_path)
+    _as_written(_KILLED_AT_THE_BOUND).place(beside)
+    monkeypatch.setitem(
+        sys.modules, "uplift.proof_supervisor", types.ModuleType("uplift.proof_supervisor")
+    )
+
+    assert admit(bare, context).reasons == (_todays_reason(bare),)
+    admission = admit(beside, context)
+    assert admission.outcome == "unavailable"
+    assert admission.proof is None
+    assert len(admission.reasons) == 1, admission.reasons
+    assert admission.reasons[0].startswith(f"{_todays_reason(beside)}; ")
+    assert "uplift.proof_supervisor could not be imported" in admission.reasons[0]
+
+
+# Feature: purpose-achievement-audit, Property 13: The uplift gate rejects inadmissible evidence
+@given(case=_any_case, record=_records_on_disk, generating_job=st.booleans())
+def test_a_supervisor_record_beside_any_artifact_changes_no_verdict_and_no_exit_code(
+    case: _Case,
+    record: _RecordOnDisk,
+    generating_job: bool,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """F-Q1-3's guarantee: a record changes one reason's text and nothing else.
+
+    Metamorphic over one artifact at one path, evaluated before and after a record is put
+    beside it -- valid in any of the five states, malformed, or unreadable -- through
+    :func:`admit` and through ``run()``'s published JSON and exit code. Wrong if any record
+    moved an outcome, a proof, an exit code or a registry status, added or dropped a reason, or
+    touched any reason of an artifact that is present, tracked, or outside the generating job.
+    """
+    monkeypatch.setenv("SYNAPSE_REVISION", _REVISION)
+    monkeypatch.setenv("SYNAPSE_RUN_ID", _RUN_ID)
+    path = case.materialise(tmp_path)
+    tree = _power_tree(tmp_path / "power-tree")
+    context = case.context(
+        generating_job=generating_job, tree_root=tree if generating_job else None
+    )
+
+    def _published() -> tuple[int, dict[str, Any]]:
+        """``run()``'s exit code and the JSON it prints, which `uplift.yml` uploads."""
+        capsys.readouterr()  # parse only what this run() prints
+        exit_code = gate.run(
+            as_json=True,
+            check=True,
+            require_fresh_run=generating_job,
+            artifact=path,
+            tree_root=tree,
+        )
+        payload: dict[str, Any] = json.loads(capsys.readouterr().out)
+        return exit_code, payload
+
+    without = admit(path, context)
+    exit_without, published_without = _published()
+    record.place(path)
+    beside = admit(path, context)
+    exit_beside, published_beside = _published()
+
+    for name in Admission.model_fields:
+        if name != "reasons":
+            assert getattr(beside, name) == getattr(without, name), (case.kind, record.kind, name)
+    code = _gate_exit(without)
+    assert _gate_exit(beside) == code
+    assert registry_status(beside, code)[0] == registry_status(without, code)[0]
+    assert exit_beside == exit_without
+    assert len(published_beside.pop("reasons")) == len(published_without.pop("reasons"))
+    assert published_beside == published_without, (case.kind, record.kind)
+    assert len(beside.reasons) == len(without.reasons)
+    assert all(reason.isascii() for reason in beside.reasons)
+    if case.payload is not None or case.tracked or not generating_job:
+        assert beside.reasons == without.reasons, (case.kind, record.kind)
+
+
+def test_the_e5_job_writes_the_supervisor_record_where_the_gate_looks_for_it() -> None:
+    """`uplift.yml` supervises the artifact the gate reads and records beside it (F-Q1-3).
+
+    Wrong if either path drifted: after a timeout the gate would find no record and fall back,
+    silently, to advising a re-run, which is the defect this repairs.
+    """
+    workflow = (ROOT / ".github" / "workflows" / "uplift.yml").read_text(encoding="utf-8")
+    supervised = re.findall(r"--expect-artifact\s+(\S+)", workflow)
+    recorded = re.findall(r"--status-out\s+(\S+)", workflow)
+
+    assert supervised, "uplift.yml no longer passes --expect-artifact to the proof supervisor"
+    assert recorded, "uplift.yml no longer passes --status-out to the proof supervisor"
+    assert set(supervised) == {RESULT_ARTIFACT.relative_to(ROOT).as_posix()}
+    assert set(recorded) == {
+        (RESULT_ARTIFACT.parent / SUPERVISOR_STATUS_NAME).relative_to(ROOT).as_posix()
+    }

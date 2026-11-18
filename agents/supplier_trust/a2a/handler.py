@@ -8,6 +8,7 @@ from typing import Any
 from uuid import UUID, uuid4
 
 import structlog
+from synapse_common import a2a_envelope
 from synapse_common.debate import build_debate_response
 from synapse_common.models import AgentName, AgentProposal, DecisionTier
 from synapse_common.schemas import validate_agent_payload
@@ -41,7 +42,7 @@ class SupplierTrustA2AHandler:
 
         try:
             if method == "proposal":
-                result = self.proposal(params)
+                result = self.proposal(a2a_envelope.decision_context(params))
             elif method == "debate_respond":
                 result = self.debate_respond(params)
             elif method == "execute":

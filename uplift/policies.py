@@ -135,5 +135,14 @@ class UnavailableConsensusArm:
         self.name = name
         self._reason = reason
 
+    @property
+    def reason(self) -> str:
+        """Why the network could not be assembled: the message every :meth:`decide` raises.
+
+        Read-only, for a record that names this stand-in and must say why it stood in: the E5
+        cost probe's ``unavailable`` record and the pathway probe's refusal (finding 116).
+        """
+        return self._reason
+
     def decide(self, obs: Observation) -> PolicyAction:  # noqa: ARG002 — always fails
         raise ConsensusArmUnavailable(self._reason)

@@ -1752,6 +1752,9 @@ def test_a_stand_in_consensus_arm_is_recorded_as_a_refusal_before_any_state_is_s
         "the consensus arm built for the probe is UnavailableConsensusArm, not a pathway the "
         "probe can consult"
     )
+    # The stand-in's own reason travels with the refusal: why there was no pathway, as well as
+    # that there was none.
+    assert refusal.reason.endswith(f"(the stand-in's own reason: {stand_in.reason})")
     assert not (output.parent / cli.PROBE_FILENAME).exists()
     assert stubbed.seen["run"] == ([e5_scenario()], list(stubbed.arms), MIN_SCENARIOS)
     assert UpliftArtifact.read(output).comparator == E5_COMPARATOR

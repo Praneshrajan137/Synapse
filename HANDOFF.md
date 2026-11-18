@@ -1,14 +1,18 @@
 # HANDOFF — decision-quality-proof
 
-**State at end of session 12 (2026-10-15 to 2026-11-01).** Branch `feat/decision-quality-proof`,
-PR **#84** open against `main`. The commit carrying this file, **P6**, also carries
-`NEXT_SESSION_PROMPT.md`, `SESSION_PROTOCOL.md`'s session-12 row and the ledger edit that
-discharges 22.1 and 25. Earlier commits, oldest first: `e5d43c1` (A/A and LCP pre-registration),
-`d8aafe6` (P1), `b3a98a8` (P2), `2b82e03` (steering G8), `af950f3` (P3), `209c6dc` (P4),
-`732ecd9` (P5). **E5's re-run, run `41289052859` at `732ecd9`, completed, and task 25's claim is
-stated in its body (headline 1).** The repository was observed private around 2026-11-01 05:40Z
-and made public again by the operator; the run-timing API reports 0 billable ms for every run
-that day.
+**State at end of session 13 (2026-11-01 to a closing date not recorded (last written 2026-11-15 by file time; committed 2026-11-18)).** PR **#84** merged as
+`cd32c9d` and PR **#85** as `d4f985c`, both by merge commit (operator decision S13.1=a), so
+`main` holds sessions 1 to 12 and ADR-057. Session 13's own work rides four branches. Two have
+open PRs, two PRs were not yet opened when this was written, and none is merged:
+
+| PR | Branch | Newest head read | State when written |
+|---|---|---|---|
+| #87 | `fix/consensus-reads-request` | `4b659e6` | open; CI green at `4b659e6`; the controls and E5 reported (31.10, 31.11), E5's headline -1.446 `baseline_wins`; the claim pending in 31.12; merging needs the operator |
+| #89 | `fix/frontend-gates` | `50deebc` | draft; round 2 red: findings 129 to 131 in repair, and `e2e` red on finding 114 (decision (e)) |
+| not yet opened -> #90, opened 2026-11-14 | `fix/owed-gate-defects` | `860c62e` | parent 33's PR |
+| not yet opened -> the pull request opened with this commit, 2026-11-18 | `docs/dqp-session-13` | the commit carrying this file | the ledger, this file, the prompt, the progress row |
+
+Code PRs do not edit `tasks.md`; the ledger PR records their discharges.
 
 **This file is DERIVED and short.** Per `.kiro/steering/throughput-with-integrity.md`, every finding
 has **one canonical home** — the ADR for design facts, the task body for ledger facts — and this
@@ -22,106 +26,123 @@ repeated here. A finding number resolves to its body with
 python -m scripts.audit.spec_ledger_census --files --next 40
 ```
 
-It reported `155 / 106 / 0 / 49` at session 11's close (22 authorable, 2 CI-gated, 25 deferred)
-and `155 / 130 / 0 / 25` at this session's close (0 authorable, 0 CI-gated, 25 deferred,
-`unharvested: 0`, `complete: yes`). **24 leaves discharged.** Every open leaf is `deferred:`, and
-a `deferred:` leaf is terminal, so **the spec is complete.**
+It reported `155 / 130 / 0 / 25` and `complete: yes` at session 12's close. Parents 30 to 33,
+registered this session under conflict X's resolution, add open leaves, so it no longer reads
+complete: `200 / 162 / 0 / 38` (open: 0 authorable, 12 CI-gated, 26 deferred; 0 unharvested), `complete: no`, exit 0, read by truth session 3 on 2026-11-18 at `d4f985c` with these four files; 162 done against 130 at session 12's close. Its `absent-artifact` lines name files of the then-unmerged PRs #87 and #89. **32 leaves discharged.**
 
 ---
 
 ## The headline
 
-### 1. E5 completed; the claim is stated, negative, in task 25's body
+### 1. PRs #84 and #85 are merged, by merge commit (parent 30)
 
-The claim is stated once, in **task 25's body** (`tasks.md`, "THE CLAIM (2026-11-01)"); this file
-quotes its headline sentence only. On the declared twin's primary cell, unshocked, the consensus
-arm's recommendations, if executed, cost 4.40 objective units more per 24-hour replicate than the
-tuned control E: headline **-4.4026**, 95% interval **[-4.4218, -4.3843]**, verdict
-**`baseline_wins`**. The pre-commitment held: the number is reported as negative, its cause beside
-it (**finding 112**), never relabelled. Every E5 prediction, registered before the push, held
-(parent 29, "MEASURED at P5").
+`cd32c9d` (parents `045f44c`, `6ff4973`) and `d4f985c` (parents `cd32c9d`, `b8d6a48`), each on
+required checks read green at its head. #85 was synced with `main` by a merge (`05b72e2`), and
+its harness repair (`b8d6a48`) turned `e2e-harness` green. Records: parent 30.
 
-### 2. 24 leaves discharged against a target of >= 11
+### 2. The consensus reads its request; E5 on the repaired arm reads `baseline_wins` (parent 31)
 
-Harvested at P2: 15.1, 15.2, 15.4–15.6, 16.4–16.6, 17.1, 17.2, 17.4, 29.4, 29.5. At P3: 16.2,
-19.4, 22.2, 24.1, 24.2, 26.5. At P5: 16.7, 17.3 and 29.6, then 22.1 and 25 on P5's own runs,
-recorded at P6. Each on its naming job's own run, in its `DISCHARGED:` line.
+PR #87 repairs finding 112 in all eight handlers, has the Inventory Sentinel plan against the
+state its request carries (ADR-058), and closes the consensus arm's two dials (findings 116 and
+121). The labelled controls first refused in every leg, because a comment edit had voided the
+B-prime record (**finding 122**). `8775a89` restored the file, the re-run held (31.9, 31.10),
+and its Power_Report is committed unedited as `4b659e6`. E5 at `4b659e6` (run 41352100304)
+dispatched every decision, where session 12's E5 read 24000 of 24000 `untranslatable`, and its
+headline is **-1.446, `baseline_wins`**, against E (31.11). **The claim and its cause are owed
+in 31.12, and whether the Sentinel bound the pathway probe's decisions is not read yet (31.11).
+Task 25's claim stands as stated.**
 
-### 3. The controls ran, the Power_Report is committed, and clause (f) passed
+### 3. PR #89's round 2 is red on three new findings and on finding 114 (parent 32)
 
-Controls run `41268743674` (`209c6dc`): negative `pass`, positive `detected` (E - O
-`[0.1875, 0.2200]`), and arms E, E' and O reproduced B-prime exactly. The Power_Report (MDE
-`0.0235` at n = 1000) is committed as `docs/state/uplift-power-report.json`, and its harness
-revision equalled the tree's `POWER_SOURCE_SET` digest at P5 (measured). **Agreement reads
-`harness_mis_measuring` (finding 117), and the verdict stands as recorded:** clause (f) passed at
-P5, so the gap is the seed sets'. Records: `tasks.md`, parent 29, "MEASURED at P4", and finding
-117's "MEASURED at P5".
+Round 1 (`4efa397`, run 41334119693): `audit-supply` green on zod 4.6.7, Stryker green, and
+`e2e` red on finding 114's LCP. Read locally over round 1's records, finding 90's repair would
+have turned FE-INV-010 into a false pass (**finding 124**), which `50deebc` repairs. Round 2
+(`50deebc`, run 41344870270): `build`'s blocking size step green (32.7); `storybook-a11y`'s
+first run red on colour contrast (**findings 130 and 131**); all five `e2e-harness` legs red on
+Req 10.1 (**finding 129**); and `e2e` red on finding 114 again. `fe-invariants` and the
+ratchet were skipped, so neither has run in CI on this PR. The repairs of findings 129 to 131
+were in authoring when this was written. **Finding 132**, read in the checker, is registered
+beside them.
 
-### 4. Finding 89 has a draft PR
+### 4. CD-GCP has failed to authenticate on every run since at least 2026-08-17 (finding 123)
 
-**PR #85 (draft)**, `fix/open-access-mode` @ `828742e`, cut from `main` `045f44c`, worktree
-`.claude/worktrees/open-access`: open preview access now, sign-in built and dormant (ADR-057 on
-that branch). Its CI, the first execution of its vitest and Playwright changes, was not read when
-this was written. It overlaps PR #84 in `CLAUDE.md`, both compose files and
-`orchestrator/inference/serve.py`; whichever merges second rebases.
+Every cd-gcp run read fails at Workload Identity Federation (`invalid_target`); the newest
+auto-issue is #86. The provider is the operator's to repair. Inferred, not probed: nothing
+merged since the failures began is deployed, PR #85's repair of finding 89 included.
 
 ---
 
 ## Binding decisions — pointers only
 
+- **Session 13's operator decisions S13.1=a, S13.2=a and S13.3=a, and conflicts W and X:**
+  `tasks.md`, the opening paragraph of Phase 8. Conflict W's resolution covers the merges of
+  #84 and #85 only.
 - **The session-11 re-cut** (1=a, 2=a, 3=a/c/d/e, Q1=a, Q2=a, Q3=c): R5.46, ADR-055 **D2.8**,
   task 29. A `deferred:` leaf is terminal.
 - **No claim against the incumbent arm:** the baseline is the primary cell's tuned control E
-  (ADR-055 D2.7; task 25's re-scope), and task 25's claim is stated under it.
-- **The committed Power_Report binds `POWER_SOURCE_SET`:** moving the digest voids it. The claim
-  is published, so finding 116's code repair may land now; a new claim after it needs the controls
-  re-run.
-- **Conflict U adopted** (task 16.7): the labelled jobs are filed
-  `ineligible/conditioned-off-pull-request`, and the operator may object.
-- **Steering G8:** authoring agents in alternating batches of at most five, then at most three.
-- **Unchanged:** the M5 terms declined (C74); 23, 20.3 and 21 deferred to named, uncreated specs;
-  maplibre-gl 6 (83) and Node 22.23 (93) under the 2026-10-02 delegation.
+  (ADR-055 D2.7; task 25's re-scope). 31.12's pre-commitment is written under it.
+- **Task 25's claim stands as stated.** The repaired arm's claim goes in 31.12, a new task.
+- **On PR #87's branch the committed Power_Report describes the tree E5 measured** (`4b659e6`,
+  31.10). An edit to any `POWER_SOURCE_SET` file voids it until the controls re-run.
+- **The B-prime record binds `BPRIME_PHYSICS_SET`, comments included** (finding 122): an edit
+  there voids the record until B-prime is re-measured.
+- **ADR-058** (the Sentinel reads its request) is on PR #87's branch and **ADR-059** (the
+  ratchet's median of five legs) on PR #89's.
+- **Unchanged:** conflict U adopted (task 16.7); steering G8; the M5 terms declined (C74); 23,
+  20.3 and 21 deferred to named, uncreated specs.
 
 ## Open operator decisions — surfaced, NOT resolved
 
 | | Decision owed | Finding |
 |---|---|---|
-| (a) | The effectiveness ratchet's tolerance against its measured noise; red **by design** until decided. The strict A/A ran and AA1–AA3 held (`tasks.md`, "SESSION 12, 2026-10-15"). | 88 |
 | (b) | The sweep's PASS-baseline branch credits an abstention or a crash; C69 is the measured case. | 85 |
-| (c) | **Live exposure:** the deployed console signs every visitor in as admin. Its repair is PR #85 (draft), for the operator to review, merge and activate. | 89 |
 | (d) | Arm D's "pointwise best" claim: restate it as unmet-pointwise-least, or make D cost-optimal, **before** E3 cites D as a bound. | 79 |
-| (e) | Lighthouse LCP at `warn` or `error`. New evidence: `error` turns `mobile-lighthouse` red (95), and the 2500 ms budget sits inside runner variation (114); at P5 it read inside budget. | 95, 114 |
-| new | The claim's cause: every agent reads its request one level too shallow. Its repair lies outside decision 3=a, so commissioning it is the operator's. | 112 |
-| new | Conflict S: the negative control is judged on gains only (task 16.4). | 101 |
-| new | Conflict V: the agreement rule under proven per-seed identity, which clause (f) measured at P5. | 117 |
-| new | The reorders-only lever set for E5 and the controls: the main agent's choice, the operator's to overturn. | none |
-| new | The zod 4 migration. | 105 |
-| new | The chromatic race, ADR-025's owner's call. | 106 |
+| (e) | Lighthouse LCP at `warn` or `error`, with the 2500 ms budget inside runner variation. New: the zod 4 build read 2728 and 2672 ms in round 1 and 2556 and 2608 ms in round 2, all inside the zod 3 builds' 2100 to 3100 ms; four samples against eleven establish no shift (parent 32's round 2). zod 4 adds 13.8 KiB gzip to the eager set (26.2 against 12.4). | 95, 114 |
+| S | The negative control is judged on gains only (task 16.4). | 101 |
+| V | The agreement rule under proven per-seed identity, which clause (f) measured at P5. | 117 |
+| | The reorders-only lever set for E5 and the controls: the main agent's choice, the operator's to overturn. | none |
+| | The chromatic race, ADR-025's owner's call. | 106 |
+| new | ADR-058's open items O1 to O5: refusing on absent state, the `SKU001` default, the sensor's `world_inventory`, the review period for other callers, and the lead-time prior. | ADR-058 |
+| new | CD-GCP's Workload Identity provider `github-aegis15`: operator-owned, outside the repository. | 123 |
+| new | Whether a PR-time check should read the B-prime record against the tree. | 122 |
 
-**Owed work, not decisions:** 116's code repair (allowed now; it voids the Power_Report, so the
-controls re-run before any new claim); 118 and 120, both Stryker's (118's next measurement is one
-Stryker run on `src/lib/universal-state.ts` alone, in CI); 119's small defects; 90 and 91 (other
-owners', from session 11).
+**Resolved in session 13 by the operator:** (a) by S13.2=a (a median of five legs, ADR-059);
+(c) by S13.1=a (PR #85 merged; it reaches the live console only once finding 123 is repaired);
+finding 112's repair by S13.3=a; finding 105's zod 4 migration by S13.2=a.
+
+**Owed work, not decisions:** 31.12, the repaired arm's claim, and the reading of whether the
+Sentinel bound the pathway probe's decisions (31.11); parent 32's round 3, carrying the repairs
+of findings 129 to 131; finding 132; enforcers for FE-INV-013 and FE-INV-024 (32.6, 32.9);
+parent 33; finding 91, on which FE-INV-011's attestation rests (32.5); finding 118 (Stryker's
+run time; Stryker passed at `4efa397` and `50deebc`); finding 127 (cause unknown); and finding
+119's remainder, F-A3-1's `foresight.py` half, F-F-1, F-F-2 and F-Q1-4 (parent 33's notes).
 
 ## CI state, read from the runs
 
-- **P4 (`209c6dc`):** CI `41268715083` held in full (slow selection 98 of 98) and Truth Gates
-  `41268714944` read `success` on both jobs. Frontend CI `41268714970`: `e2e` red on LCP (114),
-  `audit-supply` (105) and `effectiveness-ratchet` (88, by design); Stryker timed out (118).
-- **P5 (`732ecd9`):** CI `41289022422` `success`: G5's partition exact, the slow selection 99 of
-  99, clause (f) among them. Truth Gates `41289022401` as at P4; Mutation `41289022389`, Policy
-  `41289022451`, Integration, Security and Terraform `success`. Frontend CI `41289022398`: `e2e`
-  passed (21 passed, 8 skipped; 114's LCP inside budget); `audit-supply` (105),
-  `effectiveness-ratchet` (88) and `fe-invariants` (90: the same six `not_executed`,
-  `ATTESTED=60`) red; Stryker red in its dry run on the key `__proto__` (120), not on time.
-- **P6 (this commit):** documents only; its CI had not run when this was written. Expect it as at
-  P5.
-- **Labelled:** controls `41268743674` (22 jobs `success`); E5 `41268752414` (`failure`, at its
-  bound); E5 `41289052859`, job `124796295692` (`success`; the supervisor `completed` after
-  3646.5 s).
-- **Hazards:** a push to PR #84 runs Frontend CI and Mutation Testing, and `cancel-in-progress`
-  cancels the older head's run; re-running an older run cancels the newer one's job (115).
-  `uplift.yml` is label-only and never cancels in progress: a push cannot cancel its runs (read).
+- **`main`:** at `cd32c9d`, CI 41311346965, Truth Gates 41311346956, Mutation 41311346963,
+  Policy 41311346973 and SYNAPSE CD 41311347001 `success`; Frontend CI 41311346948 red on
+  `audit-supply` (105); CD-GCP 41311346932 red in all 12 build legs (123). At `d4f985c` (#85's merge): CI 41332856943, Truth Gates 41332857284 and SYNAPSE CD
+  41332856912 `success`; Frontend CI 41332856903 red on the supply-chain audit and CD-GCP
+  41332857094 red, as at `cd32c9d`.
+- **PR #87:** at `4b659e6`, CI 41350755590 (every job), Truth Gates 41350755567, Integration
+  41350755554 and Policy 41350755600 `success`; CI 41333699137 was green at `1432cda` (the job
+  ids are in parent 31's notes). Labelled: the cost probe 41332722823 `success` (31.7); the
+  controls 41340385366 refused in every leg (122); the controls re-run 41343879850 at
+  `8775a89`, all 22 jobs `success` (31.8 to 31.10); E5 41352100304 at `4b659e6` `success`
+  (31.11).
+- **PR #89:** round 1, Frontend CI 41334119693 at `4efa397` (parent 32's notes); the lockfile
+  run 41334142786 `success`. Round 2, Frontend CI 41344870270 at `50deebc`: red on
+  `storybook-a11y` (130, 131), on all five `e2e-harness` legs (129) and on `e2e` (114), with
+  `fe-invariants` and `effectiveness-ratchet` skipped (parent 32's notes). Round 3:
+  Frontend CI 43575491177 at `9c53859` (2026-11-14): red on `storybook-a11y`, the
+  visual-regression gate, all five `e2e-harness` legs and `e2e`; Stryker cancelled; 8 jobs
+  green, 2 skipped. After it: 43620027327 (`59610a9`), 43628798777 (`fb6340e`) and
+  43631919800 (`9da8ceb`), the last red on `e2e` alone with 17 jobs green and 1 skipped.
+- **Parent 33's PR:** not opened when this was written. -> #90, opened 2026-11-14 at `860c62e`: CI 43575474162, Truth Gates 43575474166 and
+  Integration 43575474160 `success`; Security Scan 43575474224 `success` (dispatched).
+- **Hazards, unchanged:** a newer push cancels an older head's in-progress run where a workflow
+  declares `cancel-in-progress`; re-running an older run cancels the newer one's job (115);
+  `uplift.yml` is label-only and never cancels in progress.
 
 ---
 
@@ -129,71 +150,76 @@ owners', from session 11).
 
 ### Executed and measured
 
-- **The controls, and E5 at P4 and at P5**, from their artifacts and logs; E5's 556 MB log at P4
-  was profiled gap by gap (116). E5 at P5 yielded task 25's numbers, and every E5 prediction held.
-- **Clause (f)**, in P5's slow selection: passed at the positive range's first three seeds, so
-  finding 117's gap is the seed sets'.
-- **The strict A/A** for (a), and the LCP samples behind (e) (95, 114).
-- **The Power_Report's harness revision against the tree's digest**, at P5.
-- **Five pre-registered CI rounds, P1–P5**, misses recorded as misses (parent 29); every CI number
-  and every discharge read from its own job, log or artifact.
+- **The merges:** each PR's required checks read green at its head before it merged (parent 30).
+- **PR #87's CI** at `1432cda` and at `4b659e6`, and its first run's red, which found finding 121.
+- **The cost probe's E5 mode**, run 41332722823: E5's path timed and tallied (31.7).
+- **The controls' refusal**, run 41340385366, and its repair measured locally: the physics digest
+  back to `dbedae9d...`, and the record accepted (finding 122).
+- **The controls re-run** (41343879850) and **E5 on the repaired arm** (41352100304), each read
+  from its own artifact (31.8 to 31.11), and the Power_Report's `describes_revision` measured
+  locally at `4b659e6` (31.10).
+- **PR #89's round 1**, and the repaired FE-INV checker run locally over round 1's own records
+  (findings 124 and 125). **Round 2** (run 41344870270), which measured findings 129 to 131.
+- **Mutations killed locally:** finding 121's clause with its repair removed, and finding 90's
+  checker with its `rootDir` resolution removed.
 
 ### The four throughput numbers (steering G6)
 
-- **Leaves DISCHARGED: 24** against a target of **>= 11.**
-- **Core-seconds: about 4,600, ESTIMATED**, single process, one executor: about 3,700 by P4 and
-  about 900 on 2026-11-01 (three login-branch verifications, the E5 log profiling over 556 MB,
-  scoped tests and gates). No repo-wide run, no simulation locally. The estimate predates E5's
-  result; the reads after it are not added.
-- **CI critical path:** five rounds (P1–P5) of about 20–25 min each to required checks; the
-  controls about 25 min; E5 at P4 229 min, failing at its bound, and at P5 3646.5 s to
-  `completed`.
-- **Agents: 63 dispatched**, beside one executor, and **36 finished**. Dispatched (finished):
-  the opening research, 18 read-only agents in two turns, r1 7 (2) and r2 11 (9); wider than
-  five, d1 7 (0) and d2 11 (4); at most five, b1 5 (5), b2 5 (1) and b3 4 (4); under G8, B4 1 (1),
-  R1+R2 2 (2), X1–X3 3 (3), two introspect queries 1 and 1 (both cancelled), Q1+Q2+introspect
-  3 (3), and the documents agent D1 1 (1) with its amendment 1 (1).
+- **Leaves DISCHARGED: 32** against a target of **>= 11.** The ledger marks `[x]`
+  30.1 to 30.4, 31.1 to 31.11, 32.1 and 32.2, seventeen leaves, and no `[~]` remains
+  (the census at this commit: 162 done against 130 at session 12's close, so 32,
+  including 31.12 and leaves of parents 32 and 33 marked after this was written; each was
+  not re-read against its naming job by truth session 3).
+- **Core-seconds: not recorded.**
+- **CI critical path: not recorded.**
+- **Agents: not recorded.**
 
 ### G6, G7 and G8
 
-- **G6 met:** 24 against >= 11. **G7 met:** 63 dispatches beside one executor; wave 3 ran one
-  agent (B4) because its work was one coupling closure, the probe into the E5 CLI (G7's stated
-  exception).
-- **G8 came from these losses:** dispatches wider than five finished 4 of 18, batches of at most
-  five 10 of 14. Under G8, 13 were dispatched and 11 finished; the 2 cancelled were documentation
-  queries, and none was lost to the usage limit.
-- **Underperformed, named:** E5's first run produced no headline (116); P3 missed three
-  predictions, P4 four (one the executor's own cancellation of Stryker, 115) and P5 two in the
-  frontend: `e2e` passed, a miss in the safe direction, and Stryker failed its dry run (120).
+- G6 met: 32 against >= 11, by the census. G7 and G8 not recorded.
+- **Prediction misses, recorded as misses:** CD-GCP on #84's merge (123); Stryker on PR #85
+  (120, under a second seed); C2, the Tier-2 cost, whose old figure carried finding 116's
+  lookup; K1, the controls (122); round 1's type errors, a miss in the safe direction; K2 as
+  worded and K3 by one field, the controls re-run (31.10); E3, two pathway inputs unresponsive
+  (31.11); and round 2's `e2e-harness` (129). **One miss of procedure:** E5's label went on
+  three minutes before the CI it waited for had completed (31.11).
 
 ### NOT verified. Must not be claimed.
 
-- **P6's CI** had not run when this was written.
-- **PR #85's vitest and Playwright changes never ran locally**; its CI is their first execution,
-  and it was not read when this was written.
-- **The core-seconds are estimated**, not metered per command.
-- **Inferred:** finding 112's consequence (no consensus decision depends on the world), and the
-  causes of findings 118 and 120. **Not known:** why the resolver slowed at 04:01Z (116).
-- **That a drawn map renders tiles; that the declared world describes a real store** (1=a:
-  fidelity `unknown`, C60 `unavailable`); **that the ceiling is the EVPI** (D2.9: a lower bound);
-  **finding 89 on the live console** (read from source, never probed).
+- **The repaired arm's claim** (31.12) (since stated: 31.12 is marked done with the claim, -1.4463, interval [-1.4650, -1.4286], `baseline_wins`, read from run 41352100304),
+  and **whether the Inventory Sentinel bound the pathway probe's decisions**, so whether
+  ADR-058's falsification item 1 fired (31.11).
+- **PR #89's round 3**: not run. `fe-invariants` and the five-leg ratchet have never run in
+  CI, and the repairs of findings 129 to 131 are unmeasured.
+- **Parent 33's work, and the FE-INV-013 and FE-INV-024 enforcers,** had no commit when the
+  ledger was written; uncommitted edits were in progress in their worktrees.
+- **Truth Gates, Integration and Policy at `1432cda`**, and **CI at `8775a89`**: not recorded.
+  The runs at `4b659e6` were read instead (parent 31's runs).
+- **That the zod 4 build moves LCP:** four samples against eleven (parent 32's round 2).
+- **Inferred:** finding 123's consequence (nothing deployed since the failures began), finding
+  126's CSP report (no CI job serves the production CSP), finding 129's Chromium step, finding
+  131's cause and finding 132's consequence. **Not known:** finding 127's cause.
+- **That FE-INV-011's attestation covers any route but `/login`** (finding 91; 32.5).
+- **That the declared world describes a real store** (1=a: fidelity `unknown`, C60
+  `unavailable`).
 
 ---
 
-## What session 13 does
+## What session 14 does
 
-No leaf is left to discharge. Read P6's CI (documents only: expect it as at P5) and PR #85's CI.
-Then surface task 25's claim to the operator with its cause (finding 112, whose repair lies
-outside decision 3=a); put the open operator decisions; take the owed work in G8 batches; and lay
-out PR #84's merge path (its required checks were green at P5) and PR #85's review, both the
-operator's to decide. `NEXT_SESSION_PROMPT.md` carries the procedure, the plan and the stop
-conditions.
+Read the newest runs on each PR (STEP 0 of `NEXT_SESSION_PROMPT.md`) and harvest every leaf
+whose discharge job has reported (G4). If 31.12 still carries its placeholder, read first
+whether the Inventory Sentinel bound the pathway probe's decisions (31.11), then state the
+repaired arm's claim from run 41352100304's artifact, with its cause beside it and task 25
+untouched. Harvest PR #89's round 3 (parent 32) and parent 33's CI, and put the open decisions.
+Merging #87, #89 or parent 33's PR changes `main`, and conflict W's resolution covered #84 and
+#85 only, so ask first.
 
 ## The lesson
 
-**Read the log before naming a cause.** E5's first run spent its bound on a DNS lookup; logging,
-the cause inferred before the log was read, was not the term (finding 116). **A comparison across
-disjoint seeds can see only sampling once both paths agree per seed**, and clause (f) measured
-that they do (finding 117), so a well-formed guard can be blind to the bias it is named for
-(conflict V). **And dispatch width has a price:** batches wider than five finished 4 of 18
-agents, which is why G8 exists.
+**A digest names bytes, not behaviour, and a record no check reads is not protected.** A comment
+edit voided the B-prime record while CI stayed green, and the first reader was a labelled run
+(finding 122). **A repair that lets a checker see more must re-read every listing it newly
+sees:** finding 90's repair would have attested FE-INV-010 from tests that assert no vital
+(finding 124). **A test proves only what its environment contains:** the laptop has no
+codecarbon, so only CI could see the arm's second dial (finding 121).

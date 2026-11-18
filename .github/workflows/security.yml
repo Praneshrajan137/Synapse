@@ -94,8 +94,16 @@ jobs:
         continue-on-error: true
 
       - name: No paid API imports (I-1)
+        # The same grep as `ci.yml::quality-gates` "No paid API imports (I-1 - BLOCKING)", in
+        # pattern and in scope (finding 53). `tests/verify/test_paid_api_import_gate_parity.py`
+        # fails naming both steps when either drifts, so change them together. `pinecone` stays
+        # off both: ADR-018 puts it outside I-1 (finding 55).
+        # Every alternative ends in grep's word-end anchor `\>`: without it `import replicate`
+        # also matched `import replicate_seed`, a harness function, and turned this gate red on
+        # main once #87 and #90 met (truth session 3).
         run: |
-          if grep -rn "import openai\|from openai\|import anthropic\|from anthropic\|import cohere\|from cohere" agents/ orchestrator/ packages/ --include="*.py"; then
+          if grep -rn "import openai\>\|from openai\>\|import anthropic\>\|from anthropic\>\|import cohere\>\|from cohere\>\|import replicate\>\|from replicate\>" \
+              agents/ orchestrator/ packages/ api/ digital_twin/ data_fabric/ ml_pipelines/ scripts/ uplift/; then
             echo "FAIL: Paid API import detected — violates I-1"
             exit 1
           fi

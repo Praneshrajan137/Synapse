@@ -57,6 +57,26 @@ is not evidence of absence, and a report on a superseded instrument licenses not
 is named by the caller through the required ``RunContext.tree_root``: the CLI names ``ROOT``,
 a test names a tree it owns, and ``None`` names none, which refuses publication.
 
+The proof supervisor's record states why an artifact is absent (F-Q1-3)
+-----------------------------------------------------------------------
+The E5 job runs the harness under ``uplift.proof_supervisor``, which writes
+:data:`SUPERVISOR_STATUS_NAME` beside the artifact naming how the run ended (task 22.1, R7.2).
+After a run killed at its bound this gate still advised running ``python -m uplift.cli --full``
+first, as if nothing had been learned. When the artifact is absent the gate now reads that
+record through the supervisor's own model, :class:`~uplift.proof_supervisor.SupervisorStatus`,
+and states what it records in place of that advice: the state, ``timed_out``,
+``elapsed_seconds`` against the ``wall_clock_seconds`` bound, ``kill_scope``, ``returncode``,
+``artifact_present`` and the supervisor's message. A record that cannot be read or does not
+validate is named unreadable or malformed after the advice. With no record the reason is
+unchanged, byte for byte.
+
+**The record changes that one reason's text and nothing else.** It is read only once the
+artifact is known to be absent, so it never adds, drops or reorders a reason, and never moves
+an outcome, a proof, an exit code or a registry status: no record can produce a pass, and a
+missing artifact stays unavailable whatever its record says. A failure to read it is reported,
+never raised, so it cannot crash the gate either. The record carries no run identifier, so the
+gate reports it as what the supervisor recorded, not as a fact checked against this run.
+
 Run::
 
     python -m scripts.audit.uplift_truth                       # human summary
@@ -97,6 +117,7 @@ from uplift.uplift_floor import (  # noqa: E402
 
 if TYPE_CHECKING:  # pragma: no cover -- typing only; the runtime import is deferred.
     from uplift.harness import UpliftArtifact
+    from uplift.proof_supervisor import SupervisorStatus
 
 # Persisted harness result artifact. `uplift.cli` writes the canonical artifact here and
 # the gate reads it. NOT under version control (R2.8): `.gitignore` covers `artifacts/`
@@ -106,6 +127,11 @@ RESULT_ARTIFACT = ROOT / "artifacts" / "uplift" / "result.json"
 
 #: The ignore declaration consulted by :func:`is_git_ignored`.
 GITIGNORE = ROOT / ".gitignore"
+
+#: The proof supervisor's status record, beside the artifact it supervised: `uplift.yml`'s E5
+#: step writes it with `--status-out artifacts/uplift/supervisor-status.json` (task 22.1, R7.2).
+#: Only an absent artifact's reason reads it, never a verdict (F-Q1-3).
+SUPERVISOR_STATUS_NAME: Final[str] = "supervisor-status.json"
 
 # Distinct exit codes (R2.1, R2.2, R2.4, R2.8).
 EXIT_PASS = 0
@@ -327,6 +353,95 @@ class Admission(BaseModel):
         return self.outcome == "admitted"
 
 
+# ---------------------------------------------------------------------------
+# F-Q1-3 -- an absent artifact's reason states the proof supervisor's record
+# ---------------------------------------------------------------------------
+def _ascii(text: str) -> str:
+    """``text`` with every non-ASCII character escaped, for ASCII-only output (E-S13-07)."""
+    return text.encode("ascii", "backslashreplace").decode("ascii")
+
+
+def _read_supervisor_record(status: Path) -> tuple[SupervisorStatus | None, str | None]:
+    """The proof supervisor's record at ``status``, or why it says nothing (F-Q1-3).
+
+    ``(None, None)`` when no record is there. Otherwise the text is decoded with
+    :func:`json.loads` and validated by :class:`~uplift.proof_supervisor.SupervisorStatus`, the
+    model the supervisor writes the record from, which refuses a ``state`` or ``message`` its own
+    facts contradict; this gate parses none of the record's fields itself. A record that
+    cannot be read, decoded or validated comes back as text naming it unreadable or malformed,
+    never as an exception, so a record cannot crash the gate and move its exit code (I-7). The
+    model is imported only after a record is found, so a missing record never reaches the
+    import, which is deferred as :func:`_read_artifact` defers the harness's.
+    """
+    display = _display(status)
+    try:
+        text = status.read_text(encoding="utf-8")
+    except (FileNotFoundError, NotADirectoryError):
+        return None, None
+    except (OSError, ValueError) as exc:
+        return None, _ascii(
+            f"the proof supervisor's record at {display} is unreadable, so how the supervised "
+            f"run ended is unknown: {exc}"
+        )
+    try:
+        from uplift.proof_supervisor import SupervisorStatus as _Status
+    except ImportError as exc:
+        return None, _ascii(
+            f"the proof supervisor's record at {display} could not be read, because "
+            f"uplift.proof_supervisor could not be imported: {exc}"
+        )
+    malformed = (
+        f"the proof supervisor's record at {display} is malformed, so how the supervised run "
+        "ended is unknown"
+    )
+    try:
+        payload = json.loads(text)
+    except (ValueError, RecursionError) as exc:
+        return None, _ascii(f"{malformed}: it does not decode as JSON ({exc})")
+    try:
+        return _Status.model_validate(payload), None
+    except ValidationError as exc:
+        return None, _ascii(
+            f"{malformed}: it is not a record uplift.proof_supervisor.SupervisorStatus admits "
+            f"({exc})"
+        )
+
+
+def _absent_artifact_reason(path: Path) -> str:
+    """Why no artifact is at ``path``, stating the proof supervisor's record beside it (F-Q1-3).
+
+    No record: the reason this gate gave before F-Q1-3, byte for byte, advising a run. A record
+    :func:`_read_supervisor_record` returns: its facts replace that advice, which after a run
+    killed at its bound told the reader to repeat a run whose duration and kill were already on
+    record. A record that says nothing: the advice stands, and the record is named unreadable or
+    malformed after it.
+
+    Only this text depends on the record. :func:`admit` returns ``unavailable`` with this one
+    reason and no proof whatever the record says, so no record can make a missing artifact
+    anything else.
+    """
+    display = _display(path)
+    advice = (
+        f"no artifact at {display}: no uplift run wrote one in this job "
+        "(run `python -m uplift.cli --full --n "
+        f"{MIN_POWERED_REPLICATES}` first)"
+    )
+    status = path.parent / SUPERVISOR_STATUS_NAME
+    record, problem = _read_supervisor_record(status)
+    if problem is not None:
+        return f"{advice}; {problem}"
+    if record is None:
+        return advice
+    return (
+        f"no artifact at {display}: the proof supervisor's record at {_display(status)} says "
+        f"the supervised run ended with state={record.state}, timed_out={record.timed_out}, "
+        f"elapsed_seconds={record.elapsed_seconds} against a bound of "
+        f"wall_clock_seconds={record.wall_clock_seconds}, kill_scope={record.kill_scope}, "
+        f"returncode={record.returncode}, artifact_present={record.artifact_present} - "
+        f"{record.message}"
+    )
+
+
 def _read_artifact(artifact: Path) -> tuple["UpliftArtifact | None", str | None]:
     """Read and shape-validate the artifact, or return the reason it is unusable.
 
@@ -335,6 +450,9 @@ def _read_artifact(artifact: Path) -> tuple["UpliftArtifact | None", str | None]
     ``verify_claims`` to call on a fresh clone. An import failure is reported as an
     unavailable reason rather than raised, because a gate that cannot read its input has
     no measurement -- not a pass (I-7).
+
+    An absent artifact's reason comes from :func:`_absent_artifact_reason`, which states the
+    proof supervisor's record when one lies beside the artifact (F-Q1-3).
     """
     try:
         from uplift.harness import UpliftArtifact as _Artifact
@@ -344,11 +462,7 @@ def _read_artifact(artifact: Path) -> tuple["UpliftArtifact | None", str | None]
     path = Path(artifact)
     display = _display(path)
     if not path.is_file():
-        return None, (
-            f"no artifact at {display}: no uplift run wrote one in this job "
-            "(run `python -m uplift.cli --full --n "
-            f"{MIN_POWERED_REPLICATES}` first)"
-        )
+        return None, _absent_artifact_reason(path)
     try:
         return _Artifact.read(path), None
     except (OSError, UnicodeDecodeError) as exc:
@@ -499,7 +613,9 @@ def admit(
        was not produced in this run, so there is nothing to certify; R2.9 excludes the
        SKIP from the published PASS count.
     3. The artifact is absent, unreadable, not JSON, or does not satisfy the shape the
-       harness is required to write -> ``unavailable`` (R2.1, R2.2, R2.3).
+       harness is required to write -> ``unavailable`` (R2.1, R2.2, R2.3). An absent
+       artifact's one reason states the proof supervisor's record when one lies beside it
+       (F-Q1-3); the outcome is the same with or without one.
     4. The artifact states it is not a completed, powered, in-bound, attributed run ->
        ``unavailable``, naming each of :attr:`UpliftArtifact.unavailable_reasons`
        verbatim (R2.1 ``incomplete``, R2.2 ``< MIN_POWERED_REPLICATES``, fidelity).
@@ -845,6 +961,7 @@ __all__ = [
     "GITIGNORE",
     "MIN_POWERED_REPLICATES",
     "RESULT_ARTIFACT",
+    "SUPERVISOR_STATUS_NAME",
     "UNATTRIBUTED",
     "UPLIFT_FLOOR",
     "Admission",
