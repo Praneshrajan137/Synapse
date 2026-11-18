@@ -126,6 +126,22 @@ CASES: Final[tuple[Case, ...]] = (
         ),
     ),
     Case(
+        # The legacy engine seeds the GLOBAL `random` module with the replicate seed
+        # (`_init_env`), so a stray `random.random()` is deterministic and Q4 is caught as a
+        # changed decision, not as nondeterminism. A string hash differs per process
+        # (PYTHONHASHSEED), so this one is caught by the cross-process repeat.
+        "Q4b-process-dependent-hash-in-the-sentinel",
+        ("NONDETERMINISTIC", "SAFETY"),
+        (
+            Edit(
+                RS,
+                104,
+                RATE_LINE.strip(),
+                RATE_LINE.strip() + ' * (1.0 + 1e-3 * (hash("synapse") % 1000) / 1000)',
+            ),
+        ),
+    ),
+    Case(
         "Q5-tuned-rule-comparison-flipped",
         ("CONTROL_MOVED", "SAFETY"),
         (Edit("uplift/tuned_static.py", 185, "if position <= point.s:", "if position < point.s:"),),
