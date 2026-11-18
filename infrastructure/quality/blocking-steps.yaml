@@ -471,6 +471,11 @@ steps:
     step_names:
       - "Measure seconds per consensus decision by tier (E5 sizing, finding 70)"
       - "Measure the E5 path itself - primary cell, unshocked, reorders only (finding 116)"
+      # Session 13 (ADR-058 falsification item 1): the pathway probe's decisions, traced through
+      # the probe's own code, and refused unless a fresh run_pathway_probe in the same process
+      # reproduces their counts. Declared in the same change as the step, because a name that
+      # resolves to no step FAILs as `blocking-unresolved`.
+      - "Trace the pathway probe's decisions (ADR-058 falsification item 1)"
     step_order:
       - step: "Measure seconds per consensus decision by tier (E5 sizing, finding 70)"
         role: producer
