@@ -19,10 +19,12 @@ What is asserted, about the committed workflows:
 3. The two greps are the same words, as the shell splits them, run from the same directory.
    A failure names both steps and every axis that differs: the pattern's alternatives, the
    options and the paths.
-4. Neither grep is vacuous. Each recurses; every alternative is ``import <client>`` or
-   ``from <client>``, with both forms present for each client; and every path is a directory
-   of this tree. A missing directory makes grep exit 2, which ``if`` reads as "no match", so
-   the step would pass whatever the other trees hold.
+4. Neither grep is vacuous. Each recurses; every alternative is ``import <client>\\>`` or
+   ``from <client>\\>``, with both forms present for each client; and every path is a
+   directory of this tree. A missing directory makes grep exit 2, which ``if`` reads as "no
+   match", so the step would pass whatever the other trees hold. The word-end anchor ``\\>``
+   is required: without it ``import replicate`` also matched ``import replicate_seed``, a harness
+   function, which turned the gate red on ``main`` once #87 and #90 met (truth session 3).
 
 What would make this file wrong. Equal words are stricter than equal behaviour: reordering two
 directories in one copy fails here although it forbids nothing new. The repair is to copy the
@@ -71,7 +73,9 @@ REPO_ROOT: Final = Path(__file__).resolve().parents[2]
 _IF_GREP: Final = re.compile(r"^if\s+(?P<command>grep\s.*?)\s*;\s*then$")
 #: grep's basic-regex alternation, which both workflows write inside double quotes.
 _ALTERNATION: Final = "\\|"
-_IMPORT_FORM: Final = re.compile(r"^(?P<form>import|from) (?P<client>[A-Za-z_][A-Za-z0-9_.]*)$")
+_IMPORT_FORM: Final = re.compile(
+    r"^(?P<form>import|from) (?P<client>[A-Za-z_][A-Za-z0-9_.]*)(?P<anchor>\\>)?$"
+)
 _BOTH_FORMS: Final = frozenset({"import", "from"})
 _RECURSIVE_SHORT: Final = frozenset({"r", "R"})
 _RECURSIVE_LONG: Final = frozenset({"--recursive", "--dereference-recursive"})
@@ -277,6 +281,10 @@ def test_each_grep_recurses_into_real_trees_and_names_each_client_in_both_forms(
                 f"{reading.label}: alternative {alternative!a} is not `import <client>` or "
                 "`from <client>`"
             )
+            assert match.group("anchor") is not None, (
+                f"{reading.label}: alternative {alternative!a} has no word-end anchor, so it also "
+                "matches names that only begin with the client's, such as a `replicate_seed` import"
+            )
             forms_by_client.setdefault(match.group("client"), set()).add(match.group("form"))
         assert forms_by_client, f"{reading.label}: the pattern names no client"
         half = sorted(client for client, forms in forms_by_client.items() if forms != _BOTH_FORMS)
@@ -317,8 +325,8 @@ def test_the_pre_repair_security_grep_reads_as_narrower_on_every_axis_finding_53
     reference = resolve(CI_STEP)
 
     assert pre_repair.words != reference.words, "the pre-repair grep must not read as the same"
-    assert reference.alternatives > pre_repair.alternatives, (
-        "the pre-repair pattern must be a strict subset of the reference's"
+    assert _forms(reference) > _forms(pre_repair), (
+        "the pre-repair pattern must forbid a strict subset of the reference's imports"
     )
     assert reference.paths > pre_repair.paths, (
         "the pre-repair trees must be a strict subset of the reference's"
@@ -335,6 +343,52 @@ def test_the_pre_repair_security_grep_reads_as_narrower_on_every_axis_finding_53
         "options only in the mirror",
     ):
         assert expected in report, f"the drift report omits {expected!a}:\n{report}"
+
+
+def _forms(reading: GrepReading) -> frozenset[tuple[str, str]]:
+    """The ``(form, client)`` pairs a reading forbids, whether or not each is anchored."""
+    pairs = set()
+    for alternative in reading.alternatives:
+        match = _IMPORT_FORM.match(alternative)
+        assert match is not None, f"{reading.label}: unreadable alternative {alternative!a}"
+        pairs.add((match.group("form"), match.group("client")))
+    return frozenset(pairs)
+
+
+def _as_python(alternative: str) -> re.Pattern[str]:
+    """One committed alternative as Python reads it: grep's ``\\>`` is "no word character next"."""
+    match = _IMPORT_FORM.match(alternative)
+    assert match is not None, f"unreadable alternative {alternative!a}"
+    end = "(?![A-Za-z0-9_])" if match.group("anchor") else ""
+    return re.compile(re.escape(f"{match.group('form')} {match.group('client')}") + end)
+
+
+def test_the_committed_alternatives_flag_paid_imports_and_spare_lookalike_names() -> None:
+    """The defect truth session 3 met, as behaviour: a harness function named like a client.
+
+    Each line is assembled from parts so this file holds no client import statement (the
+    ``no-paid-apis`` hook scans staged Python files). What would make this wrong is a grep that
+    reads ``\\>`` differently from Python's lookahead here: GNU grep treats letters, digits and
+    the underscore as word characters, as the lookahead does.
+    """
+    patterns = [_as_python(a) for a in resolve(CI_STEP).alternatives]
+    paid = [
+        " ".join(("import", "replicate")),
+        " ".join(("from", "replicate", "import", "Client")),
+        " ".join(("import", "replicate.client")),
+        "    " + " ".join(("from", "anthropic.types", "import", "Message")),
+        " ".join(("import", "openai")) + "  # trailing comment",
+    ]
+    lookalike = [
+        " ".join(("from", "uplift.harness", "import", "replicate_seed,", "run_closed_loop")),
+        " ".join(("import", "openai_compat")),
+        " ".join(("from", "cohere2", "import", "x")),
+    ]
+    for line in paid:
+        assert any(p.search(line) for p in patterns), f"a paid import passes the grep: {line!a}"
+    for line in lookalike:
+        hits = [p.pattern for p in patterns if p.search(line)]
+        assert not hits, f"a lookalike name is flagged as a paid import: {line!a} by {hits!a}"
 
 
 def test_an_unresolvable_step_or_grep_is_refused_rather_than_read_as_agreement() -> None:

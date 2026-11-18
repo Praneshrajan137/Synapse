@@ -56,16 +56,17 @@ print('OK Reward isolation verified')
 
       - id: no-paid-apis
         name: no-paid-apis
+        # The client name must end the word, as `\>` makes it in the CI greps: a substring
+        # test also matched `import replicate_seed`, a harness function (truth session 3).
         entry: python -c "
-import sys
-PAID = ['import openai', 'from openai', 'import anthropic', 'from anthropic',
-        'import cohere', 'from cohere', 'import replicate', 'from replicate']
+import re, sys
+PAID = re.compile(r'(import|from) (openai|anthropic|cohere|replicate)\b', re.ASCII)
 for f in sys.argv[1:]:
-    content = open(f).read()
-    for pattern in PAID:
-        if pattern in content:
-            print(f'FAIL {f}: Paid API import detected: {pattern} — violates I-1')
-            sys.exit(1)
+    content = open(f, encoding='utf-8').read()
+    found = PAID.search(content)
+    if found:
+        print(f'FAIL {f}: Paid API import detected: {found.group(0)} — violates I-1')
+        sys.exit(1)
 print('OK No paid API imports')
 "
         language: python
