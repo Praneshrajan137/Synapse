@@ -18,17 +18,17 @@ into ``uplift.yml::twin-regret``'s deliberately thin closure (``packages/require
 plus ``simpy numpy pyyaml``) without dragging anything else in.
 
 **Why ``alpha`` is read here with ``yaml`` rather than through**
-``uplift.contract.load_contract`` **, which is what task 15.2 asked for.** ``contract.py``
-imports ``scipy`` at module scope, for the Mann-Whitney test it also owns. ``scipy`` is in
-neither ``packages/requirements.txt`` nor ``packages/requirements-dev.txt``; it reaches
-``ci.yml::uplift-verify`` transitively through ``agents/*/requirements.txt``, which
-``twin-regret`` does not install. So routing this one float through the validating reader
-would make the regret measurement fail at import with ``ModuleNotFoundError`` inside the job
-that exists to run it. The narrow read below is the resolution, and the drift it could
-introduce is closed mechanically rather than promised away:
+``uplift.contract.load_contract`` **, which is what task 15.2 asked for.** The reason first
+given here, that ``contract.py`` imported ``scipy`` at module scope and ``twin-regret``'s thin
+closure did not install it, stopped being true when Metric_Contract v2 (task 29.4) dropped the
+rank test and that import with it (F-A3-1, read from ``contract.py``'s imports). The reason
+left is the import direction: ``contract.py`` imports ``METHOD``, ``INTERVAL_SEED``,
+``resamples_for`` and ``paired_difference_interval`` from this module at module scope, so a
+module-scope import of the validating reader from here would be a cycle. The drift the narrow
+read could introduce is closed mechanically rather than promised away:
 ``tests/uplift/test_interval_estimation_property.py`` asserts the two readers return the same
-number, and it runs in the fast suite where ``scipy`` is present. Two readers of one artifact
-with nothing comparing them is the ``None == None`` shape C75 exists to close.
+number. Two readers of one artifact with nothing comparing them is the ``None == None`` shape
+C75 exists to close.
 
 **The figure "95%" appears nowhere as a literal.** It is ``1 - alpha`` from
 ``uplift/metric_contract.yaml``'s committed ``0.05`` (AD-13).

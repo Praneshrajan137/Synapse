@@ -357,11 +357,18 @@ steps:
   # stdout stream that it is one parseable canonical document, that no log line at any
   # level reaches it, and that an ERROR line still reaches stderr. A declaration in this
   # file is not a gate; that test is.
+  #
+  # `step_names` added for finding 119 F-E-2: these two steps sat under a nested `steps:` key,
+  # which the gate never reads (it reads `step_names` or `all_steps`), so this entry declared
+  # nothing blocking. `step_order` is for readers only.
   - workflow: .github/workflows/uplift.yml
     job: twin-regret
     all_steps: false
     requirement: "R5.1, R5.32, R5.33, R5.34, R5.35"
-    steps:
+    step_names:
+      - "Measure one B-prime world cell against the six-arm comparator (R5.1, R5.33, R5.46)"
+      - "Report the objective's insensitive KPIs (R5.34, R5.35)"
+    step_order:
       - step: "Measure one B-prime world cell against the six-arm comparator (R5.1, R5.33, R5.46)"
         role: producer
         emits: "artifacts/uplift/twin-regret-<cell>.json (canonical JSON, --json; one per matrix cell)"
@@ -454,16 +461,25 @@ steps:
 
   # decision-quality-proof session 11, finding 70: E5's cost is measured before it is sized.
   # Declared in the same commit as the workflow it describes (coupling 2). Label-only, so it
-  # owes no `required-checks.yaml` entry (conflict G).
+  # owes no `required-checks.yaml` entry (conflict G). Finding 116 added the second step, E5's
+  # own path. `step_names` added for finding 119 F-E-2, as for `twin-regret` above: the steps sat
+  # under a nested `steps:` key the gate never reads. `step_order` is for readers only.
   - workflow: .github/workflows/uplift-cost-probe.yml
     job: cost-probe
     all_steps: false
-    requirement: "R7.1, R7.2 (sizing), finding 70"
-    steps:
+    requirement: "R7.1, R7.2 (sizing), findings 70 and 116"
+    step_names:
+      - "Measure seconds per consensus decision by tier (E5 sizing, finding 70)"
+      - "Measure the E5 path itself - primary cell, unshocked, reorders only (finding 116)"
+    step_order:
       - step: "Measure seconds per consensus decision by tier (E5 sizing, finding 70)"
         role: producer
         emits: "artifacts/uplift/cost-probe.json (canonical JSON, --output)"
         requirement: "finding 70"
+      - step: "Measure the E5 path itself - primary cell, unshocked, reorders only (finding 116)"
+        role: producer
+        emits: "artifacts/uplift/cost-probe-e5.json (canonical JSON, --output)"
+        requirement: "finding 116"
 
   - workflow: .github/workflows/truth-gates.yml
     job: truth-gates

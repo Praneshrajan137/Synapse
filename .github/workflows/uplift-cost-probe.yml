@@ -6,6 +6,9 @@
 # drives the REAL consensus arm through the harness's closed loop for a small number of
 # replicates of each adversarial scenario, times every decision, records the tier the router
 # assigned, and writes a projection to MIN_SCENARIOS replicates. It measures and judges nothing.
+# A second step measures E5's own path (`python -m uplift.cost_probe e5`, finding 116): the
+# primary cell unshocked, the reorders-only arm and 24 hourly decisions, at E5's first three
+# replicate seeds.
 #
 # ITS OWN WORKFLOW, NOT A JOB IN `uplift.yml`, for one reason: `uplift.yml` holds a WORKFLOW-SCOPE
 # concurrency group (`uplift-proof`) so that two powered runs never overlap, and a probe placed
@@ -44,8 +47,10 @@ jobs:
       github.event_name == 'pull_request'
       && contains(github.event.pull_request.labels.*.name, 'measure-uplift-cost')
     # One replicate per scenario at 24 hourly decisions; a locally measured Tier-4 decision
-    # took ~24 s, so ~75 shocked decisions is ~30 min plus the four-agent install. A timeout is a
-    # failed job, the honest outcome for an incomplete measurement (I-7).
+    # took ~24 s, so ~75 shocked decisions is ~30 min plus the four-agent install. The E5 step
+    # adds 3 x 24 unshocked decisions, which run no Tier-4 Monte Carlo; their cost is what that
+    # step measures. A timeout is a failed job, the honest outcome for an incomplete measurement
+    # (I-7).
     timeout-minutes: 120
     steps:
       - uses: actions/checkout@v4
@@ -88,11 +93,28 @@ jobs:
           python -m uplift.cost_probe --hours 24 --step-hours 1 --replicates 1 \
             --output artifacts/uplift/cost-probe.json
 
+      - name: Measure the E5 path itself - primary cell, unshocked, reorders only (finding 116)
+        # E5's own path, which the step above does not take: `uplift.e5_suite`'s scenario (the
+        # primary world cell, unshocked), its reorders-only consensus arm and its 24 hourly
+        # decisions, at E5's first three replicate seeds. That path had never been timed when E5
+        # stalled for 3.5 hours on a per-consult Ollama lookup (finding 116, CLAUDE.md E-DQP-01).
+        # `always()` so a failed reading above does not cost this one; this step's own exit status
+        # still propagates. Exits as above: 0 measured / 1 a replicate failed (reported, not
+        # dropped) / 2 the arm could not be assembled (the stand-in's reason recorded, nothing
+        # timed).
+        if: always()
+        run: |
+          mkdir -p artifacts/uplift
+          python -m uplift.cost_probe e5 --replicates 3 \
+            --output artifacts/uplift/cost-probe-e5.json
+
       - name: Upload the cost-probe report
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: uplift-cost-probe
-          path: artifacts/uplift/cost-probe.json
+          path: |
+            artifacts/uplift/cost-probe.json
+            artifacts/uplift/cost-probe-e5.json
           if-no-files-found: warn
           retention-days: 90
