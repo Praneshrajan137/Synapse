@@ -18,3 +18,7 @@ docs/state/bprime/*.json -text
 # The committed Power_Report (uplift/power.py) is the controls' CI artifact, committed unedited
 # from uplift.yml run 41343879850; the same rule keeps its bytes exact on every checkout.
 docs/state/uplift-power-report.json -text
+
+# The sealed pre-registration (docs/truth/sealed/PREREG-1.md) is pinned by the sha256 of its EXACT
+# bytes in SHA256SUMS, checked by check_prereg.py on any machine; no line-ending conversion.
+docs/truth/sealed/* -text
