@@ -42,7 +42,9 @@ Baseline for every measurement unless another is named: the working tree on bran
 - One reviewer with fresh context was given only `OPENING.md` and this file and asked to
   reproduce a sample and attack the reasoning. Its findings are under "Review before the gate".
 - **Next step:** session 3, opened with `docs/truth/SESSION-3-PROMPT.md` (written 2026-11-18 from
-  the operator's two guidance files and this session's record).
+  the operator's two guidance files and this session's record). Removed from the repository on
+  2026-11-19 under the operator's rule that session prompts stay on the operator's machine and
+  are never committed; it remains in the history at `7172953`.
 
 ## The operator's answers (2026-11-17)
 

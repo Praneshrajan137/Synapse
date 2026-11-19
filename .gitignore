@@ -146,3 +146,6 @@ _smoke_result.txt
 
 # Snowflake Cortex local tool state / plans (not project source)
 .snowflake/
+
+# Session prompts stay on the operator's machine and are never committed (operator's rule, 2026-11-19)
+SESSION-*-PROMPT.md
