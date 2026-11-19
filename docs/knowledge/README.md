@@ -13,6 +13,7 @@ inventory, not progress").
 |---|---|
 | [`SYNTHESIS.md`](SYNTHESIS.md) | One page: the ten entries that matter most for sessions 2 and 3, ranked by convergence and by how much they change, with the release constraint |
 | [`SESSION-2-PROMPT.md`](SESSION-2-PROMPT.md) | The prompt that opens session 2: the whole project as it truly is, the frontier it is judged against, and one gate before any change |
+| [`VERDICTS.md`](VERDICTS.md) | Session 2's verdict on every reading of SYNAPSE in this folder, and the status of every Q and R item, each with its evidence in `docs/truth/` |
 | [`LEDGER.md`](LEDGER.md) | One entry per insight: what it says, where it came from, how far it was checked, the verdict, where it lands in SYNAPSE, and what would make it wrong |
 | [`TENSIONS.md`](TENSIONS.md) | Where the corpus argues against SYNAPSE as built, or against itself |
 | [`QUESTIONS.md`](QUESTIONS.md) | Decisions owed by the operator, and the research queue for the next sessions |
@@ -20,6 +21,17 @@ inventory, not progress").
 
 ## Operator notes
 
+- **2026-11-17, reframe.** The release is for the whole world for five days, not for ten people;
+  the resources are two Google Cloud accounts, three Docker sandbox credits and the Claude budget
+  recorded in `docs/truth/LOG.md` (OA-7). The plan is `docs/truth/PLAN.md`. Older lines in this
+  folder that speak of ten reviewers describe the frame of 2026-11-15 and are kept as history.
+
+- **2026-11-17, session 2.** Every reading of SYNAPSE in this folder now has a verdict in
+  [`VERDICTS.md`](VERDICTS.md). The ledger, tensions and questions are left as written, so their
+  history stays visible; read a reading together with its verdict. The operator answered the
+  gate on 2026-11-17: the June cloud account expired, a new account holds the full credit,
+  spending before the release is allowed with every machine turned off after use, and the
+  reviewers judge the work as a whole.
 - **2026-11-15, scope.** SYNAPSE is much wider and deeper than the `decision-quality-proof`
   (Kiro) documents that most "Lands" lines here draw on. Analysing the whole project is the work
   of session 2 onward, not of this session. Every reading of SYNAPSE in this folder is

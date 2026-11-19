@@ -1,5 +1,16 @@
 # SYNTHESIS - the ten insights that matter most for sessions 2 and 3
 
+> **Reframed 2026-11-17:** the release is for the whole world, not ten people; see
+> `docs/truth/PLAN.md`.
+>
+> **After session 2 (2026-11-17).** Session 2 tested each reading below against the code. Five
+> hold, four were corrected and one stays open; the verdicts, with their evidence, are in
+> [`VERDICTS.md`](VERDICTS.md). The largest corrections: the consensus lost by 1.45 after the
+> repair of finding 112, not 4.40, and where traced one component made every decision; the
+> proof runs on the laptop in minutes, so verification need not wait on CI; and in the twin,
+> waste does not depend on any decision. The ten entries themselves still stand as the corpus's
+> ranking.
+
 Session 1 read all 242 files in `C:\Documentation` (18 folders, finished 2026-11-15) and
 distilled them into 60 ledger entries, 20 tensions, 8 questions for the operator and 61 research
 items. This page ranks the ten entries that should most change what the next sessions do. The
