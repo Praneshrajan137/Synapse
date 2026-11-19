@@ -17,6 +17,10 @@ today), **reported** (a subagent's return, not re-checked), **inferred**, **hypo
 
 ## State
 
+- **2026-11-19, at the close.** Stages A to E done: the merges and the record landed; the verdict
+  (#96), the kernel (#97) merged; the seal (#99) and the beacon (#98) opened, merged when green;
+  this record is the session's last PR. The final account, the panel, the scorecard and the work
+  for session 4 are at the end of this file.
 - **2026-11-18, after the gate.** The operator approved the gate (below) through plan mode and
   added: "Do not need to worry and measure the usage, hereafter. Proceed as per your plan. We have
   to reach and achieve the highest frontier." Stage A is under way.
@@ -310,3 +314,251 @@ Approval says yes to everything below except the lines marked **ask**, confirmed
   `packages/synapse_common/`, `agents/` and `orchestrator/` only, so the session-2 instruments
   under `docs/truth/instruments/` meet no lint gate when the documents land (D-08's concern was
   about `scripts/`).
+- **S3-M-21 A composition defect the merges exposed, repaired (measured; PR #95).** After the three
+  merges, `main`'s quality gates failed at "No paid API imports (I-1 - BLOCKING)" on
+  `uplift/cost_probe.py:459`, `from uplift.harness import replicate_seed`: #90 widened the grep to
+  `uplift/` and added `replicate`, #87 added the import of a harness function whose name only begins
+  with that client's, and each PR had been green alone. The rehearsal (S3-M-17) ran the Python gates
+  and the tests but not `ci.yml`'s inline shell steps, so it could not see this (error pattern
+  E-TP-07). Repair: every alternative of both greps (`ci.yml`, `security.yml`) ends in grep's word-end
+  anchor `\>`; the parity test now requires the anchor, compares the pre-repair grep by (form,
+  client) pairs, and runs the committed alternatives over real and lookalike lines; the pre-commit
+  hook gets the same semantics. Measured: the anchored grep passes every CI tree on `main`; the old
+  one reproduces the false positive; #95 green (17 checks), merged as `9aa2aad`.
+- **F-34 The pre-commit layer has never run (measured).** `.pre-commit-config.yaml` fails to parse as
+  YAML at every commit from its creation (`c8f1e3e`, 2026-04-06) to `main` (the `reward-isolation`
+  hook's multi-line `entry` puts code at column 1); `.git/hooks` holds no `pre-commit`; no workflow runs
+  pre-commit. So no hook in it (`no-raw-hex`, `no-paid-apis`, `spec-validate`, `reward-isolation`,
+  `jitter-enforcement`, ...) has enforced anything, although `CLAUDE.md` cites `no-raw-hex` as the
+  guard of INV-CLR-009. Even parsed, YAML would fold the multi-line `python -c` entries into one line.
+  *False if* `pre-commit validate-config` accepts the file. Left to its own change (block scalars, then
+  each hook run against the tree, then a CI job), recorded as E-TP-08.
+- **The documents PRs re-tested.** Closed and reopened after #95, they re-ran on a stale test merge;
+  both branches were then synced with `main` by merge commits (`0e55f22`, `8e0a8df`).
+
+### B. A verdict in seconds that can be trusted (PR #96, branch `feat/verdict`)
+
+- **What was built.** `python -m scripts.verdict` (`make verdict`): the decision core's fast
+  selection in two pytest shards and the E5 miniature (E5's first twelve replicate seeds, consensus
+  arm and tuned control) at the same time, judged exactly (`float.hex`) against committed pins
+  (`infrastructure/quality/verdict-pins.json`, equal to session 2's printed costs). Exit codes:
+  PASS 0, SAFETY 1, WORSE 2, CHANGED 3, NONDETERMINISTIC 4, CONTROL_MOVED 5, REFUSED_ENV 6 (any `TW_`
+  variable: F-33), INCOMPLETE 7. `--repin` writes pins only from a safe, complete, deterministic run.
+  CI: `.github/workflows/verdict.yml`. `CLAUDE.md`: E-TP-01 to E-TP-08.
+- **S3-M-22 How the time was found (measured).** One consensus replicate: 0.45 s to build the arm and
+  1.75 s to run it, after a one-time 12 s import of the agent stack per process; a tuned replicate
+  0.5 s. A pool handing out single replicates got slower with more workers (3, 4, 6, 8 workers: 49.5,
+  56.2, 71.2, 87.0 s), because each worker pays the import and they contend. Two processes, each
+  pricing half the seeds and re-pricing one seed the other priced: about 45 s on mains power; three
+  processes saved 1 s.
+- **S3-M-23 The verdict's time (measured, three consecutive runs).** On battery (70%, Balanced plan,
+  20 to 37% background CPU): 59.5, 59.9 and 52.3 s, median 59.5 s, PASS 3 of 3. On mains power
+  earlier: 44.6 to 46.7 s. Both shards together are the session-2 baseline exactly (331 + 333 = 664
+  passed, 8 + 18 = 26 skipped).
+- **S3-M-24 The fault proof (measured; `scripts/verdict/fault_proof.py`; record
+  `infrastructure/quality/verdict-fault-proof.json`).** 16 of 16 judged as expected. Clean copy, three
+  times: PASS. F1 confidence floor never fails: SAFETY. F2 fast path binds the lowest score: SAFETY,
+  consensus +2.911 dearer on 12 of 12. F3 review period tripled: SAFETY (a pinning test), consensus
+  -0.433 cheaper on 12 of 12. F4 nothing executed: SAFETY, +2.911. F5 failed guardrail dispatches:
+  SAFETY. Q1 Sentinel demand rate halved: SAFETY, +1.364 dearer. Q3 twin arrival rate, Q5 tuned-rule
+  comparison flipped, Q7 objective weight: CONTROL_MOVED (the B-prime record refuses the moved
+  physics by its digest). Q6 a `TW_` variable set: REFUSED_ENV; Q6b with `--allow-twin-env`:
+  CONTROL_MOVED, the tuned control +0.102 (F-33 through the verdict). Q4 a stray `random.random()`:
+  caught as a changed decision, not as nondeterminism, because the legacy engine seeds the GLOBAL
+  `random` module with the replicate seed (`_init_env`); Q4b a string hash (process-dependent): the
+  cross-process repeat lists the two seeds whose cost differed (`0x1.d3ec...` then `0x1.d3e4...`).
+- **S3-M-25 Two traps met building it (measured).** A `synapse_common` copied outside the repository
+  tree cannot start its schema registry (it walks up from its own file to `proto/domain/`), so the
+  consensus arm refuses to assemble and every case read INCOMPLETE (E-TP-06); and the physics faults
+  first read INCOMPLETE until a refusal by the record's physics digest was classed as a moved control.
+- **Not done: X1.** The Docker sandbox was not measured: the operator did not confirm that the credit
+  is claimed. The laptop held everything this session needed.
+- *Rejected:* pytest-xdist (a new dependency for what two process shards give); pins alone (cannot
+  say better or worse); a statistical bound alone (misses cost-neutral behaviour changes and
+  nondeterminism); a pool of single-replicate workers (measured slower).
+
+### C. One decision kernel, exact everywhere (PR #97, branch `feat/decision-kernel`)
+
+- **What was built.** `synapse_kernel/`: `world.py`, `lead_time.py`, `engine.py` ported from the
+  legacy files by asserted text replacement (every draw, event and line of arithmetic kept, in
+  order); `drive.py` (E5's replicate loop), `objective.py` (the committed objective), `observation.py`
+  (no shock field: policies must detect, never be told); `policies/tuned.py` (arm E) and
+  `policies/base_stock.py` (arm O); `worlds/legacy_primary.json` exported from the legacy reader by
+  `scripts/kernel/export_legacy_world.py`. `KernelConfig` reads no environment. CI:
+  `.github/workflows/kernel.yml`, a light job with only numpy, simpy, pytest and hypothesis, and a
+  parity job with the full closure.
+- **S3-M-26 Light by measurement.** A fresh interpreter importing every kernel module adds only
+  numpy and simpy (the legacy twin: 12 third-party packages; the legacy tuned rule: 19). No repository
+  package outside the kernel is loaded; no kernel source reads the environment. Each check fails on a
+  planted fault: a `yaml` import, an `uplift` import, an `os.environ` read.
+- **S3-M-27 Exact (measured).** Arms E and O: the kernel's cost equals
+  `uplift.e5_suite.production_arm_cost` as `float.hex` on all twelve of E5's first replicate seeds;
+  the kernel repeats itself to the bit; the constants it inlined equal the legacy ones; and
+  `TW_ORDER_ARRIVAL_RATE=2.2` moves the legacy twin's cost and not the kernel's (F-33 shown).
+- **S3-M-28 Legacy untouched.** `git diff --name-only origin/main` on the kernel branch lists no file
+  under `uplift/` or `digital_twin/`: the sealed source sets and the proof's records stand.
+- **Deferred, with reason: the Sentinel alone against the consensus arm.** Porting the Sentinel's
+  handler, pipeline, serving model and calibration data is about 600 lines with data dependencies.
+  F-01 already shows the Sentinel binds every traced decision, and session 6 rebuilds the challengers
+  inside the kernel, so the exact reduction of the eight-agent arm to one rule is the first item of
+  session 4's kernel work, not a blocker for sealing.
+- *Rejected:* a lazy `uplift/__init__.py` (voids the Power_Report's digest); an engine without SimPy
+  (parity risk now); importing legacy files by path (pulls pydantic and YAML); a JavaScript kernel.
+
+### D. The science, sealed (PR #99, branch `docs/sealed-science`)
+
+- **What was sealed.** `docs/truth/sealed/PREREG-1.md` (governing) and `prereg-1.json`, with
+  `check_prereg.py` and `SHA256SUMS`; `DEVIATIONS.md` starts empty; `.gitattributes` keeps the sealed
+  bytes exact on every checkout (the rule the B-prime record and Power_Report already use). Sealed
+  2026-11-19, before the release's world exists.
+- **S3-M-31 Sources, as obtained.** IFPA, *Produce Department Benchmarks*, August 2023, read at the
+  source: produce gross margin 38% (2023 and 2022), shrink 5.46% of sales, labour 7.42%, from 15
+  chains with over 1,000 US stores (**checked**). Carrying cost 20% to 30% a year, and a realised
+  benchmark median near 10% (**snippet**). Broekmeulen and van Donselaar 2009, existence and venue
+  (**checked**). The quicknet chain information (**checked**).
+- **S3-M-32 The attack before sealing.** A fresh-context reviewer (one subagent, 8 tool calls) found 6
+  blockers, 8 major and 8 minor findings in the first draft. Checked before use: D-4(a)'s fill floor
+  (read in `DECISIONS.md`), the round and the seed vectors (the reviewer's own arithmetic, re-done).
+  One claim did not hold (that `CONTEST-PROTOCOL.md` exists nowhere: it is on #98). All findings were
+  adopted or adapted; PREREG-1 section 12 lists them. The most consequential: parity of information
+  and action between the arms; an incumbent that follows the weekly shape and is re-tuned for short
+  shelf lives and on pooled shocks; tuning run to convergence with a defined evaluation unit; two
+  freezes, W before any challenger runs on the world; `J_k` as a per-store-day mean; R_C never
+  redrawn for our own failure and the first complete run primary; C1 with the fill floor; one Holm
+  family for C2 and C3 at one-sided 0.025; shocks lengthened from hours to days, since one point of
+  fill over a week was out of reach for a few-hour surge.
+- **S3-M-33 The seal (measured).** `SHA256SUMS` sha256 `00a28844ee45e8537a0b5f7ebe3f53703d0bbad7a76a9b8af9a99646cb830f1f`;
+  PREREG-1.md `68e538e2...`, prereg-1.json `fbcb0a85...`, check_prereg.py `1dd86e6b...`, equal in the
+  committed blobs (`bdb64da`). `python docs/truth/sealed/check_prereg.py` prints "OK the seal agrees
+  with itself"; on a scratch copy it fails when the margin's `0.38` becomes `0.39` and when the round
+  moves by one.
+- **The confirmatory round** is quicknet **34714612**, emitted **2026-12-11T00:00:00Z**; freeze C must
+  be pushed before then.
+- **Timestamp.** The pull request's server-side merge time on GitHub proves when the seal existed.
+  An OpenTimestamps proof (a download and a submission to public calendars) was not in the approved
+  outside actions; it is offered to the operator.
+- **Rule kept.** No arm was priced under any candidate weight before the seal (S3-D-03).
+
+### E. The beacon, proven (PR #98, branch `feat/beacon-verify`)
+
+- **S3-M-29 A verified round, two ways (measured).** `synapse_beacon` (pure Python, `py_ecc` 8.0.0,
+  MIT): RFC 9380 Appendix J.9.1's two hash-to-G1 vectors match (read from rfc-editor.org); quicknet
+  round 34052212 (2026-11-18T00:00:00Z; three relays byte-identical, Cloudflare's formatted
+  differently) verifies in 0.9 s and its randomness is `sha256(signature)`; a flipped bit, the
+  neighbouring rounds, another public key and malformed input are rejected. `@noble/curves` 1.9.7
+  under Node gives the same verdicts. `round_at(2026-12-11T00:00:00Z) = 34714612`.
+- **S3-M-30 An error of mine, caught by the network.** The first fixture round was computed by hand
+  and was 2026-11-19 00:00 UTC; the relays answered "Requested future beacon". The latest round,
+  34070649, matched the relay's own clock (15:21:51 UTC), confirming the formula; the error was the
+  hand arithmetic. Rounds are now always computed by `round_at`.
+- **The protocol.** `docs/truth/sealed/CONTEST-PROTOCOL.md`: commit 72 hours ahead (code hash, claims'
+  hashes, launch round); the seed mixes the launch round's signature and the code hash; hourly reveal
+  with a chained digest; anyone recomputes; what it protects and what it does not; the recorded
+  fallback (a hash commitment, weaker and labelled).
+
+## Decisions of this session (continued)
+
+- **S3-D-05 (2026-11-18). The Sentinel-alone port is deferred to session 4.** About 600 lines with
+  data dependencies; F-01 already shows the Sentinel binds every traced decision; arms E and O, the
+  twin and the objective were the kernel's acceptance.
+- **S3-D-06 (2026-11-18). The pre-registration was attacked before it was sealed, and every finding
+  was adopted or adapted** (S3-M-32): once sealed, a change is a deviation.
+- **S3-D-07 (2026-11-19). The seal's date is the commit's**, 2026-11-19 (UTC), not the day the draft
+  was written.
+- **S3-D-08 (2026-11-18). The pre-commit layer (F-34) is recorded, not repaired here.** Repairing it
+  re-enables every hook at once; each must first be run against the tree (session 4's work).
+
+## The panel at the close
+
+| Reviewer | Verdict | Evidence or condition |
+|---|---|---|
+| Domain expert | Passes, with a condition | The objective is in money with cited weights; the incumbent is the strongest classical family a planner would run, tuned to convergence and per cell. Condition: the new world must make waste depend on stock and age (F-30), or the weights still do not bite |
+| Architect | Passes | One light kernel beside an untouched legacy, bound by bit-parity tests; the verifier and the verdict are separate tools; three workflows, each proving one claim |
+| Adversary | Passes, with notes | Seeds from a round that does not exist yet; the code's hash inside the contest's seed; no redraw for our own failure. Open: F-34 (the hook layer never ran) |
+| Verifier | Passes | Verdict 16 of 16; closure tests fail on three planted faults; beacon on RFC vectors, a real round, three tamperings and a second implementation; the seal's checker fails on a changed value; the merge rehearsal's trees equal `main`'s. Gap: the Sentinel-alone parity |
+| Operator at 3 a.m. | Passes | The false sev1 stream is stopped and the way back recorded; the verdict's exit code names the failure class |
+| Release engineer | Passes, with a lesson | Small PRs merged in order with trees equal to the rehearsal; but a composition defect reached `main` for hours (E-TP-07), and the generated gate surface had to be regenerated after each merge |
+| Maintainer | Passes, with a note | Two code lines, legacy and kernel, held together by tests; the kernel is a mechanical port and carries legacy idioms; ADRs for the kernel and the verdict are owed |
+| User | Not yet | Nothing a visitor sees changed |
+| Performance engineer | Partly | Verdict measured (25 s on CI, about 45 s on mains, median 59.5 s on battery); kernel speed against the legacy not measured separately; browser unmeasured (W4 not done) |
+| Craftsman | Passes | Eight unused reader constants removed from the kernel; no dependency beyond numpy and simpy in the kernel; `py_ecc` stays in the verifier |
+| Store manager | Not yet | The sealed incumbent and objective are the first parts that speak to a store's day; nothing runs a store |
+| A stranger | Not yet | The beacon and the contest protocol are the mechanism that will let a stranger check; the page that shows it is session 9's |
+
+The user, the store manager and the stranger are not satisfied, each for a reason this session's
+scope could not remove (nothing visitor-facing was due); each is a later session's first item.
+
+## Scorecard (session 3 close)
+
+"Beyond" only where both values are verified and measured the same way. Rows 1 to 16, PV, KB, U and
+W carry `FRONTIER.md`'s definitions; P1 to P6 are this session's engineering properties (gate,
+section 2). The calibration was not found wrong; P1's mains-power target (30 s) was missed and is
+graded as such, not lowered.
+
+| # | Frontier property | Frontier reference and its value | At session start | At session end | Evidence and how to reproduce it | Status | Verdict |
+|---|---|---|---|---|---|---|---|
+| 1 | Cost against a tuned rule | Learned policies 0.79% to 5.68% better than base stock (EX-02, checked) | Consensus 3.9073 vs tuned 2.5119, worse 12 of 12 (miniature, unmerged tree) | The same on `main`, to the bit, on Windows and Linux | `make verdict`; S3-M-17, CI verdict job | Verified | Behind |
+| 2 | Knowing where the rule loses | Long lead times, shifting or censored demand, perishability | Primary cell only | The cells and tests that will map it are sealed | PREREG-1 sections 6, 7 | Verified (document) | Behind |
+| 3 | Internal validity | Pre-registration, paired seeds, power, controls, negatives published | Weights from the measured agent; margin statistical; seeds known | Weights, margin, incumbent, parity, freezes, seeds from a future beacon round, analysis: sealed before the world exists | `check_prereg.py`; PR #99's merge time | Verified (sealed, not executed) | Level in design |
+| 4 | External validity | Simulator validated on history | Declared twin | Unchanged; a calibration target named | PREREG-1 section 2 | Verified | Behind |
+| 5 | Reproduction by a stranger | Results reproduced by another team (snippet) | Minutes, heavy stack, exported tree | One command; arms E and O reproduce with numpy and simpy only, on Windows and Linux | `tests/kernel`, `kernel.yml` | Verified (native) | Behind (browser not yet) |
+| 6 | Assortment and demand | 2,000 to 40,000+ items (fetched) | 10 equal items | Unchanged | - | Verified | Behind |
+| 7 | Operational structure | Hub and spoke; 65% of records wrong (checked) | Waste a clock | Unchanged; batches, shelf lives and shocks sealed as cells | PREREG-1 section 6 | Verified | Behind |
+| 8 | A user | Anyone who plays | None | Unchanged | - | Verified | Behind |
+| 9 | Architecture earns its complexity | Ablation evidence | One agent bound 372 of 372 | Unchanged; ablations now pre-registered | PREREG-1 section 7 | Verified | Behind |
+| 10 | Agents that act | Appropriate, recorded actions | Category errors | Unchanged | - | Verified | Behind |
+| 11 | Path to production | Merge to a verified live system | No deploy since June; every merge opened a false sev1 | No deploy target; the dead workflows disabled; 8 stale sev1 closed | G5 | Verified | Behind |
+| 12 | Reliability | 99.9% over five days (target) | Nothing | Unchanged | - | Unverified | Behind |
+| 13 | Cost | $0 floor | ~$70 estimated | $0 spent; no cloud | - | Verified | Level |
+| 14 | First minute | A cold reader can say what happened | Not seen | Unchanged | - | Unverified | Behind |
+| 15 | Checks able to fail | Every load-bearing check shown failing | Safety 5 of 5; no quality check below E5 | Verdict 16 of 16; closure 3 of 3; beacon tamperings and RFC vectors; the seal's checker; the I-1 parity test on the real false positive | S3-M-21, -24, -26, -29, -33 | Verified | Level |
+| 16 | No exposure | No default credential; no open control | Defaults published | Unchanged; F-34 found | F-34 | Verified | Behind |
+| PV | Public verifiability | drand quicknet, threshold BLS (checked) | None | A real round verified by two independent implementations; the contest protocol written | S3-M-29 | Verified | Level |
+| P1 | Time from a change to a trustworthy verdict | >99.9% of faulty changes caught at half the cost (Machalica 2019, snippet) | Safety 18 to 46 s, no quality; quality only via labelled E5 (53 min + latency) | 25.2 s on CI; about 45 s on mains; median 59.5 s on battery; safety, quality, determinism and environment | S3-M-23, CI verdict job | Verified | Level (the 30 s mains target missed) |
+| P2 | Exactness of parity between runtimes | Box2D 3.1 bitwise across platforms (snippet) | Trace identical Linux and Windows; no kernel | The E5 miniature's 24 costs identical on Windows and Linux (CI); kernel equal to the harness to the bit on 12 seeds, arms E and O, on both | CI verdict and kernel jobs | Verified (native) | Level natively; browser unmeasured |
+| P3 | Dependency weight in a browser | Pyodide ~6.4 MB + numpy ~3 MB (snippet) | Twin 12 packages; tuned rule 19 | Kernel: numpy and simpy, measured at run time | S3-M-26 | Verified | Level |
+| P4 | Keeping the legacy green | Characterization tests beside an untouched legacy (recalled) | Any edit voids sealed records | Zero legacy edits; parity in seconds (light job) and a minute (parity job) | S3-M-28 | Verified | Level |
+| P5 | Pre-registration strength | Timestamped registration; public randomness for draws (recalled) | Choices open | Sealed with hashes before results, attacked before sealing, seeds from a round that does not exist yet | S3-M-32, -33 | Verified | Level (no reference measured the same way) |
+| P6 | Verifiable public randomness | drand verification libraries | None | Verified natively and cross-checked; protocol written | S3-M-29 | Verified | Level |
+| KB | Readings of SYNAPSE | Each confirmed, corrected or refuted | Local branch only | On `main` (#93), verbatim overlap 0 | S3-M-15 | Verified | - |
+| U | Preserved behaviour | - | - | Fast selection and miniature identical on `main`; physics digest unchanged; ledger files changed only on placeholder lines; `frontend-gates`' 20 files, other worktrees, the stash and `.kiro/settings/` untouched | S3-M-12, S3-M-17, the close's re-hash | Verified | - |
+| W | Made worse or less certain | - | - | `main`'s quality gates red for hours (`8c48635` to `9aa2aad`) from a composition defect; two workflows disabled by decision; the Sentinel-alone parity, Pyodide parity and the sandbox not measured | S3-M-21 | Verified | - |
+
+## Final account
+
+**Built and proven.** The work in flight landed with nothing lost: #87, #91 and #90 merged in order
+with trees byte-identical to a local rehearsal, the ledger committed with verified facts only, and the
+knowledge base and the truth record on `main`. A one-command verdict judges the decision core's
+safety, decision quality, determinism and environment in about a minute (25 s on CI), shown to fail
+on 16 of 16 known faults and to pass clean three times. A light decision kernel (numpy and simpy only)
+reproduces the legacy harness to the last bit for the twin, the objective and arms E and O, on
+Windows and Linux. The release's scientific choices are sealed, after a fresh-context attack, with
+confirmatory seeds bound to a beacon round that will not exist until 2026-12-11. The beacon is
+verified by two independent implementations against the standard's vectors and a real round.
+
+**Found.** A composition defect two green PRs created together (the I-1 grep), repaired the same day
+(#95). F-33: the legacy twin's physics reads `TW_*` environment variables, invisible to every sealed
+digest. F-34: the pre-commit layer has never run. And the legacy engine seeds the global `random`
+module with the replicate seed, which makes stray stdlib randomness deterministic.
+
+**Not achieved, and why.** The Sentinel-alone parity (deferred, S3-D-05); Pyodide parity (W4 approved,
+not reached); the Docker sandbox (the credit was never confirmed claimed); the 30 s mains-power target
+for the verdict (45 s: the agent stack's import and the consensus arm's run set the floor); an external
+timestamp beyond GitHub's (not approved).
+
+**Uncertain.** Whether the new world (session 5) can make waste respond to stock and age while staying
+calibrated; whether any challenger can clear one point of fill in money in the shock cells; whether
+the browser reproduces the kernel's bits.
+
+## Work for session 4, in order
+
+1. **The Sentinel alone against the consensus arm, in the kernel** (S3-D-05), bit parity on E5's twelve
+   seeds, recorded either way.
+2. **The truer world in the kernel** (session 5's row, begun early): batches that age, skewed items, the
+   fitted intraday shape with its masking check, the cells exactly as sealed; legacy mode kept.
+3. **The incumbent tuned exactly as sealed**, its evaluation counts published.
+4. **F-34**: repair the pre-commit YAML, run each hook over the tree, wire or retire by D-5; correct
+   `CLAUDE.md`'s claim about `no-raw-hex` until then.
+5. **Pyodide parity** (W4): the kernel's digests under Pyodide and a simulated day's time there.
+6. **ADRs** for the kernel and the verdict.
+7. **Freeze W** at the end of the world's work; **freeze C before 2026-12-11T00:00:00Z.**

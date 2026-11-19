@@ -1,6 +1,6 @@
 # TRUTH-MAP - SYNAPSE as it is
 
-**Status: 2026-11-17, after window 1 of five.** Sections 1 to 3 cover the decision path, the
+**Status: 2026-11-17, after window 1 of five; F-33 and F-34 added by session 3, 2026-11-19.** Sections 1 to 3 cover the decision path, the
 proof and the release path. The component table (section 5) has sizes and not yet a verdict on
 what runs. Section 6 lists what has not been examined. Nothing here is final until the session
 closes; every finding says how it is known and what would prove it false.
@@ -168,6 +168,16 @@ is what was measured or read.
   The Freshness Guardian has nothing in the twin to act on. *False if* a cell or world source
   makes spoilage depend on stock held or its age.
 
+- **F-33 The twin's physics reads the environment (read in source; shown by test, session 3).**
+  `digital_twin/simulation/engine.py:286` builds `TwinConfig()`, a pydantic `BaseSettings` with prefix
+  `TW_`, so `TW_ORDER_ARRIVAL_RATE`, `TW_PICK_PACK_MEAN_MIN` and `TW_PICK_PACK_STD_MIN` change every
+  legacy twin run, E5 and B-prime included, while no sealed source digest changes. Shown:
+  `tests/kernel/test_legacy_parity.py::test_a_tw_variable_moves_the_legacy_twin_and_not_the_kernel_finding_f33`
+  (the legacy cost moves at seed 0, the kernel's does not), and the verdict's fault proof case Q6b
+  (the tuned control moves by +0.102). The kernel reads no environment; `python -m scripts.verdict`
+  refuses to run while a `TW_` variable is set. *False if* setting `TW_ORDER_ARRIVAL_RATE` leaves
+  E5's per-seed cost unchanged.
+
 ## 3. The release path
 
 - **F-18 Nothing is deployed and nothing remains of the last deployment (measured, M-08;
@@ -222,6 +232,14 @@ is what was measured or read.
   half a session to two weeks; its session rows describe waiting on labelled CI runs, so CI is
   the likely cause, inferred from the dates and the rows, not measured. A replicate takes 0.6 s here. Keeping
   verification local is the difference between four sessions before the release and eleven.
+
+- **F-34 The pre-commit layer has never run (measured, session 3).** `.pre-commit-config.yaml` does not
+  parse as YAML at any commit from its creation (`c8f1e3e`) to `main`: the `reward-isolation` hook's
+  multi-line `entry` puts code at column 1. No `pre-commit` hook is installed in `.git/hooks`, and no
+  workflow runs pre-commit. So no hook in it (`no-raw-hex`, `no-paid-apis`, `spec-validate`, ...)
+  enforces anything, though `CLAUDE.md` cites `no-raw-hex` as the guard of INV-CLR-009. Parsed, the
+  multi-line `python -c` entries would still be folded into one line by YAML. *False if*
+  `pre-commit validate-config` accepts the file. Recorded as `CLAUDE.md` E-TP-08.
 
 ### Where the documents and the code part
 
