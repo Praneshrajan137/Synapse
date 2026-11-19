@@ -34,13 +34,13 @@ the same pair.
 
 ## Summary
 
-Parsed 22 workflow file(s), 71 job(s), 472 step(s).
+Parsed 23 workflow file(s), 72 job(s), 476 step(s).
 
 | Trigger | Jobs executing | Jobs conditional | Jobs NOT EXECUTED | Steps blocking | Steps advisory | Steps conditional |
 |---|---|---|---|---|---|---|
-| push:main | 4 | 33 | 34 | 31 | 0 | 198 |
-| pull_request | 17 | 35 | 19 | 107 | 4 | 219 |
-| tag:v* | 3 | 3 | 65 | 18 | 0 | 29 |
+| push:main | 4 | 34 | 34 | 31 | 0 | 202 |
+| pull_request | 17 | 36 | 19 | 107 | 4 | 223 |
+| tag:v* | 3 | 3 | 66 | 18 | 0 | 29 |
 
 ## Job selection
 
@@ -48,6 +48,7 @@ Why each job runs, does not run, or runs conditionally under each trigger. `need
 
 | Trigger | Job | State | Reason |
 |---|---|---|---|
+| push:main | .github/workflows/beacon.yml::verify | CONDITIONAL | path-filtered (paths: synapse_beacon/**, tests/beacon/**, .github/workflows/beacon.yml) |
 | push:main | .github/workflows/cd-gcp.yml::build-push-sign | CONDITIONAL | path-filtered (paths-ignore: **.md, docs/**, plans/**, notebooks/**) |
 | push:main | .github/workflows/cd-gcp.yml::deploy-to-vm | NOT EXECUTED | if: false in push:main |
 | push:main | .github/workflows/cd-gcp.yml::alert-on-failure | NOT EXECUTED | needs 'deploy-to-vm', which is NOT EXECUTED (if: false in push:main) |
@@ -119,6 +120,7 @@ Why each job runs, does not run, or runs conditionally under each trigger. `need
 | push:main | .github/workflows/uplift.yml::uplift-controls-positive | NOT EXECUTED | workflow on: has no push trigger |
 | push:main | .github/workflows/uplift.yml::uplift-controls | NOT EXECUTED | workflow on: has no push trigger |
 | push:main | .github/workflows/verdict.yml::verdict | CONDITIONAL | path-filtered (paths: agents/**, orchestrator/**, uplift/**, digital_twin/**, +6 more) |
+| pull_request | .github/workflows/beacon.yml::verify | CONDITIONAL | path-filtered (paths: synapse_beacon/**, tests/beacon/**, .github/workflows/beacon.yml) |
 | pull_request | .github/workflows/cd-gcp.yml::build-push-sign | NOT EXECUTED | workflow on: has no pull_request trigger |
 | pull_request | .github/workflows/cd-gcp.yml::deploy-to-vm | NOT EXECUTED | workflow on: has no pull_request trigger |
 | pull_request | .github/workflows/cd-gcp.yml::alert-on-failure | NOT EXECUTED | workflow on: has no pull_request trigger |
@@ -190,6 +192,7 @@ Why each job runs, does not run, or runs conditionally under each trigger. `need
 | pull_request | .github/workflows/uplift.yml::uplift-controls-positive | CONDITIONAL | if: undecidable from trigger (github.event.label.name) |
 | pull_request | .github/workflows/uplift.yml::uplift-controls | CONDITIONAL | if: undecidable from trigger (github.event.label.name); needs 'uplift-controls-negative', which is conditional; needs 'uplift-controls-positive', which is conditional |
 | pull_request | .github/workflows/verdict.yml::verdict | CONDITIONAL | path-filtered (paths: agents/**, orchestrator/**, uplift/**, digital_twin/**, +6 more) |
+| tag:v* | .github/workflows/beacon.yml::verify | NOT EXECUTED | on: push is branch-scoped (no tags: filter), so a tag push is excluded |
 | tag:v* | .github/workflows/cd-gcp.yml::build-push-sign | CONDITIONAL | path-filtered (paths-ignore: **.md, docs/**, plans/**, notebooks/**) |
 | tag:v* | .github/workflows/cd-gcp.yml::deploy-to-vm | CONDITIONAL | path-filtered (paths-ignore: **.md, docs/**, plans/**, notebooks/**); needs 'build-push-sign', which is conditional |
 | tag:v* | .github/workflows/cd-gcp.yml::alert-on-failure | CONDITIONAL | path-filtered (paths-ignore: **.md, docs/**, plans/**, notebooks/**); if: outcome-dependent (failure()); needs 'build-push-sign', which is conditional; needs 'deploy-to-vm', which is conditional |
@@ -266,6 +269,10 @@ Why each job runs, does not run, or runs conditionally under each trigger. `need
 
 | Trigger | Job | Step | Propagates | Note |
 |---|---|---|---|---|
+| push:main | .github/workflows/beacon.yml::verify | uses: actions/checkout@v4 | CONDITIONAL | conditional - blocking |
+| push:main | .github/workflows/beacon.yml::verify | Set up Python 3.11 | CONDITIONAL | conditional - blocking |
+| push:main | .github/workflows/beacon.yml::verify | Install the verifier's one dependency and the test runner | CONDITIONAL | conditional - blocking |
+| push:main | .github/workflows/beacon.yml::verify | Beacon tests | CONDITIONAL | conditional - blocking |
 | push:main | .github/workflows/cd-gcp.yml::build-push-sign | uses: actions/checkout@v4 | CONDITIONAL | conditional - blocking |
 | push:main | .github/workflows/cd-gcp.yml::build-push-sign | Set up Docker Buildx | CONDITIONAL | conditional - blocking |
 | push:main | .github/workflows/cd-gcp.yml::build-push-sign | Authenticate to GCP via Workload Identity Federation | CONDITIONAL | conditional - blocking |
@@ -529,6 +536,10 @@ Why each job runs, does not run, or runs conditionally under each trigger. `need
 | push:main | .github/workflows/verdict.yml::verdict | The verdict's own judgment rules | CONDITIONAL | conditional - blocking |
 | push:main | .github/workflows/verdict.yml::verdict | Verdict on the decision core | CONDITIONAL | conditional - blocking |
 | push:main | .github/workflows/verdict.yml::verdict | Upload the verdict | CONDITIONAL | conditional - blocking |
+| pull_request | .github/workflows/beacon.yml::verify | uses: actions/checkout@v4 | CONDITIONAL | conditional - blocking |
+| pull_request | .github/workflows/beacon.yml::verify | Set up Python 3.11 | CONDITIONAL | conditional - blocking |
+| pull_request | .github/workflows/beacon.yml::verify | Install the verifier's one dependency and the test runner | CONDITIONAL | conditional - blocking |
+| pull_request | .github/workflows/beacon.yml::verify | Beacon tests | CONDITIONAL | conditional - blocking |
 | pull_request | .github/workflows/cd-gcp.yml::build-push-sign | - | NOT EXECUTED | workflow on: has no pull_request trigger |
 | pull_request | .github/workflows/cd-gcp.yml::deploy-to-vm | - | NOT EXECUTED | workflow on: has no pull_request trigger |
 | pull_request | .github/workflows/cd-gcp.yml::alert-on-failure | - | NOT EXECUTED | workflow on: has no pull_request trigger |
@@ -878,6 +889,7 @@ Why each job runs, does not run, or runs conditionally under each trigger. `need
 | pull_request | .github/workflows/verdict.yml::verdict | The verdict's own judgment rules | CONDITIONAL | conditional - blocking |
 | pull_request | .github/workflows/verdict.yml::verdict | Verdict on the decision core | CONDITIONAL | conditional - blocking |
 | pull_request | .github/workflows/verdict.yml::verdict | Upload the verdict | CONDITIONAL | conditional - blocking |
+| tag:v* | .github/workflows/beacon.yml::verify | - | NOT EXECUTED | on: push is branch-scoped (no tags: filter), so a tag push is excluded |
 | tag:v* | .github/workflows/cd-gcp.yml::build-push-sign | uses: actions/checkout@v4 | CONDITIONAL | conditional - blocking |
 | tag:v* | .github/workflows/cd-gcp.yml::build-push-sign | Set up Docker Buildx | CONDITIONAL | conditional - blocking |
 | tag:v* | .github/workflows/cd-gcp.yml::build-push-sign | Authenticate to GCP via Workload Identity Federation | CONDITIONAL | conditional - blocking |
