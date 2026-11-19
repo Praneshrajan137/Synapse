@@ -148,6 +148,10 @@ added; the targets are in `PLAN.md` section 12.
 
 ## 3. The scorecard
 
+**Superseded as the current scorecard by session 3's**, at the end of
+[`log/session-03.md`](log/session-03.md), which carries these rows forward and adds six engineering
+properties. The table below is session 2's, kept as its record.
+
 "Sessions to close" counts implementation sessions in the path proposed in `DIRECTION.md`, and
 says what closing the row unlocks. "Beyond" is used nowhere: no SYNAPSE value was measured the
 same way as an outside reference.
