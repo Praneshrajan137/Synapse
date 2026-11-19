@@ -17,10 +17,12 @@ today), **reported** (a subagent's return, not re-checked), **inferred**, **hypo
 
 ## State
 
-- **2026-11-19, at the close.** Stages A to E done: the merges and the record landed; the verdict
-  (#96), the kernel (#97) merged; the seal (#99) and the beacon (#98) opened, merged when green;
-  this record is the session's last PR. The final account, the panel, the scorecard and the work
-  for session 4 are at the end of this file.
+- **2026-11-19, at the close.** Stages A to E done. On `main`: #87, #91, #90, the ledger (#92), the
+  knowledge base (#93), session 2's record (#94), the I-1 grep fix (#95), the verdict (#96) and the
+  kernel (#97). Open with CI running and no failure at the close: the beacon (#98), the seal (#99)
+  and this record; under the operator's standing approval each is merged once green. The seal's
+  content was pushed on 2026-11-19 (commit `bdb64da`); its timestamp is #99's merge time. The
+  final account, the panel, the scorecard and the work for session 4 are at the end of this file.
 - **2026-11-18, after the gate.** The operator approved the gate (below) through plan mode and
   added: "Do not need to worry and measure the usage, hereafter. Proceed as per your plan. We have
   to reach and achieve the highest frontier." Stage A is under way.
