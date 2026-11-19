@@ -52,6 +52,8 @@ class Case:
 RS = "agents/inventory_sentinel/inference/request_state.py"
 PROTOCOL = "orchestrator/consensus/protocol.py"
 RATE_LINE = "            mean = observed / exposure_min * (lead_time_min + REVIEW_PERIOD_MIN)"
+SENTINEL_PORT = "synapse_kernel/policies/sentinel.py"
+PINS_FILE = "infrastructure/quality/verdict-pins.json"
 
 CASES: Final[tuple[Case, ...]] = (
     Case("clean-1", ("PASS",)),
@@ -164,6 +166,27 @@ CASES: Final[tuple[Case, ...]] = (
                 75,
                 "unmet_service: 8.0",
                 "unmet_service: 7.0",
+            ),
+        ),
+    ),
+    Case(
+        # Session 5: the kernel's port of the decision core moves alone; the agents and the pins
+        # do not. Only the port's comparison with the pins can see it.
+        "K1-kernel-port-rounds-to-one-decimal",
+        ("KERNEL_DIVERGED",),
+        (Edit(SENTINEL_PORT, 193, "q_star - on_hand)), 2)", "q_star - on_hand)), 1)"),),
+    ),
+    Case(
+        # A stale consensus pin (one ulp dearer than the arm costs): the consensus reads as
+        # changed, and that outranks the port's divergence from the same pin.
+        "K2-a-stale-consensus-pin-outranks-the-port",
+        ("CHANGED",),
+        (
+            Edit(
+                PINS_FILE,
+                1,
+                '"1402771394":"0x1.d9224c4df91cfp+1"',
+                '"1402771394":"0x1.d9224c4df91d0p+1"',
             ),
         ),
     ),
