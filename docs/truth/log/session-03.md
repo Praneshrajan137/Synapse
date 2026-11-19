@@ -17,6 +17,9 @@ today), **reported** (a subagent's return, not re-checked), **inferred**, **hypo
 
 ## State
 
+- **2026-11-19, about 07:05 UTC.** The seal's timestamp is confirmed in Bitcoin, blocks 976528,
+  976529 and 976535, each checked against two block explorers (S3-M-35). The upgraded proof
+  replaces the pending one (branch `docs/seal-timestamp-upgrade`); session 4's first item is done.
 - **2026-11-19, after the close.** The operator approved anchoring the seal (S3-D-09):
   `docs/truth/sealed/SHA256SUMS.ots` is committed on #99 (`6b3a604`), accepted by four public
   calendars and awaiting a Bitcoin block (S3-M-34). Upgrading the proof is session 4's first item.
@@ -459,6 +462,24 @@ Approval says yes to everything below except the lines marked **ask**, confirmed
   prereg-1.json and check_prereg.py), so upgrading it changes no sealed hash, and `check_prereg.py`
   still prints "OK". Until a block confirms the calendars' aggregates, the proof rests on the
   calendars' word.
+- **S3-M-35 The seal confirmed in Bitcoin (measured, about 07:05 UTC).** One pass of `ots upgrade`,
+  made through the library as in S3-M-34 and asking only whitelisted calendars, found Bitcoin
+  attestations from three of the four calendars; `finney` still answered "Pending confirmation in
+  Bitcoin blockchain". The upgraded proof (3,704 bytes, sha256
+  `47036482f79e330d2622337ed78364e36f12a0fe7897570b36ea7658372c1e0b`) still commits to `00a28844...`
+  and keeps the four pending entries, as the client does. The blocks:
+  - `bob`: block 976528, `000000000000000000019286be73c9885c865686462fb0a0823937991c72fc28`, 04:09:53Z;
+  - `alice`: block 976529, `00000000000000000001bfb85615a1fb7963becf842ea35599352e2313b042eb`, 04:14:13Z;
+  - catallaxy: block 976535, `0000000000000000000045ecca1887e6050256aa69355c201f220692917a1a43`, 05:31:10Z.
+
+  Each block was checked against mempool.space and blockstream.info, two operators: both name the
+  same block at each height, its 80-byte header hashes to that block's hash, the header's merkle
+  root is the proof's attested message byte for byte, and its work meets the header's own target.
+  At the check the blocks had 18, 17 and 11 confirmations. So `SHA256SUMS`, and with it the sealed
+  files it hashes, existed when block 976528 was mined, nine minutes after the stamp (Bitcoin's
+  rules keep a block's time within about two hours of the true time). No node of our own was used:
+  the explorers' agreement and the work in each header stand in for one. Anyone can re-check with
+  `ots verify` and a Bitcoin node, or with the two files at opentimestamps.org.
 
 ### E. The beacon, proven (PR #98, branch `feat/beacon-verify`)
 
@@ -524,7 +545,7 @@ graded as such, not lowered.
 |---|---|---|---|---|---|---|---|
 | 1 | Cost against a tuned rule | Learned policies 0.79% to 5.68% better than base stock (EX-02, checked) | Consensus 3.9073 vs tuned 2.5119, worse 12 of 12 (miniature, unmerged tree) | The same on `main`, to the bit, on Windows and Linux | `make verdict`; S3-M-17, CI verdict job | Verified | Behind |
 | 2 | Knowing where the rule loses | Long lead times, shifting or censored demand, perishability | Primary cell only | The cells and tests that will map it are sealed | PREREG-1 sections 6, 7 | Verified (document) | Behind |
-| 3 | Internal validity | Pre-registration, paired seeds, power, controls, negatives published | Weights from the measured agent; margin statistical; seeds known | Weights, margin, incumbent, parity, freezes, seeds from a future beacon round, analysis: sealed before the world exists | `check_prereg.py`; PR #99's merge time; `SHA256SUMS.ots` (S3-M-34) | Verified (sealed, not executed) | Level in design |
+| 3 | Internal validity | Pre-registration, paired seeds, power, controls, negatives published | Weights from the measured agent; margin statistical; seeds known | Weights, margin, incumbent, parity, freezes, seeds from a future beacon round, analysis: sealed before the world exists | `check_prereg.py`; PR #99's merge time; `SHA256SUMS.ots` (S3-M-34, -35) | Verified (sealed, not executed) | Level in design |
 | 4 | External validity | Simulator validated on history | Declared twin | Unchanged; a calibration target named | PREREG-1 section 2 | Verified | Behind |
 | 5 | Reproduction by a stranger | Results reproduced by another team (snippet) | Minutes, heavy stack, exported tree | One command; arms E and O reproduce with numpy and simpy only, on Windows and Linux | `tests/kernel`, `kernel.yml` | Verified (native) | Behind (browser not yet) |
 | 6 | Assortment and demand | 2,000 to 40,000+ items (fetched) | 10 equal items | Unchanged | - | Verified | Behind |
@@ -543,7 +564,7 @@ graded as such, not lowered.
 | P2 | Exactness of parity between runtimes | Box2D 3.1 bitwise across platforms (snippet) | Trace identical Linux and Windows; no kernel | The E5 miniature's 24 costs identical on Windows and Linux (CI); kernel equal to the harness to the bit on 12 seeds, arms E and O, on both | CI verdict and kernel jobs | Verified (native) | Level natively; browser unmeasured |
 | P3 | Dependency weight in a browser | Pyodide ~6.4 MB + numpy ~3 MB (snippet) | Twin 12 packages; tuned rule 19 | Kernel: numpy and simpy, measured at run time | S3-M-26 | Verified | Level |
 | P4 | Keeping the legacy green | Characterization tests beside an untouched legacy (recalled) | Any edit voids sealed records | Zero legacy edits; parity in seconds (light job) and a minute (parity job) | S3-M-28 | Verified | Level |
-| P5 | Pre-registration strength | Timestamped registration; public randomness for draws (recalled) | Choices open | Sealed with hashes before results, attacked before sealing, seeds from a round that does not exist yet; the seal's hash stamped for Bitcoin by four public calendars (confirmation pending) | S3-M-32, -33, -34 | Verified | Level (no reference measured the same way) |
+| P5 | Pre-registration strength | Timestamped registration; public randomness for draws (recalled) | Choices open | Sealed with hashes before results, attacked before sealing, seeds from a round that does not exist yet; the seal's hash in Bitcoin blocks 976528, 976529 and 976535, each checked against two explorers | S3-M-32 to -35 | Verified | Level (no reference measured the same way) |
 | P6 | Verifiable public randomness | drand verification libraries | None | Verified natively and cross-checked; protocol written | S3-M-29 | Verified | Level |
 | KB | Readings of SYNAPSE | Each confirmed, corrected or refuted | Local branch only | On `main` (#93), verbatim overlap 0 | S3-M-15 | Verified | - |
 | U | Preserved behaviour | - | - | Fast selection and miniature identical on `main`; physics digest unchanged; ledger files changed only on placeholder lines; `frontend-gates`' 20 files, other worktrees, the stash and `.kiro/settings/` untouched | S3-M-12, S3-M-17, the close's re-hash | Verified | - |
@@ -560,9 +581,9 @@ reproduces the legacy harness to the last bit for the twin, the objective and ar
 Windows and Linux. The release's scientific choices are sealed, after a fresh-context attack, with
 confirmatory seeds bound to a beacon round that will not exist until 2026-12-11. The beacon is
 verified by two independent implementations against the standard's vectors and a real round.
-After the close, with the operator's approval, four public calendars stamped the seal's hash for
-Bitcoin; once a block confirms it, anyone can check the seal's date without trusting GitHub
-(S3-M-34).
+After the close, with the operator's approval, the seal's hash was stamped through OpenTimestamps
+and stood in three Bitcoin blocks within about ninety minutes, the first mined nine minutes after
+the stamp: anyone can check the seal's date against Bitcoin without trusting GitHub (S3-M-34, -35).
 
 **Found.** A composition defect two green PRs created together (the I-1 grep), repaired the same day
 (#95). F-33: the legacy twin's physics reads `TW_*` environment variables, invisible to every sealed
@@ -571,8 +592,7 @@ module with the replicate seed, which makes stray stdlib randomness deterministi
 
 **Not achieved, and why.** The Sentinel-alone parity (deferred, S3-D-05); Pyodide parity (W4 approved,
 not reached); the Docker sandbox (the credit was never confirmed claimed); the 30 s mains-power target
-for the verdict (45 s: the agent stack's import and the consensus arm's run set the floor); the
-Bitcoin confirmation of the seal's timestamp, which takes hours (session 4 upgrades the proof).
+for the verdict (45 s: the agent stack's import and the consensus arm's run set the floor).
 
 **Uncertain.** Whether the new world (session 5) can make waste respond to stock and age while staying
 calibrated; whether any challenger can clear one point of fill in money in the shock cells; whether
@@ -580,10 +600,8 @@ the browser reproduces the kernel's bits.
 
 ## Work for session 4, in order
 
-1. **Upgrade the seal's timestamp** (S3-M-34), a few minutes: once a block has confirmed the
-   calendars' aggregates, run `ots upgrade docs/truth/sealed/SHA256SUMS.ots` on Linux, or do the same
-   through the library on Windows (E-TP-09); commit the upgraded proof on its own branch; check the
-   attested block's merkle root against a node or two independent block explorers; record the height.
+1. **Done in session 3: the seal's timestamp upgraded and checked** (S3-M-35). A later `upgrade` may
+   add the `finney` calendar's attestation; nothing depends on it.
 2. **The Sentinel alone against the consensus arm, in the kernel** (S3-D-05), bit parity on E5's twelve
    seeds, recorded either way.
 3. **The truer world in the kernel** (session 5's row, begun early): batches that age, skewed items, the
