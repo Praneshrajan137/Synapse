@@ -17,6 +17,11 @@ today), **reported** (a subagent's return, not re-checked), **inferred**, **hypo
 
 ## State
 
+- **2026-11-19, the hand-off.** The next session is numbered 5 and opens with
+  `docs/truth/SESSION-5-PROMPT.md`: session 3 carried `PLAN.md`'s rows 3 and 4, and PREREG-1 names
+  session 5 for the world and freeze W, so one numbering keeps the seal literally true. "Work for
+  session 4, in order" below is its work. Section 0's question, which the close had not recorded,
+  is answered at the end of this file.
 - **2026-11-19, about 07:05 UTC.** The seal's timestamp is confirmed in Bitcoin, blocks 976528,
   976529 and 976535, each checked against two block explorers (S3-M-35). The upgraded proof
   replaces the pending one (branch `docs/seal-timestamp-upgrade`); session 4's first item is done.
@@ -600,6 +605,8 @@ the browser reproduces the kernel's bits.
 
 ## Work for session 4, in order
 
+Carried into `docs/truth/SESSION-5-PROMPT.md` as session 5's work ("State", 2026-11-19, the hand-off).
+
 1. **Done in session 3: the seal's timestamp upgraded and checked** (S3-M-35). A later `upgrade` may
    add the `finney` calendar's attestation; nothing depends on it.
 2. **The Sentinel alone against the consensus arm, in the kernel** (S3-D-05), bit parity on E5's twelve
@@ -612,3 +619,28 @@ the browser reproduces the kernel's bits.
 6. **Pyodide parity** (W4): the kernel's digests under Pyodide and a simulated day's time there.
 7. **ADRs** for the kernel and the verdict.
 8. **Freeze W** at the end of the world's work; **freeze C before 2026-12-11T00:00:00Z.**
+
+## Return to Section 0: what the prompt failed to ask
+
+Written 2026-11-19 at the hand-off; the close had not recorded it. Each answer is carried into
+`SESSION-5-PROMPT.md`.
+
+- **Who opens the next session?** The prompt asked for prioritised work for session 4, not for the
+  prompt that opens it, and nothing did until the operator asked. Session 5's prompt asks its
+  session to write session 6's.
+- **Which words in a sealed text bind?** PREREG-1 names sessions 5 and 6, so a program that runs
+  ahead turns calendar labels into sealed commitments. The next session is numbered 5, which keeps
+  every sealed sentence literally true; a future seal should bind conditions ("before any
+  challenger runs"), not session numbers.
+- **What do two green pull requests do together?** The prompt asked for each merge on a green head;
+  #87 and #90, each green, turned `main` red together (S3-M-21, E-TP-07). Rehearse sequences of
+  merges, the CI's inline shell gates included.
+- **Does the enforcement the documents cite actually run?** Nobody asked; no pre-commit hook ever
+  had (F-34).
+- **How fast must the world be?** Sessions 5 to 7 tune to convergence and run up to 2,000 replicates
+  per cell, and session 8 runs in a browser; no time budget per replicate was asked for or set.
+  Session 5's prompt makes it a stage.
+- **Can the seal's date be checked without trusting GitHub?** Not asked; answered with
+  OpenTimestamps once the operator approved it (S3-M-34, S3-M-35).
+- **Is every resource the plan counts on actually in hand?** The Docker credit was assumed; it was
+  never confirmed claimed, and stage B's sandbox measurement could not run.

@@ -96,6 +96,11 @@ Baseline for every measurement unless another is named: the working tree on bran
 
 ## How to resume
 
+**Next: session 5, opened with [`SESSION-5-PROMPT.md`](SESSION-5-PROMPT.md)** (written 2026-11-19
+from session 3's record). Session 3 carried `PLAN.md`'s rows 3 and 4, so there is no separate
+session 4, and the numbering keeps PREREG-1's references to sessions 5 and 6 literally true. Session
+5 keeps its record in `log/session-05.md`.
+
 **From 2026-11-18 the running record is [`log/session-03.md`](log/session-03.md): resume from its
 "How to resume".** The steps below were session 2's and are kept as its record.
 
