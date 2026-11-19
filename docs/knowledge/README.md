@@ -12,7 +12,7 @@ inventory, not progress").
 | File | Job |
 |---|---|
 | [`SYNTHESIS.md`](SYNTHESIS.md) | One page: the ten entries that matter most for sessions 2 and 3, ranked by convergence and by how much they change, with the release constraint |
-| [`SESSION-2-PROMPT.md`](SESSION-2-PROMPT.md) | The prompt that opens session 2: the whole project as it truly is, the frontier it is judged against, and one gate before any change |
+| `SESSION-2-PROMPT.md` | The prompt that opened session 2: the whole project as it truly is, the frontier it is judged against, and one gate before any change. Kept on the operator's machine since 2026-11-19, when session prompts left the repository; the history has it at `c1277f5` |
 | [`VERDICTS.md`](VERDICTS.md) | Session 2's verdict on every reading of SYNAPSE in this folder, and the status of every Q and R item, each with its evidence in `docs/truth/` |
 | [`LEDGER.md`](LEDGER.md) | One entry per insight: what it says, where it came from, how far it was checked, the verdict, where it lands in SYNAPSE, and what would make it wrong |
 | [`TENSIONS.md`](TENSIONS.md) | Where the corpus argues against SYNAPSE as built, or against itself |

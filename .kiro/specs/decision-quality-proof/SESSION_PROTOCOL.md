@@ -147,7 +147,8 @@ a finding.
    throughput numbers: leaves DISCHARGED, core-seconds, CI critical-path wall-clock, and
    parallel agents dispatched.**
 8. Tell the user, explicitly: **"Session complete. Start a new session and paste
-   `NEXT_SESSION_PROMPT.md`."**
+   `NEXT_SESSION_PROMPT.md`."** The prompt stays on the operator's machine, ignored by git, and is
+   never committed (the operator's rule, 2026-11-19).
 
 ### The one permitted overrun
 
