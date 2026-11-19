@@ -9,7 +9,8 @@
 > The binding agreement, the batch plan, the two CI checkpoints, the verification sweep and the
 > resolved tasks-11→12 circularity all live in
 > [`SESSION_PROTOCOL.md`](./SESSION_PROTOCOL.md). The prompt to paste when opening a new session is
-> [`NEXT_SESSION_PROMPT.md`](./NEXT_SESSION_PROMPT.md).
+> `NEXT_SESSION_PROMPT.md`, kept beside this file on the operator's machine and never committed
+> (the operator's rule, 2026-11-19; its earlier versions are in the history).
 >
 > **No count is written here.** Derive it:
 > `python -m scripts.audit.spec_ledger_census --next 40`. That command is the census; every

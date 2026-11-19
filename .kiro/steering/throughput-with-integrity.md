@@ -170,7 +170,8 @@ G8 touches none of G7's three limits: exactly one agent executes code (G1), and
 
 One canonical home per finding: **the ADR** for design facts, **the task body** for ledger
 facts. `HANDOFF.md` and `NEXT_SESSION_PROMPT.md` are **derived** — current state, pointers, and
-the honesty ledger. Never a third copy of a finding.
+the honesty ledger. Never a third copy of a finding. The prompt stays on the operator's machine and
+is never committed (the operator's rule, 2026-11-19).
 
 **Prose is not free.** It is the largest single line-item in a session's output and it competes
 directly with the work. Write the finding once, well, where a reader will look for it.
