@@ -167,24 +167,32 @@ def run(world: ReleaseWorld, scenarios: Sequence[Scenario], policy: ReleasePolic
     policy.start(reps)
     sales_from = 0  # sales of the decision hour come after it: shown at the next call
     receipts_from = 0  # receipts of the decision hour come before it: shown at that call
-    slot_index = np.arange(slots)
+    # Slots past ``active`` are empty in every row: the hourly work runs on live slots only.
+    active = int(batches.max())
 
     for hour in range(horizon):
         measured = hour >= start_measure
-        # 1. expiry: the front batches whose expiry has come (batches are in expiry order).
-        expired = expiry <= hour
-        if expired.any():
-            waste = (qty * expired).sum(axis=-1)
+        # 1. expiry: a row's batches are in receipt order, which is expiry order (one shelf life
+        # per item), so only the front batch can be due; drop it, as often as one is.
+        while active > 0:
+            front = expiry[:, :, 0] <= hour
+            if not front.any():
+                break
+            waste = np.where(front, qty[:, :, 0], 0)
             totals["wasted_all"] += waste
             if measured:
                 totals["wasted"] += waste
-            shift = expired.sum(axis=-1)
-            index = slot_index[None, None, :] + shift[:, :, None]
-            inside = index < slots
-            index = np.minimum(index, slots - 1)
-            qty = np.where(inside, np.take_along_axis(qty, index, axis=-1), 0)
-            expiry = np.where(inside, np.take_along_axis(expiry, index, axis=-1), _NO_EXPIRY)
-            batches = batches - shift
+            due = front[:, :, None]
+            live_q = qty[:, :, :active]
+            live_x = expiry[:, :, :active]
+            shifted_q = np.concatenate([live_q[:, :, 1:], np.zeros_like(live_q[:, :, :1])], axis=-1)
+            shifted_x = np.concatenate(
+                [live_x[:, :, 1:], np.full_like(live_x[:, :, :1], _NO_EXPIRY)], axis=-1
+            )
+            qty[:, :, :active] = np.where(due, shifted_q, live_q)
+            expiry[:, :, :active] = np.where(due, shifted_x, live_x)
+            batches = batches - front
+            active = int(batches.max())
         # 2. receipts: one new batch per item that receives units this hour.
         landing = arrivals[:, :, hour]
         if landing.any():
@@ -195,6 +203,7 @@ def run(world: ReleaseWorld, scenarios: Sequence[Scenario], policy: ReleasePolic
             qty[rr, ii, pos] = landing[rr, ii]
             expiry[rr, ii, pos] = hour + shelf[ii]
             batches[rr, ii] += 1
+            active = int(batches.max())
             receipts_log[:, hour, :] = landing
             totals["received_all"] += landing
             if measured:
@@ -213,8 +222,8 @@ def run(world: ReleaseWorld, scenarios: Sequence[Scenario], policy: ReleasePolic
                 deciding,
                 sales_log[:, sales_from:hour, :],
                 receipts_log[:, receipts_from : hour + 1, :],
-                qty,
-                expiry,
+                qty[:, :, : max(active, 1)],
+                expiry[:, :, : max(active, 1)],
                 open_qty,
                 open_placed,
                 landed_lead,
@@ -243,11 +252,12 @@ def run(world: ReleaseWorld, scenarios: Sequence[Scenario], policy: ReleasePolic
                         arrivals[r, cols, due] += placed
         # 4. sales, oldest batch first.
         wanted = demand[:, hour, :]
-        on_hand_start = qty.sum(axis=-1)
+        live = qty[:, :, :active]
+        on_hand_start = live.sum(axis=-1)
         sold = np.minimum(wanted, on_hand_start)
-        before = np.cumsum(qty, axis=-1) - qty
-        take = np.clip(sold[:, :, None] - before, 0, qty)
-        qty = qty - take
+        before = np.cumsum(live, axis=-1) - live
+        take = np.clip(sold[:, :, None] - before, 0, live)
+        qty[:, :, :active] = live - take
         on_hand_end = on_hand_start - sold
         sales_log[:, hour, :] = sold
         totals["sold_all"] += sold
