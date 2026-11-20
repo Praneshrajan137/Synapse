@@ -182,15 +182,15 @@ def run(world: ReleaseWorld, scenarios: Sequence[Scenario], policy: ReleasePolic
             totals["wasted_all"] += waste
             if measured:
                 totals["wasted"] += waste
-            due = front[:, :, None]
+            expiring = front[:, :, None]
             live_q = qty[:, :, :active]
             live_x = expiry[:, :, :active]
             shifted_q = np.concatenate([live_q[:, :, 1:], np.zeros_like(live_q[:, :, :1])], axis=-1)
             shifted_x = np.concatenate(
                 [live_x[:, :, 1:], np.full_like(live_x[:, :, :1], _NO_EXPIRY)], axis=-1
             )
-            qty[:, :, :active] = np.where(due, shifted_q, live_q)
-            expiry[:, :, :active] = np.where(due, shifted_x, live_x)
+            qty[:, :, :active] = np.where(expiring, shifted_q, live_q)
+            expiry[:, :, :active] = np.where(expiring, shifted_x, live_x)
             batches = batches - front
             active = int(batches.max())
         # 2. receipts: one new batch per item that receives units this hour.
