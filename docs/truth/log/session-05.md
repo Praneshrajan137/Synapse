@@ -474,8 +474,13 @@ engineer: pending stage C's measurements.
   clean tree PASS three times (29.3, 27.8, 28.8 s); F1, F2, F3, F4, F5, Q1, Q4 and Q4b SAFETY; Q3, Q5,
   Q6b and Q7 CONTROL_MOVED; Q6 REFUSED_ENV; every case within its expected set. Q4 and Q4b are now
   caught by the safety shards, where session 3 saw a changed decision and a cross-process repeat.
-  That run used `main`'s copy of the script, without the two new kernel cases; all 21 are re-run
-  from a worktree of the stage A branch.
+  That run used `main`'s copy of the script, without the two new kernel cases.
+- **S5-M-17 The fault proof, 18 of 18 (measured; run from a worktree of the stage A branch on
+  `cac4246`; record `infrastructure/quality/verdict-fault-proof.json`, commits `6af19bb`, `b8e810d`).**
+  The 16 cases above, judged the same, plus K1 (the port rounds to one decimal): KERNEL_DIVERGED,
+  and K2 (a consensus pin one ulp dearer): CHANGED, which outranks the port's divergence from the
+  same pin. **Correction:** commit `6af19bb`'s subject says "21 of 21"; the count is 18 (16 + 2),
+  a miscount of mine, corrected here and on the PR; the history is not rewritten.
 
 ### B. The truer world (branch `feat/release-world`)
 
