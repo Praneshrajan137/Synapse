@@ -440,3 +440,77 @@ engineer: pending stage C's measurements.
   `1b118840664280c6b88bffc84c80ee1f54c05d911e354b7599e5da10995e960e`; `train.parquet` 106,436,287 B,
   sha256 `6706832db892bbae4969c19d87e07975d2543d2ba7d7d4756360654785de5a3d`: both equal the
   dataset's LFS object ids read from the Hugging Face API.
+
+### A. The decision core in the kernel (PR #104, branch `feat/kernel-sentinel`, commit `cac4246`)
+
+- **What was built.** `synapse_kernel/policies/sentinel.py`, the Sentinel alone: the request the
+  consensus arm builds for the Inventory Sentinel (only the keys it reads), `forecast_from_request`'s
+  rules, the newsvendor at the fractile 8/9 (Acklam's inverse normal: the central branch, a rational
+  function, no transcendental call) and the consensus arm's translation, in the legacy order of
+  floating-point operations; numpy and simpy only; it refuses any observation but the legacy world's.
+  The verdict prices it and compares it with the consensus pins: new outcome `KERNEL_DIVERGED = 8`,
+  ranked after CHANGED; `--repin` refuses unless the port reproduces the measured consensus. CI: the
+  kernel's light job runs the new test plus ruff and `mypy --strict synapse_kernel/`. ADR-060 (the
+  kernel) and ADR-061 (the verdict) written here, moving stage E's ADR item earlier on purpose.
+- **S5-M-11 Identical, not diagnosed (measured).** On E5's twelve seeds the port costs exactly what
+  the eight-agent consensus arm costs (`float.hex`, 12 of 12), and equals the legacy pathway (the
+  consensus arm's own request builder, the Sentinel's own A2A handler, the arm's own translator) on
+  every one of 288 decisions and 2,880 quantities (`tests/kernel/test_sentinel_*.py`). So S3-D-05's
+  question has its answer: on the measured cell SYNAPSE's eight-agent decision is one newsvendor
+  rule, to the bit, and nothing downstream of the Sentinel's proposal (fast path, guardrails,
+  dispatch classification) moved a quantity on these seeds. Both tests fail on a planted one-decimal
+  rounding fault, naming the first divergence (60 min, `sku_0`, 95.1 against 95.15). The port's
+  inverse normal equals the agent's on 20,000 random points.
+- **S5-M-12 The verdict with the port (measured).** Laptop, mains power: PASS in 53.0 s, "kernel
+  Sentinel alone: equal to the measured consensus on 12 of 12 seeds", pins unchanged. CI on Linux
+  (run 44577842343): PASS in 30.8 s on 4 CPUs, the same line, pins unchanged. All 20 checks of #104
+  green (kernel light 19 s, kernel parity 3 min 55 s, verdict 4 min, truth gates 3 min 30 s). On a
+  clean export of the commit: `verify_claims` 57 PASS / 0 FAIL / 11 SKIP (as `main`), `doc_truth`
+  20/20, `gate_surface --check` OK after regenerating `GATE_SURFACE.md` for the workflow edits.
+  In the working checkout `verify_claims` also fails C44 (module liveness) on a stale
+  `frontend/node_modules` path: environmental, absent from a clean checkout of `main`.
+- **S5-M-13 The fault proof's 16 old cases (measured; the first run died when the session's process
+  exited: `git archive` failed with Windows status 0xC0000142, and was re-run).** On `cac4246`: the
+  clean tree PASS three times (29.3, 27.8, 28.8 s); F1, F2, F3, F4, F5, Q1, Q4 and Q4b SAFETY; Q3, Q5,
+  Q6b and Q7 CONTROL_MOVED; Q6 REFUSED_ENV; every case within its expected set. Q4 and Q4b are now
+  caught by the safety shards, where session 3 saw a changed decision and a cross-process repeat.
+  That run used `main`'s copy of the script, without the two new kernel cases; all 21 are re-run
+  from a worktree of the stage A branch.
+
+### B. The truer world (branch `feat/release-world`)
+
+- **S5-M-14 What the dataset is, measured (10% sample, then all 4,500,000 rows).** 50,000
+  store-product series, 898 stores, 865 products, 32 encoded first categories, 90 days
+  (2024-03-28 to 2024-06-25); the eval split is the following 7 days (2024-06-26 to 07-02), a clean
+  time hold-out. Each row holds 24 hourly values. A store holds 50 sampled series at the median
+  (1 to 164), not its whole assortment. The top five categories carry 71% of units.
+- **F-35 falsified (measured).** The card says sales are normalised by an undisclosed coefficient,
+  but 99.56% of positive hourly values are multiples of 0.1 (most common 0.1, 0.2, 0.3), and, with
+  units = 10 x value, the noise floor across 4,431 series with at least 20 fully in-stock days is
+  CV^2 = 1.287 / mean + 0.107: a slope near one, as counts of purchases give. So unit counts are
+  recoverable; the slope above one says some purchases take two units, and the intercept is
+  day-to-day variability.
+- **F-37 The stock flag is an out-of-stock flag (measured and checked).** `hours_stock_status` = 1
+  means out of stock: it sums over hours 6 to 21 to `stock_hour6_22_cnt` on 100% of 450,000 sampled
+  rows, and sales occur in 28.7% of status-0 hours against 2.9% of status-1 hours. The paper's
+  censoring indicator (its Eq. 1, checked 2026-11-19) is 1 for stock available: the complement. The
+  gate assumed the paper's reading; the data settled it before any use.
+- **S5-M-15 The shape the data shows (raw, 10% sample).** On fully in-stock days the hourly share
+  peaks at 09:00 (9.4%) and 16:00 (8.6%) and is under 1% from 23:00 to 05:00. The out-of-stock share
+  is 4.8% at 07:00, after the 06:00 restock, and rises to 41.7% by 22:00: raw evening sales are
+  heavily censored, so recovery decides the evening shape (F-13a's lesson). Weekends sell 15-19%
+  more than the mean day. Only 40% of series-days are fully in stock.
+- **The machinery (commit `e3ae6cf`).** `synapse_kernel/release/`: Threefry-2x32-20 keyed by seed
+  and read by (purpose, entity, slot, index); exact samplers; declared world with provenance; the
+  five cells; whole scenarios drawn before any policy acts; the hourly engine (expiry, receipts,
+  cut-off decisions, FIFO sales, trapezoid holding), batched over replicates, with no generator;
+  the sealed observation with no absolute time; J from integer totals. ADR-062.
+- **S5-M-16 Its tests (measured).** 53 tests in `tests/kernel/release/`, all passing (with the
+  kernel's other tests, 65). Threefry equals Random123's three published vectors and a pure-Python
+  form on 2,000 random inputs; `exp_neg` stays within 1 ulp of libm on [0, 600]. Each acceptance
+  test fails on its planted fault, run in scratch copies: LIFO issuing, demand moved by orders, an
+  absolute clock in the observation, waste as a clock (`plant_faults.py` in the scratch folder).
+  On a synthetic 300-item world: units conserved exactly in every run; waste rises with stock held
+  (8,609, 44,035, 103,921 and 281,558 units at order-up-to factors 0.5, 1, 1.5 and 2.5; in the legacy
+  twin, spoilage was the same whatever was held); about 55 ms to draw a scenario and 51 to 85 ms per
+  replicate in batches of 32.
