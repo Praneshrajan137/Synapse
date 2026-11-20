@@ -200,6 +200,7 @@ def _report(
     verdict: j.Verdict,
     shards: Sequence[ShardResult],
     costs: Mapping[str, Mapping[int, float]],
+    kernel: Mapping[int, float],
     notes: Sequence[str],
     seconds: float,
 ) -> str:
@@ -223,6 +224,13 @@ def _report(
                 f"{sum(diffs) / len(diffs):+.4f}, "
                 f"consensus worse in {sum(d < 0 for d in diffs)} of {len(diffs)}"
             )
+    consensus_measured = costs.get("consensus", {})
+    if kernel:
+        same = sum(consensus_measured.get(seed) == cost for seed, cost in kernel.items())
+        out.append(
+            f"  kernel  Sentinel alone: equal to the measured consensus on {same} of "
+            f"{len(kernel)} seeds"
+        )
     for delta in verdict.deltas.values():
         state = (
             "unchanged"
@@ -266,6 +274,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         notes.append(f"ran with {', '.join(twin_env)} set (--allow-twin-env)")
     failures: list[str] = []
     physics_moved: list[str] = []
+    kernel: dict[int, float] = {}
     with concurrent.futures.ThreadPoolExecutor(max_workers=len(shard_args)) as threads:
         running = [threads.submit(_run_shard, root, n, a) for n, a in shard_args.items()]
         try:
@@ -281,6 +290,13 @@ def main(argv: Sequence[str] | None = None) -> int:
         shards = [future.result() for future in running]
 
     pins = _read_pins(root)
+    kernel_seeds = pins.seeds if pins is not None else tuple(seeds)
+    try:
+        kernel = miniature.kernel_sentinel_costs(kernel_seeds)
+    except Exception as exc:  # noqa: BLE001 -- reported as a gap, never hidden
+        failures.append(
+            f"the kernel's Sentinel alone could not be priced: {type(exc).__name__}: {exc}"
+        )
     if pins is None:
         failures.append(f"no pins at {PINS_PATH}; run with --repin to create them")
         pins = j.Pins(seeds=tuple(seeds), costs={arm: {} for arm in j.ARMS})
@@ -292,6 +308,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         shard_exit_codes={s.name: s.exit_code for s in shards},
         failures=tuple(failures),
         physics_moved=tuple(physics_moved),
+        kernel=kernel,
     )
     verdict = j.judge(pins, measurement)
 
@@ -304,15 +321,22 @@ def main(argv: Sequence[str] | None = None) -> int:
         safe = all(s.exit_code == 0 for s in shards)
         clean = all(text.startswith(pin_problems) for text in failures)
         if not (safe and clean and measured_fully and repeats_agree):
-            print(_report(verdict, shards, costs, notes, time.perf_counter() - started))
+            print(_report(verdict, shards, costs, kernel, notes, time.perf_counter() - started))
             print("REPIN REFUSED: pins are written only from a safe, complete, deterministic run")
+            return int(verdict.outcome)
+        if not j.kernel_reproduces(costs["consensus"], kernel, seeds):
+            print(_report(verdict, shards, costs, kernel, notes, time.perf_counter() - started))
+            print(
+                "REPIN REFUSED: the kernel's Sentinel alone does not reproduce the measured "
+                "consensus; change synapse_kernel/policies/sentinel.py in the same change"
+            )
             return int(verdict.outcome)
         _write_pins(root, seeds, costs)
         notes.append(f"pins written to {PINS_PATH} ({verdict.outcome.name} before re-pinning)")
         verdict = j.Verdict(j.Outcome.PASS, (), verdict.deltas)
 
     seconds = time.perf_counter() - started
-    print(_report(verdict, shards, costs, notes, seconds))
+    print(_report(verdict, shards, costs, kernel, notes, seconds))
     if args.json_out is not None:
         document = {
             "outcome": verdict.outcome.name,
@@ -324,6 +348,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             "costs": {
                 arm: {str(k): v.hex() for k, v in sorted(costs[arm].items())} for arm in j.ARMS
             },
+            "kernel_sentinel": {str(k): v.hex() for k, v in sorted(kernel.items())},
         }
         args.json_out.write_text(
             json.dumps(document, sort_keys=True, separators=(",", ":")) + "\n", encoding="utf-8"

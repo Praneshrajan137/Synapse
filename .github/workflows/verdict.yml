@@ -4,8 +4,10 @@ name: SYNAPSE Verdict
 # It runs the decision core's fast test selection in two process shards and, at the same time,
 # a miniature of the E5 proof: E5's own cost function on its first twelve replicate seeds for
 # the consensus arm and the tuned control, judged EXACTLY against
-# `infrastructure/quality/verdict-pins.json`. The exit code names the outcome (PASS 0, SAFETY 1,
-# WORSE 2, CHANGED 3, NONDETERMINISTIC 4, CONTROL_MOVED 5, REFUSED_ENV 6, INCOMPLETE 7), so a
+# `infrastructure/quality/verdict-pins.json`, and the kernel's port of the decision core (the
+# Sentinel alone, truth session 5) against the same consensus pins. The exit code names the outcome
+# (PASS 0, SAFETY 1, WORSE 2, CHANGED 3, NONDETERMINISTIC 4, CONTROL_MOVED 5, REFUSED_ENV 6,
+# INCOMPLETE 7, KERNEL_DIVERGED 8), so a
 # change that moves any decision of the consensus arm fails here until its pins are re-written
 # with `python -m scripts.verdict --repin` in the same pull request, where the diff shows the
 # per-seed movement. The pins were written on Windows; this job also shows whether Linux
@@ -20,6 +22,8 @@ on:
       - "digital_twin/**"
       - "packages/synapse_common/**"
       - "scripts/verdict/**"
+      - "synapse_kernel/**"
+      - "tests/kernel/**"
       - "tests/uplift/**"
       - "tests/verdict/**"
       - "infrastructure/quality/verdict-pins.json"
@@ -33,6 +37,8 @@ on:
       - "digital_twin/**"
       - "packages/synapse_common/**"
       - "scripts/verdict/**"
+      - "synapse_kernel/**"
+      - "tests/kernel/**"
       - "tests/uplift/**"
       - "tests/verdict/**"
       - "infrastructure/quality/verdict-pins.json"
