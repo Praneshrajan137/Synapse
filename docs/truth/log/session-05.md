@@ -577,3 +577,64 @@ engineer: pending stage C's measurements.
   against margins of about 0.35 to 0.39. Lesson for session 6: naive use of supply-shock
   information hurts a perishable, lost-sales store; the D-4(b) guard turns most of that loss back
   into a small gain.
+
+### E. The debts (branch `chore/pre-commit-hooks`, commit `258fc71`, off `main` at `ea205a4`)
+
+- **S5-M-23 F-34 confirmed with pre-commit itself (measured 2026-11-23; pre-commit 4.7.0, MIT,
+  from PyPI into a scratch environment, O2).** `pre-commit validate-config` on `main`'s
+  `.pre-commit-config.yaml`: "while scanning a simple key, line 43 ... could not find expected
+  ':', line 44", exit 1. The file holds **14 hooks, not the 15** the gate counted: ruff, ruff-format
+  and mypy from two remote repositories, and 11 local.
+- **S5-M-24 Each hook's own check over `main`'s tree (measured; each inline body run as written,
+  `scratchpad/run_hooks.py`).** Pass: schema-validate, spec-validate, reward-isolation,
+  spec-coverage (at its default threshold of 50, where CI runs 99). Fail: no-paid-apis (it scans
+  the tests CI leaves out, and the parity test holds the pattern strings); jitter-enforcement (8
+  files: any `time.sleep` in a file lacking the string `retry_with_jitter`, so periodic loops, a
+  clock's pace, polls, and the jittered retry in `synapse_common/features.py`); contract-validate (17
+  of 23 files: package inits, `tests/contracts`, and contracts whose Pydantic type is imported, not
+  defined); kv-cache-check (any f-string in its three files, exception text included: 36 in
+  `orchestrator/consensus/protocol.py`); no-raw-hex (20 lines: a Python linter that disagrees with
+  CI's `lint-hex.mjs`, which accepts `rgb(var(--syn-*))`); color-spec-validate (F-38).
+- **F-38 PR #77 broke the colour spec's structure and nothing noticed (measured).** On 2026-07-09
+  it replaced the `preconditions:` header of `design-system/color/color-system.spec.yml` with seven
+  new invariants (INV-CLR-019 to 025), which left PRE-CLR-001 and PRE-CLR-002 inside the
+  `invariants` list: 8 schema errors. The colour job's spec coverage reads ids by regular
+  expression, so it passed; the hook that validates the spec against its schema never ran (F-34).
+  The header is restored; the spec validates.
+- **S5-D-04 (2026-11-23). Each hook, by the gate's rule (section 7).** Nine duplicate a CI step and
+  now run that step's own `run:` text, read from the workflow when the hook runs
+  (`scripts/hooks/run_ci_step.py`), so each has one definition: ruff, ruff format, the two blocking
+  mypy steps (the agents step is informational in CI, so the hook does not block on it), schema
+  validation, spec validation, I-1, I-2, spec coverage at 99, and INV-CLR-009 (the stale Python
+  linter is removed). Four that no job ran are kept, repaired where their rule could not pass on
+  correct code, and run over the tree by a new job, `hooks.yml`: jitter-enforcement (a fixed sleep
+  says `# not-a-retry: <reason>`; a jittered delay passes directly or through a name assigned from
+  a jitter call; 10 sleeps marked), contract-validate (consumer contract modules only, imports
+  followed to a Pydantic class), kv-cache-check (the system prompt is literal text, which is what
+  I-13 says), color-spec-validate. None is retired: none meets D-5's grounds. **gitleaks is neither
+  wired nor retired**: it reads the staged index, which CI does not have, so a CI job running it
+  could never fail (wiring it would be theatre); and on a machine with gitleaks installed it can
+  fail, so D-5 does not retire it. It stays local-only, says so in the config, and CI's secret scan
+  stays `security.yml`'s advisory gitleaks step with its recorded pending condition. Left to the
+  operator as an open question for session 6's prompt.
+- **S5-M-25 Each hook fails on a planted violation and passes on the tree, through pre-commit
+  (measured; `scratchpad/plant_hooks.sh`, a throwaway clone, one plant at a time).** 13 of 14:
+  clean tree exit 0; planted exit 1. Plants: an unused import (ruff), an unformatted line (ruff
+  format), an untyped function in `synapse_common` (mypy), a schema with type `not-a-type`, a spec
+  without `state_machine`, a cross-agent import in a `rewards.py`, `import openai` in `scripts/`,
+  `agents/demand_prophet/tests/test_spec.py` deleted (coverage under 99), `"#ff0000"` in
+  `frontend/src/main.tsx`, an unmarked `time.sleep(3)`, a contract with no Pydantic type,
+  `SYSTEM_PROMPT` rebound to an f-string, the colour spec's header removed again. gitleaks exits 0
+  with a fake key staged, because gitleaks is not installed here: it cannot be shown failing on
+  this machine.
+- **S5-M-26 Gates (measured).** 15 hook tests pass in an environment of pytest, PyYAML and
+  jsonschema only; `verify_claims` 57 PASS, 0 FAIL, 11 SKIP; C23, which passed on the string
+  "raw-hex" in a file that did not parse, now resolves the CI step the hook runs; gate surface
+  regenerated (744 rows); workflow shape and doc truth pass. `CLAUDE.md` (the INV-CLR-009 line and
+  E-TP-08), the engineer skill and `CURRENT.md` now cite each hook through the job that runs it.
+- **F-39 Seen in passing, not repaired (measured).** `orchestrator/contracts/twin_simulation_contract.py`
+  is collected by no job (pytest's default `test_*.py` pattern does not match its name, and no
+  workflow names it), and types its expectation with a dataclass from the sealed twin.
+  `docs/state/MODULE_INVENTORY.md` is ungated and stale (an older format, 186 lines against 683
+  regenerated today) and still lists the removed linter. The commit message first said eleven
+  sleeps were marked; it was ten, corrected before the push by amending the unpushed commit.
