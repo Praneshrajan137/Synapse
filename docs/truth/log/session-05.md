@@ -19,6 +19,14 @@ measurements, S5-D-nn decisions, F-nn findings (continuing `TRUTH-MAP.md`).
 
 ## State
 
+- **2026-11-23.** Stage A done and green (#104, open: its merge awaits the operator's yes). Stage B
+  done (#105, open, CI running): the world built, fitted, its masking check failing the bar fixed
+  before it ran (recorded, method chosen by the pre-declared rule). Stage C measured natively;
+  native-browser bit parity measured on the golden cases. Stage D's code written (uncommitted on
+  `feat/release-world`'s working tree, to go on its own branch) and its full run started. Next:
+  read stage D's result, the Pyodide timing on the release world, freeze W, stage E.
+- **2026-11-20 to 23.** No work between the evening of 2026-11-20 and 2026-11-23 (the session's
+  process was idle); nothing moved on `origin` meanwhile (`main` still `ea205a4`).
 - **2026-11-19, after the gate.** The operator approved the gate through plan mode. Stage A is
   under way. Record branch: `docs/truth-session-5`.
 
@@ -519,3 +527,53 @@ engineer: pending stage C's measurements.
   (8,609, 44,035, 103,921 and 281,558 units at order-up-to factors 0.5, 1, 1.5 and 2.5; in the legacy
   twin, spoilage was the same whatever was held); about 55 ms to draw a scenario and 51 to 85 ms per
   replicate in batches of 32.
+
+- **S5-M-18 The fit (measured; `python -m scripts.world.fit_release_world --data <folder>`; commit
+  `e68e982`, PR #105).** The exposure-weighted profile estimator settles in 38 iterations (a first
+  full run did not settle in 500: the usable series-days were re-decided each iteration and rows
+  flipped in and out; fixing the set before iterating made it a contraction; on a 10% sample it had
+  converged anyway). Store: 300 items, 3,823 units a day, 4.7 to 237 per item (median 8.7), the top
+  fifth carrying 47% of units; fourteen 168-hour profiles (13 categories with at least 1,000 series,
+  one pooled); recovery lifts the afternoon and evening (Monday 16:00: 9.6% of the day, raw 8.6%).
+  Day-level variance 0.090 (store-day 0.010, item-day 0.079); the slope of CV^2 on 1/mean over
+  44,100 series is 0.94, so no excess of two-unit purchases (pair share 0). Hold-out (the next 7
+  days): profile L1 distance 0.065 per day; recovered demand 8% higher (median ratio), a seasonal
+  drift the world does not model.
+- **S5-M-19 The masking check failed its pre-declared bar (measured; the report's
+  `masking_check`).** On held-out series' fully in-stock days, day-total bias (95% store-bootstrap
+  interval): pre-declared MNAR masks +9.5% (8.7 to 10.3); evening tails -0.3% (-1.1 to +0.5); the
+  named fallback +9.6% and -0.3%; uniform fill -1.4% and -17.2%; no recovery -32% and -46%. Post hoc,
+  labelled as such: with stock fixed before the day (0.6 to 1.4 times the series' usual day) +5.3%
+  (4.8 to 5.8). Diagnosis (inferred): the pre-declared mask set stock as a share of the day's own
+  total, so stock-outs selected purely on within-day noise; and even a fixed stock leaves the
+  hitting-time selection of a ratio estimator. **S5-D-03 (2026-11-20).** By the gate's rule the
+  smaller-bias method is used: "smaller bias" read as the smaller worst case over BOTH pre-declared
+  families (the gate asked for both), which keeps the named estimator (9.5%) over uniform fill
+  (17.2%, which would flatten the evening that F-13a says decides cost); labelled failing; a test
+  pins the verdict as it came out. The inverse-sampling correction is recorded as a candidate, not
+  adopted: a method chosen after its check fails voids the check. Consequence: demand recovered on
+  stocked-out days may be overstated by about 5 to 10%, most in the evening.
+- **S5-M-20 Native speed on the release world (measured 2026-11-23, mains power, battery 65%,
+  11-19% background CPU; `python -m scripts.kernel.bench`).** Drawing a scenario: 75 ms. One 15-day
+  replicate with the incumbent's rule: I1 33 ms alone, 36 ms each in a batch of 128; I2 44 ms alone,
+  33 ms each in a batch of 32, 55 ms in a batch of 128. A simulated day of one replicate: 2.2 to
+  2.9 ms. (The I1 batch of 32 read 86 ms each, an outlier left as measured.)
+- **S5-M-21 Native and browser give the same bits (measured 2026-11-20; `parity.mjs` in the
+  scratch folder, Pyodide 314.0.8 from npm, numpy 2.4.6 from its CDN, under Node 24).** The pinned
+  golden cases of `tests/kernel/release/test_golden.py` (four scenarios' demand digests, an engine
+  run's outcome digest, three costs as `float.hex`) are identical in WebAssembly (Python 3.14.2) and
+  natively (Windows, Python 3.11.15, numpy 2.4.4). Pyodide loaded in 3.9 s; on the 12-item fixture
+  a scenario took 25 ms and three replicates 0.13 s there.
+- **S5-M-22 The headroom oracle, designed on the fixture world only (measured; no SYNAPSE
+  component).** "The incumbent told the shock" first lost in the supply cells (S3 -3.0 to -5.0)
+  because, with lost sales, extending the protection interval over a delay orders for demand that
+  is lost before the stock lands, and the excess spoils; a bug of mine also applied the informed
+  rule to every decision of the shocked supplier's items (fixed). Rewritten as a projected,
+  lost-sales-aware cover from the order's actual arrival to the next order's, capped by shelf life
+  (which also pre-stocks before an outage): it cuts lost sales sharply but over-stocks (S3: lost
+  2,284 to 1,268 units, wasted 248 to 1,603). Hence one response factor per item, tuned by the
+  sealed coordinate search on the shock cell's tuning seeds (alone, and with the guard in the
+  loop). On the fixture: surge +1.03 tuned (+0.75 guarded), outage +0.42 (+0.35), delay -0.05,
+  against margins of about 0.35 to 0.39. Lesson for session 6: naive use of supply-shock
+  information hurts a perishable, lost-sales store; the D-4(b) guard turns most of that loss back
+  into a small gain.
