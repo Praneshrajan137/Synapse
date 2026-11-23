@@ -720,3 +720,32 @@ engineer: pending stage C's measurements.
   heads and porcelain digests, the stash (`adb7c37156c3ac6a`, 1 entry), `.kiro/settings/`
   (`15f381d03b8eebcc`) and frontend-gates' 17 uncommitted files are identical to S5-M-09;
   `.kiro/settings/` was never staged.
+- **S5-M-36 The re-run reproduced run 1 exactly (measured; driver fixed per S5-D-05; 1,502 s).**
+  From the uncalibrated world: calibration, six versions, selection, `D_c`, `M_c` and headroom
+  identical; `incumbent_tables.json` byte-identical (sha256 `e40d4962ab1c0d62...`); the world differs
+  only in its shelf-life provenance, which now names the calibration. New: validation over tuning
+  cost for the pooled versions, I1-P +1.0% and I2-P +0.5% (over N, S1, S2, S3); 1-D profiles at
+  I2-N's optimum: of 408 tuned (item, part) pairs, 5 improve at some offset within +-0.5 (the
+  largest by 0.0024 a day; item costs run 0.3 to 0.8), so the lattice optimum is near-global along
+  each axis. `D_c` of S1 is a 120 x 120 midpoint-grid expectation over the surge's onset and
+  duration; a 480 x 480 grid moves it by 0.02 units a day (`M_c` by 0.0001).
+- **S5-M-37 Speed of the final world (measured 2026-11-23 22:11, mains, Balanced, CPU load 6%).**
+  Native: scenario 52 ms; a 13-day replicate 32.5 ms (I1) and 36.9 ms (I2) alone, 21 to 22 ms each in
+  a batch of 32, 29 to 31 ms in a batch of 128; a simulated day 2.5 to 2.8 ms. Pyodide 314.0.8 under
+  Node 24 (Python 3.14.2, numpy 2.4.6): load 1.5 s, scenario 50 ms, replicate 54 to 57 ms, **a
+  simulated day 4.2 to 4.4 ms against the 3 s budget**; the scenario and both cost digests equal the
+  native ones (`92c52f4ef9a0dd09`, `b222aeca8d9fddd5`, `7aa87417303e8111`).
+- **S5-D-06 (2026-11-23). Budgets for sessions 5 to 8, derived from S5-M-27, -36, -37.** Tuning one
+  version: about 2,500 to 3,500 replicate-evaluations on 32 seeds (1 to 2 minutes natively),
+  11,000 to 13,500 pooled (5 to 7 minutes); all of stage D, 25 to 27 minutes. The confirmatory run:
+  at most 2,000 replicates x 5 cells = 10,000 per arm, about 5 minutes per arm at the incumbent's
+  speed plus 9 minutes of scenarios shared by every arm; the composition's own cost per replicate is
+  session 6's to measure, and the run stays under an hour natively unless the composition is more
+  than about 10 times slower than the incumbent. The browser: about 700 times inside its budget.
+- **Freeze W candidate (committed locally, `536e016` on `docs/freeze-w`, stacked on `feat/incumbent`;
+  not pushed).** 37 frozen files (29 under `synapse_kernel/`); `check_freeze_w.py` ticks every
+  PREREG-1 section 5 item; faults planted in clean exports: an edited frozen file, a deleted one, an
+  edited `M_c` and an edited selection with its sums line forged each fail with the file named; a
+  CRLF and an LF checkout both pass. Its sums are regenerated on `main` after #104, #105 and #108
+  merge, since every file under `synapse_kernel/` then is frozen. A fresh-context reviewer attacks it
+  next (brief: scratch `attack-brief.md`, 30 tool calls).
