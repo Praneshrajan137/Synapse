@@ -335,6 +335,7 @@ def probe_decision(compose_file: str, env_files: list[str], wait_seconds: int = 
                 True,
                 f"outbox PUBLISHED {before}->{after}; response={out.strip()[:120]}",
             )
+        # not-a-retry: polls for the outbox row inside the oracle's bounded window
         time.sleep(5)
     return CheckResult(
         "decision_flow",
@@ -372,6 +373,7 @@ def run_on_vm(
         container_results = _containers_snapshot(compose_file, env_files)
         if all(r.ok for r in container_results) or time.monotonic() >= deadline:
             break
+        # not-a-retry: the settle window polls container health (E-S14-05)
         time.sleep(10)
     results.extend(container_results)
     try:

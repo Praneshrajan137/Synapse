@@ -209,6 +209,8 @@ invariants:
     description: "atlas-console-elevation Property 26: colour is never the sole channel — every confidence value maps to a textual zone label and every agent affordance carries a stable textual key plus a token reference, so colour-coded affordances always retain a non-colour (text/icon/shape) signal (Req 5.10)."
     assertion: "for all v in [0,1]: confidenceZone(v) in {low,escalation,autonomous}; and for all agents a: a is a non-empty text key and agentVar(a) is a var(--color-agent-*) token reference"
     severity: high
+
+preconditions:
   - id: "PRE-CLR-001"
     description: "All token JSON files validate against the DTCG token schema"
     check: "jsonschema.validate(token_file, dtcg_tokens_schema) passes for every file in tokens/"

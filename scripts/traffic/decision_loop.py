@@ -111,6 +111,7 @@ def run_forever() -> None:
             logger.warning(
                 "synthetic_decision_failed", order_id=payload["order_id"], error=str(exc)
             )
+        # not-a-retry: the generator's period, already randomised
         time.sleep(INTERVAL_SECONDS + rng.randint(0, max(JITTER_SECONDS, 1)))
 
 
