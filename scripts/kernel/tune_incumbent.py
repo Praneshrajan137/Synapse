@@ -12,8 +12,11 @@
 4. computes ``D_c``, ``p_c`` and ``M_c`` per cell from the declared parameters, the shock headroom
    of an oracle told each shock, and, as an exploratory description, how much of it survives the
    guard of D-4(b);
-5. writes the tables (``synapse_kernel/worlds/incumbent_tables.json``) and the report
-   (``docs/truth/world/incumbent-report.json``).
+5. reports each version's tuning-validation gap (on the validation seeds of the cells it was tuned
+   on), 1-D profiles around the selected N version's optimum, and a restart of I1-N from k = 2;
+6. writes the tables (``synapse_kernel/worlds/incumbent_tables.json``), the report
+   (``docs/truth/world/incumbent-report.json``) and, if it recalibrated, the world with the
+   calibration in its shelf lives' provenance (``--world-out``).
 
 It uses no process pool, so the ``__main__`` guard of E-TP-01 is a habit here, not a need.
 """
@@ -63,6 +66,75 @@ def scaled(world: ReleaseWorld, scale: float) -> ReleaseWorld:
         for item in world.items
     )
     return dataclasses.replace(world, items=items)
+
+
+def calibrated(world: ReleaseWorld, scale: float, steps: list[dict[str, Any]]) -> ReleaseWorld:
+    """:func:`scaled`, with the calibration written into the shelf lives' provenance."""
+    key = "items.shelf_life_hours"
+    old = world.provenance[key]
+    history = "; ".join(f"{s['waste_share']:.2%} at {s['scale']:.4f}" for s in steps)
+    hours = sorted({max(12, round(item.shelf_life_hours * scale)) for item in world.items})
+    note = (
+        f"{old.source}. Calibrated before freeze W by the session-5 gate's rule (section 7): the "
+        f"incumbent's waste share in N (units discarded over units sold, tuning seeds) was "
+        f"{history}, so every shelf life is times {scale!r}, rounded to whole hours: "
+        f"{', '.join(str(h) for h in hours)} hours"
+    )
+    provenance = {**world.provenance, key: dataclasses.replace(old, source=note)}
+    return dataclasses.replace(scaled(world, scale), provenance=provenance)
+
+
+#: Offsets of one part's factor around the tuned point, for the 1-D profiles (gate, section 6 D).
+PROFILE_OFFSETS: Final[tuple[float, ...]] = (
+    -0.5,
+    -0.25,
+    -0.125,
+    -0.0625,
+    -0.03125,
+    0.03125,
+    0.0625,
+    0.125,
+    0.25,
+    0.5,
+)
+
+
+def profiles(
+    world: ReleaseWorld, tables: IncumbentTables, batch: list[Any], tuned_cost: np.ndarray
+) -> dict[str, Any]:
+    """1-D profiles of every item's cost along each used part's factor, around the tuned point.
+
+    Items do not interact, so one evaluation moves every item's factor of part ``d`` by the same
+    offset and reads each item's own cost. A pair (item, part) "improves" if some offset gives a
+    strictly lower cost than the tuned point, which a lattice optimum of the sealed search (step
+    1/32) may still allow farther out than one step.
+    """
+    used = used_parts(world)
+    evaluate = _evaluator(world, tables, batch)
+    out: dict[str, Any] = {"offsets": list(PROFILE_OFFSETS), "parts": {}}
+    better, largest = 0, 0.0
+    for part in range(used.shape[1]):
+        items = np.flatnonzero(used[:, part])
+        if items.size == 0:
+            continue
+        costs = []
+        for offset in PROFILE_OFFSETS:
+            factors = tables.factors.copy()
+            factors[items, part] = np.maximum(0.0, factors[items, part] + offset)
+            costs.append(evaluate(factors)[items])
+        grid = np.array(costs)  # (offsets, items)
+        gain = tuned_cost[items] - grid.min(axis=0)
+        better += int((gain > 0).sum())
+        largest = max(largest, float(gain.max()))
+        out["parts"][str(part)] = {
+            "items": int(items.size),
+            "mean_cost_at_offset": [float(row.mean()) for row in grid],
+            "mean_cost_tuned": float(tuned_cost[items].mean()),
+            "pairs_improved_by_an_offset": int((gain > 0).sum()),
+        }
+    out["pairs_improved"] = better
+    out["largest_improvement"] = largest
+    return out
 
 
 def tables_document(tables: IncumbentTables, result: Any) -> dict[str, Any]:
@@ -136,19 +208,19 @@ def main(argv: list[str] | None = None) -> int:
     for attempt in range(MAX_CALIBRATIONS + 1):
         current = scaled(world, scale) if scale != 1.0 else world
         batch = scenarios(current, "N", tuning)
-        found = {}
+        trial: dict[str, tuple[float, float, int]] = {}
         for aware, tag in ((False, "I1"), (True, "I2")):
-            tables, result = tune_incumbent(current, f"{tag}-N", aware, [batch])
-            priced = price(current, batch, Incumbent(current, tables))
-            found[tag] = (
-                priced.mean_cost,
-                float(np.mean(priced.waste)),
-                result.replicate_evaluations,
+            trial_tables, trial_result = tune_incumbent(current, f"{tag}-N", aware, [batch])
+            trial_priced = price(current, batch, Incumbent(current, trial_tables))
+            trial[tag] = (
+                trial_priced.mean_cost,
+                float(np.mean(trial_priced.waste)),
+                trial_result.replicate_evaluations,
             )
-        better = min(found, key=lambda t: (found[t][0], t))
-        share = found[better][1]
+        better = min(trial, key=lambda t: (trial[t][0], t))
+        share = trial[better][1]
         report["calibration"].append(
-            {"scale": scale, "better": better, "waste_share": share, "tuned": found}
+            {"scale": scale, "better": better, "waste_share": share, "tuned": trial}
         )
         print(
             f"calibration {attempt}: scale {scale:.4f} -> {better} waste share {share:.4f}",
@@ -165,7 +237,7 @@ def main(argv: list[str] | None = None) -> int:
         scale = math.sqrt(lo * hi)
     report["calibration_scale"] = scale
     if scale != 1.0:
-        world = scaled(world, scale)
+        world = calibrated(world, scale, report["calibration"])
         out = args.world_out or args.world
         out.write_text(
             json.dumps(world_to_document(world), sort_keys=True, separators=(",", ":")) + "\n",
@@ -261,16 +333,27 @@ def main(argv: list[str] | None = None) -> int:
             ),
         }
 
-    # Generalisation gap and a profile check around the optimum (one version), a restart.
+    # Generalisation gap (validation seeds of the cells each version was tuned on), the 1-D
+    # profiles around the selected N version's optimum, and a restart of I1-N from k = 2.
     gaps = {}
-    for name, (_tables, result) in versions.items():
-        cell = name.split("-")[1]
-        home = {"N": "N", "L": "L", "P": "N"}[cell]
-        valid_cost = priced.get(home, {}).get(name)
+    for name, (tables_, result) in versions.items():
+        cells = {"N": ("N",), "L": ("L",), "P": ("N", "S1", "S2", "S3")}[name.split("-")[1]]
+        costs: list[float] = []
+        for cell in cells:
+            known = priced.get(cell, {}).get(name)
+            costs += list(
+                known.costs
+                if known
+                else price(world, valid_sets[cell], Incumbent(world, tables_)).costs
+            )
         gaps[name] = {
+            "cells": list(cells),
             "tuning_mean_cost": float(result.cost.sum()),
-            "validation_mean_cost": None if valid_cost is None else valid_cost.mean_cost,
+            "validation_mean_cost": math.fsum(costs) / len(costs),
         }
+    n_tables, n_result = versions[selected["N"]]
+    profile = profiles(world, n_tables, tune_sets["N"], n_result.cost)
+    profile["version"] = selected["N"]
     i1n_tables, i1n_result = versions["I1-N"]
     restart = coordinate_search(
         _evaluator(world, i1n_tables, tune_sets["N"]), used, len(tuning), start=2.0
@@ -298,6 +381,7 @@ def main(argv: list[str] | None = None) -> int:
             "M_c": margins,
             "headroom": headroom,
             "generalisation": gaps,
+            "profiles_at_optimum": profile,
             "restart_from_2": {
                 "items_same_factors": int(
                     (restart.factors == i1n_result.factors).all(axis=1).sum()

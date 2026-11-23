@@ -86,6 +86,18 @@ F-36), and freeze W makes any later repair a deviation.
   hold-out week sold 8% more than the training months (median ratio), a seasonal drift the world
   does not model. Shelf lives, lead times and the hub's second delivery are chosen, with reasons.
 
+## The calibration (session 5, stage D, `scripts/kernel/tune_incumbent.py`)
+
+- **Shelf lives times 1/sqrt(2).** The gate fixed the rule before any result: the waste share
+  (units discarded over units sold) of the better of I1 and I2, tuned on cell N's tuning seeds,
+  must lie in [2.7%, 10.9%] (a factor of two around IFPA's 5.46%, which includes shrink other than
+  expiry); otherwise one global scale on shelf lives, bisected in log scale in [0.5, 2], at most six
+  steps, stopping on entering the band. At the chosen 1, 2, 3, 5 and 7 days the share was 2.38%; at
+  scale 1/sqrt(2) it was 3.09%, so the frozen shelf lives are 17, 34, 51, 85 and 119 hours, and the
+  world's provenance says so. Volume, items and the schedule did not move.
+- **The frozen world**: a 6-day warm-up (the longest shelf life plus the longest lead time, whole
+  days) and 7 measured days, 13 days per replicate.
+
 ## Consequences
 
 - Waste rises with stock held (a ladder test), the repair of F-30.

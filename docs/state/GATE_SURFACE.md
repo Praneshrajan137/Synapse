@@ -34,12 +34,12 @@ the same pair.
 
 ## Summary
 
-Parsed 23 workflow file(s), 72 job(s), 476 step(s).
+Parsed 23 workflow file(s), 72 job(s), 477 step(s).
 
 | Trigger | Jobs executing | Jobs conditional | Jobs NOT EXECUTED | Steps blocking | Steps advisory | Steps conditional |
 |---|---|---|---|---|---|---|
-| push:main | 4 | 34 | 34 | 31 | 0 | 202 |
-| pull_request | 17 | 36 | 19 | 107 | 4 | 223 |
+| push:main | 4 | 34 | 34 | 31 | 0 | 203 |
+| pull_request | 17 | 36 | 19 | 107 | 4 | 224 |
 | tag:v* | 3 | 3 | 66 | 18 | 0 | 29 |
 
 ## Job selection
@@ -454,6 +454,7 @@ Why each job runs, does not run, or runs conditionally under each trigger. `need
 | push:main | .github/workflows/kernel.yml::light | Set up Python 3.11 | CONDITIONAL | conditional - blocking |
 | push:main | .github/workflows/kernel.yml::light | Install the kernel's dependencies and the test runner, nothing else | CONDITIONAL | conditional - blocking |
 | push:main | .github/workflows/kernel.yml::light | Kernel tests without the repository's dependencies | CONDITIONAL | conditional - blocking |
+| push:main | .github/workflows/kernel.yml::light | Time the release world on this runner | CONDITIONAL | conditional - blocking |
 | push:main | .github/workflows/kernel.yml::parity | uses: actions/checkout@v4 | CONDITIONAL | conditional - blocking |
 | push:main | .github/workflows/kernel.yml::parity | Set up Python 3.11 | CONDITIONAL | conditional - blocking |
 | push:main | .github/workflows/kernel.yml::parity | Install dependencies | CONDITIONAL | conditional - blocking |
@@ -760,6 +761,7 @@ Why each job runs, does not run, or runs conditionally under each trigger. `need
 | pull_request | .github/workflows/kernel.yml::light | Set up Python 3.11 | CONDITIONAL | conditional - blocking |
 | pull_request | .github/workflows/kernel.yml::light | Install the kernel's dependencies and the test runner, nothing else | CONDITIONAL | conditional - blocking |
 | pull_request | .github/workflows/kernel.yml::light | Kernel tests without the repository's dependencies | CONDITIONAL | conditional - blocking |
+| pull_request | .github/workflows/kernel.yml::light | Time the release world on this runner | CONDITIONAL | conditional - blocking |
 | pull_request | .github/workflows/kernel.yml::parity | uses: actions/checkout@v4 | CONDITIONAL | conditional - blocking |
 | pull_request | .github/workflows/kernel.yml::parity | Set up Python 3.11 | CONDITIONAL | conditional - blocking |
 | pull_request | .github/workflows/kernel.yml::parity | Install dependencies | CONDITIONAL | conditional - blocking |

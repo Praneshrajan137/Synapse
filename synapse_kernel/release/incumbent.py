@@ -22,6 +22,8 @@ same orders on every platform.
 from __future__ import annotations
 
 import dataclasses
+import json
+from pathlib import Path
 from typing import TYPE_CHECKING, Final
 
 import numpy as np
@@ -33,12 +35,24 @@ if TYPE_CHECKING:
     from synapse_kernel.release.observation import StoreObservation
     from synapse_kernel.release.world import ReleaseWorld
 
-__all__ = ["PARTS", "Incumbent", "IncumbentTables", "part_of_day", "protection_hours"]
+__all__ = [
+    "INCUMBENT_TABLES",
+    "PARTS",
+    "Incumbent",
+    "IncumbentTables",
+    "load_incumbent_tables",
+    "part_of_day",
+    "protection_hours",
+]
 
 I64 = npt.NDArray[np.int64]
 F64 = npt.NDArray[np.float64]
 #: Six four-hour parts of the day (sealed).
 PARTS: Final[int] = 6
+#: The six tuned versions freeze W fixes, written by ``scripts/kernel/tune_incumbent.py``.
+INCUMBENT_TABLES: Final[Path] = (
+    Path(__file__).resolve().parents[1] / "worlds" / "incumbent_tables.json"
+)
 
 
 def part_of_day(hour_of_day: int) -> int:
@@ -142,3 +156,22 @@ class Incumbent:
             orders = np.maximum(0, target[None, :] - position)
         out: I64 = np.where(obs.deciding[None, :], orders, 0)
         return out
+
+
+def load_incumbent_tables(path: Path = INCUMBENT_TABLES) -> dict[str, IncumbentTables]:
+    """The tuned versions by name (``I1-N``, ``I1-L``, ``I1-P``, ``I2-N``, ``I2-L``, ``I2-P``).
+
+    JSON numbers round-trip Python floats exactly, so the loaded tables are the tuned ones to the
+    bit. Which version is "the incumbent" in a cell is the sealed selection rule's answer, recorded
+    in ``docs/truth/world/incumbent-report.json``; a policy is never told it.
+    """
+    doc = json.loads(path.read_text(encoding="utf-8"))
+    return {
+        name: IncumbentTables(
+            name=str(version["name"]),
+            waste_aware=bool(version["waste_aware"]),
+            factors=np.asarray(version["factors"], dtype=np.float64),
+            mean_table=np.asarray(version["mean_table"], dtype=np.float64),
+        )
+        for name, version in sorted(doc.items())
+    }
