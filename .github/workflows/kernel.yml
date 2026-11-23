@@ -51,6 +51,7 @@ jobs:
       - name: Kernel tests without the repository's dependencies
         run: |
           python -m pytest tests/kernel/test_closure.py tests/kernel/test_kernel_alone.py \
+            tests/kernel/release \
             -q -o addopts="--strict-markers" -p no:cacheprovider
 
   parity:

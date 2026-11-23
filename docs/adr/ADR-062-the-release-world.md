@@ -53,6 +53,39 @@ F-36), and freeze W makes any later repair a deviation.
    deliveries at its end (chosen), cell N's warm-up and calendar in every cell, replicates starting
    on a Monday.
 
+## The fit (session 5, `scripts/world/fit_release_world.py`, report `docs/truth/world/fit-report.json`)
+
+- **Data.** FreshRetailNet-50K revision `c374e85975c82816c495acfa904cc55ab14a47d3` (CC BY 4.0,
+  registered in `infrastructure/data/dataset-licences.yaml`): 50,000 store-product series, 898
+  stores, 90 days of hourly sales and stock flags; the following 7 days are the hold-out.
+- **Two readings the card did not give, measured.** Units are 10 x the hourly value (99.56% of
+  positive values lie on a 0.1 lattice and the noise floor of daily totals has slope near one), so
+  the store's volume is fitted, not chosen (finding F-35, falsified). The stock flag is 1 for out of
+  stock, the complement of the paper's censoring indicator (F-37).
+- **Stock-out-hidden demand** is recovered by the exposure-weighted profile estimator (the Poisson
+  MLE of a day's level from its in-stock hours under the profile), alternated with the profile
+  per category group and weekday to a fixed point (38 iterations). **Its masking check failed the
+  bar fixed before it ran**: on held-out fully in-stock days, the pre-declared MNAR masks (stock a
+  share of the day's own total) give a day-total bias of +9.5% (95% interval 8.7% to 10.3%); the
+  evening-tail masks give -0.3% (-1.1% to +0.5%); a post hoc mask with stock fixed before the day
+  gives +5.3%. The named fallback (weekday-type profiles) fails the same way. By the gate's rule
+  the smaller-bias method is used, read as the smaller worst case over both pre-declared families:
+  the named estimator (9.5%) over uniform fill (17.2%, which understates evening tails). So demand
+  recovered on stocked-out days may be overstated by about 5 to 10%, most in the hours that stock
+  out (the evening); an inverse-sampling correction for the hitting-time selection is a recorded
+  candidate, not adopted, because a method chosen after its check fails voids the check.
+- **The store.** 300 items at evenly spaced quantiles of each category group's within-store rate
+  distribution, times the median store's median: 3,823 units a day, 4.7 to 237 per item, the top
+  fifth carrying 47% of units (the paper reports 52% for transactions). Fourteen 168-hour profiles.
+  Day-level variance 0.090 (store-day 0.010, item-day 0.079), gamma tables of 16 points; no excess
+  of two-unit purchases (slope 0.94, so the pair share is 0).
+- **Gaps stated.** No item sells under about 4.7 units a day: the dataset's series exclude slow
+  movers (its selection rule is not published), so the world's skew is narrower than a dark store's
+  long tail, and "mostly slow movers" in S1 means the slower of these. The data is a Chinese
+  frontier-warehouse business (3 km, about 30 minutes) in spring 2024, not an Indian dark store; the
+  hold-out week sold 8% more than the training months (median ratio), a seasonal drift the world
+  does not model. Shelf lives, lead times and the hub's second delivery are chosen, with reasons.
+
 ## Consequences
 
 - Waste rises with stock held (a ladder test), the repair of F-30.
