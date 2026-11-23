@@ -638,3 +638,85 @@ engineer: pending stage C's measurements.
   `docs/state/MODULE_INVENTORY.md` is ungated and stale (an older format, 186 lines against 683
   regenerated today) and still lists the removed linter. The commit message first said eleven
   sleeps were marked; it was ten, corrected before the push by amending the unpushed commit.
+
+### C. Fast enough (on `feat/incumbent`: `scripts/kernel/bench.py`, and a timing step in `kernel.yml`'s light job)
+
+- Native speed on the release world is S5-M-20 (15-day replicates, before calibration); native and
+  browser bits agree (S5-M-21). The CI runner's numbers come from the new step in `kernel.yml`
+  when the stage D pull request runs (recorded below when read).
+- **S5-M-27 Stage D's run is the tuning budget, measured (2026-11-23, mains power, i5-12450HX, one
+  process).** Run 1 of `python -m scripts.kernel.tune_incumbent` took 1,622 s for all of it: two
+  calibration steps (four tunings on 32 seeds), six versions (36,352 replicate-evaluations), the
+  headroom oracle's response tuning (4,672), the restart (2,848) and every validation pricing:
+  about 56,000 replicate-evaluations, about 29 ms each, batched over seeds.
+
+### D. The incumbent tuned as sealed (branch `feat/incumbent`; code `5ba68d5`, results to follow)
+
+- **S5-M-28 Calibration, by the gate's rule (measured; run 1).** The better version in N on the
+  tuning seeds was I2 both times: waste share (units discarded over units sold, mean over the 32
+  replicates) **2.38% at the chosen shelf lives**, below the band [2.7%, 10.9%]; one step of the
+  log bisection in [0.5, 2] to **1/sqrt(2): 3.09%**, inside it. The driver stops on entering the
+  band; that reading of "no recalibration if the share lies in the band" was committed in
+  `5ba68d5` before the run started. Shelf lives are 17, 34, 51, 85 and 119 hours; the warm-up is
+  6 days; a replicate is 13 days. Volume, items and schedule did not move.
+- **S5-M-29 Six versions tuned to convergence (measured).** Replicate-evaluations and sweeps per
+  step (1/2 to 1/32): I1-N 2,848 (6, 3, 5, 6, 2); I1-L 3,488 (4, 5, 6, 6, 6); I1-P 13,440 (9, 3, 4,
+  6, 4); I2-N 2,720 (6, 4, 4, 4, 3); I2-L 2,464 (4, 3, 5, 4, 3); I2-P 11,392 (9, 3, 3, 3, 4). Each
+  item's last move (its convergence sweep) is in the tables. A restart of I1-N from k = 2 converged
+  to the same factors for all 300 items and the same cost.
+- **S5-M-30 Selection on the validation seeds (measured).** Mean J (money per store-day): N, I2-N
+  189.69 against I1-N 201.49; L, I2-L 395.91 against I1-L 412.99; S1, I2-P 249.98 (I2-N 257.91, I1-P
+  261.48, I1-N 269.37); S2, I2-P 235.36 (240.73, 246.37, 251.73); S3, I2-P 253.49 (261.02, 265.27,
+  272.83). **I2 wins everywhere; the pooled version wins every shock cell.** The contest's incumbent
+  (PREREG-1 section 8: lower mean J over S1 to S3's validation seeds together) is **I2-P** (246.28
+  against I1-P 257.71). In N the selected incumbent wastes **3.23% of sales** (IFPA's 5.46%
+  includes non-expiry shrink) and fills **91.9%** of demand.
+- **S5-M-31 Generalisation (measured).** Validation over tuning cost: I1-N +4.2%, I2-N +3.6%, I1-L
+  +2.8%, I2-L +2.8%. Inferred cause, beside seed noise: the sealed mean-demand table is read from
+  the tuning seeds' own recorded demand, so tuning sees its seeds' demand in averaged form.
+- **S5-M-32 `D_c`, `p_c`, `M_c` (computed from the declared world, PREREG-1 section 4).** `D_c`
+  3,822.968 units a day in N, L, S2, S3 and 4,214.519 in S1 (its surge's expected extra); `p_c` 1;
+  `M_c` = 0.01 x `D_c` x 0.38 x `p_c` = **14.527** and **16.015** money per store-day (7.7% of the N
+  incumbent's cost).
+- **S5-M-33 The shock headroom (measured; validation seeds; percentile bootstrap, seed
+  20261121).** Mean advantage of the oracle told the shock over the selected incumbent (I2-P), with
+  95% intervals; "told" is the gate's oracle, "tuned" adds one response factor per item fitted on
+  the cell's tuning seeds (736 or 992 replicate-evaluations), "guarded" clips to D-4(b):
+  S1 (margin 16.015): told +0.17 (-19.0 to +16.9), tuned **+37.37** (+28.7 to +45.9), guarded told
+  +29.34, guarded tuned +29.11 (+22.8 to +35.7), clipped 4.2% and 2.7% of item decisions.
+  S2 (14.527): told -31.18, tuned **+0.14** (-3.7 to +4.1), guarded told -4.34, guarded tuned +0.04.
+  S3 (14.527): told -97.64, tuned **+8.03** (+3.4 to +12.5), guarded told +3.80, guarded tuned +7.94
+  (+5.0 to +10.9); clipped about 5.2 to 5.4% in S2 and S3.
+- **F-40 Claim C2 has room in S1 only, as far as this oracle can see (measured; inferred
+  consequence).** PREREG-1's C2 asks, per shock cell, that the lower one-sided bound of SYNAPSE's
+  mean advantage exceed `M_c`. An arm *told* the shock clears that margin in S1 and comes nowhere
+  near it in S2 (+0.14 against 14.53) or S3 (+8.0 against 14.53); a challenger that is not told the
+  shock must infer it from sales and receipts, and so can be expected to do no better than an
+  informed arm unless this oracle is far from the best use of the information. The guard leaves S1
+  most of its room (+29 of +37). Headroom binds nothing (PREREG-1 section 6) and the shocks are
+  sealed: the world is not changed to make room, which would be fitting the world to the claim.
+  *False if* a challenger clears `M_c` in S2 or S3 on exploratory seeds, or a better-informed
+  oracle does. The operator should see this before session 6 spends effort on S2 and S3.
+- **S5-D-05 (2026-11-23). Three gaps in my own driver, found before anything was committed;
+  repaired and re-run.** Run 1's report gave no validation gap for the two pooled versions (it looked
+  for them in N's candidates), omitted the 1-D profiles at the optimum that the gate promised, and
+  wrote the calibrated world without saying in its provenance that its shelf lives were calibrated;
+  the driver also failed `mypy --strict` 13 times on variable names reused across its long `main`.
+  All four are repaired, and the driver re-runs from the uncalibrated world, so one committed script
+  produces every frozen output; its tables must come out bit-identical to run 1's.
+- **F-41 No job ran the seal's own checker (measured: `grep` of `.github/workflows/`).** An edit to
+  the sealed `PREREG-1.md` would have turned nothing red; and each checker trusts its own sums file,
+  so an edit made together with its sums line would pass it anyway. The freeze pull request adds
+  `seals.yml`: `check_prereg.py`, `check_freeze_w.py` and an add-only rule for
+  `docs/truth/sealed/` (edits allowed only to `DEVIATIONS.md` and the `.ots` proofs).
+- **S5-M-34 PR #105's three red checks, diagnosed and repaired (measured; job logs
+  137802454043 and 137802454546).** `test_committed_m5_entry_records_every_term_as_unestablished`
+  is named for the M5 entry but looped over every dataset, so FreshRetailNet's read terms failed it
+  (twice: shard 3/4 and the unsharded job); and `CURRENT.md`'s generated C74 row now counts two
+  datasets (Truth Gates' ledger-gen). Fixed in `079e31d` on `feat/release-world`: the test selects
+  M5 by id, a new test pins FreshRetailNet's entry (fields filled, the operator's flag still false,
+  which the model documents as the ordinary state), and the ledger is regenerated.
+- **S5-M-35 Preservation re-checked (measured 2026-11-23, 21:57).** The seven other worktrees'
+  heads and porcelain digests, the stash (`adb7c37156c3ac6a`, 1 entry), `.kiro/settings/`
+  (`15f381d03b8eebcc`) and frontend-gates' 17 uncommitted files are identical to S5-M-09;
+  `.kiro/settings/` was never staged.
