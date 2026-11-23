@@ -749,3 +749,12 @@ engineer: pending stage C's measurements.
   CRLF and an LF checkout both pass. Its sums are regenerated on `main` after #104, #105 and #108
   merge, since every file under `synapse_kernel/` then is frozen. A fresh-context reviewer attacks it
   next (brief: scratch `attack-brief.md`, 30 tool calls).
+- **S5-M-38 The CI runner gives the same bits, faster in batches (measured; #108, `kernel.yml`
+  light job 137848688405: Linux, 4 vCPUs, Python 3.11.18, numpy 2.4.6).** All seven digests of the
+  bench equal the laptop's (Windows, numpy 2.4.4) and Pyodide's: the scenario `92c52f4ef9a0dd09`;
+  I1 at batches 1, 32, 128 `b222aeca8d9fddd5`, `8408c832097e4fa1`, `edc844739e5d5789`; I2
+  `7aa87417303e8111`, `b496815faa973cf8`, `da366049425c3802`. Times: scenario 26 ms; a replicate
+  alone 34 to 38 ms, 16.6 to 18.8 ms each in batches of 32 or 128; a simulated day 2.6 to 2.9 ms.
+  The light job's 77 tests took 5.1 s. Stage C's question is answered: the world is exact across
+  three runtimes and two numpy versions, and fast enough for tuning, the confirmatory run and the
+  browser.
