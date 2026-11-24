@@ -85,6 +85,21 @@ def price_many(tasks: Sequence[tuple[int, str, int]]) -> list[tuple[int, str, in
     return results
 
 
+def kernel_sentinel_costs(seeds: Sequence[int]) -> dict[int, float]:
+    """The kernel's Sentinel alone priced on the kernel's legacy world, seed by seed (0.1 s each).
+
+    Imports only the kernel (numpy and simpy), never the agent stack, and reads no ``TW_``
+    variable: the comparison is with the consensus pins, which the miniature re-measures.
+    """
+    from synapse_kernel.drive import run_replicate
+    from synapse_kernel.objective import replicate_cost
+    from synapse_kernel.policies.sentinel import SentinelAlone
+    from synapse_kernel.world import load_world
+
+    world = load_world()
+    return {seed: replicate_cost(run_replicate(seed, SentinelAlone(), world)) for seed in seeds}
+
+
 def replicate_seeds(root: Path, count: int) -> Sequence[int]:
     """E5's first ``count`` replicate seeds, exactly as E5 derives them."""
     from uplift import e5_suite

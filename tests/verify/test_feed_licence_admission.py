@@ -137,8 +137,12 @@ def test_committed_m5_entry_records_every_term_as_unestablished() -> None:
     would be quoted by the first generated document that touched it.
     """
     document = load_licence_document(ARTIFACT_PATH)
-    assert document.datasets, "the artifact must declare at least one dataset"
-    for entry in document.datasets:
+    m5 = [e for e in document.datasets if e.dataset_id == "kaggle/m5-forecasting-uncertainty"]
+    # Scoped to the M5 entry, as the name says. Until truth session 5 this looped over every
+    # entry, which held only while M5 was the only one; FreshRetailNet-50K's terms were read
+    # from its public licence and are pinned by the next test.
+    assert len(m5) == 1, "the M5 entry must stay declared"
+    for entry in m5:
         assert not entry.confirmed
         assert entry.confirmation.confirmed is False
         assert entry.confirmation.procedure, "an unconfirmed entry must name the operator steps"
@@ -151,6 +155,29 @@ def test_committed_m5_entry_records_every_term_as_unestablished() -> None:
         assert entry.redistribution is None
         # And the flag does not outrun its subject.
         assert not entry.flag_disagrees()
+
+
+def test_committed_freshretailnet_entry_records_read_terms_awaiting_the_operator() -> None:
+    """FreshRetailNet-50K's terms were read, its confirmation is still the operator's.
+
+    Its licence is CC BY 4.0, public, behind no acceptance gate, and was read at the source on
+    2026-11-20 (truth session 5): every R8.1 field is filled, so the entry is complete. The
+    ``confirmation.confirmed`` flag stays false until the operator follows the entry's own
+    procedure - the ordinary state :meth:`DatasetLicence.flag_disagrees` describes, not a
+    disagreement.
+    """
+    document = load_licence_document(ARTIFACT_PATH)
+    frn = "huggingface/Dingdong-Inc/FreshRetailNet-50K"
+    (entry,) = [e for e in document.datasets if e.dataset_id == frn]
+    assert entry.confirmed
+    assert not entry.absent_fields
+    assert entry.licence_id == "CC-BY-4.0"
+    assert entry.redistribution == "permitted-with-attribution"
+    assert entry.dataset_revision == "c374e85975c82816c495acfa904cc55ab14a47d3"
+    assert entry.confirmation.confirmed is False
+    assert entry.confirmation.confirmed_by is None
+    assert entry.confirmation.procedure, "the operator's steps must be named"
+    assert not entry.flag_disagrees()
 
 
 def test_committed_schema_is_a_valid_draft07_schema() -> None:

@@ -49,6 +49,7 @@ def run_forever() -> None:
         # Heartbeat regardless of scored count: an honest 0-scored pass (no
         # settled decisions yet, or table not migrated) is still a live loop.
         HEARTBEAT_FILE.touch()
+        # not-a-retry: the scorer's period
         time.sleep(INTERVAL_SECONDS)
 
 

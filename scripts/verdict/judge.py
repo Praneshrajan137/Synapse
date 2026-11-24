@@ -37,12 +37,17 @@ class Outcome(enum.IntEnum):
     """A ``TW_`` environment variable is set, which silently changes the twin (finding F-33)."""
     INCOMPLETE = 7
     """A measurement could not be taken (an arm failed, or the pins name other seeds)."""
+    KERNEL_DIVERGED = 8
+    """The kernel's port of the decision core (``synapse_kernel.policies.sentinel``) no longer
+    costs what the consensus pins say: the browser would show other decisions than SYNAPSE's."""
 
 
 #: Which outcome wins when several apply, most severe first. A refusal or a missing measurement
 #: says nothing about the code; a failed safety test outranks every quality signal; a
 #: nondeterminism makes every cost comparison meaningless; a moved control makes the consensus
-#: arm's change uninterpretable as a decision change.
+#: arm's change uninterpretable as a decision change. A kernel divergence ranks after a change of
+#: the consensus arm: a change to the agents still reads as WORSE or CHANGED, and once its pins are
+#: re-written the port must move with it, or this outcome remains.
 PRIORITY: Final[tuple[Outcome, ...]] = (
     Outcome.REFUSED_ENV,
     Outcome.INCOMPLETE,
@@ -51,6 +56,7 @@ PRIORITY: Final[tuple[Outcome, ...]] = (
     Outcome.CONTROL_MOVED,
     Outcome.WORSE,
     Outcome.CHANGED,
+    Outcome.KERNEL_DIVERGED,
     Outcome.PASS,
 )
 
@@ -80,6 +86,9 @@ class Measurement:
     physics_moved: Sequence[str] = ()
     """Refusals by the proof's own records because the physics they describe changed (the
     B-prime record's physics digest): the control and the physics moved, so nothing was priced."""
+    kernel: Mapping[int, float] = dataclasses.field(default_factory=dict)
+    """Per seed: the kernel's Sentinel alone priced on the kernel's legacy world. It reads no legacy
+    physics, so it is priced whatever the legacy twin does; a pinned seed missing here is a gap."""
 
 
 @dataclasses.dataclass(frozen=True)
@@ -143,6 +152,27 @@ def judge(pins: Pins, measurement: Measurement) -> Verdict:
                 Outcome.INCOMPLETE,
                 f"{arm}: {len(missing)} pinned seed(s) not measured {missing[:3]}",
             )
+    unpriced = [seed for seed in pins.seeds if seed not in measurement.kernel]
+    if unpriced:
+        note(
+            Outcome.INCOMPLETE,
+            f"kernel: {len(unpriced)} pinned seed(s) not priced by the Sentinel alone "
+            f"{unpriced[:3]}",
+        )
+    else:
+        diverged = [
+            seed for seed in pins.seeds if measurement.kernel[seed] != pins.costs["consensus"][seed]
+        ]
+        if diverged:
+            first = diverged[0]
+            note(
+                Outcome.KERNEL_DIVERGED,
+                f"the kernel's Sentinel alone differs from the consensus pins on {len(diverged)} "
+                f"of {len(pins.seeds)} seeds (first: seed {first}, pinned "
+                f"{pins.costs['consensus'][first].hex()}, kernel "
+                f"{measurement.kernel[first].hex()}): synapse_kernel/policies/sentinel.py must "
+                "move with the agents",
+            )
     for shard, code in sorted(measurement.shard_exit_codes.items()):
         if code != 0:
             note(Outcome.SAFETY, f"safety shard {shard!r} exited {code}")
@@ -179,6 +209,19 @@ def judge(pins: Pins, measurement: Measurement) -> Verdict:
     outcome = next(o for o in PRIORITY if o in found or o is Outcome.PASS)
     findings = tuple(text for o in PRIORITY for text in found.get(o, []))
     return Verdict(outcome=outcome, findings=findings, deltas=deltas)
+
+
+def kernel_reproduces(
+    consensus: Mapping[int, float], kernel: Mapping[int, float], seeds: Sequence[int]
+) -> bool:
+    """Whether the kernel's port priced every seed exactly as the consensus arm was measured.
+
+    ``--repin`` writes new consensus pins only when this holds, so a change to the agents and the
+    port's matching change land together (or the re-pinned tree reads KERNEL_DIVERGED).
+    """
+    return bool(seeds) and all(
+        seed in kernel and seed in consensus and kernel[seed] == consensus[seed] for seed in seeds
+    )
 
 
 def pins_to_document(pins: Pins, note: str) -> dict[str, object]:

@@ -45,6 +45,7 @@ def init_playbook_index() -> None:
 
     while not pc.describe_index(index_name).status.get("ready"):
         logger.info("waiting_for_index", name=index_name)
+        # not-a-retry: a one-off operator script polls the index until it is ready
         time.sleep(5)
 
     logger.info("index_created", name=index_name, dimension=768, metric="cosine")
