@@ -34,12 +34,12 @@ the same pair.
 
 ## Summary
 
-Parsed 23 workflow file(s), 72 job(s), 477 step(s).
+Parsed 23 workflow file(s), 72 job(s), 478 step(s).
 
 | Trigger | Jobs executing | Jobs conditional | Jobs NOT EXECUTED | Steps blocking | Steps advisory | Steps conditional |
 |---|---|---|---|---|---|---|
-| push:main | 4 | 34 | 34 | 31 | 0 | 203 |
-| pull_request | 17 | 36 | 19 | 107 | 4 | 224 |
+| push:main | 4 | 34 | 34 | 31 | 0 | 204 |
+| pull_request | 17 | 36 | 19 | 107 | 4 | 225 |
 | tag:v* | 3 | 3 | 66 | 18 | 0 | 29 |
 
 ## Job selection
@@ -119,7 +119,7 @@ Why each job runs, does not run, or runs conditionally under each trigger. `need
 | push:main | .github/workflows/uplift.yml::uplift-controls-negative | NOT EXECUTED | workflow on: has no push trigger |
 | push:main | .github/workflows/uplift.yml::uplift-controls-positive | NOT EXECUTED | workflow on: has no push trigger |
 | push:main | .github/workflows/uplift.yml::uplift-controls | NOT EXECUTED | workflow on: has no push trigger |
-| push:main | .github/workflows/verdict.yml::verdict | CONDITIONAL | path-filtered (paths: agents/**, orchestrator/**, uplift/**, digital_twin/**, +6 more) |
+| push:main | .github/workflows/verdict.yml::verdict | CONDITIONAL | path-filtered (paths: agents/**, orchestrator/**, uplift/**, digital_twin/**, +8 more) |
 | pull_request | .github/workflows/beacon.yml::verify | CONDITIONAL | path-filtered (paths: synapse_beacon/**, tests/beacon/**, .github/workflows/beacon.yml) |
 | pull_request | .github/workflows/cd-gcp.yml::build-push-sign | NOT EXECUTED | workflow on: has no pull_request trigger |
 | pull_request | .github/workflows/cd-gcp.yml::deploy-to-vm | NOT EXECUTED | workflow on: has no pull_request trigger |
@@ -191,7 +191,7 @@ Why each job runs, does not run, or runs conditionally under each trigger. `need
 | pull_request | .github/workflows/uplift.yml::uplift-controls-negative | CONDITIONAL | if: undecidable from trigger (github.event.label.name) |
 | pull_request | .github/workflows/uplift.yml::uplift-controls-positive | CONDITIONAL | if: undecidable from trigger (github.event.label.name) |
 | pull_request | .github/workflows/uplift.yml::uplift-controls | CONDITIONAL | if: undecidable from trigger (github.event.label.name); needs 'uplift-controls-negative', which is conditional; needs 'uplift-controls-positive', which is conditional |
-| pull_request | .github/workflows/verdict.yml::verdict | CONDITIONAL | path-filtered (paths: agents/**, orchestrator/**, uplift/**, digital_twin/**, +6 more) |
+| pull_request | .github/workflows/verdict.yml::verdict | CONDITIONAL | path-filtered (paths: agents/**, orchestrator/**, uplift/**, digital_twin/**, +8 more) |
 | tag:v* | .github/workflows/beacon.yml::verify | NOT EXECUTED | on: push is branch-scoped (no tags: filter), so a tag push is excluded |
 | tag:v* | .github/workflows/cd-gcp.yml::build-push-sign | CONDITIONAL | path-filtered (paths-ignore: **.md, docs/**, plans/**, notebooks/**) |
 | tag:v* | .github/workflows/cd-gcp.yml::deploy-to-vm | CONDITIONAL | path-filtered (paths-ignore: **.md, docs/**, plans/**, notebooks/**); needs 'build-push-sign', which is conditional |
@@ -454,6 +454,7 @@ Why each job runs, does not run, or runs conditionally under each trigger. `need
 | push:main | .github/workflows/kernel.yml::light | Set up Python 3.11 | CONDITIONAL | conditional - blocking |
 | push:main | .github/workflows/kernel.yml::light | Install the kernel's dependencies and the test runner, nothing else | CONDITIONAL | conditional - blocking |
 | push:main | .github/workflows/kernel.yml::light | Kernel tests without the repository's dependencies | CONDITIONAL | conditional - blocking |
+| push:main | .github/workflows/kernel.yml::light | Lint and strict typing of the kernel | CONDITIONAL | conditional - blocking |
 | push:main | .github/workflows/kernel.yml::light | Time the release world on this runner | CONDITIONAL | conditional - blocking |
 | push:main | .github/workflows/kernel.yml::parity | uses: actions/checkout@v4 | CONDITIONAL | conditional - blocking |
 | push:main | .github/workflows/kernel.yml::parity | Set up Python 3.11 | CONDITIONAL | conditional - blocking |
@@ -761,6 +762,7 @@ Why each job runs, does not run, or runs conditionally under each trigger. `need
 | pull_request | .github/workflows/kernel.yml::light | Set up Python 3.11 | CONDITIONAL | conditional - blocking |
 | pull_request | .github/workflows/kernel.yml::light | Install the kernel's dependencies and the test runner, nothing else | CONDITIONAL | conditional - blocking |
 | pull_request | .github/workflows/kernel.yml::light | Kernel tests without the repository's dependencies | CONDITIONAL | conditional - blocking |
+| pull_request | .github/workflows/kernel.yml::light | Lint and strict typing of the kernel | CONDITIONAL | conditional - blocking |
 | pull_request | .github/workflows/kernel.yml::light | Time the release world on this runner | CONDITIONAL | conditional - blocking |
 | pull_request | .github/workflows/kernel.yml::parity | uses: actions/checkout@v4 | CONDITIONAL | conditional - blocking |
 | pull_request | .github/workflows/kernel.yml::parity | Set up Python 3.11 | CONDITIONAL | conditional - blocking |
