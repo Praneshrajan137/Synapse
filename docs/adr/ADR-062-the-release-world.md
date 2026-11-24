@@ -88,13 +88,19 @@ F-36), and freeze W makes any later repair a deviation.
 
 ## The calibration (session 5, stage D, `scripts/kernel/tune_incumbent.py`)
 
-- **Shelf lives times 1/sqrt(2).** The gate fixed the rule before any result: the waste share
-  (units discarded over units sold) of the better of I1 and I2, tuned on cell N's tuning seeds,
-  must lie in [2.7%, 10.9%] (a factor of two around IFPA's 5.46%, which includes shrink other than
-  expiry); otherwise one global scale on shelf lives, bisected in log scale in [0.5, 2], at most six
-  steps, stopping on entering the band. At the chosen 1, 2, 3, 5 and 7 days the share was 2.38%; at
-  scale 1/sqrt(2) it was 3.09%, so the frozen shelf lives are 17, 34, 51, 85 and 119 hours, and the
-  world's provenance says so. Volume, items and the schedule did not move.
+- **Shelf lives times 1/sqrt(2).** The gate fixed the rule before any result: no recalibration if
+  the waste share (units discarded over units sold) of the better of I1 and I2, tuned on cell N's
+  tuning seeds, lies in [2.7%, 10.9%] (a factor of two around IFPA's 5.46%, which includes shrink
+  other than expiry); otherwise one global scale on shelf lives in [0.5, 2], "bisected in log scale
+  toward 5.46%, at most six iterations". **The gate does not say whether the bisection stops on
+  entering the band or continues toward 5.46%.** The driver reads "no recalibration if the share
+  lies in the band" as holding at every step, so it stops on entering it; that reading was
+  committed in the driver (`2a3747c`, as `5ba68d5` before a rebase) before the run started, and it
+  is a reading, not the gate's text (freeze W's attack, truth log S5-D-07). At the chosen 1, 2, 3, 5
+  and 7 days the share was 2.38%; at scale 1/sqrt(2) it was 3.09%, so the frozen shelf lives are 17,
+  34, 51, 85 and 119 hours, and the world's provenance says so. The other reading would have gone
+  on toward 5.46%, to shorter shelf lives and more waste. Volume, items and the schedule did not
+  move.
 - **The frozen world**: a 6-day warm-up (the longest shelf life plus the longest lead time, whole
   days) and 7 measured days, 13 days per replicate.
 

@@ -2,12 +2,22 @@
 
 PREREG-1 section 6: before freeze W, an oracle arm told each shock's items, onset, size and duration
 runs on the validation seeds, and its mean advantage over the incumbent in each shock cell is
-published. The oracle here is the cell's selected incumbent version with the shock inserted into
-what it plans against (the session-5 gate, section 7): in a surge, the affected items' mean
-demand over the protection interval gains ``(u - 1)`` times the mean demand in the window's overlap
-with it; in a delay or an outage, the protection interval runs to the delivery after the order's
-actual arrival. It reads the scenario, which no policy may do: it is a measuring instrument, not
-a policy.
+published. The oracle is the cell's selected incumbent version told the shock. It reads the
+scenario, which no policy may do: it is a measuring instrument, not a policy. Two rules:
+
+* ``rule="gate"``, the gate's oracle as the session-5 gate (section 7) defines it: the shock is
+  inserted into what the incumbent plans against, and the incumbent's own rule decides. In a
+  surge, the affected items' mean demand in the shock's hours is times ``u`` wherever the
+  incumbent reads it (its order-up-to level and, for I2, its expected outdating), before the order
+  is clipped at zero. In a delay or an outage, the shocked supplier's items plan against the
+  protection interval as it will actually run: from the decision to the actual arrival of the next
+  order, with the pipeline as it will actually land.
+* ``rule="informed"``, a better use of the same information, designed on the fixture world after
+  the gate's rule lost there (truth log S5-M-22) and repaired after freeze W's attack (S5-D-07): the
+  surge enters as ``1 + kappa (u - 1)``; in a delay or an outage an order covers only the demand
+  from its own actual arrival to the next order's, given the stock projected to that arrival and
+  capped by what can sell before it expires, times ``kappa``. ``kappa`` (``response``) is one
+  factor per item, tuned by the sealed search on the cell's tuning seeds.
 
 :class:`Guarded` passes the oracle through the guard (:mod:`synapse_kernel.release.guard`) against
 the incumbent on the same state, to measure how much of the oracle's headroom survives it.
@@ -32,9 +42,12 @@ if TYPE_CHECKING:
     from synapse_kernel.release.scenario import Scenario
     from synapse_kernel.release.world import ReleaseWorld
 
-__all__ = ["Guarded", "ShockOracle"]
+__all__ = ["RULES", "Guarded", "ShockOracle"]
 
 I64 = npt.NDArray[np.int64]
+F64 = npt.NDArray[np.float64]
+#: The oracle's two rules: the gate's, and the informed variant (module docstring).
+RULES = ("gate", "informed")
 
 
 class ShockOracle(Incumbent):
@@ -46,14 +59,22 @@ class ShockOracle(Incumbent):
         tables: IncumbentTables,
         batch: list[Scenario],
         response: npt.NDArray[np.float64] | None = None,
+        rule: str = "gate",
     ) -> None:
         super().__init__(world, tables)
+        if rule not in RULES:
+            raise ValueError(f"rule {rule!r} is not one of {RULES}")
+        if rule == "gate" and response is not None:
+            raise ValueError("the gate's oracle has no response factor")
+        self.rule = rule
         self.world = world
         self.batch = batch
-        # kappa per item: scales only the informed part of a decision (1 keeps the told rule).
+        # kappa per item: scales only the informed part of a decision (1 is the gate's surge).
         self.response = (
             np.ones(len(world.items)) if response is None else np.asarray(response, dtype=float)
         )
+        # The table the incumbent's cumulative sums, kept to rebuild it with a surge inserted.
+        self.weeks = np.concatenate([tables.mean_table] * 4, axis=0)
         self.supplier_of = np.array(
             [[s.name for s in world.suppliers].index(item.supplier) for item in world.items]
         )
@@ -84,33 +105,77 @@ class ShockOracle(Incumbent):
     def _decide_one(self, obs: StoreObservation, r: int, scenario: Scenario) -> I64:
         """The incumbent's decision, informed of this replicate's shock where the shock bears."""
         one = _single(obs, r)
-        base: I64 = Incumbent.decide(self, one)[0]
         shock = scenario.shock
         if shock.kind == "surge":
-            return self._surge(obs, base, shock)
+            return self._surge(one, shock)
+        base: I64 = Incumbent.decide(self, one)[0]
         if shock.kind in ("delay", "outage"):
+            if self.rule == "gate":
+                return self._gate_supply(one, base, scenario)
             return self._supply(obs, r, base, scenario)
         return base
 
-    def _surge(self, obs: StoreObservation, base: I64, shock: Shock) -> I64:
-        """Surged items: the incumbent's level with ``(u - 1)`` times the window's demand added."""
-        hour = self.hour
-        week_hour = obs.day_of_week * HOURS_PER_DAY + obs.hour_of_day
+    def _surge(self, one: StoreObservation, shock: Shock) -> I64:
+        """The incumbent's own decision, planned against the surged mean demand.
+
+        The cumulative mean demand the incumbent reads is rebuilt with the surged items' mean in
+        the shock's hours (``onset <= h < end``, as the scenario draws them) times ``u`` (gate) or
+        ``1 + kappa (u - 1)`` (informed), so both the order-up-to level and I2's expected outdating
+        see the surge, and the order is clipped at zero only after.
+        """
+        week_hour = one.day_of_week * HOURS_PER_DAY + one.hour_of_day
+        offset = self.hour - week_hour  # the absolute hour of cumulative row x is x + offset
+        rows = np.arange(self.weeks.shape[0]) + offset
+        surged = (rows >= shock.onset_hour) & (rows < shock.end_hour)
+        reach = int(self.protection[:, one.hour_of_day].max())
+        if self.tables.waste_aware:
+            reach = max(reach, int(one.hours_to_expiry.max()))
+        read = (rows >= self.hour) & (rows < self.hour + reach)
+        if not bool((surged & read).any()):
+            plain: I64 = Incumbent.decide(self, one)[0]
+            return plain
+        items = np.asarray(shock.items, dtype=np.int64)
+        factor = np.ones(len(self.world.items))
+        factor[items] = 1.0 + self.response[items] * (shock.size - 1.0)
+        weeks = self.weeks.copy()
+        weeks[surged] = weeks[surged] * factor[None, :]
+        saved = self.cumulative
+        self.cumulative = np.concatenate(
+            [np.zeros((1, weeks.shape[1])), np.cumsum(weeks, axis=0)], axis=0
+        )
+        try:
+            out: I64 = Incumbent.decide(self, one)[0]
+        finally:
+            self.cumulative = saved
+        return out
+
+    def _gate_supply(self, one: StoreObservation, base: I64, scenario: Scenario) -> I64:
+        """The gate's rule for the shocked supplier's items: the incumbent's own decision, with the
+        protection interval running from the decision to the next order's actual arrival."""
+        shock = scenario.shock
+        j = int(shock.supplier)
+        items = np.nonzero(one.deciding & (self.supplier_of == j))[0]
+        if items.size == 0:
+            return base
+        spec = self.world.suppliers[j]
+        cutoffs = sorted(spec.cutoff_hours)
+        later = [c for c in cutoffs if c > one.hour_of_day]
+        step = (later[0] if later else cutoffs[0] + HOURS_PER_DAY) - one.hour_of_day
+        lands = arrival_hour(self.world, shock, j, self.hour)
+        lands_next = max(arrival_hour(self.world, shock, j, self.hour + step), lands)
+        week_hour = one.day_of_week * HOURS_PER_DAY + one.hour_of_day
+        hours = np.where(one.deciding, self.protection[:, one.hour_of_day], 0)
+        hours[items] = lands_next - self.hour
+        mu = self._window(week_hour, hours)
+        factor = self.tables.factors[:, part_of_day(one.hour_of_day)]
+        target: F64 = np.ceil(factor * mu)
+        position = (one.on_hand.sum(axis=-1) + one.open_qty.sum(axis=-1))[0]
+        if self.tables.waste_aware:
+            wanted = np.ceil(target - position + self.expected_outdating(one)[0])
+        else:
+            wanted = target - position
         out = base.copy()
-        factor = self.tables.factors[:, part_of_day(obs.hour_of_day)]
-        for item in shock.items:
-            if not obs.deciding[item]:
-                continue
-            span = int(self.protection[item, obs.hour_of_day])
-            lo = max(float(hour), shock.onset_hour)
-            hi = min(float(hour + span), shock.end_hour)
-            if hi <= lo:
-                continue
-            a = week_hour + int(np.ceil(lo)) - hour
-            b = week_hour + int(np.ceil(hi)) - hour
-            extra = (shock.size - 1.0) * (self.cumulative[b, item] - self.cumulative[a, item])
-            scale = float(factor[item]) * float(self.response[item])
-            out[item] = base[item] + int(np.ceil(scale * extra))
+        out[items] = np.maximum(0, wanted[items]).astype(np.int64)
         return out
 
     def _supply(self, obs: StoreObservation, r: int, base: I64, scenario: Scenario) -> I64:

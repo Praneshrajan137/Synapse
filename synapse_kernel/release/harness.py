@@ -21,7 +21,7 @@ from synapse_kernel.release.tuning import TuningResult, coordinate_search
 from synapse_kernel.release.world import HOURS_PER_WEEK
 
 if TYPE_CHECKING:
-    from collections.abc import Sequence
+    from collections.abc import Callable, Sequence
 
     from synapse_kernel.release.engine import ReleasePolicy
     from synapse_kernel.release.scenario import Scenario
@@ -29,6 +29,7 @@ if TYPE_CHECKING:
 
 __all__ = [
     "Priced",
+    "batch_independent",
     "mean_demand_table",
     "price",
     "scenarios",
@@ -97,6 +98,30 @@ def price(world: ReleaseWorld, batch: Sequence[Scenario], policy: ReleasePolicy)
         waste=tuple(waste_share(out)),
         item_cost=item_costs(world, out).mean(axis=0),
     )
+
+
+def batch_independent(
+    world: ReleaseWorld, make_policy: Callable[[], ReleasePolicy], batch: Sequence[Scenario]
+) -> bool:
+    """Whether a policy decides each replicate exactly as it would alone (freeze W's rule).
+
+    A policy sees the whole batch's observations and is told the batch size by ``start``, so it
+    could pool information across replicates, or read the batch size: in the confirmatory run a
+    cell's size is its ``n_c``, which differs by cell. PREREG-1 section 1 gives a policy neither
+    the cell nor any other replicate. One run of the batch is compared with one run per scenario,
+    each with a fresh policy, outcome by outcome; any difference is a ``False``.
+    """
+    together = run(world, batch, make_policy())
+    for r, scenario in enumerate(batch):
+        alone = run(world, [scenario], make_policy())
+        for field in dataclasses.fields(alone):
+            mine, theirs = getattr(together, field.name), getattr(alone, field.name)
+            if mine.ndim >= 1 and mine.shape[0] == len(batch) and theirs.shape[0] == 1:
+                if not np.array_equal(mine[r], theirs[0]):
+                    return False
+            elif not np.array_equal(mine, theirs):
+                return False
+    return True
 
 
 def tune_incumbent(

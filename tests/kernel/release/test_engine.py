@@ -14,11 +14,14 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 import numpy as np
+import numpy.typing as npt
 import pytest
 
 from synapse_kernel.release import engine
 from synapse_kernel.release.cells import Shock
 from synapse_kernel.release.engine import run
+from synapse_kernel.release.harness import batch_independent, mean_demand_table, scenarios
+from synapse_kernel.release.incumbent import Incumbent, IncumbentTables
 from synapse_kernel.release.scenario import Scenario, build_scenario
 from tests.kernel.release.fixtures import Never, OrderUpTo, small_world
 
@@ -193,3 +196,30 @@ def test_an_order_the_world_cannot_take_is_refused(fault: str) -> None:
 
     with pytest.raises(ValueError):
         run(world, [scene], Bad())
+
+
+def test_the_incumbent_decides_each_replicate_as_it_would_alone() -> None:
+    """Freeze W's batch rule: neither the batch size nor another replicate moves an order."""
+    world = small_world(items=9)
+    table = mean_demand_table(world, [scenarios(world, "N", range(4))])
+    for aware in (False, True):
+        tables = IncumbentTables("I2" if aware else "I1", aware, np.full((9, 6), 1.25), table)
+        for cell in ("N", "S1", "S3"):
+            batch = scenarios(world, cell, (2, 3, 4))
+            assert batch_independent(world, lambda t=tables: Incumbent(world, t), batch)
+
+
+class _PoolsTheBatch:
+    """A planted leak: orders more when the batch is larger than one replicate."""
+
+    def start(self, replicates: int) -> None:
+        self.replicates = replicates
+
+    def decide(self, obs: StoreObservation) -> npt.NDArray[np.int64]:
+        orders = np.where(obs.deciding[None, :], self.replicates, 0)
+        return np.broadcast_to(orders, obs.on_hand.shape[:2]).astype(np.int64)
+
+
+def test_a_policy_that_reads_the_batch_is_caught() -> None:
+    world = small_world(items=9)
+    assert not batch_independent(world, _PoolsTheBatch, scenarios(world, "N", (2, 3)))

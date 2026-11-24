@@ -4,14 +4,17 @@
 
 1. measures the waste share of the better of I1 and I2 tuned on cell N's tuning seeds; outside
    [2.7%, 10.9%] it recalibrates the world's shelf lives by one global scale, bisected in log scale
-   toward IFPA's 5.46%, at most six times, every iteration recorded (the session-5 gate, section 7);
+   toward IFPA's 5.46%, at most six times, every iteration recorded (the session-5 gate, section 7),
+   and stops once the share enters the band (a reading: the gate's text does not say);
 2. tunes six versions (I1 and I2, each on N's tuning seeds, on L's, and on N, S1, S2 and S3 pooled)
    with the sealed coordinate search (``synapse_kernel.release.tuning``);
 3. selects the incumbent per cell on that cell's 32 validation seeds (lowest mean J; ties: I1, then
    the version tuned on normal conditions) and the contest's incumbent (pooled versions, S1 to S3);
-4. computes ``D_c``, ``p_c`` and ``M_c`` per cell from the declared parameters, the shock headroom
-   of an oracle told each shock, and, as an exploratory description, how much of it survives the
-   guard of D-4(b);
+4. computes ``D_c``, ``p_c`` and ``M_c`` per cell from the declared parameters (``D_c`` of S1 by a
+   120 x 120 midpoint rule over the surge's duration and onset), the shock headroom of the gate's
+   oracle and of an informed variant (``synapse_kernel.release.oracle``), each with its per-seed
+   difference-in-differences against cell N, and, as an exploratory description, how much of it
+   survives the guard of D-4(b);
 5. reports each version's tuning-validation gap (on the validation seeds of the cells it was tuned
    on), 1-D profiles around the selected N version's optimum, and a restart of I1-N from k = 2;
 6. writes the tables (``synapse_kernel/worlds/incumbent_tables.json``), the report
@@ -75,10 +78,12 @@ def calibrated(world: ReleaseWorld, scale: float, steps: list[dict[str, Any]]) -
     history = "; ".join(f"{s['waste_share']:.2%} at {s['scale']:.4f}" for s in steps)
     hours = sorted({max(12, round(item.shelf_life_hours * scale)) for item in world.items})
     note = (
-        f"{old.source}. Calibrated before freeze W by the session-5 gate's rule (section 7): the "
-        f"incumbent's waste share in N (units discarded over units sold, tuning seeds) was "
-        f"{history}, so every shelf life is times {scale!r}, rounded to whole hours: "
-        f"{', '.join(str(h) for h in hours)} hours"
+        f"{old.source}. Calibrated before freeze W by the session-5 gate's rule (section 7), read "
+        f"as stopping once the share enters the band [2.7%, 10.9%] (the gate's text does not say "
+        f"whether the log bisection toward 5.46% stops there; this reading was fixed in the driver "
+        f"before the run): the incumbent's waste share in N (units discarded over units sold, "
+        f"tuning seeds) was {history}, so every shelf life is times {scale!r}, rounded to whole "
+        f"hours: {', '.join(str(h) for h in hours)} hours"
     )
     provenance = {**world.provenance, key: dataclasses.replace(old, source=note)}
     return dataclasses.replace(scaled(world, scale), provenance=provenance)
@@ -292,44 +297,60 @@ def main(argv: list[str] | None = None) -> int:
     used = used_parts(world)
     kappa_slot = np.zeros_like(used)
     kappa_slot[:, 0] = True  # one response factor per item, in the first column
+    # The oracle arm in N is the shock cell's base version with no shock to tell, against N's own
+    # incumbent: its per-seed advantage there is what the difference-in-differences subtracts
+    # (PREREG-1 section 6: delta_S,k - delta_N,k on the same seeds).
+    n_incumbent = Incumbent(world, versions[selected["N"]][0])
+    n_costs = np.array(priced["N"][selected["N"]].costs)
     for cell in SHOCK_CELLS:
         base = versions[selected[cell]][0]
         incumbent = priced[cell][selected[cell]]
         batch = valid_sets[cell]
         found: dict[str, Any] = {}
-        for guarded in (False, True):
-            for tuned in (False, True):
-                label = ("guarded" if guarded else "unguarded") + ("_tuned" if tuned else "_told")
-                response, evaluations = None, 0
-                if tuned:
-                    result = coordinate_search(
-                        _told_evaluator(world, base, tune_sets[cell], guarded),
-                        kappa_slot,
-                        len(tune_sets[cell]),
-                    )
-                    response, evaluations = result.factors[:, 0], result.replicate_evaluations
-                oracle = ShockOracle(world, base, batch, response)
-                policy: Any = Guarded(oracle, Incumbent(world, base)) if guarded else oracle
-                outcome = price(world, batch, policy)
-                gain = np.array(incumbent.costs) - np.array(outcome.costs)
-                found[label] = {
-                    "mean_advantage": float(gain.mean()),
-                    "advantage_ci95": interval(gain, rng),
-                    "response_tuning_replicate_evaluations": evaluations,
-                    "clipped_share": (policy.clipped / max(policy.decisions, 1))
-                    if guarded
-                    else None,
-                }
-                print(
-                    f"headroom {cell} {label}: {gain.mean():+.3f} (margin {margins[cell]:.3f})",
-                    flush=True,
+        for rule, guarded in (
+            ("gate", False),
+            ("gate", True),
+            ("informed", False),
+            ("informed", True),
+        ):
+            label = f"{rule}_{'guarded' if guarded else 'unguarded'}"
+            response, evaluations = None, 0
+            if rule == "informed":
+                result = coordinate_search(
+                    _told_evaluator(world, base, tune_sets[cell], guarded),
+                    kappa_slot,
+                    len(tune_sets[cell]),
                 )
+                response, evaluations = result.factors[:, 0], result.replicate_evaluations
+            oracle = ShockOracle(world, base, batch, response, rule=rule)
+            policy: Any = Guarded(oracle, Incumbent(world, base)) if guarded else oracle
+            outcome = price(world, batch, policy)
+            gain = np.array(incumbent.costs) - np.array(outcome.costs)
+            in_n_arm: Any = ShockOracle(world, base, valid_sets["N"], response, rule=rule)
+            if guarded:
+                in_n_arm = Guarded(in_n_arm, n_incumbent)
+            gain_n = n_costs - np.array(price(world, valid_sets["N"], in_n_arm).costs)
+            found[label] = {
+                "mean_advantage": float(gain.mean()),
+                "advantage_ci95": interval(gain, rng),
+                "difference_in_differences": float((gain - gain_n).mean()),
+                "difference_in_differences_ci95": interval(gain - gain_n, rng),
+                "advantage_in_N": float(gain_n.mean()),
+                "response_tuning_replicate_evaluations": evaluations,
+                "clipped_share": (policy.clipped / max(policy.decisions, 1)) if guarded else None,
+            }
+            print(
+                f"headroom {cell} {label}: {gain.mean():+.3f}, DiD {(gain - gain_n).mean():+.3f}"
+                f" (margin {margins[cell]:.3f})",
+                flush=True,
+            )
         headroom[cell] = {
             "incumbent": selected[cell],
             "margin": margins[cell],
             **found,
-            "difference_in_differences_note": (
-                "in N the told incumbent is the incumbent, so the DiD equals the advantage"
+            "rules": (
+                "gate: the session-5 gate's oracle (section 7), the incumbent planning against the "
+                "shock; informed: a post hoc variant, kappa tuned on the cell's tuning seeds"
             ),
         }
 
@@ -421,10 +442,10 @@ def _evaluator(world: ReleaseWorld, tables: IncumbentTables, batch: list[Any]) -
 def _told_evaluator(
     world: ReleaseWorld, base: IncumbentTables, batch: list[Any], guarded: bool
 ) -> Any:
-    """Item costs of the incumbent told the shock, with response factors (through the guard)."""
+    """Item costs of the informed oracle with response factors ``kappa`` (through the guard)."""
 
     def evaluate(factors: np.ndarray) -> np.ndarray:
-        oracle = ShockOracle(world, base, batch, factors[:, 0].copy())
+        oracle = ShockOracle(world, base, batch, factors[:, 0].copy(), rule="informed")
         policy: Any = Guarded(oracle, Incumbent(world, base)) if guarded else oracle
         return price(world, batch, policy).item_cost
 

@@ -108,127 +108,199 @@
  },
  "headroom": {
   "S1": {
-   "difference_in_differences_note": "in N the told incumbent is the incumbent, so the DiD equals the advantage",
-   "guarded_told": {
+   "gate_guarded": {
     "advantage_ci95": [
-     22.950347614875096,
-     35.615771920929646
+     23.551047048780987,
+     36.20018340684626
     ],
-    "clipped_share": 0.04247384049773756,
-    "mean_advantage": 29.344073413547786,
+    "advantage_in_N": -1.7164812828705918,
+    "clipped_share": 0.038921097285067874,
+    "difference_in_differences": 31.639782396648727,
+    "difference_in_differences_ci95": [
+     25.44612833235231,
+     38.13700318109023
+    ],
+    "mean_advantage": 29.92330111377813,
     "response_tuning_replicate_evaluations": 0
    },
-   "guarded_tuned": {
+   "gate_unguarded": {
     "advantage_ci95": [
-     22.849484533396783,
-     35.698652312153456
+     24.609429428612202,
+     43.96258026764054
     ],
-    "clipped_share": 0.02726126508295626,
-    "mean_advantage": 29.114181997360163,
-    "response_tuning_replicate_evaluations": 992
+    "advantage_in_N": -2.1947476621106476,
+    "clipped_share": null,
+    "difference_in_differences": 36.23962003118884,
+    "difference_in_differences_ci95": [
+     26.790957752555748,
+     46.00885934416789
+    ],
+    "mean_advantage": 34.04487236907819,
+    "response_tuning_replicate_evaluations": 0
    },
    "incumbent": "I2-P",
-   "margin": 16.01517372070183,
-   "unguarded_told": {
+   "informed_guarded": {
     "advantage_ci95": [
-     -18.96881373697917,
-     16.878424382943717
+     23.112950601767622,
+     35.95526365489823
     ],
-    "clipped_share": null,
-    "mean_advantage": 0.17468121636497003,
-    "response_tuning_replicate_evaluations": 0
+    "advantage_in_N": -1.7164812828705918,
+    "clipped_share": 0.02505184766214178,
+    "difference_in_differences": 31.106610911509293,
+    "difference_in_differences_ci95": [
+     24.55749159888698,
+     37.68591873044326
+    ],
+    "mean_advantage": 29.3901296286387,
+    "response_tuning_replicate_evaluations": 992
    },
-   "unguarded_tuned": {
+   "informed_unguarded": {
     "advantage_ci95": [
-     28.670483125535107,
-     45.929144471433155
+     30.53681124932475,
+     49.22047374432408
     ],
+    "advantage_in_N": -2.1947476621106476,
     "clipped_share": null,
-    "mean_advantage": 37.36798328823181,
+    "difference_in_differences": 42.03399645175921,
+    "difference_in_differences_ci95": [
+     32.80019820896654,
+     51.45013131497675
+    ],
+    "mean_advantage": 39.839248789648565,
     "response_tuning_replicate_evaluations": 736
-   }
+   },
+   "margin": 16.01517372070183,
+   "rules": "gate: the session-5 gate's oracle (section 7), the incumbent planning against the shock; informed: a post hoc variant, kappa tuned on the cell's tuning seeds"
   },
   "S2": {
-   "difference_in_differences_note": "in N the told incumbent is the incumbent, so the DiD equals the advantage",
-   "guarded_told": {
+   "gate_guarded": {
     "advantage_ci95": [
-     -7.500673523275701,
-     -1.2465111671801166
+     -34.96432731447861,
+     -23.365248147334164
     ],
-    "clipped_share": 0.054204374057315236,
-    "mean_advantage": -4.3388327358019465,
+    "advantage_in_N": -1.7164812828705918,
+    "clipped_share": 0.06919306184012067,
+    "difference_in_differences": -27.46656896072856,
+    "difference_in_differences_ci95": [
+     -33.01958012542426,
+     -21.75314223769774
+    ],
+    "mean_advantage": -29.183050243599148,
     "response_tuning_replicate_evaluations": 0
    },
-   "guarded_tuned": {
+   "gate_unguarded": {
     "advantage_ci95": [
-     -2.047302345979596,
-     2.209051913055993
+     -109.68571869031055,
+     -63.45020476464398
     ],
+    "advantage_in_N": -2.1947476621106476,
+    "clipped_share": null,
+    "difference_in_differences": -82.6216377749409,
+    "difference_in_differences_ci95": [
+     -107.2831436745123,
+     -61.6130476276475
+    ],
+    "mean_advantage": -84.81638543705154,
+    "response_tuning_replicate_evaluations": 0
+   },
+   "incumbent": "I2-P",
+   "informed_guarded": {
+    "advantage_ci95": [
+     -2.0976991266995864,
+     2.1986744677638774
+    ],
+    "advantage_in_N": -1.7164812828705918,
     "clipped_share": 0.052878723604826545,
+    "difference_in_differences": 1.7611939658247637,
+    "difference_in_differences_ci95": [
+     -0.4097831678018491,
+     3.8682881604696604
+    ],
     "mean_advantage": 0.04471268295417197,
     "response_tuning_replicate_evaluations": 736
    },
-   "incumbent": "I2-P",
-   "margin": 14.5272784,
-   "unguarded_told": {
+   "informed_unguarded": {
     "advantage_ci95": [
-     -41.272110504799365,
-     -22.45776289944784
+     -3.586757685062741,
+     4.119452672105596
     ],
+    "advantage_in_N": -2.1947476621106476,
     "clipped_share": null,
-    "mean_advantage": -31.179841152203608,
-    "response_tuning_replicate_evaluations": 0
-   },
-   "unguarded_tuned": {
-    "advantage_ci95": [
-     -3.6725353493010617,
-     4.113269574695242
+    "difference_in_differences": 2.337444811796715,
+    "difference_in_differences_ci95": [
+     -1.4333131828611763,
+     6.251400495734454
     ],
-    "clipped_share": null,
     "mean_advantage": 0.14269714968606717,
     "response_tuning_replicate_evaluations": 736
-   }
+   },
+   "margin": 14.5272784,
+   "rules": "gate: the session-5 gate's oracle (section 7), the incumbent planning against the shock; informed: a post hoc variant, kappa tuned on the cell's tuning seeds"
   },
   "S3": {
-   "difference_in_differences_note": "in N the told incumbent is the incumbent, so the DiD equals the advantage",
-   "guarded_told": {
+   "gate_guarded": {
     "advantage_ci95": [
-     -0.059482651332148744,
-     7.66410145114767
+     -29.227264000039494,
+     -15.177335218455696
     ],
-    "clipped_share": 0.053992269984917046,
-    "mean_advantage": 3.7986709385702078,
+    "advantage_in_N": -1.7164812828705918,
+    "clipped_share": 0.048760369532428356,
+    "difference_in_differences": -20.32138318324976,
+    "difference_in_differences_ci95": [
+     -27.46952153893637,
+     -13.536043559560769
+    ],
+    "mean_advantage": -22.037864466120354,
     "response_tuning_replicate_evaluations": 0
    },
-   "guarded_tuned": {
+   "gate_unguarded": {
     "advantage_ci95": [
-     4.953577047532419,
-     10.937436282163503
+     -279.1073946999666,
+     -155.83419307554757
     ],
+    "advantage_in_N": -2.1947476621106476,
+    "clipped_share": null,
+    "difference_in_differences": -211.4972921852067,
+    "difference_in_differences_ci95": [
+     -277.6367075841895,
+     -153.96244566127234
+    ],
+    "mean_advantage": -213.69203984731735,
+    "response_tuning_replicate_evaluations": 0
+   },
+   "incumbent": "I2-P",
+   "informed_guarded": {
+    "advantage_ci95": [
+     5.070852961984781,
+     10.948272875387314
+    ],
+    "advantage_in_N": -1.7164812828705918,
     "clipped_share": 0.05173571832579185,
+    "difference_in_differences": 9.661034218546149,
+    "difference_in_differences_ci95": [
+     6.591521974949547,
+     12.57762628673098
+    ],
     "mean_advantage": 7.944552935675558,
     "response_tuning_replicate_evaluations": 736
    },
-   "incumbent": "I2-P",
-   "margin": 14.5272784,
-   "unguarded_told": {
+   "informed_unguarded": {
     "advantage_ci95": [
-     -128.0720097818055,
-     -70.70853971551645
+     3.4360597668353567,
+     12.54208437754811
     ],
+    "advantage_in_N": -2.1947476621106476,
     "clipped_share": null,
-    "mean_advantage": -97.64107098265248,
-    "response_tuning_replicate_evaluations": 0
-   },
-   "unguarded_tuned": {
-    "advantage_ci95": [
-     3.397746526195836,
-     12.501035906126418
+    "difference_in_differences": 10.228463048607715,
+    "difference_in_differences_ci95": [
+     5.651344017073601,
+     14.78621388903753
     ],
-    "clipped_share": null,
     "mean_advantage": 8.033715386497068,
     "response_tuning_replicate_evaluations": 736
-   }
+   },
+   "margin": 14.5272784,
+   "rules": "gate: the session-5 gate's oracle (section 7), the incumbent planning against the shock; informed: a post hoc variant, kappa tuned on the cell's tuning seeds"
   }
  },
  "ifpa_shrink_reference": 0.0546,
@@ -333,7 +405,7 @@
   "mean_cost_from_1": 193.3324144013984,
   "mean_cost_from_2": 193.3324144013984
  },
- "seconds": 1502.5,
+ "seconds": 1487.1,
  "selection": {
   "L": {
    "selected": "I2-L",
