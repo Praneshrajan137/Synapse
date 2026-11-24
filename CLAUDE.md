@@ -77,7 +77,7 @@
 - The `traffic-generator` service keeps the live UI fed (one real decision every ~4–5 min, tagged `synthetic-` in `order_id`). Do not remove it without replacing the demo-liveness story
 
 ### Chromatic System Rules (ADR-025)
-- Frontend colour comes ONLY from chromatic tokens — NEVER a raw hex/`rgb()`/`hsl()` literal in `frontend/src/**`. The `no-raw-hex` hook blocks it (INV-CLR-009)
+- Frontend colour comes ONLY from chromatic tokens — NEVER a raw hex/`rgb()`/`hsl()` literal in `frontend/src/**`. CI's chromatic job blocks it (`design-system/color/scripts/lint-hex.mjs`, INV-CLR-009), and the `no-raw-hex` hook runs that same step before a commit
 - Colour tokens are authored in OKLCH in `design-system/color/tokens/*.tokens.json` (W3C DTCG format). After ANY token edit run `npm run build` in `design-system/color/` and commit the regenerated `dist/`
 - `dist/` artifacts are deterministic and committed — CI fails if a rebuild changes them (INV-CLR-010)
 - Orthogonal Encoding Principle: agent identity → Hue, decision tier → Lightness, confidence → the diverging OKLab scale. NEVER cross these axes
@@ -217,7 +217,7 @@ Evidence for each is in `docs/truth/` (LOG, TRUTH-MAP and `log/session-03.md`). 
 - E-TP-05: Never put `packages/` on `PYTHONPATH` to run tests: `packages/tests/__init__.py` makes `tests` resolve to that package and hides the repository's `tests` namespace (`No module named 'tests.verify'`; C71 then finds 0 golden traces). Put `synapse_common` alone on the path, from a folder inside the tree (E-TP-06)
 - E-TP-06: `synapse_common`'s schema registry finds `proto/domain/` by walking up from its own file, so a copy of `synapse_common` outside the repository tree cannot start it, and the consensus arm then refuses to assemble (`UnavailableConsensusArm`)
 - E-TP-07: Rehearse a merge sequence with the CI's inline shell gates too, not only the Python gates: #87 and #90 were each green, and together they turned `main` red on the I-1 grep, whose `import replicate` matched `import replicate_seed` (anchored with `\>` in #95)
-- E-TP-08: `.pre-commit-config.yaml` has not been valid YAML since it was created, no workflow runs pre-commit and the hooks are not installed, so no hook in it (`no-raw-hex`, `no-paid-apis`, `spec-validate`, ...) enforces anything today (TRUTH-MAP F-34). Do not cite a hook as enforcement until the file parses and a job runs it
+- E-TP-08: `.pre-commit-config.yaml` did not parse from its creation until truth session 5, so no hook ever ran and every citation of one was empty (TRUTH-MAP F-34). Since then every hook is local: a hook that duplicates a CI step runs that step's own text (`scripts/hooks/run_ci_step.py`), `hooks.yml` runs the others over the tree, `tests/hooks` plants a violation for each, and gitleaks alone is local-only (it reads the staged index). Cite a hook as enforcement only through the job that runs it
 - E-TP-09: The OpenTimestamps command (`ots` 0.7.2) does not start on Windows: it imports `bitcoin.rpc`, whose `bitcoin.core.key` loads OpenSSL through `ctypes.util.find_library`, which returns None there (`TypeError: argument of type 'NoneType' is not iterable`). The `opentimestamps` library never imports that module, so stamp, upgrade and inspect through it (`RemoteCalendar.submit` and `get_timestamp`, `DetachedTimestampFile`), or run `ots` on Linux. Both packages are LGPL-3: a tool, never a dependency (truth log S3-M-34)
 
 ## Sprint Status

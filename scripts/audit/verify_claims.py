@@ -460,13 +460,30 @@ def check_stryker_break_enforced() -> CheckResult:
 # ---------------------------------------------------------------------------
 @register("C23", "no-raw-hex hook present")
 def check_no_raw_hex_hook() -> CheckResult:
+    """The `no-raw-hex` hook runs the CI step that blocks raw colour literals (INV-CLR-009).
+
+    Until truth session 5 this check passed on the string "raw-hex" in a config that did not
+    parse, so the hook it vouched for never ran (TRUTH-MAP F-34). It now parses the config, finds
+    the hook, and resolves the CI step the hook runs, which must run `lint-hex.mjs`.
+    """
+    try:
+        from scripts.hooks.run_ci_step import StepError, find_step, mirrors
+    except ImportError as exc:
+        return CheckResult("C23", "no-raw-hex hook", "SKIP", f"run_ci_step import failed: {exc}")
     pc = ROOT / ".pre-commit-config.yaml"
     if not pc.exists():
         return CheckResult("C23", "no-raw-hex hook", "FAIL", ".pre-commit-config.yaml missing")
-    text = pc.read_text(encoding="utf-8")
-    if "no-raw-hex" in text or "raw-hex" in text:
-        return CheckResult("C23", "no-raw-hex hook", "PASS", "hook configured in pre-commit")
-    return CheckResult("C23", "no-raw-hex hook", "FAIL", "no no-raw-hex hook in pre-commit-config")
+    try:
+        found = dict(mirrors(pc)).get("no-raw-hex")
+        if found is None:
+            return CheckResult("C23", "no-raw-hex hook", "FAIL", "no-raw-hex mirrors no CI step")
+        workflow, job, *names = found
+        runs = " ".join(str(find_step(ROOT / workflow, job, n)["run"]) for n in names)
+    except (StepError, OSError, ValueError) as exc:
+        return CheckResult("C23", "no-raw-hex hook", "FAIL", str(exc))
+    if "lint-hex.mjs" not in runs:
+        return CheckResult("C23", "no-raw-hex hook", "FAIL", "its step does not run lint-hex.mjs")
+    return CheckResult("C23", "no-raw-hex hook", "PASS", f"runs {workflow}::{job} lint-hex.mjs")
 
 
 # ---------------------------------------------------------------------------

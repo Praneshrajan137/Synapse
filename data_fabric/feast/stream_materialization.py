@@ -425,6 +425,7 @@ class StreamMaterializer:
 
     def _sleep(self, seconds: float) -> None:
         if seconds > 0 and not self._stop:
+            # not-a-retry: the materializer's pass interval
             time.sleep(seconds)
 
 

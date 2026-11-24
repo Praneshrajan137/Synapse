@@ -198,6 +198,7 @@ class WorldRuntime:
                 self.tick()
             except Exception as exc:  # noqa: BLE001 — a tick failure must not kill the clock (I-7)
                 logger.error("world_clock_tick_failed", city=self.city, error=str(exc))
+            # not-a-retry: the world clock's real-time pace
             time.sleep(self._real_seconds_per_step)
 
     def _clock_advancing(self) -> bool:

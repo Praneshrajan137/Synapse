@@ -1,185 +1,135 @@
 # ============================================================================
-# SYNAPSE Pre-Commit Hooks — 11 hooks enforcing architectural invariants
+# SYNAPSE pre-commit hooks - 14 hooks, every one local (no remote hook repository).
+#
+# Until truth session 5 this file did not parse, so no hook ever ran (TRUTH-MAP F-34). Now:
+#   * a hook that checks what a CI step already checks runs that step's own `run:` text, read
+#     from the workflow when the hook runs (scripts/hooks/run_ci_step.py): one definition;
+#   * every other hook runs in the `hooks` job of .github/workflows/hooks.yml over the whole tree;
+#   * gitleaks alone is local-only: it reads the staged index, which only a developer's machine
+#     has. CI's secret scan is security.yml's gitleaks step.
+# Install with `pre-commit install`; run everything with `pre-commit run --all-files`.
 # ============================================================================
 repos:
-  - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.4.8
-    hooks:
-      - id: ruff
-        name: ruff-check
-        args: [--fix, --exit-non-zero-on-fix]
-      - id: ruff-format
-        name: ruff-format
-
-  - repo: https://github.com/pre-commit/mirrors-mypy
-    rev: v1.10.0
-    hooks:
-      - id: mypy
-        name: mypy-strict
-        args: [--strict]
-        additional_dependencies:
-          - pydantic>=2.7.0
-          - types-PyYAML
-
   - repo: local
     hooks:
-      - id: schema-validate
-        name: schema-validate
-        entry: python scripts/validate_schemas.py
-        language: python
-        files: '(agent_card\.json|mcp_tools\.json|\.schema\.json)$'
+      # --- Mirrors of CI steps (ci.yml). The `args` name the workflow, the job and the steps. ---
+      - id: ruff-check
+        name: ruff-check (ci.yml Ruff lint)
+        entry: python scripts/hooks/run_ci_step.py
+        args: [.github/workflows/ci.yml, quality-gates, "Ruff lint"]
+        language: system
         pass_filenames: false
+        files: '^(packages/synapse_common|agents|orchestrator)/.*\.py$'
+
+      - id: ruff-format
+        name: ruff-format (ci.yml Ruff format check)
+        entry: python scripts/hooks/run_ci_step.py
+        args: [.github/workflows/ci.yml, quality-gates, "Ruff format check"]
+        language: system
+        pass_filenames: false
+        files: '^(packages/synapse_common|agents|orchestrator)/.*\.py$'
+
+      - id: mypy-strict
+        # The two blocking mypy steps. The agents step is informational in CI
+        # (continue-on-error), so the hook does not block on it either.
+        name: mypy-strict (ci.yml MyPy strict, packages and orchestrator)
+        entry: python scripts/hooks/run_ci_step.py
+        args:
+          - .github/workflows/ci.yml
+          - quality-gates
+          - "MyPy strict type check (packages — blocking)"
+          - "MyPy strict type check (orchestrator — blocking)"
+        language: system
+        pass_filenames: false
+        files: '^(packages/synapse_common|orchestrator)/.*\.py$'
+
+      - id: schema-validate
+        name: schema-validate (ci.yml Schema validation)
+        entry: python scripts/hooks/run_ci_step.py
+        args: [.github/workflows/ci.yml, quality-gates, "Schema validation"]
+        language: system
+        pass_filenames: false
+        files: '(agent_card\.json|mcp_tools\.json|\.schema\.json)$'
 
       - id: spec-validate
-        name: spec-validate
-        entry: python -c "import yaml, json, jsonschema, sys; spec=yaml.safe_load(open(sys.argv[1])); schema=json.load(open('docs/specs/agent_spec_schema.json')); jsonschema.validate(spec, schema); print(f'OK {sys.argv[1]}')"
-        language: python
-        files: 'spec\.yaml$'
-        additional_dependencies: [pyyaml, jsonschema]
+        name: spec-validate (ci.yml Spec validation)
+        entry: python scripts/hooks/run_ci_step.py
+        args: [.github/workflows/ci.yml, quality-gates, "Spec validation"]
+        language: system
+        pass_filenames: false
+        files: '^agents/.*spec\.yaml$|^docs/specs/agent_spec_schema\.json$'
 
       - id: reward-isolation
-        name: reward-isolation
-        entry: python -c "
-import sys, ast
-for f in sys.argv[1:]:
-    tree = ast.parse(open(f).read())
-    for node in ast.walk(tree):
-        if isinstance(node, ast.ImportFrom) and node.module and 'agents.' in node.module:
-            parts = node.module.split('.')
-            if len(parts) >= 2 and parts[1] != f.split('/')[1]:
-                print(f'FAIL {f}: Cross-agent import from {node.module} violates I-2')
-                sys.exit(1)
-print('OK Reward isolation verified')
-"
-        language: python
+        name: reward-isolation (ci.yml Reward isolation check, I-2)
+        entry: python scripts/hooks/run_ci_step.py
+        args: [.github/workflows/ci.yml, quality-gates, "Reward isolation check (I-2)"]
+        language: system
+        pass_filenames: false
         files: 'rewards\.py$'
 
       - id: no-paid-apis
-        name: no-paid-apis
-        # The client name must end the word, as `\>` makes it in the CI greps: a substring
-        # test also matched `import replicate_seed`, a harness function (truth session 3).
-        entry: python -c "
-import re, sys
-PAID = re.compile(r'(import|from) (openai|anthropic|cohere|replicate)\b', re.ASCII)
-for f in sys.argv[1:]:
-    content = open(f, encoding='utf-8').read()
-    found = PAID.search(content)
-    if found:
-        print(f'FAIL {f}: Paid API import detected: {found.group(0)} — violates I-1')
-        sys.exit(1)
-print('OK No paid API imports')
-"
-        language: python
-        files: '\.py$'
-
-      - id: jitter-enforcement
-        name: jitter-enforcement
-        entry: python -c "
-import sys
-for f in sys.argv[1:]:
-    content = open(f).read()
-    if 'time.sleep' in content and 'retry_with_jitter' not in content and 'test_' not in f:
-        print(f'FAIL {f}: time.sleep without retry_with_jitter — violates ADR-016')
-        sys.exit(1)
-print('OK Jitter enforcement verified')
-"
-        language: python
-        files: '\.py$'
+        name: no-paid-apis (ci.yml No paid API imports, I-1)
+        entry: python scripts/hooks/run_ci_step.py
+        args: [.github/workflows/ci.yml, quality-gates, "No paid API imports (I-1 — BLOCKING)"]
+        language: system
+        pass_filenames: false
+        files: '^(agents|orchestrator|packages|api|digital_twin|data_fabric|ml_pipelines|scripts|uplift)/'
 
       - id: spec-coverage
-        name: spec-coverage
-        entry: python scripts/check_spec_coverage.py
-        language: python
-        files: '(spec\.yaml|test_spec\.py)$'
+        name: spec-coverage (ci.yml Spec coverage, threshold 99)
+        entry: python scripts/hooks/run_ci_step.py
+        args: [.github/workflows/ci.yml, quality-gates, "Spec coverage (Sprint 13 §Phase 5)"]
+        language: system
         pass_filenames: false
-        additional_dependencies: [pyyaml]
-
-      - id: contract-validate
-        name: contract-validate
-        entry: python -c "
-import sys, importlib.util, ast
-for f in sys.argv[1:]:
-    try:
-        tree = ast.parse(open(f, encoding='utf-8').read())
-    except SyntaxError as exc:
-        print(f'FAIL {f}: syntax error — {exc}')
-        sys.exit(1)
-    imports_common_models = any(
-        isinstance(n, ast.ImportFrom)
-        and n.module
-        and n.module.startswith('synapse_common')
-        for n in ast.walk(tree)
-    )
-    has_pydantic_base = any(
-        isinstance(n, ast.ClassDef)
-        and any(
-            (isinstance(b, ast.Name) and b.id in {'BaseModel', 'RootModel'})
-            or (isinstance(b, ast.Attribute) and b.attr in {'BaseModel', 'RootModel'})
-            for b in n.bases
-        )
-        for n in ast.walk(tree)
-    )
-    if not (imports_common_models or has_pydantic_base):
-        print(f'FAIL {f}: contract module must import from synapse_common or define a Pydantic model — violates ADR-013')
-        sys.exit(1)
-print('OK Contract modules validated')
-"
-        language: python
-        files: 'contracts/.*\.py$'
-
-      - id: kv-cache-check
-        name: kv-cache-check
-        entry: python -c "
-import sys, re
-BAD = [
-    (re.compile(r'f\"[^\"]*\\{[^}]+\\}[^\"]*\"'), 'f-string in KV-cache-sensitive file — breaks ADR-021 stable prefix'),
-    (re.compile(r\"f'[^']*\\{[^}]+\\}[^']*'\"), 'f-string in KV-cache-sensitive file — breaks ADR-021 stable prefix'),
-    (re.compile(r'\\.format\\('), '.format() in KV-cache-sensitive file — breaks ADR-021 stable prefix'),
-    (re.compile(r'time\\.time\\(\\)'), 'time.time() in KV-cache-sensitive file — breaks ADR-021 stable prefix'),
-    (re.compile(r'datetime\\.now\\('), 'datetime.now() in KV-cache-sensitive file — breaks ADR-021 stable prefix'),
-]
-for f in sys.argv[1:]:
-    content = open(f, encoding='utf-8').read()
-    # Skip lines inside docstrings / comments by checking full file; approximation acceptable for pre-commit.
-    for line_no, line in enumerate(content.splitlines(), 1):
-        stripped = line.strip()
-        if stripped.startswith('#') or stripped.startswith('\"\"\"') or stripped.startswith(\"'''\"):
-            continue
-        for pat, msg in BAD:
-            if pat.search(line):
-                print(f'FAIL {f}:{line_no}: {msg}')
-                print(f'  >>> {stripped}')
-                sys.exit(1)
-print('OK KV-cache stable prefix preserved')
-"
-        language: python
-        files: '(orchestrator/llm/context_builder\.py|orchestrator/llm/ollama_client\.py|orchestrator/consensus/protocol\.py)$'
+        files: '^agents/.*(spec\.yaml|\.py)$'
 
       - id: no-raw-hex
-        name: no-raw-hex
-        entry: python scripts/lint_chromatic_hex.py
+        name: no-raw-hex (ci.yml No raw colour literals, INV-CLR-009)
+        entry: python scripts/hooks/run_ci_step.py
+        args:
+          - .github/workflows/ci.yml
+          - chromatic-color-gates
+          - "No raw colour literals in components (INV-CLR-009)"
+        language: system
+        pass_filenames: false
+        files: '^frontend/src/'
+
+      # --- Hooks no other job runs: the `hooks` job of hooks.yml runs them over the tree. ---
+      - id: jitter-enforcement
+        name: jitter-enforcement (ADR-016)
+        entry: python scripts/hooks/jitter_enforcement.py
         language: python
-        files: 'frontend/src/.*\.(jsx?|tsx?)$'
+        files: '\.py$'
+
+      - id: contract-validate
+        name: contract-validate (consumer-driven contracts)
+        entry: python scripts/hooks/contract_validate.py
+        language: python
+        files: '^agents/[^/]+/contracts/[^/]+_contract\.py$'
+
+      - id: kv-cache-check
+        name: kv-cache-check (I-13, ADR-021)
+        entry: python scripts/hooks/kv_cache_check.py
+        language: python
+        files: '^(orchestrator/llm/context_builder\.py|orchestrator/llm/ollama_client\.py|orchestrator/consensus/protocol\.py)$'
 
       - id: color-spec-validate
         name: color-spec-validate
-        entry: python -c "import yaml,json,jsonschema; jsonschema.validate(yaml.safe_load(open('design-system/color/color-system.spec.yml')), json.load(open('design-system/color/schema/color-spec.schema.json'))); print('OK color-system.spec.yml')"
+        entry: python scripts/hooks/color_spec_validate.py
         language: python
-        files: '(color-system\.spec\.yml|color-spec\.schema\.json)$'
+        files: '^design-system/color/(color-system\.spec\.yml|schema/color-spec\.schema\.json)$'
         pass_filenames: false
-        additional_dependencies: [pyyaml, jsonschema]
+        additional_dependencies: ["pyyaml>=6.0,<7.0", "jsonschema>=4.18,<5.0"]
 
-      # WS-11 cross-cutting §3.2 — gitleaks on every commit. Prevents a
-      # `.env` slip-through; pattern-based, not name-based.
+      # --- Local only: inspects the staged index (WS-11 cross-cutting section 3.2). ---
       - id: gitleaks
-        name: gitleaks
+        name: gitleaks (local only)
         entry: |
           bash -c '
           if command -v gitleaks >/dev/null 2>&1; then
             gitleaks protect --staged --redact --no-banner
           else
-            echo "gitleaks not installed; install from https://github.com/gitleaks/gitleaks"
-            exit 0  # do not block when not installed locally — CI still gates
+            echo "gitleaks not installed, so this hook checked nothing; install from https://github.com/gitleaks/gitleaks"
           fi
           '
         language: system
