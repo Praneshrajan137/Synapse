@@ -821,3 +821,33 @@ engineer: pending stage C's measurements.
      base version, guarded against N's incumbent where the variant is guarded), with intervals.
   6. and 7. `FREEZE-W.md` is rewritten from the new report; the quadrature is stated; the proof is
      described as added at the push; `seals.yml` also applies the add-only rule to pushes to `main`.
+- **S5-M-40 The repaired run (measured 2026-11-24, 10:47 to 11:11, 1,487 s; `6f9cd01` on
+  `feat/incumbent`, pushed to #108).** From the uncalibrated world: the tables byte-identical to runs
+  1 and 2 (`e40d4962ab1c...`); every number but the headroom identical. The headroom (validation
+  seeds; I2-P; mean advantage, 95% interval; DiD against N, where the oracle arm trails N's
+  incumbent by 2.2 a store-day, 1.7 guarded):
+  S1 (margin 16.015): gate +34.04 (+24.6 to +44.0), DiD +36.24; gate guarded +29.92, clipped 3.9%;
+  informed +39.84 (+30.5 to +49.2); informed guarded +29.39.
+  S2 (14.527): gate **-84.82** (-109.7 to -63.5); gate guarded -29.18; informed +0.14 (-3.6 to +4.1),
+  DiD +2.34 (-1.4 to +6.3); informed guarded +0.04.
+  S3 (14.527): gate **-213.69** (-279.1 to -155.8); gate guarded -22.04; informed +8.03 (+3.4 to
+  +12.5), DiD +10.23 (+5.7 to +14.8); informed guarded +7.94, DiD +9.66 (+6.6 to +12.6).
+- **F-40, revised (measured; inferred consequence).** The first statement (room in S1 only) holds,
+  for a corrected reason. In S1 even the gate's oracle clears the margin twice over (+34.0 against
+  16.0), and the guard keeps most of it (+29.9). In S2 and S3 no oracle reaches it: the informed
+  variant's best is +0.1 and +8.0 (DiD +2.3 and +10.2). And the gate's way of planning against a
+  supply shock loses heavily (-85 and -214 a store-day), because stretching the protection interval
+  across a delay or an outage orders for demand that is lost before the stock lands, and the excess
+  spoils; the guard cuts the loss to -29 and -22. So the D-4(b) guard is protective where
+  information is misused, and C2 in S2 and S3 should be expected null. *False if* a challenger
+  blind to the shock clears `M_c` in S2 or S3 on exploratory seeds. The +0.17 the first candidate
+  stated for S1 was an artifact of the oracle's defect, not a property of the world.
+- **S5-M-41 The final candidate, rehearsed (measured 2026-11-24).** Freeze W rebuilt as one commit,
+  `2e97c0e` on `docs/freeze-w` (local, not pushed), on the repaired stage D. In a throwaway worktree
+  composing `main` with #104, #105, #108 (as repaired) and #107, the freeze laid on top and its sums
+  regenerated there: freeze W holds over 38 files (30 under `synapse_kernel/`, the Sentinel port
+  among them); 180 tests pass; `verify_claims` 57 PASS, 0 FAIL, 11 SKIP; ledger, doc truth (20 of
+  20), gate surface (761 rows), workflow shape and the PREREG-1 seal pass. The two merge conflicts
+  of the order are mechanical (`kernel.yml`'s light job, the generated gate surface). The first
+  rehearsal (before the repair) also ran all 14 hooks, the kernel's lint and the verdict on the
+  composed tree: all green.
