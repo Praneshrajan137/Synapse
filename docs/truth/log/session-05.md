@@ -19,6 +19,19 @@ measurements, S5-D-nn decisions, F-nn findings (continuing `TRUTH-MAP.md`).
 
 ## State
 
+- **2026-11-24, at the close.** Stages A to E done; freeze W built, attacked, repaired and rehearsed,
+  **not pushed**. Open and green: #104 (stage A), #105 (stage B), #108 (stages C and D, repaired after
+  the attack), #107 (stage E) and this record (#106, draft). The freeze candidate is `2e97c0e` on the
+  local branch `docs/freeze-w` (its own worktree, `../synapse-freeze`); its sums must be regenerated
+  on `main` once #104, #105 and #108 have merged (`scratchpad/make_freeze_w.py`, then
+  `check_freeze_w.py`), stamped with OpenTimestamps (`scratchpad/ots_stamp.py`, O4), pushed and
+  merged. Nothing is merged: every merge (O6) and the freeze push (O7) wait for the operator's yes,
+  asked at the close, together with one reading the operator may overrule (the calibration's
+  stopping rule, S5-D-07) and the gitleaks question (S5-D-04). No component of SYNAPSE has run on the
+  release world. Session 6's prompt is `docs/truth/SESSION-6-PROMPT.md` (git-ignored).
+- **2026-11-23 to 24.** The attack on the first freeze candidate (S5-M-39) and its repair (S5-D-07,
+  S5-M-40, -41). The app was closed on 2026-11-23 while the attack ran; the plan's usage limit had
+  stopped it; it was resumed on 2026-11-24.
 - **2026-11-23.** Stage A done and green (#104, open: its merge awaits the operator's yes). Stage B
   done (#105, open, CI running): the world built, fitted, its masking check failing the bar fixed
   before it ran (recorded, method chosen by the pre-declared rule). Stage C measured natively;
@@ -424,6 +437,12 @@ divergence). Release engineer: passes (small PRs, synced before merge). Maintain
 engineer: pending stage C's measurements.
 
 ## Decisions of this session
+
+Index (each is recorded where it was made): S5-D-01 the gate approved with O1 to O5; S5-D-02 the
+record lands last; S5-D-03 the masking check's method kept by the pre-declared rule (stage B);
+S5-D-04 each hook wired, repaired or kept local by the gate's rule (stage E); S5-D-05 the driver's
+own gaps repaired and re-run (stage D); S5-D-06 the budgets of sessions 5 to 8 (stage C); S5-D-07
+every finding of the attack repaired before the push (the attack).
 
 - **S5-D-01 (2026-11-19). The gate is approved, with its outside actions O1 to O5.** Merges (O6) and
   the push of freeze W (O7) are asked for at the time.
@@ -851,3 +870,187 @@ engineer: pending stage C's measurements.
   of the order are mechanical (`kernel.yml`'s light job, the generated gate surface). The first
   rehearsal (before the repair) also ran all 14 hooks, the kernel's lint and the verdict on the
   composed tree: all green.
+
+## The panel at the close
+
+- **Domain Expert: passes, with conditions.** The world carries perishability as the research test
+  beds do (batches, first-in-first-out outdating, lost sales, lead times, schedules), fitted to real
+  data with its error stated. Conditions: the failed masking check and the independence of items are
+  stated wherever a result is shown; the headroom of the gate's oracle says which claims have room.
+- **Architect: passes.** One engine, integer state, counter-based draws drawn before any policy, a
+  frozen boundary checked by digests at rest and by bindings at run time. The comparison harness of
+  session 6 must put each challenger in a process of its own.
+- **Adversary: passes, with notes.** The fresh-context attack found one blocker and five fixes; all
+  are repaired and each repair is shown failing on the old code. Left open by necessity: tampering
+  from inside the same process (numpy patched, the checker rebound), closable only by process
+  isolation; the batch leak is closed by rule and by test.
+- **Verifier: passes.** Every new check is shown failing on a planted fault: the oracle (three tests
+  on the old rule), the run-time check (ten kinds of tampering), batch independence (a planted
+  batch-reading policy), the freeze checker (five plants), the hooks (13 of 14), the add-only rule.
+- **Operator, paged at 3 a.m.: passes.** Each checker names the file or binding that failed; the
+  seals job names the seal; the verdict names a kernel divergence.
+- **Release Engineer: passes, with a condition.** The merge order (#104, #105, #108, freeze W, #107,
+  the record) is rehearsed with its conflicts resolved and every gate green on the composed tree;
+  nothing merges without the operator's yes, and nothing has.
+- **Maintainer: passes.** ADR-060 to ADR-062, `FREEZE-W.md`, the driver's docstring and this record
+  let a successor change the kernel without fear, and the freeze says what may not change.
+- **User: not yet.** Nothing a visitor sees exists; that is sessions 8 to 10's.
+- **Performance Engineer: passes.** Measured on Windows, Linux and WebAssembly, the same bits on all
+  three; the budgets of sessions 5 to 8 are derived, not guessed.
+- **Craftsman: passes, with a note.** The tables file (2.6 MB) repeats each tuning set's mean table
+  for I1 and I2; the run-time snapshot is broad but plain. Nothing found that could simply go.
+- **Store Manager, at evening peak: not yet.** The incumbent wastes 3.2% of sales and fills 91.9% of
+  demand in N; nothing of SYNAPSE has yet changed a store's evening.
+- **A stranger with one minute: not yet.** There is no page to read.
+
+Three members are not satisfied, all for work this session was not scoped to do (the visitor's
+release); recorded, not hidden.
+
+## Scorecard (session 5 close)
+
+Rows 1 to 16, PV, P1 to P6, KB, U and W are carried from session 3's scorecard in definition; P7 to
+P15 are the rows the gate added (section 2). No row is dropped or merged. "At session start" is
+session 3's "At session end" unless this session measured it again.
+
+| # | Frontier property | Frontier reference and its value | At session start | At session end | Evidence and how to reproduce it | Status | Verdict |
+|---|---|---|---|---|---|---|---|
+| 1 | Cost against a tuned rule | Learned policies 0.79% to 5.68% better than base stock (EX-02, checked) | Legacy world: consensus 3.9073 vs tuned 2.5119, worse 12 of 12 | Legacy world unchanged (verdict PASS, pins unchanged); the Sentinel alone equals the consensus arm 12 of 12; on the release world the incumbent is tuned and selected (N: 189.69 a store-day); SYNAPSE not yet run there, by rule | `make verdict`; `tests/kernel/test_sentinel_*`; `docs/truth/world/incumbent-report.json` | Verified | Behind |
+| 2 | Knowing where the rule loses | Long lead times, shifting or censored demand, perishability | The cells sealed | The five cells built; the gate's oracle clears the margin in S1 (+34.0 against 16.0); in S2 and S3 no oracle does (best +0.1 and +8.0), and planning the gate's way loses heavily there (F-40, revised) | the report's `headroom`; S5-M-40 | Verified | Behind |
+| 3 | Internal validity | Pre-registration, paired seeds, power, controls, negatives published | Sealed before the world existed | World, incumbent, margins and headroom frozen with hashes before any challenger (candidate; push awaits the operator); both seals checked in CI on every pull request; common random numbers by construction | `check_freeze_w.py`, `check_prereg.py`, `seals.yml` | Verified (freeze local) | Level in design |
+| 4 | External validity | Simulator validated on history | Declared twin | Fitted to FreshRetailNet-50K: shape, skew and variability; masking check failed its bar (+9.5% under MNAR masks); hold-out week +8%; a Chinese frontier warehouse, not an Indian dark store | `docs/truth/world/fit-report.json`; S5-M-18, -19 | Verified | Behind |
+| 5 | Reproduction by a stranger | Results reproduced by another team (snippet) | One command; numpy and simpy; Windows and Linux | The release world gives the same bits on Windows, Linux and Pyodide (seven digests) | S5-M-21, -37, -38; `kernel.yml` | Verified (Pyodide under Node, not a browser page) | Behind (no page yet) |
+| 6 | Assortment and demand | 2,000 to 40,000+ items (fetched) | 10 equal items | 300 items, 4.7 to 237 a day, top fifth 47% of units; 14 fitted 168-hour shapes; no slow movers under 4.7 | `release_world.json`; ADR-062 | Verified | Behind |
+| 7 | Operational structure | Hub and spoke; 65% of records wrong (checked) | Waste a clock | Ageing batches issued first in first out, shelf lives, three suppliers with schedules and lead times, whole-unit orders on the next delivery; waste rises with stock (a test) | `tests/kernel/release` | Verified | Behind (no hub and spoke, no record errors, items independent) |
+| 8 | A user | Anyone who plays | None | Unchanged | - | Verified | Behind |
+| 9 | Architecture earns its complexity | Ablation evidence | One agent bound 372 of 372 | The Sentinel alone reproduces the eight-agent consensus to the bit, per decision | #104 | Verified | Behind |
+| 10 | Agents that act | Appropriate, recorded actions | Category errors | Unchanged | - | Verified | Behind |
+| 11 | Path to production | Merge to a verified live system | No deploy target | Unchanged | - | Verified | Behind |
+| 12 | Reliability | 99.9% over five days (target) | Nothing | Unchanged | - | Unverified | Behind |
+| 13 | Cost | $0 floor | $0 spent | $0 spent: the dataset, PyPI and npm packages are free; no cloud | - | Verified | Level |
+| 14 | First minute | A cold reader can say what happened | Not seen | Unchanged | - | Unverified | Behind |
+| 15 | Checks able to fail | Every load-bearing check shown failing | Verdict 16 of 16 | Verdict 18 of 18 (with `KERNEL_DIVERGED`); every world test shown failing on a planted fault; 13 of 14 hooks shown failing; the freeze checker on five plants; the run-time check on ten kinds of tampering; the repaired oracle's three tests on the old rule; batch independence on a planted policy | S5-M-17, -25, -36, -39; this record | Verified | Level |
+| 16 | No exposure | No default credential; no open control | Defaults published; F-34 | F-34 closed: the hooks run; gitleaks local-only; compose defaults unchanged | #107 | Verified | Behind |
+| PV | Public verifiability | drand quicknet, threshold BLS (checked) | A round verified twice | Unchanged; freeze W to be anchored with OpenTimestamps when pushed | - | Verified | Level |
+| P1 | Time from a change to a trustworthy verdict | >99.9% of faulty changes caught at half the cost (Machalica 2019, snippet) | 54.3 s on mains (S5-M-03) | The verdict also judges the kernel's Sentinel, about 1 s more | S5-M-03, -17 | Verified | Level (the 30 s mains target missed) |
+| P2 | Exactness of parity between runtimes | Box2D 3.1 bitwise across platforms (snippet) | Windows and Linux; browser unmeasured | The release world identical on Windows (numpy 2.4.4), Linux (2.4.6) and WebAssembly (2.4.6) | S5-M-21, -37, -38 | Verified | Level |
+| P3 | Dependency weight in a browser | Pyodide ~6.4 MB + numpy ~3 MB (snippet) | numpy and simpy | The release world needs numpy alone (simpy only for legacy mode); Pyodide loads it in 1.5 to 3.9 s | `tests/kernel/test_closure.py`; S5-M-37 | Verified | Level |
+| P4 | Keeping the legacy green | Characterization tests beside an untouched legacy (recalled) | Zero legacy edits | Zero edits to sealed source sets; verdict pins unchanged | `git diff --name-only origin/main...` per branch; `make verdict` | Verified | Level |
+| P5 | Pre-registration strength | Timestamped registration; public randomness (recalled) | Sealed; hash in Bitcoin | Freeze W built, attacked and checked item by item; seals in CI; sealed files add-only; anchor at its push | `check_freeze_w.py`; `sealed_add_only.py` | Verified (local) | Level |
+| P6 | Verifiable public randomness | drand verification libraries | Verified, cross-checked | Unchanged | - | Verified | Level |
+| KB | Readings of SYNAPSE | Each confirmed, corrected or refuted | On `main` | Unchanged | - | Verified | - |
+| P7 | Decision core in the kernel | Definitional: the browser shows what was measured | Not ported | Equal to the consensus arm per decision (288) and per cost (12 of 12), judged by the verdict | #104 | Verified | Level |
+| P8 | Truth to perishable grocery | Broekmeulen and van Donselaar 2009; Haijema and Minner 2019 | Waste a clock; 10 equal items | Batches, FIFO outdating, lost sales, lead times, schedules, 300 skewed items, five cells | ADR-062; `tests/kernel/release` | Verified | Level, with items independent |
+| P9 | Fit to real data, error stated | FreshRetailNet paper: TimesNet WAPE 27.62%, WPE 1.43% (checked) | Declared shape | Fitted, the masking check's error reported: +9.5% (8.7 to 10.3) MNAR, -0.3% evening tails | `fit-report.json` | Verified | Behind |
+| P10 | Stock-out-hidden demand recovered | Timing recovers 76.1% (Jain, Rudi and Wang 2015, snippet); FreshRetailNet 7.37% to near zero | None | The exposure-weighted profile estimator, failing its pre-declared bar; no recovery would bias -32% and -46% | S5-M-19 | Verified | Behind |
+| P11 | Draw independence and cross-runtime exactness | Random123 answer vectors; JAX's threefry | numpy substreams | Threefry-2x32-20 keyed by (seed, purpose, entity, slot), drawn before any policy; no libm or `numpy.random` in the draw path (an AST test) | `test_rng_sampling.py`, `test_exactness.py` | Verified | Level |
+| P12 | Legacy-mode parity | Characterization tests (recalled) | Equal to the bit, arms E and O | Unchanged, plus the Sentinel | `test_legacy_parity.py`, `test_sentinel_parity.py` | Verified | Level |
+| P13 | Speed: replicate, tuning run, browser day | PLAN target: a simulated day under 3 s in a browser | Legacy 0.068 s per 24 h replicate | A 13-day replicate 17 to 38 ms (CI, laptop), 55 ms in Pyodide; a version tuned in 1 to 7 minutes; a simulated day 4.4 ms in WebAssembly | S5-M-37, -38; S5-D-06 | Verified | Level (inside the target about 700 times) |
+| P14 | Incumbent strength | Base stock optimal at zero setup (recalled); age-aware base stock near-optimal (snippet) | One (s, S) per supplier | I1 and I2 tuned per item and part of the day to convergence; restart-stable; 5 of 408 pairs improve within +-0.5, by at most 0.0024; validation 0.5% to 4.2% above tuning | `incumbent-report.json` | Verified | Level |
+| P15 | Hook layer enforcement | Every cited gate runs in CI | 0 of 14 ever ran | 13 of 14 run and are shown failing; gitleaks local-only | #107; S5-M-25 | Verified | Level |
+| U | Preserved behaviour | - | - | Verdict PASS with pins unchanged; legacy parity; the seven other worktrees, the stash, `.kiro/settings/` and frontend-gates' 17 files untouched; no sealed source set edited | S5-M-35; `make verdict` | Verified | - |
+| W | Made worse or less certain | - | - | See "Made worse or less certain" below | this record | Verified | - |
+
+### Made worse or less certain (row W), and how it was looked for
+
+Looked for by re-reading every red check this session caused, every number later corrected, and
+every claim the record makes that a successor could misread.
+
+- **Less certain: the evening's demand.** The masking check failed its bar, so the fitted world's
+  recovered demand on stocked-out days may be 5 to 10% too high, most in the evening (S5-M-19).
+- **Less certain: claim C2.** It is very likely null in S2 and S3 (F-40); the release must say so.
+- **Made worse, briefly: PR #105 was red** for about six hours (a licence test's scope, and the
+  ledger), repaired in `079e31d` (S5-M-34).
+- **Two miscounts**, both caught before they spread: 18 fault-proof cases first written as 21 (S5-M-17)
+  and 10 marked sleeps first written as 11 (corrected before the push, S5-M-26's note).
+- **An optimistic incumbent cost by construction**: the sealed mean-demand table is read from the
+  tuning seeds' own demand, so tuning costs run 0.5 to 4.2% below validation (S5-M-31, -36).
+- **The first freeze candidate was wrong in one frozen item**: its headroom came from an oracle that added the surge after clipping and from a supply rule the gate never defined (a blocker the attack found, S5-M-39); repaired before anything was pushed.
+- **Not pushed**: freeze W, and no merge; the session's asks reached the operator late.
+- **A review cut short**: the fresh-context attack hit the plan's usage limit and was resumed.
+
+## Final account
+
+**Built and proven.**
+- **SYNAPSE's decision core runs in the kernel** (#104): the Sentinel alone equals the eight-agent
+  consensus arm on E5's twelve seeds to the bit, per cost (12 of 12) and per decision (288 decisions,
+  2,880 quantities), on Windows and Linux; the verdict judges it and names a divergence
+  (`KERNEL_DIVERGED`); 18 of 18 planted faults caught. This answers S3-D-05: on the legacy world the
+  other seven agents change nothing the Sentinel decides.
+- **A world worth deciding in** (#105, ADR-062): ageing batches issued first in first out, waste that
+  rises with stock (the repair of F-30), 300 skewed items with 168-hour shapes fitted to
+  FreshRetailNet-50K, three suppliers, five cells, one objective in money per store-day; every draw
+  counter-based and drawn before any policy acts, so the same bits come out on Windows, Linux and in
+  WebAssembly. Its one failed check is reported as it came out: the recovery of stock-out-hidden
+  demand misses its pre-declared bar (+9.5% under MNAR masks), so recovered demand on stocked-out days
+  may be overstated by 5 to 10%, mostly in the evening.
+- **A strong incumbent, tuned exactly as sealed** (#108): calibrated once by the pre-declared rule,
+  six versions tuned to convergence, selected on validation seeds (I2 everywhere; the pooled
+  version in every shock cell), stable under restart and along every tuned axis, reproduced byte for
+  byte by a second run. `D_c`, `p_c` and `M_c` follow from the declared world.
+- **Fast enough for everything ahead** (stage C): a 13-day replicate in 17 to 38 ms natively, 55 ms in
+  Pyodide; a version tuned in 1 to 7 minutes; a simulated day in 4.4 ms of WebAssembly against a 3 s
+  budget; budgets for sessions 5 to 8 derived (S5-D-06).
+- **Freeze W, built, attacked, repaired and checked, but not pushed**: a fresh-context reviewer
+  found one blocker (the headroom oracle) and five fixes in the first candidate; each was verified
+  and repaired, each repair shown failing on the old code, and stage D re-run so one script
+  produces every frozen number (S5-M-39, S5-D-07). The rebuilt candidate (`2e97c0e`) holds over 38
+  frozen files on a tree composing `main` with #104, #105, #108 and #107; a stdlib checker ticks
+  every PREREG-1 section 5 item; a run-time check refuses ten kinds of tampering; seals are checked
+  in CI with an add-only rule.
+- **The hooks run** (#107): F-34 closed; one real defect found and repaired on the way (F-38).
+
+**Where SYNAPSE stands.** Against the calibrated frontier: level on exactness, speed, legacy parity,
+incumbent strength and the checks' ability to fail; behind on external validity (the failed masking
+check, a Chinese frontier warehouse, no slow movers), on assortment, on any user, and on everything a
+release visitor would see. On the release's ladder (`PLAN.md` section 3) SYNAPSE has a frozen world
+and incumbent and nothing yet that a visitor can play; its own challenger does not exist on the
+release world, by rule, until freeze W is on `main`.
+
+**Not achieved, and why.** Freeze W is not pushed and nothing is merged: both need the operator's yes
+at the time, and the questions reached the operator after they had stopped answering in this
+session. The fresh-context attack was cut short by the plan's usage limit and resumed the next day.
+No browser page has run the world (Node only). gitleaks is neither wired nor retired (an open question).
+
+**Uncertain.** Whether a challenger blind to the shock can clear `M_c` in S1 (the gate's oracle
+clears it twice over, but it is told the surge; a challenger must detect it from sales); that it
+cannot in S2 or S3 is close to certain (F-40, revised); how much the failed masking check biases the evening;
+whether a same-process challenger can be kept honest without process isolation and an import ban.
+
+**Work for session 6, in order.** In its prompt (`docs/truth/SESSION-6-PROMPT.md`, kept out of git):
+land session 5's pull requests and freeze W in order, each synced and green; build SYNAPSE's
+components as fair kernel policies with parity tests and an import ban; decide before any result
+which frozen incumbent SYNAPSE contains; fit the composition's trust map on exploratory seeds only;
+compute `s_c` and `n_c`; write and test the analysis; push freeze C before 2026-12-11T00:00:00Z.
+
+## Return to Section 0: what this session's prompt failed to ask
+
+Asked at the close, answered here, and carried into session 6's prompt.
+
+1. **Whether each claim can be won at all, before effort goes into it.** The prompt asked for the
+   headroom left inside the guard; it did not ask whether the headroom clears each claim's margin.
+   It does not in S2 or S3 even for an arm told the shock (F-40). Session 6's prompt plans around
+   it, and the world is not changed to make room.
+2. **Whether the seals are enforced by any machine.** No job ran `check_prereg.py`, and each checker
+   trusts its own sums file (F-41). A seal checked only by hand is a promise, not a gate.
+3. **How the freeze's content depends on the order of merges.** Every file under `synapse_kernel/`
+   at the freeze is frozen, so whether the Sentinel port (#104) is inside it depends on what merges
+   first; and the sums must be built on `main`, not on a stacked branch. The prompt treated the
+   freeze as one push; it is the last step of an ordered series of merges, each needing the operator.
+4. **How the operator's attention is spent.** Five stacked pull requests and a freeze each need a
+   yes at the time; the session reached its asks late, after the operator had stopped answering. A
+   standing approval for a session's own pull requests, asked at the gate, would have saved days.
+5. **What a line ending does to a digest.** Frozen files outside `docs/truth/sealed/` are converted
+   by `core.autocrlf` on Windows, so a raw sha256 differs between checkouts; the freeze hashes the
+   bytes git stores. Nothing in the prompt anticipated it.
+6. **A browser, not Node.** Pyodide parity and speed were measured under Node 24; no browser page
+   has run the world. Session 8 must measure it in browsers, on a mid laptop and a phone.
+7. **How much room the claims have in the normal cell.** Headroom was asked for shock cells only; a
+   perfect-information bound in N would say how much any challenger could gain where most days are
+   spent (C1's margin is a non-inferiority bound, so this matters less, but it is unknown).
+8. **Who checks the instruments.** The prompt asked for the world and the incumbent to be checked;
+   the defect the attack found was in the measuring instrument (the headroom oracle), which no test
+   compared with the gate's own definition. Instruments need the same fresh-context attack as the
+   things they measure.
+9. **What the usage limit does to a review.** The fresh-context attack was cut off by the plan's
+   five-hour limit and resumed the next day; a review planned for the end of a long session should
+   be dispatched early, while capacity remains.
