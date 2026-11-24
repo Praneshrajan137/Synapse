@@ -23,6 +23,7 @@ from scripts.verdict.judge import (
     Pins,
     arm_delta,
     judge,
+    kernel_reproduces,
     pins_from_document,
     pins_to_document,
 )
@@ -40,6 +41,7 @@ def measured(
     repeats: dict[str, dict[int, float]] | None = None,
     shards: dict[str, int] | None = None,
     failures: tuple[str, ...] = (),
+    kernel: dict[int, float] | None = None,
 ) -> Measurement:
     costs = {
         "consensus": {**BASE["consensus"], **(consensus or {})},
@@ -50,6 +52,7 @@ def measured(
         repeats=repeats if repeats is not None else {"consensus": {11: costs["consensus"][11]}},
         shard_exit_codes=SAFE if shards is None else shards,
         failures=failures,
+        kernel=dict(BASE["consensus"]) if kernel is None else kernel,
     )
 
 
@@ -192,8 +195,41 @@ def test_a_record_that_refuses_the_physics_is_a_moved_control_not_a_gap() -> Non
         repeats={},
         shard_exit_codes=SAFE,
         physics_moved=("BprimeRecordError: the physics digest of this tree is 1, not 2",),
+        kernel=dict(BASE["consensus"]),
     )
     verdict = judge(PINS, nothing)
     assert verdict.outcome is Outcome.CONTROL_MOVED
     assert verdict.deltas == {}
     assert not any("not measured" in text for text in verdict.findings)
+
+
+def test_a_kernel_port_that_differs_from_the_consensus_pins_is_a_divergence() -> None:
+    verdict = judge(PINS, measured(kernel={**BASE["consensus"], 22: 4.1 + 1e-9}))
+    assert verdict.outcome is Outcome.KERNEL_DIVERGED
+    assert any("seed 22" in text and "sentinel.py" in text for text in verdict.findings)
+
+
+def test_a_consensus_change_outranks_a_kernel_divergence() -> None:
+    both = judge(PINS, measured(consensus={22: 4.2}, kernel={**BASE["consensus"], 22: 4.0}))
+    assert both.outcome is Outcome.WORSE
+    assert any("Sentinel alone" in text for text in both.findings)
+
+
+def test_an_unpriced_kernel_seed_is_a_gap_never_a_pass() -> None:
+    gap = judge(PINS, measured(kernel={11: 3.9, 22: 4.1}))
+    assert gap.outcome is Outcome.INCOMPLETE
+    assert any("not priced by the Sentinel alone" in text for text in gap.findings)
+
+
+def test_a_kernel_divergence_ranks_just_above_pass() -> None:
+    assert PRIORITY[-2] is Outcome.KERNEL_DIVERGED
+    assert PRIORITY.index(Outcome.CHANGED) < PRIORITY.index(Outcome.KERNEL_DIVERGED)
+    assert int(Outcome.KERNEL_DIVERGED) == 8
+
+
+def test_a_repin_needs_the_kernel_to_reproduce_every_measured_consensus_cost() -> None:
+    consensus = dict(BASE["consensus"])
+    assert kernel_reproduces(consensus, dict(consensus), SEEDS)
+    assert not kernel_reproduces(consensus, {**consensus, 33: 3.7 + 1e-12}, SEEDS)
+    assert not kernel_reproduces(consensus, {11: 3.9, 22: 4.1}, SEEDS)
+    assert not kernel_reproduces(consensus, dict(consensus), ())
