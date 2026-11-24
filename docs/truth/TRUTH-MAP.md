@@ -240,6 +240,30 @@ is what was measured or read.
   enforces anything, though `CLAUDE.md` cites `no-raw-hex` as the guard of INV-CLR-009. Parsed, the
   multi-line `python -c` entries would still be folded into one line by YAML. *False if*
   `pre-commit validate-config` accepts the file. Recorded as `CLAUDE.md` E-TP-08.
+  **Repaired in session 5 (#107):** the file parses; nine hooks run their CI step's own text, four run
+  in `hooks.yml`, each shown failing on a plant; gitleaks stays local-only (truth log S5-D-04).
+- **F-35 The dataset's volume is recoverable (falsified, session 5).** Feared that FreshRetailNet-50K
+  fixes only shapes; measured that units are 10 times the hourly value (99.56% of positive values lie
+  on a 0.1 lattice; the noise floor of daily totals has slope near one), so the store's volume is
+  fitted (truth log S5-M-18).
+- **F-36 A world drawn with numpy's `Generator` cannot promise native-browser parity (checked,
+  session 5).** numpy does not promise its distribution streams across versions or CPUs. The release
+  world draws with counter-based Threefry-2x32-20 and exact samplers instead, and gives the same bits
+  on Windows, Linux and Pyodide (S5-M-21, -37, -38).
+- **F-37 FreshRetailNet's stock flag is an out-of-stock flag (measured and checked, session 5).**
+  `hours_stock_status` = 1 means out of stock, the complement of the paper's censoring indicator.
+- **F-38 PR #77 broke the colour spec's structure (measured, session 5).** It replaced the
+  `preconditions:` header of `color-system.spec.yml` with seven invariants, leaving two preconditions
+  inside the invariant list; the hook that validates the spec never ran (F-34). Restored in #107.
+- **F-39 Two stale corners (measured, session 5).** `orchestrator/contracts/twin_simulation_contract.py`
+  is collected by no job; `docs/state/MODULE_INVENTORY.md` is ungated and stale. Not repaired.
+- **F-40 Claim C2 has room in S1 only (measured, session 5; revised after freeze W's attack).** Even
+  an oracle told the shock clears `M_c` only in S1 (+34.0 against 16.0); in S2 and S3 the best
+  informed oracle gains +0.1 and +8.0 against 14.5, and planning against a supply shock the gate's way
+  loses -85 and -214 a store-day. C2 in S2 and S3 should be expected null (S5-M-40).
+- **F-41 No job ran the seal's checker (measured, session 5).** An edit to PREREG-1 would have failed
+  nothing, and each checker trusts its own sums file. Freeze W's pull request adds `seals.yml`: both
+  checkers and an add-only rule for `docs/truth/sealed/`.
 
 ### Where the documents and the code part
 
