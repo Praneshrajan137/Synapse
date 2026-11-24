@@ -1,0 +1,302 @@
+{
+ "dataset": {
+  "revision": "c374e85975c82816c495acfa904cc55ab14a47d3",
+  "sha256": {
+   "eval.parquet": "1b118840664280c6b88bffc84c80ee1f54c05d911e354b7599e5da10995e960e",
+   "train.parquet": "6706832db892bbae4969c19d87e07975d2543d2ba7d7d4756360654785de5a3d"
+  },
+  "unit": 0.1
+ },
+ "dispersion": {
+  "day_variance_total": 0.08954726436392868,
+  "intercept": 0.08954726436392868,
+  "item_day_variance": 0.07856266804294254,
+  "pair_share": 0.0,
+  "series_used": 44100,
+  "slope": 0.9427032134664557,
+  "store_day_variance": 0.010184476661812807
+ },
+ "fit_seed": 20261120,
+ "groups": [
+  "cat04",
+  "cat05",
+  "cat07",
+  "cat08",
+  "cat10",
+  "cat16",
+  "cat18",
+  "cat20",
+  "cat21",
+  "cat24",
+  "cat28",
+  "cat29",
+  "cat31",
+  "other"
+ ],
+ "holdout_eval_split": {
+  "median_level_ratio_eval_over_train": 1.082422073573521,
+  "shape_l1_per_day_mean": 0.06530334888916704
+ },
+ "masking_check": {
+  "days": 340617,
+  "evening": {
+   "hidden_share_of_units": 0.4612880634259121,
+   "methods": {
+    "exposure_profile": {
+     "day_total_bias": -0.003172305649573263,
+     "day_total_bias_ci95": [
+      -0.010550572423715553,
+      0.004544201838768013
+     ],
+     "hidden_wape": 1.24600149362164,
+     "hidden_wape_ci95": [
+      1.2306915513825618,
+      1.262159113128875
+     ],
+     "hidden_wpe": -0.00687705991352358,
+     "hidden_wpe_ci95": [
+      -0.022727896124057963,
+      0.009897895514156159
+     ]
+    },
+    "exposure_profile_weekday_type_fallback": {
+     "day_total_bias": -0.0027448518180395965,
+     "day_total_bias_ci95": [
+      -0.011058705346665776,
+      0.005915787303143522
+     ],
+     "hidden_wape": 1.2470581544179438,
+     "hidden_wape_ci95": [
+      1.2283412445569097,
+      1.264961716710762
+     ],
+     "hidden_wpe": -0.005950407209009538,
+     "hidden_wpe_ci95": [
+      -0.02380480770143837,
+      0.012912971980437477
+     ]
+    },
+    "no_recovery": {
+     "day_total_bias": -0.4612880634259121,
+     "day_total_bias_ci95": [
+      -0.46428821700244477,
+      -0.45828331236855924
+     ],
+     "hidden_wape": 1.0,
+     "hidden_wape_ci95": [
+      1.0,
+      1.0
+     ],
+     "hidden_wpe": -1.0,
+     "hidden_wpe_ci95": [
+      -1.0,
+      -1.0
+     ]
+    },
+    "uniform_fill": {
+     "day_total_bias": -0.17176110647131096,
+     "day_total_bias_ci95": [
+      -0.17779998479362846,
+      -0.1665794072664267
+     ],
+     "hidden_wape": 1.2021022689007161,
+     "hidden_wape_ci95": [
+      1.192275777167273,
+      1.2125857016057884
+     ],
+     "hidden_wpe": -0.3723510753685428,
+     "hidden_wpe_ci95": [
+      -0.3827164297550974,
+      -0.3629996528751139
+     ]
+    }
+   }
+  },
+  "fallback_passes": false,
+  "label": "failing",
+  "mnar": {
+   "hidden_share_of_units": 0.42566211726242015,
+   "methods": {
+    "exposure_profile": {
+     "day_total_bias": 0.09500907329776971,
+     "day_total_bias_ci95": [
+      0.08736132819509959,
+      0.10318619555251096
+     ],
+     "hidden_wape": 1.0727297374560136,
+     "hidden_wape_ci95": [
+      1.0588130344304822,
+      1.088794240451326
+     ],
+     "hidden_wpe": 0.2232030275769096,
+     "hidden_wpe_ci95": [
+      0.20584152080309442,
+      0.24236951210320637
+     ]
+    },
+    "exposure_profile_weekday_type_fallback": {
+     "day_total_bias": 0.09577651121080999,
+     "day_total_bias_ci95": [
+      0.08795452295135515,
+      0.10336119832980117
+     ],
+     "hidden_wape": 1.0745225466837596,
+     "hidden_wape_ci95": [
+      1.0586815099646563,
+      1.0907828706600244
+     ],
+     "hidden_wpe": 0.22500595502080792,
+     "hidden_wpe_ci95": [
+      0.20724103624265597,
+      0.24219684166734762
+     ]
+    },
+    "no_recovery": {
+     "day_total_bias": -0.3243543908208707,
+     "day_total_bias_ci95": [
+      -0.3252710459721872,
+      -0.3234111785975432
+     ],
+     "hidden_wape": 0.7619996651496863,
+     "hidden_wape_ci95": [
+      0.7594447231915009,
+      0.7646674917216149
+     ],
+     "hidden_wpe": -0.7619996651496863,
+     "hidden_wpe_ci95": [
+      -0.7646674917216149,
+      -0.7594447231915009
+     ]
+    },
+    "uniform_fill": {
+     "day_total_bias": -0.01406039003332193,
+     "day_total_bias_ci95": [
+      -0.01715408514497496,
+      -0.010959498958307935
+     ],
+     "hidden_wape": 1.0181575495331558,
+     "hidden_wape_ci95": [
+      1.0109194315664214,
+      1.0252943898926092
+     ],
+     "hidden_wpe": -0.03303180965162966,
+     "hidden_wpe_ci95": [
+      -0.04018629279263596,
+      -0.02578896670811042
+     ]
+    }
+   }
+  },
+  "mnar_fixed_stock_post_hoc": {
+   "hidden_share_of_units": 0.2476050547209141,
+   "methods": {
+    "exposure_profile": {
+     "day_total_bias": 0.05291952962043446,
+     "day_total_bias_ci95": [
+      0.04823383104683354,
+      0.057822177359934814
+     ],
+     "hidden_wape": 1.0234909840479023,
+     "hidden_wape_ci95": [
+      1.008291187751015,
+      1.0375091757241557
+     ],
+     "hidden_wpe": 0.2137255625903205,
+     "hidden_wpe_ci95": [
+      0.19393601303903754,
+      0.23403114026858385
+     ]
+    },
+    "exposure_profile_weekday_type_fallback": {
+     "day_total_bias": 0.05294449696994469,
+     "day_total_bias_ci95": [
+      0.04835218803052829,
+      0.057293467350588545
+     ],
+     "hidden_wape": 1.0244095637341433,
+     "hidden_wape_ci95": [
+      1.011142853737244,
+      1.0383759336578522
+     ],
+     "hidden_wpe": 0.21382639796922007,
+     "hidden_wpe_ci95": [
+      0.1952891829735617,
+      0.23188912740378437
+     ]
+    },
+    "no_recovery": {
+     "day_total_bias": -0.19314820890690365,
+     "day_total_bias_ci95": [
+      -0.1951214469276822,
+      -0.1912537812793668
+     ],
+     "hidden_wape": 0.7800656942347521,
+     "hidden_wape_ci95": [
+      0.7780036646951994,
+      0.781992149794023
+     ],
+     "hidden_wpe": -0.7800656942347521,
+     "hidden_wpe_ci95": [
+      -0.781992149794023,
+      -0.7780036646951994
+     ]
+    },
+    "uniform_fill": {
+     "day_total_bias": -0.007481697492929628,
+     "day_total_bias_ci95": [
+      -0.009748421638932015,
+      -0.004989763515148807
+     ],
+     "hidden_wape": 1.01185158109413,
+     "hidden_wape_ci95": [
+      1.005925453023239,
+      1.0174357677492156
+     ],
+     "hidden_wpe": -0.03021625508155542,
+     "hidden_wpe_ci95": [
+      -0.03907807258688942,
+      -0.02031992219791743
+     ]
+    }
+   }
+  },
+  "passes": false,
+  "series_held_out_share": 0.2,
+  "used": "exposure_profile",
+  "worst_day_total_bias_over_predeclared_families": {
+   "exposure_profile": 0.09500907329776971,
+   "exposure_profile_weekday_type_fallback": 0.09577651121080999,
+   "uniform_fill": 0.17176110647131096
+  }
+ },
+ "profile_iterations": 38,
+ "rates": {
+  "raw_mean_units_per_series_day": 9.985912860000001,
+  "recovered_mean_units_per_series_day": 13.011809631719956,
+  "reference_store_median_units_per_day": 8.648061697757168,
+  "series": 50000,
+  "unrecoverable_series_days": 302948,
+  "z_quantiles": {
+   "0.1": 0.6498430561426962,
+   "0.25": 0.7622317268337442,
+   "0.5": 1.0,
+   "0.75": 1.5669657809554818,
+   "0.9": 2.632671503369897,
+   "0.99": 6.672840421362631
+  }
+ },
+ "software": {
+  "numpy": "2.4.4",
+  "pandas": "2.3.3",
+  "python": "3.11.15"
+ },
+ "store": {
+  "items": 300,
+  "supplier_volume_share": {
+   "chilled_morning": 0.3320199600031108,
+   "fresh_morning": 0.33167755220788425,
+   "hub_twice": 0.3363024877890049
+  },
+  "units_per_day": 3822.9679999999994
+ }
+}
