@@ -758,3 +758,66 @@ engineer: pending stage C's measurements.
   The light job's 77 tests took 5.1 s. Stage C's question is answered: the world is exact across
   three runtimes and two numpy versions, and fast enough for tuning, the confirmatory run and the
   browser.
+
+### The attack on freeze W (2026-11-23 to 24)
+
+- **S5-M-39 A fresh-context reviewer attacked the candidate (`536e016`), reported (20 of 30 tool
+  calls, read-only; cut off by the plan's five-hour limit on 2026-11-23 and resumed after it reset on
+  2026-11-24).** Seven findings, each verified here before acting:
+  1. **BLOCKER, confirmed in the code.** The S1 oracle added the surge's extra demand to the
+     incumbent's order *after* that order was clipped at zero (`oracle.py`, the old line 113), so
+     where stock already exceeded the target it ordered the whole surge on top; the gate's oracle
+     puts the surge into what the incumbent plans against, before the clip. The reviewer measured
+     the gate's form at +20.58 in S1 where the freeze stated +0.17, above `M_c`. And the S2 and S3
+     figures labelled "told, as the gate defined it" came from my lost-sales-aware rule, designed on
+     the fixture world after the gate's literal rule lost there (S5-M-22): a rule the gate never
+     defined. A new test shows the old rule ordering 4 where the gate's gives 3 from empty stock.
+  2. **FIX, confirmed.** ADR-062 said "the gate fixed the rule ... stopping on entering the band";
+     the gate says "bisected in log scale toward 5.46%, at most six iterations" and does not say
+     whether the bisection stops on entering the band. The stopping rule is a reading, committed in
+     the driver before the run (`git log -S`), not the gate's text.
+  3. **FIX, confirmed.** The run-time check let pass a frozen dataclass changed through
+     `object.__setattr__` (the objective's weights), a function's `__defaults__` or `__code__`
+     changed in place, an added class dunder, and the loaded incumbent tables zeroed in memory.
+  4. **FIX, confirmed.** `start(replicates)` tells a policy the batch size, and a policy sees every
+     replicate in its batch; in the confirmatory run a cell's batch would be its `n_c`, which differs
+     by cell, and PREREG-1 section 1 gives a policy neither the cell nor another replicate.
+  5. **FIX, confirmed.** The difference-in-differences was asserted ("in N the told incumbent is the
+     incumbent"), not computed: the oracle's base in the shock cells is I2-P, N's incumbent I2-N, and
+     they differ by 2.2 a store-day on N's validation seeds.
+  6. **FIX, confirmed.** `FREEZE-W.md` said validation runs "3 to 7%" above tuning (the report says
+     0.5% to 4.2%) and that S3's headroom "does not come near" the margin (+8.0, interval 3.4 to
+     12.5, against 14.5).
+  7. **NOTES.** `D_c` of S1 is a 120 x 120 midpoint quadrature given to 16 digits (a 3000 x 3000 grid
+     moves it by 5e-6 relative); the world's `units_per_day` prints as 3822.9679999999994 where `D_c`
+     prints 3822.968; `FREEZE-W.md` cited an OpenTimestamps proof that does not exist until the push;
+     the add-only rule ran on pull requests only.
+  Nothing else found: the observation, J, I1, I2, the protection interval, the tuner, the cells, the
+  shocks, the warm-up and the initial state match the sealed text and the gate; no float reduction
+  on the release path; every selection wins by at least 5.37 a store-day.
+- **S5-D-07 (2026-11-24). Every finding is repaired before the push; none is waved through.**
+  1. The oracle now has two rules (`synapse_kernel/release/oracle.py`): **the gate's** (the surge
+     inserted into the mean demand the incumbent plans against, for its level and I2's outdating,
+     before the clip; in S2 and S3 the protection interval running to the next order's actual
+     arrival), reported as the headroom; and **an informed variant** (the surge as `1 + kappa(u-1)`;
+     the lost-sales-aware cover in S2 and S3; `kappa` tuned on tuning seeds), labelled a post hoc
+     design. Three new tests, each failing on the old rule. The stage D driver re-runs from the
+     uncalibrated world, so one committed script produces every frozen number again.
+  2. ADR-062, the driver's docstring and the world's provenance now call the stopping rule a reading
+     fixed before the run. Re-running the other reading after seeing the result would be the forking
+     path the gate exists to prevent; whether to override the reading is the operator's call, asked
+     at the close.
+  3. `integrity.py` now snapshots each function's code, defaults and keyword defaults, every class
+     member (dunders included), the fields of module-level dataclass instances, and refuses names
+     added to a module or class (a new global can shadow a builtin); `assert_tables_frozen` refuses
+     altered tables. Eighteen tests, including one showing a real run raises no false alarm. What
+     one process cannot see (numpy or the standard library patched, code run before the import,
+     rebinding the checker itself) is stated, and freeze W's rules put a compared challenger in a
+     process of its own.
+  4. `harness.batch_independent` runs a policy on a batch and on each scenario alone and compares
+     every outcome; I1 and I2 pass it, a planted batch-reading policy fails it; freeze W's rules
+     require it of every compared policy and one replicate per call in the confirmatory run.
+  5. The driver computes the difference-in-differences per seed against the oracle arm in N (its
+     base version, guarded against N's incumbent where the variant is guarded), with intervals.
+  6. and 7. `FREEZE-W.md` is rewritten from the new report; the quadrature is stated; the proof is
+     described as added at the push; `seals.yml` also applies the add-only rule to pushes to `main`.
