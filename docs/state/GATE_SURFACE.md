@@ -34,13 +34,13 @@ the same pair.
 
 ## Summary
 
-Parsed 24 workflow file(s), 73 job(s), 484 step(s).
+Parsed 25 workflow file(s), 74 job(s), 489 step(s).
 
 | Trigger | Jobs executing | Jobs conditional | Jobs NOT EXECUTED | Steps blocking | Steps advisory | Steps conditional |
 |---|---|---|---|---|---|---|
-| push:main | 5 | 34 | 34 | 37 | 0 | 204 |
-| pull_request | 18 | 36 | 19 | 113 | 4 | 225 |
-| tag:v* | 3 | 3 | 67 | 18 | 0 | 29 |
+| push:main | 6 | 34 | 34 | 42 | 0 | 204 |
+| pull_request | 19 | 36 | 19 | 118 | 4 | 225 |
+| tag:v* | 3 | 3 | 68 | 18 | 0 | 29 |
 
 ## Job selection
 
@@ -86,6 +86,7 @@ Why each job runs, does not run, or runs conditionally under each trigger. `need
 | push:main | .github/workflows/frontend.yml::mutation | NOT EXECUTED | if: false in push:main |
 | push:main | .github/workflows/frontend.yml::sbom | CONDITIONAL | path-filtered (paths: frontend/**, proto/domain/**, .github/workflows/frontend.yml) |
 | push:main | .github/workflows/frontend.yml::audit-supply | CONDITIONAL | path-filtered (paths: frontend/**, proto/domain/**, .github/workflows/frontend.yml) |
+| push:main | .github/workflows/hooks.yml::hooks | EXECUTES | - |
 | push:main | .github/workflows/integration.yml::schemathesis | NOT EXECUTED | workflow on: has no push trigger |
 | push:main | .github/workflows/integration.yml::contracts | NOT EXECUTED | workflow on: has no push trigger |
 | push:main | .github/workflows/integration.yml::metamorphic | NOT EXECUTED | workflow on: has no push trigger |
@@ -159,6 +160,7 @@ Why each job runs, does not run, or runs conditionally under each trigger. `need
 | pull_request | .github/workflows/frontend.yml::mutation | CONDITIONAL | path-filtered (paths: frontend/**, proto/domain/**, .github/workflows/frontend.yml); needs 'quality', which is conditional |
 | pull_request | .github/workflows/frontend.yml::sbom | CONDITIONAL | path-filtered (paths: frontend/**, proto/domain/**, .github/workflows/frontend.yml) |
 | pull_request | .github/workflows/frontend.yml::audit-supply | CONDITIONAL | path-filtered (paths: frontend/**, proto/domain/**, .github/workflows/frontend.yml) |
+| pull_request | .github/workflows/hooks.yml::hooks | EXECUTES | - |
 | pull_request | .github/workflows/integration.yml::schemathesis | EXECUTES | - |
 | pull_request | .github/workflows/integration.yml::contracts | EXECUTES | - |
 | pull_request | .github/workflows/integration.yml::metamorphic | EXECUTES | - |
@@ -232,6 +234,7 @@ Why each job runs, does not run, or runs conditionally under each trigger. `need
 | tag:v* | .github/workflows/frontend.yml::mutation | NOT EXECUTED | on: push is branch-scoped (no tags: filter), so a tag push is excluded |
 | tag:v* | .github/workflows/frontend.yml::sbom | NOT EXECUTED | on: push is branch-scoped (no tags: filter), so a tag push is excluded |
 | tag:v* | .github/workflows/frontend.yml::audit-supply | NOT EXECUTED | on: push is branch-scoped (no tags: filter), so a tag push is excluded |
+| tag:v* | .github/workflows/hooks.yml::hooks | NOT EXECUTED | on: push is branch-scoped (no tags: filter), so a tag push is excluded |
 | tag:v* | .github/workflows/integration.yml::schemathesis | NOT EXECUTED | workflow on: has no push trigger |
 | tag:v* | .github/workflows/integration.yml::contracts | NOT EXECUTED | workflow on: has no push trigger |
 | tag:v* | .github/workflows/integration.yml::metamorphic | NOT EXECUTED | workflow on: has no push trigger |
@@ -447,6 +450,11 @@ Why each job runs, does not run, or runs conditionally under each trigger. `need
 | push:main | .github/workflows/frontend.yml::audit-supply | run: pnpm install --frozen-lockfile=false | CONDITIONAL | conditional - blocking |
 | push:main | .github/workflows/frontend.yml::audit-supply | pnpm audit (high+ severity, production tree only) | CONDITIONAL | conditional - blocking |
 | push:main | .github/workflows/frontend.yml::audit-supply | pnpm-lock supply-chain check (HTTPS + registry.npmjs.org only) | CONDITIONAL | conditional - blocking |
+| push:main | .github/workflows/hooks.yml::hooks | uses: actions/checkout@v4 | yes | blocking |
+| push:main | .github/workflows/hooks.yml::hooks | Set up Python 3.11 | yes | blocking |
+| push:main | .github/workflows/hooks.yml::hooks | Install pre-commit and the hooks' test runner | yes | blocking |
+| push:main | .github/workflows/hooks.yml::hooks | The config parses and each hook fails on a planted violation | yes | blocking |
+| push:main | .github/workflows/hooks.yml::hooks | Every hook no other job runs, over the whole tree | yes | blocking |
 | push:main | .github/workflows/integration.yml::schemathesis | - | NOT EXECUTED | workflow on: has no push trigger |
 | push:main | .github/workflows/integration.yml::contracts | - | NOT EXECUTED | workflow on: has no push trigger |
 | push:main | .github/workflows/integration.yml::metamorphic | - | NOT EXECUTED | workflow on: has no push trigger |
@@ -743,6 +751,11 @@ Why each job runs, does not run, or runs conditionally under each trigger. `need
 | pull_request | .github/workflows/frontend.yml::audit-supply | run: pnpm install --frozen-lockfile=false | CONDITIONAL | conditional - blocking |
 | pull_request | .github/workflows/frontend.yml::audit-supply | pnpm audit (high+ severity, production tree only) | CONDITIONAL | conditional - blocking |
 | pull_request | .github/workflows/frontend.yml::audit-supply | pnpm-lock supply-chain check (HTTPS + registry.npmjs.org only) | CONDITIONAL | conditional - blocking |
+| pull_request | .github/workflows/hooks.yml::hooks | uses: actions/checkout@v4 | yes | blocking |
+| pull_request | .github/workflows/hooks.yml::hooks | Set up Python 3.11 | yes | blocking |
+| pull_request | .github/workflows/hooks.yml::hooks | Install pre-commit and the hooks' test runner | yes | blocking |
+| pull_request | .github/workflows/hooks.yml::hooks | The config parses and each hook fails on a planted violation | yes | blocking |
+| pull_request | .github/workflows/hooks.yml::hooks | Every hook no other job runs, over the whole tree | yes | blocking |
 | pull_request | .github/workflows/integration.yml::schemathesis | uses: actions/checkout@v4 | yes | blocking |
 | pull_request | .github/workflows/integration.yml::schemathesis | uses: actions/setup-python@v5 | yes | blocking |
 | pull_request | .github/workflows/integration.yml::schemathesis | run: pip install -r packages/requirements.txt -r packages/require | yes | blocking |
@@ -987,6 +1000,7 @@ Why each job runs, does not run, or runs conditionally under each trigger. `need
 | tag:v* | .github/workflows/frontend.yml::mutation | - | NOT EXECUTED | on: push is branch-scoped (no tags: filter), so a tag push is excluded |
 | tag:v* | .github/workflows/frontend.yml::sbom | - | NOT EXECUTED | on: push is branch-scoped (no tags: filter), so a tag push is excluded |
 | tag:v* | .github/workflows/frontend.yml::audit-supply | - | NOT EXECUTED | on: push is branch-scoped (no tags: filter), so a tag push is excluded |
+| tag:v* | .github/workflows/hooks.yml::hooks | - | NOT EXECUTED | on: push is branch-scoped (no tags: filter), so a tag push is excluded |
 | tag:v* | .github/workflows/integration.yml::schemathesis | - | NOT EXECUTED | workflow on: has no push trigger |
 | tag:v* | .github/workflows/integration.yml::contracts | - | NOT EXECUTED | workflow on: has no push trigger |
 | tag:v* | .github/workflows/integration.yml::metamorphic | - | NOT EXECUTED | workflow on: has no push trigger |

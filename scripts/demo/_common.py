@@ -93,6 +93,7 @@ def wait_for_zero_lag(group: str, bootstrap: str = KAFKA_BOOTSTRAP) -> int:
             return 0
 
         logger.info("lag_poll_waiting", group=group, lag=final_lag, elapsed=elapsed)
+        # not-a-retry: the demo polls consumer lag between segments
         time.sleep(LAG_POLL_INTERVAL)
         elapsed += LAG_POLL_INTERVAL
 
@@ -104,6 +105,7 @@ def sleep_scaled(base_seconds: float, speed_factor: float) -> None:
     """Scaled delay for segment pacing (speed=1.0 → real-time)."""
     if speed_factor <= 0:
         speed_factor = 1.0
+    # not-a-retry: the demo's segment pacing
     time.sleep(max(0.0, base_seconds / speed_factor))
 
 

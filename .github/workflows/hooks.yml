@@ -1,0 +1,45 @@
+name: Pre-commit hooks
+
+# TRUTH-MAP F-34: until truth session 5, `.pre-commit-config.yaml` did not parse and no workflow
+# ran a hook, so every hook the documents cited enforced nothing. This job is where the hooks run
+# in CI:
+#   * the config parses (`pre-commit validate-config`), and tests/hooks shows every check this
+#     repository owns failing on a planted violation and every mirrored CI step resolving;
+#   * every hook that no other job runs is run over the whole tree.
+# The hooks that mirror a CI step (scripts/hooks/run_ci_step.py) are skipped here, since that step
+# runs in its own job; gitleaks is local-only (it reads the staged index, which CI does not have).
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  hooks:
+    name: Pre-commit hooks - each runs over the tree
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install pre-commit and the hooks' test runner
+        run: pip install "pre-commit>=4.0,<5.0" "pyyaml>=6.0,<7.0" "jsonschema>=4.18,<5.0" "pytest>=8.2,<9.0"
+      - name: The config parses and each hook fails on a planted violation
+        run: |
+          pre-commit validate-config .pre-commit-config.yaml
+          python -m pytest tests/hooks -q -o addopts="--strict-markers" -p no:cacheprovider
+      - name: Every hook no other job runs, over the whole tree
+        run: |
+          SKIP="$(python scripts/hooks/run_ci_step.py --mirrors),gitleaks" \
+            pre-commit run --all-files --show-diff-on-failure

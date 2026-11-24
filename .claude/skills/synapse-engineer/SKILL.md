@@ -22,7 +22,8 @@ two production-grade automation scripts.
 Load these in order before writing code — they are the minimum viable model:
 
 1. `references/14_invariants.md` — the architectural guarantees. A PR that
-   breaks any of I-1 through I-14 is rejected automatically by pre-commit.
+   breaks I-1, I-2, I-3 or I-13 is rejected by CI; the pre-commit hooks
+   (`pre-commit install`) run the same checks before a commit.
 2. `references/adr_index.md` — the 24 ADRs with one-line summaries, so you
    can point at a decision instead of re-deriving it.
 3. `references/testing_topology.md` — the 7 layers (SDD → Fuzz → Contract →
@@ -40,19 +41,22 @@ Load these in order before writing code — they are the minimum viable model:
   iteration, appends results to `progress_<agent>.txt`, and exits on
   `<promise>COMPLETE</promise>`.
 
-## Hard rules (enforced by pre-commit)
+## Hard rules (enforced by CI; the pre-commit hooks run the same checks)
 - **I-1 (zero cost)**: no paid API imports (`openai`, `anthropic`, `cohere`,
   `replicate`). CI blocks any paid-API string.
 - **I-2 (reward isolation)**: `agents/X/training/rewards.py` MUST NOT import
-  from `agents.Y.*`. `reward-isolation` hook enforces this.
-- **I-13 (KV-cache)**: no f-strings, no `.format()`, no `time.time()`,
-  no `datetime.now()` in `orchestrator/llm/context_builder.py`,
-  `orchestrator/llm/ollama_client.py`, or
-  `orchestrator/consensus/protocol.py`. `kv-cache-check` hook enforces this.
+  from `agents.Y.*`. CI's I-2 step enforces this; the `reward-isolation` hook
+  runs it.
+- **I-13 (KV-cache)**: the system prompt (`SYSTEM_PROMPT` in
+  `orchestrator/llm/context_builder.py`) is string literals only, bound once,
+  and every system message uses it; dynamic data goes in the messages after
+  the prefix. The `kv-cache-check` hook enforces this (`hooks.yml` runs it).
 - **I-14 (append-only context)**: never `del`, `.pop()`, `.remove()`, or
   reassign `context.messages`. `ContextMessage` is `frozen=True`.
-- **ADR-016 (jitter)**: never `time.sleep(constant)`. Use
-  `synapse_common.retry.retry_with_jitter`.
+- **ADR-016 (jitter)**: never a fixed-delay retry. Use
+  `synapse_common.retry.retry_with_jitter`; a `time.sleep` that is not a
+  retry (a period, a pace, a poll) says so with `# not-a-retry: <reason>`
+  (the `jitter-enforcement` hook, run by `hooks.yml`).
 
 ## Conventions
 - `mypy --strict` must pass.

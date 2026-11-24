@@ -2,9 +2,9 @@
 
 | ID | Name | Enforcement |
 |----|------|-------------|
-| I-1 | Zero-cost stack (no paid APIs) | `no-paid-apis` pre-commit hook + CI grep |
-| I-2 | Independent reward functions per agent | `reward-isolation` pre-commit hook (AST scan) |
-| I-3 | All agent outputs validate against `proto/domain/*.schema.json` | `schema-validate` hook + Schemathesis layer |
+| I-1 | Zero-cost stack (no paid APIs) | CI grep (`ci.yml`, `security.yml`); the `no-paid-apis` hook runs the `ci.yml` step |
+| I-2 | Independent reward functions per agent | CI grep of `rewards.py` (`ci.yml`); the `reward-isolation` hook runs it |
+| I-3 | All agent outputs validate against `proto/domain/*.schema.json` | CI schema validation (`ci.yml`; the `schema-validate` hook runs it) + Schemathesis layer |
 | I-4 | Audit log immutability (Postgres role permissions) | Role grants in init SQL; chaos test `test_audit_immutability` |
 | I-5 | Confidence-gated execution (HITL escalation below threshold) | `orchestrator/hitl/escalation.py` + metric `synapse_hitl_escalation_total` |
 | I-6 | Essential SKU price cap <= 1.3x base | `deal.post` in `pricing_oracle/inference/pipeline.py` + compose-file grep |
@@ -14,7 +14,7 @@
 | I-10 | API latency <2s p99 | Prometheus alert `SynapseAPILatencyHigh` |
 | I-11 | Federated learning keeps raw data at-store (DPDPA) | Flower gradient-only aggregation; `test_dpdpa.py` |
 | I-12 | Digital Twin KL divergence vs live <0.1 | Prometheus metric `synapse_digital_twin_kl_divergence` + alert |
-| I-13 | KV-cache stable prefix (deterministic serialization + no dynamic data in system prompt) | `kv-cache-check` pre-commit hook + SHA-256 unit test |
+| I-13 | KV-cache stable prefix (deterministic serialization + no dynamic data in system prompt) | `kv-cache-check` hook (the system prompt is literal text; `hooks.yml` runs it) + SHA-256 unit test |
 | I-14 | Runtime context append-only during Phases 1–5 | `ContextMessage` frozen=True + `deal` postcondition + `test_context_immutability.py` |
 
 ## Failure modes to know

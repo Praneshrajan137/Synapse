@@ -157,6 +157,7 @@ class DivergenceMonitor:
         """Background monitoring loop."""
         while self._running:
             self.check_all()
+            # not-a-retry: the monitor's check period
             time.sleep(self._config.divergence_check_interval_s)
 
     def start(self) -> None:
