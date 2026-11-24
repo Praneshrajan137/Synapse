@@ -19,17 +19,16 @@ measurements, S5-D-nn decisions, F-nn findings (continuing `TRUTH-MAP.md`).
 
 ## State
 
-- **2026-11-24, at the close.** Stages A to E done; freeze W built, attacked, repaired and rehearsed,
-  **not pushed**. Open and green: #104 (stage A), #105 (stage B), #108 (stages C and D, repaired after
-  the attack), #107 (stage E) and this record (#106, draft). The freeze candidate is `df2a428` on the
-  local branch `docs/freeze-w` (its own worktree, `../synapse-freeze`); its sums must be regenerated
-  on `main` once #104, #105 and #108 have merged (`python -m scripts.truth.make_freeze_w --date ...
-  --base <main's head>`, then `python docs/truth/sealed/check_freeze_w.py`), stamped with
-  OpenTimestamps through the `opentimestamps` 0.4.5 library in a scratch environment as S3-M-34
-  did (O4; LGPL-3, never a dependency), pushed and merged. Nothing is merged: every merge (O6) and the freeze push (O7) wait for the operator's yes,
-  asked at the close, together with one reading the operator may overrule (the calibration's
-  stopping rule, S5-D-07) and the gitleaks question (S5-D-04). No component of SYNAPSE has run on the
-  release world. Session 6's prompt is `docs/truth/SESSION-6-PROMPT.md` (git-ignored).
+- **2026-11-24, at the close.** Stages A to E done and landed with the operator's yes (S5-D-08):
+  #104, #105, #108 and #107 merged (`ac653c3`, `dd90277`, `d69f0f5`, `055072f`), each green on a head
+  synced with `main`; this record merges last. **Freeze W is pushed** as #109, taken on `d69f0f5`
+  (38 frozen files, 30 under `synapse_kernel/`), stamped through OpenTimestamps (four calendars,
+  pending Bitcoin) and green on a head synced with `main` (`d223a5b`); its own merge was not named in
+  the operator's approval, so it is asked separately (S5-M-42). Until #109 merges, the frozen digests
+  are public and timestamped but not on `main`, and nothing of SYNAPSE may run on the release world.
+  Also open for the operator: the calibration's stopping-rule reading (S5-D-07) and the gitleaks
+  hook (S5-D-04). The freeze's proof is to be upgraded once Bitcoin confirms it (S3-M-35's method).
+  Session 6's prompt is `docs/truth/SESSION-6-PROMPT.md` (git-ignored).
 - **2026-11-23 to 24.** The attack on the first freeze candidate (S5-M-39) and its repair (S5-D-07,
   S5-M-40, -41). The app was closed on 2026-11-23 while the attack ran; the plan's usage limit had
   stopped it; it was resumed on 2026-11-24.
