@@ -16,6 +16,7 @@ from synapse_kernel.release.world import REQUIRED_PROVENANCE, load_release_world
 
 ROOT = Path(__file__).resolve().parents[3]
 REPORT = ROOT / "docs" / "truth" / "world" / "fit-report.json"
+INCUMBENT_REPORT = ROOT / "docs" / "truth" / "world" / "incumbent-report.json"
 REVISION = "c374e85975c82816c495acfa904cc55ab14a47d3"
 
 
@@ -27,7 +28,22 @@ def test_the_release_world_loads_with_every_rule_and_provenance() -> None:
     kinds = {key: p.kind for key, p in world.provenance.items()}
     assert kinds["profiles"] == kinds["items.rate_per_day"] == "fitted"
     assert kinds["items.shelf_life_hours"] == kinds["suppliers.lead_time_hours"] == "chosen"
-    assert world.warmup_days == math.ceil((7 * 24 + 12) / 24)
+    # The longest shelf life after calibration (119 hours) plus the longest lead time (12).
+    assert world.warmup_days == math.ceil((119 + 12) / 24) == 6
+
+
+def test_the_shelf_lives_carry_their_calibration() -> None:
+    """The fit chose 1, 2, 3, 5 or 7 days; stage D's pre-declared calibration scaled them once."""
+    world = load_release_world()
+    report = json.loads(INCUMBENT_REPORT.read_text(encoding="utf-8"))
+    scale = report["calibration_scale"]
+    chosen = (24, 48, 72, 120, 168)  # scripts/world/fit_release_world.py, CHOICES
+    lives = sorted({item.shelf_life_hours for item in world.items})
+    assert lives == sorted({max(12, round(hours * scale)) for hours in chosen})
+    assert "Calibrated before freeze W" in world.provenance["items.shelf_life_hours"].source
+    shares = [step["waste_share"] for step in report["calibration"]]
+    assert not 0.027 <= shares[0] <= 0.109
+    assert 0.027 <= shares[-1] <= 0.109
 
 
 def test_the_world_carries_its_attribution() -> None:
