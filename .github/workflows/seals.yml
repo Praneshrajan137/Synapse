@@ -1,0 +1,46 @@
+name: Seals
+
+# The sealed pre-registration (PREREG-1, truth session 3) and freeze W (truth session 5) are
+# checked on every pull request and every push to main, so an edit to a sealed or frozen file
+# turns this red. Until truth session 5 no job ran check_prereg.py: an edit to PREREG-1 would
+# have failed nothing. The checkers use the standard library and git only; nothing is installed.
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  seals:
+    name: Sealed and frozen files are unchanged
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: The seal of PREREG-1 holds
+        run: python docs/truth/sealed/check_prereg.py
+      - name: Freeze W holds
+        run: python docs/truth/sealed/check_freeze_w.py
+      - name: Sealed files are only ever added (pull requests)
+        # Each checker trusts its sums file, so an edit made together with its sums line would
+        # pass both. A deviation adds files beside the sealed ones; it never edits them.
+        if: github.event_name == 'pull_request'
+        run: python -m scripts.audit.sealed_add_only "origin/${{ github.base_ref }}"
+      - name: Sealed files are only ever added (pushes to main)
+        # The same rule for a push that bypasses a pull request, against the commit it replaced.
+        if: github.event_name == 'push' && github.event.before != '0000000000000000000000000000000000000000'
+        run: python -m scripts.audit.sealed_add_only "${{ github.event.before }}"
