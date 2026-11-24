@@ -1055,3 +1055,22 @@ Asked at the close, answered here, and carried into session 6's prompt.
 9. **What the usage limit does to a review.** The fresh-context attack was cut off by the plan's
    five-hour limit and resumed the next day; a review planned for the end of a long session should
    be dispatched early, while capacity remains.
+
+### Landing (2026-11-24)
+
+- **S5-D-08 (2026-11-24). The operator approved the landing:** "Yes, all in order", to the question
+  "Merge #104, #105, #108, #107 and the record in order, and push freeze W?". Taken as: each merged
+  in that order once green on a head synced with `main` (E-TP-07), and freeze W pushed once #104,
+  #105 and #108 are on `main`. The merge of freeze W's own pull request was not named, so it is
+  asked separately rather than assumed.
+- **S5-M-42 Landed (measured).** #104 merged as `ac653c3` (its head was `main`'s base; 20 checks).
+  #105 synced (`8142b19`; the light job's test line combined) and merged as `dd90277` (20 checks).
+  #108 synced (`c4ca68b`; #104's lint step and #108's bench step both kept, the gate surface
+  regenerated) and merged as `d69f0f5` (20 checks; the CI runner's bench gave the laptop's seven
+  digests again). **Freeze W pushed** as #109 (`1d1df34`, taken on `d69f0f5`): 38 frozen files, 30
+  under `synapse_kernel/` (the Sentinel port among them); `SHA256SUMS-W` sha256
+  `089aed725e891a0bbaeb99c2f4149ba7516b4146ca12d93ba90a9314c24a5059`. **Stamped** at
+  2026-11-24T06:52:12Z through the `opentimestamps` 0.4.5 library as S3-M-34 did: all four
+  calendars accepted; the proof (`SHA256SUMS-W.ots`, `fbe7d5d`) is 945 bytes, sha256
+  `c655a086f063a7e3fbe01e191968f3e3ae4dd0c11184491e516d16a5756054ce`, pending Bitcoin. #107 synced
+  (`d1d8aee`; the gate surface regenerated; its four repository hooks pass over the composed tree).
