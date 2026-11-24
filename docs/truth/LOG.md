@@ -98,8 +98,10 @@ Baseline for every measurement unless another is named: the working tree on bran
 
 ## How to resume
 
-**From 2026-11-18 the running record is [`log/session-03.md`](log/session-03.md): resume from its
-"How to resume".** The steps below were session 2's and are kept as its record.
+**From 2026-11-19 the running record is [`log/session-05.md`](log/session-05.md): resume from its
+"How to resume".** Session 3's record, [`log/session-03.md`](log/session-03.md), ran from 2026-11-18
+to 2026-11-19 (there is no session 4: its row was folded into session 3). The steps below were
+session 2's and are kept as its record.
 
 1. Read `OPENING.md`, then this file from "Measurements".
 2. Re-run M-14 and compare the two digests, to confirm nothing moved while the session was away.
