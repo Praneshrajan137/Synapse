@@ -34,13 +34,13 @@ the same pair.
 
 ## Summary
 
-Parsed 23 workflow file(s), 72 job(s), 478 step(s).
+Parsed 24 workflow file(s), 73 job(s), 484 step(s).
 
 | Trigger | Jobs executing | Jobs conditional | Jobs NOT EXECUTED | Steps blocking | Steps advisory | Steps conditional |
 |---|---|---|---|---|---|---|
-| push:main | 4 | 34 | 34 | 31 | 0 | 204 |
-| pull_request | 17 | 36 | 19 | 107 | 4 | 225 |
-| tag:v* | 3 | 3 | 66 | 18 | 0 | 29 |
+| push:main | 5 | 34 | 34 | 37 | 0 | 204 |
+| pull_request | 18 | 36 | 19 | 113 | 4 | 225 |
+| tag:v* | 3 | 3 | 67 | 18 | 0 | 29 |
 
 ## Job selection
 
@@ -108,6 +108,7 @@ Why each job runs, does not run, or runs conditionally under each trigger. `need
 | push:main | .github/workflows/publish-audit-anchor.yml::publish | CONDITIONAL | path-filtered (paths: infrastructure/audit_anchors/**) |
 | push:main | .github/workflows/regenerate-truth-docs.yml::regenerate | NOT EXECUTED | workflow on: has no push trigger |
 | push:main | .github/workflows/required-checks-reconcile.yml::reconcile | NOT EXECUTED | workflow on: has no push trigger |
+| push:main | .github/workflows/seals.yml::seals | EXECUTES | - |
 | push:main | .github/workflows/security.yml::security | NOT EXECUTED | workflow on: has no push trigger |
 | push:main | .github/workflows/sprint6-e2e-oracle.yml::sprint6-e2e | NOT EXECUTED | workflow on: has no push trigger |
 | push:main | .github/workflows/terraform-validate.yml::validate | CONDITIONAL | path-filtered (paths: infrastructure/gcp/terraform/**, infrastructure/oracle/terraform/**) |
@@ -180,6 +181,7 @@ Why each job runs, does not run, or runs conditionally under each trigger. `need
 | pull_request | .github/workflows/publish-audit-anchor.yml::publish | NOT EXECUTED | workflow on: has no pull_request trigger |
 | pull_request | .github/workflows/regenerate-truth-docs.yml::regenerate | CONDITIONAL | unparsable if: (unparsable at offset 126: "*.name, 'regenerate-") |
 | pull_request | .github/workflows/required-checks-reconcile.yml::reconcile | NOT EXECUTED | workflow on: has no pull_request trigger |
+| pull_request | .github/workflows/seals.yml::seals | EXECUTES | - |
 | pull_request | .github/workflows/security.yml::security | CONDITIONAL | path-filtered (paths: **/requirements.txt, **/package.json, **/Dockerfile) |
 | pull_request | .github/workflows/sprint6-e2e-oracle.yml::sprint6-e2e | NOT EXECUTED | workflow on: has no pull_request trigger |
 | pull_request | .github/workflows/terraform-validate.yml::validate | CONDITIONAL | path-filtered (paths: infrastructure/gcp/terraform/**, infrastructure/oracle/terraform/**, .github/workflows/terraform-validate.yml) |
@@ -252,6 +254,7 @@ Why each job runs, does not run, or runs conditionally under each trigger. `need
 | tag:v* | .github/workflows/publish-audit-anchor.yml::publish | NOT EXECUTED | on: push is branch-scoped (no tags: filter), so a tag push is excluded |
 | tag:v* | .github/workflows/regenerate-truth-docs.yml::regenerate | NOT EXECUTED | workflow on: has no push trigger |
 | tag:v* | .github/workflows/required-checks-reconcile.yml::reconcile | NOT EXECUTED | workflow on: has no push trigger |
+| tag:v* | .github/workflows/seals.yml::seals | NOT EXECUTED | on: push is branch-scoped (no tags: filter), so a tag push is excluded |
 | tag:v* | .github/workflows/security.yml::security | NOT EXECUTED | workflow on: has no push trigger |
 | tag:v* | .github/workflows/sprint6-e2e-oracle.yml::sprint6-e2e | NOT EXECUTED | workflow on: has no push trigger |
 | tag:v* | .github/workflows/terraform-validate.yml::validate | NOT EXECUTED | on: push is branch-scoped (no tags: filter), so a tag push is excluded |
@@ -500,6 +503,12 @@ Why each job runs, does not run, or runs conditionally under each trigger. `need
 | push:main | .github/workflows/publish-audit-anchor.yml::publish | Commit signatures back | CONDITIONAL | conditional - blocking |
 | push:main | .github/workflows/regenerate-truth-docs.yml::regenerate | - | NOT EXECUTED | workflow on: has no push trigger |
 | push:main | .github/workflows/required-checks-reconcile.yml::reconcile | - | NOT EXECUTED | workflow on: has no push trigger |
+| push:main | .github/workflows/seals.yml::seals | uses: actions/checkout@v4 | yes | blocking |
+| push:main | .github/workflows/seals.yml::seals | Set up Python 3.11 | yes | blocking |
+| push:main | .github/workflows/seals.yml::seals | The seal of PREREG-1 holds | yes | blocking |
+| push:main | .github/workflows/seals.yml::seals | Freeze W holds | yes | blocking |
+| push:main | .github/workflows/seals.yml::seals | Sealed files are only ever added (pull requests) | yes | blocking |
+| push:main | .github/workflows/seals.yml::seals | Sealed files are only ever added (pushes to main) | yes | blocking |
 | push:main | .github/workflows/security.yml::security | - | NOT EXECUTED | workflow on: has no push trigger |
 | push:main | .github/workflows/sprint6-e2e-oracle.yml::sprint6-e2e | - | NOT EXECUTED | workflow on: has no push trigger |
 | push:main | .github/workflows/terraform-validate.yml::validate | uses: actions/checkout@v4 | CONDITIONAL | conditional - blocking |
@@ -811,6 +820,12 @@ Why each job runs, does not run, or runs conditionally under each trigger. `need
 | pull_request | .github/workflows/regenerate-truth-docs.yml::regenerate | Show what regeneration changed | CONDITIONAL | conditional - blocking |
 | pull_request | .github/workflows/regenerate-truth-docs.yml::regenerate | Upload the regenerated documents | CONDITIONAL | conditional - blocking |
 | pull_request | .github/workflows/required-checks-reconcile.yml::reconcile | - | NOT EXECUTED | workflow on: has no pull_request trigger |
+| pull_request | .github/workflows/seals.yml::seals | uses: actions/checkout@v4 | yes | blocking |
+| pull_request | .github/workflows/seals.yml::seals | Set up Python 3.11 | yes | blocking |
+| pull_request | .github/workflows/seals.yml::seals | The seal of PREREG-1 holds | yes | blocking |
+| pull_request | .github/workflows/seals.yml::seals | Freeze W holds | yes | blocking |
+| pull_request | .github/workflows/seals.yml::seals | Sealed files are only ever added (pull requests) | yes | blocking |
+| pull_request | .github/workflows/seals.yml::seals | Sealed files are only ever added (pushes to main) | yes | blocking |
 | pull_request | .github/workflows/security.yml::security | uses: actions/checkout@v4 | CONDITIONAL | conditional - blocking |
 | pull_request | .github/workflows/security.yml::security | uses: actions/setup-python@v5 | CONDITIONAL | conditional - blocking |
 | pull_request | .github/workflows/security.yml::security | uses: pnpm/action-setup@v4 | CONDITIONAL | conditional - blocking |
@@ -994,6 +1009,7 @@ Why each job runs, does not run, or runs conditionally under each trigger. `need
 | tag:v* | .github/workflows/publish-audit-anchor.yml::publish | - | NOT EXECUTED | on: push is branch-scoped (no tags: filter), so a tag push is excluded |
 | tag:v* | .github/workflows/regenerate-truth-docs.yml::regenerate | - | NOT EXECUTED | workflow on: has no push trigger |
 | tag:v* | .github/workflows/required-checks-reconcile.yml::reconcile | - | NOT EXECUTED | workflow on: has no push trigger |
+| tag:v* | .github/workflows/seals.yml::seals | - | NOT EXECUTED | on: push is branch-scoped (no tags: filter), so a tag push is excluded |
 | tag:v* | .github/workflows/security.yml::security | - | NOT EXECUTED | workflow on: has no push trigger |
 | tag:v* | .github/workflows/sprint6-e2e-oracle.yml::sprint6-e2e | - | NOT EXECUTED | workflow on: has no push trigger |
 | tag:v* | .github/workflows/terraform-validate.yml::validate | - | NOT EXECUTED | on: push is branch-scoped (no tags: filter), so a tag push is excluded |
