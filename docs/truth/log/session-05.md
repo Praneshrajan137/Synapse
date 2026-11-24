@@ -21,11 +21,12 @@ measurements, S5-D-nn decisions, F-nn findings (continuing `TRUTH-MAP.md`).
 
 - **2026-11-24, at the close.** Stages A to E done; freeze W built, attacked, repaired and rehearsed,
   **not pushed**. Open and green: #104 (stage A), #105 (stage B), #108 (stages C and D, repaired after
-  the attack), #107 (stage E) and this record (#106, draft). The freeze candidate is `2e97c0e` on the
+  the attack), #107 (stage E) and this record (#106, draft). The freeze candidate is `df2a428` on the
   local branch `docs/freeze-w` (its own worktree, `../synapse-freeze`); its sums must be regenerated
-  on `main` once #104, #105 and #108 have merged (`scratchpad/make_freeze_w.py`, then
-  `check_freeze_w.py`), stamped with OpenTimestamps (`scratchpad/ots_stamp.py`, O4), pushed and
-  merged. Nothing is merged: every merge (O6) and the freeze push (O7) wait for the operator's yes,
+  on `main` once #104, #105 and #108 have merged (`python -m scripts.truth.make_freeze_w --date ...
+  --base <main's head>`, then `python docs/truth/sealed/check_freeze_w.py`), stamped with
+  OpenTimestamps through the `opentimestamps` 0.4.5 library in a scratch environment as S3-M-34
+  did (O4; LGPL-3, never a dependency), pushed and merged. Nothing is merged: every merge (O6) and the freeze push (O7) wait for the operator's yes,
   asked at the close, together with one reading the operator may overrule (the calibration's
   stopping rule, S5-D-07) and the gitleaks question (S5-D-04). No component of SYNAPSE has run on the
   release world. Session 6's prompt is `docs/truth/SESSION-6-PROMPT.md` (git-ignored).
