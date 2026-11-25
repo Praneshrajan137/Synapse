@@ -1,0 +1,193 @@
+{
+ "D_c": {
+  "L": 3822.968,
+  "N": 3822.968,
+  "S1": 4227.213965484783,
+  "S2": 3822.968,
+  "S3": 3822.968
+ },
+ "M_c": {
+  "L": 14.5272784,
+  "N": 14.5272784,
+  "S1": 16.063413068842177,
+  "S2": 14.5272784,
+  "S3": 14.5272784
+ },
+ "calibration": {
+  "bracket": [
+   0.5,
+   2.0
+  ],
+  "scale": 0.5054446430258502,
+  "steps": [
+   {
+    "better": "I2",
+    "scale": 1.0,
+    "waste_share": 0.023814417649457548
+   },
+   {
+    "better": "I2",
+    "scale": 0.7071067811865476,
+    "waste_share": 0.030902520404918955
+   },
+   {
+    "better": "I2",
+    "scale": 0.5946035575013605,
+    "waste_share": 0.03719370664624362
+   },
+   {
+    "better": "I2",
+    "scale": 0.5452538663326288,
+    "waste_share": 0.042414915169433576
+   },
+   {
+    "better": "I2",
+    "scale": 0.5221368912137069,
+    "waste_share": 0.04382175672231411
+   },
+   {
+    "better": "I2",
+    "scale": 0.5109485743270583,
+    "waste_share": 0.04402507387496274
+   },
+   {
+    "better": "I2",
+    "scale": 0.5054446430258502,
+    "waste_share": 0.045233719920007326
+   }
+  ],
+  "steps_after_scale_1": 6,
+  "target": 0.0546,
+  "target_reachable": false
+ },
+ "date": "2026-11-24",
+ "decision": "S6-D-03: the operator chose 'Override it' to 'Keep the frozen reading?' (truth session 6, plan mode)",
+ "deviation": 1,
+ "files": {
+  "checker": "docs/truth/sealed/check_deviation_1.py",
+  "incumbent_report": "docs/truth/world/incumbent-report-d1.json",
+  "incumbent_tables": "synapse_kernel/worlds/incumbent_tables_d1.json",
+  "run_time_check": "synapse_kernel/deviation1.py",
+  "script": "scripts/kernel/deviation_1.py",
+  "statement": "docs/truth/sealed/DEVIATION-1.md",
+  "tests": "tests/kernel/release/test_deviation_1.py",
+  "uncalibrated_world": "synapse_kernel/worlds/release_world_uncalibrated.json",
+  "world": "synapse_kernel/worlds/release_world_d1.json"
+ },
+ "freeze_w_sums_sha256": "089aed725e891a0bbaeb99c2f4149ba7516b4146ca12d93ba90a9314c24a5059",
+ "hashing": "sha256 of each file's bytes as git stores them (CRLF read as LF), as SHA256SUMS-W",
+ "headroom": {
+  "S1": {
+   "gate_guarded": {
+    "clipped_share": 0.03749234068627451,
+    "difference_in_differences": 38.35466278207559,
+    "mean_advantage": 36.04843998313153
+   },
+   "gate_unguarded": {
+    "clipped_share": null,
+    "difference_in_differences": 41.968198510375906,
+    "mean_advantage": 39.365130819879326
+   },
+   "informed_guarded": {
+    "clipped_share": 0.027879901960784315,
+    "difference_in_differences": 38.70879219667319,
+    "mean_advantage": 36.402569397729124
+   },
+   "informed_unguarded": {
+    "clipped_share": null,
+    "difference_in_differences": 48.55017552389107,
+    "mean_advantage": 45.9471078333945
+   }
+  },
+  "S2": {
+   "gate_guarded": {
+    "clipped_share": 0.06869127859477124,
+    "difference_in_differences": -39.67319021500937,
+    "mean_advantage": -41.97941301395343
+   },
+   "gate_unguarded": {
+    "clipped_share": null,
+    "difference_in_differences": -93.41491728076075,
+    "mean_advantage": -96.01798497125733
+   },
+   "informed_guarded": {
+    "clipped_share": 0.051215277777777776,
+    "difference_in_differences": 0.02731852882420327,
+    "mean_advantage": -2.2789042701198614
+   },
+   "informed_unguarded": {
+    "clipped_share": null,
+    "difference_in_differences": 1.0245739015105215,
+    "mean_advantage": -1.5784937889860586
+   }
+  },
+  "S3": {
+   "gate_guarded": {
+    "clipped_share": 0.049096200980392156,
+    "difference_in_differences": -32.777475614603716,
+    "mean_advantage": -35.08369841354778
+   },
+   "gate_unguarded": {
+    "clipped_share": null,
+    "difference_in_differences": -220.5969898241296,
+    "mean_advantage": -223.20005751462617
+   },
+   "informed_guarded": {
+    "clipped_share": 0.05291947508169935,
+    "difference_in_differences": 10.044088279211518,
+    "mean_advantage": 7.737865480267454
+   },
+   "informed_unguarded": {
+    "clipped_share": null,
+    "difference_in_differences": 12.29797279512191,
+    "mean_advantage": 9.69490510462533
+   }
+  }
+ },
+ "incumbent": {
+  "contest": "I2-P",
+  "fill_rate_N_selected": 0.8598531775991434,
+  "replicate_evaluations": {
+   "I1-L": 3104,
+   "I1-N": 3360,
+   "I1-P": 12928,
+   "I2-L": 2464,
+   "I2-N": 2592,
+   "I2-P": 9856
+  },
+  "selected": {
+   "L": "I2-L",
+   "N": "I2-N",
+   "S1": "I2-P",
+   "S2": "I2-P",
+   "S3": "I2-P"
+  },
+  "waste_share_N_selected": 0.047872748304635386
+ },
+ "p_c": {
+  "L": 1.0,
+  "N": 1.0,
+  "S1": 1.0,
+  "S2": 1.0,
+  "S3": 1.0
+ },
+ "prereg": "PREREG-1 section 2 ('Any recalibration of the world happens before freeze W, never after'), sections 5 and 11",
+ "primary": "freeze W's world: every claim is judged there; W-d1 is reported beside it",
+ "reading": "deviation 1 (truth session 6, S6-D-03): the log bisection toward 5.46% does not stop on entering [2.7%, 10.9%]; it runs the six frozen steps after scale 1 in the bracket [0.5, 2], a share below 5.46% moving to shorter lives and above to longer, and keeps the evaluated scale whose share is closest to 5.46% (ties: the larger scale)",
+ "rules": [
+  "Nothing frozen is edited: a deviation adds files beside the frozen ones.",
+  "No challenger runs on W-d1 before this deviation is merged.",
+  "Every comparison on W-d1 imports synapse_kernel.release.integrity before any challenger code, asserts freeze W, and loads W-d1 through synapse_kernel.deviation1.load."
+ ],
+ "world": {
+  "items": 300,
+  "name": "release-world-1-d1",
+  "shelf_life_hours": [
+   12,
+   24,
+   36,
+   61,
+   85
+  ]
+ }
+}

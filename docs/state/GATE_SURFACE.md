@@ -34,12 +34,12 @@ the same pair.
 
 ## Summary
 
-Parsed 25 workflow file(s), 74 job(s), 489 step(s).
+Parsed 25 workflow file(s), 74 job(s), 490 step(s).
 
 | Trigger | Jobs executing | Jobs conditional | Jobs NOT EXECUTED | Steps blocking | Steps advisory | Steps conditional |
 |---|---|---|---|---|---|---|
-| push:main | 6 | 34 | 34 | 42 | 0 | 204 |
-| pull_request | 19 | 36 | 19 | 118 | 4 | 225 |
+| push:main | 6 | 34 | 34 | 43 | 0 | 204 |
+| pull_request | 19 | 36 | 19 | 119 | 4 | 225 |
 | tag:v* | 3 | 3 | 68 | 18 | 0 | 29 |
 
 ## Job selection
@@ -515,6 +515,7 @@ Why each job runs, does not run, or runs conditionally under each trigger. `need
 | push:main | .github/workflows/seals.yml::seals | Set up Python 3.11 | yes | blocking |
 | push:main | .github/workflows/seals.yml::seals | The seal of PREREG-1 holds | yes | blocking |
 | push:main | .github/workflows/seals.yml::seals | Freeze W holds | yes | blocking |
+| push:main | .github/workflows/seals.yml::seals | Deviation 1 holds | yes | blocking |
 | push:main | .github/workflows/seals.yml::seals | Sealed files are only ever added (pull requests) | yes | blocking |
 | push:main | .github/workflows/seals.yml::seals | Sealed files are only ever added (pushes to main) | yes | blocking |
 | push:main | .github/workflows/security.yml::security | - | NOT EXECUTED | workflow on: has no push trigger |
@@ -837,6 +838,7 @@ Why each job runs, does not run, or runs conditionally under each trigger. `need
 | pull_request | .github/workflows/seals.yml::seals | Set up Python 3.11 | yes | blocking |
 | pull_request | .github/workflows/seals.yml::seals | The seal of PREREG-1 holds | yes | blocking |
 | pull_request | .github/workflows/seals.yml::seals | Freeze W holds | yes | blocking |
+| pull_request | .github/workflows/seals.yml::seals | Deviation 1 holds | yes | blocking |
 | pull_request | .github/workflows/seals.yml::seals | Sealed files are only ever added (pull requests) | yes | blocking |
 | pull_request | .github/workflows/seals.yml::seals | Sealed files are only ever added (pushes to main) | yes | blocking |
 | pull_request | .github/workflows/security.yml::security | uses: actions/checkout@v4 | CONDITIONAL | conditional - blocking |
