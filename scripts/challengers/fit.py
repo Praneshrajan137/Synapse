@@ -136,14 +136,19 @@ def tune(world_label: str, component: str, workers: int, ks: range = TUNING) -> 
             return per_item
 
         result = coordinate_search(evaluate, used_parts(world), replicates=len(moving))
+        # The final table once more as the search evaluates (decision S6-D-09): where items are
+        # coupled (the surge detector pools them), an item's cost moves when others' kappa moves,
+        # so the search's own record of it, kept from its last accepted step, can be stale.
+        final = evaluate(result.factors)
         reported = run(result.factors, order, True)
     if not all(r["outcome_replay"] and r["decision_replay"] for r in reported):
         raise RuntimeError("a replay failed in the reported re-evaluation")
     again = np.array(
         [math.fsum(r["item_cost"][i] for r in reported) / n for i in range(len(world.items))]
     )
-    if not np.array_equal(again, result.cost):
-        raise RuntimeError("the reported re-evaluation does not give the search's J_i to the bit")
+    if not np.array_equal(again, final):
+        raise RuntimeError("the reported re-evaluation does not give the tuning's J_i to the bit")
+    stale = np.abs(final - result.cost)
     return {
         "world": world_label,
         "component": component,
@@ -153,14 +158,21 @@ def tune(world_label: str, component: str, workers: int, ks: range = TUNING) -> 
         "replicates": n,
         "replicates_where_it_acts": len(moving),
         "kappa": result.factors.tolist(),
-        "item_cost": result.cost.tolist(),
-        "pooled_cost": math.fsum(result.cost.tolist()),
+        "item_cost": final.tolist(),
+        "pooled_cost": math.fsum(final.tolist()),
         "pooled_cost_at_one": log[0]["pooled_cost"],
+        "search_record": {
+            "pooled_cost": math.fsum(result.cost.tolist()),
+            "items_whose_record_was_stale": int(np.count_nonzero(stale)),
+            "largest_stale_gap": float(stale.max()),
+        },
         "replicate_evaluations": result.replicate_evaluations,
         "sweeps_per_step": list(result.sweeps_per_step),
         "items_moved": int(np.count_nonzero(result.factors[used_parts(world)] != 1.0)),
         "evaluations": log,
-        "reported_check": "J_i equal to the bit; both replays held on every replicate",
+        "reported_check": (
+            "the final table in reported mode gives the tuning's J_i to the bit; both replays held"
+        ),
         "wall_seconds": round(time.perf_counter() - t0, 1),
     }
 
