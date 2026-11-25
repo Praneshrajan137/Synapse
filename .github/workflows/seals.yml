@@ -35,6 +35,10 @@ jobs:
         run: python docs/truth/sealed/check_prereg.py
       - name: Freeze W holds
         run: python docs/truth/sealed/check_freeze_w.py
+      - name: Deviation 1 holds
+        # The calibration's other reading (truth session 6, S6-D-03): a second world beside
+        # freeze W's, chained to it through SHA256SUMS-W's digest.
+        run: python docs/truth/sealed/check_deviation_1.py
       - name: Sealed files are only ever added (pull requests)
         # Each checker trusts its sums file, so an edit made together with its sums line would
         # pass both. A deviation adds files beside the sealed ones; it never edits them.
