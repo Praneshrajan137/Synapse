@@ -158,3 +158,57 @@ def test_the_record_replays_and_an_altered_observation_shows(world: Any, tables:
 def test_a_map_outside_the_gate_is_refused(trust: dict[str, str], world: Any, tables: Any) -> None:
     with pytest.raises(ValueError, match="cannot decide|no such entry"):
         build("synapse", world, tables, {"trust": trust, "surge_threshold": THRESHOLD})
+
+
+# -- stage C's acceptance: the fit's seeds, and the fitted composition's decisions ----------------
+
+#: Seed ranges no fit may touch (gate item 4): validation, D3 (the dry run), D4 (the redesign's
+#: check) and the pre-gate scoping range. Confirmatory seeds are not ``k``s at all.
+PROTECTED = {
+    "validation": range(32, 64),
+    "D3": range(448, 648),
+    "D4": range(648, 776),
+    "scoping": range(1000, 1064),
+}
+
+
+def _overlaps(used: dict[str, range]) -> list[str]:
+    return [
+        f"{name} meets {other}"
+        for name, span in used.items()
+        for other, kept in PROTECTED.items()
+        if set(span) & set(kept)
+    ]
+
+
+def test_the_fits_seeds_exclude_every_protected_range() -> None:
+    from scripts.challengers import calibrate_surge, fit
+
+    used = {
+        "tuning": fit.TUNING,
+        "trust D1": fit.D1,
+        "trust D2": fit.D2,
+        "threshold tuning": calibrate_surge.TUNING,
+        "threshold D1": calibrate_surge.D1,
+    }
+    assert _overlaps(used) == []
+    assert _overlaps({"planted": range(60, 70)}) == ["planted meets validation"]
+
+
+def test_the_fitted_composition_decides_as_recorded() -> None:
+    """Golden decisions of the fitted composition (W's parameters, S1, D1 seed k 67), recorded on
+    Windows (numpy 2.4.4), for Linux CI to reproduce bit for bit (gate item 8)."""
+    import hashlib
+    import json
+    from pathlib import Path
+
+    root = Path(__file__).resolve().parents[3]
+    params = json.loads((root / "docs/truth/composition/params-W.json").read_text(encoding="utf-8"))
+    world, tables = load_release_world(), load_incumbent_tables()
+    log = _Log(build("synapse", world, tables, params))
+    run(world, [build_scenario(world, "S1", seeds.explore_seed(67))], log)
+    digest = hashlib.sha256()
+    for orders in log.orders:
+        digest.update(np.ascontiguousarray(orders, dtype=np.int64).tobytes())
+    want = "9af66520a0d1bddc1f670c10d10d5f427fbccf6e05a0605526ad03d15d03147d"
+    assert digest.hexdigest() == want, digest.hexdigest()
