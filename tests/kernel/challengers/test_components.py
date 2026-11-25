@@ -242,6 +242,35 @@ def test_the_lane_settles_on_development_seeds(world: Any, tables: Any) -> None:
     assert _lane_violations(world, tables, range(64, 80)) == []
 
 
+def test_the_lane_settles_on_deviation_1s_world() -> None:
+    from scripts.challengers import child
+
+    world_d1, tables_d1, _ = child.load("W-d1")
+    assert _lane_violations(world_d1, tables_d1, range(64, 72)) == []
+
+
+def test_the_old_lane_p_for_good_rule_is_caught(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Planted: the gate's first rule, lane P for good once a life equals its declared one, which
+    W-d1's 12-hour items (whole in L, at the floor) satisfy (decision S6-D-10)."""
+    from scripts.challengers import child
+    from synapse_kernel.challengers import shelf
+
+    def old_update(self: Any, history: Any) -> Any:
+        known = history.life >= 0
+        normal = (known & (history.life == self.declared[None, :])).any(axis=1)
+        self.normal = getattr(self, "normal", np.zeros_like(normal)) | normal
+        shorter = (known & (history.life < self.declared[None, :])).any(axis=1)
+        self.short = shorter & ~self.normal
+        return self.short.copy()
+
+    monkeypatch.setattr(shelf.Lane, "update", old_update)
+    world_d1, tables_d1, _ = child.load("W-d1")
+    assert any(
+        " L k " in v or v.startswith("L k")
+        for v in _lane_violations(world_d1, tables_d1, range(64, 66))
+    )
+
+
 def test_a_life_one_hour_short_is_caught(
     world: Any, tables: Any, monkeypatch: pytest.MonkeyPatch
 ) -> None:
