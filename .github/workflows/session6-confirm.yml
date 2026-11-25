@@ -1,0 +1,86 @@
+# Truth session 6, stage D2: power on the validation seeds, then the dry run on D3, on runners.
+# Temporary: this file lives only on the compute/s6-confirm branch, which is never merged.
+# docs/truth/composition/compute-stage.txt says which runs: "power" (one job per world and cell)
+# or "dry-run" (one job per world, cell and slice of ten). Parts come back as artifacts and are
+# merged locally.
+name: Session 6 compute - power and dry run
+
+on:
+  push:
+    branches: ["compute/s6-confirm"]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: session6-compute-confirm
+  cancel-in-progress: false
+
+jobs:
+  stage:
+    name: Which stage
+    runs-on: ubuntu-latest
+    outputs:
+      name: ${{ steps.read.outputs.name }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: read
+        run: echo "name=$(tr -d '[:space:]' < docs/truth/composition/compute-stage.txt)" >> "$GITHUB_OUTPUT"
+
+  power:
+    needs: stage
+    if: needs.stage.outputs.name == 'power'
+    name: power ${{ matrix.world }} ${{ matrix.cell }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    strategy:
+      fail-fast: false
+      matrix:
+        world: ["W", "W-d1"]
+        cell: ["N", "L", "S1", "S2", "S3"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install the kernel's closure, pinned as on the laptop
+        run: pip install "numpy==2.4.4" "simpy==4.1.1"
+      - name: s_c's paired differences on the validation seeds, this part
+        run: |
+          python -u -m scripts.confirm.power --worlds "${{ matrix.world }}" \
+            --cells "${{ matrix.cell }}" --workers 4 --raw-out parts
+      - uses: actions/upload-artifact@v4
+        with:
+          name: power-${{ matrix.world }}-${{ matrix.cell }}
+          path: parts/
+          retention-days: 30
+
+  dry-run:
+    needs: stage
+    if: needs.stage.outputs.name == 'dry-run'
+    name: dry run ${{ matrix.world }} ${{ matrix.cell }} ${{ matrix.slice }}/10
+    runs-on: ubuntu-latest
+    timeout-minutes: 300
+    strategy:
+      fail-fast: false
+      max-parallel: 20
+      matrix:
+        world: ["W", "W-d1"]
+        cell: ["N", "L", "S1", "S2", "S3"]
+        slice: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install the kernel's closure, pinned as on the laptop
+        run: pip install "numpy==2.4.4" "simpy==4.1.1"
+      - name: Every arm at this slice of D3 (a fresh child per replicate, both replays)
+        run: |
+          python -u -m scripts.confirm.run --dry-run --worlds "${{ matrix.world }}" \
+            --cells "${{ matrix.cell }}" --chunk "${{ matrix.slice }}/10" --workers 4 --raw-out parts
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dry-${{ matrix.world }}-${{ matrix.cell }}-${{ matrix.slice }}
+          path: parts/
+          retention-days: 30
