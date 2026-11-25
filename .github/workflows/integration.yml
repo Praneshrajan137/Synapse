@@ -188,7 +188,11 @@ jobs:
 
   real-stack-run:
     name: Real_Stack_Run — Console fidelity (Req 5)
-    runs-on: ubuntu-latest
+    # Pinned: ubuntu-latest became Ubuntu 26.04, where the locked Playwright (1.60.0) refuses
+    # to install chromium ("Playwright does not support chromium on ubuntu26.04-x64", scheduled
+    # integration run 45626617539, 2026-11-25). Lift the pin with a Playwright that supports it;
+    # the visual-regression baselines were made on this image, so move them together.
+    runs-on: ubuntu-24.04
     timeout-minutes: 45
     # SCHEDULE / manual ONLY — NEVER on pull_request. The Real_Stack_Run drives
     # the real docker stack (live gateway + orchestrator + datastores), whose
