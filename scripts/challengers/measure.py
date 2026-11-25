@@ -34,6 +34,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import math
 import statistics
 import time
 from concurrent.futures import ProcessPoolExecutor
@@ -270,13 +271,21 @@ def analyse(
                 }
             entry["cell_incumbent_version"] = base[0]["cell_incumbent_version"]
             if name == "lane_incumbent":
-                # The lane rule, on every seed: exactly the frozen version of its lane.
-                same = [
-                    r["cost"] == b["lane_version"]["cost"] for r, b in zip(rows, base, strict=True)
+                # Against the frozen version of its lane, seed by seed. Lane P is the default from
+                # the first decision, so outside L it must be that version exactly. In L the first
+                # decision (02:00 on day 0) comes before any receipt shows a life, so it orders as
+                # I2-P; the trace of that order can reach the measured week, so L is reported.
+                gaps = [
+                    r["cost"] - b["lane_version"]["cost"] for r, b in zip(rows, base, strict=True)
                 ]
-                if not all(same):
+                differ = [(k, g) for k, g in zip(ks, gaps, strict=True) if g != 0.0]
+                if differ and cell != "L":
                     raise RuntimeError(f"the lane rule missed its version: {world_label} {cell}")
-                entry["equals_its_lane_version_on_every_seed"] = True
+                entry["against_its_lane_version"] = {
+                    "seeds_that_differ": [k for k, _ in differ],
+                    "deltas": [g for _, g in differ],
+                    "mean_delta": math.fsum(gaps) / len(gaps),
+                }
             if guarded:
                 clipped = sum(r["report"]["clipped"] for r in rows)
                 decisions = sum(r["report"]["decisions"] for r in rows)
@@ -389,6 +398,7 @@ def assemble(
         },
         "wall_seconds": max(p["wall_seconds"] for p in parts),
         "code": parts[0]["code"],
+        "merge_code": code_digest(),
     }
 
 
