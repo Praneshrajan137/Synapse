@@ -22,7 +22,9 @@ the clipped share; for the surge components, the store's alarms (any alarm outsi
 the onset in S1, is false) and the delay of the first alarm after the onset; for the supply
 component, the same for its flags in S2 and S3.
 
-Writes ``docs/truth/challengers/measure-d1-<world>.json``, one world after the other. Run after
+Writes ``docs/truth/challengers/measure-d1-<world>.json``, one world after the other; with
+``--cells`` and ``--raw-out`` it runs a part (some cells of a world) and ``--merge`` assembles the
+parts, so the work can be spread over machines with the same result. Run after
 ``calibrate_surge``, whose threshold the surge components are built from:
 ``python -m scripts.challengers.measure``.
 """
@@ -227,13 +229,13 @@ def analyse(
     world_label: str,
     results: dict[tuple[str, str, int, str], dict[str, Any]],
     components: tuple[tuple[str, str, bool], ...],
+    ks: range = D1,
 ) -> dict[str, Any]:
     """Every component's comparison in every cell of one world."""
     from scripts.challengers import child
 
     world, _, _ = child.load(world_label)
     hours = _schedule(world)
-    ks = list(D1)
     out: dict[str, Any] = {}
     for label, name, guarded in components:
         digest = hashlib.sha256(
@@ -309,42 +311,92 @@ def code_digest() -> dict[str, str]:
     return out
 
 
-def measure_world(
-    world_label: str, chosen: tuple[tuple[str, str, bool], ...], workers: int
+def run_part(
+    world_label: str,
+    cells: tuple[str, ...],
+    ks: range,
+    chosen: tuple[tuple[str, str, bool], ...],
+    workers: int,
 ) -> dict[str, Any]:
-    """Every job of one world, run in parallel, then analysed."""
+    """Every job of some cells of one world, run in parallel; the raw results, not analysed."""
     write_params(world_label)
     jobs = [
         (world_label, cell, k, label)
-        for cell in CELLS
-        for k in D1
+        for cell in cells
+        for k in ks
         for label in ["comparators", *(c[0] for c in chosen)]
     ]
     weight = {label: _WEIGHT.get(name, 1) for label, name, _ in chosen}
     jobs.sort(key=lambda j: -weight.get(j[3], 1))
-    results: dict[tuple[str, str, int, str], dict[str, Any]] = {}
+    results: list[list[Any]] = []
     seconds: dict[str, float] = {}
     t0 = time.perf_counter()
     with ProcessPoolExecutor(max_workers=workers, mp_context=SPAWN) as pool:
         for n, (job, out, secs) in enumerate(pool.map(_job, jobs), start=1):
-            results[job] = out
+            results.append([list(job), out])
             seconds[job[3]] = seconds.get(job[3], 0.0) + secs
-            if n % 500 == 0:
+            if n % 250 == 0:
                 print(
-                    f"{world_label}: {n}/{len(jobs)} jobs, {time.perf_counter() - t0:.0f} s",
+                    f"{world_label} {','.join(cells)}: {n}/{len(jobs)} jobs, "
+                    f"{time.perf_counter() - t0:.0f} s",
                     flush=True,
                 )
     return {
-        "what": "each component alone on D1 (k 64-191), split mode, both replays; truth session 6",
         "world": world_label,
-        "seeds_k": [D1.start, D1.stop - 1],
-        "components": analyse(world_label, results, chosen),
-        "seconds_per_replicate": {
-            label: secs / (len(CELLS) * len(D1)) for label, secs in seconds.items()
-        },
+        "cells": list(cells),
+        "k": [ks.start, ks.stop - 1],
+        "components": [c[0] for c in chosen],
+        "results": results,
+        "seconds": seconds,
         "wall_seconds": time.perf_counter() - t0,
         "code": code_digest(),
     }
+
+
+def assemble(
+    world_label: str, parts: list[dict[str, Any]], chosen: tuple[tuple[str, str, bool], ...]
+) -> dict[str, Any]:
+    """One world's parts merged (every cell once, the same seeds, components and code in each)
+    and analysed."""
+    if len({json.dumps(p["code"], sort_keys=True) for p in parts}) != 1:
+        raise RuntimeError(f"{world_label}: the parts ran different code")
+    if (
+        len({tuple(p["k"]) for p in parts}) != 1
+        or len({tuple(p["components"]) for p in parts}) != 1
+    ):
+        raise RuntimeError(f"{world_label}: the parts ran different seeds or components")
+    cells = [c for p in parts for c in p["cells"]]
+    if sorted(cells) != sorted(CELLS):
+        raise RuntimeError(f"{world_label}: cells {sorted(cells)}, not each of {CELLS} once")
+    if [c[0] for c in chosen] != list(parts[0]["components"]):
+        raise RuntimeError(f"{world_label}: the parts measured other components")
+    first, last = parts[0]["k"]
+    ks = range(first, last + 1)
+    results = {
+        (str(j[0]), str(j[1]), int(j[2]), str(j[3])): out for p in parts for j, out in p["results"]
+    }
+    seconds: dict[str, float] = {}
+    for p in parts:
+        for label, secs in p["seconds"].items():
+            seconds[label] = seconds.get(label, 0.0) + secs
+    return {
+        "what": "each component alone on D1, split mode, both replays; truth session 6",
+        "world": world_label,
+        "seeds_k": [first, last],
+        "components": analyse(world_label, results, chosen, ks),
+        "seconds_per_replicate": {
+            label: secs / (len(CELLS) * len(ks)) for label, secs in seconds.items()
+        },
+        "wall_seconds": max(p["wall_seconds"] for p in parts),
+        "code": parts[0]["code"],
+    }
+
+
+def _write(path: Path, document: Any) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    text = json.dumps(document, sort_keys=True, separators=(",", ":")) + "\n"
+    path.write_text(text, encoding="utf-8", newline="\n")
+    print("written", path, flush=True)
 
 
 def main() -> None:
@@ -353,14 +405,33 @@ def main() -> None:
     parser.add_argument("--workers", type=int, default=10)
     parser.add_argument("--out", type=Path, default=OUT)
     parser.add_argument("--components", nargs="+", default=[c[0] for c in COMPONENTS])
+    parser.add_argument("--cells", nargs="+", default=list(CELLS), choices=CELLS)
+    parser.add_argument("--k", default=f"{D1.start}:{D1.stop - 1}", help="smoke tests only")
+    parser.add_argument("--raw-out", type=Path, help="run these cells only; write raw results")
+    parser.add_argument("--merge", type=Path, help="merge the raw parts in this folder")
     args = parser.parse_args()
     chosen = tuple(c for c in COMPONENTS if c[0] in args.components)
+    first, last = (int(x) for x in args.k.split(":"))
+    ks = range(first, last + 1)
     for world_label in args.worlds:
-        document = measure_world(world_label, chosen, args.workers)
-        path = args.out / f"measure-d1-{world_label}.json"
-        text = json.dumps(document, sort_keys=True, separators=(",", ":")) + "\n"
-        path.write_text(text, encoding="utf-8", newline="\n")
-        print("written", path, flush=True)
+        if args.merge is not None:
+            # By the world each part records ("raw-W-*" would also match W-d1's files).
+            loaded = [
+                json.loads(path.read_text(encoding="utf-8"))
+                for path in sorted(args.merge.glob("**/raw-*.json"))
+            ]
+            parts = [part for part in loaded if part["world"] == world_label]
+            _write(
+                args.out / f"measure-d1-{world_label}.json", assemble(world_label, parts, chosen)
+            )
+        elif args.raw_out is not None:
+            part = run_part(world_label, tuple(args.cells), ks, chosen, args.workers)
+            _write(args.raw_out / f"raw-{world_label}-{'-'.join(args.cells)}.json", part)
+        else:
+            part = run_part(world_label, tuple(CELLS), ks, chosen, args.workers)
+            _write(
+                args.out / f"measure-d1-{world_label}.json", assemble(world_label, [part], chosen)
+            )
 
 
 if __name__ == "__main__":
