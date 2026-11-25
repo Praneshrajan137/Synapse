@@ -83,6 +83,30 @@ def test_without_the_lane_rule_it_is_i2_p_everywhere(world: Any, tables: Any) ->
     assert not _same_outcome(got, lane)  # in L the lane rule matters
 
 
+def test_without_the_lane_rule_every_part_holds_lane_p(world: Any, tables: Any) -> None:
+    from synapse_kernel.challengers.guarded import Guarded
+    from synapse_kernel.challengers.shelf import LaneSensing
+
+    params = {"trust": {"P/calm": "sensing"}, "surge_threshold": THRESHOLD, "lane_rule": False}
+    composition = _Log(build("synapse", world, tables, params))
+
+    def held(hold_decider: bool) -> _Log:
+        sensing = LaneSensing(world, tables["I2-P"], tables["I2-L"])
+        if hold_decider:
+            sensing.base.hold_lane_p()
+        guarded = Guarded(sensing, world, tables["I2-P"], tables["I2-L"], "sensing")
+        guarded.lane.hold_lane_p()
+        return _Log(guarded)
+
+    want, planted = held(True), held(False)  # planted: the decider keeps its own lane
+    for policy in (composition, want, planted):
+        run(world, [build_scenario(world, "L", seeds.explore_seed(64))], policy)
+    pairs = zip(composition.orders, want.orders, strict=True)
+    assert all(np.array_equal(a, b) for a, b in pairs)
+    pairs = zip(composition.orders, planted.orders, strict=True)
+    assert not all(np.array_equal(a, b) for a, b in pairs)
+
+
 def test_a_trusted_calm_decider_decides_as_the_guarded_component(world: Any, tables: Any) -> None:
     params = {"trust": {"P/calm": "sensing"}, "surge_threshold": THRESHOLD}
     composition = _Log(build("synapse", world, tables, params))

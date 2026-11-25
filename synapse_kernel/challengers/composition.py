@@ -114,6 +114,13 @@ class Composition:
             for entry in ("L/calm", "P/calm")
             if entry in trust
         }
+        if not self.lane_rule:  # every lane-aware part holds lane P
+            from synapse_kernel.challengers.shelf import LaneSensing
+
+            self.base.hold_lane_p()
+            for part in (self.surge, self.supply, *self.calm.values()):
+                if isinstance(part, (SurgeResponse, SupplyResponse, LaneSensing)):
+                    part.base.hold_lane_p()
         self.deciders = ("incumbent", *sorted(set(trust.values())))
         self.items = len(world.items)
         self._reset(0)
@@ -135,16 +142,9 @@ class Composition:
         self._reset(replicates)
 
     def decide(self, obs: StoreObservation) -> I64:
-        self.base.observe(obs)
-        normal = np.asarray(self.base.normal.decide(obs), dtype=np.int64)
-        r = normal.shape[0]
-        if self.lane_rule:
-            short: Bools = self.base.is_short.copy()
-            brief = np.asarray(self.base.short.decide(obs), dtype=np.int64)
-            incumbent: I64 = np.where(short[:, None], brief, normal)
-        else:  # the ablation without the Freshness Guardian: I2-P throughout
-            short = np.zeros(r, dtype=bool)
-            incumbent = normal
+        short: Bools = self.base.observe(obs).copy()  # all lane P when the lane rule is held
+        incumbent = self.base.incumbent_orders(obs)
+        r = incumbent.shape[0]
         regime = np.zeros((r, self.items), dtype=np.int8)
         surge_factor = supply_factor = None
         if self.surge is not None and self.supply is not None:

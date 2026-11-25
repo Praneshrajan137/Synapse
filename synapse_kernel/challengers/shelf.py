@@ -76,6 +76,12 @@ class LaneIncumbent:
         self.normal = Incumbent(world, normal)
         self.short = Incumbent(world, short)
         self.is_short = np.zeros(0, dtype=bool)
+        self.lane_rule = True
+
+    def hold_lane_p(self) -> None:
+        """Lane P throughout, whatever lives are seen: the composition without its Freshness
+        Guardian (an ablation, gate item 16)."""
+        self.lane_rule = False
 
     def start(self, replicates: int) -> None:
         self.history.start(replicates)
@@ -86,7 +92,8 @@ class LaneIncumbent:
     def observe(self, obs: StoreObservation) -> Bools:
         """Update the memory and the lane; return the lane per replicate."""
         self.history.update(obs)
-        self.is_short = self.lane.update(self.history)
+        short = self.lane.update(self.history)
+        self.is_short = short if self.lane_rule else np.zeros_like(short)
         return self.is_short
 
     def incumbent_orders(self, obs: StoreObservation) -> I64:

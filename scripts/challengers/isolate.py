@@ -52,6 +52,8 @@ class Spec:
     component: str
     world: str = "W"
     params: str | None = None
+    inline: str | None = None
+    """Parameters as canonical JSON, instead of a file (a tuning evaluation's own table)."""
 
     def to_bytes(self) -> bytes:
         return json.dumps(dataclasses.asdict(self), sort_keys=True, separators=(",", ":")).encode()
