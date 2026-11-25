@@ -1,0 +1,55 @@
+# Truth session 6: the composition runs a planner asks for, spread over runners.
+# Temporary: this file lives only on the compute/s6-runs branch, which is never merged. Each round,
+# docs/truth/composition/needed.json (written by `python -m scripts.challengers.fit trust`) lists
+# the runs needed next; each becomes one matrix job, and its run file comes back as an artifact.
+name: Session 6 compute - composition runs
+
+on:
+  push:
+    branches: ["compute/s6-runs"]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: session6-compute-runs
+  cancel-in-progress: false
+
+jobs:
+  list:
+    name: List the needed runs
+    runs-on: ubuntu-latest
+    outputs:
+      index: ${{ steps.list.outputs.index }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: list
+        run: |
+          python3 -c "import json; n = len(json.load(open('docs/truth/composition/needed.json'))['items']); print('index=' + json.dumps(list(range(n))))" >> "$GITHUB_OUTPUT"
+
+  run:
+    name: run ${{ matrix.index }}
+    needs: list
+    runs-on: ubuntu-latest
+    timeout-minutes: 340
+    strategy:
+      fail-fast: false
+      max-parallel: 20
+      matrix:
+        index: ${{ fromJSON(needs.list.outputs.index) }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install the kernel's closure, pinned as on the laptop
+        run: pip install "numpy==2.4.4" "simpy==4.1.1"
+      - name: Make this run (a fresh child per replicate)
+        run: |
+          python -u -m scripts.challengers.fit runs --needed docs/truth/composition/needed.json \
+            --index "${{ matrix.index }}" --workers 4 --out runs
+      - uses: actions/upload-artifact@v4
+        with:
+          name: runs-${{ matrix.index }}
+          path: runs/
+          retention-days: 30
