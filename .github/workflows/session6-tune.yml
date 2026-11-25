@@ -1,0 +1,44 @@
+# Truth session 6, stage C: kappa for every tuned candidate on both worlds, one runner each.
+# Temporary: this file lives only on the compute/s6-tune branch, which is never merged; each table
+# comes back as an artifact and is committed on the stage's own branch. Both surge plans are tuned
+# here only to save waiting; which one is a candidate is still decided by stage B's D1 measurement
+# at kappa 1 (decision S6-D-08), whatever their tuned numbers.
+name: Session 6 compute - kappa tuning
+
+on:
+  push:
+    branches: ["compute/s6-tune"]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: session6-compute-tune
+  cancel-in-progress: false
+
+jobs:
+  tune:
+    name: kappa ${{ matrix.component }} ${{ matrix.world }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 355
+    strategy:
+      fail-fast: false
+      matrix:
+        world: ["W", "W-d1"]
+        component: ["supply", "surge_today", "surge_ahead"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install the kernel's closure, pinned as on the laptop
+        run: pip install "numpy==2.4.4" "simpy==4.1.1"
+      - name: Tune (the sealed coordinate search; the final table re-checked in reported mode)
+        run: |
+          python -u -m scripts.challengers.fit tune --world "${{ matrix.world }}" \
+            --component "${{ matrix.component }}" --workers 4
+      - uses: actions/upload-artifact@v4
+        with:
+          name: kappa-${{ matrix.component }}-${{ matrix.world }}
+          path: docs/truth/composition/kappa-*.json
+          retention-days: 30
