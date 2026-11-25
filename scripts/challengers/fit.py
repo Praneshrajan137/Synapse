@@ -30,6 +30,7 @@ W-d1 secondary), from that world's own inputs:
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import math
 import time
@@ -227,36 +228,87 @@ def kappas(world_label: str) -> dict[str, Any]:
     return out
 
 
-class Runs:
-    """Composition runs, a fresh child per replicate, kept by trust map, cell and seed."""
+def composition_params(world_label: str, trust: dict[str, str]) -> dict[str, Any]:
+    """The composition's parameters for a trust map: the threshold and every tuned table."""
+    return {"trust": trust, "surge_threshold": threshold(world_label), **kappas(world_label)}
 
-    def __init__(self, pool: ProcessPoolExecutor, world_label: str, tables: dict[str, Any]) -> None:
-        self.pool = pool
+
+class Cache:
+    """Composition results by (trust map, cell, seed) from run files, noting what is missing."""
+
+    def __init__(self, world_label: str, raw: Path | None) -> None:
         self.world = world_label
-        self.tables = tables
         self.kept: dict[tuple[str, str, int], dict[str, Any]] = {}
-        self.replicates = 0
-
-    def params(self, trust: dict[str, str]) -> dict[str, Any]:
-        return {"trust": trust, "surge_threshold": threshold(self.world), **self.tables}
+        self.missing: list[dict[str, Any]] = []
+        self.files: list[str] = []
+        for path in sorted(raw.glob("**/runs-*.json")) if raw is not None else []:
+            document = json.loads(path.read_text(encoding="utf-8"))
+            if document["world"] != world_label:
+                continue
+            if document["params"] != composition_params(world_label, document["trust"]):
+                raise RuntimeError(f"{path.name} ran other parameters than these")
+            self.files.append(path.name)
+            key = canonical(document["trust"])
+            for row in document["results"]:
+                self.kept[(key, document["cell"], int(row["k"]))] = row
 
     def costs(
         self, trust: dict[str, str], cells: tuple[str, ...], ks: range, replay: bool = True
-    ) -> dict[str, list[dict[str, Any]]]:
-        """Per cell, the replicates' results in seed order."""
-        spec = Spec("synapse", self.world, inline=canonical(self.params(trust)))
+    ) -> dict[str, list[dict[str, Any]]] | None:
+        """Per cell, the results in seed order; ``None``, noted, if any is missing."""
         key = canonical(trust)
-        jobs = [(cell, k) for cell in cells for k in ks if (key, cell, k) not in self.kept]
-        done = self.pool.map(
-            _one, [(spec, cell, seeds.explore_seed(k), replay) for cell, k in jobs]
-        )
-        for (cell, k), result in zip(jobs, done, strict=True):
-            if not result["outcome_replay"] or (replay and not result["decision_replay"]):
-                raise RuntimeError(f"a replay failed: {self.world} {cell} k {k}")
-            result.pop("item_cost", None)
-            self.kept[(key, cell, k)] = result
-        self.replicates += len(jobs)
-        return {cell: [self.kept[(key, cell, k)] for k in ks] for cell in cells}
+        absent = [c for c in cells if any((key, c, k) not in self.kept for k in ks)]
+        for cell in absent:
+            self.missing.append(
+                {
+                    "world": self.world,
+                    "trust": trust,
+                    "cell": cell,
+                    "k": [ks.start, ks.stop - 1],
+                    "replay": replay,
+                }
+            )
+        if absent:
+            return None
+        out = {cell: [self.kept[(key, cell, k)] for k in ks] for cell in cells}
+        for cell, rows in out.items():
+            if not all(r["outcome_replay"] for r in rows) or (
+                replay and not all(r["decision_replay"] is True for r in rows)
+            ):
+                raise RuntimeError(f"{self.world} {key} {cell}: a replay failed or was not run")
+        return out
+
+
+def run_item(item: dict[str, Any], workers: int) -> dict[str, Any]:
+    """One needed run: a composition on one cell's seeds, a fresh child per replicate."""
+    world_label = str(item["world"])
+    trust = dict(item["trust"])
+    params = composition_params(world_label, trust)
+    spec = Spec("synapse", world_label, inline=canonical(params))
+    first, last = (int(x) for x in item["k"])
+    ks = range(first, last + 1)
+    jobs = [(spec, str(item["cell"]), seeds.explore_seed(k), bool(item["replay"])) for k in ks]
+    t0 = time.perf_counter()
+    with ProcessPoolExecutor(max_workers=workers, mp_context=SPAWN) as pool:
+        done = list(pool.map(_one, jobs))
+    results = []
+    for k, result in zip(ks, done, strict=True):
+        result.pop("item_cost", None)
+        result.pop("handshake", None)
+        results.append({"k": k, **result})
+    from scripts.challengers.measure import code_digest
+
+    return {
+        "world": world_label,
+        "trust": trust,
+        "params": params,
+        "cell": item["cell"],
+        "k": [first, last],
+        "replay": bool(item["replay"]),
+        "results": results,
+        "wall_seconds": round(time.perf_counter() - t0, 1),
+        "code": code_digest(),
+    }
 
 
 def d4a(
@@ -300,64 +352,104 @@ def d4a(
     return {"cells": cells, "passes": passes}
 
 
-def trust(
+def _deltas(
+    mine: dict[str, list[dict[str, Any]]], theirs: dict[str, list[dict[str, Any]]]
+) -> dict[str, Any]:
+    return {
+        cell: {
+            "cost": [a["cost"] - b["cost"] for a, b in zip(mine[cell], theirs[cell], strict=True)],
+            "fill": [a["fill"] - b["fill"] for a, b in zip(mine[cell], theirs[cell], strict=True)],
+        }
+        for cell in mine
+    }
+
+
+def plan(
     world_label: str,
-    workers: int,
+    raw: Path | None,
     d1: range = D1,
     d2: range = D2,
     measures: Path = MEASURES,
-) -> dict[str, Any]:
-    """The trust map of one world, by gate item 7; every look at D2 is recorded."""
+) -> tuple[dict[str, Any] | None, list[dict[str, Any]]]:
+    """Gate item 7, as far as the runs in ``raw`` allow: the record, or the runs needed next.
+
+    Every entry's D1 check is independent of the others, so all are asked for at once; the D2
+    steps are asked for one at a time, each only once the steps before it are decided, so no D2
+    run is made that the procedure does not look at.
+    """
     candidates = choose(world_label, measures)
-    tables = kappas(world_label)
+    cache = Cache(world_label, raw)
+    checks = {}
+    for entry in ENTRY_ORDER:
+        cells = LANE_CELLS[entry[0]]
+        decider = candidates[entry]["candidate"]
+        checks[entry] = (
+            cache.costs({entry: decider}, cells, d1, replay=False),
+            cache.costs({}, cells, d1, replay=False),
+        )
+    if cache.missing:
+        return None, cache.missing
+    opened: dict[str, bool] = {}
+    for entry, (alone, lane) in checks.items():
+        assert alone is not None and lane is not None
+        cells = LANE_CELLS[entry[0]]
+        pooled = math.fsum(statistics_mean([r["cost"] for r in alone[c]]) for c in cells)
+        base = math.fsum(statistics_mean([r["cost"] for r in lane[c]]) for c in cells)
+        candidates[entry]["composition_pooled_d1_mean_j"] = pooled / len(cells)
+        candidates[entry]["lane_pooled_d1_mean_j"] = base / len(cells)
+        opened[entry] = pooled < base
     looks: list[dict[str, Any]] = []
     trusted: dict[str, str] = {}
-    t0 = time.perf_counter()
-    with ProcessPoolExecutor(max_workers=workers, mp_context=SPAWN) as pool:
-        runs = Runs(pool, world_label, tables)
-        for entry in ENTRY_ORDER:
-            cells = LANE_CELLS[entry[0]]
-            decider = candidates[entry]["candidate"]
-            # D1: the composition with this entry alone against the lane incumbent (design seeds;
-            # the outcome replay only, since nothing is decided on D1 but whether D2 is opened).
-            alone = runs.costs({entry: decider}, cells, d1, replay=False)
-            lane = runs.costs({}, cells, d1, replay=False)
-            pooled = math.fsum(statistics_mean([r["cost"] for r in alone[c]]) for c in cells)
-            base = math.fsum(statistics_mean([r["cost"] for r in lane[c]]) for c in cells)
-            candidates[entry]["composition_pooled_d1_mean_j"] = pooled / len(cells)
-            candidates[entry]["lane_pooled_d1_mean_j"] = base / len(cells)
-            if not pooled < base:
-                looks.append({"entry": entry, "candidate": decider, "d2_opened": False})
-                continue
-            with_it = {**trusted, entry: decider}
-            mark = d4a(world_label, runs.costs(with_it, cells, d2), runs.costs(trusted, cells, d2))
-            looks.append({"entry": entry, "candidate": decider, "d2_opened": True, **mark})
-            print(f"{world_label} {entry} {decider}: trusted {mark['passes']}", flush=True)
-            if mark["passes"]:
-                trusted = with_it
-        backed_off: list[str] = []
-        while trusted:
-            whole = d4a(
-                world_label, runs.costs(trusted, ALL_CELLS, d2), runs.costs({}, ALL_CELLS, d2)
-            )
-            looks.append({"entry": "whole", "trust": dict(trusted), **whole})
-            if whole["passes"]:
-                break
-            last = [e for e in ENTRY_ORDER if e in trusted][-1]
-            backed_off.append(last)
-            trusted = {e: d for e, d in trusted.items() if e != last}
-    return {
+    for entry in ENTRY_ORDER:
+        decider = candidates[entry]["candidate"]
+        if not opened[entry]:
+            looks.append({"entry": entry, "candidate": decider, "d2_opened": False})
+            continue
+        cells = LANE_CELLS[entry[0]]
+        with_it = {**trusted, entry: decider}
+        mine, theirs = cache.costs(with_it, cells, d2), cache.costs(trusted, cells, d2)
+        if mine is None or theirs is None:
+            return None, cache.missing
+        mark = d4a(world_label, mine, theirs)
+        looks.append(
+            {
+                "entry": entry,
+                "candidate": decider,
+                "d2_opened": True,
+                "against": dict(trusted),
+                **mark,
+                "deltas": _deltas(mine, theirs),
+            }
+        )
+        if mark["passes"]:
+            trusted = with_it
+    backed_off: list[str] = []
+    while trusted:
+        mine, theirs = cache.costs(trusted, ALL_CELLS, d2), cache.costs({}, ALL_CELLS, d2)
+        if mine is None or theirs is None:
+            return None, cache.missing
+        whole = d4a(world_label, mine, theirs)
+        looks.append(
+            {"entry": "whole", "trust": dict(trusted), **whole, "deltas": _deltas(mine, theirs)}
+        )
+        if whole["passes"]:
+            break
+        last = [e for e in ENTRY_ORDER if e in trusted][-1]
+        backed_off.append(last)
+        trusted = {e: d for e, d in trusted.items() if e != last}
+    record = {
         "world": world_label,
         "rule": "gate item 7: D-4(a) with zero margin against the composition without the entry, "
-        "on D2 (k 192-319), entries in the order " + ", ".join(ENTRY_ORDER),
+        f"on D2 (k {d2.start}-{d2.stop - 1}), entries in the order " + ", ".join(ENTRY_ORDER),
+        "d1": [d1.start, d1.stop - 1],
         "candidates": candidates,
         "looks": looks,
         "backed_off": backed_off,
         "trust": trusted,
-        "params": runs.params(trusted),
-        "replicates_run": runs.replicates,
-        "wall_seconds": round(time.perf_counter() - t0, 1),
+        "params": composition_params(world_label, trusted),
+        "run_files": cache.files,
     }
+    return record, []
 
 
 def statistics_mean(values: list[float]) -> float:
@@ -374,31 +466,52 @@ def main() -> None:
     one.add_argument("--workers", type=int, default=10)
     one.add_argument("--k", default="0:31", help="tuning seeds k first:last (smoke tests only)")
     one.add_argument("--out", type=Path, default=OUT)
-    two = sub.add_parser("trust", help="the trust map of one world on D2 (gate item 7)")
-    two.add_argument("--world", required=True, choices=("W", "W-d1"))
-    two.add_argument("--workers", type=int, default=10)
+    two = sub.add_parser("trust", help="gate item 7 as far as the runs allow (gate item 7)")
+    two.add_argument("--worlds", nargs="+", default=["W", "W-d1"], choices=("W", "W-d1"))
+    two.add_argument("--raw", type=Path, help="folder of run files already made")
     two.add_argument("--d1", default="64:191", help="k first:last (smoke tests only)")
     two.add_argument("--d2", default="192:319", help="k first:last (smoke tests only)")
     two.add_argument("--measures", type=Path, default=MEASURES)
     two.add_argument("--out", type=Path, default=OUT)
+    three = sub.add_parser("runs", help="make one needed run (a matrix job)")
+    three.add_argument("--needed", type=Path, required=True)
+    three.add_argument("--index", type=int, required=True)
+    three.add_argument("--workers", type=int, default=4)
+    three.add_argument("--out", type=Path, required=True)
     args = parser.parse_args()
     if args.step == "trust":
         d1a, d1b = (int(x) for x in args.d1.split(":"))
         d2a, d2b = (int(x) for x in args.d2.split(":"))
-        record = trust(
-            args.world,
-            args.workers,
-            range(d1a, d1b + 1),
-            range(d2a, d2b + 1),
-            args.measures,
-        )
+        needed: list[dict[str, Any]] = []
         args.out.mkdir(parents=True, exist_ok=True)
-        for name, document in (
-            (f"trust-{args.world}.json", record),
-            (f"params-{args.world}.json", record["params"]),
-        ):
-            (args.out / name).write_text(canonical(document) + "\n", encoding="utf-8", newline="\n")
-            print("written", args.out / name, flush=True)
+        for world_label in args.worlds:
+            record, missing = plan(
+                world_label, args.raw, range(d1a, d1b + 1), range(d2a, d2b + 1), args.measures
+            )
+            for item in missing:  # one run per (world, map, cell, seeds), however often asked
+                if item not in needed:
+                    needed.append(item)
+            if record is not None:
+                for name, document in (
+                    (f"trust-{world_label}.json", record),
+                    (f"params-{world_label}.json", record["params"]),
+                ):
+                    path = args.out / name
+                    path.write_text(canonical(document) + "\n", encoding="utf-8", newline="\n")
+                    print("written", path, flush=True)
+        if needed:
+            path = args.out / "needed.json"
+            path.write_text(canonical({"items": needed}) + "\n", encoding="utf-8", newline="\n")
+            print(f"{len(needed)} runs needed next: {path}", flush=True)
+            raise SystemExit(3)
+    if args.step == "runs":
+        item = json.loads(args.needed.read_text(encoding="utf-8"))["items"][args.index]
+        document = run_item(item, args.workers)
+        args.out.mkdir(parents=True, exist_ok=True)
+        tag = hashlib.sha256(canonical(item).encode()).hexdigest()[:12]
+        path = args.out / f"runs-{item['world']}-{item['cell']}-{tag}.json"
+        path.write_text(canonical(document) + "\n", encoding="utf-8", newline="\n")
+        print("written", path, flush=True)
     if args.step == "tune":
         first, last = (int(x) for x in args.k.split(":"))
         record = tune(args.world, args.component, args.workers, range(first, last + 1))
