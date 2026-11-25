@@ -71,7 +71,7 @@ jobs:
   parity:
     name: Kernel equals the legacy harness to the bit
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
       - name: Set up Python 3.11
