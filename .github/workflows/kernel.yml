@@ -39,7 +39,7 @@ jobs:
   light:
     name: Kernel alone - numpy and simpy only
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 25
     steps:
       - uses: actions/checkout@v4
       - name: Set up Python 3.11
@@ -52,7 +52,7 @@ jobs:
         run: |
           python -m pytest tests/kernel/test_closure.py tests/kernel/test_kernel_alone.py \
             tests/kernel/test_sentinel_alone.py tests/kernel/release tests/kernel/proof \
-            -q -o addopts="--strict-markers" -p no:cacheprovider
+            tests/kernel/challengers -q -o addopts="--strict-markers" -p no:cacheprovider
       - name: Lint and strict typing of the kernel
         # The kernel is outside ci.yml's lint scope; it holds itself to CLAUDE.md's rules here.
         run: |
