@@ -32,6 +32,8 @@ ALLOWED_IMPORTS = frozenset(
         "__future__",
         "typing",
         "dataclasses",
+        # Digests of the composition's decision record: pure computation, no I/O, no reach.
+        "hashlib",
         "math",
         "collections.abc",
         "numpy",
