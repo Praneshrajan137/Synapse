@@ -6,8 +6,14 @@ that reason), and the observation shows it: a batch's hours to expiry. Truth ses
 with no parameter of cell L: a batch whose receipt was observed has a known life at receipt, its
 hours to expiry plus the hours since it arrived
 (:class:`~synapse_kernel.challengers.history.History` learns it). The store is in **lane L** once
-some such life is shorter than its item's declared shelf life; in **lane P** until then, and for
-good once one equals the declared life.
+some such life is shorter than its item's declared shelf life, and in **lane P** until then.
+
+The gate also had the store stay in lane P for good once an observed life equalled the declared
+one. On deviation 1's world that locked the wrong lane: its 12-hour items keep their whole life in
+cell L, whose halving stops at a floor, so a normal-looking 12-hour batch held lane P while every
+longer-lived item showed the shorter lives (+448 a store-day against I2-L on every D1 seed). The
+rule now lets any shorter life decide, which needs no parameter of cell L either (decision
+S6-D-10); on freeze W's world, where no life is left whole in L, it decides exactly as before.
 
 SYNAPSE's incumbent is the lane's frozen incumbent version, and the guard's anchor with it (gate
 item 1, a reading recorded as one): I2-P in lane P, the contest's incumbent and the cell-blind
@@ -50,14 +56,11 @@ class Lane:
 
     def start(self, replicates: int) -> None:
         self.short = np.zeros(replicates, dtype=bool)
-        self.normal = np.zeros(replicates, dtype=bool)
 
     def update(self, history: History) -> Bools:
-        """The lane after the history's latest update: ``True`` for lane L."""
+        """The lane after the history's latest update: ``True`` for lane L, kept once seen."""
         known = history.life >= 0
-        self.normal |= (known & (history.life == self.declared[None, :])).any(axis=1)
-        shorter = (known & (history.life < self.declared[None, :])).any(axis=1)
-        self.short = shorter & ~self.normal
+        self.short |= (known & (history.life < self.declared[None, :])).any(axis=1)
         out: Bools = self.short.copy()
         return out
 

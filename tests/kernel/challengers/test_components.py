@@ -8,9 +8,10 @@ Truth session 6, stage B (gate items 2, 9, 10 and 14):
   one (the isolation test's planted class memory covers the failing side);
 * **bounded memory**: on the last measured day, a component fed only the observations from 96 hours
   before decides exactly as one fed everything; planted: a call counter;
-* **the lane** settles on development seeds: lane L in L, lane P elsewhere, ordering exactly as I2-L
-  or I2-P; planted: a life at receipt one hour short (16 seeds here; ``measure.py`` checks all 128
-  D1 seeds of both worlds);
+* **the lane** settles on development seeds: outside L lane P from the first decision, every
+  outcome I2-P's; in L lane P at the first decision (no receipt seen yet) and L from the second on;
+  planted: a life at receipt one hour short (16 seeds here; ``measure.py`` checks all 128 D1 seeds
+  of both worlds against the lane's frozen version);
 * **no supply flag** in N, L and S1 on 32 development seeds (no order is ever late there;
   ``measure.py`` counts flags on all D1 seeds);
 * **items kept apart** by the components that claim it (sensing, both Sentinels): altering one
@@ -25,6 +26,7 @@ Truth session 6, stage B (gate items 2, 9, 10 and 14):
 
 from __future__ import annotations
 
+import dataclasses
 import hashlib
 import json
 from pathlib import Path
@@ -199,25 +201,74 @@ def test_a_call_counter_is_caught(world: Any, tables: Any) -> None:
 
 
 def _lane_violations(world: Any, tables: Any, ks: range) -> list[str]:
-    """Cells and seeds where the lane did not settle right, or the orders were not the version's."""
+    """Where the lane rule did not do what gate item 2 says.
+
+    Outside L, lane P holds from the first decision, so every outcome must be I2-P's, field by
+    field. In L, the first decision (02:00 on day 0) comes before any receipt shows a life, so the
+    lane is P there and L from the second decision on (the hub's first receipt lands at 06:00).
+    """
     out: list[str] = []
     for cell in ("N", "L", "S1", "S2", "S3"):
         batch = scenarios(world, cell, seeds.explore_seeds(ks))
         lane = LaneIncumbent(world, tables["I2-P"], tables["I2-L"])
-        got = run(world, batch, lane)
-        want = run(world, batch, Incumbent(world, tables["I2-L" if cell == "L" else "I2-P"]))
-        short = lane.is_short
+        trace: list[Any] = []
+
+        class Watch:
+            def start(self, replicates: int, lane: Any = lane, trace: Any = trace) -> None:
+                lane.start(replicates)
+                trace.clear()
+
+            def decide(self, obs: Any, lane: Any = lane, trace: Any = trace) -> Any:
+                trace.append(lane.observe(obs).copy())
+                return lane.incumbent_orders(obs)
+
+        got = run(world, batch, Watch())
+        if cell != "L":
+            want = run(world, batch, Incumbent(world, tables["I2-P"]))
+            for r, k in enumerate(ks):
+                fields = [f.name for f in dataclasses.fields(got)]
+                if not all(np.array_equal(getattr(got, f)[r], getattr(want, f)[r]) for f in fields):
+                    out.append(f"{cell} k {k}: not I2-P's outcome")
         for r, k in enumerate(ks):
-            if bool(short[r]) != (cell == "L"):
-                out.append(f"{cell} k {k}: lane {'L' if short[r] else 'P'}")
-            if not np.array_equal(got.sold[r], want.sold[r]):
-                out.append(f"{cell} k {k}: not the version's orders")
+            lanes = [bool(t[r]) for t in trace]
+            expected = [cell == "L" and d > 0 for d in range(len(lanes))]
+            if lanes != expected:
+                out.append(f"{cell} k {k}: lane by decision {lanes[:4]}...")
     return out
 
 
 def test_the_lane_settles_on_development_seeds(world: Any, tables: Any) -> None:
     # 16 seeds here; the stage-B measurement checks all 128 D1 seeds of both worlds.
     assert _lane_violations(world, tables, range(64, 80)) == []
+
+
+def test_the_lane_settles_on_deviation_1s_world() -> None:
+    from scripts.challengers import child
+
+    world_d1, tables_d1, _ = child.load("W-d1")
+    assert _lane_violations(world_d1, tables_d1, range(64, 72)) == []
+
+
+def test_the_old_lane_p_for_good_rule_is_caught(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Planted: the gate's first rule, lane P for good once a life equals its declared one, which
+    W-d1's 12-hour items (whole in L, at the floor) satisfy (decision S6-D-10)."""
+    from scripts.challengers import child
+    from synapse_kernel.challengers import shelf
+
+    def old_update(self: Any, history: Any) -> Any:
+        known = history.life >= 0
+        normal = (known & (history.life == self.declared[None, :])).any(axis=1)
+        self.normal = getattr(self, "normal", np.zeros_like(normal)) | normal
+        shorter = (known & (history.life < self.declared[None, :])).any(axis=1)
+        self.short = shorter & ~self.normal
+        return self.short.copy()
+
+    monkeypatch.setattr(shelf.Lane, "update", old_update)
+    world_d1, tables_d1, _ = child.load("W-d1")
+    assert any(
+        " L k " in v or v.startswith("L k")
+        for v in _lane_violations(world_d1, tables_d1, range(64, 66))
+    )
 
 
 def test_a_life_one_hour_short_is_caught(
