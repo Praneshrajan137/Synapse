@@ -240,14 +240,15 @@ class Cache:
         self.world = world_label
         self.kept: dict[tuple[str, str, int], dict[str, Any]] = {}
         self.missing: list[dict[str, Any]] = []
-        self.files: list[str] = []
+        self.files: dict[str, str] = {}  # run file -> sha256 of its bytes (LF)
         for path in sorted(raw.glob("**/runs-*.json")) if raw is not None else []:
             document = json.loads(path.read_text(encoding="utf-8"))
             if document["world"] != world_label:
                 continue
             if document["params"] != composition_params(world_label, document["trust"]):
                 raise RuntimeError(f"{path.name} ran other parameters than these")
-            self.files.append(path.name)
+            data = path.read_bytes().replace(b"\r\n", b"\n")
+            self.files[path.name] = hashlib.sha256(data).hexdigest()
             key = canonical(document["trust"])
             for row in document["results"]:
                 self.kept[(key, document["cell"], int(row["k"]))] = row
