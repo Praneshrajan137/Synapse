@@ -1,0 +1,71 @@
+# Truth session 6, stage B: the D1 measurement of every component, spread over runners.
+# Temporary: this file lives only on the compute/s6-measure branch, which is never merged; the
+# results come back as artifacts and are committed on the stage's own branch. Each (world, cell)
+# part runs on its own 4-vCPU runner; the merge job assembles them and runs the analysis.
+name: Session 6 compute - D1 measurement
+
+on:
+  push:
+    branches: ["compute/s6-measure"]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: session6-compute-measure
+  cancel-in-progress: false
+
+jobs:
+  part:
+    name: D1 ${{ matrix.world }} ${{ matrix.cell }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 350
+    strategy:
+      fail-fast: false
+      matrix:
+        world: ["W", "W-d1"]
+        cell: ["N", "L", "S1", "S2", "S3"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install the kernel's closure, pinned as on the laptop
+        run: pip install "numpy==2.4.4" "simpy==4.1.1" "pytest>=8.2,<9.0" "hypothesis>=6.100,<7.0"
+      - name: The challenger's own process works on this runner
+        run: |
+          python -m pytest tests/kernel/challengers/test_isolation.py -q \
+            -o addopts="--strict-markers" -p no:cacheprovider
+      - name: Measure this part (128 D1 seeds, every component, fresh child per replicate)
+        run: |
+          python -u -m scripts.challengers.measure --worlds "${{ matrix.world }}" \
+            --cells "${{ matrix.cell }}" --workers 4 --raw-out raw
+      - uses: actions/upload-artifact@v4
+        with:
+          name: raw-${{ matrix.world }}-${{ matrix.cell }}
+          path: raw/
+          retention-days: 14
+
+  merge:
+    name: Merge and analyse
+    needs: part
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install the kernel's closure
+        run: pip install "numpy==2.4.4" "simpy==4.1.1"
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: raw-*
+          path: raw
+      - name: Assemble both worlds and analyse
+        run: python -u -m scripts.challengers.measure --merge raw --out out
+      - uses: actions/upload-artifact@v4
+        with:
+          name: measure-d1
+          path: out/
+          retention-days: 30
