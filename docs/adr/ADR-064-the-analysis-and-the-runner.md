@@ -44,7 +44,8 @@ world, so it could not be bent toward one.
 4. **The runner** (`scripts/confirm/run.py`) refuses unless the attempt's record:
    - is on `origin/main` byte for byte;
    - is not named by any results file;
-   - and freeze C's checker passes, and R_C has been emitted.
+   - names R_C, and the digest of the freeze C sums this checkout holds;
+   - and freeze C's checker passes, and R_C has been emitted (the relays are not asked before).
 
    It fetches R_C from the public relays and verifies it against quicknet's key (`synapse_beacon`),
    then derives the seeds. Per world and cell it runs `n_c` replicates of:
@@ -55,8 +56,12 @@ world, so it could not be bent toward one.
 
    Every SYNAPSE arm runs in a fresh child per replicate, with both replays. It then calls the
    frozen analysis. The work can be split into parts (cells, slices of replicates) on separate
-   machines and merged. The merge refuses a part that ran other code or arms, a missing or repeated
-   replicate, or a part of another attempt.
+   machines and merged. The merge refuses:
+   - a part of another attempt (its label, round or signature differs);
+   - a part of another world, or holding a cell outside the five;
+   - a part whose challenger code differs from the merging checkout's, or whose arms differ from
+     the world's;
+   - a missing or repeated replicate, or one run with another seed than the round gives it.
 5. **The dry run** stands the D3 development seeds (k 448-647, up to 200 a cell) in for the
    confirmatory seeds and a fixed label in for the signature. It computes every statistic, with no
    attempt and no round.
@@ -66,6 +71,13 @@ world, so it could not be bent toward one.
 - **One attempt per pushed record.** A crash or a repeat needs a new pushed record. Every execution
   that read the signature is therefore in the public history before its output is opened.
   PREREG-1's "first complete run is primary" can be checked against that history.
+- **What the code enforces, and what the procedure does.** The runner refuses an attempt that a
+  results file has used. A crashed execution leaves no results file, so the runner alone cannot
+  refuse a second execution of the same record. Two things close that gap:
+  - every execution runs on GitHub's runners, whose run history is public;
+  - the run is deterministic: the replicates are bit-exact, and the bootstrap is seeded from the
+    signature. So a second complete run of the same record gives the same bytes, and repeating a
+    run cannot select a result.
 - **The confirmatory run's compute.** At `n_c` replicates a cell, four SYNAPSE arms each with a
   replay, and two worlds, it is spread over runners. The dry run measures how long it takes.
 - **The analysis is frozen with numpy 2.4.4.** Another version is accepted only if the stream's
