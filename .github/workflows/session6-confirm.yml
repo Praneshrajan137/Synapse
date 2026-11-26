@@ -1,8 +1,10 @@
 # Truth session 6, stage D2: power on the validation seeds, then the dry run on D3, on runners.
 # Temporary: this file lives only on the compute/s6-confirm branch, which is never merged.
-# docs/truth/composition/compute-stage.txt says which runs: "power" (one job per world and cell)
-# or "dry-run" (one job per world, cell and slice of ten). Parts come back as artifacts and are
-# merged locally.
+# docs/truth/composition/compute-stage.txt names the stage that runs:
+#   - "power": one job per world and cell;
+#   - "dry-run": one job per world, cell and slice of ten. The dry run's merge is a job on a runner,
+#     as the confirmatory merge will be. Beside it, two rehearsals of the confirmatory path's outside
+#     steps on a known past round run on a shallow and a full checkout.
 name: Session 6 compute - power and dry run
 
 on:
@@ -83,4 +85,56 @@ jobs:
         with:
           name: dry-${{ matrix.world }}-${{ matrix.cell }}-${{ matrix.slice }}
           path: parts/
+          retention-days: 30
+
+  merge:
+    needs: dry-run
+    name: merge the dry run's parts, on a runner
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install the kernel's closure, pinned as on the laptop
+        run: pip install "numpy==2.4.4" "simpy==4.1.1"
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: dry-*
+          path: parts
+      - name: Both worlds, every part checked whole, nothing written before both are analysed
+        run: python -u -m scripts.confirm.run --dry-run --merge parts
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dry-run-merged
+          path: docs/truth/composition/dry-run-*.json
+          retention-days: 30
+
+  rehearse:
+    needs: stage
+    if: needs.stage.outputs.name == 'dry-run'
+    name: rehearse the outside steps (fetch-depth ${{ matrix.depth }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        depth: [1, 0]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: ${{ matrix.depth }}
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: The kernel's closure and the beacon verifier's
+        run: pip install "numpy==2.4.4" "simpy==4.1.1" -r synapse_beacon/requirements.txt
+      - name: The verifier, every relay and the git reads, on a known past round (never R_C)
+        run: python -u -m scripts.confirm.run --rehearse | tee rehearsal.json
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: rehearsal-depth-${{ matrix.depth }}
+          path: rehearsal.json
           retention-days: 30
