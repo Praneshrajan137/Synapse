@@ -93,8 +93,8 @@ Why each job runs, does not run, or runs conditionally under each trigger. `need
 | push:main | .github/workflows/integration.yml::integration-e2e | NOT EXECUTED | workflow on: has no push trigger |
 | push:main | .github/workflows/integration.yml::audit-chain-tamper | NOT EXECUTED | workflow on: has no push trigger |
 | push:main | .github/workflows/integration.yml::real-stack-run | NOT EXECUTED | workflow on: has no push trigger |
-| push:main | .github/workflows/kernel.yml::light | CONDITIONAL | path-filtered (paths: synapse_kernel/**, tests/kernel/**, scripts/kernel/**, digital_twin/**, +2 more) |
-| push:main | .github/workflows/kernel.yml::parity | CONDITIONAL | path-filtered (paths: synapse_kernel/**, tests/kernel/**, scripts/kernel/**, digital_twin/**, +2 more) |
+| push:main | .github/workflows/kernel.yml::light | CONDITIONAL | path-filtered (paths: synapse_kernel/**, tests/kernel/**, scripts/kernel/**, scripts/challengers/**, +6 more) |
+| push:main | .github/workflows/kernel.yml::parity | CONDITIONAL | path-filtered (paths: synapse_kernel/**, tests/kernel/**, scripts/kernel/**, scripts/challengers/**, +6 more) |
 | push:main | .github/workflows/live-truth.yml::watchdog | NOT EXECUTED | workflow on: has no push trigger |
 | push:main | .github/workflows/mutation.yml::mutation | NOT EXECUTED | if: false in push:main |
 | push:main | .github/workflows/mutation.yml::mutation-fast-plan | CONDITIONAL | path-filtered (paths: agents/*/training/rewards.py, orchestrator/guardrails/rules.py, orchestrator/audit/logger.py, packages/synapse_common/audit_chain.py, +1 more) |
@@ -167,8 +167,8 @@ Why each job runs, does not run, or runs conditionally under each trigger. `need
 | pull_request | .github/workflows/integration.yml::integration-e2e | EXECUTES | - |
 | pull_request | .github/workflows/integration.yml::audit-chain-tamper | EXECUTES | - |
 | pull_request | .github/workflows/integration.yml::real-stack-run | NOT EXECUTED | if: false in pull_request |
-| pull_request | .github/workflows/kernel.yml::light | CONDITIONAL | path-filtered (paths: synapse_kernel/**, tests/kernel/**, scripts/kernel/**, digital_twin/**, +2 more) |
-| pull_request | .github/workflows/kernel.yml::parity | CONDITIONAL | path-filtered (paths: synapse_kernel/**, tests/kernel/**, scripts/kernel/**, digital_twin/**, +2 more) |
+| pull_request | .github/workflows/kernel.yml::light | CONDITIONAL | path-filtered (paths: synapse_kernel/**, tests/kernel/**, scripts/kernel/**, scripts/challengers/**, +6 more) |
+| pull_request | .github/workflows/kernel.yml::parity | CONDITIONAL | path-filtered (paths: synapse_kernel/**, tests/kernel/**, scripts/kernel/**, scripts/challengers/**, +6 more) |
 | pull_request | .github/workflows/live-truth.yml::watchdog | NOT EXECUTED | workflow on: has no pull_request trigger |
 | pull_request | .github/workflows/mutation.yml::mutation | NOT EXECUTED | if: false in pull_request |
 | pull_request | .github/workflows/mutation.yml::mutation-fast-plan | CONDITIONAL | path-filtered (paths: agents/*/training/rewards.py, orchestrator/guardrails/rules.py, orchestrator/audit/logger.py, packages/synapse_common/audit_chain.py, +1 more) |

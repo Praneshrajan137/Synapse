@@ -14,6 +14,10 @@ on:
       - "synapse_kernel/**"
       - "tests/kernel/**"
       - "scripts/kernel/**"
+      - "scripts/challengers/**"
+      - "scripts/confirm/**"
+      - "tests/confirm/**"
+      - "synapse_beacon/**"
       - "digital_twin/**"
       - "uplift/**"
       - ".github/workflows/kernel.yml"
@@ -23,6 +27,10 @@ on:
       - "synapse_kernel/**"
       - "tests/kernel/**"
       - "scripts/kernel/**"
+      - "scripts/challengers/**"
+      - "scripts/confirm/**"
+      - "tests/confirm/**"
+      - "synapse_beacon/**"
       - "digital_twin/**"
       - "uplift/**"
       - ".github/workflows/kernel.yml"
@@ -52,14 +60,15 @@ jobs:
         run: |
           python -m pytest tests/kernel/test_closure.py tests/kernel/test_kernel_alone.py \
             tests/kernel/test_sentinel_alone.py tests/kernel/release tests/kernel/proof \
-            tests/kernel/challengers -q -o addopts="--strict-markers" -p no:cacheprovider
+            tests/kernel/challengers tests/confirm -q -o addopts="--strict-markers" \n            -p no:cacheprovider
       - name: Lint and strict typing of the kernel
         # The kernel is outside ci.yml's lint scope; it holds itself to CLAUDE.md's rules here.
         run: |
           pip install "ruff==0.14.14" "mypy==1.20.0"
-          ruff check synapse_kernel/ tests/kernel/
-          ruff format --check synapse_kernel/ tests/kernel/
+          ruff check synapse_kernel/ tests/kernel/ scripts/challengers/ scripts/confirm/ tests/confirm/
+          ruff format --check synapse_kernel/ tests/kernel/ scripts/challengers/ scripts/confirm/ \n            tests/confirm/
           mypy --strict synapse_kernel/
+          mypy --strict --explicit-package-bases scripts/challengers/ scripts/confirm/
       # Stage C of truth session 5: the release world's speed on a CI runner, beside the laptop's.
       # A measurement the truth log reads, with no time threshold: it fails the job only when the
       # bench cannot run. Its digests must equal the laptop's.
