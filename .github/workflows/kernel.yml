@@ -65,7 +65,9 @@ jobs:
       - name: Lint and strict typing of the kernel
         # The kernel is outside ci.yml's lint scope; it holds itself to CLAUDE.md's rules here.
         run: |
-          pip install "ruff==0.14.14" "mypy==1.20.0"
+          # The runner verifies the beacon with synapse_beacon, whose one dependency (py_ecc, MIT,
+          # pure Python) mypy needs to follow it; the kernel's tests above ran without it.
+          pip install "ruff==0.14.14" "mypy==1.20.0" -r synapse_beacon/requirements.txt
           ruff check synapse_kernel/ tests/kernel/ scripts/challengers/ scripts/confirm/ tests/confirm/
           ruff format --check synapse_kernel/ tests/kernel/ scripts/challengers/ scripts/confirm/ \
             tests/confirm/
