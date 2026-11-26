@@ -5,9 +5,10 @@ This script does both for one attempt, in this order, refusing at the first thin
 
 1. **The attempt is on record.** ``--attempt <nonce>`` names a record that
    :mod:`scripts.confirm.attempt` wrote and that is on ``origin/main`` (pushed before this run),
-   byte for byte, and that no results file has used; freeze C's checker passes; the beacon round
-   R_C has been emitted. An execution that reads the round's signature is an attempt: this order
-   puts its record in public before its output exists.
+   byte for byte, and that no results file has used; the record names R_C and the digest of the
+   freeze C sums this checkout holds; freeze C's checker passes; the beacon round R_C has been
+   emitted. An execution that reads the round's signature is an attempt: this order puts its
+   record in public before its output exists.
 2. **The round.** R_C's signature is fetched from public drand relays and verified against
    quicknet's public key (:mod:`synapse_beacon`); replicate ``j`` of every cell gets
    ``SHA-256("synapse/prereg-1/confirm/" || sig || j)``'s first 8 bytes, big-endian, shifted right
@@ -23,10 +24,12 @@ This script does both for one attempt, in this order, refusing at the first thin
    digest first.
 
 ``--cells``, ``--chunk i/m`` and ``--raw-out`` run a part (some cells, every m-th replicate from
-the i-th) so the work can be spread over machines; ``--merge`` checks the parts whole and
-analyses them. ``--dry-run`` stands the D3 development seeds (k 448-647) in for the confirmatory
-ones and a fixed label in for the signature: no attempt, no round, every statistic computed (truth
-session 6, stage D2). The results file names its attempt, so an attempt is used once.
+the i-th) so the work can be spread over machines; ``--merge`` checks the parts whole (every part
+this attempt's, run with this checkout's challenger code and arms, every replicate ``j < n_c`` of
+every cell exactly once and with the seed the round gives it) and analyses them. ``--dry-run``
+stands the D3 development seeds (k 448-647) in for the confirmatory ones and a fixed label in for
+the signature: no attempt, no round, every statistic computed (truth session 6, stage D2). The
+results file names its attempt, so an attempt is used once.
 """
 
 from __future__ import annotations
@@ -40,7 +43,7 @@ import time
 import urllib.request
 from concurrent.futures import ProcessPoolExecutor
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import numpy as np
 
@@ -56,10 +59,14 @@ from synapse_kernel.proof.analysis import (
 )
 from synapse_kernel.release import seeds
 
+if TYPE_CHECKING:
+    from collections.abc import Callable
+
 ROOT = Path(__file__).resolve().parents[2]
 ATTEMPTS = ROOT / "docs" / "truth" / "confirm" / "attempts"
 RESULTS = ROOT / "docs" / "truth" / "confirm" / "results"
 COMPOSITION = ROOT / "docs" / "truth" / "composition"
+SUMS_C = ROOT / "docs" / "truth" / "sealed" / "SHA256SUMS-C"
 REPORTS = {
     "W": ROOT / "docs" / "truth" / "world" / "incumbent-report.json",
     "W-d1": ROOT / "docs" / "truth" / "world" / "incumbent-report-d1.json",
@@ -84,21 +91,34 @@ def _git(*args: str) -> str:
 
 
 def check_attempt(nonce: str) -> dict[str, Any]:
-    """Refuse unless the attempt is pushed, unused, and freeze C holds; return its record."""
+    """Refuse unless the attempt is pushed, unused, for R_C and for the freeze C this checkout
+    holds, and freeze C's checker passes; return its record."""
     path = ATTEMPTS / f"{nonce}.json"
     if not path.exists():
         raise SystemExit(f"no attempt record {path.name}; run scripts.confirm.attempt first")
     _git("fetch", "--quiet", "origin")
-    published = _git("show", f"origin/main:{path.relative_to(ROOT).as_posix()}")
+    try:
+        published = _git("show", f"origin/main:{path.relative_to(ROOT).as_posix()}")
+    except subprocess.CalledProcessError:
+        raise SystemExit(f"the attempt record {path.name} is not on origin/main") from None
     if published.encode("utf-8") != path.read_bytes().replace(b"\r\n", b"\n"):
         raise SystemExit("the attempt record on origin/main differs from this one")
     for result in RESULTS.glob("*.json"):
         if json.loads(result.read_text(encoding="utf-8")).get("attempt") == nonce:
             raise SystemExit(f"attempt {nonce} was already used ({result.name})")
+    record: dict[str, Any] = json.loads(path.read_text(encoding="utf-8"))
+    if record.get("round") != ROUND:
+        raise SystemExit(f"the attempt names round {record.get('round')}, not R_C = {ROUND}")
+    sums = (
+        hashlib.sha256(SUMS_C.read_bytes().replace(b"\r\n", b"\n")).hexdigest()
+        if SUMS_C.is_file()
+        else None
+    )
+    if sums is None or record.get("freeze_c_sums_sha256") != sums:
+        raise SystemExit("the attempt was recorded against other freeze C sums than these")
     checker = ROOT / "docs" / "truth" / "sealed" / "check_freeze_c.py"
     if subprocess.run([sys.executable, str(checker)], cwd=ROOT).returncode != 0:
         raise SystemExit("freeze C does not hold")
-    record: dict[str, Any] = json.loads(path.read_text(encoding="utf-8"))
     return record
 
 
@@ -217,26 +237,68 @@ def collect(
     }
 
 
-def analyse_world(
-    world_label: str, parts: list[dict[str, Any]], n_c: dict[str, int], signature: bytes
-) -> dict[str, Any]:
-    """One world's parts, checked whole (every replicate ``j < n_c`` of every cell exactly once,
-    the same arms and code in each), then the frozen analysis."""
-    if len({json.dumps(p["code"], sort_keys=True) for p in parts}) != 1:
-        raise RuntimeError(f"{world_label}: the parts ran different code")
-    if len({tuple(p["arms"]) for p in parts}) != 1:
-        raise RuntimeError(f"{world_label}: the parts ran different arms")
-    margins = json.loads(REPORTS[world_label].read_text(encoding="utf-8"))["M_c"]
-    by_cell: dict[str, list[dict[str, Any]]] = {cell: [] for cell in CELLS}
+def replicate_seed(dry_run: bool, signature: bytes, j: int) -> int:
+    """Replicate ``j``'s seed: from R_C's signature, or in the dry run D3's ``k = 448 + j``."""
+    return seeds.explore_seed(D3[j]) if dry_run else confirm_seed(signature, j)
+
+
+def check_parts(
+    world_label: str,
+    parts: list[dict[str, Any]],
+    n_c: dict[str, int],
+    head: dict[str, Any],
+    seed_of: Callable[[int], int],
+) -> dict[str, list[dict[str, Any]]]:
+    """Refuse a merge unless every part is this attempt's (``head``: attempt, round, signature),
+    ran this checkout's challenger code and this world's arms, holds no cell but the five, and
+    every replicate ``j < n_c`` of every cell appears exactly once, with ``seed_of(j)``; return
+    the rows by cell in replicate order."""
+    from scripts.challengers.measure import code_digest
+
+    if not parts:
+        raise RuntimeError(f"{world_label}: no parts to merge")
     for part in parts:
-        for cell, rows in part["rows"].items():
-            by_cell[cell].extend(rows)
-    runs: dict[str, CellRun] = {}
+        for key, value in head.items():
+            if part.get(key) != value:
+                raise RuntimeError(f"{world_label}: a part of another attempt ({key} differs)")
+        if part.get("world") != world_label:
+            raise RuntimeError(f"{world_label}: a part of world {part.get('world')}")
+        if set(part["rows"]) - set(CELLS):
+            raise RuntimeError(f"{world_label}: a part holds cells {sorted(part['rows'])}")
+    here = json.dumps(code_digest(), sort_keys=True)
+    if {json.dumps(p["code"], sort_keys=True) for p in parts} != {here}:
+        raise RuntimeError(f"{world_label}: a part ran other challenger code than this checkout's")
+    if {tuple(p["arms"]) for p in parts} != {tuple(sorted(specs(world_label)))}:
+        raise RuntimeError(f"{world_label}: a part ran other arms than this world's")
+    by_cell: dict[str, list[dict[str, Any]]] = {}
     for cell in CELLS:
-        rows = sorted(by_cell[cell], key=lambda r: int(r["j"]))
+        rows = sorted(
+            (row for part in parts for row in part["rows"].get(cell, [])),
+            key=lambda r: int(r["j"]),
+        )
         if [int(r["j"]) for r in rows] != list(range(n_c[cell])):
             raise RuntimeError(f"{world_label} {cell}: replicates are missing or repeated")
+        wrong = [int(r["j"]) for r in rows if int(r["seed"]) != seed_of(int(r["j"]))]
+        if wrong:
+            raise RuntimeError(f"{world_label} {cell}: replicates {wrong[:5]} ran another seed")
         by_cell[cell] = rows
+    return by_cell
+
+
+def analyse_world(
+    world_label: str,
+    parts: list[dict[str, Any]],
+    n_c: dict[str, int],
+    signature: bytes,
+    head: dict[str, Any],
+    seed_of: Callable[[int], int],
+) -> dict[str, Any]:
+    """One world's parts, checked whole by :func:`check_parts`, then the frozen analysis."""
+    by_cell = check_parts(world_label, parts, n_c, head, seed_of)
+    margins = json.loads(REPORTS[world_label].read_text(encoding="utf-8"))["M_c"]
+    runs: dict[str, CellRun] = {}
+    for cell in CELLS:
+        rows = by_cell[cell]
         reports = [r["synapse"]["report"] for r in rows]
         challenger = [k for k, name in enumerate(reports[0]["deciders"]) if name != "incumbent"]
         runs[cell] = CellRun(
@@ -308,33 +370,36 @@ def main() -> None:
             "round": None if args.dry_run else ROUND,
             "signature": None if args.dry_run else signature.hex(),
         }
+
+        def seed_of(j: int) -> int:
+            return replicate_seed(args.dry_run, signature, j)
+
         if args.merge is not None:
             parts = [
                 json.loads(path.read_text(encoding="utf-8"))
                 for path in sorted(args.merge.glob("**/part-*.json"))
             ]
-            parts = [p for p in parts if p["world"] == world_label and p["attempt"] == label]
+            # One folder may hold both worlds' parts; every part of this world must be this
+            # attempt's (check_parts refuses one that is not, rather than skipping it).
+            parts = [p for p in parts if p["world"] == world_label]
             name = f"{'dry-run' if args.dry_run else args.attempt}-{world_label}.json"
             document = {
                 **head,
                 "commit": _git("rev-parse", "HEAD").strip(),
-                **analyse_world(world_label, parts, n_c, signature),
+                **analyse_world(world_label, parts, n_c, signature, head, seed_of),
             }
             _write(out_dir / name, document)
             continue
         chosen: dict[str, list[tuple[int, int]]] = {}
         for cell in args.cells:
             js = [j for j in range(n_c[cell]) if j % slices == index]
-            chosen[cell] = [
-                (j, seeds.explore_seed(D3[j]) if args.dry_run else confirm_seed(signature, j))
-                for j in js
-            ]
+            chosen[cell] = [(j, seed_of(j)) for j in js]
         part = {**head, **collect(world_label, chosen, args.workers)}
         if args.raw_out is not None:
             cells = "-".join(args.cells)
             _write(args.raw_out / f"part-{world_label}-{cells}-{index}of{slices}.json", part)
         else:
-            whole = analyse_world(world_label, [part], n_c, signature)
+            whole = analyse_world(world_label, [part], n_c, signature, head, seed_of)
             document = {**head, "commit": _git("rev-parse", "HEAD").strip(), **whole}
             name = f"{'dry-run' if args.dry_run else args.attempt}-{world_label}.json"
             _write(out_dir / name, document)
