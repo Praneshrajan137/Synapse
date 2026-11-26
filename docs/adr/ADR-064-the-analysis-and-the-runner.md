@@ -41,11 +41,24 @@ world, so it could not be bent toward one.
 3. **The attempt record** (`scripts/confirm/attempt.py`). It holds a fresh nonce, the time, the
    commit and the digest of freeze C's sums. It is committed and pushed before any execution reads
    R_C's signature.
-4. **The runner** (`scripts/confirm/run.py`) refuses unless the attempt's record:
+4. **The runner** (`scripts/confirm/run.py`). First, before anything reads the round, it refuses
+   any of the following:
+   - arguments that would fail later: an attempt runs as parts and one merge of both worlds;
+   - a numpy other than 2.4.4;
+   - a beacon verifier that cannot verify a known past round (py_ecc missing, say);
+   - a loaded module that comes from an unfrozen file under the repository, such as an added
+     `scripts/__init__.py` or a root-level file shadowing the standard library.
+
+   It also clears `sys.argv`, so no child's launch inputs carry the part's cells. Then it refuses
+   unless the attempt's record:
    - is on `origin/main` byte for byte;
-   - is not named by any results file;
-   - names R_C, and the digest of the freeze C sums this checkout holds;
-   - and freeze C's checker passes, and R_C has been emitted (the relays are not asked before).
+   - is not named by any results file, in the checkout or on `origin/main`;
+   - names R_C, and the digest of the freeze C sums this checkout holds.
+
+   Beyond the record, all of these must hold:
+   - those sums are `origin/main`'s, and the checkout's commit is on `origin/main`;
+   - freeze C's checker passes, run isolated (`-I`);
+   - R_C has been emitted (the relays are not asked before).
 
    It fetches R_C from the public relays and verifies it against quicknet's key (`synapse_beacon`),
    then derives the seeds. Per world and cell it runs `n_c` replicates of:
@@ -56,32 +69,61 @@ world, so it could not be bent toward one.
 
    Every SYNAPSE arm runs in a fresh child per replicate, with both replays. It then calls the
    frozen analysis. The work can be split into parts (cells, slices of replicates) on separate
-   machines and merged. The merge refuses:
+   machines and merged. Each part records where it ran: the interpreter, numpy, the platform, and
+   GitHub's run id, run attempt and job. The merge refuses:
    - a part of another attempt (its label, round or signature differs);
    - a part of another world, or holding a cell outside the five;
-   - a part whose challenger code differs from the merging checkout's, or whose arms differ from
-     the world's;
+   - a part whose challenger code differs from the merging checkout's, whose arms differ from the
+     world's, or that ran another numpy;
+   - an arm whose children were launched with different specs or arguments, or outside an empty
+     folder, and a part whose children saw different environments;
    - a missing or repeated replicate, or one run with another seed than the round gives it.
+
+   It analyses both worlds before it writes anything. The results record:
+   - each part's sha256 and environment;
+   - every replicate's totals;
+   - as description beside section 7, the per-item breakdown and each shock cell's difference in
+     differences against N.
 5. **The dry run** stands the D3 development seeds (k 448-647, up to 200 a cell) in for the
    confirmatory seeds and a fixed label in for the signature. It computes every statistic, with no
    attempt and no round.
+6. **No run overwrites a frozen file** (`scripts/confirm/outputs.py`). After freeze C, a dry run or
+   a power run is a rehearsal and writes to `docs/truth/confirm/rehearsals/`.
+7. **The rehearsal** (`--rehearse`) exercises the confirmatory path's outside steps on a known past
+   round: the verifier, every relay, and the git reads of `origin/main`. It never reads R_C.
 
 ## Consequences
 
-- **One attempt per pushed record.** A crash or a repeat needs a new pushed record. Every execution
-  that read the signature is therefore in the public history before its output is opened.
-  PREREG-1's "first complete run is primary" can be checked against that history.
-- **What the code enforces, and what the procedure does.** The runner refuses an attempt that a
-  results file has used. A crashed execution leaves no results file, so the runner alone cannot
-  refuse a second execution of the same record. Two things close that gap:
-  - every execution runs on GitHub's runners, whose run history is public;
-  - the run is deterministic: the replicates are bit-exact, and the bootstrap is seeded from the
-    signature. So a second complete run of the same record gives the same bytes, and repeating a
-    run cannot select a result.
+- **An attempt is one pushed record and one workflow run on GitHub's runners.** Its parts and its
+  merge are jobs of that run, so every execution that reads the signature is in the run's public
+  history, and the parts and results name the run. This is the reading of PREREG-1 section 5's
+  "each is logged publicly (a pushed commit)": the record is the pushed commit, and the workflow
+  run is the execution it announces.
+- **A part whose job fails before writing its output** may be re-run within that workflow run
+  (GitHub's "re-run failed jobs"). Its run attempt number is recorded in the part. The run is
+  deterministic (bit-exact replicates, a bootstrap seeded from the signature), so a re-run gives
+  the same bytes and cannot select a result.
+- **A run is complete when every part is written.** A merge that fails leaves no results file and is
+  repeated on the same parts. The first complete run is primary. Anything else needs a new pushed
+  record:
+  - a new workflow run;
+  - a re-run after the results exist.
+- **What the code enforces, and what the procedure does.** The runner refuses an attempt whose
+  results exist, in the checkout or on `origin/main`. That a crashed whole run is not re-executed
+  under its record rests on two things:
+  - the public run history;
+  - the determinism above.
+- **The parts are kept.** They are the run's raw data, and GitHub's artifacts expire. Session 7
+  commits them compressed or attaches them to a release, and each part's sha256 is in the results.
 - **The confirmatory run's compute.** At `n_c` replicates a cell, four SYNAPSE arms each with a
   replay, and two worlds, it is spread over runners. The dry run measures how long it takes.
-- **The analysis is frozen with numpy 2.4.4.** Another version is accepted only if the stream's
-  golden digest is equal.
+- **numpy is exactly 2.4.4** (PREREG-1 section 5 fixes "the numpy version"). The gate's reading
+  allowed any version whose bootstrap stream digest is equal. The attack on freeze C showed the
+  analysis also does float work that the digest does not cover, so the runner and the merge refuse
+  any other version. The stream digest is still checked.
+- **One platform note.** `statistics.NormalDist` uses `math.erf` for the normal distribution, so a
+  merge on another platform could differ from the runner's in the last bits of a BCa endpoint. The
+  merge runs on a runner and records its environment.
 
 ## Alternatives rejected
 

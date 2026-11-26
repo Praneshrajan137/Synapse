@@ -10,7 +10,9 @@ upper 97.5% bound still clears ``M_c`` at that spread, for C2 the mean advantage
 clears ``M_c`` at Holm's first step (one-sided ``1 - 0.025 / 4``), both under a normal approximation
 (a guide for the reader; the analysis itself is the BCa bootstrap).
 
-``python -m scripts.confirm.power`` writes ``docs/truth/composition/power.json``.
+``python -m scripts.confirm.power`` writes ``docs/truth/composition/power.json`` before freeze C,
+and after it a rehearsal's ``docs/truth/confirm/rehearsals/power.json``: it never overwrites a
+frozen file (:mod:`scripts.confirm.outputs`).
 """
 
 from __future__ import annotations
@@ -27,6 +29,7 @@ from typing import Any
 
 from scripts.challengers import child
 from scripts.challengers.isolate import SPAWN, Spec, run_one, summarise
+from scripts.confirm.outputs import record_dir, write_json
 from synapse_kernel.proof.analysis import CELLS, replicates_for, sample_sd
 from synapse_kernel.release import seeds
 
@@ -129,16 +132,9 @@ def main() -> None:
             done = list(pool.map(_pair, jobs))
         rows_by_job = list(zip(jobs, done, strict=True))
         if args.raw_out is not None:
-            args.raw_out.mkdir(parents=True, exist_ok=True)
             tag = "-".join(args.worlds) + "-" + "-".join(args.cells)
-            path = args.raw_out / f"power-part-{tag}.json"
             part = {"rows": [[list(job), row] for job, row in rows_by_job], "commit": commit}
-            path.write_text(
-                json.dumps(part, sort_keys=True, separators=(",", ":")) + "\n",
-                encoding="utf-8",
-                newline="\n",
-            )
-            print("written", path, flush=True)
+            write_json(args.raw_out / f"power-part-{tag}.json", part)
             return
     document = {
         "rule": "PREREG-1 section 6; s_c with n - 1 on the 32 validation seeds (k 32-63)",
@@ -146,13 +142,7 @@ def main() -> None:
         "worlds": summarise_power(rows_by_job),
         "wall_seconds": round(time.perf_counter() - t0, 1),
     }
-    path = COMPOSITION / "power.json"
-    path.write_text(
-        json.dumps(document, sort_keys=True, separators=(",", ":")) + "\n",
-        encoding="utf-8",
-        newline="\n",
-    )
-    print("written", path, flush=True)
+    write_json(record_dir() / "power.json", document)
 
 
 if __name__ == "__main__":
