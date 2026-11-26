@@ -21,7 +21,7 @@ This script does both for one attempt, in this order, refusing at the first thin
    re-derived from its observation log by a second fresh child (:mod:`scripts.challengers.isolate`).
 4. **The analysis**: :func:`synapse_kernel.proof.analysis.analyse`, its bootstrap seeded from
    ``SHA-256("synapse/prereg-1/bootstrap/" || sig)``, numpy's stream checked against its golden
-   digest first.
+   digest first; and, as description, section 7's per-item breakdown (:func:`per_item`).
 
 ``--cells``, ``--chunk i/m`` and ``--raw-out`` run a part (some cells, every m-th replicate from
 the i-th) so the work can be spread over machines; ``--merge`` checks the parts whole (every part
@@ -37,6 +37,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import math
 import subprocess
 import sys
 import time
@@ -77,6 +78,8 @@ CONFIRM_LABEL = b"synapse/prereg-1/confirm/"
 RELAYS = ("https://api.drand.sh", "https://api2.drand.sh", "https://drand.cloudflare.com")
 D3 = range(448, 648)
 DRY_SIGNATURE = b"truth-session-6/dry-run/D3"
+#: The arms whose per-item costs a replicate keeps, for the per-item breakdown.
+ITEM_ARMS = ("incumbent", "synapse", "lane")
 
 
 def confirm_seed(signature: bytes, j: int) -> int:
@@ -187,14 +190,14 @@ def _replicate(job: tuple[str, str, int, int, dict[str, Spec]]) -> dict[str, Any
     ]
     scenario = build_scenario(world, cell, seed)
     incumbent = summarise(world, run(world, [scenario], Incumbent(world, tables[version])))
-    incumbent.pop("item_cost", None)
     out: dict[str, Any] = {"j": j, "seed": seed, "incumbent": incumbent}
     for arm, spec in arm_specs.items():
         result = run_one(spec, cell, seed)
         if not (result["outcome_replay"] and result["decision_replay"]):
             raise RuntimeError(f"a replay failed: {world_label} {cell} {j} {arm}")
-        for heavy in ("item_cost", "handshake"):
-            result.pop(heavy, None)
+        result.pop("handshake", None)
+        if arm not in ITEM_ARMS:
+            result.pop("item_cost", None)
         out[arm] = result
     child.check(world_label, world, tables)
     integrity.assert_frozen()
@@ -285,6 +288,24 @@ def check_parts(
     return by_cell
 
 
+def per_item(item_names: list[str], by_cell: dict[str, list[dict[str, Any]]]) -> dict[str, Any]:
+    """PREREG-1 section 7's per-item breakdown, as description: in every cell, each item's mean
+    cost per store-day (its part of J, ``objective.item_costs``) under the incumbent, SYNAPSE and
+    the lane incumbent, each a ``math.fsum`` over replicates divided by their number, in the
+    world's item order. An item's mean delta is SYNAPSE's minus the incumbent's."""
+    cells: dict[str, dict[str, list[float]]] = {}
+    for cell in CELLS:
+        rows = by_cell[cell]
+        means: dict[str, list[float]] = {}
+        for arm in ITEM_ARMS:
+            columns = list(zip(*(row[arm]["item_cost"] for row in rows), strict=True))
+            if len(columns) != len(item_names):
+                raise RuntimeError(f"{cell} {arm}: {len(columns)} item costs, not one per item")
+            means[arm] = [math.fsum(column) / len(rows) for column in columns]
+        cells[cell] = means
+    return {"items": list(item_names), "arms": list(ITEM_ARMS), "cells": cells}
+
+
 def analyse_world(
     world_label: str,
     parts: list[dict[str, Any]],
@@ -320,12 +341,14 @@ def analyse_world(
         ).hexdigest()
         for cell in CELLS
     }
+    world, _, _ = child.load(world_label)
     return {
         "world": world_label,
         "replicates": {cell: n_c[cell] for cell in CELLS},
         "arms": parts[0]["arms"],
         "orders_digest_by_cell": digests,
         "analysis": analyse(runs, bootstrap_seed(signature)),
+        "per_item": per_item([item.name for item in world.items], by_cell),
         "wall_seconds": max(p["wall_seconds"] for p in parts),
         "code": parts[0]["code"],
     }

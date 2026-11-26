@@ -10,7 +10,9 @@
   with other challenger code or other arms, holding a cell outside the five, a missing or repeated
   replicate, or a replicate run with another seed than the round (or D3) gives it;
 * the arms are SYNAPSE, its lane incumbent and one ablation per named component: the Freshness
-  Guardian (the lane rule) and each trusted entry's decider.
+  Guardian (the lane rule) and each trusted entry's decider;
+* the per-item breakdown is each item's mean cost under the incumbent, SYNAPSE and the lane
+  incumbent, and refuses rows that do not hold one cost per item.
 """
 
 from __future__ import annotations
@@ -273,3 +275,36 @@ def test_the_arms_name_every_component(tmp_path: Path, monkeypatch: pytest.Monke
     assert lane_off["lane_rule"] is False and lane_off["trust"] == params["trust"]
     no_surge = json.loads(str(arms["without:surge_today@P/surge"].inline))
     assert no_surge["trust"] == {"L/calm": "sensing"}
+
+
+def _item_rows(costs: list[list[float]]) -> list[dict[str, Any]]:
+    """Replicates whose three item arms carry ``costs[j]`` (SYNAPSE twice it, the lane thrice)."""
+    return [
+        {
+            "j": j,
+            "incumbent": {"item_cost": list(row)},
+            "synapse": {"item_cost": [2.0 * c for c in row]},
+            "lane": {"item_cost": [3.0 * c for c in row]},
+        }
+        for j, row in enumerate(costs)
+    ]
+
+
+def test_the_per_item_breakdown_is_each_items_mean_cost_per_arm() -> None:
+    by_cell = {cell: _item_rows([[1.0, 0.1, 5.0], [3.0, 0.2, 0.0]]) for cell in CELLS}
+    out = runner.per_item(["a", "b", "c"], by_cell)
+    assert out["items"] == ["a", "b", "c"] and out["arms"] == ["incumbent", "synapse", "lane"]
+    for cell in CELLS:
+        means = out["cells"][cell]
+        assert means["incumbent"] == [2.0, 0.15000000000000002, 2.5]
+        assert means["synapse"] == [4.0, 0.30000000000000004, 5.0]
+        assert means["lane"] == [6.0, 0.45000000000000007, 7.5]
+
+
+def test_the_per_item_breakdown_refuses_rows_without_one_cost_per_item() -> None:
+    short = {cell: _item_rows([[1.0, 2.0], [3.0, 4.0]]) for cell in CELLS}
+    with pytest.raises(RuntimeError, match="not one per item"):
+        runner.per_item(["a", "b", "c"], short)
+    ragged = {cell: _item_rows([[1.0, 2.0, 3.0], [3.0, 4.0]]) for cell in CELLS}
+    with pytest.raises(ValueError, match="zip"):
+        runner.per_item(["a", "b", "c"], ragged)
