@@ -36,6 +36,7 @@ _NAMES = (
     "sentinel_as_built",
     "sentinel_world",
     "surge_calibration",
+    "synapse",
 )
 
 
@@ -63,7 +64,11 @@ def build(
     """
     policy = _build(name, world, tables, params)
     if params.get("guard") is True:
-        reporting = (SurgeCalibration, SurgeResponse, SupplyResponse)
+        reporting = (
+            SurgeCalibration,
+            SurgeResponse,
+            SupplyResponse,
+        )  # the composition guards itself
         report = policy.report if isinstance(policy, reporting) else None
         return Guarded(policy, world, tables["I2-P"], tables["I2-L"], name, report)
     return policy
@@ -100,4 +105,8 @@ def _build(
         return SentinelForThisWorld(world, normal)
     if name == "surge_calibration":
         return SurgeCalibration(world, normal, short)
+    if name == "synapse":
+        from synapse_kernel.challengers.composition import Composition
+
+        return Composition(world, tables, params, _build)
     raise ValueError(f"unknown component {name!r}; known: {names()}")

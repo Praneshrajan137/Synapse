@@ -396,7 +396,13 @@ def _protected_seeds_in(document: Any) -> list[int]:
 
 
 def test_no_parameter_file_holds_a_protected_seed() -> None:
-    files = sorted((ROOT / "docs" / "truth" / "challengers").glob("params-*.json"))
+    files = sorted(
+        [
+            *(ROOT / "docs" / "truth" / "challengers").glob("params-*.json"),
+            *(ROOT / "docs" / "truth" / "composition").glob("params-*.json"),
+        ]
+    )
+    assert len(files) >= 6  # stage B's four, and the composition's two
     for path in files:
         assert _protected_seeds_in(json.loads(path.read_text(encoding="utf-8"))) == [], path
     planted = {"surge_threshold": 4096.0, "note": [seeds.explore_seed(200)]}

@@ -153,10 +153,14 @@ def serve(conn: Connection, spec: bytes) -> None:
     os.chdir(workdir)
     world, tables, files = load(request["world"])
     params: dict[str, Any] = {}
+    if request.get("params") and request.get("inline"):
+        raise ValueError("parameters come from a file or inline, not both")
     if request.get("params"):
         params_path = ROOT / request["params"]
         params = json.loads(params_path.read_text(encoding="utf-8"))
         files.append(params_path)
+    elif request.get("inline"):
+        params = json.loads(request["inline"])  # part of the spec, so of the handshake's digest
     integrity.assert_frozen()
     from synapse_kernel.challengers.registry import build
     from synapse_kernel.release.observation import StoreObservation
