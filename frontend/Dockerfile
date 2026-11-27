@@ -21,6 +21,9 @@ COPY tsconfig.json tsconfig.node.json vite.config.ts ./
 COPY tailwind.config.ts postcss.config.cjs ./
 COPY index.html ./
 COPY src ./src
+# src/lib/contract-coverage.ts (and its property test) import the contract-fidelity types from
+# spec/, so `pnpm typecheck` below cannot pass without them; the rest of spec/ is not needed here.
+COPY spec/contract-fidelity ./spec/contract-fidelity
 
 ARG VITE_BUILD_SHA=dev
 ARG VITE_BUILD_TIME
