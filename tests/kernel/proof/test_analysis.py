@@ -129,7 +129,7 @@ def test_a_share_of_0_or_1_gives_the_extreme_resample_at_both_ends() -> None:
 def test_past_the_pole_an_upper_end_takes_level_1_and_a_lower_end_level_0() -> None:
     means = np.arange(100.0)
     upper = a.Boot(estimate=60.0, means=means, share=0.6, z0=1.5, accel=0.5, constant=None)
-    assert 1.0 - 0.5 * (1.5 + a._NORMAL.inv_cdf(0.975)) <= 0  # the pole is passed
+    assert 1.0 - 0.5 * (1.5 + a.phi_inverse(0.975)) <= 0  # the pole is passed
     assert a.endpoint(upper, 0.975) == 99.0  # unguarded, the formula would give about 0.06
     lower = a.Boot(estimate=40.0, means=means, share=0.4, z0=-1.5, accel=-0.5, constant=None)
     assert a.endpoint(lower, 0.025) == 0.0
