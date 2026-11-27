@@ -121,9 +121,13 @@ world, so it could not be bent toward one.
   allowed any version whose bootstrap stream digest is equal. The attack on freeze C showed the
   analysis also does float work that the digest does not cover, so the runner and the merge refuse
   any other version. The stream digest is still checked.
-- **One platform note.** `statistics.NormalDist` uses `math.erf` for the normal distribution, so a
-  merge on another platform could differ from the runner's in the last bits of a BCa endpoint. The
-  merge runs on a runner and records its environment.
+- **The analysis is the same bits on every platform.** The gate fixed Phi from
+  `statistics.NormalDist`, but its bits follow the platform's libm and the Python version. Merges of
+  the same parts on Windows and on Linux differed in a few BCa endpoints' last bits, with no verdict
+  moved. Phi and its inverse are now computed in decimal arithmetic, correctly rounded
+  (`analysis.phi`, `analysis.phi_inverse`; truth session 6, S6-D-14). Merges of the same 100 parts
+  on Windows and on a Linux runner now give a byte-identical analysis. Φ's golden digest is
+  reproduced under Pyodide too, so the map can be recomputed in a browser to the bit.
 
 ## Alternatives rejected
 
