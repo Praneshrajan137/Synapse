@@ -24,13 +24,12 @@ import subprocess
 import time
 from concurrent.futures import ProcessPoolExecutor
 from pathlib import Path
-from statistics import NormalDist
 from typing import Any
 
 from scripts.challengers import child
 from scripts.challengers.isolate import SPAWN, Spec, run_one, summarise
 from scripts.confirm.outputs import record_dir, write_json
-from synapse_kernel.proof.analysis import CELLS, replicates_for, sample_sd
+from synapse_kernel.proof.analysis import CELLS, phi_inverse, replicates_for, sample_sd
 from synapse_kernel.release import seeds
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -78,8 +77,8 @@ def summarise_power(
     rows_by_job: list[tuple[tuple[str, str, int], dict[str, Any]]],
 ) -> dict[str, Any]:
     """Per world and cell: every delta, ``s_c`` (``n - 1``), ``n_c`` and what ``n_c`` can detect."""
-    z_c1 = NormalDist().inv_cdf(0.975)
-    z_c2 = NormalDist().inv_cdf(1.0 - 0.025 / 4)
+    z_c1 = phi_inverse(0.975)
+    z_c2 = phi_inverse(1.0 - 0.025 / 4)
     worlds: dict[str, Any] = {}
     for w in WORLDS:
         margins = json.loads(REPORTS[w].read_text(encoding="utf-8"))["M_c"]

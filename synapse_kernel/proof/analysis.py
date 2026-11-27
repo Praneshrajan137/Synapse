@@ -20,7 +20,11 @@ leaves open was fixed in that session's gate (section 7, item 11) before this fi
   z)))``, ``z = Phi^-1(alpha)``, by numpy's ``linear`` rule; past the formula's pole (``1 - a (z0 +
   z) <= 0``) an upper end takes level 1 and a lower end level 0, since there the formula stops being
   monotone and would pull an upper end below the estimate. When every value is equal the interval is
-  that value. Phi from :class:`statistics.NormalDist`.
+  that value. Phi and its inverse are computed in decimal arithmetic to 80 digits and rounded once
+  (:func:`phi`, :func:`phi_inverse`), so every platform gives the same bits. The gate fixed Phi from
+  :class:`statistics.NormalDist`, whose bits differ between platforms and Python versions; the
+  change, its evidence and its effect are truth session 6's S6-D-14 (no verdict of the dry run
+  moved).
 * **Levels.** Two-sided 95% means the endpoints at 0.025 and 0.975; a one-sided bound at level
   ``1 - gamma`` is the endpoint at ``gamma`` (lower) or ``1 - gamma`` (upper).
 * **C1** (intersection-union, Berger 1982): in every cell, the upper end of the two-sided 95%
@@ -47,9 +51,10 @@ leaves open was fixed in that session's gate (section 7, item 11) before this fi
 from __future__ import annotations
 
 import dataclasses
+import functools
 import hashlib
 import math
-from statistics import NormalDist
+from decimal import Context, Decimal, localcontext
 from typing import TYPE_CHECKING, Any, Final
 
 import numpy as np
@@ -75,6 +80,8 @@ __all__ = [
     "endpoint",
     "holm",
     "index_stream",
+    "phi",
+    "phi_inverse",
     "replicates_for",
     "sample_sd",
     "seq_mean",
@@ -101,13 +108,144 @@ BAND: Final[tuple[tuple[float, float, float], ...]] = tuple(
 )
 #: Resamples handled at once, to bound memory; the result does not depend on it.
 CHUNK: Final[int] = 1000
-_NORMAL: Final[NormalDist] = NormalDist()
 
 #: The golden stream that pins numpy's bounded-integer draws: this seed, 200 replicates per cell.
 GOLDEN_SEED: Final[int] = 20261124
 GOLDEN_N: Final[int] = 200
 #: Its sha256, measured on numpy 2.4.4 (Windows, CPython 3.11.15), truth session 6.
 GOLDEN_DIGEST: Final[str] = "1b3cf648752b35a595f32aa10cd8d0c6a6a558065cc3648b4ba4ababc95185bc"
+
+
+# -- the normal distribution, the same bits on every platform -----------------------------------
+
+#: Working precision of Phi: 80 significant digits, against the 17 a float keeps.
+_DIGITS: Final[int] = 80
+#: Beyond this |x|, Phi rounds to 0 or 1 in a float (Phi(-38.5) is below half the least subnormal).
+_TAIL: Final[int] = 40
+#: Below this t = |x| / sqrt(2), erf's series; at or above it, erfc's continued fraction.
+_SERIES_BELOW: Final[int] = 3
+#: Terms of the continued fraction, enough for 80 digits at t = 3 and more beyond.
+_FRACTION_TERMS: Final[int] = 3000
+_CONTEXT: Final[Context] = Context(prec=_DIGITS + 20)
+#: Phi^-1 bisects to this bracket before Newton's method takes over.
+_BRACKET: Final[Decimal] = Decimal(1) / 64
+
+
+def _pi() -> Decimal:
+    """pi in the current decimal context (the decimal module's documented recipe)."""
+    three = Decimal(3)
+    last, t, s, n, na, d, da = Decimal(0), three, three, 1, 0, 0, 24
+    while s != last:
+        last = s
+        n, na = n + na, na + 8
+        d, da = d + da, da + 32
+        t = (t * n) / d
+        s += t
+    return +s
+
+
+with localcontext(_CONTEXT):
+    _SQRT2: Final[Decimal] = Decimal(2).sqrt()
+    _SQRT_PI: Final[Decimal] = _pi().sqrt()
+    _SQRT_2PI: Final[Decimal] = (2 * _pi()).sqrt()
+    _EPSILON: Final[Decimal] = Decimal(10) ** -(_DIGITS + 10)
+
+
+def _erfc(t: Decimal) -> Decimal:
+    """erfc(t) for t >= 0, in the caller's decimal context: erf's Maclaurin series below 3, and
+    Laplace's continued fraction, evaluated backward to a fixed depth, at or above it."""
+    if t < _SERIES_BELOW:
+        square = t * t
+        term = t  # t^(2n+1) / n!, signed
+        total = t
+        n = 0
+        while True:
+            n += 1
+            term = -term * square / n
+            part = term / (2 * n + 1)
+            total += part
+            if abs(part) < _EPSILON:
+                break
+        return 1 - 2 * total / _SQRT_PI
+    tail = t
+    for k in range(_FRACTION_TERMS, 0, -1):
+        tail = t + Decimal(k) / 2 / tail
+    return (-(t * t)).exp() / _SQRT_PI / tail
+
+
+def _phi(x: Decimal) -> Decimal:
+    """Phi(x) in the caller's decimal context."""
+    half_tail = _erfc(abs(x) / _SQRT2) / 2
+    return half_tail if x < 0 else 1 - half_tail
+
+
+def phi(x: float) -> float:
+    """The standard normal distribution function, the same bits on every platform.
+
+    Raises:
+        ValueError: ``x`` is not a number.
+    """
+    if math.isnan(x):
+        raise ValueError("Phi of NaN")
+    if x <= -_TAIL:
+        return 0.0
+    if x >= _TAIL:
+        return 1.0
+    with localcontext(_CONTEXT):
+        return float(_phi(Decimal(x)))
+
+
+@functools.lru_cache(maxsize=4096)
+def phi_inverse(p: float) -> float:
+    """Phi's inverse, the same bits on every platform, to 80 digits. The steps:
+    - bisect the decimal Phi on [-40, 40] until the bracket is narrower than 1/64;
+    - then apply Newton's method inside the shrinking bracket, bisecting when a step would leave
+      it.
+
+    Started from 0, Newton alone crawls into the far tail by about 1/|x| a step and runs out before
+    p = 1e-199; from within 1/64 it converges quadratically everywhere.
+
+    Raises:
+        ValueError: ``p`` is not strictly between 0 and 1.
+    """
+    if not 0.0 < p < 1.0:
+        raise ValueError(f"Phi^-1 needs 0 < p < 1, got {p!r}")
+    if p == 0.5:
+        # The one root at 0: Newton stops within 1e-100 of it, a float of its own. Every other float
+        # p is at least 5.5e-17 from 0.5, so its root is at least 1.4e-16 from 0, and 80 digits
+        # place it exactly.
+        return 0.0
+    with localcontext(_CONTEXT):
+        target = Decimal(p)
+        low, high = Decimal(-_TAIL), Decimal(_TAIL)
+        while high - low > _BRACKET:
+            middle = (low + high) / 2
+            if _phi(middle) > target:
+                high = middle
+            else:
+                low = middle
+        x = (low + high) / 2
+        for _ in range(200):
+            gap = _phi(x) - target
+            if gap == 0:
+                break
+            density = (-(x * x) / 2).exp() / _SQRT_2PI
+            newton = x - gap / density
+            # Converged before the bracket is consulted: at convergence the step rounds to nothing,
+            # the point sits on the bracket's edge, and a bisection there would undo the root.
+            if abs(newton - x) <= _EPSILON * (1 + abs(x)):
+                x = newton
+                break
+            if gap > 0:
+                high = x
+            else:
+                low = x
+            x = newton if low < newton < high else (low + high) / 2
+        else:
+            raise ArithmeticError(
+                f"Phi^-1({p!r}) did not converge"
+            )  # never seen; refuse, not guess
+        return float(x)
 
 
 # -- the resamples -------------------------------------------------------------------------------
@@ -244,7 +382,7 @@ def bootstrap(values: npt.ArrayLike, indices: I64) -> Boot:
     elif share == 1.0:
         z0 = math.inf
     else:
-        z0 = _NORMAL.inv_cdf(share)
+        z0 = phi_inverse(share)
     accel = 0.0 if constant is not None else acceleration(v)
     return Boot(estimate, means, share, z0, accel, constant)
 
@@ -258,12 +396,12 @@ def endpoint(boot: Boot, alpha: float) -> float:
     elif boot.share == 1.0:
         level = 1.0
     else:
-        z = _NORMAL.inv_cdf(alpha)
+        z = phi_inverse(alpha)
         denominator = 1.0 - boot.accel * (boot.z0 + z)
         if denominator <= 0.0:
             level = 1.0 if alpha > 0.5 else 0.0
         else:
-            level = _NORMAL.cdf(boot.z0 + (boot.z0 + z) / denominator)
+            level = phi(boot.z0 + (boot.z0 + z) / denominator)
     return float(np.quantile(boot.means, level, method="linear"))
 
 
