@@ -31,7 +31,7 @@ jobs:
 
   power:
     needs: stage
-    if: needs.stage.outputs.name == 'power'
+    if: needs.stage.outputs.name == 'power' || needs.stage.outputs.name == 'final'
     name: power ${{ matrix.world }} ${{ matrix.cell }}
     runs-on: ubuntu-latest
     timeout-minutes: 120
@@ -59,7 +59,7 @@ jobs:
 
   dry-run:
     needs: stage
-    if: needs.stage.outputs.name == 'dry-run'
+    if: needs.stage.outputs.name == 'dry-run' || needs.stage.outputs.name == 'final'
     name: dry run ${{ matrix.world }} ${{ matrix.cell }} ${{ matrix.slice }}/10
     runs-on: ubuntu-latest
     timeout-minutes: 300
@@ -113,7 +113,7 @@ jobs:
 
   rehearse:
     needs: stage
-    if: needs.stage.outputs.name == 'dry-run'
+    if: needs.stage.outputs.name == 'dry-run' || needs.stage.outputs.name == 'final'
     name: rehearse the outside steps (fetch-depth ${{ matrix.depth }})
     runs-on: ubuntu-latest
     timeout-minutes: 15
