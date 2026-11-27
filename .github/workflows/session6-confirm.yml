@@ -153,12 +153,13 @@ jobs:
           python-version: "3.11"
       - name: Install the kernel's closure, pinned as on the laptop
         run: pip install "numpy==2.4.4" "simpy==4.1.1"
-      - uses: actions/download-artifact@v4
-        with:
-          pattern: dry-W*
-          path: parts
-          run-id: 45956771216
-          github-token: ${{ github.token }}
+      - name: The final run's 100 dry-run parts (gh pages through all 113 artifacts; the
+          download action's cross-run listing stopped at 100, and the merge refused the gap)
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh run download 45956771216 -R "${{ github.repository }}" -p "dry-W*" -D parts
+          echo "parts: $(find parts -name 'part-*.json' | wc -l)"
       - name: Both worlds from the same 100 parts
         run: python -u -m scripts.confirm.run --dry-run --merge parts
       - uses: actions/upload-artifact@v4
