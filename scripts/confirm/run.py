@@ -116,6 +116,9 @@ WORLDS = ("W", "W-d1")
 ROUND = 34714612
 CONFIRM_LABEL = b"synapse/prereg-1/confirm/"
 RELAYS = ("https://api.drand.sh", "https://api2.drand.sh", "https://drand.cloudflare.com")
+#: A generic client name: drand.cloudflare.com refuses urllib's default User-Agent with 403
+#: (measured 2026-11-26 on GitHub's runners, and from the laptop; this one is served).
+USER_AGENT = "synapse-confirm/1"
 D3 = range(448, 648)
 DRY_SIGNATURE = b"truth-session-6/dry-run/D3"
 #: Freeze C fixes the numpy version (PREREG-1 section 5); any other is refused.
@@ -208,11 +211,18 @@ def audit_modules() -> None:
             raise SystemExit(f"module {name} came from {rel}, which no freeze lists")
 
 
-def validate(args: argparse.Namespace) -> tuple[int, int]:
-    """Refuse, before anything reads the round, arguments that would fail after it; return the
-    chunk ``(i, m)``."""
+def check_environment() -> None:
+    """Refuse, before anything reads the round, a numpy other than the one freeze C fixes. It is
+    kept apart from :func:`validate`, which reads the arguments only, so the arguments' rules hold
+    and are tested whatever the machine's numpy (truth session 6: CI's numpy 2.4.6 once masked
+    every argument test behind this refusal)."""
     if np.__version__ != NUMPY:
         raise SystemExit(f"numpy {np.__version__}: freeze C fixes numpy {NUMPY}")
+
+
+def validate(args: argparse.Namespace) -> tuple[int, int]:
+    """Refuse, before anything reads the round, arguments that would fail after it; return the
+    chunk ``(i, m)``. It reads the arguments only."""
     try:
         first, second = args.chunk.split("/")
         index, slices = int(first), int(second)
@@ -313,7 +323,8 @@ def fetch_from(relay: str, round_number: int) -> bytes:
     import synapse_beacon
 
     url = f"{relay}/{synapse_beacon.CHAIN_HASH}/public/{round_number}"
-    with urllib.request.urlopen(url, timeout=30) as response:  # noqa: S310 - fixed https hosts
+    request = urllib.request.Request(url, headers={"User-Agent": USER_AGENT})
+    with urllib.request.urlopen(request, timeout=30) as response:  # noqa: S310 - fixed https hosts
         body = json.loads(response.read().decode("utf-8"))
     if int(body["round"]) != round_number:
         raise ValueError(f"served round {body['round']}")
@@ -739,6 +750,7 @@ def main() -> None:
     parser.add_argument("--merge", type=Path, help="assemble the parts in this folder")
     args = parser.parse_args()
     index, slices = validate(args)
+    check_environment()
     # Spawned processes inherit sys.argv: clear it, so no child's launch inputs carry the part's
     # cells or chunk (gate item 9; the merge checks that every child of an arm got the same).
     del sys.argv[1:]

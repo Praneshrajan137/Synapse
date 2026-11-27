@@ -212,6 +212,11 @@ def test_a_checkout_whose_commit_is_not_on_main_is_refused(attempts: dict[str, A
         runner.check_attempt("kk")
 
 
+def _url(request: Any) -> str:
+    """The URL of what reached ``urlopen``: a request object, or a plain string."""
+    return str(getattr(request, "full_url", request))
+
+
 class _Relay:
     """A stand-in relay response, served for every URL."""
 
@@ -337,7 +342,18 @@ def test_sound_arguments_pass_and_give_the_chunk() -> None:
 def test_another_numpy_is_refused(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(runner, "NUMPY", "2.4.5")
     with pytest.raises(SystemExit, match="freeze C fixes numpy 2.4.5"):
-        runner.validate(_args(dry_run=True))
+        runner.check_environment()
+    monkeypatch.setattr(runner, "NUMPY", runner.np.__version__)
+    runner.check_environment()
+
+
+def test_the_arguments_rules_do_not_depend_on_the_machines_numpy(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(runner, "NUMPY", "0.0.0")
+    assert runner.validate(_args(dry_run=True)) == (0, 1)
+    with pytest.raises(SystemExit, match="expected i/m"):
+        runner.validate(_args(dry_run=True, chunk="1-2"))
 
 
 def test_a_module_from_an_unfrozen_file_under_the_repository_is_refused(
@@ -581,8 +597,9 @@ def test_the_rehearsal_exercises_every_outside_step_on_a_known_round(
     body = {"round": runner.KNOWN_ROUND, "signature": runner.KNOWN_SIGNATURE}
     asked: list[str] = []
 
-    def urlopen(url: str, timeout: int) -> _Relay:
-        asked.append(url)
+    def urlopen(request: Any, timeout: int) -> _Relay:
+        asked.append(_url(request))
+        assert request.get_header("User-agent") == runner.USER_AGENT
         return _Relay(body)
 
     monkeypatch.setattr(runner.urllib.request, "urlopen", urlopen)
